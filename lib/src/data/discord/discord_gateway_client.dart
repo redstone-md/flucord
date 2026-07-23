@@ -47,6 +47,21 @@ final class DiscordGatewayProtocol {
 
   Map<String, Object?> heartbeat() => {'op': 1, 'd': sequence};
 
+  Map<String, Object?> voiceStateUpdate({
+    required String guildId,
+    required String? channelId,
+    required bool selfMute,
+    required bool selfDeaf,
+  }) => {
+    'op': 4,
+    'd': {
+      'guild_id': guildId,
+      'channel_id': channelId,
+      'self_mute': selfMute,
+      'self_deaf': selfDeaf,
+    },
+  };
+
   Map<String, Object?> resume() => {
     'op': 6,
     'd': {'token': token, 'session_id': sessionId, 'seq': sequence},
@@ -104,6 +119,7 @@ final class DiscordGatewayClient {
   String? _gatewayUrl;
   bool _heartbeatAcknowledged = true;
   bool _closing = false;
+  final Map<String, Map<String, Object?>> _desiredVoiceStates = {};
 
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
@@ -155,6 +171,7 @@ final class DiscordGatewayClient {
         final data = payload['d'];
         if (name == 'READY') {
           _emitStatus(DiscordGatewayStatus.connected);
+          _flushVoiceStates();
         }
         if (name != null && data is Map) {
           _events.add(
@@ -215,9 +232,38 @@ final class DiscordGatewayClient {
     _send(_protocol.heartbeat());
   }
 
-  void _send(Map<String, Object?> payload) {
+  bool _send(Map<String, Object?> payload) {
     if (_socket?.readyState == WebSocket.open) {
       _socket!.add(jsonEncode(payload));
+      return true;
+    }
+    return false;
+  }
+
+  void updateVoiceState({
+    required String guildId,
+    required String? channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) {
+    final payload = _protocol.voiceStateUpdate(
+      guildId: guildId,
+      channelId: channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+    );
+    if (channelId == null) {
+      _desiredVoiceStates.remove(guildId);
+      _send(payload);
+      return;
+    }
+    _desiredVoiceStates[guildId] = payload;
+    _send(payload);
+  }
+
+  void _flushVoiceStates() {
+    for (final payload in _desiredVoiceStates.values) {
+      _send(payload);
     }
   }
 
@@ -243,6 +289,7 @@ final class DiscordGatewayClient {
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     await _socket?.close();
+    _desiredVoiceStates.clear();
     _emitStatus(DiscordGatewayStatus.offline);
     await _events.close();
   }
