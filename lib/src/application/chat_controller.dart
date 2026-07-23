@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
@@ -6,19 +8,46 @@ import '../domain/chat_repository.dart';
 enum ChatLoadState { idle, loading, ready, failure }
 
 final class ChatController extends ChangeNotifier {
-  ChatController(this._repository);
+  ChatController(ChatRepository repository) : _repository = repository {
+    _listenToRepository();
+  }
 
-  final ChatRepository _repository;
+  ChatRepository _repository;
+  StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
 
   ChatLoadState _state = ChatLoadState.idle;
   ChatWorkspace? _workspace;
   Object? _error;
   bool _isSending = false;
+  RepositoryConnectionStatus _connectionStatus =
+      RepositoryConnectionStatus.offline;
+  final Set<String> _loadedChannels = {};
+  final Set<String> _loadingChannels = {};
+  final Map<String, Object> _channelErrors = {};
 
   ChatLoadState get state => _state;
   ChatWorkspace? get workspace => _workspace;
   Object? get error => _error;
   bool get isSending => _isSending;
+  RepositoryConnectionStatus get connectionStatus => _connectionStatus;
+
+  bool isChannelLoading(String channelId) =>
+      _loadingChannels.contains(channelId);
+
+  Object? channelError(String channelId) => _channelErrors[channelId];
+
+  Future<void> useRepository(ChatRepository repository) async {
+    await _eventSubscription?.cancel();
+    await _repository.close();
+    _repository = repository;
+    _workspace = null;
+    _loadedChannels.clear();
+    _loadingChannels.clear();
+    _channelErrors.clear();
+    _connectionStatus = RepositoryConnectionStatus.offline;
+    _listenToRepository();
+    await load();
+  }
 
   Future<void> load() async {
     _state = ChatLoadState.loading;
@@ -32,6 +61,27 @@ final class ChatController extends ChangeNotifier {
       _state = ChatLoadState.failure;
     }
     notifyListeners();
+  }
+
+  Future<void> openChannel(String channelId, {bool refresh = false}) async {
+    if (_workspace == null ||
+        _loadingChannels.contains(channelId) ||
+        (_loadedChannels.contains(channelId) && !refresh)) {
+      return;
+    }
+    _loadingChannels.add(channelId);
+    _channelErrors.remove(channelId);
+    notifyListeners();
+    try {
+      final history = await _repository.loadChannelHistory(channelId);
+      _workspace = _workspace?.mergeHistory(history);
+      _loadedChannels.add(channelId);
+    } catch (error) {
+      _channelErrors[channelId] = error;
+    } finally {
+      _loadingChannels.remove(channelId);
+      notifyListeners();
+    }
   }
 
   Future<bool> sendMessage({
@@ -52,9 +102,7 @@ final class ChatController extends ChangeNotifier {
         authorId: workspace.currentMemberId,
         body: content,
       );
-      _workspace = workspace.copyWith(
-        messages: [...workspace.messages, message],
-      );
+      _workspace = _workspace?.upsertMessage(message);
       return true;
     } catch (error) {
       _error = error;
@@ -63,5 +111,27 @@ final class ChatController extends ChangeNotifier {
       _isSending = false;
       notifyListeners();
     }
+  }
+
+  void _listenToRepository() {
+    _eventSubscription = _repository.events.listen((event) {
+      switch (event) {
+        case MessageUpsertedEvent():
+          _workspace = _workspace?.upsertMessage(
+            event.message,
+            member: event.member,
+          );
+        case RepositoryStatusChangedEvent():
+          _connectionStatus = event.status;
+      }
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_eventSubscription?.cancel());
+    unawaited(_repository.close());
+    super.dispose();
   }
 }

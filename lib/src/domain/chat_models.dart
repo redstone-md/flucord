@@ -107,11 +107,54 @@ final class ChatWorkspace {
   Member memberById(String id) =>
       members.firstWhere((member) => member.id == id);
 
-  ChatWorkspace copyWith({List<ChatMessage>? messages}) => ChatWorkspace(
-    spaces: spaces,
-    channels: channels,
-    members: members,
+  ChatWorkspace copyWith({
+    List<CommunitySpace>? spaces,
+    List<ConversationChannel>? channels,
+    List<Member>? members,
+    List<ChatMessage>? messages,
+    String? currentMemberId,
+  }) => ChatWorkspace(
+    spaces: spaces ?? this.spaces,
+    channels: channels ?? this.channels,
+    members: members ?? this.members,
     messages: messages ?? this.messages,
-    currentMemberId: currentMemberId,
+    currentMemberId: currentMemberId ?? this.currentMemberId,
   );
+
+  ChatWorkspace mergeHistory(ChannelHistory history) {
+    final memberMap = {for (final member in members) member.id: member};
+    for (final member in history.members) {
+      memberMap[member.id] = member;
+    }
+    final nextMessages = messages
+        .where((message) => message.channelId != history.channelId)
+        .toList();
+    nextMessages.addAll(history.messages);
+    nextMessages.sort((left, right) => left.sentAt.compareTo(right.sentAt));
+    return copyWith(members: memberMap.values.toList(), messages: nextMessages);
+  }
+
+  ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
+    final nextMessages = [
+      ...messages.where((existing) => existing.id != message.id),
+      message,
+    ]..sort((left, right) => left.sentAt.compareTo(right.sentAt));
+    final nextMembers = member == null
+        ? members
+        : [...members.where((existing) => existing.id != member.id), member];
+    return copyWith(messages: nextMessages, members: nextMembers);
+  }
+}
+
+final class ChannelHistory {
+  ChannelHistory({
+    required this.channelId,
+    required List<ChatMessage> messages,
+    required List<Member> members,
+  }) : messages = List.unmodifiable(messages),
+       members = List.unmodifiable(members);
+
+  final String channelId;
+  final List<ChatMessage> messages;
+  final List<Member> members;
 }

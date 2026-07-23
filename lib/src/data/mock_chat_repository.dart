@@ -10,9 +10,22 @@ final class MockChatRepository implements ChatRepository {
   int _messageSequence = 100;
 
   @override
+  Stream<ChatRepositoryEvent> get events => const Stream.empty();
+
+  @override
   Future<ChatWorkspace> loadWorkspace() async {
     await _wait();
     return _workspace;
+  }
+
+  @override
+  Future<ChannelHistory> loadChannelHistory(String channelId) async {
+    await _wait();
+    return ChannelHistory(
+      channelId: channelId,
+      messages: _workspace.messagesFor(channelId),
+      members: _workspace.members,
+    );
   }
 
   @override
@@ -34,6 +47,9 @@ final class MockChatRepository implements ChatRepository {
     );
     return message;
   }
+
+  @override
+  Future<void> close() async {}
 
   Future<void> _wait() async {
     if (latency > Duration.zero) {
