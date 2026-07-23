@@ -39,12 +39,14 @@ class _ConversationPane extends StatefulWidget {
     required this.onCreateForumPost,
     required this.onOpenInbox,
     required this.onSend,
+    required this.onCreatePoll,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    required this.onEndPoll,
     required this.onTyping,
     required this.voiceController,
   });
@@ -86,12 +88,14 @@ class _ConversationPane extends StatefulWidget {
   final CreateForumPostCallback onCreateForumPost;
   final VoidCallback onOpenInbox;
   final SendMessageCallback onSend;
+  final CreatePollCallback onCreatePoll;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+  final Future<bool> Function(ChatMessage) onEndPoll;
   final VoidCallback onTyping;
   final VoiceController voiceController;
 
@@ -149,6 +153,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onAddReaction: widget.onAddReaction,
         onCreateThread: widget.onCreateThread,
         onTogglePin: widget.onTogglePin,
+        onEndPoll: widget.onEndPoll,
         canLoadOlder: widget.canLoadOlder,
         isLoadingOlder: widget.isLoadingOlder,
         olderLoadError: widget.olderLoadError,
@@ -199,6 +204,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
                 : widget.workspace.memberOrNull(_replyTo!.authorId),
             onCancelReply: () => setState(() => _replyTo = null),
             onTyping: widget.onTyping,
+            onCreatePoll: widget.onCreatePoll,
             onSend: (body, attachments, replyToMessageId) async {
               final sent = await widget.onSend(
                 body,

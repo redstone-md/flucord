@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import '../pending_attachment_picker.dart';
+import 'create_poll_dialog.dart';
 import 'emoji_picker.dart';
 import 'pending_attachment_strip.dart';
 
@@ -21,6 +22,7 @@ class MessageComposer extends StatefulWidget {
     required this.customEmojis,
     required this.isSending,
     required this.onSend,
+    required this.onCreatePoll,
     required this.onCancelReply,
     required this.onTyping,
     this.attachmentPicker = const NativePendingAttachmentPicker(),
@@ -34,6 +36,7 @@ class MessageComposer extends StatefulWidget {
   final List<GuildEmoji> customEmojis;
   final bool isSending;
   final SendMessageCallback onSend;
+  final CreatePollCallback onCreatePoll;
   final ChatMessage? replyTo;
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
@@ -124,6 +127,11 @@ class _MessageComposerState extends State<MessageComposer> {
     _focusNode.requestFocus();
   }
 
+  void _showPollDialog() {
+    if (widget.isSending) return;
+    CreatePollDialog.show(context, onCreate: widget.onCreatePoll);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -168,7 +176,7 @@ class _MessageComposerState extends State<MessageComposer> {
                     tooltip: 'Add attachment',
                   ),
                   suffixIconConstraints: const BoxConstraints.tightFor(
-                    width: 96,
+                    width: 144,
                     height: 48,
                   ),
                   suffixIcon: Row(
@@ -178,6 +186,17 @@ class _MessageComposerState extends State<MessageComposer> {
                         spaceName: widget.spaceName,
                         customEmojis: widget.customEmojis,
                         onSelected: _insertEmoji,
+                      ),
+                      IconButton(
+                        key: const ValueKey('create-poll'),
+                        constraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: widget.isSending ? null : _showPollDialog,
+                        icon: const Icon(Icons.poll_outlined, size: 19),
+                        tooltip: 'Create poll',
                       ),
                       if (widget.isSending)
                         const SizedBox.square(

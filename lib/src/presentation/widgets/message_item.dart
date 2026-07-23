@@ -12,6 +12,7 @@ import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
+import 'message_poll_view.dart';
 import 'remote_identity_image.dart';
 
 class MessageItem extends StatefulWidget {
@@ -28,6 +29,7 @@ class MessageItem extends StatefulWidget {
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    required this.onEndPoll,
     required this.linkLauncher,
     required this.onSelectChannel,
     super.key,
@@ -45,6 +47,7 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+  final Future<bool> Function(ChatMessage) onEndPoll;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -191,6 +194,15 @@ class _MessageItemState extends State<MessageItem> {
               workspace: widget.workspace,
               linkLauncher: widget.linkLauncher,
               onSelectChannel: widget.onSelectChannel,
+            ),
+          ),
+        if (message.poll case final poll?)
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: MessagePollView(
+              poll: poll,
+              canEnd: widget.isCurrentUser,
+              onEnd: () => unawaited(widget.onEndPoll(message)),
             ),
           ),
         if (message.reactions.isNotEmpty) ...[

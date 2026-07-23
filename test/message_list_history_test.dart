@@ -147,6 +147,7 @@ Widget _host(
           onAddReaction: (_, _) async {},
           onCreateThread: (_, _, _) async => true,
           onTogglePin: (_) async {},
+          onEndPoll: (_) async => true,
           canLoadOlder: true,
           isLoadingOlder: isLoadingOlder,
           olderLoadError: olderLoadError,

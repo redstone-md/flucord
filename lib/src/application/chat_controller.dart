@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
+import '../domain/poll_repository.dart';
 import '../domain/thread_repository.dart';
 import '../domain/voice_connection.dart';
 import 'channel_activity_persistence.dart';
@@ -12,6 +13,7 @@ import 'channel_activity_persistence.dart';
 part 'chat_controller_events.dart';
 part 'chat_controller_threads.dart';
 part 'chat_controller_forums.dart';
+part 'chat_controller_polls.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 

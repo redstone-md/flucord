@@ -5,7 +5,8 @@ Linux. The Windows release is verified locally; macOS and Linux runners are
 configured but still require release verification on their native hosts. It
 provides server and ordered channel navigation with collapsible categories,
 searchable message history, replies, attachments, reactions, message editing
-and deletion, active-thread discovery and creation, archived-thread browsing,
+and deletion, native message polls, active-thread discovery and creation,
+archived-thread browsing,
 native forum and media-channel feeds, member roles and presence, local unread
 markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
@@ -76,6 +77,16 @@ and channels configured for gallery layout use responsive one- to three-column
 cards with real starter-image previews, video/file fallbacks, and stable loading
 or broken-image states. Visible cards lazily load missing post history through
 the existing repository and SQLite cache without changing the selected channel.
+
+Text-channel messages retain Discord's documented poll question, answers,
+expiry, multiselect mode, result counts, and finalized state. The composer opens
+a native creation dialog for two to ten answers and durations from one hour to
+32 days. Poll-only messages render inline in the timeline and pinned-message
+panel with proportional result bars, accessible vote summaries, compact-width
+layout, and an End Poll action for polls authored by the connected application.
+Gateway poll-vote add/remove events update the cached counts live. Discord does
+not document a bot operation for casting a poll vote, so Flucord does not expose
+a voting control that would require a private user endpoint.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -198,6 +209,10 @@ their native timelines and lock state remain available after a restart.
 SQLite v13 retains forum/media channel kinds, available tags, post tag IDs,
 default archive duration, sort order, and forum layout. Existing text/voice enum
 indices remain stable during migration.
+
+SQLite v14 retains each message's complete poll payload, including answer
+counts and current-bot vote flags, so result and expiry state survive an offline
+restart. Poll-only Inbox mentions use the question as their native preview.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

@@ -6,6 +6,7 @@ import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_embed_view.dart';
+import 'message_poll_view.dart';
 import 'message_content_view.dart';
 
 class PinnedMessagesPanel extends StatelessWidget {
@@ -193,6 +194,15 @@ class _PinnedMessageRow extends StatelessWidget {
                       workspace: workspace,
                       linkLauncher: linkLauncher,
                       onSelectChannel: onSelectChannel,
+                    ),
+                  ),
+                if (message.poll case final poll?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: MessagePollView(
+                      poll: poll,
+                      canEnd: false,
+                      onEnd: () {},
                     ),
                   ),
               ],

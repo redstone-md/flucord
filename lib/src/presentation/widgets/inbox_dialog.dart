@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../application/inbox_catalog.dart';
+import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 
@@ -321,9 +322,7 @@ class _MentionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = entry.message.body.trim().isEmpty
-        ? 'Attachment or embed'
-        : entry.message.body.trim();
+    final preview = _messagePreview(entry.message);
     final label =
         '${entry.author.displayName} in ${entry.path}, $preview, '
         '${_relativeTime(entry.message.sentAt)}';
@@ -403,6 +402,14 @@ class _MentionRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _messagePreview(ChatMessage message) {
+  final body = message.body.trim();
+  if (body.isNotEmpty) return body;
+  final question = message.poll?.question.trim();
+  if (question != null && question.isNotEmpty) return question;
+  return 'Attachment or embed';
 }
 
 class _InboxEmptyState extends StatelessWidget {

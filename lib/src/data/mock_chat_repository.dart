@@ -3,18 +3,27 @@ import 'dart:async';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
+import '../domain/poll_repository.dart';
 import '../domain/thread_repository.dart';
 import 'mock_chat_seed.dart';
 
 part 'mock_chat_repository_mutations.dart';
+part 'mock_chat_repository_polls.dart';
 
 final class MockChatRepository
-    implements ChatRepository, ArchivedThreadRepository, ForumPostRepository {
+    with _MockChatRepositoryPolls
+    implements
+        ChatRepository,
+        ArchivedThreadRepository,
+        ForumPostRepository,
+        PollRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = MockChatSeed.withForums(_seedWorkspace());
 
   final Duration latency;
+  @override
   ChatWorkspace _workspace;
+  @override
   int _messageSequence = 100;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
@@ -161,18 +170,6 @@ final class MockChatRepository
     return message;
   }
 
-  MessageReply? _replyFor(String? messageId) {
-    if (messageId == null) return null;
-    final original = _workspace.messages.firstWhere(
-      (message) => message.id == messageId,
-    );
-    return MessageReply(
-      messageId: original.id,
-      authorId: original.authorId,
-      body: original.body,
-    );
-  }
-
   @override
   Future<ChatMessage> editMessage({
     required String channelId,
@@ -238,6 +235,7 @@ final class MockChatRepository
   @override
   Future<void> close() async {}
 
+  @override
   Future<void> _wait() async {
     if (latency > Duration.zero) {
       await Future<void>.delayed(latency);

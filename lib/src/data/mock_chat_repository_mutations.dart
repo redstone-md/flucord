@@ -1,6 +1,18 @@
 part of 'mock_chat_repository.dart';
 
 extension _MockChatRepositoryMutations on MockChatRepository {
+  MessageReply? _replyFor(String? messageId) {
+    if (messageId == null) return null;
+    final original = _workspace.messages.firstWhere(
+      (message) => message.id == messageId,
+    );
+    return MessageReply(
+      messageId: original.id,
+      authorId: original.authorId,
+      body: original.body,
+    );
+  }
+
   Future<ConversationChannel> _createMessageThread({
     required String channelId,
     required String messageId,

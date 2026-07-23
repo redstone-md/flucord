@@ -38,6 +38,7 @@ void main() {
                 },
                 onCreateThread: (_, _, _) async => true,
                 onTogglePin: (_) async {},
+                onEndPoll: (_) async => true,
                 linkLauncher: const _TestLinkLauncher(),
                 onSelectChannel: (_) {},
               ),

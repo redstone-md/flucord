@@ -150,6 +150,11 @@ browser runtime or dependency on Discord's private user API.
     card geometry, render real starter-image previews plus video/file and error
     fallbacks, and lazily hydrate visible post previews through the existing
     history repository and SQLite cache without changing active navigation.
+27. Completed: retain documented Discord message polls in SQLite v14, create
+    polls through the Bot REST API, expire application-authored polls, apply
+    Gateway vote add/remove events live, and render native responsive results
+    in timelines, pinned messages, and poll-only Inbox previews. Voting remains
+    absent because Discord exposes no documented bot mutation for casting one.
 
 ## Protocol safety
 

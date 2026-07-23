@@ -14,6 +14,7 @@ import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/create_forum_post_dialog.dart';
+import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/forum_channel_view.dart';
 import 'widgets/inbox_dialog.dart';
@@ -283,6 +284,11 @@ class FlucordShell extends StatelessWidget {
                                       attachments: attachments,
                                       replyToMessageId: replyToMessageId,
                                     ),
+                                onCreatePoll: (poll) =>
+                                    chatController.createPoll(
+                                      channelId: channel.id,
+                                      poll: poll,
+                                    ),
                                 onEdit: chatController.editMessage,
                                 onDelete: chatController.deleteMessage,
                                 onToggleReaction: chatController.toggleReaction,
@@ -306,6 +312,7 @@ class FlucordShell extends StatelessWidget {
                                       return true;
                                     },
                                 onTogglePin: chatController.togglePin,
+                                onEndPoll: chatController.endPoll,
                                 onTyping: () =>
                                     chatController.startTyping(channel.id),
                                 voiceController: voiceController,
