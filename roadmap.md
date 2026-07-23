@@ -42,7 +42,11 @@ browser runtime or dependency on Discord's private user API.
    WinSparkle feed with an embedded DSA verification key. Platform code stays
    behind application-owned service contracts so chat state and presentation
    remain independently testable.
-5. Voice rooms, device selection, screen sharing, and media diagnostics.
+5. In progress: native voice-room controls, input/output device selection,
+   microphone capture, desktop source selection, live screen preview, and
+   deterministic media teardown are complete. The documented Discord Voice
+   Gateway, encrypted RTP transport, and remote audio remain isolated follow-up
+   work behind a dedicated repository boundary.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety

@@ -5,7 +5,8 @@ server and channel navigation, searchable message history, replies,
 attachments, reactions, message editing and deletion, active threads, member
 roles and presence, typing indicators, local unread markers, paginated pinned
 messages, Windows notifications, close-to-tray behavior, channel deep links,
-signed updates, and theme switching without a browser runtime.
+signed updates, native voice-device diagnostics, desktop capture preview, and
+theme switching without a browser runtime.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -41,6 +42,18 @@ permissions for deletes, uploads, and reactions.
 Unread and mention markers are maintained locally for the running Flucord
 session. Discord does not publish a bot API for a personal account's read
 state, so these markers do not synchronize with the official Discord client.
+
+## Native Media
+
+Opening a voice channel initializes the native Windows WebRTC media layer. The
+voice surface supports microphone mute, input/output device selection,
+screen/window source selection, live desktop-capture preview, and deterministic
+track teardown. This path uses native WebRTC textures and devices, not a web
+view.
+
+The current media tracer is local diagnostics only. Audio and screen tracks are
+not yet transmitted to Discord; the documented Discord Voice Gateway, UDP
+discovery, encryption, and RTP transport remain the next roadmap increment.
 
 ## Verify
 
@@ -90,6 +103,8 @@ dart run auto_updater:sign_update .\dist\flucord-setup.exe
 - `lib/src/domain`: immutable entities and the transport contract.
 - `lib/src/data`: transport implementations.
 - `lib/src/application`: isolated remote and local state controllers.
+- `lib/src/data/webrtc_voice_media_service.dart`: native device and capture
+  implementation behind the voice media contract.
 - `lib/src/presentation`: adaptive desktop workspace and focused widgets.
 - `lib/src/theme`: shared surface, semantic color, and typography system.
 
