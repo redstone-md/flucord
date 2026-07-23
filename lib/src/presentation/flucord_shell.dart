@@ -120,10 +120,17 @@ class FlucordShell extends StatelessWidget {
                           },
                           onQueryChanged: workspaceController.setQuery,
                           onToggleMembers: workspaceController.toggleMembers,
-                          onSend: (body) => chatController.sendMessage(
-                            channelId: channel.id,
-                            body: body,
-                          ),
+                          onSend: (body, attachments, replyToMessageId) =>
+                              chatController.sendMessage(
+                                channelId: channel.id,
+                                body: body,
+                                attachments: attachments,
+                                replyToMessageId: replyToMessageId,
+                              ),
+                          onEdit: chatController.editMessage,
+                          onDelete: chatController.deleteMessage,
+                          onToggleReaction: chatController.toggleReaction,
+                          onAddReaction: chatController.addReaction,
                         ),
                       ),
                       if (showMembers)
@@ -147,7 +154,7 @@ class FlucordShell extends StatelessWidget {
   }
 }
 
-class _ConversationPane extends StatelessWidget {
+class _ConversationPane extends StatefulWidget {
   const _ConversationPane({
     required this.workspace,
     required this.channel,
@@ -164,6 +171,10 @@ class _ConversationPane extends StatelessWidget {
     required this.onQueryChanged,
     required this.onToggleMembers,
     required this.onSend,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleReaction,
+    required this.onAddReaction,
   });
 
   final ChatWorkspace workspace;
@@ -180,41 +191,76 @@ class _ConversationPane extends StatelessWidget {
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
-  final Future<bool> Function(String body) onSend;
+  final SendMessageCallback onSend;
+  final Future<bool> Function(ChatMessage, String) onEdit;
+  final Future<void> Function(ChatMessage) onDelete;
+  final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
+  final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  @override
+  State<_ConversationPane> createState() => _ConversationPaneState();
+}
+
+class _ConversationPaneState extends State<_ConversationPane> {
+  ChatMessage? _replyTo;
+
+  @override
+  void didUpdateWidget(covariant _ConversationPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id != widget.channel.id) _replyTo = null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final conversation = switch (channel.kind) {
-      ChannelKind.voice => VoiceRoomView(channelName: channel.name),
-      ChannelKind.text when isLoading => const ChannelLoadingView(),
-      ChannelKind.text when loadError != null => ChannelFailureView(
-        onRetry: onRetry,
+    final conversation = switch (widget.channel.kind) {
+      ChannelKind.voice => VoiceRoomView(channelName: widget.channel.name),
+      ChannelKind.text when widget.isLoading => const ChannelLoadingView(),
+      ChannelKind.text when widget.loadError != null => ChannelFailureView(
+        onRetry: widget.onRetry,
       ),
       ChannelKind.text => MessageList(
-        workspace: workspace,
-        channel: channel,
-        query: query,
+        workspace: widget.workspace,
+        channel: widget.channel,
+        query: widget.query,
+        onReply: (message) => setState(() => _replyTo = message),
+        onEdit: widget.onEdit,
+        onDelete: widget.onDelete,
+        onToggleReaction: widget.onToggleReaction,
+        onAddReaction: widget.onAddReaction,
       ),
     };
     return Column(
       children: [
         ChatHeader(
-          channel: channel,
-          channels: channels,
-          query: query,
-          showCompactPicker: compact,
-          allowMemberPanel: allowMemberPanel,
-          showMembers: showMembers,
-          onSelectChannel: onSelectChannel,
-          onQueryChanged: onQueryChanged,
-          onToggleMembers: onToggleMembers,
+          channel: widget.channel,
+          channels: widget.channels,
+          query: widget.query,
+          showCompactPicker: widget.compact,
+          allowMemberPanel: widget.allowMemberPanel,
+          showMembers: widget.showMembers,
+          onSelectChannel: widget.onSelectChannel,
+          onQueryChanged: widget.onQueryChanged,
+          onToggleMembers: widget.onToggleMembers,
         ),
         Expanded(child: conversation),
-        if (channel.kind == ChannelKind.text)
+        if (widget.channel.kind == ChannelKind.text)
           MessageComposer(
-            channelName: channel.name,
-            isSending: isSending,
-            onSend: onSend,
+            channelName: widget.channel.name,
+            isSending: widget.isSending,
+            replyTo: _replyTo,
+            replyAuthor: _replyTo == null
+                ? null
+                : widget.workspace.memberOrNull(_replyTo!.authorId),
+            onCancelReply: () => setState(() => _replyTo = null),
+            onSend: (body, attachments, replyToMessageId) async {
+              final sent = await widget.onSend(
+                body,
+                attachments,
+                replyToMessageId,
+              );
+              if (mounted && sent) setState(() => _replyTo = null);
+              return sent;
+            },
           ),
       ],
     );

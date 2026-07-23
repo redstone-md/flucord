@@ -214,6 +214,15 @@ final class MockChatRepository implements ChatRepository {
         kind: ChannelKind.text,
       ),
       ConversationChannel(
+        id: 'forge-thread-release',
+        spaceId: 'forge',
+        name: 'release-checklist',
+        topic: 'Active thread under native-client.',
+        kind: ChannelKind.text,
+        parentId: 'forge-native',
+        isThread: true,
+      ),
+      ConversationChannel(
         id: 'forge-voice',
         spaceId: 'forge',
         name: 'workbench',
@@ -325,6 +334,15 @@ final class MockChatRepository implements ChatRepository {
         body:
             'Good. Next tracer bullet is channel switching plus local send. Transport stays behind the repository boundary.',
         sentAt: now.subtract(const Duration(minutes: 31)),
+        attachments: const [
+          MessageAttachment(
+            id: 'a1',
+            fileName: 'transport-boundary.md',
+            url: 'local://transport-boundary.md',
+            size: 18420,
+            contentType: 'text/markdown',
+          ),
+        ],
       ),
       ChatMessage(
         id: 'm4',
@@ -333,6 +351,15 @@ final class MockChatRepository implements ChatRepository {
         body:
             'Ship the vertical slice first. We can make it loud after it is real.',
         sentAt: now.subtract(const Duration(minutes: 18)),
+        reply: const MessageReply(
+          messageId: 'm3',
+          authorId: 'fly',
+          body: 'Next tracer bullet is channel switching plus local send.',
+        ),
+        reactions: const [
+          MessageReaction(emojiName: '✓', count: 3, reactedByCurrentUser: true),
+          MessageReaction(emojiName: '🔥', count: 2),
+        ],
       ),
       ChatMessage(
         id: 'm5',
@@ -380,6 +407,14 @@ final class MockChatRepository implements ChatRepository {
         authorId: 'jack',
         body: 'The old server is still alive. Leave the fan curve alone.',
         sentAt: now.subtract(const Duration(days: 1, minutes: 27)),
+      ),
+      ChatMessage(
+        id: 'm11',
+        channelId: 'forge-thread-release',
+        authorId: 'roman',
+        body:
+            'Release runner, cache migration, and reconnect checks are green.',
+        sentAt: now.subtract(const Duration(minutes: 6)),
       ),
     ];
     return ChatWorkspace(

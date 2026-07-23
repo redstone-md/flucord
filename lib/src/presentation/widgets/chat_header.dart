@@ -47,7 +47,11 @@ class ChatHeader extends StatelessWidget {
                   PopupMenuItem(
                     value: item.id,
                     child: Text(
-                      '${item.kind == ChannelKind.text ? '#' : 'Voice:'} ${item.name}',
+                      '${item.isThread
+                          ? 'Thread:'
+                          : item.kind == ChannelKind.text
+                          ? '#'
+                          : 'Voice:'} ${item.name}',
                     ),
                   ),
               ],
@@ -55,7 +59,9 @@ class ChatHeader extends StatelessWidget {
             )
           else
             Icon(
-              channel.kind == ChannelKind.text
+              channel.isThread
+                  ? Icons.forum_outlined
+                  : channel.kind == ChannelKind.text
                   ? Icons.tag
                   : Icons.volume_up_outlined,
               size: 20,

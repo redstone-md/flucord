@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
 
@@ -16,6 +17,20 @@ void main() {
       find.textContaining('Ship the vertical slice first'),
       findsOneWidget,
     );
+    expect(find.text('transport-boundary.md'), findsOneWidget);
+    expect(find.text('release-checklist'), findsOneWidget);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('message-m4'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Reply'));
+    await tester.pump();
+    expect(find.text('Replying to Jack'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cancel reply'));
+    await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('open-connections')));
     await tester.pumpAndSettle();

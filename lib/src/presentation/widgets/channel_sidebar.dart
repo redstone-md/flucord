@@ -26,7 +26,12 @@ class ChannelSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textChannels = channels
-        .where((channel) => channel.kind == ChannelKind.text)
+        .where(
+          (channel) => channel.kind == ChannelKind.text && !channel.isThread,
+        )
+        .toList(growable: false);
+    final threads = channels
+        .where((channel) => channel.isThread)
         .toList(growable: false);
     final voiceChannels = channels
         .where((channel) => channel.kind == ChannelKind.voice)
@@ -80,6 +85,17 @@ class ChannelSidebar extends StatelessWidget {
                     selected: channel.id == selectedChannelId,
                     onPressed: () => onSelectChannel(channel.id),
                   ),
+                if (threads.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  const _SectionLabel(label: 'Active threads'),
+                  for (final channel in threads)
+                    _ChannelRow(
+                      channel: channel,
+                      selected: channel.id == selectedChannelId,
+                      indented: true,
+                      onPressed: () => onSelectChannel(channel.id),
+                    ),
+                ],
                 if (voiceChannels.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   const _SectionLabel(label: 'Voice channels'),
@@ -189,11 +205,13 @@ class _ChannelRow extends StatelessWidget {
     required this.channel,
     required this.selected,
     required this.onPressed,
+    this.indented = false,
   });
 
   final ConversationChannel channel;
   final bool selected;
   final VoidCallback onPressed;
+  final bool indented;
 
   @override
   Widget build(BuildContext context) {
@@ -221,9 +239,11 @@ class _ChannelRow extends StatelessWidget {
                       ? const ColoredBox(color: FlucordColors.signal)
                       : null,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: indented ? 18 : 8),
                 Icon(
-                  channel.kind == ChannelKind.text
+                  channel.isThread
+                      ? Icons.forum_outlined
+                      : channel.kind == ChannelKind.text
                       ? Icons.tag
                       : Icons.volume_up_outlined,
                   size: 17,

@@ -2,19 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
-import 'member_avatar.dart';
+import 'message_item.dart';
 
 class MessageList extends StatefulWidget {
   const MessageList({
     required this.workspace,
     required this.channel,
     required this.query,
+    required this.onReply,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleReaction,
+    required this.onAddReaction,
     super.key,
   });
 
   final ChatWorkspace workspace;
   final ConversationChannel channel;
   final String query;
+  final ValueChanged<ChatMessage> onReply;
+  final Future<bool> Function(ChatMessage, String) onEdit;
+  final Future<void> Function(ChatMessage) onDelete;
+  final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
+  final Future<void> Function(ChatMessage, String) onAddReaction;
 
   @override
   State<MessageList> createState() => _MessageListState();
@@ -56,7 +66,11 @@ class _MessageListState extends State<MessageList> {
         .where((message) {
           final author = widget.workspace.memberById(message.authorId);
           return message.body.toLowerCase().contains(query) ||
-              author.displayName.toLowerCase().contains(query);
+              author.displayName.toLowerCase().contains(query) ||
+              message.attachments.any(
+                (attachment) =>
+                    attachment.fileName.toLowerCase().contains(query),
+              );
         })
         .toList(growable: false);
   }
@@ -89,20 +103,26 @@ class _MessageListState extends State<MessageList> {
       padding: const EdgeInsets.fromLTRB(0, 18, 0, 22),
       itemCount: messages.length + 1,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return _ChannelStart(channel: widget.channel);
-        }
+        if (index == 0) return _ChannelStart(channel: widget.channel);
         final message = messages[index - 1];
         final previous = index > 1 ? messages[index - 2] : null;
         final grouped =
+            message.reply == null &&
             previous != null &&
             previous.authorId == message.authorId &&
             message.sentAt.difference(previous.sentAt).inMinutes < 7;
-        return _MessageRow(
+        return MessageItem(
+          key: ValueKey('message-${message.id}'),
           message: message,
           member: widget.workspace.memberById(message.authorId),
+          workspace: widget.workspace,
           grouped: grouped,
           isCurrentUser: message.authorId == widget.workspace.currentMemberId,
+          onReply: widget.onReply,
+          onEdit: widget.onEdit,
+          onDelete: widget.onDelete,
+          onToggleReaction: widget.onToggleReaction,
+          onAddReaction: widget.onAddReaction,
         );
       },
     );
@@ -121,10 +141,14 @@ class _ChannelStart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.tag, size: 28, color: context.surfaces.muted),
+          Icon(
+            channel.isThread ? Icons.forum_outlined : Icons.tag,
+            size: 28,
+            color: context.surfaces.muted,
+          ),
           const SizedBox(height: 12),
           Text(
-            '# ${channel.name}',
+            '${channel.isThread ? '' : '# '}${channel.name}',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
@@ -135,103 +159,6 @@ class _ChannelStart extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _MessageRow extends StatelessWidget {
-  const _MessageRow({
-    required this.message,
-    required this.member,
-    required this.grouped,
-    required this.isCurrentUser,
-  });
-
-  final ChatMessage message;
-  final Member member;
-  final bool grouped;
-  final bool isCurrentUser;
-
-  @override
-  Widget build(BuildContext context) {
-    final time = _formatTime(message.sentAt);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {},
-        hoverColor: context.surfaces.raised.withValues(alpha: 0.6),
-        child: Container(
-          decoration: isCurrentUser
-              ? const BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: FlucordColors.signal, width: 2),
-                  ),
-                )
-              : null,
-          padding: EdgeInsets.fromLTRB(20, grouped ? 3 : 9, 20, 5),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 38,
-                child: grouped
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          time,
-                          style: TextStyle(
-                            color: context.surfaces.muted,
-                            fontSize: 9,
-                          ),
-                        ),
-                      )
-                    : MemberAvatar(member: member, size: 34),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!grouped)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Row(
-                          children: [
-                            Text(
-                              member.displayName,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              time,
-                              style: TextStyle(
-                                color: context.surfaces.muted,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    SelectableText(
-                      message.body,
-                      style: const TextStyle(fontSize: 13, height: 1.38),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _formatTime(DateTime value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 }
 
@@ -261,7 +188,7 @@ class _MessageEmptyState extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               hasQuery
-                  ? 'Try a different phrase or author.'
+                  ? 'Try a different phrase, author, or filename.'
                   : 'Start the conversation from the field below.',
               style: TextStyle(color: context.surfaces.muted, fontSize: 12),
             ),
