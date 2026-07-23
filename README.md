@@ -67,10 +67,11 @@ transport. Mute and disconnect finish the speaking burst before the microphone
 or voice session is torn down.
 
 This is not yet a complete live audio call. The receive boundary maps speaking
-SSRCs to users, decrypts DAVE, and keeps independent Opus decoder state per
-remote user, but native PCM playback still needs packet ordering, a jitter
-buffer, loss concealment, and selected output-device routing. Screen capture is
-currently a local preview and is not sent to Discord.
+SSRCs to users, reorders RTP across sequence wrap, rejects duplicate/replayed
+packets, decrypts DAVE, and keeps independent Opus decoder state per remote
+user. Native PCM playback still needs a playout-timed jitter buffer, loss
+concealment, and selected output-device routing. Screen capture is currently a
+local preview and is not sent to Discord.
 
 ## Verify
 

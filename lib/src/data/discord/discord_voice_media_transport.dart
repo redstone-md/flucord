@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../../domain/voice_audio.dart';
 import 'discord_rtp_packet.dart';
+import 'discord_rtp_reorder_buffer.dart';
 
 typedef DiscordDaveAudioEncryptor = Uint8List Function(Uint8List opusFrame);
 typedef DiscordDaveAudioDecryptor =
@@ -45,26 +46,27 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
   final DiscordAudioFrameSender _sendFrame;
   final DiscordSpeakingSender _sendSpeaking;
   final DiscordVoiceUserLookup _userForSsrc;
+  final Map<int, _RemoteAudioState> _remoteStates = {};
   DiscordAudioRtpPacketizer? _packetizer;
   bool _daveEnabled = false;
   bool _speaking = false;
 
   @override
-  Stream<VoiceRemoteOpusFrame> get remoteAudio => _incomingFrames
-      .map(_decodeRemoteFrame)
-      .where((frame) => frame != null)
-      .cast<VoiceRemoteOpusFrame>();
+  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
+      _incomingFrames.expand(_decodeRemoteFrames);
 
   void configure({required int ssrc, required bool daveEnabled}) {
     _packetizer = DiscordAudioRtpPacketizer.secure(ssrc: ssrc);
     _daveEnabled = daveEnabled;
     _speaking = false;
+    _remoteStates.clear();
   }
 
   void reset() {
     _packetizer = null;
     _daveEnabled = false;
     _speaking = false;
+    _remoteStates.clear();
   }
 
   @override
@@ -105,11 +107,32 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
     }
   }
 
-  VoiceRemoteOpusFrame? _decodeRemoteFrame(DiscordRtpFrame frame) {
+  Iterable<VoiceRemoteOpusFrame> _decodeRemoteFrames(DiscordRtpFrame frame) {
     final userId = _userForSsrc(frame.header.ssrc);
-    if (userId == null) return null;
+    if (userId == null) return const [];
+    final currentState = _remoteStates[frame.header.ssrc];
+    final state = currentState == null || currentState.userId != userId
+        ? (_remoteStates[frame.header.ssrc] = _RemoteAudioState(userId))
+        : currentState;
+    return [
+      for (final orderedFrame in state.reorderBuffer.add(frame))
+        _decodeRemoteFrame(userId, orderedFrame),
+    ];
+  }
+
+  VoiceRemoteOpusFrame _decodeRemoteFrame(
+    String userId,
+    DiscordRtpFrame frame,
+  ) {
     final encrypted = Uint8List.fromList(frame.payload);
     final opus = _daveEnabled ? _decryptDave(userId, encrypted) : encrypted;
     return VoiceRemoteOpusFrame(userId: userId, opus: opus);
   }
+}
+
+final class _RemoteAudioState {
+  _RemoteAudioState(this.userId);
+
+  final String userId;
+  final DiscordRtpReorderBuffer reorderBuffer = DiscordRtpReorderBuffer();
 }

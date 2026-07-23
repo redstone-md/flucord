@@ -63,6 +63,32 @@ void main() {
     expect(result.opus, [2, 3]);
   });
 
+  test('reorders remote RTP before DAVE decryption and drops replay', () async {
+    final incoming = StreamController<DiscordRtpFrame>.broadcast();
+    addTearDown(incoming.close);
+    final decryptedSequences = <int>[];
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: incoming.stream,
+      encryptDave: (frame) => frame,
+      decryptDave: (_, frame) {
+        decryptedSequences.add(frame.first);
+        return frame;
+      },
+      sendFrame: (_) => 1,
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => 'user-1',
+    )..configure(ssrc: 42, daveEnabled: true);
+    final received = transport.remoteAudio.take(3).toList();
+
+    incoming.add(_frame(ssrc: 77, sequence: 10, payload: [10]));
+    incoming.add(_frame(ssrc: 77, sequence: 12, payload: [12]));
+    incoming.add(_frame(ssrc: 77, sequence: 12, payload: [12]));
+    incoming.add(_frame(ssrc: 77, sequence: 11, payload: [11]));
+
+    expect((await received).map((frame) => frame.opus.single), [10, 11, 12]);
+    expect(decryptedSequences, [10, 11, 12]);
+  });
+
   test('refuses media before configure and after reset', () {
     final transport = DiscordVoiceMediaTransport(
       incomingFrames: const Stream.empty(),
@@ -80,8 +106,11 @@ void main() {
   });
 }
 
-DiscordRtpFrame _frame({required int ssrc, required List<int> payload}) =>
-    DiscordRtpFrame(
-      header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: ssrc),
-      payload: payload,
-    );
+DiscordRtpFrame _frame({
+  required int ssrc,
+  required List<int> payload,
+  int sequence = 1,
+}) => DiscordRtpFrame(
+  header: DiscordRtpHeader(sequence: sequence, timestamp: 2, ssrc: ssrc),
+  payload: payload,
+);
