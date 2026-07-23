@@ -11,6 +11,7 @@ import '../domain/external_link_launcher.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
+import 'widgets/direct_message_views.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
@@ -70,10 +71,12 @@ class FlucordShell extends StatelessWidget {
           listenable: workspaceController,
           builder: (context, _) {
             final spaceId = workspaceController.selectedSpaceId!;
-            final channelId = workspaceController.selectedChannelId!;
+            final channelId = workspaceController.selectedChannelId;
             final space = workspace.spaceById(spaceId);
             final channels = workspace.channelsFor(spaceId);
-            final channel = workspace.channelById(channelId);
+            final channel = channelId == null
+                ? null
+                : workspace.channelById(channelId);
             return Scaffold(
               body: LayoutBuilder(
                 builder: (context, constraints) {
@@ -81,9 +84,10 @@ class FlucordShell extends StatelessWidget {
                   final membersFit = constraints.maxWidth >= 1120;
                   final showPins =
                       workspaceController.showPins &&
-                      channel.kind == ChannelKind.text;
+                      channel?.kind == ChannelKind.text;
                   final showMembers =
                       membersFit &&
+                      !space.isDirectMessages &&
                       workspaceController.showMembers &&
                       !showPins;
                   return Row(
@@ -93,9 +97,11 @@ class FlucordShell extends StatelessWidget {
                         selectedSpaceId: spaceId,
                         onSelectSpace: (id) {
                           workspaceController.selectSpace(workspace, id);
-                          chatController.openChannel(
-                            workspaceController.selectedChannelId!,
-                          );
+                          final selected =
+                              workspaceController.selectedChannelId;
+                          if (selected != null) {
+                            chatController.openChannel(selected);
+                          }
                         },
                         onToggleTheme: workspaceController.toggleTheme,
                         onOpenConnections: () => _openConnections(context),
@@ -107,6 +113,8 @@ class FlucordShell extends StatelessWidget {
                           space: space,
                           channels: channels,
                           selectedChannelId: channelId,
+                          workspace: workspace,
+                          onNewDirectMessage: () => _openDirectMessage(context),
                           onSelectChannel: (id) {
                             workspaceController.selectChannel(id);
                             chatController.openChannel(id);
@@ -115,69 +123,79 @@ class FlucordShell extends StatelessWidget {
                           connectionStatus: chatController.connectionStatus,
                         ),
                       Expanded(
-                        child: _ConversationPane(
-                          workspace: workspace,
-                          externalLinkLauncher: externalLinkLauncher,
-                          channel: channel,
-                          channels: channels,
-                          query: workspaceController.query,
-                          compact: !showChannels,
-                          allowMemberPanel: membersFit,
-                          showMembers: showMembers,
-                          showPins: showPins,
-                          typingMembers: chatController.typingMembersFor(
-                            channelId,
-                          ),
-                          isSending: chatController.isSending,
-                          isLoading: chatController.isChannelLoading(channelId),
-                          loadError: chatController.channelError(channelId),
-                          canLoadOlder: chatController.canLoadOlderMessages(
-                            channelId,
-                          ),
-                          isLoadingOlder: chatController.isLoadingOlderMessages(
-                            channelId,
-                          ),
-                          olderLoadError: chatController.olderMessagesError(
-                            channelId,
-                          ),
-                          onLoadOlder: () => unawaited(
-                            chatController.loadOlderMessages(channelId),
-                          ),
-                          onRetry: () => chatController.openChannel(
-                            channelId,
-                            refresh: true,
-                          ),
-                          onSelectChannel: (id) {
-                            workspaceController.selectChannel(id);
-                            chatController.openChannel(id);
-                          },
-                          onQueryChanged: workspaceController.setQuery,
-                          onToggleMembers: workspaceController.toggleMembers,
-                          onTogglePins: () {
-                            workspaceController.togglePins();
-                            if (workspaceController.showPins) {
-                              unawaited(
-                                chatController.loadPinnedMessages(channelId),
-                              );
-                            }
-                          },
-                          onSend: (body, attachments, replyToMessageId) =>
-                              chatController.sendMessage(
-                                channelId: channel.id,
-                                body: body,
-                                attachments: attachments,
-                                replyToMessageId: replyToMessageId,
+                        child: channel == null
+                            ? DirectMessagesEmptyView(
+                                onNewMessage: () => _openDirectMessage(context),
+                              )
+                            : _ConversationPane(
+                                workspace: workspace,
+                                externalLinkLauncher: externalLinkLauncher,
+                                channel: channel,
+                                channels: channels,
+                                query: workspaceController.query,
+                                compact: !showChannels,
+                                allowMemberPanel:
+                                    membersFit && !space.isDirectMessages,
+                                showMembers: showMembers,
+                                showPins: showPins,
+                                typingMembers: chatController.typingMembersFor(
+                                  channel.id,
+                                ),
+                                isSending: chatController.isSending,
+                                isLoading: chatController.isChannelLoading(
+                                  channel.id,
+                                ),
+                                loadError: chatController.channelError(
+                                  channel.id,
+                                ),
+                                canLoadOlder: chatController
+                                    .canLoadOlderMessages(channel.id),
+                                isLoadingOlder: chatController
+                                    .isLoadingOlderMessages(channel.id),
+                                olderLoadError: chatController
+                                    .olderMessagesError(channel.id),
+                                onLoadOlder: () => unawaited(
+                                  chatController.loadOlderMessages(channel.id),
+                                ),
+                                onRetry: () => chatController.openChannel(
+                                  channel.id,
+                                  refresh: true,
+                                ),
+                                onSelectChannel: (id) {
+                                  workspaceController.selectChannel(id);
+                                  chatController.openChannel(id);
+                                },
+                                onQueryChanged: workspaceController.setQuery,
+                                onToggleMembers:
+                                    workspaceController.toggleMembers,
+                                onTogglePins: () {
+                                  workspaceController.togglePins();
+                                  if (workspaceController.showPins) {
+                                    unawaited(
+                                      chatController.loadPinnedMessages(
+                                        channel.id,
+                                      ),
+                                    );
+                                  }
+                                },
+                                onSend: (body, attachments, replyToMessageId) =>
+                                    chatController.sendMessage(
+                                      channelId: channel.id,
+                                      body: body,
+                                      attachments: attachments,
+                                      replyToMessageId: replyToMessageId,
+                                    ),
+                                onEdit: chatController.editMessage,
+                                onDelete: chatController.deleteMessage,
+                                onToggleReaction: chatController.toggleReaction,
+                                onAddReaction: chatController.addReaction,
+                                onTogglePin: chatController.togglePin,
+                                onTyping: () =>
+                                    chatController.startTyping(channel.id),
+                                voiceController: voiceController,
                               ),
-                          onEdit: chatController.editMessage,
-                          onDelete: chatController.deleteMessage,
-                          onToggleReaction: chatController.toggleReaction,
-                          onAddReaction: chatController.addReaction,
-                          onTogglePin: chatController.togglePin,
-                          onTyping: () => chatController.startTyping(channelId),
-                          voiceController: voiceController,
-                        ),
                       ),
-                      if (showPins)
+                      if (showPins && channel != null)
                         PinnedMessagesPanel(
                           workspace: workspace,
                           linkLauncher: externalLinkLauncher,
@@ -185,14 +203,14 @@ class FlucordShell extends StatelessWidget {
                             workspaceController.selectChannel(id);
                             chatController.openChannel(id);
                           },
-                          channelId: channelId,
-                          history: chatController.pinnedMessages(channelId),
-                          isLoading: chatController.isLoadingPins(channelId),
-                          error: chatController.pinError(channelId),
+                          channelId: channel.id,
+                          history: chatController.pinnedMessages(channel.id),
+                          isLoading: chatController.isLoadingPins(channel.id),
+                          error: chatController.pinError(channel.id),
                           onClose: workspaceController.togglePins,
                           onRefresh: () => unawaited(
                             chatController.loadPinnedMessages(
-                              channelId,
+                              channel.id,
                               refresh: true,
                             ),
                           ),
@@ -219,6 +237,27 @@ class FlucordShell extends StatelessWidget {
       context: context,
       builder: (context) => ConnectionDialog(controller: connectionController),
     );
+  }
+
+  Future<void> _openDirectMessage(BuildContext context) async {
+    final recipientId = await showDialog<String>(
+      context: context,
+      builder: (_) => const DirectMessageDialog(),
+    );
+    if (recipientId == null) return;
+    final channelId = await chatController.openDirectConversation(recipientId);
+    if (!context.mounted) return;
+    if (channelId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Direct message could not be opened')),
+      );
+      return;
+    }
+    final workspace = chatController.workspace!;
+    final channel = workspace.channelById(channelId);
+    workspaceController.selectSpace(workspace, channel.spaceId);
+    workspaceController.selectChannel(channel.id);
+    unawaited(chatController.openChannel(channel.id));
   }
 }
 

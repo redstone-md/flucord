@@ -177,6 +177,83 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'opens and selects a direct conversation through repository state',
+      () async {
+        final controller = ChatController(
+          MockChatRepository(latency: Duration.zero),
+        );
+        addTearDown(controller.dispose);
+        await controller.load();
+
+        final channelId = await controller.openDirectConversation(
+          '123456789012345678',
+        );
+
+        expect(channelId, 'dm-123456789012345678');
+        expect(
+          controller.workspace!.spaceById(CommunitySpace.directMessagesId).kind,
+          SpaceKind.directMessages,
+        );
+        expect(
+          controller.workspace!.channelById(channelId!).recipientId,
+          isNotNull,
+        );
+      },
+    );
+
+    test(
+      'accepts a live direct message space before its channel and message',
+      () async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+        const recipient = Member(
+          id: 'dm-user',
+          displayName: 'Jack',
+          initials: 'J',
+          role: 'Direct message',
+          presence: Presence.offline,
+          colorValue: 0xff59636a,
+        );
+        const channel = ConversationChannel(
+          id: 'dm-live',
+          spaceId: CommunitySpace.directMessagesId,
+          name: 'Jack',
+          topic: 'Direct message with Jack',
+          kind: ChannelKind.text,
+          recipientId: 'dm-user',
+        );
+
+        repository.emit(
+          const SpaceUpsertedEvent(CommunitySpace.directMessages()),
+        );
+        repository.emit(const MemberUpsertedEvent(recipient));
+        repository.emit(const ChannelUpsertedEvent(channel));
+        repository.emit(
+          MessageUpsertedEvent(
+            message: ChatMessage(
+              id: 'dm-message',
+              channelId: channel.id,
+              authorId: recipient.id,
+              body: 'Direct signal',
+              sentAt: DateTime.now(),
+            ),
+            member: recipient,
+            isNew: true,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.workspace!.channelById(channel.id).unread, isTrue);
+        expect(
+          controller.workspace!.messagesFor(channel.id).single.body,
+          'Direct signal',
+        );
+      },
+    );
   });
 
   test('workspace state remains independent from server state', () async {
@@ -191,6 +268,22 @@ void main() {
     expect(controller.selectedSpaceId, 'night');
     expect(controller.selectedChannelId, 'night-ops');
     expect(controller.query, isEmpty);
+  });
+
+  test('workspace selection supports an empty direct message inbox', () {
+    final workspace = ChatWorkspace(
+      spaces: const [CommunitySpace.directMessages()],
+      channels: const [],
+      members: const [],
+      messages: const [],
+      currentMemberId: 'bot-1',
+    );
+    final controller = WorkspaceController();
+
+    controller.reconcile(workspace);
+
+    expect(controller.selectedSpaceId, CommunitySpace.directMessagesId);
+    expect(controller.selectedChannelId, isNull);
   });
 }
 
@@ -219,6 +312,10 @@ final class _EventRepository implements ChatRepository {
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>
       _delegate.loadPinnedMessages(channelId);
+
+  @override
+  Future<DirectConversation> openDirectConversation(String recipientId) =>
+      _delegate.openDirectConversation(recipientId);
 
   @override
   Future<ChatMessage> sendMessage({

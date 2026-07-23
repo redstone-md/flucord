@@ -141,6 +141,10 @@ final class _PagedRepository implements ChatRepository {
       _delegate.loadPinnedMessages(channelId);
 
   @override
+  Future<DirectConversation> openDirectConversation(String recipientId) =>
+      _delegate.openDirectConversation(recipientId);
+
+  @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,

@@ -66,6 +66,12 @@ final class ChannelUpsertedEvent extends ChatRepositoryEvent {
   final ConversationChannel channel;
 }
 
+final class SpaceUpsertedEvent extends ChatRepositoryEvent {
+  const SpaceUpsertedEvent(this.space);
+
+  final CommunitySpace space;
+}
+
 final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 
@@ -89,6 +95,8 @@ abstract interface class ChatRepository {
   });
 
   Future<ChannelHistory> loadPinnedMessages(String channelId);
+
+  Future<DirectConversation> openDirectConversation(String recipientId);
 
   Future<ChatMessage> sendMessage({
     required String channelId,

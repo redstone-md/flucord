@@ -116,6 +116,13 @@ final class DiscordApiClient {
   Future<List<Map<String, Object?>>> getGuildChannels(String guildId) =>
       _getList('/guilds/$guildId/channels');
 
+  Future<Map<String, Object?>> createDirectMessageChannel(String recipientId) =>
+      _requestObject(
+        'POST',
+        '/users/@me/channels',
+        body: {'recipient_id': recipientId},
+      );
+
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
 

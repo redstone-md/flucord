@@ -162,6 +162,24 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
+  Future<String?> openDirectConversation(String recipientId) async {
+    final value = recipientId.trim();
+    if (value.isEmpty || _workspace == null) return null;
+    try {
+      final conversation = await _repository.openDirectConversation(value);
+      _workspace = _workspace!
+          .upsertSpace(const CommunitySpace.directMessages())
+          .upsertMember(conversation.recipient)
+          .upsertChannel(conversation.channel);
+      notifyListeners();
+      return conversation.channel.id;
+    } catch (error) {
+      _error = error;
+      notifyListeners();
+      return null;
+    }
+  }
+
   Future<void> loadOlderMessages(String channelId) async {
     final workspace = _workspace;
     if (workspace == null ||
@@ -392,6 +410,8 @@ final class ChatController extends ChangeNotifier {
           _workspace = _workspace?.removeMessage(event.messageId);
         case ChannelUpsertedEvent():
           _workspace = _workspace?.upsertChannel(event.channel);
+        case SpaceUpsertedEvent():
+          _workspace = _workspace?.upsertSpace(event.space);
         case ChannelDeletedEvent():
           _workspace = _workspace?.removeChannel(event.channelId);
         case MemberUpsertedEvent():

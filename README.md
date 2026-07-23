@@ -25,6 +25,10 @@ same cached archive remains browsable in 100-message slices while offline.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
+Documented bot Direct Messages can be opened by a recipient's numeric Discord
+user ID and then use the same native history, composer, replies, Markdown,
+attachments, embeds, and video surfaces as guild channels. Incoming DM channels
+are discovered from Gateway events and restored from the SQLite v7 cache.
 
 ## Run
 
@@ -50,6 +54,12 @@ intents, heartbeat/resume, and REST rate-limit retries. It deliberately does
 not send private Discord-client headers such as `X-Super-Properties` or use
 user-account token flows.
 
+Discord intentionally returns no bot DM inbox through `READY.private_channels`
+or `GET /users/@me/channels`. Flucord therefore builds the bot inbox from
+proactively opened recipient IDs, live `CHANNEL_CREATE` and `MESSAGE_CREATE`
+events, and previously cached channels. This does not expose a normal user's
+private Discord inbox or synchronize personal-account DM state.
+
 Discord bots can edit only messages they authored. The UI exposes inline edit
 for the connected bot's messages and lets Discord enforce channel-specific
 permissions for deletes, uploads, and reactions.
@@ -72,6 +82,8 @@ play/pause, mute, seek, duration, fullscreen, loading, retry, and error states.
 
 The SQLite v6 workspace cache also retains Discord role IDs, names, ordering,
 and source colors so role mentions remain resolved during offline sessions.
+SQLite v7 adds space kinds and DM recipient identity while preserving the
+existing guild, role, message, embed, and media records during migration.
 
 ## Native Media
 

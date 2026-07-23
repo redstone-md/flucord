@@ -20,6 +20,8 @@ abstract interface class ChatCache {
 
   Future<void> writeMember(Member member);
 
+  Future<void> writeSpace(CommunitySpace space);
+
   Future<void> deleteMessage(String messageId);
 
   Future<void> writeChannel(ConversationChannel channel);

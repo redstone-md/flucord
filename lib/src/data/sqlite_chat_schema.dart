@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 6;
+  static const version = 7;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -17,6 +17,7 @@ abstract final class SqliteChatSchema {
         monogram TEXT NOT NULL,
         color_value INTEGER NOT NULL,
         icon_url TEXT,
+        kind INTEGER NOT NULL,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -31,6 +32,7 @@ abstract final class SqliteChatSchema {
         mention_count INTEGER NOT NULL,
         parent_id TEXT,
         is_thread INTEGER NOT NULL,
+        recipient_id TEXT,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -130,6 +132,12 @@ abstract final class SqliteChatSchema {
           color_value INTEGER
         )
       ''');
+    }
+    if (oldVersion < 7) {
+      await database.execute(
+        'ALTER TABLE spaces ADD kind INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute('ALTER TABLE channels ADD recipient_id TEXT');
     }
   }
 }

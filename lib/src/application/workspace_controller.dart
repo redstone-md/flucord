@@ -24,6 +24,10 @@ final class WorkspaceController extends ChangeNotifier {
       _selectedSpaceId = workspace.spaces.first.id;
     }
     final availableChannels = workspace.channelsFor(_selectedSpaceId!);
+    if (availableChannels.isEmpty) {
+      _selectedChannelId = null;
+      return;
+    }
     if (_selectedChannelId == null ||
         !availableChannels.any((channel) => channel.id == _selectedChannelId)) {
       _selectedChannelId = availableChannels
@@ -39,6 +43,12 @@ final class WorkspaceController extends ChangeNotifier {
     if (_selectedSpaceId == spaceId) return;
     _selectedSpaceId = spaceId;
     final channels = workspace.channelsFor(spaceId);
+    if (channels.isEmpty) {
+      _selectedChannelId = null;
+      _query = '';
+      notifyListeners();
+      return;
+    }
     _selectedChannelId = channels
         .firstWhere(
           (channel) => channel.kind == ChannelKind.text,

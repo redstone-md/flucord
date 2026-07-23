@@ -213,6 +213,31 @@ void main() {
       expect(request.uri.queryParameters['limit'], '100');
       expect(request.uri.queryParameters['before'], 'message-100');
     });
+
+    test('opens a documented bot direct message channel', () async {
+      final transport = _RecordingTransport([
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body:
+              '{"id":"dm-1","type":1,"recipients":[{"id":"123456789012345678","username":"Jack"}]}',
+        ),
+      ]);
+      final client = DiscordApiClient(botToken: 'token', transport: transport);
+
+      final channel = await client.createDirectMessageChannel(
+        '123456789012345678',
+      );
+
+      expect(channel['id'], 'dm-1');
+      final request = transport.requests.single;
+      expect(request.method, 'POST');
+      expect(request.uri.path, '/api/v10/users/@me/channels');
+      expect(
+        jsonDecode(utf8.decode(request.body!))['recipient_id'],
+        '123456789012345678',
+      );
+    });
   });
 
   test('gateway protocol identifies then resumes the same session', () {
@@ -225,6 +250,9 @@ void main() {
           DiscordGatewayClient.guildMessagesIntent |
           DiscordGatewayClient.guildMessageReactionsIntent |
           DiscordGatewayClient.guildMessageTypingIntent |
+          DiscordGatewayClient.directMessagesIntent |
+          DiscordGatewayClient.directMessageReactionsIntent |
+          DiscordGatewayClient.directMessageTypingIntent |
           DiscordGatewayClient.messageContentIntent,
     );
 
@@ -232,7 +260,7 @@ void main() {
     expect(identify['op'], 2);
     final identifyData = identify['d']! as Map<String, Object?>;
     expect(identifyData['token'], 'bot-token');
-    expect(identifyData['intents'], 36611);
+    expect(identifyData['intents'], 65283);
     expect(identifyData['large_threshold'], 250);
 
     protocol.accept({
@@ -338,6 +366,39 @@ void main() {
     expect(edited.authorId, 'user-1');
     expect(edited.isEdited, isTrue);
     expect(edited.embeds.single.title, 'Release status');
+  });
+
+  test('mapper builds a direct message inbox with recipient identity', () {
+    final workspace = DiscordMapper().workspace(
+      currentUser: {'id': 'bot-1', 'username': 'Flucord Bot'},
+      guilds: const [],
+      channelsByGuild: const {},
+      includeDirectMessagesSpace: true,
+      directChannels: const [
+        {
+          'id': 'dm-1',
+          'type': 1,
+          'recipients': [
+            {
+              'id': '123456789012345678',
+              'username': 'jack',
+              'global_name': 'Jack',
+              'avatar': 'avatar-hash',
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(workspace.spaces.single.kind, SpaceKind.directMessages);
+    final channel = workspace.channels.single;
+    expect(channel.name, 'Jack');
+    expect(channel.recipientId, '123456789012345678');
+    expect(channel.isDirectMessage, isTrue);
+    expect(
+      workspace.memberById('123456789012345678').avatarUrl,
+      contains('/avatars/123456789012345678/'),
+    );
   });
 }
 

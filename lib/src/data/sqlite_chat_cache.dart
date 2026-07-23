@@ -205,6 +205,29 @@ final class SqliteChatCache implements ChatCache {
   );
 
   @override
+  Future<void> writeSpace(CommunitySpace space) async {
+    final existing = await _database.query(
+      'spaces',
+      columns: ['sort_index'],
+      where: 'id = ?',
+      whereArgs: [space.id],
+      limit: 1,
+    );
+    final countRows = await _database.rawQuery(
+      'SELECT COUNT(*) AS space_count FROM spaces',
+    );
+    final count = countRows.single['space_count']! as int;
+    await _database.insert(
+      'spaces',
+      _spaceToRow(
+        space,
+        existing.isEmpty ? count : existing.single['sort_index']! as int,
+      ),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
   Future<void> deleteMessage(String messageId) =>
       _database.delete('messages', where: 'id = ?', whereArgs: [messageId]);
 
@@ -254,6 +277,7 @@ final class SqliteChatCache implements ChatCache {
     'monogram': space.monogram,
     'color_value': space.colorValue,
     'icon_url': space.iconUrl,
+    'kind': space.kind.index,
     'sort_index': index,
   };
 
@@ -264,6 +288,7 @@ final class SqliteChatCache implements ChatCache {
         monogram: row['monogram']! as String,
         colorValue: row['color_value']! as int,
         iconUrl: row['icon_url'] as String?,
+        kind: SpaceKind.values[row['kind']! as int],
       );
 
   static Map<String, Object?> _roleToRow(CommunityRole role) => {
@@ -295,6 +320,7 @@ final class SqliteChatCache implements ChatCache {
     'mention_count': channel.mentionCount,
     'parent_id': channel.parentId,
     'is_thread': channel.isThread ? 1 : 0,
+    'recipient_id': channel.recipientId,
     'sort_index': index,
   };
 
@@ -309,6 +335,7 @@ final class SqliteChatCache implements ChatCache {
         mentionCount: row['mention_count']! as int,
         parentId: row['parent_id'] as String?,
         isThread: row['is_thread'] == 1,
+        recipientId: row['recipient_id'] as String?,
       );
 
   static Map<String, Object?> _memberToRow(Member member) => {

@@ -2,7 +2,18 @@ import '../../domain/chat_models.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
 
+final class DiscordMappedDirectMessage {
+  const DiscordMappedDirectMessage({
+    required this.channel,
+    required this.recipient,
+  });
+
+  final ConversationChannel channel;
+  final Member recipient;
+}
+
 final class DiscordMapper {
+  static const directMessagesSpaceId = CommunitySpace.directMessagesId;
   static const _colors = [
     0xff456b5a,
     0xff765341,
@@ -19,11 +30,22 @@ final class DiscordMapper {
     Map<String, List<Map<String, Object?>>> threadsByGuild = const {},
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
     Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
+    List<Map<String, Object?>> directChannels = const [],
+    bool includeDirectMessagesSpace = false,
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
     final roles = <CommunityRole>[];
     final members = <String, Member>{};
+    if (includeDirectMessagesSpace || directChannels.isNotEmpty) {
+      spaces.add(directMessagesSpace);
+    }
+    for (final payload in directChannels) {
+      final mapped = directMessage(payload, currentUser['id']! as String);
+      if (mapped == null) continue;
+      channels.add(mapped.channel);
+      members[mapped.recipient.id] = mapped.recipient;
+    }
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
       final rawChannels = [
@@ -68,6 +90,38 @@ final class DiscordMapper {
       members: members.values.toList(),
       messages: const [],
       currentMemberId: currentMember.id,
+    );
+  }
+
+  CommunitySpace get directMessagesSpace =>
+      const CommunitySpace.directMessages();
+
+  DiscordMappedDirectMessage? directMessage(
+    Map<String, Object?> payload,
+    String currentUserId,
+  ) {
+    if (payload['type'] != 1) return null;
+    final recipients = (payload['recipients'] as List? ?? const [])
+        .whereType<Map>()
+        .map((recipient) => recipient.cast<String, Object?>())
+        .where((recipient) => recipient['id'] != currentUserId)
+        .toList(growable: false);
+    if (recipients.isEmpty) return null;
+    final recipient = member(
+      recipients.first,
+      role: 'Direct message',
+      spaceIds: const {directMessagesSpaceId},
+    );
+    return DiscordMappedDirectMessage(
+      recipient: recipient,
+      channel: ConversationChannel(
+        id: payload['id']! as String,
+        spaceId: directMessagesSpaceId,
+        name: recipient.displayName,
+        topic: 'Direct message with ${recipient.displayName}',
+        kind: ChannelKind.text,
+        recipientId: recipient.id,
+      ),
     );
   }
 

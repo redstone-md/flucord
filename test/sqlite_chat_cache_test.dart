@@ -215,6 +215,57 @@ void main() {
     expect(restored.messages.map((item) => item.id), ['older', 'newer']);
   });
 
+  test('persists direct message space and recipient identity', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    addTearDown(cache.close);
+    final workspace = ChatWorkspace(
+      spaces: const [CommunitySpace.directMessages()],
+      channels: const [
+        ConversationChannel(
+          id: 'dm-1',
+          spaceId: CommunitySpace.directMessagesId,
+          name: 'Jack',
+          topic: 'Direct message with Jack',
+          kind: ChannelKind.text,
+          recipientId: 'user-1',
+        ),
+      ],
+      members: const [
+        Member(
+          id: 'bot-1',
+          displayName: 'Flucord Bot',
+          initials: 'FB',
+          role: 'Discord bot',
+          presence: Presence.online,
+          colorValue: 0xff456b5a,
+        ),
+        Member(
+          id: 'user-1',
+          displayName: 'Jack',
+          initials: 'J',
+          role: 'Direct message',
+          presence: Presence.offline,
+          colorValue: 0xff59636a,
+          spaceIds: {CommunitySpace.directMessagesId},
+          avatarUrl: 'https://cdn.discordapp.com/avatars/user-1/avatar.webp',
+        ),
+      ],
+      messages: const [],
+      currentMemberId: 'bot-1',
+    );
+
+    await cache.writeWorkspace(workspace);
+    final restored = await cache.readWorkspace();
+
+    expect(restored?.spaces.single.kind, SpaceKind.directMessages);
+    expect(restored?.channels.single.recipientId, 'user-1');
+    expect(restored?.channels.single.isDirectMessage, isTrue);
+    expect(restored?.memberById('user-1').displayName, 'Jack');
+  });
+
   test('migrates the version 1 message and channel schema', () async {
     final directory = await Directory.systemTemp.createTemp('flucord-db-test-');
     addTearDown(() => directory.delete(recursive: true));
@@ -309,6 +360,8 @@ void main() {
       contains('avatar_urls_by_space_json'),
     );
     expect(spaceColumns.map((row) => row['name']), contains('icon_url'));
+    expect(spaceColumns.map((row) => row['name']), contains('kind'));
+    expect(channelColumns.map((row) => row['name']), contains('recipient_id'));
     expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
     expect(roleTables, hasLength(1));
   });

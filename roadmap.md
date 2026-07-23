@@ -85,7 +85,12 @@ browser runtime or dependency on Discord's private user API.
     states, play/pause, mute, seek, duration, fullscreen, and deterministic
     teardown. A local MP4 integration smoke verifies the native texture and
     playback commands without network access or an embedded browser surface.
-11. macOS and Linux packaging after Windows behavior stabilizes.
+11. Completed: documented bot Direct Messages with the required Gateway
+    intents, proactive REST channel creation by recipient ID, live DM channel
+    discovery, recipient identity, unread state, and SQLite restoration. Bot
+    READY payloads intentionally do not expose an open-DM list, so cached and
+    live channels form the native inbox without private user endpoints.
+12. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 

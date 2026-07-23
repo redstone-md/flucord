@@ -29,6 +29,13 @@ class ServerRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentMember = workspace.memberById(workspace.currentMemberId);
+    final directSpaces = workspace.spaces.where(
+      (space) => space.isDirectMessages,
+    );
+    final directSpace = directSpaces.isEmpty ? null : directSpaces.first;
+    final guildSpaces = workspace.spaces
+        .where((space) => !space.isDirectMessages)
+        .toList(growable: false);
     return Container(
       width: 72,
       decoration: BoxDecoration(
@@ -39,6 +46,13 @@ class ServerRail extends StatelessWidget {
         children: [
           const SizedBox(height: 12),
           _BrandMark(),
+          if (directSpace != null) ...[
+            const SizedBox(height: 8),
+            _DirectMessagesButton(
+              selected: directSpace.id == selectedSpaceId,
+              onPressed: () => onSelectSpace(directSpace.id),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, indent: 18, endIndent: 18),
@@ -46,10 +60,10 @@ class ServerRail extends StatelessWidget {
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              itemCount: workspace.spaces.length,
+              itemCount: guildSpaces.length,
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final space = workspace.spaces[index];
+                final space = guildSpaces[index];
                 return _SpaceButton(
                   space: space,
                   selected: space.id == selectedSpaceId,
@@ -91,6 +105,59 @@ class ServerRail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DirectMessagesButton extends StatelessWidget {
+  const _DirectMessagesButton({
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 46,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        if (selected)
+          const Positioned(
+            left: 0,
+            child: SizedBox(
+              width: 3,
+              height: 28,
+              child: ColoredBox(color: FlucordColors.signal),
+            ),
+          ),
+        Tooltip(
+          message: 'Direct Messages',
+          child: InkWell(
+            key: const ValueKey('space-direct-messages'),
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected
+                    ? FlucordColors.signalDark
+                    : context.surfaces.raised,
+                borderRadius: BorderRadius.circular(selected ? 8 : 22),
+                border: Border.all(color: context.surfaces.border),
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline,
+                size: 20,
+                color: selected ? Colors.white : context.surfaces.muted,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BrandMark extends StatelessWidget {

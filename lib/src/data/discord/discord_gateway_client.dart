@@ -96,7 +96,14 @@ abstract interface class DiscordVoiceStateGateway {
   });
 }
 
-final class DiscordGatewayClient implements DiscordVoiceStateGateway {
+abstract interface class DiscordChatGateway
+    implements DiscordVoiceStateGateway {
+  Future<void> connect(String gatewayUrl);
+
+  Future<void> close();
+}
+
+final class DiscordGatewayClient implements DiscordChatGateway {
   DiscordGatewayClient({required String botToken})
     : _protocol = DiscordGatewayProtocol(
         token: botToken.trim(),
@@ -107,6 +114,9 @@ final class DiscordGatewayClient implements DiscordVoiceStateGateway {
             guildMessagesIntent |
             guildMessageReactionsIntent |
             guildMessageTypingIntent |
+            directMessagesIntent |
+            directMessageReactionsIntent |
+            directMessageTypingIntent |
             messageContentIntent,
       );
 
@@ -116,6 +126,9 @@ final class DiscordGatewayClient implements DiscordVoiceStateGateway {
   static const guildMessagesIntent = 1 << 9;
   static const guildMessageReactionsIntent = 1 << 10;
   static const guildMessageTypingIntent = 1 << 11;
+  static const directMessagesIntent = 1 << 12;
+  static const directMessageReactionsIntent = 1 << 13;
+  static const directMessageTypingIntent = 1 << 14;
   static const messageContentIntent = 1 << 15;
 
   final DiscordGatewayProtocol _protocol;
@@ -135,6 +148,7 @@ final class DiscordGatewayClient implements DiscordVoiceStateGateway {
   @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
+  @override
   Future<void> connect(String gatewayUrl) async {
     _gatewayUrl = gatewayUrl;
     _closing = false;
@@ -296,6 +310,7 @@ final class DiscordGatewayClient implements DiscordVoiceStateGateway {
     if (!_events.isClosed) _events.add(DiscordGatewayStatusEvent(status));
   }
 
+  @override
   Future<void> close() async {
     _closing = true;
     _reconnectTimer?.cancel();

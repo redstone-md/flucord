@@ -4,6 +4,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'member_avatar.dart';
 
 class ChannelSidebar extends StatelessWidget {
   const ChannelSidebar({
@@ -13,18 +14,23 @@ class ChannelSidebar extends StatelessWidget {
     required this.onSelectChannel,
     required this.sessionMode,
     required this.connectionStatus,
+    required this.workspace,
+    required this.onNewDirectMessage,
     super.key,
   });
 
   final CommunitySpace space;
   final List<ConversationChannel> channels;
-  final String selectedChannelId;
+  final String? selectedChannelId;
   final ValueChanged<String> onSelectChannel;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
+  final ChatWorkspace workspace;
+  final VoidCallback onNewDirectMessage;
 
   @override
   Widget build(BuildContext context) {
+    final isDirect = space.isDirectMessages;
     final textChannels = channels
         .where(
           (channel) => channel.kind == ChannelKind.text && !channel.isThread,
@@ -67,9 +73,10 @@ class ChannelSidebar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.more_horiz),
-                  tooltip: 'Server menu',
+                  key: isDirect ? const ValueKey('new-direct-message') : null,
+                  onPressed: isDirect ? onNewDirectMessage : () {},
+                  icon: Icon(isDirect ? Icons.edit_square : Icons.more_horiz),
+                  tooltip: isDirect ? 'New message' : 'Server menu',
                 ),
               ],
             ),
@@ -78,14 +85,17 @@ class ChannelSidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
               children: [
-                const _SectionLabel(label: 'Text channels'),
-                for (final channel in textChannels)
+                _SectionLabel(label: isDirect ? 'Messages' : 'Text channels'),
+                for (final channel in isDirect ? channels : textChannels)
                   _ChannelRow(
                     channel: channel,
                     selected: channel.id == selectedChannelId,
+                    recipient: channel.recipientId == null
+                        ? null
+                        : workspace.memberOrNull(channel.recipientId!),
                     onPressed: () => onSelectChannel(channel.id),
                   ),
-                if (threads.isNotEmpty) ...[
+                if (!isDirect && threads.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   const _SectionLabel(label: 'Active threads'),
                   for (final channel in threads)
@@ -96,7 +106,7 @@ class ChannelSidebar extends StatelessWidget {
                       onPressed: () => onSelectChannel(channel.id),
                     ),
                 ],
-                if (voiceChannels.isNotEmpty) ...[
+                if (!isDirect && voiceChannels.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   const _SectionLabel(label: 'Voice channels'),
                   for (final channel in voiceChannels)
@@ -205,12 +215,14 @@ class _ChannelRow extends StatelessWidget {
     required this.channel,
     required this.selected,
     required this.onPressed,
+    this.recipient,
     this.indented = false,
   });
 
   final ConversationChannel channel;
   final bool selected;
   final VoidCallback onPressed;
+  final Member? recipient;
   final bool indented;
 
   @override
@@ -240,15 +252,20 @@ class _ChannelRow extends StatelessWidget {
                       : null,
                 ),
                 SizedBox(width: indented ? 18 : 8),
-                Icon(
-                  channel.isThread
-                      ? Icons.forum_outlined
-                      : channel.kind == ChannelKind.text
-                      ? Icons.tag
-                      : Icons.volume_up_outlined,
-                  size: 17,
-                  color: foreground,
-                ),
+                if (recipient != null)
+                  MemberAvatar(member: recipient!, size: 24)
+                else
+                  Icon(
+                    channel.isDirectMessage
+                        ? Icons.person_outline
+                        : channel.isThread
+                        ? Icons.forum_outlined
+                        : channel.kind == ChannelKind.text
+                        ? Icons.tag
+                        : Icons.volume_up_outlined,
+                    size: 17,
+                    color: foreground,
+                  ),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(

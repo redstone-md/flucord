@@ -57,6 +57,8 @@ class ChatHeader extends StatelessWidget {
                         child: Text(
                           '${item.isThread
                               ? 'Thread:'
+                              : item.isDirectMessage
+                              ? '@'
                               : item.kind == ChannelKind.text
                               ? '#'
                               : 'Voice:'} ${item.name}',
@@ -69,6 +71,8 @@ class ChatHeader extends StatelessWidget {
                 Icon(
                   channel.isThread
                       ? Icons.forum_outlined
+                      : channel.isDirectMessage
+                      ? Icons.person_outline
                       : channel.kind == ChannelKind.text
                       ? Icons.tag
                       : Icons.volume_up_outlined,

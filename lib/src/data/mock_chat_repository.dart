@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import 'mock_chat_seed.dart';
 
 final class MockChatRepository implements ChatRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
@@ -58,6 +59,34 @@ final class MockChatRepository implements ChatRepository {
           .toList(),
       members: _workspace.members,
     );
+  }
+
+  @override
+  Future<DirectConversation> openDirectConversation(String recipientId) async {
+    await _wait();
+    final recipient = Member(
+      id: recipientId,
+      displayName: 'User $recipientId',
+      initials: 'U',
+      role: 'Direct message',
+      presence: Presence.offline,
+      colorValue: 0xff59636a,
+      spaceIds: const {CommunitySpace.directMessagesId},
+    );
+    const space = CommunitySpace.directMessages();
+    final channel = ConversationChannel(
+      id: 'dm-$recipientId',
+      spaceId: space.id,
+      name: recipient.displayName,
+      topic: 'Direct message with ${recipient.displayName}',
+      kind: ChannelKind.text,
+      recipientId: recipient.id,
+    );
+    _workspace = _workspace
+        .upsertSpace(space)
+        .upsertMember(recipient)
+        .upsertChannel(channel);
+    return DirectConversation(channel: channel, recipient: recipient);
   }
 
   @override
@@ -214,32 +243,6 @@ final class MockChatRepository implements ChatRepository {
   }
 
   static ChatWorkspace _seedWorkspace() {
-    const spaces = [
-      CommunitySpace(
-        id: 'forge',
-        name: 'The Forge',
-        monogram: 'TF',
-        colorValue: 0xff456b5a,
-      ),
-      CommunitySpace(
-        id: 'night',
-        name: 'Night Shift',
-        monogram: 'NS',
-        colorValue: 0xff765341,
-      ),
-      CommunitySpace(
-        id: 'studio',
-        name: 'Signal Studio',
-        monogram: 'SS',
-        colorValue: 0xff5f5b76,
-      ),
-      CommunitySpace(
-        id: 'lab',
-        name: 'Home Lab',
-        monogram: 'HL',
-        colorValue: 0xff59636a,
-      ),
-    ];
     const channels = [
       ConversationChannel(
         id: 'forge-general',
@@ -470,7 +473,7 @@ final class MockChatRepository implements ChatRepository {
       ),
     ];
     return ChatWorkspace(
-      spaces: spaces,
+      spaces: MockChatSeed.spaces,
       channels: channels,
       members: members,
       messages: messages,
