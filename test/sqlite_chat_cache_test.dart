@@ -162,6 +162,48 @@ void main() {
     expect(direct?.body, 'SQLite upsert confirmed.');
   });
 
+  test('appends paginated history without deleting newer messages', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    addTearDown(cache.close);
+    ChatMessage message(String id, int minute) => ChatMessage(
+      id: id,
+      channelId: 'channel-1',
+      authorId: 'user-1',
+      body: id,
+      sentAt: DateTime.utc(2026, 7, 23, 2, minute),
+    );
+    const member = Member(
+      id: 'user-1',
+      displayName: 'Jack',
+      initials: 'JK',
+      role: 'Bot',
+      presence: Presence.online,
+      colorValue: 0xff48745f,
+    );
+
+    await cache.writeChannelHistory(
+      ChannelHistory(
+        channelId: 'channel-1',
+        messages: [message('newer', 2)],
+        members: const [member],
+      ),
+    );
+    await cache.writeChannelHistory(
+      ChannelHistory(
+        channelId: 'channel-1',
+        messages: [message('older', 1)],
+        members: const [member],
+      ),
+      replaceExisting: false,
+    );
+
+    final restored = await cache.readChannelHistory('channel-1');
+    expect(restored.messages.map((item) => item.id), ['older', 'newer']);
+  });
+
   test('migrates the version 1 message and channel schema', () async {
     final directory = await Directory.systemTemp.createTemp('flucord-db-test-');
     addTearDown(() => directory.delete(recursive: true));

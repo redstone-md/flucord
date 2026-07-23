@@ -7,6 +7,7 @@ import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_api_client.dart';
 import 'discord_gateway_client.dart';
+import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_voice_signaling_service.dart';
 
@@ -30,6 +31,11 @@ final class DiscordChatRepository
   final DiscordGatewayClient _gateway;
   final ChatCache _cache;
   final DiscordMapper _mapper;
+  late final DiscordHistoryLoader _historyLoader = DiscordHistoryLoader(
+    _api,
+    _mapper,
+    _cache,
+  );
   final DiscordVoiceSignalingService _voiceSignaling;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
@@ -91,19 +97,10 @@ final class DiscordChatRepository
   }
 
   @override
-  Future<ChannelHistory> loadChannelHistory(String channelId) async {
-    try {
-      final payloads = await _api.getChannelMessages(channelId);
-      final history = _mapper.history(channelId, payloads);
-      await _cache.writeChannelHistory(history);
-      return history;
-    } catch (error) {
-      if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readChannelHistory(channelId);
-      if (cached.messages.isNotEmpty) return cached;
-      rethrow;
-    }
-  }
+  Future<ChannelHistoryPage> loadChannelHistory(
+    String channelId, {
+    String? beforeMessageId,
+  }) => _historyLoader.load(channelId, beforeMessageId: beforeMessageId);
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) async {

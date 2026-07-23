@@ -83,7 +83,10 @@ abstract interface class ChatRepository {
 
   Future<ChatWorkspace> loadWorkspace();
 
-  Future<ChannelHistory> loadChannelHistory(String channelId);
+  Future<ChannelHistoryPage> loadChannelHistory(
+    String channelId, {
+    String? beforeMessageId,
+  });
 
   Future<ChannelHistory> loadPinnedMessages(String channelId);
 

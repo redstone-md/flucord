@@ -10,6 +10,11 @@ documented Discord CDN guild/member identity, and theme switching without a
 browser runtime. Discord rich embeds retain their documented structured fields
 across live updates and offline cache restores.
 
+Channel history loads through Discord's documented `before` cursor in pages
+of up to 100 messages. Reaching the top requests the next page while keeping
+the visible message anchored. Loaded pages are upserted into SQLite, so the
+same cached archive remains browsable in 100-message slices while offline.
+
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
 
@@ -95,7 +100,7 @@ is not sent to Discord.
 ## Verify
 
 ```powershell
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze
 flutter test
 flutter test integration_test/voice_playback_smoke_test.dart -d windows

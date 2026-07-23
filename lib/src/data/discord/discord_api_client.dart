@@ -138,9 +138,13 @@ final class DiscordApiClient {
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {
     int limit = 100,
+    String? beforeMessageId,
   }) => _getList(
     '/channels/$channelId/messages',
-    query: {'limit': limit.clamp(1, 100).toString()},
+    query: {
+      'limit': limit.clamp(1, 100).toString(),
+      'before': ?beforeMessageId,
+    },
   );
 
   Future<List<Map<String, Object?>>> getChannelPins(String channelId) async {

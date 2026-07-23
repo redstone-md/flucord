@@ -251,13 +251,18 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
-  Future<void> writeChannelHistory(ChannelHistory history) async {
+  Future<void> writeChannelHistory(
+    ChannelHistory history, {
+    bool replaceExisting = true,
+  }) async {
     await _database.transaction((transaction) async {
-      await transaction.delete(
-        'messages',
-        where: 'channel_id = ?',
-        whereArgs: [history.channelId],
-      );
+      if (replaceExisting) {
+        await transaction.delete(
+          'messages',
+          where: 'channel_id = ?',
+          whereArgs: [history.channelId],
+        );
+      }
       final batch = transaction.batch();
       for (final member in history.members) {
         batch.insert(

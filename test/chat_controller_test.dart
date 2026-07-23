@@ -210,8 +210,11 @@ final class _EventRepository implements ChatRepository {
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
 
   @override
-  Future<ChannelHistory> loadChannelHistory(String channelId) =>
-      _delegate.loadChannelHistory(channelId);
+  Future<ChannelHistoryPage> loadChannelHistory(
+    String channelId, {
+    String? beforeMessageId,
+  }) =>
+      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>

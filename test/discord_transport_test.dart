@@ -194,6 +194,25 @@ void main() {
       expect(transport.requests[4].method, 'DELETE');
       expect(transport.requests[5].uri.path, '/api/v10/channels/c1/typing');
     });
+
+    test('paginates message history with a bounded before cursor', () async {
+      final transport = _RecordingTransport([
+        const DiscordHttpResponse(statusCode: 200, headers: {}, body: '[]'),
+      ]);
+      final client = DiscordApiClient(botToken: 'token', transport: transport);
+
+      await client.getChannelMessages(
+        'c1',
+        limit: 250,
+        beforeMessageId: 'message-100',
+      );
+
+      final request = transport.requests.single;
+      expect(request.method, 'GET');
+      expect(request.uri.path, '/api/v10/channels/c1/messages');
+      expect(request.uri.queryParameters['limit'], '100');
+      expect(request.uri.queryParameters['before'], 'message-100');
+    });
   });
 
   test('gateway protocol identifies then resumes the same session', () {

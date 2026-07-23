@@ -27,6 +27,9 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadedChannels = {};
   final Set<String> _loadingChannels = {};
   final Map<String, Object> _channelErrors = {};
+  final Set<String> _loadingOlderChannels = {};
+  final Set<String> _exhaustedChannels = {};
+  final Map<String, Object> _olderChannelErrors = {};
   final Map<String, ChannelHistory> _pinnedMessages = {};
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
@@ -64,6 +67,13 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.contains(channelId);
 
   Object? channelError(String channelId) => _channelErrors[channelId];
+  bool canLoadOlderMessages(String channelId) =>
+      _loadedChannels.contains(channelId) &&
+      !_exhaustedChannels.contains(channelId);
+  bool isLoadingOlderMessages(String channelId) =>
+      _loadingOlderChannels.contains(channelId);
+  Object? olderMessagesError(String channelId) =>
+      _olderChannelErrors[channelId];
   ChannelHistory? pinnedMessages(String channelId) =>
       _pinnedMessages[channelId];
   bool isLoadingPins(String channelId) => _loadingPins.contains(channelId);
@@ -87,6 +97,9 @@ final class ChatController extends ChangeNotifier {
     _loadedChannels.clear();
     _loadingChannels.clear();
     _channelErrors.clear();
+    _loadingOlderChannels.clear();
+    _exhaustedChannels.clear();
+    _olderChannelErrors.clear();
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
@@ -134,16 +147,63 @@ final class ChatController extends ChangeNotifier {
     }
     _loadingChannels.add(channelId);
     _channelErrors.remove(channelId);
+    _olderChannelErrors.remove(channelId);
     notifyListeners();
     try {
-      final history = await _repository.loadChannelHistory(channelId);
-      _workspace = _workspace?.mergeHistory(history);
+      final page = await _repository.loadChannelHistory(channelId);
+      _workspace = _workspace?.mergeHistory(page.history);
       _loadedChannels.add(channelId);
+      _setHistoryExhausted(channelId, !page.hasMore);
     } catch (error) {
       _channelErrors[channelId] = error;
     } finally {
       _loadingChannels.remove(channelId);
       if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> loadOlderMessages(String channelId) async {
+    final workspace = _workspace;
+    if (workspace == null ||
+        !canLoadOlderMessages(channelId) ||
+        _loadingOlderChannels.contains(channelId)) {
+      return;
+    }
+    final messages = workspace.messagesFor(channelId);
+    if (messages.isEmpty) {
+      _exhaustedChannels.add(channelId);
+      notifyListeners();
+      return;
+    }
+    _loadingOlderChannels.add(channelId);
+    _olderChannelErrors.remove(channelId);
+    notifyListeners();
+    try {
+      final page = await _repository.loadChannelHistory(
+        channelId,
+        beforeMessageId: messages.first.id,
+      );
+      _workspace = _workspace?.mergeHistory(
+        page.history,
+        replaceChannel: false,
+      );
+      _setHistoryExhausted(
+        channelId,
+        !page.hasMore || page.history.messages.isEmpty,
+      );
+    } catch (error) {
+      _olderChannelErrors[channelId] = error;
+    } finally {
+      _loadingOlderChannels.remove(channelId);
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _setHistoryExhausted(String channelId, bool exhausted) {
+    if (exhausted) {
+      _exhaustedChannels.add(channelId);
+    } else {
+      _exhaustedChannels.remove(channelId);
     }
   }
 

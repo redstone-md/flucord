@@ -127,6 +127,18 @@ class FlucordShell extends StatelessWidget {
                           isSending: chatController.isSending,
                           isLoading: chatController.isChannelLoading(channelId),
                           loadError: chatController.channelError(channelId),
+                          canLoadOlder: chatController.canLoadOlderMessages(
+                            channelId,
+                          ),
+                          isLoadingOlder: chatController.isLoadingOlderMessages(
+                            channelId,
+                          ),
+                          olderLoadError: chatController.olderMessagesError(
+                            channelId,
+                          ),
+                          onLoadOlder: () => unawaited(
+                            chatController.loadOlderMessages(channelId),
+                          ),
                           onRetry: () => chatController.openChannel(
                             channelId,
                             refresh: true,
@@ -215,6 +227,10 @@ class _ConversationPane extends StatefulWidget {
     required this.isSending,
     required this.isLoading,
     required this.loadError,
+    required this.canLoadOlder,
+    required this.isLoadingOlder,
+    required this.olderLoadError,
+    required this.onLoadOlder,
     required this.onRetry,
     required this.onSelectChannel,
     required this.onQueryChanged,
@@ -242,6 +258,10 @@ class _ConversationPane extends StatefulWidget {
   final bool isSending;
   final bool isLoading;
   final Object? loadError;
+  final bool canLoadOlder;
+  final bool isLoadingOlder;
+  final Object? olderLoadError;
+  final VoidCallback onLoadOlder;
   final VoidCallback onRetry;
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
@@ -294,6 +314,10 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onToggleReaction: widget.onToggleReaction,
         onAddReaction: widget.onAddReaction,
         onTogglePin: widget.onTogglePin,
+        canLoadOlder: widget.canLoadOlder,
+        isLoadingOlder: widget.isLoadingOlder,
+        olderLoadError: widget.olderLoadError,
+        onLoadOlder: widget.onLoadOlder,
       ),
     };
     return Column(

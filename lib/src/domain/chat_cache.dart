@@ -11,7 +11,10 @@ abstract interface class ChatCache {
 
   Future<ChannelHistory> readPinnedMessages(String channelId);
 
-  Future<void> writeChannelHistory(ChannelHistory history);
+  Future<void> writeChannelHistory(
+    ChannelHistory history, {
+    bool replaceExisting = true,
+  });
 
   Future<void> writeMessage(ChatMessage message, {Member? member});
 

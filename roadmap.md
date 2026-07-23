@@ -71,7 +71,11 @@ browser runtime or dependency on Discord's private user API.
    author/provider metadata, title, description, adaptive inline fields,
    source color, image/thumbnail error states, footer, and timestamp while
    preserving video metadata for a later native player.
-8. macOS and Linux packaging after Windows behavior stabilizes.
+8. Completed: channel history uses Discord's documented `before` cursor in
+   bounded 100-message pages. Older pages merge without duplicate IDs, append
+   to SQLite instead of replacing newer history, fall back to cached cursor
+   slices offline, and preserve the visible timeline anchor when prepended.
+9. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 

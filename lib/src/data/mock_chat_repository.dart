@@ -26,12 +26,24 @@ final class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<ChannelHistory> loadChannelHistory(String channelId) async {
+  Future<ChannelHistoryPage> loadChannelHistory(
+    String channelId, {
+    String? beforeMessageId,
+  }) async {
     await _wait();
-    return ChannelHistory(
-      channelId: channelId,
-      messages: _workspace.messagesFor(channelId),
-      members: _workspace.members,
+    final messages = _workspace.messagesFor(channelId);
+    final end = beforeMessageId == null
+        ? messages.length
+        : messages.indexWhere((message) => message.id == beforeMessageId);
+    final safeEnd = end < 0 ? 0 : end;
+    final start = safeEnd > 100 ? safeEnd - 100 : 0;
+    return ChannelHistoryPage(
+      history: ChannelHistory(
+        channelId: channelId,
+        messages: messages.sublist(start, safeEnd),
+        members: _workspace.members,
+      ),
+      hasMore: start > 0,
     );
   }
 

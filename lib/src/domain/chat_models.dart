@@ -289,15 +289,24 @@ final class ChatWorkspace {
     currentMemberId: currentMemberId ?? this.currentMemberId,
   );
 
-  ChatWorkspace mergeHistory(ChannelHistory history) {
+  ChatWorkspace mergeHistory(
+    ChannelHistory history, {
+    bool replaceChannel = true,
+  }) {
     final memberMap = {for (final member in members) member.id: member};
     for (final member in history.members) {
       memberMap[member.id] = _mergeMember(memberMap[member.id], member);
     }
-    final nextMessages = messages
-        .where((message) => message.channelId != history.channelId)
-        .toList();
-    nextMessages.addAll(history.messages);
+    final channelMessages = <String, ChatMessage>{
+      if (!replaceChannel)
+        for (final message in messages)
+          if (message.channelId == history.channelId) message.id: message,
+      for (final message in history.messages) message.id: message,
+    };
+    final nextMessages = [
+      ...messages.where((message) => message.channelId != history.channelId),
+      ...channelMessages.values,
+    ];
     nextMessages.sort((left, right) => left.sentAt.compareTo(right.sentAt));
     return copyWith(members: memberMap.values.toList(), messages: nextMessages);
   }
@@ -425,4 +434,11 @@ final class ChannelHistory {
   final String channelId;
   final List<ChatMessage> messages;
   final List<Member> members;
+}
+
+final class ChannelHistoryPage {
+  const ChannelHistoryPage({required this.history, required this.hasMore});
+
+  final ChannelHistory history;
+  final bool hasMore;
 }
