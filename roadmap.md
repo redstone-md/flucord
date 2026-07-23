@@ -124,6 +124,10 @@ browser runtime or dependency on Discord's private user API.
 20. Completed: documented guild emoji load through REST, update through
     Gateway, persist in SQLite v11, and feed a searchable native composer
     picker that inserts Unicode or Discord custom-emoji syntax at the caret.
+21. Completed: message hover actions reuse the searchable guild-aware picker
+    for Unicode and documented `name:id` custom reactions. The anchored overlay
+    survives pointer transfer from the message, and known custom reactions
+    render as stable native glyphs instead of raw identifiers.
 
 ## Protocol safety
 

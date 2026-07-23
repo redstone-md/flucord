@@ -6,17 +6,29 @@ import 'remote_identity_image.dart';
 
 part 'emoji_picker_data.dart';
 
+enum EmojiPickerPurpose { message, reaction }
+
 class EmojiPickerButton extends StatefulWidget {
   const EmojiPickerButton({
     required this.spaceName,
     required this.customEmojis,
     required this.onSelected,
+    this.purpose = EmojiPickerPurpose.message,
+    this.dimension = 48,
+    this.iconSize = 19,
+    this.buttonKey,
+    this.onMenuStateChanged,
     super.key,
   });
 
   final String spaceName;
   final List<GuildEmoji> customEmojis;
   final ValueChanged<String> onSelected;
+  final EmojiPickerPurpose purpose;
+  final double dimension;
+  final double iconSize;
+  final Key? buttonKey;
+  final ValueChanged<bool>? onMenuStateChanged;
 
   @override
   State<EmojiPickerButton> createState() => _EmojiPickerButtonState();
@@ -28,6 +40,8 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
   @override
   Widget build(BuildContext context) => MenuAnchor(
     controller: _menuController,
+    onOpen: () => widget.onMenuStateChanged?.call(true),
+    onClose: () => widget.onMenuStateChanged?.call(false),
     style: MenuStyle(
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
       backgroundColor: WidgetStatePropertyAll(context.surfaces.surface),
@@ -44,6 +58,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
       EmojiPickerPanel(
         spaceName: widget.spaceName,
         customEmojis: widget.customEmojis,
+        purpose: widget.purpose,
         onSelected: (value) {
           widget.onSelected(value);
           _menuController.close();
@@ -51,16 +66,23 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
       ),
     ],
     builder: (context, controller, _) => IconButton(
-      key: const ValueKey('open-emoji-picker'),
+      key: widget.buttonKey ?? const ValueKey('open-emoji-picker'),
       onPressed: controller.isOpen ? controller.close : controller.open,
-      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      constraints: BoxConstraints.tightFor(
+        width: widget.dimension,
+        height: widget.dimension,
+      ),
       padding: EdgeInsets.zero,
-      tooltip: controller.isOpen ? 'Close emoji picker' : 'Choose emoji',
+      tooltip: controller.isOpen
+          ? widget.purpose.closeTooltip
+          : widget.purpose.openTooltip,
       icon: Icon(
-        controller.isOpen
+        widget.purpose == EmojiPickerPurpose.reaction
+            ? Icons.add_reaction_outlined
+            : controller.isOpen
             ? Icons.emoji_emotions
             : Icons.emoji_emotions_outlined,
-        size: 19,
+        size: widget.iconSize,
         color: controller.isOpen ? FlucordColors.brand : null,
       ),
     ),
@@ -72,12 +94,14 @@ class EmojiPickerPanel extends StatefulWidget {
     required this.spaceName,
     required this.customEmojis,
     required this.onSelected,
+    this.purpose = EmojiPickerPurpose.message,
     super.key,
   });
 
   final String spaceName;
   final List<GuildEmoji> customEmojis;
   final ValueChanged<String> onSelected;
+  final EmojiPickerPurpose purpose;
 
   @override
   State<EmojiPickerPanel> createState() => _EmojiPickerPanelState();
@@ -112,7 +136,10 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PickerHeader(spaceName: widget.spaceName),
+          _PickerHeader(
+            title: widget.purpose.panelTitle,
+            spaceName: widget.spaceName,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
@@ -141,18 +168,12 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
                         _SectionLabel(
                           label: _query.isEmpty ? 'FREQUENT' : 'UNICODE',
                         ),
-                        _EmojiGrid(
-                          choices: unicode,
-                          onSelected: widget.onSelected,
-                        ),
+                        _EmojiGrid(choices: unicode, onSelected: _select),
                       ],
                       if (custom.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         _SectionLabel(label: widget.spaceName.toUpperCase()),
-                        _EmojiGrid(
-                          choices: custom,
-                          onSelected: widget.onSelected,
-                        ),
+                        _EmojiGrid(choices: custom, onSelected: _select),
                       ],
                     ],
                   ),
@@ -161,11 +182,15 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
       ),
     );
   }
+
+  void _select(_EmojiChoice choice) =>
+      widget.onSelected(choice.valueFor(widget.purpose));
 }
 
 class _PickerHeader extends StatelessWidget {
-  const _PickerHeader({required this.spaceName});
+  const _PickerHeader({required this.title, required this.spaceName});
 
+  final String title;
   final String spaceName;
 
   @override
@@ -175,9 +200,9 @@ class _PickerHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          const Text(
-            'Emoji',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -218,7 +243,7 @@ class _EmojiGrid extends StatelessWidget {
   const _EmojiGrid({required this.choices, required this.onSelected});
 
   final List<_EmojiChoice> choices;
-  final ValueChanged<String> onSelected;
+  final ValueChanged<_EmojiChoice> onSelected;
 
   @override
   Widget build(BuildContext context) => GridView.builder(
@@ -236,14 +261,14 @@ class _EmojiGrid extends StatelessWidget {
       return Semantics(
         label: choice.semanticLabel,
         button: true,
-        onTap: () => onSelected(choice.token),
+        onTap: () => onSelected(choice),
         excludeSemantics: true,
         child: Tooltip(
           message: choice.tooltip,
           child: InkWell(
             key: ValueKey('emoji-choice-${choice.key}'),
             borderRadius: BorderRadius.circular(4),
-            onTap: () => onSelected(choice.token),
+            onTap: () => onSelected(choice),
             child: Center(child: _EmojiGlyph(choice: choice)),
           ),
         ),
@@ -305,7 +330,8 @@ class _EmojiEmptyState extends StatelessWidget {
 final class _EmojiChoice {
   const _EmojiChoice({
     required this.key,
-    required this.token,
+    required this.messageToken,
+    required this.reactionKey,
     required this.tooltip,
     required this.semanticLabel,
     required this.fallback,
@@ -315,7 +341,8 @@ final class _EmojiChoice {
 
   factory _EmojiChoice.unicode(_UnicodeEmoji emoji) => _EmojiChoice(
     key: 'unicode-${emoji.name}',
-    token: emoji.glyph,
+    messageToken: emoji.glyph,
+    reactionKey: emoji.glyph,
     tooltip: ':${emoji.name}:',
     semanticLabel: '${emoji.name} emoji',
     fallback: emoji.glyph,
@@ -324,7 +351,8 @@ final class _EmojiChoice {
 
   factory _EmojiChoice.custom(GuildEmoji emoji) => _EmojiChoice(
     key: 'custom-${emoji.id}',
-    token: emoji.messageSyntax,
+    messageToken: emoji.messageSyntax,
+    reactionKey: emoji.reactionKey,
     tooltip: ':${emoji.name}:',
     semanticLabel: '${emoji.name} guild emoji',
     fallback: emoji.name.substring(0, 1).toUpperCase(),
@@ -332,10 +360,33 @@ final class _EmojiChoice {
   );
 
   final String key;
-  final String token;
+  final String messageToken;
+  final String reactionKey;
   final String tooltip;
   final String semanticLabel;
   final String fallback;
   final String? unicodeGlyph;
   final String? imageUrl;
+
+  String valueFor(EmojiPickerPurpose purpose) => switch (purpose) {
+    EmojiPickerPurpose.message => messageToken,
+    EmojiPickerPurpose.reaction => reactionKey,
+  };
+}
+
+extension on EmojiPickerPurpose {
+  String get panelTitle => switch (this) {
+    EmojiPickerPurpose.message => 'Emoji',
+    EmojiPickerPurpose.reaction => 'Add reaction',
+  };
+
+  String get openTooltip => switch (this) {
+    EmojiPickerPurpose.message => 'Choose emoji',
+    EmojiPickerPurpose.reaction => 'Add reaction',
+  };
+
+  String get closeTooltip => switch (this) {
+    EmojiPickerPurpose.message => 'Close emoji picker',
+    EmojiPickerPurpose.reaction => 'Close reaction picker',
+  };
 }

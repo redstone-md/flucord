@@ -32,6 +32,11 @@ inserts the result at the current caret or selection. Guild emoji load through
 affected server catalog. Animated custom emoji use Discord's documented
 `<a:name:id>` syntax and CDN route without private client headers.
 
+The same guild-aware catalog powers the message reaction action. Its anchored
+picker sends Unicode glyphs or Discord's documented `name:id` custom reaction
+key, remains mounted while the pointer crosses from a message hover action into
+the overlay, and renders known custom reactions as compact native image glyphs.
+
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the

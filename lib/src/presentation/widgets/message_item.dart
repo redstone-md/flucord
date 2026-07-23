@@ -6,10 +6,12 @@ import 'package:flutter/services.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'emoji_picker.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
+import 'remote_identity_image.dart';
 
 class MessageItem extends StatefulWidget {
   const MessageItem({
@@ -48,10 +50,9 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
-  static const _quickReactions = ['👍', '❤️', '😂', '🔥', '✓'];
-
   bool _hovered = false;
   bool _editing = false;
+  bool _reactionPickerOpen = false;
   late final TextEditingController _editController = TextEditingController(
     text: widget.message.body,
   );
@@ -145,7 +146,7 @@ class _MessageItemState extends State<MessageItem> {
               ],
             ),
           ),
-          if (_hovered && !_editing)
+          if ((_hovered || _reactionPickerOpen) && !_editing)
             Positioned(right: 18, top: -12, child: _actionBar(context)),
         ],
       ),
@@ -278,36 +279,87 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Widget _reactionChip(BuildContext context, MessageReaction reaction) =>
-      Material(
-        color: reaction.reactedByCurrentUser
-            ? FlucordColors.brand.withValues(alpha: 0.16)
-            : context.surfaces.inset,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          onTap: () => widget.onToggleReaction(widget.message, reaction),
+      Semantics(
+        label: '${reaction.emojiName} reaction, ${reaction.count}',
+        button: true,
+        toggled: reaction.reactedByCurrentUser,
+        onTap: () => widget.onToggleReaction(widget.message, reaction),
+        excludeSemantics: true,
+        child: Material(
+          color: reaction.reactedByCurrentUser
+              ? FlucordColors.brand.withValues(alpha: 0.16)
+              : context.surfaces.inset,
           borderRadius: BorderRadius.circular(4),
-          child: Container(
-            height: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 7),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: reaction.reactedByCurrentUser
-                    ? FlucordColors.brand.withValues(alpha: 0.65)
-                    : context.surfaces.border,
+          child: InkWell(
+            onTap: () => widget.onToggleReaction(widget.message, reaction),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              height: 24,
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: reaction.reactedByCurrentUser
+                      ? FlucordColors.brand.withValues(alpha: 0.65)
+                      : context.surfaces.border,
+                ),
+                borderRadius: BorderRadius.circular(4),
               ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(reaction.emojiName, style: const TextStyle(fontSize: 12)),
-                const SizedBox(width: 5),
-                Text('${reaction.count}', style: const TextStyle(fontSize: 10)),
-              ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _reactionGlyph(reaction),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${reaction.count}',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
+
+  Widget _reactionGlyph(MessageReaction reaction) {
+    final emoji = _guildEmojiFor(reaction);
+    if (emoji == null) {
+      return Text(reaction.emojiName, style: const TextStyle(fontSize: 12));
+    }
+    return SizedBox.square(
+      key: ValueKey('reaction-custom-${widget.message.id}-${reaction.emojiId}'),
+      dimension: 16,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: RemoteIdentityImage(
+          url: emoji.imageUrl,
+          fallback: ColoredBox(
+            color: context.surfaces.raised,
+            child: Center(
+              child: Text(
+                emoji.name.substring(0, 1).toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  GuildEmoji? _guildEmojiFor(MessageReaction reaction) {
+    final id = reaction.emojiId;
+    if (id == null) return null;
+    final spaceId = widget.workspace
+        .channelById(widget.message.channelId)
+        .spaceId;
+    for (final emoji in widget.workspace.emojisFor(spaceId)) {
+      if (emoji.id == id) return emoji;
+    }
+    return null;
+  }
 
   Widget _actionBar(BuildContext context) => Container(
     height: 30,
@@ -324,18 +376,7 @@ class _MessageItemState extends State<MessageItem> {
           tooltip: 'Reply',
           onPressed: () => widget.onReply(widget.message),
         ),
-        PopupMenuButton<String>(
-          tooltip: 'Add reaction',
-          icon: const Icon(Icons.add_reaction_outlined, size: 16),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-          onSelected: (emoji) =>
-              unawaited(widget.onAddReaction(widget.message, emoji)),
-          itemBuilder: (_) => [
-            for (final emoji in _quickReactions)
-              PopupMenuItem(value: emoji, child: Text(emoji)),
-          ],
-        ),
+        _reactionPicker(),
         if (widget.isCurrentUser)
           _ActionButton(
             icon: Icons.edit_outlined,
@@ -361,6 +402,24 @@ class _MessageItemState extends State<MessageItem> {
       ],
     ),
   );
+
+  Widget _reactionPicker() {
+    final channel = widget.workspace.channelById(widget.message.channelId);
+    final space = widget.workspace.spaceById(channel.spaceId);
+    return EmojiPickerButton(
+      buttonKey: ValueKey('add-reaction-${widget.message.id}'),
+      spaceName: space.name,
+      customEmojis: widget.workspace.emojisFor(space.id),
+      purpose: EmojiPickerPurpose.reaction,
+      dimension: 30,
+      iconSize: 16,
+      onMenuStateChanged: (isOpen) {
+        if (mounted) setState(() => _reactionPickerOpen = isOpen);
+      },
+      onSelected: (emoji) =>
+          unawaited(widget.onAddReaction(widget.message, emoji)),
+    );
+  }
 
   static String _formatTime(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:'
