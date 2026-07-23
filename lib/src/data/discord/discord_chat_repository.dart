@@ -48,7 +48,8 @@ final class DiscordChatRepository implements ChatRepository {
       final gatewayUrl = await _api.getGatewayUrl();
       unawaited(_gateway.connect(gatewayUrl));
       return workspace;
-    } catch (_) {
+    } catch (error) {
+      if (error is DiscordApiException && error.isUnauthorized) rethrow;
       final cached = await _cache.readWorkspace();
       if (cached != null) {
         _emitStatus(RepositoryConnectionStatus.offline);
@@ -65,7 +66,8 @@ final class DiscordChatRepository implements ChatRepository {
       final history = _mapper.history(channelId, payloads);
       await _cache.writeChannelHistory(history);
       return history;
-    } catch (_) {
+    } catch (error) {
+      if (error is DiscordApiException && error.isUnauthorized) rethrow;
       final cached = await _cache.readChannelHistory(channelId);
       if (cached.messages.isNotEmpty) return cached;
       rethrow;
@@ -103,15 +105,25 @@ final class DiscordChatRepository implements ChatRepository {
         if (event.name != 'MESSAGE_CREATE' && event.name != 'MESSAGE_UPDATE') {
           return;
         }
-        final message = _mapper.message(event.data);
-        final authorPayload = event.data['author'];
-        final member = authorPayload is Map
-            ? _mapper.member(authorPayload.cast<String, Object?>())
-            : null;
-        unawaited(_cache.writeMessage(message, member: member));
-        if (!_events.isClosed) {
-          _events.add(MessageUpsertedEvent(message: message, member: member));
-        }
+        unawaited(_handleMessageDispatch(event));
+    }
+  }
+
+  Future<void> _handleMessageDispatch(DiscordGatewayDispatch event) async {
+    final messageId = event.data['id'] as String?;
+    if (messageId == null) return;
+    final fallback = event.name == 'MESSAGE_UPDATE'
+        ? await _cache.readMessage(messageId)
+        : null;
+    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
+    final message = _mapper.message(event.data, fallback: fallback);
+    final authorPayload = event.data['author'];
+    final member = authorPayload is Map
+        ? _mapper.member(authorPayload.cast<String, Object?>())
+        : null;
+    await _cache.writeMessage(message, member: member);
+    if (!_events.isClosed) {
+      _events.add(MessageUpsertedEvent(message: message, member: member));
     }
   }
 

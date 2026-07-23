@@ -161,6 +161,17 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
+  Future<ChatMessage?> readMessage(String messageId) async {
+    final rows = await _database.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : _messageFromRow(rows.single);
+  }
+
+  @override
   Future<void> writeChannelHistory(ChannelHistory history) async {
     await _database.transaction((transaction) async {
       await transaction.delete(

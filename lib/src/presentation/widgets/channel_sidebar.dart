@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/chat_repository.dart';
+import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 
 class ChannelSidebar extends StatelessWidget {
@@ -9,6 +11,8 @@ class ChannelSidebar extends StatelessWidget {
     required this.channels,
     required this.selectedChannelId,
     required this.onSelectChannel,
+    required this.sessionMode,
+    required this.connectionStatus,
     super.key,
   });
 
@@ -16,6 +20,8 @@ class ChannelSidebar extends StatelessWidget {
   final List<ConversationChannel> channels;
   final String selectedChannelId;
   final ValueChanged<String> onSelectChannel;
+  final SessionMode sessionMode;
+  final RepositoryConnectionStatus connectionStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -87,27 +93,70 @@ class ChannelSidebar extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: context.surfaces.inset,
-              border: Border(top: BorderSide(color: context.surfaces.border)),
+          _TransportStatus(
+            sessionMode: sessionMode,
+            connectionStatus: connectionStatus,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransportStatus extends StatelessWidget {
+  const _TransportStatus({
+    required this.sessionMode,
+    required this.connectionStatus,
+  });
+
+  final SessionMode sessionMode;
+  final RepositoryConnectionStatus connectionStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, state, color) = sessionMode == SessionMode.local
+        ? ('Local workspace', 'READY', FlucordColors.signal)
+        : switch (connectionStatus) {
+            RepositoryConnectionStatus.connected => (
+              'Discord Gateway',
+              'LIVE',
+              FlucordColors.signal,
             ),
-            child: const Row(
-              children: [
-                Icon(Icons.sensors, size: 17, color: FlucordColors.signal),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Local transport',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                ),
-                Text('READY', style: TextStyle(fontSize: 10)),
-              ],
+            RepositoryConnectionStatus.connecting => (
+              'Discord Gateway',
+              'CONNECTING',
+              FlucordColors.copper,
+            ),
+            RepositoryConnectionStatus.reconnecting => (
+              'Discord Gateway',
+              'RECONNECT',
+              FlucordColors.copper,
+            ),
+            RepositoryConnectionStatus.offline => (
+              'Cached workspace',
+              'OFFLINE',
+              context.surfaces.muted,
+            ),
+          };
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: context.surfaces.inset,
+        border: Border(top: BorderSide(color: context.surfaces.border)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.sensors, size: 17, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ),
+          Text(state, style: TextStyle(fontSize: 9, color: color)),
         ],
       ),
     );

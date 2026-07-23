@@ -117,7 +117,7 @@ final class DiscordGatewayClient {
       _socket = await WebSocket.connect(uri.toString());
       _socket!.listen(
         _onData,
-        onDone: _scheduleReconnect,
+        onDone: _onDone,
         onError: (_) => _scheduleReconnect(),
         cancelOnError: true,
       );
@@ -128,7 +128,14 @@ final class DiscordGatewayClient {
 
   void _onData(Object? raw) {
     if (raw is! String) return;
-    final payload = (jsonDecode(raw) as Map).cast<String, Object?>();
+    final Map<String, Object?> payload;
+    try {
+      payload = (jsonDecode(raw) as Map).cast<String, Object?>();
+    } on FormatException {
+      return;
+    } on TypeError {
+      return;
+    }
     _protocol.accept(payload);
     switch (payload['op']) {
       case 0:
@@ -162,6 +169,17 @@ final class DiscordGatewayClient {
       case 11:
         _heartbeatAcknowledged = true;
     }
+  }
+
+  void _onDone() {
+    final closeCode = _socket?.closeCode;
+    if (closeCode == 4004 || closeCode == 4013 || closeCode == 4014) {
+      _heartbeatTimer?.cancel();
+      _initialHeartbeatTimer?.cancel();
+      _emitStatus(DiscordGatewayStatus.offline);
+      return;
+    }
+    _scheduleReconnect();
   }
 
   void _startHeartbeat(Duration interval) {

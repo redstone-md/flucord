@@ -17,6 +17,14 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.tap(find.byKey(const ValueKey('open-connections')));
+    await tester.pumpAndSettle();
+    expect(find.text('Connections'), findsOneWidget);
+    expect(find.byKey(const ValueKey('discord-bot-token')), findsOneWidget);
+    expect(find.textContaining('Personal account tokens'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('channel-forge-design')));
     await tester.pumpAndSettle();
     expect(find.textContaining('continuous signal'), findsOneWidget);

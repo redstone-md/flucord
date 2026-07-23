@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 
@@ -10,6 +11,8 @@ class ServerRail extends StatelessWidget {
     required this.selectedSpaceId,
     required this.onSelectSpace,
     required this.onToggleTheme,
+    required this.onOpenConnections,
+    required this.sessionMode,
     required this.isDark,
     super.key,
   });
@@ -18,6 +21,8 @@ class ServerRail extends StatelessWidget {
   final String selectedSpaceId;
   final ValueChanged<String> onSelectSpace;
   final VoidCallback onToggleTheme;
+  final VoidCallback onOpenConnections;
+  final SessionMode sessionMode;
   final bool isDark;
 
   @override
@@ -51,6 +56,19 @@ class ServerRail extends StatelessWidget {
                 );
               },
             ),
+          ),
+          IconButton(
+            key: const ValueKey('open-connections'),
+            onPressed: onOpenConnections,
+            icon: Icon(
+              sessionMode == SessionMode.discordBot
+                  ? Icons.link
+                  : Icons.link_outlined,
+              color: sessionMode == SessionMode.discordBot
+                  ? FlucordColors.signal
+                  : null,
+            ),
+            tooltip: 'Connections',
           ),
           IconButton(
             onPressed: onToggleTheme,

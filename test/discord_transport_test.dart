@@ -34,6 +34,7 @@ void main() {
       expect(transport.requests, hasLength(2));
       final headers = transport.requests.first.headers;
       expect(headers['authorization'], 'Bot secret-token');
+      expect(headers['accept'], 'application/json');
       expect(headers['content-type'], 'application/json');
       expect(headers, isNot(contains('x-super-properties')));
       expect(headers, isNot(contains('x-fingerprint')));
@@ -153,6 +154,15 @@ void main() {
     expect(workspace.members.single.role, 'Discord bot');
     expect(history.messages.map((message) => message.id), ['old', 'new']);
     expect(history.members.single.displayName, 'Mira');
+
+    final edited = mapper.message({
+      'id': 'new',
+      'channel_id': 'channel-1',
+      'edited_timestamp': '2026-07-23T02:03:00Z',
+    }, fallback: history.messages.last);
+    expect(edited.body, 'message new');
+    expect(edited.authorId, 'user-1');
+    expect(edited.isEdited, isTrue);
   });
 }
 

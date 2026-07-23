@@ -47,6 +47,9 @@ final class ChatController extends ChangeNotifier {
     _connectionStatus = RepositoryConnectionStatus.offline;
     _listenToRepository();
     await load();
+    if (_state == ChatLoadState.failure) {
+      throw _error!;
+    }
   }
 
   Future<void> load() async {
@@ -61,6 +64,15 @@ final class ChatController extends ChangeNotifier {
       _state = ChatLoadState.failure;
     }
     notifyListeners();
+    final workspace = _workspace;
+    if (_state == ChatLoadState.ready && workspace != null) {
+      final textChannels = workspace.channels.where(
+        (channel) => channel.kind == ChannelKind.text,
+      );
+      if (textChannels.isNotEmpty) {
+        unawaited(openChannel(textChannels.first.id));
+      }
+    }
   }
 
   Future<void> openChannel(String channelId, {bool refresh = false}) async {

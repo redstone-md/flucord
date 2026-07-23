@@ -56,8 +56,10 @@ final class DiscordMapper {
     );
   }
 
-  ChatMessage message(Map<String, Object?> payload) {
-    final rawContent = payload['content'] as String? ?? '';
+  ChatMessage message(Map<String, Object?> payload, {ChatMessage? fallback}) {
+    final rawContent = payload.containsKey('content')
+        ? payload['content'] as String? ?? ''
+        : fallback?.body ?? '';
     final attachments = payload['attachments'];
     final body = rawContent.isNotEmpty
         ? rawContent
@@ -65,12 +67,18 @@ final class DiscordMapper {
         ? '[Attachment]'
         : '[Message without text content]';
     return ChatMessage(
-      id: payload['id']! as String,
-      channelId: payload['channel_id']! as String,
-      authorId: (payload['author']! as Map)['id']! as String,
+      id: payload['id'] as String? ?? fallback!.id,
+      channelId: payload['channel_id'] as String? ?? fallback!.channelId,
+      authorId: payload['author'] is Map
+          ? (payload['author']! as Map)['id']! as String
+          : fallback!.authorId,
       body: body,
-      sentAt: DateTime.parse(payload['timestamp']! as String).toLocal(),
-      isEdited: payload['edited_timestamp'] != null,
+      sentAt: payload['timestamp'] is String
+          ? DateTime.parse(payload['timestamp']! as String).toLocal()
+          : fallback!.sentAt,
+      isEdited: payload.containsKey('edited_timestamp')
+          ? payload['edited_timestamp'] != null
+          : fallback?.isEdited ?? false,
     );
   }
 

@@ -81,7 +81,9 @@ void main() {
     await cache.writeMessage(edited);
 
     final updated = await cache.readChannelHistory('channel-1');
+    final direct = await cache.readMessage('message-1');
     expect(updated.messages.single.body, 'SQLite upsert confirmed.');
     expect(updated.messages.single.isEdited, isTrue);
+    expect(direct?.body, 'SQLite upsert confirmed.');
   });
 }

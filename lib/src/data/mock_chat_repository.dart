@@ -10,7 +10,9 @@ final class MockChatRepository implements ChatRepository {
   int _messageSequence = 100;
 
   @override
-  Stream<ChatRepositoryEvent> get events => const Stream.empty();
+  Stream<ChatRepositoryEvent> get events => Stream.value(
+    const RepositoryStatusChangedEvent(RepositoryConnectionStatus.connected),
+  );
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {

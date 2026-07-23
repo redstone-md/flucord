@@ -192,6 +192,7 @@ final class DiscordApiClient {
         uri: uri,
         headers: {
           HttpHeaders.authorizationHeader: 'Bot $_botToken',
+          HttpHeaders.acceptHeader: 'application/json',
           HttpHeaders.contentTypeHeader: 'application/json',
           HttpHeaders.userAgentHeader: _userAgent,
         },
