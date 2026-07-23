@@ -37,7 +37,10 @@ browser runtime or dependency on Discord's private user API.
 3. Completed: paginated pins with the 2026 `PIN_MESSAGES` permission, guild
    member and role loading, initial/live presence, typing expiry/throttling,
    and local unread/mention state.
-4. Notifications, tray integration, deep links, and auto-update.
+4. In progress: native Windows notifications, close-to-tray behavior,
+   `flucord://` channel deep links, and a configurable signed update feed.
+   Platform code stays behind application-owned service contracts so chat
+   state and presentation remain independently testable.
 5. Voice rooms, device selection, screen sharing, and media diagnostics.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
