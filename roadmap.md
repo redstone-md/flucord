@@ -108,6 +108,9 @@ browser runtime or dependency on Discord's private user API.
     the domain model and SQLite v9. Opening a channel clears rail/sidebar
     counters without discarding the in-timeline marker; the message surface
     adds a Discord-like NEW divider and direct navigation to that boundary.
+17. Completed: guild member rows open an anchored native profile popover
+    with guild identity, presence, role, copyable user ID, keyboard dismissal,
+    and a direct transition into the documented bot DM flow.
 
 ## Protocol safety
 

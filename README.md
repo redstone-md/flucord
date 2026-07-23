@@ -9,11 +9,12 @@ and deletion, active threads, member roles and presence, typing indicators,
 local unread markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
-documented Discord CDN guild/member identity, and theme switching without a
-browser runtime. Local unread bursts open at a Discord-like NEW boundary in the
-message timeline. Discord rich embeds retain their documented structured
-fields across live updates and offline cache restores. Video attachments and
-embed video metadata play through a native Windows texture.
+documented Discord CDN guild/member identity, anchored member profile
+popovers, and theme switching without a browser runtime. Local unread bursts
+open at a Discord-like NEW boundary in the message timeline. Discord rich
+embeds retain their documented structured fields across live updates and
+offline cache restores. Video attachments and embed video metadata play
+through a native Windows texture.
 
 Message bodies, pinned previews, and embed text render GitHub-flavored
 Markdown plus Discord's documented user, role, and channel mentions, custom
@@ -30,9 +31,12 @@ same cached archive remains browsable in 100-message slices while offline.
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
 Documented bot Direct Messages can be opened by a recipient's numeric Discord
-user ID and then use the same native history, composer, replies, Markdown,
-attachments, embeds, and video surfaces as guild channels. Incoming DM channels
-are discovered from Gateway events and restored from the SQLite v7 cache.
+user ID or directly from an anchored guild-member profile. They then use the
+same native history, composer, replies, Markdown, attachments, embeds, and
+video surfaces as guild channels. Incoming DM channels are discovered from
+Gateway events and restored from the SQLite v7 cache. Member profiles retain
+the guild avatar, presence and role context, expose a copyable user ID, dismiss
+with Escape or an outside click, and disable messaging the current bot user.
 
 ## Run
 

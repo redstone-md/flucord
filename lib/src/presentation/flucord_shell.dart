@@ -223,6 +223,10 @@ class FlucordShell extends StatelessWidget {
                         MemberSidebar(
                           members: workspace.members,
                           spaceId: spaceId,
+                          currentMemberId: workspace.currentMemberId,
+                          onMessage: (member) => unawaited(
+                            _openDirectConversation(context, member.id),
+                          ),
                         ),
                     ],
                   );
@@ -247,7 +251,14 @@ class FlucordShell extends StatelessWidget {
       context: context,
       builder: (_) => const DirectMessageDialog(),
     );
-    if (recipientId == null) return;
+    if (recipientId == null || !context.mounted) return;
+    await _openDirectConversation(context, recipientId);
+  }
+
+  Future<void> _openDirectConversation(
+    BuildContext context,
+    String recipientId,
+  ) async {
     final channelId = await chatController.openDirectConversation(recipientId);
     if (!context.mounted) return;
     if (channelId == null) {

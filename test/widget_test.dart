@@ -88,6 +88,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('opens a direct message from the native member profile', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('member-row-mira')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('member-profile-popover')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('message-member')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Direct Messages'), findsOneWidget);
+    expect(find.text('User mira'), findsWidgets);
+    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+  });
+
   testWidgets('opens native voice controls without media plugins', (
     tester,
   ) async {
