@@ -17,6 +17,7 @@ Thumbs.db
 # Local tooling and runtime state
 .continuum/
 *.log
+dsa_priv.pem
 
 # Flutter SDK is installed outside the repository.
 .tools/
