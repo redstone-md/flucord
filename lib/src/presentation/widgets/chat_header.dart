@@ -68,30 +68,13 @@ class ChatHeader extends StatelessWidget {
                     ))
                       PopupMenuItem(
                         value: item.id,
-                        child: Text(
-                          '${item.isThread
-                              ? 'Thread:'
-                              : item.isDirectMessage
-                              ? '@'
-                              : item.kind == ChannelKind.text
-                              ? '#'
-                              : 'Voice:'} ${item.name}',
-                        ),
+                        child: Text('${_channelLabel(item)} ${item.name}'),
                       ),
                   ],
                   icon: const Icon(Icons.menu),
                 )
               else
-                Icon(
-                  channel.isThread
-                      ? Icons.forum_outlined
-                      : channel.isDirectMessage
-                      ? Icons.person_outline
-                      : channel.kind == ChannelKind.text
-                      ? Icons.tag
-                      : Icons.volume_up_outlined,
-                  size: 20,
-                ),
+                Icon(_channelIcon(channel), size: 20),
               const SizedBox(width: 9),
               Flexible(
                 fit: FlexFit.loose,
@@ -170,6 +153,28 @@ class ChatHeader extends StatelessWidget {
         },
       ),
     );
+  }
+
+  static String _channelLabel(ConversationChannel channel) {
+    if (channel.isThread) return 'Post:';
+    if (channel.isDirectMessage) return '@';
+    return switch (channel.kind) {
+      ChannelKind.text => '#',
+      ChannelKind.voice => 'Voice:',
+      ChannelKind.forum => 'Forum:',
+      ChannelKind.media => 'Media:',
+    };
+  }
+
+  static IconData _channelIcon(ConversationChannel channel) {
+    if (channel.isThread) return Icons.forum_outlined;
+    if (channel.isDirectMessage) return Icons.person_outline;
+    return switch (channel.kind) {
+      ChannelKind.text => Icons.tag,
+      ChannelKind.voice => Icons.volume_up_outlined,
+      ChannelKind.forum => Icons.forum_outlined,
+      ChannelKind.media => Icons.perm_media_outlined,
+    };
   }
 }
 

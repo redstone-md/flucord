@@ -161,6 +161,97 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('filters, pages, and creates a native forum post', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('channel-forge-forum-bootstrap')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('channel-forge-forum')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('forum-post-feed')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('forum-post-forge-forum-bootstrap')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('forum-post-archived-forge-forum-1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('forum-filter-tag-client')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('forum-post-forge-forum-bootstrap')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('forum-post-archived-forge-forum-1')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('forum-filter-tag-client')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('load-more-forum-posts')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('forum-post-archived-forge-forum-2')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('create-forum-post')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('forum-post-name')),
+      'SQLite v13 report',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('forum-post-content')),
+      'Forum metadata survives a native restart.',
+    );
+    await tester.tap(find.byKey(const ValueKey('forum-post-tag-tag-client')));
+    await tester.tap(find.byKey(const ValueKey('create-forum-post-confirm')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SQLite v13 report'), findsWidgets);
+    expect(
+      find.text('Forum metadata survives a native restart.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens the forum feed without compact layout overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Choose channel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forum: field-reports'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('forum-post-feed')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opens a direct message from the native member profile', (
     tester,
   ) async {

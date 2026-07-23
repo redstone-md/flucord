@@ -6,8 +6,8 @@ configured but still require release verification on their native hosts. It
 provides server and ordered channel navigation with collapsible categories,
 searchable message history, replies, attachments, reactions, message editing
 and deletion, active-thread discovery and creation, archived-thread browsing,
-member roles and presence, local unread markers, paginated pinned messages,
-Windows notifications,
+native forum and media-channel feeds, member roles and presence, local unread
+markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, anchored member profile
@@ -58,6 +58,17 @@ native timeline. Locked archived threads show their lock state and replace the
 composer with a read-only notice; unlocked archives retain Discord's documented
 send-to-unarchive behavior. Archived rows stay out of the channel sidebar and
 Quick Switcher.
+
+Discord `GUILD_FORUM` and `GUILD_MEDIA` channel types are retained as distinct
+native destinations instead of being discarded during bootstrap. Their
+guidelines, available tags, default archive duration, sort order, and layout
+metadata survive SQLite restoration. Opening one loads active and public
+archived posts into a responsive one- or two-column feed with tag filters,
+loading/error/empty states, and direct thread-timeline navigation. The New Post
+dialog uses the documented `POST /channels/{channel.id}/threads` payload with a
+nested starter message, up to five applied tags, and Discord's supported
+auto-archive durations. Initial post creation currently sends text content;
+forum-post file attachments remain a later increment.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -176,6 +187,10 @@ removed emoji.
 SQLite v12 retains thread archive, lock, archive timestamp, and auto-archive
 duration metadata. Public archived-thread pages are upserted as they arrive, so
 their native timelines and lock state remain available after a restart.
+
+SQLite v13 retains forum/media channel kinds, available tags, post tag IDs,
+default archive duration, sort order, and forum layout. Existing text/voice enum
+indices remain stable during migration.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

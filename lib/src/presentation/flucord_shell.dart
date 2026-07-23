@@ -13,7 +13,9 @@ import '../domain/external_link_launcher.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
+import 'widgets/create_forum_post_dialog.dart';
 import 'widgets/direct_message_views.dart';
+import 'widgets/forum_channel_view.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
@@ -167,6 +169,19 @@ class FlucordShell extends StatelessWidget {
                                 showMembers: showMembers,
                                 showPins: showPins,
                                 showThreads: showThreads,
+                                forumArchivedPosts:
+                                    channel.kind == ChannelKind.forum ||
+                                        channel.kind == ChannelKind.media
+                                    ? chatController.archivedThreadsFor(
+                                        channel.id,
+                                      )
+                                    : const [],
+                                isLoadingForumPosts: chatController
+                                    .isLoadingArchivedThreads(channel.id),
+                                forumPostsError: chatController
+                                    .archivedThreadsError(channel.id),
+                                canLoadMoreForumPosts: chatController
+                                    .canLoadMoreArchivedThreads(channel.id),
                                 inboxSummary: inboxSummary,
                                 typingMembers: chatController.typingMembersFor(
                                   channel.id,
@@ -219,6 +234,37 @@ class FlucordShell extends StatelessWidget {
                                     );
                                   }
                                 },
+                                onRefreshForumPosts: () => unawaited(
+                                  chatController.loadArchivedThreads(
+                                    channel.id,
+                                    refresh: true,
+                                  ),
+                                ),
+                                onLoadMoreForumPosts: () => unawaited(
+                                  chatController.loadArchivedThreads(
+                                    channel.id,
+                                  ),
+                                ),
+                                onCreateForumPost:
+                                    (name, content, duration, tagIds) async {
+                                      final thread = await chatController
+                                          .createForumPost(
+                                            channelId: channel.id,
+                                            name: name,
+                                            content: content,
+                                            autoArchiveDurationMinutes:
+                                                duration,
+                                            appliedTagIds: tagIds,
+                                          );
+                                      if (thread == null) return false;
+                                      workspaceController.selectChannel(
+                                        thread.id,
+                                      );
+                                      unawaited(
+                                        chatController.openChannel(thread.id),
+                                      );
+                                      return true;
+                                    },
                                 onOpenInbox: () => _openInbox(context),
                                 onSend: (body, attachments, replyToMessageId) =>
                                     chatController.sendMessage(

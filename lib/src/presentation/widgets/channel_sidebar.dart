@@ -4,6 +4,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'account_panel.dart';
 import 'member_avatar.dart';
 
 class ChannelSidebar extends StatelessWidget {
@@ -39,7 +40,10 @@ class ChannelSidebar extends StatelessWidget {
         .where((channel) => !channel.isThread)
         .toList(growable: false);
     final threads = channels
-        .where((channel) => channel.isThread && !channel.isArchived)
+        .where(
+          (channel) =>
+              channel.isThread && !channel.isArchived && !_isForumPost(channel),
+        )
         .toList(growable: false);
     return Container(
       key: const ValueKey('channel-sidebar'),
@@ -92,7 +96,7 @@ class ChannelSidebar extends StatelessWidget {
               ),
             ),
           ),
-          _AccountPanel(
+          AccountPanel(
             member: workspace.memberById(workspace.currentMemberId),
             sessionMode: sessionMode,
             connectionStatus: connectionStatus,
@@ -100,6 +104,14 @@ class ChannelSidebar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  bool _isForumPost(ConversationChannel channel) {
+    final parentId = channel.parentId;
+    if (parentId == null) return false;
+    final parent = workspace.channelOrNull(parentId);
+    return parent?.kind == ChannelKind.forum ||
+        parent?.kind == ChannelKind.media;
   }
 
   List<Widget> _navigationEntries({
@@ -163,6 +175,13 @@ class ChannelSidebar extends StatelessWidget {
     final voice = _ordered(
       channels.where((channel) => channel.kind == ChannelKind.voice),
     );
+    final forums = _ordered(
+      channels.where(
+        (channel) =>
+            channel.kind == ChannelKind.forum ||
+            channel.kind == ChannelKind.media,
+      ),
+    );
     return [
       if (text.isNotEmpty) ...[
         const _SectionLabel(label: 'Text channels'),
@@ -173,6 +192,11 @@ class ChannelSidebar extends StatelessWidget {
         const _SectionLabel(label: 'Active threads'),
         for (final channel in _ordered(threads))
           _rowFor(channel, indented: true),
+      ],
+      if (forums.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        const _SectionLabel(label: 'Forums'),
+        for (final channel in forums) _rowFor(channel),
       ],
       if (voice.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -274,91 +298,6 @@ class _CategorySection extends StatelessWidget {
   );
 }
 
-class _AccountPanel extends StatelessWidget {
-  const _AccountPanel({
-    required this.member,
-    required this.sessionMode,
-    required this.connectionStatus,
-  });
-
-  final Member member;
-  final SessionMode sessionMode;
-  final RepositoryConnectionStatus connectionStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    final (status, color) = sessionMode == SessionMode.local
-        ? ('Local workspace', FlucordColors.success)
-        : switch (connectionStatus) {
-            RepositoryConnectionStatus.connected => (
-              'Bot online',
-              FlucordColors.success,
-            ),
-            RepositoryConnectionStatus.connecting => (
-              'Connecting...',
-              FlucordColors.warning,
-            ),
-            RepositoryConnectionStatus.reconnecting => (
-              'Reconnecting...',
-              FlucordColors.warning,
-            ),
-            RepositoryConnectionStatus.offline => (
-              'Offline',
-              context.surfaces.muted,
-            ),
-          };
-    return Container(
-      key: const ValueKey('account-panel'),
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: context.surfaces.inset,
-        border: Border(top: BorderSide(color: context.surfaces.border)),
-      ),
-      child: Row(
-        children: [
-          MemberAvatar(
-            member: member,
-            size: 32,
-            presenceBorderColor: context.surfaces.inset,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  member.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  status,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: color, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          Tooltip(
-            message: sessionMode == SessionMode.local
-                ? 'Local workspace'
-                : 'Discord Gateway',
-            child: Icon(Icons.sensors, size: 17, color: color),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
 
@@ -424,9 +363,12 @@ class _ChannelRow extends StatelessWidget {
                         ? Icons.person_outline
                         : channel.isThread
                         ? Icons.forum_outlined
-                        : channel.kind == ChannelKind.text
-                        ? Icons.tag
-                        : Icons.volume_up_outlined,
+                        : switch (channel.kind) {
+                            ChannelKind.text => Icons.tag,
+                            ChannelKind.voice => Icons.volume_up_outlined,
+                            ChannelKind.forum => Icons.forum_outlined,
+                            ChannelKind.media => Icons.perm_media_outlined,
+                          },
                     size: 17,
                     color: foreground,
                   ),

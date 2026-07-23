@@ -137,6 +137,11 @@ browser runtime or dependency on Discord's private user API.
     documented public archived-thread route, and expose active plus archived
     branches in a native header Threads panel with direct timeline navigation,
     compact-window states, and locked archive handling.
+24. Completed: retain documented Discord forum and media channel types,
+    tags, defaults, and layouts in SQLite v13; render active and archived posts
+    in a responsive native feed; filter by tags; create a text starter post
+    through the documented forum-thread endpoint; and navigate directly into
+    the existing native thread timeline.
 
 ## Protocol safety
 

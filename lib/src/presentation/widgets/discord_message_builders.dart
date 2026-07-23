@@ -60,7 +60,7 @@ final class _MentionBuilder extends MarkdownElementBuilder {
     final channel = _kind == _MentionKind.channel
         ? _workspace.channelOrNull(id)
         : null;
-    final enabled = channel?.kind == ChannelKind.text;
+    final enabled = channel != null && channel.kind != ChannelKind.voice;
     return Semantics(
       button: enabled,
       label: label,

@@ -35,6 +35,20 @@ void main() {
             kind: ChannelKind.voice,
           ),
           ConversationChannel(
+            id: 'forum',
+            spaceId: 'guild',
+            name: 'field-reports',
+            topic: '',
+            kind: ChannelKind.forum,
+          ),
+          ConversationChannel(
+            id: 'media',
+            spaceId: 'guild',
+            name: 'captures',
+            topic: '',
+            kind: ChannelKind.media,
+          ),
+          ConversationChannel(
             id: 'thread',
             spaceId: 'guild',
             name: 'release-checklist',
@@ -91,6 +105,8 @@ void main() {
       QuickSwitcherDestinationKind.directMessage,
       QuickSwitcherDestinationKind.textChannel,
       QuickSwitcherDestinationKind.voiceChannel,
+      QuickSwitcherDestinationKind.forumChannel,
+      QuickSwitcherDestinationKind.mediaChannel,
       QuickSwitcherDestinationKind.thread,
     ]);
 
@@ -107,6 +123,8 @@ void main() {
     expect(channel.path, 'The Forge / #general');
     expect(channel.mentionCount, 2);
 
+    expect(catalog.destinations[4].path, 'The Forge / field-reports');
+    expect(catalog.destinations[5].path, 'The Forge / captures');
     final thread = catalog.destinations.last;
     expect(thread.path, 'The Forge / #release-checklist');
     expect(
@@ -119,6 +137,6 @@ void main() {
     expect(catalog.search('forge GENERAL').single.channelId, 'general');
     expect(catalog.search('mira').single.channelId, 'dm');
     expect(catalog.search('missing'), isEmpty);
-    expect(catalog.search('  '), hasLength(5));
+    expect(catalog.search('  '), hasLength(7));
   });
 }

@@ -183,6 +183,8 @@ String _groupName(QuickSwitcherDestinationKind kind) => switch (kind) {
   QuickSwitcherDestinationKind.directMessage => 'Direct Messages',
   QuickSwitcherDestinationKind.textChannel => 'Text Channels',
   QuickSwitcherDestinationKind.voiceChannel => 'Voice Channels',
+  QuickSwitcherDestinationKind.forumChannel => 'Forums',
+  QuickSwitcherDestinationKind.mediaChannel => 'Media Channels',
   QuickSwitcherDestinationKind.thread => 'Active Threads',
 };
 
@@ -191,6 +193,8 @@ String _kindName(QuickSwitcherDestinationKind kind) => switch (kind) {
   QuickSwitcherDestinationKind.directMessage => 'Direct Message',
   QuickSwitcherDestinationKind.textChannel => 'Text Channel',
   QuickSwitcherDestinationKind.voiceChannel => 'Voice Channel',
+  QuickSwitcherDestinationKind.forumChannel => 'Forum',
+  QuickSwitcherDestinationKind.mediaChannel => 'Media Channel',
   QuickSwitcherDestinationKind.thread => 'Thread',
 };
 
@@ -199,5 +203,7 @@ IconData _kindIcon(QuickSwitcherDestinationKind kind) => switch (kind) {
   QuickSwitcherDestinationKind.directMessage => Icons.alternate_email_rounded,
   QuickSwitcherDestinationKind.textChannel => Icons.tag_rounded,
   QuickSwitcherDestinationKind.voiceChannel => Icons.volume_up_rounded,
+  QuickSwitcherDestinationKind.forumChannel => Icons.forum_outlined,
+  QuickSwitcherDestinationKind.mediaChannel => Icons.perm_media_outlined,
   QuickSwitcherDestinationKind.thread => Icons.forum_rounded,
 };

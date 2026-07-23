@@ -14,6 +14,10 @@ class _ConversationPane extends StatefulWidget {
     required this.showMembers,
     required this.showPins,
     required this.showThreads,
+    required this.forumArchivedPosts,
+    required this.isLoadingForumPosts,
+    required this.forumPostsError,
+    required this.canLoadMoreForumPosts,
     required this.inboxSummary,
     required this.typingMembers,
     required this.isSending,
@@ -29,6 +33,9 @@ class _ConversationPane extends StatefulWidget {
     required this.onToggleMembers,
     required this.onTogglePins,
     required this.onToggleThreads,
+    required this.onRefreshForumPosts,
+    required this.onLoadMoreForumPosts,
+    required this.onCreateForumPost,
     required this.onOpenInbox,
     required this.onSend,
     required this.onEdit,
@@ -53,6 +60,10 @@ class _ConversationPane extends StatefulWidget {
   final bool showMembers;
   final bool showPins;
   final bool showThreads;
+  final List<ConversationChannel> forumArchivedPosts;
+  final bool isLoadingForumPosts;
+  final Object? forumPostsError;
+  final bool canLoadMoreForumPosts;
   final InboxSummary inboxSummary;
   final List<Member> typingMembers;
   final bool isSending;
@@ -68,6 +79,9 @@ class _ConversationPane extends StatefulWidget {
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
   final VoidCallback onToggleThreads;
+  final VoidCallback onRefreshForumPosts;
+  final VoidCallback onLoadMoreForumPosts;
+  final CreateForumPostCallback onCreateForumPost;
   final VoidCallback onOpenInbox;
   final SendMessageCallback onSend;
   final Future<bool> Function(ChatMessage, String) onEdit;
@@ -102,6 +116,18 @@ class _ConversationPaneState extends State<_ConversationPane> {
         controller: widget.voiceController,
         members: widget.workspace.members,
         currentMemberId: widget.workspace.currentMemberId,
+      ),
+      ChannelKind.forum || ChannelKind.media => ForumChannelView(
+        workspace: widget.workspace,
+        channel: widget.channel,
+        archivedPosts: widget.forumArchivedPosts,
+        isLoading: widget.isLoadingForumPosts,
+        error: widget.forumPostsError,
+        canLoadMore: widget.canLoadMoreForumPosts,
+        onRefresh: widget.onRefreshForumPosts,
+        onLoadMore: widget.onLoadMoreForumPosts,
+        onOpenPost: widget.onSelectChannel,
+        onCreatePost: widget.onCreateForumPost,
       ),
       ChannelKind.text when widget.isLoading => const ChannelLoadingView(),
       ChannelKind.text when widget.loadError != null => ChannelFailureView(

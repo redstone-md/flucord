@@ -43,7 +43,7 @@ final class WorkspaceController extends ChangeNotifier {
       _targetMessageId = null;
       _selectedChannelId = availableChannels
           .firstWhere(
-            (channel) => channel.kind == ChannelKind.text,
+            (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
             orElse: () => availableChannels.first,
           )
           .id;
@@ -62,7 +62,7 @@ final class WorkspaceController extends ChangeNotifier {
     }
     _selectedChannelId = channels
         .firstWhere(
-          (channel) => channel.kind == ChannelKind.text,
+          (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
           orElse: () => channels.first,
         )
         .id;

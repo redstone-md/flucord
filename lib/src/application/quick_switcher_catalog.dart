@@ -6,6 +6,8 @@ enum QuickSwitcherDestinationKind {
   directMessage,
   textChannel,
   voiceChannel,
+  forumChannel,
+  mediaChannel,
   thread,
 }
 
@@ -59,6 +61,8 @@ final class QuickSwitcherCatalog {
       QuickSwitcherDestinationKind.directMessage,
       QuickSwitcherDestinationKind.textChannel,
       QuickSwitcherDestinationKind.voiceChannel,
+      QuickSwitcherDestinationKind.forumChannel,
+      QuickSwitcherDestinationKind.mediaChannel,
       QuickSwitcherDestinationKind.thread,
     ]) {
       groupedChannels.addAll(
@@ -99,6 +103,10 @@ final class QuickSwitcherCatalog {
         ? QuickSwitcherDestinationKind.directMessage
         : channel.isThread
         ? QuickSwitcherDestinationKind.thread
+        : channel.kind == ChannelKind.forum
+        ? QuickSwitcherDestinationKind.forumChannel
+        : channel.kind == ChannelKind.media
+        ? QuickSwitcherDestinationKind.mediaChannel
         : channel.kind == ChannelKind.voice
         ? QuickSwitcherDestinationKind.voiceChannel
         : QuickSwitcherDestinationKind.textChannel;
@@ -106,6 +114,8 @@ final class QuickSwitcherCatalog {
       QuickSwitcherDestinationKind.directMessage =>
         '@${_recipientName(workspace, channel)}',
       QuickSwitcherDestinationKind.voiceChannel => channel.name,
+      QuickSwitcherDestinationKind.forumChannel ||
+      QuickSwitcherDestinationKind.mediaChannel => channel.name,
       QuickSwitcherDestinationKind.textChannel ||
       QuickSwitcherDestinationKind.thread => '#${channel.name}',
       QuickSwitcherDestinationKind.guild => space.name,
