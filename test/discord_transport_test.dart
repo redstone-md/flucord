@@ -239,9 +239,10 @@ void main() {
         'id': 'bot-1',
         'username': 'Flucord Bot',
         'global_name': null,
+        'avatar': 'bot-avatar',
       },
       guilds: [
-        {'id': 'guild-1', 'name': 'The Forge'},
+        {'id': 'guild-1', 'name': 'The Forge', 'icon': 'guild-icon'},
       ],
       channelsByGuild: {
         'guild-1': [
@@ -269,8 +270,14 @@ void main() {
         'guild-1': [
           {
             'nick': 'Mira Ops',
+            'avatar': 'member-avatar',
             'roles': ['role-1'],
-            'user': {'id': 'user-1', 'username': 'Mira', 'global_name': null},
+            'user': {
+              'id': 'user-1',
+              'username': 'Mira',
+              'global_name': null,
+              'avatar': 'global-avatar',
+            },
           },
         ],
       },
@@ -281,6 +288,7 @@ void main() {
     ]);
 
     expect(workspace.spaces.single.name, 'The Forge');
+    expect(workspace.spaces.single.iconUrl, contains('/icons/guild-1/'));
     expect(workspace.channels.single.name, 'general');
     expect(
       workspace.members.firstWhere((member) => member.id == 'bot-1').role,
@@ -290,6 +298,11 @@ void main() {
     expect(guildMember.displayName, 'Mira Ops');
     expect(guildMember.roleFor('guild-1'), 'Operator');
     expect(guildMember.colorValue, 0xff336699);
+    expect(guildMember.avatarUrl, contains('/avatars/user-1/'));
+    expect(
+      guildMember.avatarUrlFor('guild-1'),
+      contains('/guilds/guild-1/users/user-1/avatars/member-avatar.webp'),
+    );
     expect(history.messages.map((message) => message.id), ['old', 'new']);
     expect(history.members.single.displayName, 'Mira');
 
@@ -314,7 +327,12 @@ Map<String, Object?> _messagePayload({
   'timestamp': '2026-07-23T02:0$minute:00Z',
   'edited_timestamp': null,
   'attachments': <Object?>[],
-  'author': {'id': 'user-1', 'username': 'Mira', 'global_name': null},
+  'author': {
+    'id': 'user-1',
+    'username': 'Mira',
+    'global_name': null,
+    'avatar': 'history-avatar',
+  },
 };
 
 final class _RecordedRequest {

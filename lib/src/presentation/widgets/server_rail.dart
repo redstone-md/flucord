@@ -4,6 +4,7 @@ import '../../domain/chat_models.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
+import 'remote_identity_image.dart';
 
 class ServerRail extends StatelessWidget {
   const ServerRail({
@@ -79,7 +80,11 @@ class ServerRail extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 14, top: 4),
             child: Tooltip(
               message: '${currentMember.displayName} - ${currentMember.role}',
-              child: MemberAvatar(member: currentMember, size: 38),
+              child: MemberAvatar(
+                member: currentMember,
+                size: 38,
+                spaceId: selectedSpaceId,
+              ),
             ),
           ),
         ],
@@ -158,13 +163,19 @@ class _SpaceButton extends StatelessWidget {
                       : Color(space.colorValue).withValues(alpha: 0.62),
                   borderRadius: BorderRadius.circular(selected ? 8 : 22),
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  space.monogram,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                clipBehavior: Clip.antiAlias,
+                child: RemoteIdentityImage(
+                  url: space.iconUrl,
+                  imageKey: ValueKey('space-icon-${space.id}'),
+                  fallback: Center(
+                    child: Text(
+                      space.monogram,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),

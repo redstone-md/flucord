@@ -22,6 +22,7 @@ void main() {
           name: 'Forge',
           monogram: 'FO',
           colorValue: 0xff456b5a,
+          iconUrl: 'https://cdn.discordapp.com/icons/guild-1/icon.webp',
         ),
       ],
       channels: const [
@@ -52,6 +53,11 @@ void main() {
           colorValue: 0xff48745f,
           spaceIds: {'guild-1'},
           rolesBySpace: {'guild-1': 'Bot'},
+          avatarUrl: 'https://cdn.discordapp.com/avatars/user-1/global.webp',
+          avatarUrlsBySpace: {
+            'guild-1':
+                'https://cdn.discordapp.com/guilds/guild-1/users/user-1/avatars/member.webp',
+          },
         ),
       ],
       messages: const [],
@@ -103,6 +109,7 @@ void main() {
     final history = await cache.readChannelHistory('channel-1');
 
     expect(restored?.spaces.single.name, 'Forge');
+    expect(restored?.spaces.single.iconUrl, contains('/icons/guild-1/'));
     expect(restored?.channels.first.name, 'general');
     expect(restored?.channels.last.isThread, isTrue);
     expect(restored?.channels.last.parentId, 'channel-1');
@@ -113,6 +120,11 @@ void main() {
     expect(history.messages.single.reactions.single.count, 3);
     expect(history.members.single.displayName, 'Jack');
     expect(history.members.single.roleFor('guild-1'), 'Bot');
+    expect(history.members.single.avatarUrl, contains('/avatars/user-1/'));
+    expect(
+      history.members.single.avatarUrlFor('guild-1'),
+      contains('/guilds/guild-1/users/user-1/'),
+    );
     expect(history.messages.single.isPinned, isTrue);
     expect(
       (await cache.readPinnedMessages('channel-1')).messages.single.id,
@@ -145,6 +157,15 @@ void main() {
       options: OpenDatabaseOptions(
         version: 1,
         onCreate: (database, _) async {
+          await database.execute('''
+            CREATE TABLE spaces (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              monogram TEXT NOT NULL,
+              color_value INTEGER NOT NULL,
+              sort_index INTEGER NOT NULL
+            )
+          ''');
           await database.execute('''
             CREATE TABLE channels (
               id TEXT PRIMARY KEY,
@@ -196,6 +217,7 @@ void main() {
       'PRAGMA table_info(messages)',
     );
     final memberColumns = await database.rawQuery('PRAGMA table_info(members)');
+    final spaceColumns = await database.rawQuery('PRAGMA table_info(spaces)');
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
     expect(
@@ -211,5 +233,11 @@ void main() {
       memberColumns.map((row) => row['name']),
       contains('roles_by_space_json'),
     );
+    expect(memberColumns.map((row) => row['name']), contains('avatar_url'));
+    expect(
+      memberColumns.map((row) => row['name']),
+      contains('avatar_urls_by_space_json'),
+    );
+    expect(spaceColumns.map((row) => row['name']), contains('icon_url'));
   });
 }

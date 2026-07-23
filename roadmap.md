@@ -62,7 +62,11 @@ browser runtime or dependency on Discord's private user API.
    Voice-Gateway speaking flags drive the live participant border in a
    responsive Discord-like call grid. Discord interoperability testing in an
    actual bot voice session and transmitted screen sharing remain.
-6. macOS and Linux packaging after Windows behavior stabilizes.
+6. Completed: documented Discord CDN guild icons, global avatars, and
+   guild-specific member avatars flow through immutable identity models,
+   SQLite v4, messages, pins, member lists, the server rail, and voice rooms.
+   Network failures retain deterministic initials without shifting layout.
+7. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 

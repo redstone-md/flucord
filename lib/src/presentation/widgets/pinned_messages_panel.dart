@@ -101,6 +101,7 @@ class PinnedMessagesPanel extends StatelessWidget {
       itemBuilder: (context, index) => _PinnedMessageRow(
         message: messages[index],
         member: workspace.memberOrNull(messages[index].authorId),
+        spaceId: workspace.channelById(channelId).spaceId,
         onUnpin: onUnpin,
       ),
     );
@@ -111,11 +112,13 @@ class _PinnedMessageRow extends StatelessWidget {
   const _PinnedMessageRow({
     required this.message,
     required this.member,
+    required this.spaceId,
     required this.onUnpin,
   });
 
   final ChatMessage message;
   final Member? member;
+  final String spaceId;
   final Future<void> Function(ChatMessage message) onUnpin;
 
   @override
@@ -125,7 +128,8 @@ class _PinnedMessageRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (member != null) MemberAvatar(member: member!, size: 30),
+          if (member != null)
+            MemberAvatar(member: member!, size: 30, spaceId: spaceId),
           if (member == null)
             const SizedBox.square(
               dimension: 30,

@@ -1,4 +1,5 @@
 import '../../domain/chat_models.dart';
+import 'discord_cdn.dart';
 
 final class DiscordMapper {
   static const _colors = [
@@ -171,15 +172,17 @@ final class DiscordMapper {
         payload['global_name'] as String? ??
         payload['username'] as String? ??
         'Unknown';
+    final id = payload['id']! as String;
     return Member(
-      id: payload['id']! as String,
+      id: id,
       displayName: username,
       initials: _monogram(username),
       role: role,
       presence: presence,
-      colorValue: colorValue ?? _colorFor(payload['id']! as String),
+      colorValue: colorValue ?? _colorFor(id),
       spaceIds: spaceIds,
       rolesBySpace: rolesBySpace,
+      avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
     );
   }
 
@@ -205,6 +208,11 @@ final class DiscordMapper {
         user['username'] as String? ??
         'Unknown';
     final id = user['id']! as String;
+    final guildAvatarUrl = DiscordCdn.guildMemberAvatar(
+      guildId,
+      id,
+      payload['avatar'] as String?,
+    );
     return Member(
       id: id,
       displayName: username,
@@ -214,6 +222,8 @@ final class DiscordMapper {
       colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
       spaceIds: {guildId},
       rolesBySpace: {guildId: roleName},
+      avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
+      avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
     );
   }
 
@@ -228,6 +238,11 @@ final class DiscordMapper {
     return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
       rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
+      avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
+      avatarUrlsBySpace: {
+        ...previous.avatarUrlsBySpace,
+        ...incoming.avatarUrlsBySpace,
+      },
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
@@ -242,6 +257,7 @@ final class DiscordMapper {
       name: name,
       monogram: _monogram(name),
       colorValue: _colorFor(id),
+      iconUrl: DiscordCdn.guildIcon(id, payload['icon'] as String?),
     );
   }
 

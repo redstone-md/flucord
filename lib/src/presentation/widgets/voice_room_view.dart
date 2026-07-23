@@ -71,6 +71,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               controller: widget.controller,
               members: widget.members,
               currentMemberId: widget.currentMemberId,
+              spaceId: widget.guildId,
             ),
           );
           return Column(
@@ -118,12 +119,14 @@ class _VoiceStage extends StatelessWidget {
     required this.controller,
     required this.members,
     required this.currentMemberId,
+    required this.spaceId,
   });
 
   final String channelName;
   final VoiceController controller;
   final List<Member> members;
   final String currentMemberId;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +208,7 @@ class _VoiceStage extends StatelessWidget {
             participants: controller.participants,
             members: members,
             currentMemberId: currentMemberId,
+            spaceId: spaceId,
           ),
         ),
       ],

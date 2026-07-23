@@ -5,8 +5,9 @@ server and channel navigation, searchable message history, replies,
 attachments, reactions, message editing and deletion, active threads, member
 roles and presence, typing indicators, local unread markers, paginated pinned
 messages, Windows notifications, close-to-tray behavior, channel deep links,
-signed updates, native voice-device diagnostics, desktop capture preview, and
-theme switching without a browser runtime.
+signed updates, native voice-device diagnostics, desktop capture preview,
+documented Discord CDN guild/member identity, and theme switching without a
+browser runtime.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -42,6 +43,11 @@ permissions for deletes, uploads, and reactions.
 Unread and mention markers are maintained locally for the running Flucord
 session. Discord does not publish a bot API for a personal account's read
 state, so these markers do not synchronize with the official Discord client.
+
+Guild icons, global user avatars, guild-specific member avatars, and Discord's
+default avatars use documented public CDN routes. Their URLs persist in the
+SQLite v4 cache; unavailable images fall back to deterministic initials without
+changing navigation, message, member-list, or voice-room geometry.
 
 ## Native Media
 

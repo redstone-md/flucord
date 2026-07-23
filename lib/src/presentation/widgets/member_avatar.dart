@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import 'remote_identity_image.dart';
 
 class MemberAvatar extends StatelessWidget {
   const MemberAvatar({
     required this.member,
     this.size = 36,
     this.showPresence = true,
+    this.spaceId,
     super.key,
   });
 
   final Member member;
   final double size;
   final bool showPresence;
+  final String? spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -27,18 +30,21 @@ class MemberAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(member.colorValue),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  member.initials,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: size * 0.32,
-                    fontWeight: FontWeight.w600,
+            child: ClipOval(
+              child: RemoteIdentityImage(
+                url: member.avatarUrlFor(spaceId),
+                imageKey: ValueKey('member-avatar-image-${member.id}'),
+                fallback: DecoratedBox(
+                  decoration: BoxDecoration(color: Color(member.colorValue)),
+                  child: Center(
+                    child: Text(
+                      member.initials,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size * 0.32,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),

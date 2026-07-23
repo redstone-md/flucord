@@ -8,12 +8,14 @@ final class CommunitySpace {
     required this.name,
     required this.monogram,
     required this.colorValue,
+    this.iconUrl,
   });
 
   final String id;
   final String name;
   final String monogram;
   final int colorValue;
+  final String? iconUrl;
 }
 
 final class ConversationChannel {
@@ -63,6 +65,8 @@ final class Member {
     required this.colorValue,
     this.spaceIds = const {},
     this.rolesBySpace = const {},
+    this.avatarUrl,
+    this.avatarUrlsBySpace = const {},
   });
 
   final String id;
@@ -73,8 +77,12 @@ final class Member {
   final int colorValue;
   final Set<String> spaceIds;
   final Map<String, String> rolesBySpace;
+  final String? avatarUrl;
+  final Map<String, String> avatarUrlsBySpace;
 
   String roleFor(String spaceId) => rolesBySpace[spaceId] ?? role;
+  String? avatarUrlFor(String? spaceId) =>
+      spaceId == null ? avatarUrl : avatarUrlsBySpace[spaceId] ?? avatarUrl;
 
   Member copyWith({
     String? displayName,
@@ -83,6 +91,8 @@ final class Member {
     int? colorValue,
     Set<String>? spaceIds,
     Map<String, String>? rolesBySpace,
+    String? avatarUrl,
+    Map<String, String>? avatarUrlsBySpace,
   }) => Member(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -92,6 +102,8 @@ final class Member {
     colorValue: colorValue ?? this.colorValue,
     spaceIds: spaceIds ?? this.spaceIds,
     rolesBySpace: rolesBySpace ?? this.rolesBySpace,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
+    avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
   );
 }
 
@@ -273,7 +285,7 @@ final class ChatWorkspace {
   ChatWorkspace mergeHistory(ChannelHistory history) {
     final memberMap = {for (final member in members) member.id: member};
     for (final member in history.members) {
-      memberMap[member.id] = member;
+      memberMap[member.id] = _mergeMember(memberMap[member.id], member);
     }
     final nextMessages = messages
         .where((message) => message.channelId != history.channelId)
@@ -313,8 +325,15 @@ final class ChatWorkspace {
       }
       final spaces = {...member.spaceIds}..remove(spaceId);
       final roles = {...member.rolesBySpace}..remove(spaceId);
+      final avatars = {...member.avatarUrlsBySpace}..remove(spaceId);
       if (spaces.isNotEmpty || member.spaceIds.isEmpty) {
-        next.add(member.copyWith(spaceIds: spaces, rolesBySpace: roles));
+        next.add(
+          member.copyWith(
+            spaceIds: spaces,
+            rolesBySpace: roles,
+            avatarUrlsBySpace: avatars,
+          ),
+        );
       }
     }
     return copyWith(members: next);
@@ -367,15 +386,24 @@ final class ChatWorkspace {
   static List<Member> _mergeMemberInto(List<Member> current, Member incoming) {
     final existing = current.where((member) => member.id == incoming.id);
     if (existing.isEmpty) return [...current, incoming];
-    final previous = existing.first;
-    final merged = incoming.copyWith(
+    final merged = _mergeMember(existing.first, incoming);
+    return [...current.where((member) => member.id != incoming.id), merged];
+  }
+
+  static Member _mergeMember(Member? previous, Member incoming) {
+    if (previous == null) return incoming;
+    return incoming.copyWith(
       spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
       rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
+      avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
+      avatarUrlsBySpace: {
+        ...previous.avatarUrlsBySpace,
+        ...incoming.avatarUrlsBySpace,
+      },
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
     );
-    return [...current.where((member) => member.id != incoming.id), merged];
   }
 }
 

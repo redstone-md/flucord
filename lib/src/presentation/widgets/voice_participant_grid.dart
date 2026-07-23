@@ -10,12 +10,14 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.participants,
     required this.members,
     required this.currentMemberId,
+    required this.spaceId,
     super.key,
   });
 
   final List<VoiceParticipant> participants;
   final List<Member> members;
   final String currentMemberId;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,7 @@ class VoiceParticipantGrid extends StatelessWidget {
               memberById[participant.userId] ??
               _unknownMember(participant.userId),
           isCurrentUser: participant.userId == currentMemberId,
+          spaceId: spaceId,
         );
       },
     );
@@ -83,11 +86,13 @@ class _ParticipantTile extends StatelessWidget {
     required this.participant,
     required this.member,
     required this.isCurrentUser,
+    required this.spaceId,
   });
 
   final VoiceParticipant participant;
   final Member member;
   final bool isCurrentUser;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +125,7 @@ class _ParticipantTile extends StatelessWidget {
                   member: member,
                   size: 64,
                   showPresence: false,
+                  spaceId: spaceId,
                 ),
               ),
             ),

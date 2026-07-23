@@ -130,7 +130,13 @@ class _MessageItemState extends State<MessageItem> {
                             ),
                           ),
                         )
-                      : MemberAvatar(member: widget.member, size: 34),
+                      : MemberAvatar(
+                          member: widget.member,
+                          size: 34,
+                          spaceId: widget.workspace
+                              .channelById(widget.message.channelId)
+                              .spaceId,
+                        ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(child: _content(context, time)),

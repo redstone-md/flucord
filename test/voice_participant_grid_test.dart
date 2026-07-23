@@ -81,6 +81,7 @@ class _TestApp extends StatelessWidget {
             ),
           ],
           currentMemberId: 'member-1',
+          spaceId: 'guild-1',
         ),
       ),
     );

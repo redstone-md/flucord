@@ -44,13 +44,21 @@ class MemberSidebar extends StatelessWidget {
           for (final entry in roleGroups.entries) ...[
             _MemberGroupLabel(label: entry.key, count: entry.value.length),
             for (final member in entry.value)
-              _MemberRow(member: member, role: member.roleFor(spaceId)),
+              _MemberRow(
+                member: member,
+                role: member.roleFor(spaceId),
+                spaceId: spaceId,
+              ),
             const SizedBox(height: 14),
           ],
           if (offline.isNotEmpty) ...[
             _MemberGroupLabel(label: 'Offline', count: offline.length),
             for (final member in offline)
-              _MemberRow(member: member, role: member.roleFor(spaceId)),
+              _MemberRow(
+                member: member,
+                role: member.roleFor(spaceId),
+                spaceId: spaceId,
+              ),
           ],
         ],
       ),
@@ -81,10 +89,15 @@ class _MemberGroupLabel extends StatelessWidget {
 }
 
 class _MemberRow extends StatelessWidget {
-  const _MemberRow({required this.member, required this.role});
+  const _MemberRow({
+    required this.member,
+    required this.role,
+    required this.spaceId,
+  });
 
   final Member member;
   final String role;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +108,7 @@ class _MemberRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Row(
           children: [
-            MemberAvatar(member: member, size: 32),
+            MemberAvatar(member: member, size: 32, spaceId: spaceId),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

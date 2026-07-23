@@ -32,7 +32,7 @@ final class SqliteChatCache implements ChatCache {
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onCreate: _createSchema,
         onUpgrade: _upgradeSchema,
       ),
@@ -53,6 +53,7 @@ final class SqliteChatCache implements ChatCache {
         name TEXT NOT NULL,
         monogram TEXT NOT NULL,
         color_value INTEGER NOT NULL,
+        icon_url TEXT,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -79,7 +80,9 @@ final class SqliteChatCache implements ChatCache {
         presence INTEGER NOT NULL,
         color_value INTEGER NOT NULL,
         space_ids_json TEXT NOT NULL,
-        roles_by_space_json TEXT NOT NULL
+        roles_by_space_json TEXT NOT NULL,
+        avatar_url TEXT,
+        avatar_urls_by_space_json TEXT NOT NULL
       )
     ''');
     await database.execute('''
@@ -129,6 +132,14 @@ final class SqliteChatCache implements ChatCache {
       );
       await database.execute(
         'ALTER TABLE messages ADD is_pinned INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (oldVersion < 4) {
+      await database.execute('ALTER TABLE spaces ADD icon_url TEXT');
+      await database.execute('ALTER TABLE members ADD avatar_url TEXT');
+      await database.execute(
+        "ALTER TABLE members ADD avatar_urls_by_space_json "
+        "TEXT NOT NULL DEFAULT '{}'",
       );
     }
   }
@@ -329,11 +340,12 @@ final class SqliteChatCache implements ChatCache {
     return rows.map(_memberFromRow).toList();
   }
 
-  static Map<String, Object> _spaceToRow(CommunitySpace space, int index) => {
+  static Map<String, Object?> _spaceToRow(CommunitySpace space, int index) => {
     'id': space.id,
     'name': space.name,
     'monogram': space.monogram,
     'color_value': space.colorValue,
+    'icon_url': space.iconUrl,
     'sort_index': index,
   };
 
@@ -343,6 +355,7 @@ final class SqliteChatCache implements ChatCache {
         name: row['name']! as String,
         monogram: row['monogram']! as String,
         colorValue: row['color_value']! as int,
+        iconUrl: row['icon_url'] as String?,
       );
 
   static Map<String, Object?> _channelToRow(
@@ -374,7 +387,7 @@ final class SqliteChatCache implements ChatCache {
         isThread: row['is_thread'] == 1,
       );
 
-  static Map<String, Object> _memberToRow(Member member) => {
+  static Map<String, Object?> _memberToRow(Member member) => {
     'id': member.id,
     'display_name': member.displayName,
     'initials': member.initials,
@@ -383,6 +396,10 @@ final class SqliteChatCache implements ChatCache {
     'color_value': member.colorValue,
     'space_ids_json': ChatModelJson.strings(member.spaceIds),
     'roles_by_space_json': ChatModelJson.stringMap(member.rolesBySpace),
+    'avatar_url': member.avatarUrl,
+    'avatar_urls_by_space_json': ChatModelJson.stringMap(
+      member.avatarUrlsBySpace,
+    ),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -395,6 +412,10 @@ final class SqliteChatCache implements ChatCache {
     spaceIds: ChatModelJson.stringsFrom(row['space_ids_json']! as String),
     rolesBySpace: ChatModelJson.stringMapFrom(
       row['roles_by_space_json']! as String,
+    ),
+    avatarUrl: row['avatar_url'] as String?,
+    avatarUrlsBySpace: ChatModelJson.stringMapFrom(
+      row['avatar_urls_by_space_json']! as String,
     ),
   );
 
