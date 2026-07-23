@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "dev.flucord" "\0"
-            VALUE "FileDescription", "flucord" "\0"
+            VALUE "FileDescription", "Flucord" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "flucord" "\0"
+            VALUE "InternalName", "Flucord" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 dev.flucord. All rights reserved." "\0"
             VALUE "OriginalFilename", "flucord.exe" "\0"
-            VALUE "ProductName", "flucord" "\0"
+            VALUE "ProductName", "Flucord" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
