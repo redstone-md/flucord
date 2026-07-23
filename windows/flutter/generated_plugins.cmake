@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   auto_updater_windows
   flutter_secure_storage_windows
+  flutter_webrtc
   local_notifier
   protocol_handler_windows
   screen_retriever_windows
