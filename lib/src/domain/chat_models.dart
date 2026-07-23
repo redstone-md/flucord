@@ -3,6 +3,7 @@ import 'message_embed.dart';
 part 'message_models.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
+part 'guild_emoji.dart';
 
 enum ChannelKind { text, voice }
 
@@ -136,12 +137,14 @@ final class ChatWorkspace {
     required this.currentMemberId,
     List<CommunityRole> roles = const [],
     List<ChannelCategory> categories = const [],
+    List<GuildEmoji> emojis = const [],
   }) : spaces = List.unmodifiable(spaces),
        channels = List.unmodifiable(channels),
        members = List.unmodifiable(members),
        messages = List.unmodifiable(messages),
        roles = List.unmodifiable(roles),
-       categories = List.unmodifiable(categories);
+       categories = List.unmodifiable(categories),
+       emojis = List.unmodifiable(emojis);
 
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
@@ -149,6 +152,7 @@ final class ChatWorkspace {
   final List<ChatMessage> messages;
   final List<CommunityRole> roles;
   final List<ChannelCategory> categories;
+  final List<GuildEmoji> emojis;
   final String currentMemberId;
 
   List<ConversationChannel> channelsFor(String spaceId) => channels
@@ -200,6 +204,7 @@ final class ChatWorkspace {
     List<ChatMessage>? messages,
     List<CommunityRole>? roles,
     List<ChannelCategory>? categories,
+    List<GuildEmoji>? emojis,
     String? currentMemberId,
   }) => ChatWorkspace(
     spaces: spaces ?? this.spaces,
@@ -208,6 +213,7 @@ final class ChatWorkspace {
     messages: messages ?? this.messages,
     roles: roles ?? this.roles,
     categories: categories ?? this.categories,
+    emojis: emojis ?? this.emojis,
     currentMemberId: currentMemberId ?? this.currentMemberId,
   );
 

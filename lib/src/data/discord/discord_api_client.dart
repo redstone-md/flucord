@@ -126,6 +126,9 @@ final class DiscordApiClient {
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
 
+  Future<List<Map<String, Object?>>> getGuildEmojis(String guildId) =>
+      _getList('/guilds/$guildId/emojis');
+
   Future<List<Map<String, Object?>>> getGuildMembers(String guildId) async {
     final members = <Map<String, Object?>>[];
     String? after;

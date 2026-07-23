@@ -78,6 +78,13 @@ final class SpaceUpsertedEvent extends ChatRepositoryEvent {
   final CommunitySpace space;
 }
 
+final class GuildEmojisReplacedEvent extends ChatRepositoryEvent {
+  const GuildEmojisReplacedEvent({required this.spaceId, required this.emojis});
+
+  final String spaceId;
+  final List<GuildEmoji> emojis;
+}
+
 final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 

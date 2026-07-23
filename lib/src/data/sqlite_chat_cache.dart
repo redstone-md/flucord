@@ -7,11 +7,14 @@ import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
 import 'chat_model_json.dart';
 import 'sqlite_chat_schema.dart';
+import 'sqlite_guild_emoji_store.dart';
 
 final class SqliteChatCache implements ChatCache {
-  SqliteChatCache._(this._database);
+  SqliteChatCache._(this._database)
+    : _emojiStore = SqliteGuildEmojiStore(_database);
 
   final Database _database;
+  final SqliteGuildEmojiStore _emojiStore;
 
   static Future<SqliteChatCache> openDefault() async {
     sqfliteFfiInit();
@@ -56,6 +59,7 @@ final class SqliteChatCache implements ChatCache {
     final roles = await _database.query('roles', orderBy: 'position DESC');
     final members = await _database.query('members');
     final messages = await _database.query('messages', orderBy: 'sent_at');
+    final emojis = await _emojiStore.readAll();
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),
       channels: channels.map(_channelFromRow).toList(),
@@ -63,6 +67,7 @@ final class SqliteChatCache implements ChatCache {
       roles: roles.map(_roleFromRow).toList(),
       members: members.map(_memberFromRow).toList(),
       messages: messages.map(_messageFromRow).toList(),
+      emojis: emojis,
       currentMemberId: metadata.single['value']! as String,
     );
   }
@@ -78,6 +83,7 @@ final class SqliteChatCache implements ChatCache {
       await transaction.delete('channels');
       await transaction.delete('categories');
       await transaction.delete('roles');
+      await _emojiStore.writeAll(transaction, workspace.emojis);
       final batch = transaction.batch();
       for (var index = 0; index < workspace.spaces.length; index++) {
         batch.insert('spaces', _spaceToRow(workspace.spaces[index], index));
@@ -239,6 +245,10 @@ final class SqliteChatCache implements ChatCache {
     _categoryToRow(category),
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
+
+  @override
+  Future<void> replaceGuildEmojis(String spaceId, List<GuildEmoji> emojis) =>
+      _emojiStore.replaceForSpace(spaceId, emojis);
 
   @override
   Future<void> deleteMessage(String messageId) =>

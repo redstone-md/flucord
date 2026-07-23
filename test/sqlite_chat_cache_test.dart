@@ -66,6 +66,15 @@ void main() {
           colorValue: 0xff336699,
         ),
       ],
+      emojis: const [
+        GuildEmoji(
+          id: 'emoji-1',
+          spaceId: 'guild-1',
+          name: 'ship_it',
+          imageUrl: 'https://cdn.discordapp.com/emojis/emoji-1.webp',
+          animated: true,
+        ),
+      ],
       members: const [
         Member(
           id: 'user-1',
@@ -156,6 +165,8 @@ void main() {
     expect(restored?.channels.last.parentId, 'channel-1');
     expect(restored?.roles.single.name, 'Operator');
     expect(restored?.roles.single.colorValue, 0xff336699);
+    expect(restored?.emojis.single.name, 'ship_it');
+    expect(restored?.emojis.single.animated, isTrue);
     expect(restored?.currentMemberId, 'user-1');
     expect(history.messages.single.body, 'SQLite path confirmed.');
     expect(history.messages.single.attachments.single.fileName, 'proof.png');
@@ -198,6 +209,12 @@ void main() {
     expect(updated.messages.single.body, 'SQLite upsert confirmed.');
     expect(updated.messages.single.isEdited, isTrue);
     expect(direct?.body, 'SQLite upsert confirmed.');
+
+    await cache.replaceGuildEmojis('guild-1', const [
+      GuildEmoji(id: 'emoji-2', spaceId: 'guild-1', name: 'native'),
+    ]);
+    final emojiRefresh = await cache.readWorkspace();
+    expect(emojiRefresh?.emojis.single.id, 'emoji-2');
   });
 
   test('appends paginated history without deleting newer messages', () async {
@@ -370,6 +387,9 @@ void main() {
       "SELECT name FROM sqlite_master "
       "WHERE type = 'table' AND name = 'categories'",
     );
+    final emojiTables = await database.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'emojis'",
+    );
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
     expect(
@@ -405,5 +425,6 @@ void main() {
     );
     expect(roleTables, hasLength(1));
     expect(categoryTables, hasLength(1));
+    expect(emojiTables, hasLength(1));
   });
 }

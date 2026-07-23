@@ -17,6 +17,7 @@ import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
 
 part 'discord_chat_repository_messages.dart';
+part 'discord_chat_repository_emojis.dart';
 
 final class DiscordChatRepository
     implements ChatRepository, VoiceSignalingService {
@@ -78,12 +79,14 @@ final class DiscordChatRepository
       final channelsByGuild = <String, List<Map<String, Object?>>>{};
       final threadsByGuild = <String, List<Map<String, Object?>>>{};
       final membersByGuild = <String, List<Map<String, Object?>>>{};
+      final emojisByGuild = <String, List<Map<String, Object?>>>{};
       for (final guild in guilds) {
         final guildId = guild['id']! as String;
         channelsByGuild[guildId] = await _api.getGuildChannels(guildId);
         threadsByGuild[guildId] = await _api.getGuildActiveThreads(guildId);
         _rolesByGuild[guildId] = await _api.getGuildRoles(guildId);
         membersByGuild[guildId] = await _guildMemberLoader.load(guildId);
+        emojisByGuild[guildId] = await _api.getGuildEmojis(guildId);
       }
       final cached = await _cache.readWorkspace();
       final workspace = _mapper
@@ -94,6 +97,7 @@ final class DiscordChatRepository
             threadsByGuild: threadsByGuild,
             membersByGuild: membersByGuild,
             rolesByGuild: _rolesByGuild,
+            emojisByGuild: emojisByGuild,
             includeDirectMessagesSpace: true,
           )
           .retainDirectMessagesFrom(cached)
@@ -297,6 +301,8 @@ final class DiscordChatRepository
             _handlePinsChanged(event.data);
           case 'GUILD_CREATE':
             _handleGuildSnapshot(event.data);
+          case 'GUILD_EMOJIS_UPDATE':
+            unawaited(_handleGuildEmojis(event.data));
         }
     }
   }
@@ -389,6 +395,7 @@ final class DiscordChatRepository
   void _handleGuildSnapshot(Map<String, Object?> data) {
     final guildId = data['id'] as String?;
     if (guildId == null) return;
+    if (data['emojis'] is List) unawaited(_handleGuildEmojis(data));
     final roles = data['roles'];
     if (roles is List) {
       _rolesByGuild[guildId] = roles

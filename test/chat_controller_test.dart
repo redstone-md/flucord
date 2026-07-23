@@ -350,6 +350,25 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(controller.workspace!.categories, isNot(contains(category)));
     });
+
+    test('replaces one guild emoji catalog from a live event', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      repository.emit(
+        const GuildEmojisReplacedEvent(
+          spaceId: 'forge',
+          emojis: [
+            GuildEmoji(id: 'live-emoji', spaceId: 'forge', name: 'online'),
+          ],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.workspace!.emojisFor('forge').single.id, 'live-emoji');
+    });
   });
 }
 

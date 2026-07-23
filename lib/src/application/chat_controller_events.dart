@@ -14,6 +14,11 @@ extension _ChatControllerEvents on ChatController {
           _workspace = _workspace?.upsertCategory(event.category);
         case SpaceUpsertedEvent():
           _workspace = _workspace?.upsertSpace(event.space);
+        case GuildEmojisReplacedEvent():
+          _workspace = _workspace?.replaceGuildEmojis(
+            event.spaceId,
+            event.emojis,
+          );
         case ChannelDeletedEvent():
           _workspace = _workspace?.removeChannel(event.channelId);
         case CategoryDeletedEvent():

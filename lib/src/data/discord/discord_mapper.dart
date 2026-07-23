@@ -31,6 +31,7 @@ final class DiscordMapper {
     Map<String, List<Map<String, Object?>>> threadsByGuild = const {},
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
     Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
+    Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
     List<Map<String, Object?>> directChannels = const [],
     bool includeDirectMessagesSpace = false,
   }) {
@@ -38,6 +39,7 @@ final class DiscordMapper {
     final channels = <ConversationChannel>[];
     final categories = <ChannelCategory>[];
     final roles = <CommunityRole>[];
+    final emojis = <GuildEmoji>[];
     final members = <String, Member>{};
     if (includeDirectMessagesSpace || directChannels.isNotEmpty) {
       spaces.add(directMessagesSpace);
@@ -71,6 +73,11 @@ final class DiscordMapper {
           (payload) => role(payload, guildId),
         ),
       );
+      emojis.addAll(
+        (emojisByGuild[guildId] ?? const []).map(
+          (payload) => emoji(payload, guildId),
+        ),
+      );
       for (final payload in membersByGuild[guildId] ?? const []) {
         final mapped = guildMember(
           payload,
@@ -97,12 +104,26 @@ final class DiscordMapper {
       categories: categories,
       members: members.values.toList(),
       messages: const [],
+      emojis: emojis,
       currentMemberId: currentMember.id,
     );
   }
 
   CommunitySpace get directMessagesSpace =>
       const CommunitySpace.directMessages();
+
+  GuildEmoji emoji(Map<String, Object?> payload, String guildId) {
+    final id = payload['id']! as String;
+    final animated = payload['animated'] as bool? ?? false;
+    return GuildEmoji(
+      id: id,
+      spaceId: guildId,
+      name: payload['name']! as String,
+      animated: animated,
+      available: payload['available'] as bool? ?? true,
+      imageUrl: DiscordCdn.customEmoji(id, animated: animated, size: 64),
+    );
+  }
 
   DiscordMappedDirectMessage? directMessage(
     Map<String, Object?> payload,
