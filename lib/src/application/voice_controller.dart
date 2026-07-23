@@ -64,6 +64,7 @@ final class VoiceController extends ChangeNotifier {
   String? _connectedGuildId;
   String? _connectedChannelId;
   VoiceTransportSession? _transportSession;
+  final Map<String, VoiceParticipant> _participants = {};
   Object? _error;
   bool _isMuted = false;
   bool _isScreenSharing = false;
@@ -85,6 +86,8 @@ final class VoiceController extends ChangeNotifier {
   String? get connectedGuildId => _connectedGuildId;
   String? get connectedChannelId => _connectedChannelId;
   VoiceTransportSession? get transportSession => _transportSession;
+  List<VoiceParticipant> get participants =>
+      List.unmodifiable(_participants.values);
   Object? get error => _error;
   bool get isConnected => _connectedChannelId != null;
   bool get hasDiscordSignaling => _signalingService != null;
@@ -152,6 +155,7 @@ final class VoiceController extends ChangeNotifier {
       }
       _connectedGuildId = guildId;
       _connectedChannelId = channelId;
+      _participants.clear();
       _transportSession = null;
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
@@ -261,6 +265,7 @@ final class VoiceController extends ChangeNotifier {
       _connectedChannelId = null;
       _connectionStatus = VoiceConnectionStatus.disconnected;
       _transportSession = null;
+      _participants.clear();
       _isScreenSharing = false;
       _isMuted = false;
     });
@@ -277,6 +282,7 @@ final class VoiceController extends ChangeNotifier {
     await _setPlaybackEnabled(false);
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
+    _participants.clear();
     _signalingSubscription = service?.voiceEvents.listen(
       _handleSignalingEvent,
       onDone: _handleSignalingDone,
@@ -291,6 +297,7 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
+          _participants.clear();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
       case VoiceTransportReadyEvent():
@@ -298,10 +305,24 @@ final class VoiceController extends ChangeNotifier {
         unawaited(
           _applyBackgroundAudioState(uplink: !_isMuted, playback: true),
         );
-      case VoiceCredentialsReadyEvent() ||
-          VoiceDaveBinaryEvent() ||
-          VoiceSpeakingEvent() ||
-          VoiceUserDisconnectedEvent():
+      case VoiceCredentialsReadyEvent():
+        _participants.putIfAbsent(
+          event.credentials.userId,
+          () => VoiceParticipant(userId: event.credentials.userId),
+        );
+      case VoiceParticipantStateEvent():
+        _applyParticipantState(event);
+      case VoiceSpeakingEvent():
+        final participant =
+            _participants[event.userId] ??
+            VoiceParticipant(userId: event.userId);
+        _participants[event.userId] = participant.copyWith(
+          ssrc: event.ssrc,
+          speakingFlags: event.speakingFlags,
+        );
+      case VoiceUserDisconnectedEvent():
+        _participants.remove(event.userId);
+      case VoiceDaveBinaryEvent():
         break;
     }
     if (!_disposed) notifyListeners();
@@ -311,8 +332,27 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
+    _participants.clear();
     unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();
+  }
+
+  void _applyParticipantState(VoiceParticipantStateEvent event) {
+    if (event.guildId != _connectedGuildId ||
+        event.channelId != _connectedChannelId) {
+      _participants.remove(event.userId);
+      return;
+    }
+    final participant =
+        _participants[event.userId] ?? VoiceParticipant(userId: event.userId);
+    _participants[event.userId] = participant.copyWith(
+      selfMuted: event.selfMuted,
+      selfDeafened: event.selfDeafened,
+      serverMuted: event.serverMuted,
+      serverDeafened: event.serverDeafened,
+      isStreaming: event.isStreaming,
+      isVideoEnabled: event.isVideoEnabled,
+    );
   }
 
   Future<void> _run(Future<void> Function() action) async {

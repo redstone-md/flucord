@@ -97,6 +97,75 @@ void main() {
 
     expect(gateway.updates, isEmpty);
   });
+
+  test('emits documented participant voice state fields', () async {
+    final gateway = _FakeMainGateway();
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+    )..setCurrentUserId('bot-1');
+    final events = <VoiceSignalingEvent>[];
+    final subscription = service.voiceEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'member-1',
+      'session_id': 'member-session',
+      'self_mute': true,
+      'self_deaf': false,
+      'mute': false,
+      'deaf': true,
+      'self_stream': true,
+      'self_video': true,
+    });
+    await _flushEvents();
+
+    final participant = events.whereType<VoiceParticipantStateEvent>().single;
+    expect(participant.userId, 'member-1');
+    expect(participant.channelId, 'voice-1');
+    expect(participant.selfMuted, isTrue);
+    expect(participant.serverDeafened, isTrue);
+    expect(participant.isStreaming, isTrue);
+    expect(participant.isVideoEnabled, isTrue);
+  });
+
+  test('emits departure but ignores voice state from another guild', () async {
+    final gateway = _FakeMainGateway();
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+    )..setCurrentUserId('bot-1');
+    final events = <VoiceSignalingEvent>[];
+    final subscription = service.voiceEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-2',
+      'channel_id': 'voice-2',
+      'user_id': 'member-2',
+    });
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': null,
+      'user_id': 'member-1',
+      'self_mute': false,
+      'self_deaf': false,
+      'mute': false,
+      'deaf': false,
+    });
+    await _flushEvents();
+
+    final states = events.whereType<VoiceParticipantStateEvent>().toList();
+    expect(states, hasLength(1));
+    expect(states.single.userId, 'member-1');
+    expect(states.single.channelId, isNull);
+  });
 }
 
 Future<void> _flushEvents() async {

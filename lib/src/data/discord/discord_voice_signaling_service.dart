@@ -119,6 +119,7 @@ final class DiscordVoiceSignalingService
 
   void _onGatewayEvent(DiscordGatewayEvent event) {
     if (event is! DiscordGatewayDispatch || _currentUserId == null) return;
+    _emitParticipantState(event);
     final credentials = _assembler.accept(
       eventName: event.name,
       data: event.data,
@@ -130,6 +131,33 @@ final class DiscordVoiceSignalingService
     }
     final generation = _generations[credentials.guildId] ?? 0;
     unawaited(_startVoiceClient(credentials, generation));
+  }
+
+  void _emitParticipantState(DiscordGatewayDispatch event) {
+    if (event.name != 'VOICE_STATE_UPDATE') return;
+    final data = event.data;
+    final guildId = data['guild_id'];
+    final userId = data['user_id'];
+    if (guildId is! String ||
+        userId is! String ||
+        !_desiredChannels.containsKey(guildId)) {
+      return;
+    }
+    final channelId = data['channel_id'];
+    if (channelId != null && channelId is! String) return;
+    _emit(
+      VoiceParticipantStateEvent(
+        userId: userId,
+        guildId: guildId,
+        channelId: channelId as String?,
+        selfMuted: data['self_mute'] == true,
+        selfDeafened: data['self_deaf'] == true,
+        serverMuted: data['mute'] == true,
+        serverDeafened: data['deaf'] == true,
+        isStreaming: data['self_stream'] == true,
+        isVideoEnabled: data['self_video'] == true,
+      ),
+    );
   }
 
   Future<void> _startVoiceClient(

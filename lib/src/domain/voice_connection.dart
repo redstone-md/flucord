@@ -96,6 +96,79 @@ final class VoiceSpeakingEvent extends VoiceSignalingEvent {
   bool get isSpeaking => speakingFlags != 0;
 }
 
+final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
+  const VoiceParticipantStateEvent({
+    required this.userId,
+    required this.guildId,
+    required this.channelId,
+    required this.selfMuted,
+    required this.selfDeafened,
+    required this.serverMuted,
+    required this.serverDeafened,
+    required this.isStreaming,
+    required this.isVideoEnabled,
+  });
+
+  final String userId;
+  final String guildId;
+  final String? channelId;
+  final bool selfMuted;
+  final bool selfDeafened;
+  final bool serverMuted;
+  final bool serverDeafened;
+  final bool isStreaming;
+  final bool isVideoEnabled;
+}
+
+final class VoiceParticipant {
+  const VoiceParticipant({
+    required this.userId,
+    this.ssrc,
+    this.speakingFlags = 0,
+    this.selfMuted = false,
+    this.selfDeafened = false,
+    this.serverMuted = false,
+    this.serverDeafened = false,
+    this.isStreaming = false,
+    this.isVideoEnabled = false,
+  });
+
+  final String userId;
+  final int? ssrc;
+  final int speakingFlags;
+  final bool selfMuted;
+  final bool selfDeafened;
+  final bool serverMuted;
+  final bool serverDeafened;
+  final bool isStreaming;
+  final bool isVideoEnabled;
+
+  bool get isSpeaking => speakingFlags != 0;
+  bool get isMuted => selfMuted || serverMuted;
+  bool get isDeafened => selfDeafened || serverDeafened;
+
+  VoiceParticipant copyWith({
+    int? ssrc,
+    int? speakingFlags,
+    bool? selfMuted,
+    bool? selfDeafened,
+    bool? serverMuted,
+    bool? serverDeafened,
+    bool? isStreaming,
+    bool? isVideoEnabled,
+  }) => VoiceParticipant(
+    userId: userId,
+    ssrc: ssrc ?? this.ssrc,
+    speakingFlags: speakingFlags ?? this.speakingFlags,
+    selfMuted: selfMuted ?? this.selfMuted,
+    selfDeafened: selfDeafened ?? this.selfDeafened,
+    serverMuted: serverMuted ?? this.serverMuted,
+    serverDeafened: serverDeafened ?? this.serverDeafened,
+    isStreaming: isStreaming ?? this.isStreaming,
+    isVideoEnabled: isVideoEnabled ?? this.isVideoEnabled,
+  );
+}
+
 final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
   const VoiceUserDisconnectedEvent(this.userId);
 

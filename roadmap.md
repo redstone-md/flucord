@@ -57,8 +57,11 @@ browser runtime or dependency on Discord's private user API.
    speaking teardown, bounded per-SSRC RTP reordering, replay rejection,
    per-user remote Opus decoding, native PLC/FEC, a 60 ms playout buffer,
    per-user native PCM playback, and selected output-device routing are
-   implemented. Discord interoperability testing in an actual bot voice
-   session and transmitted screen sharing remain.
+   implemented. Documented main-Gateway voice-state updates now maintain an
+   isolated participant roster with mute, deafen, stream, and video state;
+   Voice-Gateway speaking flags drive the live participant border in a
+   responsive Discord-like call grid. Discord interoperability testing in an
+   actual bot voice session and transmitted screen sharing remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety

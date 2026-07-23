@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../application/voice_controller.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
+import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
 
 class VoiceRoomView extends StatefulWidget {
@@ -14,6 +16,8 @@ class VoiceRoomView extends StatefulWidget {
     required this.channelId,
     required this.channelName,
     required this.controller,
+    required this.members,
+    required this.currentMemberId,
     super.key,
   });
 
@@ -21,6 +25,8 @@ class VoiceRoomView extends StatefulWidget {
   final String channelId;
   final String channelName;
   final VoiceController controller;
+  final List<Member> members;
+  final String currentMemberId;
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -63,6 +69,8 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             child: _VoiceStage(
               channelName: widget.channelName,
               controller: widget.controller,
+              members: widget.members,
+              currentMemberId: widget.currentMemberId,
             ),
           );
           return Column(
@@ -105,10 +113,17 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
 }
 
 class _VoiceStage extends StatelessWidget {
-  const _VoiceStage({required this.channelName, required this.controller});
+  const _VoiceStage({
+    required this.channelName,
+    required this.controller,
+    required this.members,
+    required this.currentMemberId,
+  });
 
   final String channelName;
   final VoiceController controller;
+  final List<Member> members;
+  final String currentMemberId;
 
   @override
   Widget build(BuildContext context) {
@@ -143,58 +158,56 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: context.surfaces.raised,
-                border: Border.all(
-                  color: controller.isConnected
-                      ? FlucordColors.signal
-                      : context.surfaces.border,
-                  width: 2,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  channelName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              child: Icon(
-                Icons.graphic_eq,
-                size: 38,
-                color: controller.isConnected
-                    ? FlucordColors.signal
-                    : context.surfaces.muted,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              channelName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              voiceRoomStatusLabel(controller),
-              style: TextStyle(
-                color: controller.isTransportReady
-                    ? FlucordColors.signal
-                    : context.surfaces.muted,
-                fontSize: 12,
-              ),
-            ),
-            if (controller.error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(width: 12),
               Text(
-                'Media device unavailable',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                voiceRoomStatusLabel(controller),
+                style: TextStyle(
+                  color: controller.isTransportReady
+                      ? FlucordColors.signal
+                      : context.surfaces.muted,
+                  fontSize: 11,
+                ),
               ),
             ],
-          ],
+          ),
         ),
-      ),
+        if (controller.error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+            child: Text(
+              'Media device unavailable',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        Expanded(
+          child: VoiceParticipantGrid(
+            participants: controller.participants,
+            members: members,
+            currentMemberId: currentMemberId,
+          ),
+        ),
+      ],
     );
   }
 }

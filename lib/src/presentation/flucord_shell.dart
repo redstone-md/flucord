@@ -277,6 +277,8 @@ class _ConversationPaneState extends State<_ConversationPane> {
         channelId: widget.channel.id,
         channelName: widget.channel.name,
         controller: widget.voiceController,
+        members: widget.workspace.members,
+        currentMemberId: widget.workspace.currentMemberId,
       ),
       ChannelKind.text when widget.isLoading => const ChannelLoadingView(),
       ChannelKind.text when widget.loadError != null => ChannelFailureView(
