@@ -101,6 +101,9 @@ browser runtime or dependency on Discord's private user API.
     hierarchy, blurple interaction states, semantic presence and mention
     colors, and the familiar account panel placement without changing
     transport behavior.
+15. Completed: local unread and mention state is aggregated per guild and DM
+    space into Discord-like server rail pips, numeric badges, tooltips, and
+    accessible navigation labels.
 
 ## Protocol safety
 

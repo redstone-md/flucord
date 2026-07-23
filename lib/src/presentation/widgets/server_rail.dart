@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
@@ -34,6 +35,7 @@ class ServerRail extends StatelessWidget {
     final guildSpaces = workspace.spaces
         .where((space) => !space.isDirectMessages)
         .toList(growable: false);
+    final activityBySpaceId = workspace.activityBySpace();
     return Container(
       key: const ValueKey('server-rail'),
       width: 72,
@@ -46,6 +48,9 @@ class ServerRail extends StatelessWidget {
           const SizedBox(height: 12),
           _HomeButton(
             selected: directSpace?.id == selectedSpaceId,
+            activity: directSpace == null
+                ? SpaceActivity.none
+                : activityBySpaceId[directSpace.id] ?? SpaceActivity.none,
             onPressed: directSpace == null
                 ? null
                 : () => onSelectSpace(directSpace.id),
@@ -64,6 +69,7 @@ class ServerRail extends StatelessWidget {
                 return _SpaceButton(
                   space: space,
                   selected: space.id == selectedSpaceId,
+                  activity: activityBySpaceId[space.id] ?? SpaceActivity.none,
                   onPressed: () => onSelectSpace(space.id),
                 );
               },
@@ -95,15 +101,22 @@ class ServerRail extends StatelessWidget {
 }
 
 class _HomeButton extends StatelessWidget {
-  const _HomeButton({required this.selected, required this.onPressed});
+  const _HomeButton({
+    required this.selected,
+    required this.activity,
+    required this.onPressed,
+  });
 
   final bool selected;
+  final SpaceActivity activity;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => _RailButton(
+    spaceId: CommunitySpace.directMessagesId,
     buttonKey: const ValueKey('space-direct-messages'),
     selected: selected,
+    activity: activity,
     onPressed: onPressed,
     tooltip: onPressed == null ? 'Flucord' : 'Direct Messages',
     idleColor: context.surfaces.raised,
@@ -120,17 +133,21 @@ class _SpaceButton extends StatelessWidget {
   const _SpaceButton({
     required this.space,
     required this.selected,
+    required this.activity,
     required this.onPressed,
   });
 
   final CommunitySpace space;
   final bool selected;
+  final SpaceActivity activity;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) => _RailButton(
+    spaceId: space.id,
     buttonKey: ValueKey('space-${space.id}'),
     selected: selected,
+    activity: activity,
     onPressed: onPressed,
     tooltip: space.name,
     idleColor: Color(space.colorValue).withValues(alpha: 0.62),
@@ -156,8 +173,10 @@ typedef _RailButtonBuilder = Widget Function(BuildContext context, bool active);
 
 class _RailButton extends StatefulWidget {
   const _RailButton({
+    required this.spaceId,
     required this.buttonKey,
     required this.selected,
+    required this.activity,
     required this.onPressed,
     required this.tooltip,
     required this.idleColor,
@@ -165,8 +184,10 @@ class _RailButton extends StatefulWidget {
     required this.builder,
   });
 
+  final String spaceId;
   final Key buttonKey;
   final bool selected;
+  final SpaceActivity activity;
   final VoidCallback? onPressed;
   final String tooltip;
   final Color idleColor;
@@ -184,55 +205,115 @@ class _RailButtonState extends State<_RailButton> {
   Widget build(BuildContext context) {
     final active = widget.selected || _hovered;
     final radius = BorderRadius.circular(active ? 14 : 22);
-    return SizedBox(
-      height: 46,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (widget.selected)
-            Positioned(
-              left: 0,
-              child: SizedBox(
-                width: 3,
-                height: 28,
-                child: ColoredBox(
-                  color: Theme.of(context).colorScheme.onSurface,
+    final semanticsLabel = _activityLabel(widget.tooltip, widget.activity);
+    return Semantics(
+      key: ValueKey('space-semantics-${widget.spaceId}'),
+      label: semanticsLabel,
+      button: widget.onPressed != null,
+      enabled: widget.onPressed != null,
+      selected: widget.selected,
+      onTap: widget.onPressed,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: 46,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (widget.selected || widget.activity.hasUnread)
+              Positioned(
+                left: 0,
+                child: SizedBox(
+                  key: ValueKey('space-indicator-${widget.spaceId}'),
+                  width: 3,
+                  height: widget.selected ? 28 : 8,
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
-            ),
-          Tooltip(
-            message: widget.tooltip,
-            preferBelow: false,
-            child: MouseRegion(
-              onEnter: (_) {
-                if (widget.onPressed != null) setState(() => _hovered = true);
-              },
-              onExit: (_) => setState(() => _hovered = false),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: radius,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  key: widget.buttonKey,
-                  onTap: widget.onPressed,
+            Tooltip(
+              message: semanticsLabel,
+              excludeFromSemantics: true,
+              preferBelow: false,
+              child: MouseRegion(
+                onEnter: (_) {
+                  if (widget.onPressed != null) {
+                    setState(() => _hovered = true);
+                  }
+                },
+                onExit: (_) => setState(() => _hovered = false),
+                child: Material(
+                  color: Colors.transparent,
                   borderRadius: radius,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: active ? widget.activeColor : widget.idleColor,
-                      borderRadius: radius,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    key: widget.buttonKey,
+                    onTap: widget.onPressed,
+                    borderRadius: radius,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: active ? widget.activeColor : widget.idleColor,
+                        borderRadius: radius,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: widget.builder(context, active),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: widget.builder(context, active),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+            if (widget.activity.mentionCount > 0)
+              Positioned(
+                right: 4,
+                bottom: 0,
+                child: _MentionBadge(
+                  spaceId: widget.spaceId,
+                  count: widget.activity.mentionCount,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
+
+  static String _activityLabel(String name, SpaceActivity activity) {
+    if (activity.mentionCount == 1) return '$name, 1 mention';
+    if (activity.mentionCount > 1) {
+      return '$name, ${activity.mentionCount} mentions';
+    }
+    return activity.hasUnread ? '$name, unread' : name;
+  }
+}
+
+class _MentionBadge extends StatelessWidget {
+  const _MentionBadge({required this.spaceId, required this.count});
+
+  final String spaceId;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey('space-mention-$spaceId'),
+    constraints: const BoxConstraints(minWidth: 18),
+    height: 18,
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: FlucordColors.mention,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: context.surfaces.rail, width: 2),
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }

@@ -79,6 +79,9 @@ permissions for deletes, uploads, and reactions.
 Unread and mention markers are maintained locally for the running Flucord
 session. Discord does not publish a bot API for a personal account's read
 state, so these markers do not synchronize with the official Discord client.
+The server rail aggregates that local state per guild and for Direct Messages:
+short pips mark unread spaces, selected spaces retain the taller navigation
+indicator, and numeric mention badges are capped visually at `99+`.
 
 Guild icons, global user avatars, guild-specific member avatars, and Discord's
 default avatars use documented public CDN routes. Their URLs persist in the
