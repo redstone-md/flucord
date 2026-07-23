@@ -95,6 +95,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   bool _failed = false;
   int _generation = 0;
   int? _ssrc;
+  final Map<int, String> _userIdsBySsrc = {};
   String? _mode;
   DiscordVoiceIpDiscovery? _discovered;
   VoiceTransportSession? _session;
@@ -103,6 +104,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   Stream<VoiceSignalingEvent> get events => _events.stream;
   Stream<Uint8List> get packets => _udpTransport.packets;
   VoiceTransportSession? get session => _session;
+  String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
 
   @override
   Future<void> connect() async {
@@ -185,6 +187,8 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
         }
       case 4:
         if (data is Map) _handleSession(data.cast<String, Object?>());
+      case 5:
+        if (data is Map) _handleSpeaking(data.cast<String, Object?>());
       case 6:
         _heartbeatAcknowledged = true;
       case 8:
@@ -192,6 +196,8 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
       case 9:
         _canResume = true;
         _emitStatus(VoiceConnectionStatus.ready);
+      case 12:
+        if (data is Map) _handleClientDisconnect(data.cast<String, Object?>());
     }
   }
 
@@ -228,6 +234,36 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     _heartbeatAcknowledged = true;
     final interval = Duration(milliseconds: rawInterval.round());
     _heartbeatTimer = Timer.periodic(interval, (_) => _heartbeat());
+  }
+
+  void _handleSpeaking(Map<String, Object?> data) {
+    final userId = data['user_id'];
+    final ssrc = data['ssrc'];
+    final speakingFlags = data['speaking'];
+    if (userId is! String ||
+        ssrc is! int ||
+        ssrc < 0 ||
+        ssrc > 0xffffffff ||
+        speakingFlags is! int) {
+      return;
+    }
+    _userIdsBySsrc[ssrc] = userId;
+    if (!_events.isClosed) {
+      _events.add(
+        VoiceSpeakingEvent(
+          userId: userId,
+          ssrc: ssrc,
+          speakingFlags: speakingFlags,
+        ),
+      );
+    }
+  }
+
+  void _handleClientDisconnect(Map<String, Object?> data) {
+    final userId = data['user_id'];
+    if (userId is! String) return;
+    _userIdsBySsrc.removeWhere((_, mappedUserId) => mappedUserId == userId);
+    if (!_events.isClosed) _events.add(VoiceUserDisconnectedEvent(userId));
   }
 
   void _heartbeat() {
@@ -376,6 +412,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     _heartbeatTimer = null;
     _discovered = null;
     _session = null;
+    _userIdsBySsrc.clear();
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
     _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
@@ -393,6 +430,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     unawaited(_socket?.close());
     _discovered = null;
     _session = null;
+    _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.failure, error: error);
   }
@@ -418,6 +456,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.disconnected);
     await _events.close();

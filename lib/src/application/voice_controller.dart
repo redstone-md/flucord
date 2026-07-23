@@ -236,7 +236,10 @@ final class VoiceController extends ChangeNotifier {
         }
       case VoiceTransportReadyEvent():
         _transportSession = event.session;
-      case VoiceCredentialsReadyEvent() || VoiceDaveBinaryEvent():
+      case VoiceCredentialsReadyEvent() ||
+          VoiceDaveBinaryEvent() ||
+          VoiceSpeakingEvent() ||
+          VoiceUserDisconnectedEvent():
         break;
     }
     if (!_disposed) notifyListeners();

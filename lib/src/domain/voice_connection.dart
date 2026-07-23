@@ -82,6 +82,26 @@ final class VoiceDaveBinaryEvent extends VoiceSignalingEvent {
   final int sequence;
 }
 
+final class VoiceSpeakingEvent extends VoiceSignalingEvent {
+  const VoiceSpeakingEvent({
+    required this.userId,
+    required this.ssrc,
+    required this.speakingFlags,
+  });
+
+  final String userId;
+  final int ssrc;
+  final int speakingFlags;
+
+  bool get isSpeaking => speakingFlags != 0;
+}
+
+final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
+  const VoiceUserDisconnectedEvent(this.userId);
+
+  final String userId;
+}
+
 abstract interface class VoiceSignalingService {
   Stream<VoiceSignalingEvent> get voiceEvents;
 

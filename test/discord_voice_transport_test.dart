@@ -206,6 +206,28 @@ void main() {
       expect(dave.opcode, 25);
       expect(dave.payload, [7, 8, 9]);
 
+      socket.addJson({
+        'op': 5,
+        'seq': 13,
+        'd': {'user_id': 'remote-1', 'ssrc': 77, 'speaking': 1},
+      });
+      await _flushEvents();
+
+      final speaking = events.whereType<VoiceSpeakingEvent>().single;
+      expect(speaking.userId, 'remote-1');
+      expect(speaking.isSpeaking, isTrue);
+      expect(client.userIdForSsrc(77), 'remote-1');
+
+      socket.addJson({
+        'op': 12,
+        'seq': 14,
+        'd': {'user_id': 'remote-1'},
+      });
+      await _flushEvents();
+
+      expect(client.userIdForSsrc(77), isNull);
+      expect(events.whereType<VoiceUserDisconnectedEvent>(), hasLength(1));
+
       client.sendDaveMessage(opcode: 26, payload: [3, 2, 1]);
       expect(socket.sent.last, isA<Uint8List>());
       expect(socket.sent.last, [26, 3, 2, 1]);
