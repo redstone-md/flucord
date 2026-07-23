@@ -46,10 +46,7 @@ void main() {
     addTearDown(subscription.cancel);
     addTearDown(service.close);
 
-    await service.joinVoiceChannel(
-      guildId: 'guild-1',
-      channelId: 'voice-1',
-    );
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
     gateway.dispatch('VOICE_SERVER_UPDATE', {
       'guild_id': 'guild-1',
       'token': 'voice-token',
@@ -178,6 +175,14 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
 final class _CapabilityOnlyDaveService implements VoiceDaveService {
   @override
   int get maxProtocolVersion => 1;
+
+  @override
+  VoiceDaveEncryptor createEncryptor() =>
+      throw UnsupportedError('Media encryption is outside this test');
+
+  @override
+  VoiceDaveDecryptor createDecryptor() =>
+      throw UnsupportedError('Media decryption is outside this test');
 
   @override
   VoiceDaveSession createSession({

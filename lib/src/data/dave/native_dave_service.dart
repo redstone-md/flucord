@@ -4,6 +4,8 @@ import 'package:ffi/ffi.dart';
 
 import '../../domain/voice_dave.dart';
 import 'native_dave_bindings.dart';
+import 'native_dave_buffers.dart';
+import 'native_dave_media.dart';
 
 final class NativeDaveService implements VoiceDaveService {
   NativeDaveService._(this._bindings);
@@ -42,6 +44,12 @@ final class NativeDaveService implements VoiceDaveService {
       selfUserId: selfUserId,
     );
   }
+
+  @override
+  VoiceDaveEncryptor createEncryptor() => NativeDaveEncryptor.create(_bindings);
+
+  @override
+  VoiceDaveDecryptor createDecryptor() => NativeDaveDecryptor.create(_bindings);
 }
 
 final class NativeDaveSession implements VoiceDaveSession {
@@ -191,6 +199,25 @@ final class NativeDaveSession implements VoiceDaveSession {
     }
   }
 
+  @override
+  VoiceDaveKeyRatchet getKeyRatchet(String userId) {
+    _checkActive();
+    final numericUserId = int.tryParse(userId);
+    if (numericUserId == null || numericUserId <= 0) {
+      throw const FormatException('DAVE requires a numeric Discord user ID');
+    }
+    final handle = using(
+      (arena) => _bindings.sessionGetKeyRatchet(
+        _handle,
+        userId.toNativeUtf8(allocator: arena),
+      ),
+    );
+    if (handle == nullptr) {
+      throw StateError('DAVE key ratchet is unavailable for user $userId');
+    }
+    return NativeDaveKeyRatchet(_bindings, handle);
+  }
+
   List<String> _commitRoster(DaveResultHandle result) => _readRoster(
     (output, length) => _bindings.commitResultGetRoster(result, output, length),
   );
@@ -230,10 +257,7 @@ final class NativeDaveSession implements VoiceDaveSession {
       using((arena) => action(_allocateBytes(arena, bytes), bytes.length));
 
   Pointer<Uint8> _allocateBytes(Allocator allocator, List<int> bytes) {
-    if (bytes.isEmpty) return nullptr;
-    final pointer = allocator<Uint8>(bytes.length);
-    pointer.asTypedList(bytes.length).setAll(0, bytes);
-    return pointer;
+    return NativeDaveBuffers.allocate(allocator, bytes);
   }
 
   Pointer<Pointer<Utf8>> _allocateUsers(

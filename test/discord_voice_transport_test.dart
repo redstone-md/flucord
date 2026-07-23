@@ -391,6 +391,14 @@ final class _GatewayFakeDaveService implements VoiceDaveService {
   int get maxProtocolVersion => 1;
 
   @override
+  VoiceDaveEncryptor createEncryptor() =>
+      throw UnsupportedError('Media encryption is outside this test');
+
+  @override
+  VoiceDaveDecryptor createDecryptor() =>
+      throw UnsupportedError('Media decryption is outside this test');
+
+  @override
   VoiceDaveSession createSession({
     required int protocolVersion,
     required String channelId,
@@ -407,6 +415,10 @@ final class _GatewayFakeDaveSession implements VoiceDaveSession {
 
   @override
   int get protocolVersion => _version;
+
+  @override
+  VoiceDaveKeyRatchet getKeyRatchet(String userId) =>
+      throw UnsupportedError('Key ratchets are outside this test');
 
   @override
   void setProtocolVersion(int version) => _version = version;
