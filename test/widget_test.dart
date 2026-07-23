@@ -20,6 +20,14 @@ void main() {
     expect(find.text('transport-boundary.md'), findsOneWidget);
     expect(find.text('release-checklist'), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('toggle-pins')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pinned-messages-panel')), findsOneWidget);
+    expect(find.byTooltip('Unpin message'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('close-pins-panel')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('pinned-messages-panel')), findsNothing);
+
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: Offset.zero);
     await mouse.moveTo(
@@ -62,5 +70,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Native message path confirmed.'), findsOneWidget);
+  });
+
+  testWidgets('opens pinned messages without compact layout overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-pins')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('pinned-messages-panel')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

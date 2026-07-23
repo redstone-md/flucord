@@ -11,9 +11,11 @@ class ChatHeader extends StatelessWidget {
     required this.showCompactPicker,
     required this.allowMemberPanel,
     required this.showMembers,
+    required this.showPins,
     required this.onSelectChannel,
     required this.onQueryChanged,
     required this.onToggleMembers,
+    required this.onTogglePins,
     super.key,
   });
 
@@ -23,9 +25,11 @@ class ChatHeader extends StatelessWidget {
   final bool showCompactPicker;
   final bool allowMemberPanel;
   final bool showMembers;
+  final bool showPins;
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
+  final VoidCallback onTogglePins;
 
   @override
   Widget build(BuildContext context) {
@@ -36,66 +40,95 @@ class ChatHeader extends StatelessWidget {
         color: context.surfaces.canvas,
         border: Border(bottom: BorderSide(color: context.surfaces.border)),
       ),
-      child: Row(
-        children: [
-          if (showCompactPicker)
-            PopupMenuButton<String>(
-              tooltip: 'Choose channel',
-              onSelected: onSelectChannel,
-              itemBuilder: (context) => [
-                for (final item in channels)
-                  PopupMenuItem(
-                    value: item.id,
-                    child: Text(
-                      '${item.isThread
-                          ? 'Thread:'
-                          : item.kind == ChannelKind.text
-                          ? '#'
-                          : 'Voice:'} ${item.name}',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showTopic = constraints.maxWidth >= 430;
+          final showSearch = constraints.maxWidth >= 610;
+          return Row(
+            children: [
+              if (showCompactPicker)
+                PopupMenuButton<String>(
+                  tooltip: 'Choose channel',
+                  onSelected: onSelectChannel,
+                  itemBuilder: (context) => [
+                    for (final item in channels)
+                      PopupMenuItem(
+                        value: item.id,
+                        child: Text(
+                          '${item.isThread
+                              ? 'Thread:'
+                              : item.kind == ChannelKind.text
+                              ? '#'
+                              : 'Voice:'} ${item.name}',
+                        ),
+                      ),
+                  ],
+                  icon: const Icon(Icons.menu),
+                )
+              else
+                Icon(
+                  channel.isThread
+                      ? Icons.forum_outlined
+                      : channel.kind == ChannelKind.text
+                      ? Icons.tag
+                      : Icons.volume_up_outlined,
+                  size: 20,
+                ),
+              const SizedBox(width: 9),
+              Text(
+                channel.name,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (showTopic) ...[
+                const SizedBox(width: 14),
+                Container(width: 1, height: 20, color: context.surfaces.border),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    channel.topic,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.surfaces.muted,
+                      fontSize: 12,
                     ),
                   ),
+                ),
+              ] else
+                const Spacer(),
+              if (channel.kind == ChannelKind.text && showSearch)
+                SizedBox(
+                  width: 190,
+                  child: _SearchField(query: query, onChanged: onQueryChanged),
+                ),
+              if (channel.kind == ChannelKind.text) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-pins'),
+                  onPressed: onTogglePins,
+                  icon: Icon(
+                    showPins ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 19,
+                  ),
+                  tooltip: showPins
+                      ? 'Close pinned messages'
+                      : 'Pinned messages',
+                ),
               ],
-              icon: const Icon(Icons.menu),
-            )
-          else
-            Icon(
-              channel.isThread
-                  ? Icons.forum_outlined
-                  : channel.kind == ChannelKind.text
-                  ? Icons.tag
-                  : Icons.volume_up_outlined,
-              size: 20,
-            ),
-          const SizedBox(width: 9),
-          Text(
-            channel.name,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 14),
-          Container(width: 1, height: 20, color: context.surfaces.border),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              channel.topic,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-            ),
-          ),
-          if (channel.kind == ChannelKind.text)
-            SizedBox(
-              width: 190,
-              child: _SearchField(query: query, onChanged: onQueryChanged),
-            ),
-          if (allowMemberPanel) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              key: const ValueKey('toggle-members'),
-              onPressed: onToggleMembers,
-              icon: Icon(showMembers ? Icons.group : Icons.group_outlined),
-              tooltip: showMembers ? 'Hide members' : 'Show members',
-            ),
-          ],
-        ],
+              if (allowMemberPanel) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-members'),
+                  onPressed: onToggleMembers,
+                  icon: Icon(showMembers ? Icons.group : Icons.group_outlined),
+                  tooltip: showMembers ? 'Hide members' : 'Show members',
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

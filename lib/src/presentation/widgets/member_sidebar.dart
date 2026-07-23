@@ -5,18 +5,33 @@ import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 
 class MemberSidebar extends StatelessWidget {
-  const MemberSidebar({required this.members, super.key});
+  const MemberSidebar({
+    required this.members,
+    required this.spaceId,
+    super.key,
+  });
 
   final List<Member> members;
+  final String spaceId;
 
   @override
   Widget build(BuildContext context) {
-    final online = members
+    final visibleMembers = members
+        .where(
+          (member) =>
+              member.spaceIds.isEmpty || member.spaceIds.contains(spaceId),
+        )
+        .toList(growable: false);
+    final online = visibleMembers
         .where((member) => member.presence != Presence.offline)
         .toList(growable: false);
-    final offline = members
+    final offline = visibleMembers
         .where((member) => member.presence == Presence.offline)
         .toList(growable: false);
+    final roleGroups = <String, List<Member>>{};
+    for (final member in online) {
+      roleGroups.putIfAbsent(member.roleFor(spaceId), () => []).add(member);
+    }
     return Container(
       width: 224,
       decoration: BoxDecoration(
@@ -26,11 +41,17 @@ class MemberSidebar extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
         children: [
-          _MemberGroupLabel(label: 'Online', count: online.length),
-          for (final member in online) _MemberRow(member: member),
-          const SizedBox(height: 20),
-          _MemberGroupLabel(label: 'Offline', count: offline.length),
-          for (final member in offline) _MemberRow(member: member),
+          for (final entry in roleGroups.entries) ...[
+            _MemberGroupLabel(label: entry.key, count: entry.value.length),
+            for (final member in entry.value)
+              _MemberRow(member: member, role: member.roleFor(spaceId)),
+            const SizedBox(height: 14),
+          ],
+          if (offline.isNotEmpty) ...[
+            _MemberGroupLabel(label: 'Offline', count: offline.length),
+            for (final member in offline)
+              _MemberRow(member: member, role: member.roleFor(spaceId)),
+          ],
         ],
       ),
     );
@@ -60,9 +81,10 @@ class _MemberGroupLabel extends StatelessWidget {
 }
 
 class _MemberRow extends StatelessWidget {
-  const _MemberRow({required this.member});
+  const _MemberRow({required this.member, required this.role});
 
   final Member member;
+  final String role;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +111,7 @@ class _MemberRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    member.role,
+                    role,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,

@@ -18,6 +18,7 @@ class MessageComposer extends StatefulWidget {
     required this.isSending,
     required this.onSend,
     required this.onCancelReply,
+    required this.onTyping,
     this.replyTo,
     this.replyAuthor,
     super.key,
@@ -29,6 +30,7 @@ class MessageComposer extends StatefulWidget {
   final ChatMessage? replyTo;
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
+  final VoidCallback onTyping;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -128,6 +130,7 @@ class _MessageComposerState extends State<MessageComposer> {
                 maxLines: 4,
                 onChanged: (value) {
                   final hasContent = value.trim().isNotEmpty;
+                  if (hasContent) widget.onTyping();
                   if (hasContent != _hasContent) {
                     setState(() => _hasContent = hasContent);
                   }

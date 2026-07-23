@@ -20,6 +20,7 @@ class MessageItem extends StatefulWidget {
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onTogglePin,
     super.key,
   });
 
@@ -33,6 +34,7 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<void> Function(ChatMessage) onTogglePin;
 
   @override
   State<MessageItem> createState() => _MessageItemState();
@@ -322,6 +324,13 @@ class _MessageItemState extends State<MessageItem> {
               _editFocus.requestFocus();
             },
           ),
+        _ActionButton(
+          icon: widget.message.isPinned
+              ? Icons.push_pin
+              : Icons.push_pin_outlined,
+          tooltip: widget.message.isPinned ? 'Unpin' : 'Pin',
+          onPressed: () => widget.onTogglePin(widget.message),
+        ),
         _ActionButton(
           icon: Icons.delete_outline,
           tooltip: 'Delete',

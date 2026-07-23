@@ -8,12 +8,14 @@ final class WorkspaceController extends ChangeNotifier {
   String _query = '';
   ThemeMode _themeMode = ThemeMode.dark;
   bool _showMembers = true;
+  bool _showPins = false;
 
   String? get selectedSpaceId => _selectedSpaceId;
   String? get selectedChannelId => _selectedChannelId;
   String get query => _query;
   ThemeMode get themeMode => _themeMode;
   bool get showMembers => _showMembers;
+  bool get showPins => _showPins;
 
   void reconcile(ChatWorkspace workspace) {
     if (_selectedSpaceId == null ||
@@ -61,6 +63,13 @@ final class WorkspaceController extends ChangeNotifier {
 
   void toggleMembers() {
     _showMembers = !_showMembers;
+    if (_showMembers) _showPins = false;
+    notifyListeners();
+  }
+
+  void togglePins() {
+    _showPins = !_showPins;
+    if (_showPins) _showMembers = false;
     notifyListeners();
   }
 

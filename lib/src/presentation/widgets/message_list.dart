@@ -14,6 +14,7 @@ class MessageList extends StatefulWidget {
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onTogglePin,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<void> Function(ChatMessage) onTogglePin;
 
   @override
   State<MessageList> createState() => _MessageListState();
@@ -123,6 +125,7 @@ class _MessageListState extends State<MessageList> {
           onDelete: widget.onDelete,
           onToggleReaction: widget.onToggleReaction,
           onAddReaction: widget.onAddReaction,
+          onTogglePin: widget.onTogglePin,
         );
       },
     );

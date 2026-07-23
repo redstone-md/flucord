@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
@@ -10,8 +12,10 @@ import 'widgets/connection_dialog.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
+import 'widgets/pinned_messages_panel.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
+import 'widgets/typing_indicator.dart';
 
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
@@ -68,8 +72,13 @@ class FlucordShell extends StatelessWidget {
                 builder: (context, constraints) {
                   final showChannels = constraints.maxWidth >= 760;
                   final membersFit = constraints.maxWidth >= 1120;
+                  final showPins =
+                      workspaceController.showPins &&
+                      channel.kind == ChannelKind.text;
                   final showMembers =
-                      membersFit && workspaceController.showMembers;
+                      membersFit &&
+                      workspaceController.showMembers &&
+                      !showPins;
                   return Row(
                     children: [
                       ServerRail(
@@ -107,6 +116,10 @@ class FlucordShell extends StatelessWidget {
                           compact: !showChannels,
                           allowMemberPanel: membersFit,
                           showMembers: showMembers,
+                          showPins: showPins,
+                          typingMembers: chatController.typingMembersFor(
+                            channelId,
+                          ),
                           isSending: chatController.isSending,
                           isLoading: chatController.isChannelLoading(channelId),
                           loadError: chatController.channelError(channelId),
@@ -120,6 +133,14 @@ class FlucordShell extends StatelessWidget {
                           },
                           onQueryChanged: workspaceController.setQuery,
                           onToggleMembers: workspaceController.toggleMembers,
+                          onTogglePins: () {
+                            workspaceController.togglePins();
+                            if (workspaceController.showPins) {
+                              unawaited(
+                                chatController.loadPinnedMessages(channelId),
+                              );
+                            }
+                          },
                           onSend: (body, attachments, replyToMessageId) =>
                               chatController.sendMessage(
                                 channelId: channel.id,
@@ -131,10 +152,31 @@ class FlucordShell extends StatelessWidget {
                           onDelete: chatController.deleteMessage,
                           onToggleReaction: chatController.toggleReaction,
                           onAddReaction: chatController.addReaction,
+                          onTogglePin: chatController.togglePin,
+                          onTyping: () => chatController.startTyping(channelId),
                         ),
                       ),
+                      if (showPins)
+                        PinnedMessagesPanel(
+                          workspace: workspace,
+                          channelId: channelId,
+                          history: chatController.pinnedMessages(channelId),
+                          isLoading: chatController.isLoadingPins(channelId),
+                          error: chatController.pinError(channelId),
+                          onClose: workspaceController.togglePins,
+                          onRefresh: () => unawaited(
+                            chatController.loadPinnedMessages(
+                              channelId,
+                              refresh: true,
+                            ),
+                          ),
+                          onUnpin: chatController.togglePin,
+                        ),
                       if (showMembers)
-                        MemberSidebar(members: workspace.members),
+                        MemberSidebar(
+                          members: workspace.members,
+                          spaceId: spaceId,
+                        ),
                     ],
                   );
                 },
@@ -163,6 +205,8 @@ class _ConversationPane extends StatefulWidget {
     required this.compact,
     required this.allowMemberPanel,
     required this.showMembers,
+    required this.showPins,
+    required this.typingMembers,
     required this.isSending,
     required this.isLoading,
     required this.loadError,
@@ -170,11 +214,14 @@ class _ConversationPane extends StatefulWidget {
     required this.onSelectChannel,
     required this.onQueryChanged,
     required this.onToggleMembers,
+    required this.onTogglePins,
     required this.onSend,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onTogglePin,
+    required this.onTyping,
   });
 
   final ChatWorkspace workspace;
@@ -184,6 +231,8 @@ class _ConversationPane extends StatefulWidget {
   final bool compact;
   final bool allowMemberPanel;
   final bool showMembers;
+  final bool showPins;
+  final List<Member> typingMembers;
   final bool isSending;
   final bool isLoading;
   final Object? loadError;
@@ -191,11 +240,14 @@ class _ConversationPane extends StatefulWidget {
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
+  final VoidCallback onTogglePins;
   final SendMessageCallback onSend;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<void> Function(ChatMessage) onTogglePin;
+  final VoidCallback onTyping;
 
   @override
   State<_ConversationPane> createState() => _ConversationPaneState();
@@ -227,6 +279,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onDelete: widget.onDelete,
         onToggleReaction: widget.onToggleReaction,
         onAddReaction: widget.onAddReaction,
+        onTogglePin: widget.onTogglePin,
       ),
     };
     return Column(
@@ -238,11 +291,15 @@ class _ConversationPaneState extends State<_ConversationPane> {
           showCompactPicker: widget.compact,
           allowMemberPanel: widget.allowMemberPanel,
           showMembers: widget.showMembers,
+          showPins: widget.showPins,
           onSelectChannel: widget.onSelectChannel,
           onQueryChanged: widget.onQueryChanged,
           onToggleMembers: widget.onToggleMembers,
+          onTogglePins: widget.onTogglePins,
         ),
         Expanded(child: conversation),
+        if (widget.channel.kind == ChannelKind.text)
+          TypingIndicator(members: widget.typingMembers),
         if (widget.channel.kind == ChannelKind.text)
           MessageComposer(
             channelName: widget.channel.name,
@@ -252,6 +309,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
                 ? null
                 : widget.workspace.memberOrNull(_replyTo!.authorId),
             onCancelReply: () => setState(() => _replyTo = null),
+            onTyping: widget.onTyping,
             onSend: (body, attachments, replyToMessageId) async {
               final sent = await widget.onSend(
                 body,
