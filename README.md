@@ -1,7 +1,9 @@
 # Flucord
 
-Flucord is a native Flutter desktop messaging client for Windows. It provides
-server and channel navigation, searchable message history, replies,
+Flucord is a native Flutter desktop messaging client for Windows, macOS, and
+Linux. The Windows release is verified locally; macOS and Linux runners are
+configured but still require release verification on their native hosts. It
+provides server and channel navigation, searchable message history, replies,
 attachments, reactions, message editing and deletion, active threads, member
 roles and presence, typing indicators, local unread markers, paginated pinned
 messages, Windows notifications, close-to-tray behavior, channel deep links,
@@ -36,6 +38,15 @@ are discovered from Gateway events and restored from the SQLite v7 cache.
 flutter pub get
 flutter run -d windows
 ```
+
+On the corresponding native host, use `flutter run -d macos` or
+`flutter run -d linux`. Desktop builds are host-specific: Flutter cannot build
+a macOS release on Windows or a Linux release on macOS/Windows.
+
+Ubuntu/Debian Linux builds need Flutter's desktop toolchain plus
+`libgtk-3-dev` and `libsecret-1-dev`; the latter backs bot-token storage through
+the desktop keyring. A Secret Service provider such as GNOME Keyring or KWallet
+must be available at runtime.
 
 ## Connect Discord
 
@@ -136,6 +147,12 @@ flutter test integration_test/inline_video_playback_smoke_test.dart -d windows
 flutter test integration_test/voice_playback_smoke_test.dart -d windows
 flutter build windows --release
 ```
+
+Run `flutter build macos --release` on macOS and
+`flutter build linux --release` on Linux before publishing those packages.
+Both runners use the same Dart application and the cross-platform
+`media_kit_libs_video` bundle; macOS declares network, microphone, and screen
+capture capabilities in its sandbox configuration.
 
 The release executable is written to
 `build\windows\x64\runner\Release\flucord.exe`.

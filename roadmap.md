@@ -90,7 +90,10 @@ browser runtime or dependency on Discord's private user API.
     discovery, recipient identity, unread state, and SQLite restoration. Bot
     READY payloads intentionally do not expose an open-DM list, so cached and
     live channels form the native inbox without private user endpoints.
-12. macOS and Linux packaging after Windows behavior stabilizes.
+12. In progress: macOS and Linux Flutter runners, platform assets, plugin
+    registration, sandbox capabilities, and a cross-platform native video
+    bundle are configured without changing the verified Windows path. Release
+    builds still require verification on native macOS and Linux hosts.
 
 ## Protocol safety
 
