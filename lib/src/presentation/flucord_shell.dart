@@ -395,6 +395,8 @@ class _ConversationPaneState extends State<_ConversationPane> {
         if (widget.channel.kind == ChannelKind.text)
           MessageComposer(
             channelName: widget.channel.name,
+            spaceName: widget.workspace.spaceById(widget.channel.spaceId).name,
+            customEmojis: widget.workspace.emojisFor(widget.channel.spaceId),
             isSending: widget.isSending,
             replyTo: _replyTo,
             replyAuthor: _replyTo == null

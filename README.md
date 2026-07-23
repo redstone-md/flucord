@@ -11,8 +11,9 @@ close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, anchored member profile
 popovers, a global native Quick Switcher, a cross-server Inbox, and theme
-switching without a browser runtime. Local unread bursts open at a Discord-like
-NEW boundary in the message timeline. Discord rich
+switching without a browser runtime. The composer includes a searchable native
+Unicode and guild-emoji picker. Local unread bursts open at a Discord-like NEW
+boundary in the message timeline. Discord rich
 embeds retain their documented structured fields across live updates and
 offline cache restores. Video attachments and embed video metadata play
 through a native Windows texture.
@@ -23,6 +24,13 @@ emoji, localized timestamps, application commands, and tap-to-reveal spoilers.
 Channel mentions navigate inside Flucord. Web links open through the native OS
 launcher only for `http` and `https` schemes; Markdown never introduces an
 embedded browser surface.
+
+The composer emoji control opens an anchored native picker, searches common
+Unicode shortcodes and the selected server's documented custom emoji, and
+inserts the result at the current caret or selection. Guild emoji load through
+`GET /guilds/{guild.id}/emojis`; `GUILD_EMOJIS_UPDATE` atomically replaces the
+affected server catalog. Animated custom emoji use Discord's documented
+`<a:name:id>` syntax and CDN route without private client headers.
 
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
@@ -135,6 +143,11 @@ for matching channels without allowing Gateway metadata updates to erase them.
 
 SQLite v10 retains whether each cached message explicitly mentions the current
 bot, allowing the native Inbox to restore exact mention entries offline.
+
+SQLite v11 retains each guild emoji's identity, name, availability, animation
+flag, and public CDN URL. Gateway replacements delete stale entries before
+writing the current server catalog, so the offline picker cannot resurrect
+removed emoji.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

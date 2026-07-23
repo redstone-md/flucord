@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'emoji_picker.dart';
 
 typedef SendMessageCallback =
     Future<bool> Function(
@@ -15,6 +16,8 @@ typedef SendMessageCallback =
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelName,
+    required this.spaceName,
+    required this.customEmojis,
     required this.isSending,
     required this.onSend,
     required this.onCancelReply,
@@ -25,6 +28,8 @@ class MessageComposer extends StatefulWidget {
   });
 
   final String channelName;
+  final String spaceName;
+  final List<GuildEmoji> customEmojis;
   final bool isSending;
   final SendMessageCallback onSend;
   final ChatMessage? replyTo;
@@ -108,6 +113,22 @@ class _MessageComposerState extends State<MessageComposer> {
     _focusNode.requestFocus();
   }
 
+  void _insertEmoji(String token) {
+    final text = _controller.text;
+    final selection = _controller.selection;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final next = text.replaceRange(start, end, token);
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + token.length),
+    );
+    final hasContent = next.trim().isNotEmpty;
+    if (hasContent) widget.onTyping();
+    setState(() => _hasContent = hasContent);
+    _focusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -144,16 +165,36 @@ class _MessageComposerState extends State<MessageComposer> {
                     icon: const Icon(Icons.add_circle_outline, size: 20),
                     tooltip: 'Add attachment',
                   ),
-                  suffixIcon: widget.isSending
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                  suffixIconConstraints: const BoxConstraints.tightFor(
+                    width: 96,
+                    height: 48,
+                  ),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      EmojiPickerButton(
+                        spaceName: widget.spaceName,
+                        customEmojis: widget.customEmojis,
+                        onSelected: _insertEmoji,
+                      ),
+                      if (widget.isSending)
+                        const SizedBox.square(
+                          dimension: 48,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           ),
                         )
-                      : IconButton(
+                      else
+                        IconButton(
                           key: const ValueKey('send-message'),
+                          constraints: const BoxConstraints.tightFor(
+                            width: 48,
+                            height: 48,
+                          ),
+                          padding: EdgeInsets.zero,
                           onPressed: _canSend ? _send : null,
                           icon: Icon(
                             Icons.send,
@@ -162,6 +203,8 @@ class _MessageComposerState extends State<MessageComposer> {
                           ),
                           tooltip: 'Send message',
                         ),
+                    ],
+                  ),
                 ),
               ),
             ),

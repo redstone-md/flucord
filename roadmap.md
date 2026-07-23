@@ -121,6 +121,9 @@ browser runtime or dependency on Discord's private user API.
     channels across every space, exposes a familiar header activity control,
     supports mark-all-read, and jumps from unread or mention entries into the
     native timeline.
+20. Completed: documented guild emoji load through REST, update through
+    Gateway, persist in SQLite v11, and feed a searchable native composer
+    picker that inserts Unicode or Discord custom-emoji syntax at the caret.
 
 ## Protocol safety
 

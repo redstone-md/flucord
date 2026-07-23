@@ -487,13 +487,10 @@ final class MockChatRepository implements ChatRepository {
         sentAt: now.subtract(const Duration(minutes: 6)),
       ),
     ];
-    return ChatWorkspace(
-      spaces: MockChatSeed.spaces,
-      categories: MockChatSeed.categories,
+    return MockChatSeed.workspace(
       channels: channels,
       members: members,
       messages: messages,
-      currentMemberId: 'jack',
     );
   }
 }
