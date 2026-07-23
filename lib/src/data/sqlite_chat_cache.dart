@@ -471,6 +471,7 @@ final class SqliteChatCache implements ChatCache {
     'is_pinned': message.isPinned ? 1 : 0,
     'embeds_json': ChatModelJson.embeds(message.embeds),
     'mentions_current_member': message.mentionsCurrentMember ? 1 : 0,
+    'poll_json': ChatModelJson.poll(message.poll),
   };
 
   static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -488,6 +489,7 @@ final class SqliteChatCache implements ChatCache {
     isPinned: row['is_pinned'] == 1,
     embeds: ChatModelJson.embedsFrom(row['embeds_json']! as String),
     mentionsCurrentMember: row['mentions_current_member'] == 1,
+    poll: ChatModelJson.pollFrom(row['poll_json'] as String?),
   );
 
   @override

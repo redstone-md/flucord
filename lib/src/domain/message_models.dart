@@ -77,6 +77,7 @@ final class ChatMessage {
     List<MessageAttachment> attachments = const [],
     List<MessageEmbed> embeds = const [],
     List<MessageReaction> reactions = const [],
+    this.poll,
     this.reply,
     this.isEdited = false,
     this.isPinned = false,
@@ -92,6 +93,7 @@ final class ChatMessage {
   final DateTime sentAt;
   final List<MessageAttachment> attachments;
   final List<MessageEmbed> embeds;
+  final MessagePoll? poll;
   final MessageReply? reply;
   final List<MessageReaction> reactions;
   final bool isEdited;
@@ -103,6 +105,7 @@ final class ChatMessage {
     List<MessageAttachment>? attachments,
     List<MessageEmbed>? embeds,
     List<MessageReaction>? reactions,
+    MessagePoll? poll,
     bool? isEdited,
     bool? isPinned,
     bool? mentionsCurrentMember,
@@ -114,6 +117,7 @@ final class ChatMessage {
     sentAt: sentAt,
     attachments: attachments ?? this.attachments,
     embeds: embeds ?? this.embeds,
+    poll: poll ?? this.poll,
     reply: reply,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,

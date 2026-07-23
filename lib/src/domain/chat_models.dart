@@ -1,6 +1,7 @@
 import 'message_embed.dart';
 
 part 'message_models.dart';
+part 'message_poll.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
 part 'forum_models.dart';

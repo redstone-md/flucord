@@ -3,6 +3,8 @@ import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
 import 'discord_mention_matcher.dart';
 
+part 'discord_poll_mapper.dart';
+
 final class DiscordMappedDirectMessage {
   const DiscordMappedDirectMessage({
     required this.channel,
@@ -197,6 +199,9 @@ final class DiscordMapper {
     final embeds = payload.containsKey('embeds')
         ? MessageEmbedCodec.listFrom(payload['embeds'])
         : fallback?.embeds ?? const [];
+    final poll = payload.containsKey('poll')
+        ? _mapPoll(payload['poll'])
+        : fallback?.poll;
     final referenced = payload['referenced_message'];
     final reply = referenced is Map
         ? _reply(referenced.cast<String, Object?>())
@@ -223,6 +228,7 @@ final class DiscordMapper {
       attachments: attachments,
       embeds: embeds,
       reactions: reactions,
+      poll: poll,
       reply: reply,
     );
   }

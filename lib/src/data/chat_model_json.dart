@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../domain/chat_models.dart';
 import '../domain/message_embed.dart';
 import 'message_embed_codec.dart';
+import 'message_poll_codec.dart';
 
 final class ChatModelJson {
   const ChatModelJson._();
@@ -41,6 +42,11 @@ final class ChatModelJson {
 
   static List<MessageEmbed> embedsFrom(String source) =>
       MessageEmbedCodec.decode(source);
+
+  static String? poll(MessagePoll? value) => MessagePollCodec.encode(value);
+
+  static MessagePoll? pollFrom(String? source) =>
+      MessagePollCodec.decode(source);
 
   static String? reply(MessageReply? value) => value == null
       ? null

@@ -4,6 +4,7 @@ import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
+import '../../domain/poll_repository.dart';
 import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
@@ -15,6 +16,7 @@ import 'discord_guild_member_loader.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_reaction_handler.dart';
+import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
 
@@ -23,12 +25,15 @@ part 'discord_chat_repository_emojis.dart';
 part 'discord_chat_repository_threads.dart';
 part 'discord_chat_repository_forums.dart';
 part 'discord_chat_repository_pins.dart';
+part 'discord_chat_repository_polls.dart';
 
 final class DiscordChatRepository
+    with _DiscordChatRepositoryPolls
     implements
         ChatRepository,
         ArchivedThreadRepository,
         ForumPostRepository,
+        PollRepository,
         VoiceSignalingService {
   DiscordChatRepository(
     this._api,
@@ -44,9 +49,12 @@ final class DiscordChatRepository
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
 
+  @override
   final DiscordApiClient _api;
   final DiscordChatGateway _gateway;
+  @override
   final ChatCache _cache;
+  @override
   final DiscordMapper _mapper;
   late final DiscordHistoryLoader _historyLoader = DiscordHistoryLoader(
     _api,
@@ -66,9 +74,11 @@ final class DiscordChatRepository
   late final DiscordGuildMemberLoader _guildMemberLoader =
       DiscordGuildMemberLoader(_api);
   final DiscordVoiceSignalingService _voiceSignaling;
+  @override
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
+  @override
   String? _currentMemberId;
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   late final DiscordReactionHandler _reactionHandler = DiscordReactionHandler(
@@ -308,6 +318,8 @@ final class DiscordChatRepository
             unawaited(_handleMessageDelete(event.data));
           case 'MESSAGE_REACTION_ADD' || 'MESSAGE_REACTION_REMOVE':
             unawaited(_handleReaction(event));
+          case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
+            unawaited(_handlePollVote(event));
           case 'CHANNEL_CREATE' ||
               'CHANNEL_UPDATE' ||
               'THREAD_CREATE' ||

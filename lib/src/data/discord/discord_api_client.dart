@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../../domain/chat_models.dart';
 import 'discord_multipart_body.dart';
+import 'discord_poll_codec.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
@@ -240,11 +241,13 @@ final class DiscordApiClient {
     required String content,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    PendingPoll? poll,
   }) {
     final payload = <String, Object?>{
       'content': content,
       if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
+      if (poll != null) 'poll': DiscordPollCodec.request(poll),
       if (attachments.isNotEmpty)
         'attachments': [
           for (var index = 0; index < attachments.length; index++)
@@ -274,6 +277,11 @@ final class DiscordApiClient {
     '/channels/$channelId/messages/$messageId',
     body: {'content': content},
   );
+
+  Future<Map<String, Object?>> endPoll({
+    required String channelId,
+    required String messageId,
+  }) => _requestObject('POST', '/channels/$channelId/polls/$messageId/expire');
 
   Future<void> deleteMessage({
     required String channelId,

@@ -140,6 +140,16 @@ void main() {
           ],
         ),
       ],
+      poll: MessagePoll(
+        question: 'Which cache ships?',
+        answers: const [
+          PollAnswer(id: 1, text: 'SQLite', count: 7),
+          PollAnswer(id: 2, text: 'Memory only', count: 1),
+        ],
+        expiry: DateTime.utc(2026, 7, 24, 2, 30),
+        allowMultiselect: false,
+        isFinalized: false,
+      ),
       isPinned: true,
       mentionsCurrentMember: true,
     );
@@ -182,6 +192,9 @@ void main() {
     expect(history.messages.single.reactions.single.count, 3);
     expect(history.messages.single.embeds.single.title, 'Build report');
     expect(history.messages.single.embeds.single.fields.single.value, '91');
+    expect(history.messages.single.poll?.question, 'Which cache ships?');
+    expect(history.messages.single.poll?.answers.first.count, 7);
+    expect(history.messages.single.poll?.expiry?.toUtc().day, 24);
     expect(history.members.single.displayName, 'Jack');
     expect(history.members.single.roleFor('guild-1'), 'Bot');
     expect(history.members.single.avatarUrl, contains('/avatars/user-1/'));
@@ -461,6 +474,7 @@ void main() {
       messageColumns.map((row) => row['name']),
       contains('mentions_current_member'),
     );
+    expect(messageColumns.map((row) => row['name']), contains('poll_json'));
     expect(roleTables, hasLength(1));
     expect(categoryTables, hasLength(1));
     expect(emojiTables, hasLength(1));
