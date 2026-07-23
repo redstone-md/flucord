@@ -46,11 +46,48 @@ void main() {
     final ready = commands.single as DiscordVoiceDaveJsonCommand;
     expect(ready.opcode, 23);
     expect(ready.data, {'transition_id': 42});
+    expect(service.encryptors.single.keyUserId, '100');
+  });
+
+  test('rotates roster ratchets and releases departed decryptors', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+    final session = service.sessions.single;
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['100', '200'],
+    );
+
+    controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
+
+    expect(service.encryptors.single.ssrc, 42);
+    expect(service.encryptors.single.keyUserId, '100');
+    expect(service.decryptors.single.keyUserId, '200');
+    expect(session.ratchets.every((ratchet) => ratchet.disposed), isTrue);
+    expect(controller.encryptAudioFrame([8, 9]), [8, 9]);
+    expect(
+      controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
+      [6, 7],
+    );
+
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['100'],
+    );
+    controller.acceptBinary(opcode: 29, payload: [0, 2, 8]);
+
+    expect(service.decryptors.single.disposed, isTrue);
+    expect(
+      () => controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
+      throwsStateError,
+    );
   });
 
   test('recovers from an invalid welcome with a fresh session', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
     controller.acceptBinary(opcode: 25, payload: [1, 2, 3]);
     service.sessions.single.welcomeResult = const DaveCommitResult(
       status: DaveCommitStatus.failed,
@@ -64,6 +101,7 @@ void main() {
 
     expect(service.sessions, hasLength(2));
     expect(service.sessions.first.disposed, isTrue);
+    expect(service.encryptors.single.disposed, isTrue);
     expect(service.sessions.last.externalSender, [1, 2, 3]);
     expect(commands, hasLength(2));
     expect((commands.first as DiscordVoiceDaveJsonCommand).opcode, 31);
@@ -73,6 +111,7 @@ void main() {
   test('tracks downgrade prepare and execute transitions', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
 
     final commands = controller.acceptJson(21, {
       'transition_id': 5,
@@ -82,6 +121,7 @@ void main() {
 
     expect((commands.single as DiscordVoiceDaveJsonCommand).opcode, 23);
     expect(service.sessions.single.protocolVersion, 1);
+    expect(service.encryptors.single.isPassthrough, isTrue);
   });
 }
 
@@ -94,17 +134,25 @@ DiscordVoiceDaveController _controller(_FakeDaveService service) =>
 
 final class _FakeDaveService implements VoiceDaveService {
   final List<_FakeDaveSession> sessions = [];
+  final List<_FakeDaveEncryptor> encryptors = [];
+  final List<_FakeDaveDecryptor> decryptors = [];
 
   @override
   int get maxProtocolVersion => 1;
 
   @override
-  VoiceDaveEncryptor createEncryptor() =>
-      throw UnsupportedError('Media encryption is outside this test');
+  VoiceDaveEncryptor createEncryptor() {
+    final encryptor = _FakeDaveEncryptor();
+    encryptors.add(encryptor);
+    return encryptor;
+  }
 
   @override
-  VoiceDaveDecryptor createDecryptor() =>
-      throw UnsupportedError('Media decryption is outside this test');
+  VoiceDaveDecryptor createDecryptor() {
+    final decryptor = _FakeDaveDecryptor();
+    decryptors.add(decryptor);
+    return decryptor;
+  }
 
   @override
   VoiceDaveSession createSession({
@@ -127,6 +175,7 @@ final class _FakeDaveSession implements VoiceDaveSession {
   List<int>? commit;
   List<String>? recognizedUsers;
   bool disposed = false;
+  final List<_FakeDaveKeyRatchet> ratchets = [];
   DaveCommitResult commitResult = const DaveCommitResult(
     status: DaveCommitStatus.applied,
     rosterUserIds: ['100'],
@@ -140,8 +189,11 @@ final class _FakeDaveSession implements VoiceDaveSession {
   int get protocolVersion => _protocolVersion;
 
   @override
-  VoiceDaveKeyRatchet getKeyRatchet(String userId) =>
-      throw UnsupportedError('Key ratchets are outside this test');
+  VoiceDaveKeyRatchet getKeyRatchet(String userId) {
+    final ratchet = _FakeDaveKeyRatchet(userId);
+    ratchets.add(ratchet);
+    return ratchet;
+  }
 
   @override
   void setProtocolVersion(int version) => _protocolVersion = version;
@@ -181,6 +233,78 @@ final class _FakeDaveSession implements VoiceDaveSession {
 
   @override
   void reset() => _protocolVersion = 0;
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _FakeDaveKeyRatchet implements VoiceDaveKeyRatchet {
+  _FakeDaveKeyRatchet(this.userId);
+
+  final String userId;
+  bool disposed = false;
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _FakeDaveEncryptor implements VoiceDaveEncryptor {
+  String? keyUserId;
+  int? ssrc;
+  bool _passthrough = false;
+  bool disposed = false;
+
+  @override
+  int get protocolVersion => keyUserId == null ? 0 : 1;
+
+  @override
+  bool get hasKeyRatchet => keyUserId != null;
+
+  @override
+  bool get isPassthrough => _passthrough;
+
+  @override
+  void assignSsrcToCodec(int ssrc, DaveMediaCodec codec) {
+    this.ssrc = ssrc;
+  }
+
+  @override
+  List<int> encrypt({
+    required DaveMediaType mediaType,
+    required int ssrc,
+    required List<int> frame,
+  }) => List.of(frame);
+
+  @override
+  void setKeyRatchet(VoiceDaveKeyRatchet keyRatchet) {
+    keyUserId = (keyRatchet as _FakeDaveKeyRatchet).userId;
+  }
+
+  @override
+  void setPassthrough(bool enabled) => _passthrough = enabled;
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _FakeDaveDecryptor implements VoiceDaveDecryptor {
+  String? keyUserId;
+  bool isPassthrough = false;
+  bool disposed = false;
+
+  @override
+  List<int> decrypt({
+    required DaveMediaType mediaType,
+    required List<int> encryptedFrame,
+  }) => List.of(encryptedFrame);
+
+  @override
+  void transitionToKeyRatchet(VoiceDaveKeyRatchet keyRatchet) {
+    keyUserId = (keyRatchet as _FakeDaveKeyRatchet).userId;
+  }
+
+  @override
+  void transitionToPassthrough(bool enabled) => isPassthrough = enabled;
 
   @override
   void dispose() => disposed = true;

@@ -36,7 +36,10 @@ final class DiscordVoiceDaveController {
   final String selfUserId;
   final Set<String> _recognizedUserIds;
   VoiceDaveSession? _session;
+  VoiceDaveEncryptor? _encryptor;
+  final Map<String, VoiceDaveDecryptor> _decryptors = {};
   List<int>? _externalSender;
+  int? _audioSsrc;
   int _protocolVersion = 0;
   int? _pendingTransitionId;
   int? _pendingProtocolVersion;
@@ -46,6 +49,7 @@ final class DiscordVoiceDaveController {
       throw StateError('Discord selected an unsupported DAVE version');
     }
     _protocolVersion = protocolVersion;
+    _transitionMediaProtocol(protocolVersion);
     if (protocolVersion > 0) {
       _ensureSession(protocolVersion).setProtocolVersion(protocolVersion);
     }
@@ -114,6 +118,7 @@ final class DiscordVoiceDaveController {
     final protocolVersion = _pendingProtocolVersion;
     if (protocolVersion != null) {
       _protocolVersion = protocolVersion;
+      _transitionMediaProtocol(protocolVersion);
     }
     _pendingTransitionId = null;
     _pendingProtocolVersion = null;
@@ -155,6 +160,7 @@ final class DiscordVoiceDaveController {
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
+    if (result.status == DaveCommitStatus.applied) _applyRoster(result);
     _pendingTransitionId = transitionId;
     _pendingProtocolVersion = _protocolVersion;
     return [_readyCommand(transitionId)];
@@ -170,6 +176,7 @@ final class DiscordVoiceDaveController {
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
+    if (result.status == DaveCommitStatus.applied) _applyRoster(result);
     _pendingTransitionId = transitionId;
     _pendingProtocolVersion = _protocolVersion;
     return [_readyCommand(transitionId)];
@@ -220,6 +227,7 @@ final class DiscordVoiceDaveController {
       _session ??= _createSession(protocolVersion);
 
   void _replaceSession(int protocolVersion) {
+    _clearMediaCryptors();
     _session?.dispose();
     _session = _createSession(protocolVersion);
     final sender = _externalSender;
@@ -233,7 +241,108 @@ final class DiscordVoiceDaveController {
         selfUserId: selfUserId,
       );
 
+  void assignAudioSsrc(int ssrc) {
+    _audioSsrc = ssrc;
+    _ensureEncryptor().assignSsrcToCodec(ssrc, DaveMediaCodec.opus);
+  }
+
+  List<int> encryptAudioFrame(List<int> opusFrame) {
+    final ssrc = _audioSsrc;
+    if (ssrc == null) throw StateError('Discord voice SSRC is unavailable');
+    return _ensureEncryptor().encrypt(
+      mediaType: DaveMediaType.audio,
+      ssrc: ssrc,
+      frame: opusFrame,
+    );
+  }
+
+  List<int> decryptAudioFrame({
+    required String userId,
+    required List<int> encryptedFrame,
+  }) {
+    var decryptor = _decryptors[userId];
+    if (decryptor == null && _protocolVersion == 0) {
+      decryptor = _service.createDecryptor()..transitionToPassthrough(true);
+      _decryptors[userId] = decryptor;
+    }
+    if (decryptor == null) {
+      throw StateError('DAVE decryptor is unavailable for user $userId');
+    }
+    return decryptor.decrypt(
+      mediaType: DaveMediaType.audio,
+      encryptedFrame: encryptedFrame,
+    );
+  }
+
+  void _applyRoster(DaveCommitResult result) {
+    final roster = result.rosterUserIds.toSet();
+    if (!roster.contains(selfUserId)) {
+      throw StateError('DAVE roster does not contain the current user');
+    }
+    final session = _requiredSession();
+    final encryptor = _ensureEncryptor();
+    _withRatchet(session.getKeyRatchet(selfUserId), encryptor.setKeyRatchet);
+    encryptor.setPassthrough(false);
+
+    final remoteUsers = roster.where((userId) => userId != selfUserId).toSet();
+    for (final userId in remoteUsers) {
+      final decryptor = _decryptors.putIfAbsent(
+        userId,
+        _service.createDecryptor,
+      );
+      _withRatchet(
+        session.getKeyRatchet(userId),
+        decryptor.transitionToKeyRatchet,
+      );
+      decryptor.transitionToPassthrough(false);
+    }
+    final departedUsers = _decryptors.keys
+        .where((userId) => !remoteUsers.contains(userId))
+        .toList(growable: false);
+    for (final userId in departedUsers) {
+      _decryptors.remove(userId)?.dispose();
+    }
+  }
+
+  VoiceDaveEncryptor _ensureEncryptor() {
+    final existing = _encryptor;
+    if (existing != null) return existing;
+    final created = _service.createEncryptor()
+      ..setPassthrough(_protocolVersion == 0);
+    final ssrc = _audioSsrc;
+    if (ssrc != null) created.assignSsrcToCodec(ssrc, DaveMediaCodec.opus);
+    return _encryptor = created;
+  }
+
+  void _transitionMediaProtocol(int protocolVersion) {
+    _encryptor?.setPassthrough(protocolVersion == 0);
+    for (final decryptor in _decryptors.values) {
+      decryptor.transitionToPassthrough(protocolVersion == 0);
+    }
+  }
+
+  void _withRatchet(
+    VoiceDaveKeyRatchet ratchet,
+    void Function(VoiceDaveKeyRatchet) apply,
+  ) {
+    try {
+      apply(ratchet);
+    } finally {
+      ratchet.dispose();
+    }
+  }
+
+  void _clearMediaCryptors() {
+    _encryptor?.dispose();
+    _encryptor = null;
+    for (final decryptor in _decryptors.values) {
+      decryptor.dispose();
+    }
+    _decryptors.clear();
+  }
+
   void dispose() {
+    _clearMediaCryptors();
     _session?.dispose();
     _session = null;
   }

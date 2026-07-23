@@ -255,6 +255,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     _discovered = null;
     _emitStatus(VoiceConnectionStatus.discovering);
     try {
+      _daveController?.assignAudioSsrc(ready.ssrc);
       final discovered = await _udpTransport.discover(
         host: ready.ip,
         port: ready.port,
@@ -318,6 +319,26 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   }
 
   int sendPacket(Uint8List packet) => _udpTransport.send(packet);
+
+  Uint8List encryptDaveAudioFrame(Uint8List opusFrame) {
+    final controller = _daveController;
+    if (controller == null) throw StateError('DAVE is unavailable');
+    return Uint8List.fromList(controller.encryptAudioFrame(opusFrame));
+  }
+
+  Uint8List decryptDaveAudioFrame({
+    required String userId,
+    required Uint8List encryptedFrame,
+  }) {
+    final controller = _daveController;
+    if (controller == null) throw StateError('DAVE is unavailable');
+    return Uint8List.fromList(
+      controller.decryptAudioFrame(
+        userId: userId,
+        encryptedFrame: encryptedFrame,
+      ),
+    );
+  }
 
   void sendDaveMessage({required int opcode, required List<int> payload}) {
     _socket?.send(Uint8List.fromList([opcode, ...payload]));

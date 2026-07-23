@@ -440,8 +440,8 @@ final class _GatewayFakeDaveSession implements VoiceDaveSession {
   DaveCommitResult processCommit(List<int> commit) {
     this.commit = List.of(commit);
     return const DaveCommitResult(
-      status: DaveCommitStatus.applied,
-      rosterUserIds: ['bot-1'],
+      status: DaveCommitStatus.ignored,
+      rosterUserIds: [],
     );
   }
 
