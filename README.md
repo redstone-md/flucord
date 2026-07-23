@@ -10,9 +10,10 @@ local unread markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, and theme switching without a
-browser runtime. Discord rich embeds retain their documented structured fields
-across live updates and offline cache restores. Video attachments and embed
-video metadata play through a native Windows texture.
+browser runtime. Local unread bursts open at a Discord-like NEW boundary in the
+message timeline. Discord rich embeds retain their documented structured
+fields across live updates and offline cache restores. Video attachments and
+embed video metadata play through a native Windows texture.
 
 Message bodies, pinned previews, and embed text render GitHub-flavored
 Markdown plus Discord's documented user, role, and channel mentions, custom
@@ -76,12 +77,15 @@ Discord bots can edit only messages they authored. The UI exposes inline edit
 for the connected bot's messages and lets Discord enforce channel-specific
 permissions for deletes, uploads, and reactions.
 
-Unread and mention markers are maintained locally for the running Flucord
-session. Discord does not publish a bot API for a personal account's read
-state, so these markers do not synchronize with the official Discord client.
-The server rail aggregates that local state per guild and for Direct Messages:
-short pips mark unread spaces, selected spaces retain the taller navigation
-indicator, and numeric mention badges are capped visually at `99+`.
+Unread and mention markers are maintained locally for the Flucord installation.
+Discord does not publish a bot API for a personal account's read state, so
+these markers do not synchronize with the official Discord client. The server
+rail aggregates that local state per guild and for Direct Messages: short pips
+mark unread spaces, selected spaces retain the taller navigation indicator,
+and numeric mention badges are capped visually at `99+`. Each unread burst
+also retains its first message ID. Opening the channel clears its counters but
+keeps a semantic NEW divider in the timeline until the reader leaves the
+channel, backgrounds the app again, or sends a message.
 
 Guild icons, global user avatars, guild-specific member avatars, and Discord's
 default avatars use documented public CDN routes. Their URLs persist in the
@@ -103,6 +107,10 @@ existing guild, role, message, embed, and media records during migration.
 SQLite v8 retains documented category channels, child `parent_id` values, and
 Discord channel positions. Collapsed categories remain client-only UI state;
 selected, unread, and mentioned channels stay visible inside them.
+
+SQLite v9 retains the first local unread message ID separately from unread and
+mention counters. A fresh REST bootstrap restores those local activity fields
+for matching channels without allowing Gateway metadata updates to erase them.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

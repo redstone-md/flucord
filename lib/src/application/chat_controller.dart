@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/voice_connection.dart';
+import 'channel_activity_persistence.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -56,9 +57,14 @@ final class ChatController extends ChangeNotifier {
 
   void setApplicationActive(bool value) {
     if (_isApplicationActive == value) return;
+    if (!value && _activeChannelId != null) {
+      _workspace = _workspace?.clearChannelUnreadBoundary(_activeChannelId!);
+      _persistChannelActivity(_activeChannelId!);
+    }
     _isApplicationActive = value;
     if (value && _activeChannelId != null) {
       _workspace = _workspace?.markChannelRead(_activeChannelId!);
+      _persistChannelActivity(_activeChannelId!);
       notifyListeners();
     }
   }
@@ -137,8 +143,14 @@ final class ChatController extends ChangeNotifier {
   }
 
   Future<void> openChannel(String channelId, {bool refresh = false}) async {
+    final previousChannelId = _activeChannelId;
+    if (previousChannelId != null && previousChannelId != channelId) {
+      _workspace = _workspace?.clearChannelUnreadBoundary(previousChannelId);
+      _persistChannelActivity(previousChannelId);
+    }
     _activeChannelId = channelId;
     _workspace = _workspace?.markChannelRead(channelId);
+    _persistChannelActivity(channelId);
     if (_workspace == null ||
         _loadingChannels.contains(channelId) ||
         (_loadedChannels.contains(channelId) && !refresh)) {
@@ -151,7 +163,7 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await _repository.loadChannelHistory(channelId);
-      _workspace = _workspace?.mergeHistory(page.history);
+      _workspace = _workspace?.mergeInitialHistory(page.history);
       _loadedChannels.add(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
     } catch (error) {
@@ -275,6 +287,8 @@ final class ChatController extends ChangeNotifier {
         replyToMessageId: replyToMessageId,
       );
       _workspace = _workspace?.upsertMessage(message);
+      _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
+      _persistChannelActivity(channelId);
       return true;
     } catch (error) {
       _error = error;
@@ -402,8 +416,10 @@ final class ChatController extends ChangeNotifier {
                 event.message.channelId != _activeChannelId) {
               _workspace = _workspace?.markChannelUnread(
                 event.message.channelId,
+                messageId: event.message.id,
                 mention: event.mentionsCurrentMember,
               );
+              _persistChannelActivity(event.message.channelId);
             }
           }
         case MessageDeletedEvent():
@@ -464,6 +480,10 @@ final class ChatController extends ChangeNotifier {
     _typingMembers.clear();
     _typingRequests.clear();
   }
+
+  void _persistChannelActivity(String channelId) => unawaited(
+    ChannelActivityPersistence.save(_repository, _workspace, channelId),
+  );
 
   @override
   void dispose() {

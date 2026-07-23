@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'anchored_scroll_controller.dart';
 import 'message_item.dart';
+import 'unread_message_boundary.dart';
 
 class MessageList extends StatefulWidget {
   const MessageList({
@@ -46,16 +48,16 @@ class MessageList extends StatefulWidget {
 }
 
 class _MessageListState extends State<MessageList> {
-  final _AnchoredScrollController _scrollController =
-      _AnchoredScrollController();
+  final AnchoredScrollController _scrollController = AnchoredScrollController();
   final Map<String, GlobalKey> _messageKeys = {};
   bool _readyForHistoryPaging = false;
+  bool _didReachUnread = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
-    _scrollToEnd(jump: true);
+    _scheduleInitialPosition();
   }
 
   @override
@@ -64,6 +66,9 @@ class _MessageListState extends State<MessageList> {
     final previousMessages = _visibleMessagesFor(oldWidget);
     final messages = _visibleMessages;
     final channelChanged = oldWidget.channel.id != widget.channel.id;
+    final unreadChanged =
+        oldWidget.channel.firstUnreadMessageId !=
+        widget.channel.firstUnreadMessageId;
     final previousFirstId = previousMessages.isEmpty
         ? null
         : previousMessages.first.id;
@@ -77,12 +82,17 @@ class _MessageListState extends State<MessageList> {
     if (channelChanged) {
       _messageKeys.clear();
       _readyForHistoryPaging = false;
-      _scrollToEnd(jump: true);
+      _didReachUnread = false;
+      _scheduleInitialPosition();
+    } else if (unreadChanged && _unreadMessageId != null) {
+      _didReachUnread = false;
+      _scrollToUnread(animate: false);
     } else if (anchor != null && _scrollController.hasClients) {
       _preserveScrollAfterPrepend(anchor, remainingPasses: 3);
     } else if (messages.length > previousMessages.length) {
       _scrollToEnd(jump: false);
     }
+    if (unreadChanged && _unreadMessageId == null) _didReachUnread = false;
   }
 
   @override
@@ -93,6 +103,9 @@ class _MessageListState extends State<MessageList> {
   }
 
   List<ChatMessage> get _visibleMessages => _visibleMessagesFor(widget);
+
+  String? get _unreadMessageId =>
+      widget.query.trim().isEmpty ? widget.channel.firstUnreadMessageId : null;
 
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
@@ -125,6 +138,59 @@ class _MessageListState extends State<MessageList> {
         );
       }
       _readyForHistoryPaging = true;
+    });
+  }
+
+  void _scheduleInitialPosition() {
+    if (_unreadMessageId == null) {
+      _scrollToEnd(jump: true);
+      return;
+    }
+    _scrollToUnread(animate: false);
+  }
+
+  void _scrollToUnread({required bool animate, int attempt = 0}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final messageId = _unreadMessageId;
+      final messages = _visibleMessages;
+      final index = messageId == null
+          ? -1
+          : messages.indexWhere((message) => message.id == messageId);
+      if (index < 0) return;
+      final key = _messageKeys.putIfAbsent(
+        messageId!,
+        () => GlobalKey(debugLabel: 'message-anchor-$messageId'),
+      );
+      final targetContext = key.currentContext;
+      if (targetContext != null) {
+        Scrollable.ensureVisible(
+          targetContext,
+          alignment: 0.16,
+          duration: animate ? const Duration(milliseconds: 180) : Duration.zero,
+          curve: Curves.easeOut,
+        );
+        if (!_didReachUnread) setState(() => _didReachUnread = true);
+        return;
+      }
+      final position = _scrollController.position;
+      final fraction = (index + 1) / (messages.length + 1);
+      final estimate = (position.maxScrollExtent * fraction).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if (animate) {
+        _scrollController.animateTo(
+          estimate,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(estimate);
+      }
+      if (attempt < 4) {
+        _scrollToUnread(animate: animate, attempt: attempt + 1);
+      }
     });
   }
 
@@ -175,6 +241,9 @@ class _MessageListState extends State<MessageList> {
   }
 
   void _handleScroll() {
+    if (!_didReachUnread && _isUnreadBoundaryVisible()) {
+      setState(() => _didReachUnread = true);
+    }
     if (!_readyForHistoryPaging ||
         !_scrollController.hasClients ||
         _scrollController.offset > 160 ||
@@ -186,96 +255,97 @@ class _MessageListState extends State<MessageList> {
     widget.onLoadOlder();
   }
 
+  bool _isUnreadBoundaryVisible() {
+    final messageId = _unreadMessageId;
+    final target = messageId == null
+        ? null
+        : _messageKeys[messageId]?.currentContext?.findRenderObject();
+    final viewport = _scrollController.position.context.notificationContext
+        ?.findRenderObject();
+    if (target is! RenderBox || viewport is! RenderBox) return false;
+    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+    final viewportBottom = viewportTop + viewport.size.height;
+    final targetTop = target.localToGlobal(Offset.zero).dy;
+    return targetTop >= viewportTop && targetTop < viewportBottom;
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = _visibleMessages;
     if (messages.isEmpty) {
       return _MessageEmptyState(hasQuery: widget.query.trim().isNotEmpty);
     }
-    return ListView.builder(
-      key: ValueKey('messages-${widget.channel.id}'),
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(0, 18, 0, 22),
-      itemCount: messages.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          if (!widget.canLoadOlder &&
-              !widget.isLoadingOlder &&
-              widget.olderLoadError == null) {
-            return _ChannelStart(channel: widget.channel);
-          }
-          return _HistoryBoundary(
-            isLoading: widget.isLoadingOlder,
-            error: widget.olderLoadError,
-            onLoad: widget.onLoadOlder,
-          );
-        }
-        final message = messages[index - 1];
-        final previous = index > 1 ? messages[index - 2] : null;
-        final grouped =
-            message.reply == null &&
-            previous != null &&
-            previous.authorId == message.authorId &&
-            message.sentAt.difference(previous.sentAt).inMinutes < 7;
-        return KeyedSubtree(
-          key: _messageKeys.putIfAbsent(
-            message.id,
-            () => GlobalKey(debugLabel: 'message-anchor-${message.id}'),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: ListView.builder(
+            key: ValueKey('messages-${widget.channel.id}'),
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(0, 18, 0, 22),
+            itemCount: messages.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                if (!widget.canLoadOlder &&
+                    !widget.isLoadingOlder &&
+                    widget.olderLoadError == null) {
+                  return _ChannelStart(channel: widget.channel);
+                }
+                return _HistoryBoundary(
+                  isLoading: widget.isLoadingOlder,
+                  error: widget.olderLoadError,
+                  onLoad: widget.onLoadOlder,
+                );
+              }
+              final message = messages[index - 1];
+              final previous = index > 1 ? messages[index - 2] : null;
+              final startsUnread = message.id == _unreadMessageId;
+              final grouped =
+                  !startsUnread &&
+                  message.reply == null &&
+                  previous != null &&
+                  previous.authorId == message.authorId &&
+                  message.sentAt.difference(previous.sentAt).inMinutes < 7;
+              return KeyedSubtree(
+                key: _messageKeys.putIfAbsent(
+                  message.id,
+                  () => GlobalKey(debugLabel: 'message-anchor-${message.id}'),
+                ),
+                child: Column(
+                  children: [
+                    if (startsUnread) const UnreadMessageBoundary(),
+                    MessageItem(
+                      key: ValueKey('message-${message.id}'),
+                      message: message,
+                      member: widget.workspace.memberById(message.authorId),
+                      workspace: widget.workspace,
+                      grouped: grouped,
+                      isCurrentUser:
+                          message.authorId == widget.workspace.currentMemberId,
+                      onReply: widget.onReply,
+                      onEdit: widget.onEdit,
+                      onDelete: widget.onDelete,
+                      onToggleReaction: widget.onToggleReaction,
+                      onAddReaction: widget.onAddReaction,
+                      onTogglePin: widget.onTogglePin,
+                      linkLauncher: widget.externalLinkLauncher,
+                      onSelectChannel: widget.onSelectChannel,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-          child: MessageItem(
-            key: ValueKey('message-${message.id}'),
-            message: message,
-            member: widget.workspace.memberById(message.authorId),
-            workspace: widget.workspace,
-            grouped: grouped,
-            isCurrentUser: message.authorId == widget.workspace.currentMemberId,
-            onReply: widget.onReply,
-            onEdit: widget.onEdit,
-            onDelete: widget.onDelete,
-            onToggleReaction: widget.onToggleReaction,
-            onAddReaction: widget.onAddReaction,
-            onTogglePin: widget.onTogglePin,
-            linkLauncher: widget.externalLinkLauncher,
-            onSelectChannel: widget.onSelectChannel,
+        ),
+        if (_unreadMessageId != null && !_didReachUnread)
+          Positioned(
+            top: 10,
+            right: 16,
+            child: JumpToUnreadButton(
+              onPressed: () => _scrollToUnread(animate: true),
+            ),
           ),
-        );
-      },
+      ],
     );
-  }
-}
-
-final class _AnchoredScrollController extends ScrollController {
-  @override
-  ScrollPosition createScrollPosition(
-    ScrollPhysics physics,
-    ScrollContext context,
-    ScrollPosition? oldPosition,
-  ) => _AnchoredScrollPosition(
-    physics: physics,
-    context: context,
-    oldPosition: oldPosition,
-    keepScrollOffset: keepScrollOffset,
-    debugLabel: debugLabel,
-  );
-
-  void shiftBy(double displacement) {
-    if (!hasClients || displacement.abs() <= 0.5) return;
-    (position as _AnchoredScrollPosition).shiftBy(displacement);
-  }
-}
-
-final class _AnchoredScrollPosition extends ScrollPositionWithSingleContext {
-  _AnchoredScrollPosition({
-    required super.physics,
-    required super.context,
-    required super.oldPosition,
-    required super.keepScrollOffset,
-    required super.debugLabel,
-  });
-
-  void shiftBy(double displacement) {
-    goIdle();
-    forcePixels(pixels + displacement);
   }
 }
 

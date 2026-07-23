@@ -12,7 +12,9 @@ import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
+import 'discord_mention_matcher.dart';
 import 'discord_reaction_handler.dart';
+import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
 
 final class DiscordChatRepository
@@ -67,7 +69,7 @@ final class DiscordChatRepository
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {
-    _emitStatus(RepositoryConnectionStatus.connecting);
+    _events.addStatus(RepositoryConnectionStatus.connecting);
     try {
       final user = await _api.getCurrentUser();
       final guilds = await _api.getCurrentUserGuilds();
@@ -92,7 +94,8 @@ final class DiscordChatRepository
             rolesByGuild: _rolesByGuild,
             includeDirectMessagesSpace: true,
           )
-          .retainDirectMessagesFrom(cached);
+          .retainDirectMessagesFrom(cached)
+          .restoreChannelActivityFrom(cached);
       _currentMemberId = workspace.currentMemberId;
       _directMessages.seed(workspace.channels);
       _voiceSignaling.setCurrentUserId(workspace.currentMemberId);
@@ -104,7 +107,7 @@ final class DiscordChatRepository
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
       final cached = await _cache.readWorkspace();
       if (cached != null) {
-        _emitStatus(RepositoryConnectionStatus.offline);
+        _events.addStatus(RepositoryConnectionStatus.offline);
         return cached;
       }
       rethrow;
@@ -244,10 +247,14 @@ final class DiscordChatRepository
   @override
   Future<void> startTyping(String channelId) => _api.startTyping(channelId);
 
+  @override
+  Future<void> saveChannelActivity(ConversationChannel channel) =>
+      _cache.writeChannelActivity(channel);
+
   void _onGatewayEvent(DiscordGatewayEvent event) {
     switch (event) {
       case DiscordGatewayStatusEvent():
-        _emitStatus(switch (event.status) {
+        _events.addStatus(switch (event.status) {
           DiscordGatewayStatus.offline => RepositoryConnectionStatus.offline,
           DiscordGatewayStatus.connecting =>
             RepositoryConnectionStatus.connecting,
@@ -440,7 +447,10 @@ final class DiscordChatRepository
           message: message,
           member: member,
           isNew: event.name == 'MESSAGE_CREATE',
-          mentionsCurrentMember: _mentionsCurrentMember(event.data),
+          mentionsCurrentMember: DiscordMentionMatcher.containsUser(
+            event.data,
+            _currentMemberId,
+          ),
         ),
       );
     }
@@ -451,20 +461,6 @@ final class DiscordChatRepository
     _events.add(SpaceUpsertedEvent(_directMessages.space));
     _events.add(MemberUpsertedEvent(conversation.recipient));
     _events.add(ChannelUpsertedEvent(conversation.channel));
-  }
-
-  bool _mentionsCurrentMember(Map<String, Object?> data) {
-    final memberId = _currentMemberId;
-    if (memberId == null) return false;
-    final mentions = data['mentions'];
-    return mentions is List &&
-        mentions.whereType<Map>().any((user) => user['id'] == memberId);
-  }
-
-  void _emitStatus(RepositoryConnectionStatus status) {
-    if (!_events.isClosed) {
-      _events.add(RepositoryStatusChangedEvent(status));
-    }
   }
 
   @override

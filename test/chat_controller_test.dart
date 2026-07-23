@@ -136,6 +136,7 @@ void main() {
       final unread = controller.workspace!.channelById('forge-native');
       expect(unread.unread, isTrue);
       expect(unread.mentionCount, 1);
+      expect(unread.firstUnreadMessageId, 'incoming-1');
       expect(
         controller.workspace!.memberById('lena').presence,
         Presence.online,
@@ -146,6 +147,19 @@ void main() {
       final read = controller.workspace!.channelById('forge-native');
       expect(read.unread, isFalse);
       expect(read.mentionCount, 0);
+      expect(read.firstUnreadMessageId, 'incoming-1');
+      expect(
+        controller.workspace!
+            .messagesFor('forge-native')
+            .map((item) => item.id),
+        contains('incoming-1'),
+      );
+
+      await controller.openChannel('forge-general');
+      expect(
+        controller.workspace!.channelById('forge-native').firstUnreadMessageId,
+        isNull,
+      );
     });
 
     test('marks the active channel unread while the app is inactive', () async {
@@ -171,10 +185,23 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(controller.workspace!.channelById('forge-general').unread, isTrue);
+      expect(
+        controller.workspace!.channelById('forge-general').firstUnreadMessageId,
+        'background-1',
+      );
       controller.setApplicationActive(true);
       expect(
         controller.workspace!.channelById('forge-general').unread,
         isFalse,
+      );
+      expect(
+        controller.workspace!.channelById('forge-general').firstUnreadMessageId,
+        'background-1',
+      );
+      controller.setApplicationActive(false);
+      expect(
+        controller.workspace!.channelById('forge-general').firstUnreadMessageId,
+        isNull,
       );
     });
 
@@ -407,6 +434,10 @@ final class _EventRepository implements ChatRepository {
   @override
   Future<void> startTyping(String channelId) =>
       _delegate.startTyping(channelId);
+
+  @override
+  Future<void> saveChannelActivity(ConversationChannel channel) =>
+      _delegate.saveChannelActivity(channel);
 
   @override
   Future<void> close() async {}

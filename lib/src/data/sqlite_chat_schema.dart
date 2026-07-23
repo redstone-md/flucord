@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 8;
+  static const version = 9;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -39,6 +39,7 @@ abstract final class SqliteChatSchema {
         position INTEGER NOT NULL,
         unread INTEGER NOT NULL,
         mention_count INTEGER NOT NULL,
+        first_unread_message_id TEXT,
         parent_id TEXT,
         is_thread INTEGER NOT NULL,
         recipient_id TEXT,
@@ -159,6 +160,11 @@ abstract final class SqliteChatSchema {
       ''');
       await database.execute(
         'ALTER TABLE channels ADD position INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (oldVersion < 9) {
+      await database.execute(
+        'ALTER TABLE channels ADD first_unread_message_id TEXT',
       );
     }
   }

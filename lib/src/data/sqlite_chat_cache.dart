@@ -258,6 +258,19 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
+  Future<void> writeChannelActivity(ConversationChannel channel) =>
+      _database.update(
+        'channels',
+        {
+          'unread': channel.unread ? 1 : 0,
+          'mention_count': channel.mentionCount,
+          'first_unread_message_id': channel.firstUnreadMessageId,
+        },
+        where: 'id = ?',
+        whereArgs: [channel.id],
+      );
+
+  @override
   Future<void> deleteChannel(String channelId) async {
     await _database.transaction((transaction) async {
       await transaction.delete(
@@ -351,6 +364,7 @@ final class SqliteChatCache implements ChatCache {
     'position': channel.position,
     'unread': channel.unread ? 1 : 0,
     'mention_count': channel.mentionCount,
+    'first_unread_message_id': channel.firstUnreadMessageId,
     'parent_id': channel.parentId,
     'is_thread': channel.isThread ? 1 : 0,
     'recipient_id': channel.recipientId,
@@ -367,6 +381,7 @@ final class SqliteChatCache implements ChatCache {
         position: row['position']! as int,
         unread: row['unread'] == 1,
         mentionCount: row['mention_count']! as int,
+        firstUnreadMessageId: row['first_unread_message_id'] as String?,
         parentId: row['parent_id'] as String?,
         isThread: row['is_thread'] == 1,
         recipientId: row['recipient_id'] as String?,

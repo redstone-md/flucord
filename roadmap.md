@@ -104,6 +104,10 @@ browser runtime or dependency on Discord's private user API.
 15. Completed: local unread and mention state is aggregated per guild and DM
     space into Discord-like server rail pips, numeric badges, tooltips, and
     accessible navigation labels.
+16. Completed: each local unread burst retains its first message ID through
+    the domain model and SQLite v9. Opening a channel clears rail/sidebar
+    counters without discarding the in-timeline marker; the message surface
+    adds a Discord-like NEW divider and direct navigation to that boundary.
 
 ## Protocol safety
 

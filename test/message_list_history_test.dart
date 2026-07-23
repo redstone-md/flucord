@@ -60,6 +60,43 @@ void main() {
     final after = tester.getTopLeft(anchor).dy;
     expect(after, closeTo(before, 1));
   });
+
+  testWidgets('positions the timeline at the first unread message', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final messages = List.generate(50, _message);
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm025');
+
+    await tester.pumpWidget(_host(messages, channel: channel));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('unread-message-boundary')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('New messages'), findsOneWidget);
+    final unreadMessage = find.byKey(const ValueKey('message-m025'));
+    expect(unreadMessage, findsOneWidget);
+    expect(tester.getTopLeft(unreadMessage).dy, inInclusiveRange(60, 250));
+    expect(find.byKey(const ValueKey('jump-to-unread')), findsNothing);
+    semantics.dispose();
+  });
+
+  testWidgets('hides the unread boundary while filtering messages', (
+    tester,
+  ) async {
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm010');
+    await tester.pumpWidget(
+      _host(List.generate(20, _message), channel: channel, query: 'Message 15'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('unread-message-boundary')), findsNothing);
+    expect(find.textContaining('Message 15'), findsOneWidget);
+  });
 }
 
 Widget _host(
@@ -67,6 +104,8 @@ Widget _host(
   bool isLoadingOlder = false,
   Object? olderLoadError,
   VoidCallback? onLoadOlder,
+  ConversationChannel channel = _channel,
+  String query = '',
 }) {
   return MaterialApp(
     theme: FlucordTheme.dark,
@@ -77,13 +116,13 @@ Widget _host(
         child: MessageList(
           workspace: ChatWorkspace(
             spaces: const [_space],
-            channels: const [_channel],
+            channels: [channel],
             members: const [_member],
             messages: messages,
             currentMemberId: 'bot-1',
           ),
-          channel: _channel,
-          query: '',
+          channel: channel,
+          query: query,
           onReply: (_) {},
           onEdit: (_, _) async => true,
           onDelete: (_) async {},

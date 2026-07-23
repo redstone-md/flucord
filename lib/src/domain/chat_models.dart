@@ -2,6 +2,7 @@ import 'message_embed.dart';
 
 part 'message_models.dart';
 part 'channel_category.dart';
+part 'conversation_channel.dart';
 
 enum ChannelKind { text, voice }
 
@@ -53,51 +54,6 @@ final class CommunityRole {
   final String name;
   final int position;
   final int? colorValue;
-}
-
-final class ConversationChannel {
-  const ConversationChannel({
-    required this.id,
-    required this.spaceId,
-    required this.name,
-    required this.topic,
-    required this.kind,
-    this.position = 0,
-    this.parentId,
-    this.isThread = false,
-    this.recipientId,
-    this.unread = false,
-    this.mentionCount = 0,
-  });
-
-  final String id;
-  final String spaceId;
-  final String name;
-  final String topic;
-  final ChannelKind kind;
-  final int position;
-  final String? parentId;
-  final bool isThread;
-  final String? recipientId;
-  final bool unread;
-  final int mentionCount;
-
-  bool get isDirectMessage => recipientId != null;
-
-  ConversationChannel copyWith({bool? unread, int? mentionCount}) =>
-      ConversationChannel(
-        id: id,
-        spaceId: spaceId,
-        name: name,
-        topic: topic,
-        kind: kind,
-        position: position,
-        parentId: parentId,
-        isThread: isThread,
-        recipientId: recipientId,
-        unread: unread ?? this.unread,
-        mentionCount: mentionCount ?? this.mentionCount,
-      );
 }
 
 final class DirectConversation {
@@ -313,6 +269,21 @@ final class ChatWorkspace {
     );
   }
 
+  ChatWorkspace restoreChannelActivityFrom(ChatWorkspace? cached) {
+    if (cached == null || cached.currentMemberId != currentMemberId) {
+      return this;
+    }
+    final cachedChannels = {
+      for (final channel in cached.channels) channel.id: channel,
+    };
+    return copyWith(
+      channels: [
+        for (final channel in channels)
+          channel.withActivityOf(cachedChannels[channel.id] ?? channel),
+      ],
+    );
+  }
+
   ChatWorkspace mergeHistory(
     ChannelHistory history, {
     bool replaceChannel = true,
@@ -334,6 +305,11 @@ final class ChatWorkspace {
     nextMessages.sort((left, right) => left.sentAt.compareTo(right.sentAt));
     return copyWith(members: memberMap.values.toList(), messages: nextMessages);
   }
+
+  ChatWorkspace mergeInitialHistory(ChannelHistory history) => mergeHistory(
+    history,
+    replaceChannel: channelById(history.channelId).firstUnreadMessageId == null,
+  );
 
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
     final nextMessages = [
@@ -396,21 +372,20 @@ final class ChatWorkspace {
     return copyWith(members: next);
   }
 
-  ChatWorkspace markChannelRead(String channelId) => updateChannel(
-    channelId,
-    (channel) => channel.copyWith(unread: false, mentionCount: 0),
-  );
+  ChatWorkspace markChannelRead(String channelId) =>
+      updateChannel(channelId, (channel) => channel.markRead());
 
-  ChatWorkspace markChannelUnread(String channelId, {required bool mention}) =>
-      updateChannel(
-        channelId,
-        (channel) => channel.copyWith(
-          unread: true,
-          mentionCount: mention
-              ? channel.mentionCount + 1
-              : channel.mentionCount,
-        ),
-      );
+  ChatWorkspace clearChannelUnreadBoundary(String channelId) =>
+      updateChannel(channelId, (channel) => channel.clearUnreadBoundary());
+
+  ChatWorkspace markChannelUnread(
+    String channelId, {
+    required String messageId,
+    required bool mention,
+  }) => updateChannel(
+    channelId,
+    (channel) => channel.markUnread(messageId: messageId, mention: mention),
+  );
 
   ChatWorkspace updateChannel(
     String channelId,
@@ -424,14 +399,24 @@ final class ChatWorkspace {
 
   ChatWorkspace removeMessage(String messageId) => copyWith(
     messages: messages.where((message) => message.id != messageId).toList(),
-  );
-
-  ChatWorkspace upsertChannel(ConversationChannel channel) => copyWith(
     channels: [
-      ...channels.where((existing) => existing.id != channel.id),
-      channel,
+      for (final channel in channels)
+        channel.firstUnreadMessageId == messageId
+            ? channel.clearUnreadBoundary()
+            : channel,
     ],
   );
+
+  ChatWorkspace upsertChannel(ConversationChannel channel) {
+    final previous = channelOrNull(channel.id);
+    final next = previous == null ? channel : channel.withActivityOf(previous);
+    return copyWith(
+      channels: [
+        ...channels.where((existing) => existing.id != channel.id),
+        next,
+      ],
+    );
+  }
 
   ChatWorkspace removeChannel(String channelId) {
     final nextChannels = channels

@@ -28,6 +28,8 @@ abstract interface class ChatCache {
 
   Future<void> writeChannel(ConversationChannel channel);
 
+  Future<void> writeChannelActivity(ConversationChannel channel);
+
   Future<void> deleteChannel(String channelId);
 
   Future<void> deleteCategory(String categoryId);

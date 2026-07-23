@@ -153,5 +153,7 @@ abstract interface class ChatRepository {
 
   Future<void> startTyping(String channelId);
 
+  Future<void> saveChannelActivity(ConversationChannel channel);
+
   Future<void> close();
 }

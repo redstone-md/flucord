@@ -35,6 +35,9 @@ void main() {
           kind: ChannelKind.text,
           position: 2,
           parentId: 'category-1',
+          unread: true,
+          mentionCount: 2,
+          firstUnreadMessageId: 'message-1',
         ),
         ConversationChannel(
           id: 'thread-1',
@@ -144,6 +147,9 @@ void main() {
     expect(restored?.channels.first.name, 'general');
     expect(restored?.channels.first.position, 2);
     expect(restored?.channels.first.parentId, 'category-1');
+    expect(restored?.channels.first.unread, isTrue);
+    expect(restored?.channels.first.mentionCount, 2);
+    expect(restored?.channels.first.firstUnreadMessageId, 'message-1');
     expect(restored?.categories.single.name, 'Operations');
     expect(restored?.channels.last.isThread, isTrue);
     expect(restored?.channels.last.parentId, 'channel-1');
@@ -168,6 +174,12 @@ void main() {
       (await cache.readPinnedMessages('channel-1')).messages.single.id,
       'message-1',
     );
+
+    await cache.writeChannelActivity(restored!.channels.first.markRead());
+    final readWorkspace = await cache.readWorkspace();
+    expect(readWorkspace?.channels.first.unread, isFalse);
+    expect(readWorkspace?.channels.first.mentionCount, 0);
+    expect(readWorkspace?.channels.first.firstUnreadMessageId, 'message-1');
 
     final edited = ChatMessage(
       id: message.id,
@@ -380,6 +392,10 @@ void main() {
     expect(spaceColumns.map((row) => row['name']), contains('kind'));
     expect(channelColumns.map((row) => row['name']), contains('recipient_id'));
     expect(channelColumns.map((row) => row['name']), contains('position'));
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('first_unread_message_id'),
+    );
     expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
     expect(roleTables, hasLength(1));
     expect(categoryTables, hasLength(1));

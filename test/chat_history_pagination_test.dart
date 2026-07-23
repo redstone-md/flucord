@@ -215,5 +215,9 @@ final class _PagedRepository implements ChatRepository {
       _delegate.startTyping(channelId);
 
   @override
+  Future<void> saveChannelActivity(ConversationChannel channel) =>
+      _delegate.saveChannelActivity(channel);
+
+  @override
   Future<void> close() async {}
 }

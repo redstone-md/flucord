@@ -201,6 +201,11 @@ final class MockChatRepository implements ChatRepository {
   @override
   Future<void> startTyping(String channelId) async {}
 
+  @override
+  Future<void> saveChannelActivity(ConversationChannel channel) async {
+    _workspace = _workspace.updateChannel(channel.id, (_) => channel);
+  }
+
   Future<void> _setReaction(
     String messageId,
     String emoji, {
@@ -253,6 +258,7 @@ final class MockChatRepository implements ChatRepository {
         position: 0,
         parentId: 'forge-project',
         unread: true,
+        firstUnreadMessageId: 'm3',
       ),
       ConversationChannel(
         id: 'forge-design',
