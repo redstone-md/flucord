@@ -3,7 +3,8 @@
 Flucord is a native Flutter desktop messaging client for Windows. It provides
 server and channel navigation, searchable message history, replies,
 attachments, reactions, message editing and deletion, active threads, member
-lists, and theme switching without a browser runtime.
+roles and presence, typing indicators, local unread markers, paginated pinned
+messages, and theme switching without a browser runtime.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -18,10 +19,11 @@ flutter run -d windows
 ## Connect Discord
 
 1. Create an application and bot in the Discord Developer Portal.
-2. Enable the Message Content Intent for the bot.
+2. Enable the Message Content, Server Members, and Presence intents for the
+   bot in the Developer Portal.
 3. Install the bot with View Channels, Read Message History, Send Messages,
-   Attach Files, and Add Reactions permissions. Manage Messages is required
-   only when deleting messages written by other members.
+   Attach Files, Add Reactions, and Pin Messages permissions. Manage Messages
+   is required only when deleting messages written by other members.
 4. Open Connections from the link icon in the Flucord server rail.
 5. Enter the bot token. When remembering it, Flucord stores it through Windows
    Credential Manager rather than SQLite or application logs.
@@ -34,6 +36,10 @@ user-account token flows.
 Discord bots can edit only messages they authored. The UI exposes inline edit
 for the connected bot's messages and lets Discord enforce channel-specific
 permissions for deletes, uploads, and reactions.
+
+Unread and mention markers are maintained locally for the running Flucord
+session. Discord does not publish a bot API for a personal account's read
+state, so these markers do not synchronize with the official Discord client.
 
 ## Verify
 

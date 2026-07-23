@@ -34,7 +34,9 @@ browser runtime or dependency on Discord's private user API.
 2. Completed: multipart attachments, replies, reaction add/remove, inline
    edits, confirmed deletes, active thread discovery, live Gateway updates,
    and SQLite v2 migration.
-3. Pins, member roles, presence updates, typing indicators, and unread state.
+3. Completed: paginated pins with the 2026 `PIN_MESSAGES` permission, guild
+   member and role loading, initial/live presence, typing expiry/throttling,
+   and local unread/mention state.
 4. Notifications, tray integration, deep links, and auto-update.
 5. Voice rooms, device selection, screen sharing, and media diagnostics.
 6. macOS and Linux packaging after Windows behavior stabilizes.
