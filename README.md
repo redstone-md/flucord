@@ -4,7 +4,8 @@ Flucord is a native Flutter desktop messaging client for Windows. It provides
 server and channel navigation, searchable message history, replies,
 attachments, reactions, message editing and deletion, active threads, member
 roles and presence, typing indicators, local unread markers, paginated pinned
-messages, and theme switching without a browser runtime.
+messages, Windows notifications, close-to-tray behavior, channel deep links,
+signed updates, and theme switching without a browser runtime.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -52,6 +53,37 @@ flutter build windows --release
 
 The release executable is written to
 `build\windows\x64\runner\Release\flucord.exe`.
+
+## Windows Integration
+
+Flucord registers links in this form and forwards them to the existing app
+instance:
+
+```text
+flucord://channels/{serverId}/{channelId}
+```
+
+Incoming messages raise native Windows notifications while Flucord is not
+focused. Clicking a notification restores the window and opens its channel.
+Closing the window hides it in the notification area; use `Quit Flucord` from
+the tray menu to stop the process.
+
+Automatic updates are disabled unless a release is built with an HTTPS
+WinSparkle appcast:
+
+```powershell
+flutter build windows --release `
+  --dart-define=FLUCORD_UPDATE_FEED_URL=https://updates.example.com/appcast.xml
+```
+
+The checked-in `dsa_pub.pem` verifies Windows update signatures. The matching
+`dsa_priv.pem` is intentionally ignored by Git and must be backed up as a
+release secret. Sign every installer before adding its signature to the
+appcast:
+
+```powershell
+dart run auto_updater:sign_update .\dist\flucord-setup.exe
+```
 
 ## Structure
 
