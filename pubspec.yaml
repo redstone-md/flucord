@@ -9,6 +9,7 @@ environment:
 dependencies:
   auto_updater: ^1.0.0
   file_picker: 11.0.2
+  ffi: ^2.2.0
   flutter:
     sdk: flutter
   flutter_secure_storage: ^10.3.1
