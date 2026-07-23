@@ -51,9 +51,19 @@ screen/window source selection, live desktop-capture preview, and deterministic
 track teardown. This path uses native WebRTC textures and devices, not a web
 view.
 
-The current media tracer is local diagnostics only. Audio and screen tracks are
-not yet transmitted to Discord; the documented Discord Voice Gateway, UDP
-discovery, encryption, and RTP transport remain the next roadmap increment.
+For Discord repositories, Flucord also performs the documented main Gateway
+voice-state exchange, Voice Gateway v8 heartbeat and resume flow, UDP address
+discovery, AEAD mode negotiation, and DAVE MLS signaling through the bundled
+official `libdave.dll`. The voice surface reports joining, connection,
+discovery, DAVE negotiation, reconnect, failure, and encrypted transport-ready
+states. Mute changes use a voice-state update without rebuilding the voice
+session.
+
+Encrypted transport readiness is not yet a live audio call. Raw microphone
+frames still need Opus encoding, DAVE frame encryption, RTP packetization and
+Discord packet encryption; received packets need the inverse pipeline and
+native playback. Screen capture is currently a local preview and is not sent to
+Discord.
 
 ## Verify
 

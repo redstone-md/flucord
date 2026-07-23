@@ -42,11 +42,14 @@ browser runtime or dependency on Discord's private user API.
    WinSparkle feed with an embedded DSA verification key. Platform code stays
    behind application-owned service contracts so chat state and presentation
    remain independently testable.
-5. In progress: native voice-room controls, input/output device selection,
-   microphone capture, desktop source selection, live screen preview, and
-   deterministic media teardown are complete. The documented Discord Voice
-   Gateway, encrypted RTP transport, and remote audio remain isolated follow-up
-   work behind a dedicated repository boundary.
+5. In progress: native voice-room controls, device selection, local microphone
+   capture, desktop preview, and deterministic teardown are complete. The app
+   now sends documented main Gateway voice-state updates, assembles voice
+   credentials, connects to Voice Gateway v8, performs UDP discovery, negotiates
+   Discord's AEAD transport, and drives an official libdave MLS session. The UI
+   exposes each signaling stage without presenting transport readiness as live
+   audio. RTP packetization, Opus encode/decode, DAVE frame encryption, packet
+   encryption, remote playback, and transmitted screen sharing remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
