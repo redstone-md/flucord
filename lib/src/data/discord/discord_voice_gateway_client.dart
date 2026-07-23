@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../../domain/voice_connection.dart';
+import '../../domain/voice_dave.dart';
+import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_udp_transport.dart';
 
@@ -51,17 +53,26 @@ final class DiscordVoiceGatewayClient {
   DiscordVoiceGatewayClient({
     required VoiceServerCredentials credentials,
     required int maxDaveProtocolVersion,
+    VoiceDaveService? daveService,
     DiscordVoiceSocketConnector? socketConnector,
     DiscordVoiceUdpTransport? udpTransport,
   }) : _protocol = DiscordVoiceGatewayProtocol(
          credentials: credentials,
          maxDaveProtocolVersion: maxDaveProtocolVersion,
        ),
+       _daveController = daveService == null
+           ? null
+           : DiscordVoiceDaveController(
+               daveService: daveService,
+               channelId: credentials.channelId,
+               selfUserId: credentials.userId,
+             ),
        _socketConnector =
            socketConnector ?? const IoDiscordVoiceSocketConnector(),
        _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport();
 
   final DiscordVoiceGatewayProtocol _protocol;
+  final DiscordVoiceDaveController? _daveController;
   final DiscordVoiceSocketConnector _socketConnector;
   final DiscordVoiceUdpTransport _udpTransport;
   final StreamController<VoiceSignalingEvent> _events =
@@ -146,7 +157,19 @@ final class DiscordVoiceGatewayClient {
     }
     _protocol.acceptSequence(payload['seq']);
     final data = payload['d'];
-    switch (payload['op']) {
+    final opcode = payload['op'];
+    if (opcode is int && data is Map) {
+      try {
+        _executeDaveCommands(
+          _daveController?.acceptJson(opcode, data.cast<String, Object?>()) ??
+              const [],
+        );
+      } catch (error) {
+        _fail(error);
+        return;
+      }
+    }
+    switch (opcode) {
       case 2:
         if (data is Map) {
           unawaited(_handleReady(data.cast<String, Object?>(), generation));
@@ -175,6 +198,17 @@ final class DiscordVoiceGatewayClient {
           sequence: sequence,
         ),
       );
+    }
+    try {
+      _executeDaveCommands(
+        _daveController?.acceptBinary(
+              opcode: message[2],
+              payload: message.sublist(3),
+            ) ??
+            const [],
+      );
+    } catch (error) {
+      _fail(error);
     }
   }
 
@@ -249,6 +283,12 @@ final class DiscordVoiceGatewayClient {
       _fail(StateError('Discord selected an unsupported voice protocol'));
       return;
     }
+    try {
+      _daveController?.activate(description.daveProtocolVersion);
+    } catch (error) {
+      _fail(error);
+      return;
+    }
     _session = VoiceTransportSession(
       guildId: _protocol.credentials.guildId,
       ssrc: ssrc,
@@ -272,6 +312,17 @@ final class DiscordVoiceGatewayClient {
 
   void sendDaveMessage({required int opcode, required List<int> payload}) {
     _socket?.send(Uint8List.fromList([opcode, ...payload]));
+  }
+
+  void _executeDaveCommands(List<DiscordVoiceDaveCommand> commands) {
+    for (final command in commands) {
+      switch (command) {
+        case DiscordVoiceDaveJsonCommand():
+          _send({'op': command.opcode, 'd': command.data});
+        case DiscordVoiceDaveBinaryCommand():
+          sendDaveMessage(opcode: command.opcode, payload: command.payload);
+      }
+    }
   }
 
   void _onSocketError(Object error, int generation) {
@@ -312,6 +363,7 @@ final class DiscordVoiceGatewayClient {
     unawaited(_socket?.close());
     _discovered = null;
     _session = null;
+    _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.failure, error: error);
   }
 
@@ -335,6 +387,7 @@ final class DiscordVoiceGatewayClient {
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.disconnected);
     await _events.close();
   }

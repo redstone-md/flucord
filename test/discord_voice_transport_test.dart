@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/voice_dave.dart';
 
 void main() {
   group('Discord voice session signaling', () {
@@ -234,6 +235,35 @@ void main() {
       expect(statuses.last.status, VoiceConnectionStatus.failure);
       expect(statuses.last.error.toString(), contains('4017'));
     });
+
+    test('routes DAVE gateway frames through the native boundary', () async {
+      final socket = _FakeVoiceWebSocket();
+      final daveService = _GatewayFakeDaveService();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 1,
+        daveService: daveService,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      addTearDown(client.close);
+
+      await client.connect();
+      socket.addBinary([0, 1, 25, 4, 5, 6]);
+      await _flushEvents();
+
+      expect(daveService.session?.externalSender, [4, 5, 6]);
+      expect(socket.sent.last, [26, 9, 8]);
+
+      socket.addBinary([0, 2, 29, 0, 7, 3, 2, 1]);
+      await _flushEvents();
+
+      expect(daveService.session?.commit, [3, 2, 1]);
+      expect(_jsonAt(socket.sent, socket.sent.length - 1), {
+        'op': 23,
+        'd': {'transition_id': 7},
+      });
+    });
   });
 }
 
@@ -352,4 +382,69 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
     _closed = true;
     await _packets.close();
   }
+}
+
+final class _GatewayFakeDaveService implements VoiceDaveService {
+  _GatewayFakeDaveSession? session;
+
+  @override
+  int get maxProtocolVersion => 1;
+
+  @override
+  VoiceDaveSession createSession({
+    required int protocolVersion,
+    required String channelId,
+    required String selfUserId,
+  }) => session = _GatewayFakeDaveSession(protocolVersion);
+}
+
+final class _GatewayFakeDaveSession implements VoiceDaveSession {
+  _GatewayFakeDaveSession(this._version);
+
+  int _version;
+  List<int>? externalSender;
+  List<int>? commit;
+
+  @override
+  int get protocolVersion => _version;
+
+  @override
+  void setProtocolVersion(int version) => _version = version;
+
+  @override
+  void setExternalSender(List<int> package) =>
+      externalSender = List.of(package);
+
+  @override
+  List<int> createKeyPackage() => [9, 8];
+
+  @override
+  List<int> processProposals({
+    required List<int> proposals,
+    required List<String> recognizedUserIds,
+  }) => [6];
+
+  @override
+  DaveCommitResult processCommit(List<int> commit) {
+    this.commit = List.of(commit);
+    return const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['bot-1'],
+    );
+  }
+
+  @override
+  DaveCommitResult processWelcome({
+    required List<int> welcome,
+    required List<String> recognizedUserIds,
+  }) => const DaveCommitResult(
+    status: DaveCommitStatus.applied,
+    rosterUserIds: ['bot-1'],
+  );
+
+  @override
+  void reset() => _version = 0;
+
+  @override
+  void dispose() {}
 }
