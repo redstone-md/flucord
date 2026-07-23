@@ -11,6 +11,7 @@ final class WorkspaceController extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   bool _showMembers = true;
   bool _showPins = false;
+  bool _showThreads = false;
   final Set<String> _collapsedCategoryIds = {};
 
   String? get selectedSpaceId => _selectedSpaceId;
@@ -20,6 +21,7 @@ final class WorkspaceController extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   bool get showMembers => _showMembers;
   bool get showPins => _showPins;
+  bool get showThreads => _showThreads;
   Set<String> get collapsedCategoryIds =>
       Set.unmodifiable(_collapsedCategoryIds);
 
@@ -119,13 +121,28 @@ final class WorkspaceController extends ChangeNotifier {
 
   void toggleMembers() {
     _showMembers = !_showMembers;
-    if (_showMembers) _showPins = false;
+    if (_showMembers) {
+      _showPins = false;
+      _showThreads = false;
+    }
     notifyListeners();
   }
 
   void togglePins() {
     _showPins = !_showPins;
-    if (_showPins) _showMembers = false;
+    if (_showPins) {
+      _showMembers = false;
+      _showThreads = false;
+    }
+    notifyListeners();
+  }
+
+  void toggleThreads() {
+    _showThreads = !_showThreads;
+    if (_showThreads) {
+      _showMembers = false;
+      _showPins = false;
+    }
     notifyListeners();
   }
 

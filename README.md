@@ -5,8 +5,9 @@ Linux. The Windows release is verified locally; macOS and Linux runners are
 configured but still require release verification on their native hosts. It
 provides server and ordered channel navigation with collapsible categories,
 searchable message history, replies, attachments, reactions, message editing
-and deletion, active-thread discovery and creation, member roles and presence,
-local unread markers, paginated pinned messages, Windows notifications,
+and deletion, active-thread discovery and creation, archived-thread browsing,
+member roles and presence, local unread markers, paginated pinned messages,
+Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, anchored member profile
@@ -49,6 +50,15 @@ loading or permission failures in place. The returned channel is persisted,
 shown under Active threads, and selected immediately through the existing
 history boundary.
 
+The header Threads control keeps active and archived branches in a native
+right-side panel. Public archives load through the documented
+`GET /channels/{channel.id}/threads/archived/public` route using its ISO8601
+`before` cursor and explicit pagination. Selecting any row opens the existing
+native timeline. Locked archived threads show their lock state and replace the
+composer with a read-only notice; unlocked archives retain Discord's documented
+send-to-unarchive behavior. Archived rows stay out of the channel sidebar and
+Quick Switcher.
+
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
 Documented bot Direct Messages can be opened by a recipient's numeric Discord
@@ -83,7 +93,8 @@ must be available at runtime.
 3. Install the bot with View Channels, Read Message History, Send Messages,
    Send Messages in Threads, Create Public Threads, Attach Files, Add Reactions,
    and Pin Messages permissions. Manage Messages is required only when deleting
-   messages written by other members.
+   messages written by other members. Read Message History is also required by
+   Discord's public archived-thread route.
 4. Open Connections from the link icon in the Flucord server rail.
 5. Enter the bot token. When remembering it, Flucord stores it through Windows
    Credential Manager rather than SQLite or application logs.
@@ -161,6 +172,10 @@ SQLite v11 retains each guild emoji's identity, name, availability, animation
 flag, and public CDN URL. Gateway replacements delete stale entries before
 writing the current server catalog, so the offline picker cannot resurrect
 removed emoji.
+
+SQLite v12 retains thread archive, lock, archive timestamp, and auto-archive
+duration metadata. Public archived-thread pages are upserted as they arrive, so
+their native timelines and lock state remain available after a restart.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

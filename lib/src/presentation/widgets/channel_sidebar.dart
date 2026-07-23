@@ -39,7 +39,7 @@ class ChannelSidebar extends StatelessWidget {
         .where((channel) => !channel.isThread)
         .toList(growable: false);
     final threads = channels
-        .where((channel) => channel.isThread)
+        .where((channel) => channel.isThread && !channel.isArchived)
         .toList(growable: false);
     return Container(
       key: const ValueKey('channel-sidebar'),

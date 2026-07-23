@@ -133,6 +133,10 @@ browser runtime or dependency on Discord's private user API.
     directly into the new native conversation from a compact creation dialog.
     The dialog validates Discord's name limit, exposes all documented
     auto-archive durations, and retains loading and failure states in place.
+23. Completed: retain Discord thread archive metadata in SQLite v12, page the
+    documented public archived-thread route, and expose active plus archived
+    branches in a native header Threads panel with direct timeline navigation,
+    compact-window states, and locked archive handling.
 
 ## Protocol safety
 

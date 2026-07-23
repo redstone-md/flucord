@@ -53,4 +53,23 @@ void main() {
       expect(controller.targetMessageId, isNull);
     },
   );
+
+  test('right-side panels remain mutually exclusive', () {
+    final controller = WorkspaceController();
+
+    expect(controller.showMembers, isTrue);
+    controller.toggleThreads();
+    expect(controller.showThreads, isTrue);
+    expect(controller.showMembers, isFalse);
+    expect(controller.showPins, isFalse);
+
+    controller.togglePins();
+    expect(controller.showThreads, isFalse);
+    expect(controller.showPins, isTrue);
+
+    controller.toggleMembers();
+    expect(controller.showMembers, isTrue);
+    expect(controller.showPins, isFalse);
+    expect(controller.showThreads, isFalse);
+  });
 }

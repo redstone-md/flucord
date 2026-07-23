@@ -51,9 +51,9 @@ final class QuickSwitcherCatalog {
           );
         });
 
-    final channels = workspace.channels.map(
-      (channel) => _channelDestination(workspace, channel),
-    );
+    final channels = workspace.channels
+        .where((channel) => !channel.isArchived)
+        .map((channel) => _channelDestination(workspace, channel));
     final groupedChannels = <QuickSwitcherDestination>[];
     for (final kind in const [
       QuickSwitcherDestinationKind.directMessage,

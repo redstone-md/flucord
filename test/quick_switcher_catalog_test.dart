@@ -43,6 +43,15 @@ void main() {
             isThread: true,
           ),
           ConversationChannel(
+            id: 'archived-thread',
+            spaceId: 'guild',
+            name: 'old-release',
+            topic: '',
+            kind: ChannelKind.text,
+            isThread: true,
+            isArchived: true,
+          ),
+          ConversationChannel(
             id: 'dm',
             spaceId: CommunitySpace.directMessagesId,
             name: 'User mira',
@@ -100,6 +109,10 @@ void main() {
 
     final thread = catalog.destinations.last;
     expect(thread.path, 'The Forge / #release-checklist');
+    expect(
+      catalog.destinations.map((destination) => destination.channelId),
+      isNot(contains('archived-thread')),
+    );
   });
 
   test('filters case-insensitively across every term in the full path', () {

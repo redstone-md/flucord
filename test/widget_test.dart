@@ -88,6 +88,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('browses active and archived threads from the header', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('channel-forge-native')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-threads')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('thread-browser-panel')), findsOneWidget);
+    expect(find.text('ACTIVE THREADS'), findsOneWidget);
+    expect(find.text('ARCHIVED THREADS'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('thread-row-forge-thread-release')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('thread-row-archived-forge-native-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('channel-archived-forge-native-1')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('load-more-archived-threads')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('thread-row-archived-forge-native-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('load-more-archived-threads')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('thread-row-archived-forge-native-2')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.text('transport-notes'), findsWidgets);
+    expect(find.byKey(const ValueKey('locked-thread-notice')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-composer')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens threads without compact layout overflow', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-threads')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('thread-browser-panel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('thread-row-archived-forge-general-1')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opens a direct message from the native member profile', (
     tester,
   ) async {

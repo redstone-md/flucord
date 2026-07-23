@@ -12,13 +12,16 @@ class ChatHeader extends StatelessWidget {
     required this.query,
     required this.showCompactPicker,
     required this.allowMemberPanel,
+    required this.allowThreadPanel,
     required this.showMembers,
     required this.showPins,
+    required this.showThreads,
     required this.inboxSummary,
     required this.onSelectChannel,
     required this.onQueryChanged,
     required this.onToggleMembers,
     required this.onTogglePins,
+    required this.onToggleThreads,
     required this.onOpenInbox,
     super.key,
   });
@@ -28,13 +31,16 @@ class ChatHeader extends StatelessWidget {
   final String query;
   final bool showCompactPicker;
   final bool allowMemberPanel;
+  final bool allowThreadPanel;
   final bool showMembers;
   final bool showPins;
+  final bool showThreads;
   final InboxSummary inboxSummary;
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
+  final VoidCallback onToggleThreads;
   final VoidCallback onOpenInbox;
 
   @override
@@ -57,7 +63,9 @@ class ChatHeader extends StatelessWidget {
                   tooltip: 'Choose channel',
                   onSelected: onSelectChannel,
                   itemBuilder: (context) => [
-                    for (final item in channels)
+                    for (final item in channels.where(
+                      (item) => !item.isArchived || item.id == channel.id,
+                    ))
                       PopupMenuItem(
                         value: item.id,
                         child: Text(
@@ -85,11 +93,15 @@ class ChatHeader extends StatelessWidget {
                   size: 20,
                 ),
               const SizedBox(width: 9),
-              Text(
-                channel.name,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                fit: FlexFit.loose,
+                child: Text(
+                  channel.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               if (showTopic) ...[
@@ -119,6 +131,18 @@ class ChatHeader extends StatelessWidget {
                 onPressed: onOpenInbox,
               ),
               if (channel.kind == ChannelKind.text) ...[
+                if (allowThreadPanel) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    key: const ValueKey('toggle-threads'),
+                    onPressed: onToggleThreads,
+                    icon: Icon(
+                      showThreads ? Icons.forum : Icons.forum_outlined,
+                      size: 19,
+                    ),
+                    tooltip: showThreads ? 'Close threads' : 'Threads',
+                  ),
+                ],
                 const SizedBox(width: 4),
                 IconButton(
                   key: const ValueKey('toggle-pins'),
