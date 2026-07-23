@@ -47,7 +47,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _workspaceController = WorkspaceController();
     _voiceController = VoiceController(
       widget.voiceMediaService ?? const NoopVoiceMediaService(),
+      signalingServiceProvider: () => _chatController.voiceSignalingService,
     );
+    _chatController.addListener(_syncVoiceSignaling);
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
@@ -59,11 +61,18 @@ class _FlucordAppState extends State<FlucordApp> {
   @override
   void dispose() {
     unawaited(widget.desktopIntegration?.dispose());
+    _chatController.removeListener(_syncVoiceSignaling);
     _chatController.dispose();
     _connectionController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
     super.dispose();
+  }
+
+  void _syncVoiceSignaling() {
+    if (_chatController.state == ChatLoadState.ready) {
+      unawaited(_voiceController.refreshSignalingService());
+    }
   }
 
   @override

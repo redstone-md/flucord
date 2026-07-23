@@ -2,12 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
 
 enum VoiceState { idle, loading, ready, failure }
 
+typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
+
 final class VoiceController extends ChangeNotifier {
-  VoiceController(this._mediaService) {
+  VoiceController(
+    this._mediaService, {
+    VoiceSignalingServiceProvider? signalingServiceProvider,
+  }) : _signalingServiceProvider = signalingServiceProvider ?? _noSignaling {
     _screenEndedSubscription = _mediaService.screenShareEnded.listen((_) {
       _isScreenSharing = false;
       if (!_disposed) notifyListeners();
@@ -15,13 +21,19 @@ final class VoiceController extends ChangeNotifier {
   }
 
   final VoiceMediaService _mediaService;
+  final VoiceSignalingServiceProvider _signalingServiceProvider;
   StreamSubscription<void>? _screenEndedSubscription;
+  StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
+  VoiceSignalingService? _signalingService;
   VoiceState _state = VoiceState.idle;
+  VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
   List<VoiceDevice> _devices = const [];
   List<VoiceCaptureSource> _captureSources = const [];
   String? _selectedInputId;
   String? _selectedOutputId;
+  String? _connectedGuildId;
   String? _connectedChannelId;
+  VoiceTransportSession? _transportSession;
   Object? _error;
   bool _isMuted = false;
   bool _isScreenSharing = false;
@@ -29,6 +41,7 @@ final class VoiceController extends ChangeNotifier {
   bool _disposed = false;
 
   VoiceState get state => _state;
+  VoiceConnectionStatus get connectionStatus => _connectionStatus;
   List<VoiceDevice> get inputDevices => _devices
       .where((device) => device.kind == VoiceDeviceKind.audioInput)
       .toList(growable: false);
@@ -38,9 +51,13 @@ final class VoiceController extends ChangeNotifier {
   List<VoiceCaptureSource> get captureSources => _captureSources;
   String? get selectedInputId => _selectedInputId;
   String? get selectedOutputId => _selectedOutputId;
+  String? get connectedGuildId => _connectedGuildId;
   String? get connectedChannelId => _connectedChannelId;
+  VoiceTransportSession? get transportSession => _transportSession;
   Object? get error => _error;
   bool get isConnected => _connectedChannelId != null;
+  bool get hasDiscordSignaling => _signalingService != null;
+  bool get isTransportReady => _transportSession != null;
   bool get isMuted => _isMuted;
   bool get isScreenSharing => _isScreenSharing;
   bool get isBusy => _isBusy;
@@ -70,15 +87,56 @@ final class VoiceController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> connect(String channelId) async {
+  Future<void> connect({
+    required String guildId,
+    required String channelId,
+  }) async {
     await initialize();
-    if (_state != VoiceState.ready || _connectedChannelId == channelId) return;
+    if (_state != VoiceState.ready ||
+        (_connectedGuildId == guildId && _connectedChannelId == channelId)) {
+      return;
+    }
     await _run(() async {
+      final signalingService = _signalingServiceProvider();
+      await _bindSignaling(signalingService);
+      final previousGuildId = _connectedGuildId;
+      if (previousGuildId != null && previousGuildId != guildId) {
+        await _signalingService?.leaveVoiceChannel(previousGuildId);
+      }
       if (_connectedChannelId == null) {
         await _mediaService.startMicrophone(_selectedInputId);
         await _mediaService.setMicrophoneEnabled(!_isMuted);
       }
+      _connectedGuildId = guildId;
       _connectedChannelId = channelId;
+      _transportSession = null;
+      if (signalingService != null) {
+        _connectionStatus = VoiceConnectionStatus.joining;
+        await signalingService.joinVoiceChannel(
+          guildId: guildId,
+          channelId: channelId,
+          selfMute: _isMuted,
+        );
+      } else {
+        _connectionStatus = VoiceConnectionStatus.disconnected;
+      }
+    });
+  }
+
+  Future<void> refreshSignalingService() async {
+    final service = _signalingServiceProvider();
+    if (identical(service, _signalingService)) return;
+    await _run(() async {
+      await _bindSignaling(service);
+      final guildId = _connectedGuildId;
+      final channelId = _connectedChannelId;
+      if (service == null || guildId == null || channelId == null) return;
+      _connectionStatus = VoiceConnectionStatus.joining;
+      await service.joinVoiceChannel(
+        guildId: guildId,
+        channelId: channelId,
+        selfMute: _isMuted,
+      );
     });
   }
 
@@ -106,6 +164,15 @@ final class VoiceController extends ChangeNotifier {
     await _run(() async {
       _isMuted = !_isMuted;
       await _mediaService.setMicrophoneEnabled(!_isMuted);
+      final guildId = _connectedGuildId;
+      final channelId = _connectedChannelId;
+      if (guildId != null && channelId != null) {
+        await _signalingService?.joinVoiceChannel(
+          guildId: guildId,
+          channelId: channelId,
+          selfMute: _isMuted,
+        );
+      }
     });
   }
 
@@ -131,12 +198,55 @@ final class VoiceController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     await _run(() async {
+      final guildId = _connectedGuildId;
+      if (guildId != null) {
+        await _signalingService?.leaveVoiceChannel(guildId);
+      }
       await _mediaService.stopScreenShare();
       await _mediaService.stopMicrophone();
+      _connectedGuildId = null;
       _connectedChannelId = null;
+      _connectionStatus = VoiceConnectionStatus.disconnected;
+      _transportSession = null;
       _isScreenSharing = false;
       _isMuted = false;
     });
+  }
+
+  Future<void> _bindSignaling(VoiceSignalingService? service) async {
+    if (identical(service, _signalingService)) return;
+    await _signalingSubscription?.cancel();
+    _signalingService = service;
+    _connectionStatus = VoiceConnectionStatus.disconnected;
+    _transportSession = null;
+    _signalingSubscription = service?.voiceEvents.listen(
+      _handleSignalingEvent,
+      onDone: _handleSignalingDone,
+    );
+  }
+
+  void _handleSignalingEvent(VoiceSignalingEvent event) {
+    switch (event) {
+      case VoiceSignalingStatusEvent():
+        _connectionStatus = event.status;
+        if (event.error != null) _error = event.error;
+        if (event.status == VoiceConnectionStatus.disconnected ||
+            event.status == VoiceConnectionStatus.failure) {
+          _transportSession = null;
+        }
+      case VoiceTransportReadyEvent():
+        _transportSession = event.session;
+      case VoiceCredentialsReadyEvent() || VoiceDaveBinaryEvent():
+        break;
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void _handleSignalingDone() {
+    _signalingService = null;
+    _connectionStatus = VoiceConnectionStatus.disconnected;
+    _transportSession = null;
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -158,7 +268,10 @@ final class VoiceController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     unawaited(_screenEndedSubscription?.cancel());
+    unawaited(_signalingSubscription?.cancel());
     unawaited(_mediaService.dispose());
     super.dispose();
   }
+
+  static VoiceSignalingService? _noSignaling() => null;
 }

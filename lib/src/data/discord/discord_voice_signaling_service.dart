@@ -73,6 +73,15 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
       );
       return;
     }
+    if (_desiredChannels[guildId] == channelId) {
+      _gateway.updateVoiceState(
+        guildId: guildId,
+        channelId: channelId,
+        selfMute: selfMute,
+        selfDeaf: selfDeaf,
+      );
+      return;
+    }
     _desiredChannels[guildId] = channelId;
     _generations[guildId] = (_generations[guildId] ?? 0) + 1;
     _assembler.clear(guildId);

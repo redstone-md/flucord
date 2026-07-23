@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/voice_connection.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -43,6 +44,12 @@ final class ChatController extends ChangeNotifier {
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
   String? get activeChannelId => _activeChannelId;
   Stream<MessageUpsertedEvent> get incomingMessages => _incomingMessages.stream;
+  VoiceSignalingService? get voiceSignalingService {
+    final repository = _repository;
+    return repository is VoiceSignalingService
+        ? repository as VoiceSignalingService
+        : null;
+  }
 
   void setApplicationActive(bool value) {
     if (_isApplicationActive == value) return;

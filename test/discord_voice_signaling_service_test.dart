@@ -49,7 +49,6 @@ void main() {
     await service.joinVoiceChannel(
       guildId: 'guild-1',
       channelId: 'voice-1',
-      selfMute: true,
     );
     gateway.dispatch('VOICE_SERVER_UPDATE', {
       'guild_id': 'guild-1',
@@ -66,11 +65,22 @@ void main() {
 
     expect(gateway.updates.single.guildId, 'guild-1');
     expect(gateway.updates.single.channelId, 'voice-1');
-    expect(gateway.updates.single.selfMute, isTrue);
+    expect(gateway.updates.single.selfMute, isFalse);
     expect(clients, hasLength(1));
     expect(clients.single.connected, isTrue);
     expect(clients.single.credentials.sessionId, 'session-1');
     expect(events.whereType<VoiceCredentialsReadyEvent>(), hasLength(1));
+
+    await service.joinVoiceChannel(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      selfMute: true,
+    );
+    await _flushEvents();
+
+    expect(gateway.updates, hasLength(2));
+    expect(gateway.updates.last.selfMute, isTrue);
+    expect(clients, hasLength(1));
 
     await service.leaveVoiceChannel('guild-1');
 

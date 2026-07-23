@@ -4,17 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../application/voice_controller.dart';
+import '../../domain/voice_connection.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({
+    required this.guildId,
     required this.channelId,
     required this.channelName,
     required this.controller,
     super.key,
   });
 
+  final String guildId;
   final String channelId;
   final String channelName;
   final VoiceController controller;
@@ -27,14 +30,25 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.controller.connect(widget.channelId));
+    unawaited(
+      widget.controller.connect(
+        guildId: widget.guildId,
+        channelId: widget.channelId,
+      ),
+    );
   }
 
   @override
   void didUpdateWidget(covariant VoiceRoomView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.channelId != widget.channelId) {
-      unawaited(widget.controller.connect(widget.channelId));
+    if (oldWidget.guildId != widget.guildId ||
+        oldWidget.channelId != widget.channelId) {
+      unawaited(
+        widget.controller.connect(
+          guildId: widget.guildId,
+          channelId: widget.channelId,
+        ),
+      );
     }
   }
 
@@ -163,9 +177,9 @@ class _VoiceStage extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              controller.isConnected ? 'Media Ready' : 'Disconnected',
+              _statusLabel(controller),
               style: TextStyle(
-                color: controller.isConnected
+                color: controller.isTransportReady
                     ? FlucordColors.signal
                     : context.surfaces.muted,
                 fontSize: 12,
@@ -182,6 +196,21 @@ class _VoiceStage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _statusLabel(VoiceController controller) {
+    if (!controller.isConnected) return 'Disconnected';
+    if (!controller.hasDiscordSignaling) return 'Local media ready';
+    return switch (controller.connectionStatus) {
+      VoiceConnectionStatus.disconnected => 'Voice transport disconnected',
+      VoiceConnectionStatus.joining => 'Joining voice channel...',
+      VoiceConnectionStatus.connecting => 'Connecting to voice server...',
+      VoiceConnectionStatus.discovering => 'Discovering UDP route...',
+      VoiceConnectionStatus.negotiating => 'Negotiating DAVE encryption...',
+      VoiceConnectionStatus.ready => 'Encrypted transport ready',
+      VoiceConnectionStatus.reconnecting => 'Reconnecting voice transport...',
+      VoiceConnectionStatus.failure => 'Voice transport failed',
+    };
   }
 }
 

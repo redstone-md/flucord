@@ -100,7 +100,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('channel-forge-voice')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Media Ready'), findsOneWidget);
+    expect(find.text('Local media ready'), findsOneWidget);
     expect(find.text('Input device'), findsOneWidget);
     expect(find.text('Output device'), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);

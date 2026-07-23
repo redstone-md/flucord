@@ -273,6 +273,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
   Widget build(BuildContext context) {
     final conversation = switch (widget.channel.kind) {
       ChannelKind.voice => VoiceRoomView(
+        guildId: widget.channel.spaceId,
         channelId: widget.channel.id,
         channelName: widget.channel.name,
         controller: widget.voiceController,
