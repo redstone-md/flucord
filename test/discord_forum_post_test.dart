@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
@@ -102,6 +103,57 @@ void main() {
     expect(restored?.channelById('post-1').appliedTagIds, ['tag-1']);
     expect((await cache.readMessage('starter-1'))?.channelId, 'post-1');
   });
+
+  test('uploads forum starter attachments as Discord multipart', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'flucord-forum-upload-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}${Platform.pathSeparator}capture.png');
+    await file.writeAsString('native capture bytes');
+    final transport = _RecordingTransport(
+      const DiscordHttpResponse(
+        statusCode: 200,
+        headers: {},
+        body: '{"id":"post-1"}',
+      ),
+    );
+    final client = DiscordApiClient(botToken: 'token', transport: transport);
+    addTearDown(client.close);
+
+    await client.createForumPost(
+      channelId: 'forum-1',
+      name: 'native-capture',
+      content: '',
+      autoArchiveDurationMinutes: 1440,
+      attachments: [
+        PendingAttachment(
+          name: 'capture.png',
+          path: file.path,
+          size: await file.length(),
+        ),
+      ],
+      appliedTagIds: const ['tag-1'],
+    );
+
+    expect(transport.uri!.path, '/api/v10/channels/forum-1/threads');
+    expect(
+      transport.headers!['content-type'],
+      startsWith('multipart/form-data; boundary='),
+    );
+    final body = utf8.decode(transport.body!);
+    expect(body, contains('name="payload_json"'));
+    expect(
+      body,
+      contains(
+        '"message":{"content":"","attachments":'
+        '[{"id":0,"filename":"capture.png"}]}',
+      ),
+    );
+    expect(body, contains('name="files[0]"; filename="capture.png"'));
+    expect(body, contains('Content-Type: image/png'));
+    expect(body, contains('native capture bytes'));
+  });
 }
 
 final _workspace = ChatWorkspace(
@@ -143,6 +195,7 @@ final class _RecordingTransport implements DiscordHttpTransport {
   final DiscordHttpResponse response;
   String? method;
   Uri? uri;
+  Map<String, String>? headers;
   List<int>? body;
 
   @override
@@ -154,6 +207,7 @@ final class _RecordingTransport implements DiscordHttpTransport {
   }) async {
     this.method = method;
     this.uri = uri;
+    this.headers = headers;
     this.body = body;
     return response;
   }

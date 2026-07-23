@@ -152,17 +152,28 @@ final class DiscordApiClient {
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    List<PendingAttachment> attachments = const [],
     List<String> appliedTagIds = const [],
-  }) => _requestObject(
-    'POST',
-    '/channels/$channelId/threads',
-    body: {
+  }) {
+    final payload = <String, Object?>{
       'name': name,
       'auto_archive_duration': autoArchiveDurationMinutes,
-      'message': {'content': content},
+      'message': {
+        'content': content,
+        if (attachments.isNotEmpty)
+          'attachments': [
+            for (var index = 0; index < attachments.length; index++)
+              {'id': index, 'filename': attachments[index].name},
+          ],
+      },
       if (appliedTagIds.isNotEmpty) 'applied_tags': appliedTagIds,
-    },
-  );
+    };
+    final path = '/channels/$channelId/threads';
+    if (attachments.isEmpty) {
+      return _requestObject('POST', path, body: payload);
+    }
+    return _createMultipartObject(path, payload, attachments);
+  }
 
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
@@ -247,7 +258,11 @@ final class DiscordApiClient {
         body: payload,
       );
     }
-    return _createMultipartMessage(channelId, payload, attachments);
+    return _createMultipartObject(
+      '/channels/$channelId/messages',
+      payload,
+      attachments,
+    );
   }
 
   Future<Map<String, Object?>> editMessage({
@@ -318,15 +333,15 @@ final class DiscordApiClient {
         .toList(growable: false);
   }
 
-  Future<Map<String, Object?>> _createMultipartMessage(
-    String channelId,
+  Future<Map<String, Object?>> _createMultipartObject(
+    String path,
     Map<String, Object?> payload,
     List<PendingAttachment> attachments,
   ) async {
     final multipart = await DiscordMultipartBody.build(payload, attachments);
     final response = await _request(
       'POST',
-      '/channels/$channelId/messages',
+      path,
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
     );

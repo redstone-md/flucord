@@ -13,6 +13,7 @@ abstract interface class ForumPostRepository {
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    List<PendingAttachment> attachments = const [],
     List<String> appliedTagIds = const [],
   });
 }

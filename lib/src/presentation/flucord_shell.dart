@@ -246,7 +246,13 @@ class FlucordShell extends StatelessWidget {
                                   ),
                                 ),
                                 onCreateForumPost:
-                                    (name, content, duration, tagIds) async {
+                                    (
+                                      name,
+                                      content,
+                                      attachments,
+                                      duration,
+                                      tagIds,
+                                    ) async {
                                       final thread = await chatController
                                           .createForumPost(
                                             channelId: channel.id,
@@ -254,6 +260,7 @@ class FlucordShell extends StatelessWidget {
                                             content: content,
                                             autoArchiveDurationMinutes:
                                                 duration,
+                                            attachments: attachments,
                                             appliedTagIds: tagIds,
                                           );
                                       if (thread == null) return false;

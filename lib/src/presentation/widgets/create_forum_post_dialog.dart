@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../pending_attachment_picker.dart';
+import 'pending_attachment_strip.dart';
 
 typedef CreateForumPostCallback =
     Future<bool> Function(
       String name,
       String content,
+      List<PendingAttachment> attachments,
       int autoArchiveDurationMinutes,
       List<String> appliedTagIds,
     );
@@ -15,11 +18,13 @@ class CreateForumPostDialog extends StatefulWidget {
   const CreateForumPostDialog({
     required this.channel,
     required this.onCreate,
+    this.attachmentPicker = const NativePendingAttachmentPicker(),
     super.key,
   });
 
   final ConversationChannel channel;
   final CreateForumPostCallback onCreate;
+  final PendingAttachmentPicker attachmentPicker;
 
   static Future<bool> show(
     BuildContext context, {
@@ -41,6 +46,7 @@ class CreateForumPostDialog extends StatefulWidget {
 class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
   final Set<String> _selectedTagIds = {};
   late int _autoArchiveDurationMinutes;
   bool _isCreating = false;
@@ -68,8 +74,8 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
       setState(() => _error = 'Enter a post title.');
       return;
     }
-    if (content.isEmpty) {
-      setState(() => _error = 'Write the first message.');
+    if (content.isEmpty && _attachments.isEmpty) {
+      setState(() => _error = 'Write a message or attach a file.');
       return;
     }
     setState(() {
@@ -79,6 +85,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
     final created = await widget.onCreate(
       name,
       content,
+      _attachments.items,
       _autoArchiveDurationMinutes,
       _selectedTagIds.toList(growable: false),
     );
@@ -91,6 +98,25 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
       _isCreating = false;
       _error = 'Could not create the post.';
     });
+  }
+
+  Future<void> _pickAttachments() async {
+    try {
+      final picked = await widget.attachmentPicker.pick();
+      if (!mounted || picked.isEmpty) return;
+      final reachedLimit = _attachments.merge(picked);
+      setState(() {});
+      if (reachedLimit) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You can attach up to 10 files.')),
+        );
+      }
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The file picker could not be opened.')),
+      );
+    }
   }
 
   void _toggleTag(String tagId, bool selected) {
@@ -154,6 +180,31 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
                 alignLabelWithHint: true,
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('forum-post-add-attachments'),
+                  onPressed: _isCreating ? null : _pickAttachments,
+                  icon: const Icon(Icons.attach_file, size: 16),
+                  label: const Text('Add files'),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${_attachments.items.length}/${PendingAttachment.maxCount}',
+                  style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                ),
+              ],
+            ),
+            if (_attachments.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              PendingAttachmentStrip(
+                attachments: _attachments.items,
+                enabled: !_isCreating,
+                onRemove: (index) =>
+                    setState(() => _attachments.removeAt(index)),
+              ),
+            ],
             if (widget.channel.availableTags.isNotEmpty) ...[
               const SizedBox(height: 8),
               _FieldLabel(label: 'TAGS', detail: '${_selectedTagIds.length}/5'),

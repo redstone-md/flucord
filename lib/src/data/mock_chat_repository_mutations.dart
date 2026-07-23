@@ -28,6 +28,7 @@ extension _MockChatRepositoryMutations on MockChatRepository {
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    required List<PendingAttachment> attachments,
     required List<String> appliedTagIds,
   }) async {
     await _wait();
@@ -51,6 +52,15 @@ extension _MockChatRepositoryMutations on MockChatRepository {
       authorId: _workspace.currentMemberId,
       body: content.trim(),
       sentAt: DateTime.now(),
+      attachments: [
+        for (var index = 0; index < attachments.length; index++)
+          MessageAttachment(
+            id: '$id-attachment-$index',
+            fileName: attachments[index].name,
+            url: Uri.file(attachments[index].path).toString(),
+            size: attachments[index].size,
+          ),
+      ],
     );
     _workspace = _workspace.upsertChannel(thread).upsertMessage(message);
     _events.add(ChannelUpsertedEvent(thread));

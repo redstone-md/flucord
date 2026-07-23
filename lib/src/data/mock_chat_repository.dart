@@ -118,12 +118,14 @@ final class MockChatRepository
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    List<PendingAttachment> attachments = const [],
     List<String> appliedTagIds = const [],
   }) => _createForumPost(
     channelId: channelId,
     name: name,
     content: content,
     autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    attachments: attachments,
     appliedTagIds: appliedTagIds,
   );
 

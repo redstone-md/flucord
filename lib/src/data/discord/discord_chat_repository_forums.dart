@@ -6,6 +6,7 @@ extension _DiscordChatRepositoryForums on DiscordChatRepository {
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    required List<PendingAttachment> attachments,
     required List<String> appliedTagIds,
   }) async {
     final workspace = await _cache.readWorkspace();
@@ -20,6 +21,7 @@ extension _DiscordChatRepositoryForums on DiscordChatRepository {
       name: name,
       content: content,
       autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+      attachments: attachments,
       appliedTagIds: appliedTagIds,
     );
     final thread = _mapThread(payload, parent.spaceId);

@@ -6,6 +6,7 @@ extension ChatControllerForums on ChatController {
     required String name,
     required String content,
     required int autoArchiveDurationMinutes,
+    List<PendingAttachment> attachments = const [],
     List<String> appliedTagIds = const [],
   }) async {
     final workspace = _workspace;
@@ -22,8 +23,11 @@ extension ChatControllerForums on ChatController {
             parent.kind != ChannelKind.media) ||
         normalizedName.isEmpty ||
         normalizedName.length > 100 ||
-        normalizedContent.isEmpty ||
+        (normalizedContent.isEmpty && attachments.isEmpty) ||
         normalizedContent.length > 2000 ||
+        attachments.length > PendingAttachment.maxCount ||
+        attachments.map((item) => item.path).toSet().length !=
+            attachments.length ||
         appliedTagIds.length > 5 ||
         appliedTagIds.toSet().length != appliedTagIds.length ||
         !const {60, 1440, 4320, 10080}.contains(autoArchiveDurationMinutes) ||
@@ -36,6 +40,7 @@ extension ChatControllerForums on ChatController {
         name: normalizedName,
         content: normalizedContent,
         autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+        attachments: List.unmodifiable(attachments),
         appliedTagIds: List.unmodifiable(appliedTagIds),
       );
       _workspace = workspace!

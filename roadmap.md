@@ -142,6 +142,10 @@ browser runtime or dependency on Discord's private user API.
     in a responsive native feed; filter by tags; create a text starter post
     through the documented forum-thread endpoint; and navigate directly into
     the existing native thread timeline.
+25. Completed: create forum and media posts with up to ten native file-picker
+    attachments, reuse one encapsulated pending-attachment selection surface
+    across both composers, support attachment-only starter messages, and send
+    the documented nested message metadata and files as multipart form data.
 
 ## Protocol safety
 
