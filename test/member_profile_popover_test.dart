@@ -93,6 +93,51 @@ void main() {
     );
     expect(button.onPressed, isNull);
   });
+
+  testWidgets('closes an open profile after the workspace changes', (
+    tester,
+  ) async {
+    var spaceId = 'guild-1';
+    late StateSetter updateHost;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            updateHost = setState;
+            return Scaffold(
+              body: Row(
+                children: [
+                  const Expanded(child: SizedBox()),
+                  MemberSidebar(
+                    members: const [_jack, _mira, _roman],
+                    spaceId: spaceId,
+                    currentMemberId: _jack.id,
+                    onMessage: (_) {},
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('member-row-222222222222222222')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('member-profile-popover')),
+      findsOneWidget,
+    );
+
+    updateHost(() => spaceId = 'guild-2');
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('member-profile-popover')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _host({ValueChanged<Member>? onMessage}) => MaterialApp(

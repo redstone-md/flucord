@@ -38,7 +38,11 @@ class _MemberSidebarState extends State<MemberSidebar> {
     if (oldWidget.spaceId != widget.spaceId ||
         (selectedId != null &&
             !widget.members.any((member) => member.id == selectedId))) {
-      _overlayController.hide();
+      if (_overlayController.isShowing) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _overlayController.hide();
+        });
+      }
       _selectedMember = null;
       _selectedLink = null;
     }
