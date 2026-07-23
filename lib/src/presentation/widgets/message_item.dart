@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'create_thread_dialog.dart';
 import 'emoji_picker.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
@@ -25,6 +26,7 @@ class MessageItem extends StatefulWidget {
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onCreateThread,
     required this.onTogglePin,
     required this.linkLauncher,
     required this.onSelectChannel,
@@ -41,6 +43,7 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
@@ -377,6 +380,13 @@ class _MessageItemState extends State<MessageItem> {
           onPressed: () => widget.onReply(widget.message),
         ),
         _reactionPicker(),
+        if (_canCreateThread)
+          _ActionButton(
+            buttonKey: ValueKey('create-thread-${widget.message.id}'),
+            icon: Icons.forum_outlined,
+            tooltip: 'Create thread',
+            onPressed: _showCreateThreadDialog,
+          ),
         if (widget.isCurrentUser)
           _ActionButton(
             icon: Icons.edit_outlined,
@@ -421,6 +431,22 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
+  bool get _canCreateThread {
+    final channel = widget.workspace.channelById(widget.message.channelId);
+    return !channel.isThread &&
+        !widget.workspace.spaceById(channel.spaceId).isDirectMessages;
+  }
+
+  void _showCreateThreadDialog() {
+    unawaited(
+      CreateThreadDialog.show(
+        context,
+        onCreate: (name, duration) =>
+            widget.onCreateThread(widget.message, name, duration),
+      ),
+    );
+  }
+
   static String _formatTime(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:'
       '${value.minute.toString().padLeft(2, '0')}';
@@ -431,9 +457,11 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.buttonKey,
     this.destructive = false,
   });
 
+  final Key? buttonKey;
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
@@ -441,6 +469,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
+    key: buttonKey,
     onPressed: onPressed,
     icon: Icon(
       icon,

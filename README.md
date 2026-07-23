@@ -5,7 +5,7 @@ Linux. The Windows release is verified locally; macOS and Linux runners are
 configured but still require release verification on their native hosts. It
 provides server and ordered channel navigation with collapsible categories,
 searchable message history, replies, attachments, reactions, message editing
-and deletion, active threads, member roles and presence, typing indicators,
+and deletion, active-thread discovery and creation, member roles and presence,
 local unread markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
@@ -42,6 +42,13 @@ of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the
 same cached archive remains browsable in 100-message slices while offline.
 
+The message action bar can start a documented public thread from its source
+message. A compact native dialog validates the 1-100 character name, exposes
+Discord's 1-hour, 24-hour, 3-day, and 1-week auto-archive durations, and keeps
+loading or permission failures in place. The returned channel is persisted,
+shown under Active threads, and selected immediately through the existing
+history boundary.
+
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
 Documented bot Direct Messages can be opened by a recipient's numeric Discord
@@ -74,8 +81,9 @@ must be available at runtime.
 2. Enable the Message Content, Server Members, and Presence intents for the
    bot in the Developer Portal.
 3. Install the bot with View Channels, Read Message History, Send Messages,
-   Attach Files, Add Reactions, and Pin Messages permissions. Manage Messages
-   is required only when deleting messages written by other members.
+   Send Messages in Threads, Create Public Threads, Attach Files, Add Reactions,
+   and Pin Messages permissions. Manage Messages is required only when deleting
+   messages written by other members.
 4. Open Connections from the link icon in the Flucord server rail.
 5. Enter the bot token. When remembering it, Flucord stores it through Windows
    Credential Manager rather than SQLite or application logs.

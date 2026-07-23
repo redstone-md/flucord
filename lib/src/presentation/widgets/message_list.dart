@@ -20,6 +20,7 @@ class MessageList extends StatefulWidget {
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onCreateThread,
     required this.onTogglePin,
     required this.canLoadOlder,
     required this.isLoadingOlder,
@@ -39,6 +40,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final bool canLoadOlder;
   final bool isLoadingOlder;
@@ -365,6 +367,7 @@ class _MessageListState extends State<MessageList> {
                         onDelete: widget.onDelete,
                         onToggleReaction: widget.onToggleReaction,
                         onAddReaction: widget.onAddReaction,
+                        onCreateThread: widget.onCreateThread,
                         onTogglePin: widget.onTogglePin,
                         linkLauncher: widget.externalLinkLauncher,
                         onSelectChannel: widget.onSelectChannel,

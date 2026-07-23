@@ -128,6 +128,11 @@ browser runtime or dependency on Discord's private user API.
     for Unicode and documented `name:id` custom reactions. The anchored overlay
     survives pointer transfer from the message, and known custom reactions
     render as stable native glyphs instead of raw identifiers.
+22. Completed: start a documented public thread from an existing message,
+    persist the returned channel, project it into Active threads, and navigate
+    directly into the new native conversation from a compact creation dialog.
+    The dialog validates Discord's name limit, exposes all documented
+    auto-archive durations, and retains loading and failure states in place.
 
 ## Protocol safety
 

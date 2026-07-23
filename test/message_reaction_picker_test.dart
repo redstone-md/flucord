@@ -36,6 +36,7 @@ void main() {
                 onAddReaction: (_, emoji) async {
                   selectedReaction = emoji;
                 },
+                onCreateThread: (_, _, _) async => true,
                 onTogglePin: (_) async {},
                 linkLauncher: const _TestLinkLauncher(),
                 onSelectChannel: (_) {},

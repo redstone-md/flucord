@@ -145,6 +145,7 @@ Widget _host(
           onDelete: (_) async {},
           onToggleReaction: (_, _) async {},
           onAddReaction: (_, _) async {},
+          onCreateThread: (_, _, _) async => true,
           onTogglePin: (_) async {},
           canLoadOlder: true,
           isLoadingOlder: isLoadingOlder,

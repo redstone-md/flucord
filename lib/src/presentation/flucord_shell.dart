@@ -203,6 +203,24 @@ class FlucordShell extends StatelessWidget {
                                 onDelete: chatController.deleteMessage,
                                 onToggleReaction: chatController.toggleReaction,
                                 onAddReaction: chatController.addReaction,
+                                onCreateThread:
+                                    (message, name, duration) async {
+                                      final thread = await chatController
+                                          .createThreadFromMessage(
+                                            message,
+                                            name: name,
+                                            autoArchiveDurationMinutes:
+                                                duration,
+                                          );
+                                      if (thread == null) return false;
+                                      workspaceController.selectChannel(
+                                        thread.id,
+                                      );
+                                      unawaited(
+                                        chatController.openChannel(thread.id),
+                                      );
+                                      return true;
+                                    },
                                 onTogglePin: chatController.togglePin,
                                 onTyping: () =>
                                     chatController.startTyping(channel.id),
@@ -286,6 +304,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onDelete,
     required this.onToggleReaction,
     required this.onAddReaction,
+    required this.onCreateThread,
     required this.onTogglePin,
     required this.onTyping,
     required this.voiceController,
@@ -321,6 +340,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final VoidCallback onTyping;
   final VoiceController voiceController;
@@ -364,6 +384,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onDelete: widget.onDelete,
         onToggleReaction: widget.onToggleReaction,
         onAddReaction: widget.onAddReaction,
+        onCreateThread: widget.onCreateThread,
         onTogglePin: widget.onTogglePin,
         canLoadOlder: widget.canLoadOlder,
         isLoadingOlder: widget.isLoadingOlder,
