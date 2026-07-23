@@ -35,6 +35,7 @@ final class DiscordMapper {
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
+    final categories = <ChannelCategory>[];
     final roles = <CommunityRole>[];
     final members = <String, Member>{};
     if (includeDirectMessagesSpace || directChannels.isNotEmpty) {
@@ -59,6 +60,11 @@ final class DiscordMapper {
       if (mappedChannels.isEmpty) continue;
       spaces.add(_space(guild));
       channels.addAll(mappedChannels);
+      categories.addAll(
+        rawChannels
+            .map((channel) => category(channel, guildId))
+            .whereType<ChannelCategory>(),
+      );
       roles.addAll(
         (rolesByGuild[guildId] ?? const []).map(
           (payload) => role(payload, guildId),
@@ -87,6 +93,7 @@ final class DiscordMapper {
       spaces: spaces,
       channels: channels,
       roles: roles,
+      categories: categories,
       members: members.values.toList(),
       messages: const [],
       currentMemberId: currentMember.id,
@@ -310,6 +317,16 @@ final class DiscordMapper {
     );
   }
 
+  ChannelCategory? category(Map<String, Object?> payload, String guildId) {
+    if (payload['type'] != 4) return null;
+    return ChannelCategory(
+      id: payload['id']! as String,
+      spaceId: guildId,
+      name: payload['name'] as String? ?? 'Unnamed category',
+      position: payload['position'] as int? ?? 0,
+    );
+  }
+
   static Member _mergeMembers(Member? previous, Member incoming) {
     if (previous == null) return incoming;
     return incoming.copyWith(
@@ -354,6 +371,7 @@ final class DiscordMapper {
           payload['topic'] as String? ??
           (kind == ChannelKind.voice ? 'Discord voice channel' : ''),
       kind: kind,
+      position: payload['position'] as int? ?? 0,
       parentId: payload['parent_id'] as String?,
       isThread: type == 10 || type == 11 || type == 12,
       unread: false,

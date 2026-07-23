@@ -52,12 +52,14 @@ final class SqliteChatCache implements ChatCache {
     final spaces = await _database.query('spaces', orderBy: 'sort_index');
     if (metadata.isEmpty || spaces.isEmpty) return null;
     final channels = await _database.query('channels', orderBy: 'sort_index');
+    final categories = await _database.query('categories', orderBy: 'position');
     final roles = await _database.query('roles', orderBy: 'position DESC');
     final members = await _database.query('members');
     final messages = await _database.query('messages', orderBy: 'sent_at');
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),
       channels: channels.map(_channelFromRow).toList(),
+      categories: categories.map(_categoryFromRow).toList(),
       roles: roles.map(_roleFromRow).toList(),
       members: members.map(_memberFromRow).toList(),
       messages: messages.map(_messageFromRow).toList(),
@@ -74,6 +76,7 @@ final class SqliteChatCache implements ChatCache {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       await transaction.delete('spaces');
       await transaction.delete('channels');
+      await transaction.delete('categories');
       await transaction.delete('roles');
       final batch = transaction.batch();
       for (var index = 0; index < workspace.spaces.length; index++) {
@@ -84,6 +87,9 @@ final class SqliteChatCache implements ChatCache {
           'channels',
           _channelToRow(workspace.channels[index], index),
         );
+      }
+      for (final category in workspace.categories) {
+        batch.insert('categories', _categoryToRow(category));
       }
       for (final role in workspace.roles) {
         batch.insert('roles', _roleToRow(role));
@@ -228,6 +234,13 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
+  Future<void> writeCategory(ChannelCategory category) => _database.insert(
+    'categories',
+    _categoryToRow(category),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+
+  @override
   Future<void> deleteMessage(String messageId) =>
       _database.delete('messages', where: 'id = ?', whereArgs: [messageId]);
 
@@ -259,6 +272,10 @@ final class SqliteChatCache implements ChatCache {
       );
     });
   }
+
+  @override
+  Future<void> deleteCategory(String categoryId) =>
+      _database.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
 
   Future<List<Member>> _readMembers(Set<String> ids) async {
     if (ids.isEmpty) return [];
@@ -299,6 +316,21 @@ final class SqliteChatCache implements ChatCache {
     'color_value': role.colorValue,
   };
 
+  static Map<String, Object?> _categoryToRow(ChannelCategory category) => {
+    'id': category.id,
+    'space_id': category.spaceId,
+    'name': category.name,
+    'position': category.position,
+  };
+
+  static ChannelCategory _categoryFromRow(Map<String, Object?> row) =>
+      ChannelCategory(
+        id: row['id']! as String,
+        spaceId: row['space_id']! as String,
+        name: row['name']! as String,
+        position: row['position']! as int,
+      );
+
   static CommunityRole _roleFromRow(Map<String, Object?> row) => CommunityRole(
     id: row['id']! as String,
     spaceId: row['space_id']! as String,
@@ -316,6 +348,7 @@ final class SqliteChatCache implements ChatCache {
     'name': channel.name,
     'topic': channel.topic,
     'kind': channel.kind.index,
+    'position': channel.position,
     'unread': channel.unread ? 1 : 0,
     'mention_count': channel.mentionCount,
     'parent_id': channel.parentId,
@@ -331,6 +364,7 @@ final class SqliteChatCache implements ChatCache {
         name: row['name']! as String,
         topic: row['topic']! as String,
         kind: ChannelKind.values[row['kind']! as int],
+        position: row['position']! as int,
         unread: row['unread'] == 1,
         mentionCount: row['mention_count']! as int,
         parentId: row['parent_id'] as String?,

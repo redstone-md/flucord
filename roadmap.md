@@ -94,6 +94,9 @@ browser runtime or dependency on Discord's private user API.
     registration, sandbox capabilities, and a cross-platform native video
     bundle are configured without changing the verified Windows path. Release
     builds still require verification on native macOS and Linux hosts.
+13. Completed: documented Discord category channels and channel positions flow
+    through Gateway updates, immutable workspace state, SQLite, and a
+    collapsible Discord-like channel sidebar.
 
 ## Protocol safety
 

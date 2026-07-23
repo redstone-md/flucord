@@ -22,11 +22,15 @@ abstract interface class ChatCache {
 
   Future<void> writeSpace(CommunitySpace space);
 
+  Future<void> writeCategory(ChannelCategory category);
+
   Future<void> deleteMessage(String messageId);
 
   Future<void> writeChannel(ConversationChannel channel);
 
   Future<void> deleteChannel(String channelId);
+
+  Future<void> deleteCategory(String categoryId);
 
   Future<void> close();
 }

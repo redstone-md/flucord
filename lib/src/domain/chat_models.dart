@@ -1,6 +1,7 @@
 import 'message_embed.dart';
 
 part 'message_models.dart';
+part 'channel_category.dart';
 
 enum ChannelKind { text, voice }
 
@@ -61,6 +62,7 @@ final class ConversationChannel {
     required this.name,
     required this.topic,
     required this.kind,
+    this.position = 0,
     this.parentId,
     this.isThread = false,
     this.recipientId,
@@ -73,6 +75,7 @@ final class ConversationChannel {
   final String name;
   final String topic;
   final ChannelKind kind;
+  final int position;
   final String? parentId;
   final bool isThread;
   final String? recipientId;
@@ -88,6 +91,7 @@ final class ConversationChannel {
         name: name,
         topic: topic,
         kind: kind,
+        position: position,
         parentId: parentId,
         isThread: isThread,
         recipientId: recipientId,
@@ -175,17 +179,20 @@ final class ChatWorkspace {
     required List<ChatMessage> messages,
     required this.currentMemberId,
     List<CommunityRole> roles = const [],
+    List<ChannelCategory> categories = const [],
   }) : spaces = List.unmodifiable(spaces),
        channels = List.unmodifiable(channels),
        members = List.unmodifiable(members),
        messages = List.unmodifiable(messages),
-       roles = List.unmodifiable(roles);
+       roles = List.unmodifiable(roles),
+       categories = List.unmodifiable(categories);
 
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
   final List<Member> members;
   final List<ChatMessage> messages;
   final List<CommunityRole> roles;
+  final List<ChannelCategory> categories;
   final String currentMemberId;
 
   List<ConversationChannel> channelsFor(String spaceId) => channels
@@ -194,6 +201,10 @@ final class ChatWorkspace {
 
   List<ChatMessage> messagesFor(String channelId) => messages
       .where((message) => message.channelId == channelId)
+      .toList(growable: false);
+
+  List<ChannelCategory> categoriesFor(String spaceId) => categories
+      .where((category) => category.spaceId == spaceId)
       .toList(growable: false);
 
   CommunitySpace spaceById(String id) =>
@@ -232,6 +243,7 @@ final class ChatWorkspace {
     List<Member>? members,
     List<ChatMessage>? messages,
     List<CommunityRole>? roles,
+    List<ChannelCategory>? categories,
     String? currentMemberId,
   }) => ChatWorkspace(
     spaces: spaces ?? this.spaces,
@@ -239,6 +251,7 @@ final class ChatWorkspace {
     members: members ?? this.members,
     messages: messages ?? this.messages,
     roles: roles ?? this.roles,
+    categories: categories ?? this.categories,
     currentMemberId: currentMemberId ?? this.currentMemberId,
   );
 
@@ -338,6 +351,19 @@ final class ChatWorkspace {
 
   ChatWorkspace upsertSpace(CommunitySpace space) => copyWith(
     spaces: [...spaces.where((existing) => existing.id != space.id), space],
+  );
+
+  ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(
+    categories: [
+      ...categories.where((existing) => existing.id != category.id),
+      category,
+    ],
+  );
+
+  ChatWorkspace removeCategory(String categoryId) => copyWith(
+    categories: categories
+        .where((category) => category.id != categoryId)
+        .toList(),
   );
 
   ChatWorkspace updatePresence(String memberId, Presence presence) => copyWith(

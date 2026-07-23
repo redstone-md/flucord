@@ -41,6 +41,8 @@ void main() {
                   sessionMode: SessionMode.discordBot,
                   connectionStatus: RepositoryConnectionStatus.connected,
                   workspace: _workspace,
+                  collapsedCategoryIds: const {},
+                  onToggleCategory: (_) {},
                   onNewDirectMessage: () => newMessages++,
                 ),
                 const Expanded(child: SizedBox()),

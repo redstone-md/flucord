@@ -15,6 +15,8 @@ class ChannelSidebar extends StatelessWidget {
     required this.sessionMode,
     required this.connectionStatus,
     required this.workspace,
+    required this.collapsedCategoryIds,
+    required this.onToggleCategory,
     required this.onNewDirectMessage,
     super.key,
   });
@@ -26,21 +28,18 @@ class ChannelSidebar extends StatelessWidget {
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
   final ChatWorkspace workspace;
+  final Set<String> collapsedCategoryIds;
+  final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
 
   @override
   Widget build(BuildContext context) {
     final isDirect = space.isDirectMessages;
-    final textChannels = channels
-        .where(
-          (channel) => channel.kind == ChannelKind.text && !channel.isThread,
-        )
+    final regularChannels = channels
+        .where((channel) => !channel.isThread)
         .toList(growable: false);
     final threads = channels
         .where((channel) => channel.isThread)
-        .toList(growable: false);
-    final voiceChannels = channels
-        .where((channel) => channel.kind == ChannelKind.voice)
         .toList(growable: false);
     return Container(
       width: 236,
@@ -84,39 +83,11 @@ class ChannelSidebar extends StatelessWidget {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-              children: [
-                _SectionLabel(label: isDirect ? 'Messages' : 'Text channels'),
-                for (final channel in isDirect ? channels : textChannels)
-                  _ChannelRow(
-                    channel: channel,
-                    selected: channel.id == selectedChannelId,
-                    recipient: channel.recipientId == null
-                        ? null
-                        : workspace.memberOrNull(channel.recipientId!),
-                    onPressed: () => onSelectChannel(channel.id),
-                  ),
-                if (!isDirect && threads.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  const _SectionLabel(label: 'Active threads'),
-                  for (final channel in threads)
-                    _ChannelRow(
-                      channel: channel,
-                      selected: channel.id == selectedChannelId,
-                      indented: true,
-                      onPressed: () => onSelectChannel(channel.id),
-                    ),
-                ],
-                if (!isDirect && voiceChannels.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  const _SectionLabel(label: 'Voice channels'),
-                  for (final channel in voiceChannels)
-                    _ChannelRow(
-                      channel: channel,
-                      selected: channel.id == selectedChannelId,
-                      onPressed: () => onSelectChannel(channel.id),
-                    ),
-                ],
-              ],
+              children: _navigationEntries(
+                isDirect: isDirect,
+                regularChannels: regularChannels,
+                threads: threads,
+              ),
             ),
           ),
           _TransportStatus(
@@ -127,6 +98,177 @@ class ChannelSidebar extends StatelessWidget {
       ),
     );
   }
+
+  List<Widget> _navigationEntries({
+    required bool isDirect,
+    required List<ConversationChannel> regularChannels,
+    required List<ConversationChannel> threads,
+  }) {
+    if (isDirect) {
+      return [
+        const _SectionLabel(label: 'Messages'),
+        for (final channel in regularChannels) _rowFor(channel),
+      ];
+    }
+    final categories = [...workspace.categoriesFor(space.id)]
+      ..sort((left, right) => left.position.compareTo(right.position));
+    if (categories.isEmpty) {
+      return _uncategorizedEntries(regularChannels, threads);
+    }
+    final categoryIds = categories.map((category) => category.id).toSet();
+    final uncategorized = _ordered(
+      regularChannels.where(
+        (channel) =>
+            channel.parentId == null || !categoryIds.contains(channel.parentId),
+      ),
+    );
+    return [
+      if (uncategorized.isNotEmpty) ...[
+        const _SectionLabel(label: 'Channels'),
+        for (final channel in uncategorized) _rowFor(channel),
+        const SizedBox(height: 10),
+      ],
+      for (final category in categories)
+        _CategorySection(
+          category: category,
+          collapsed: collapsedCategoryIds.contains(category.id),
+          onToggle: () => onToggleCategory(category.id),
+          children: [
+            for (final channel in _visibleCategoryChannels(
+              category,
+              regularChannels,
+            ))
+              _rowFor(channel),
+          ],
+        ),
+      if (threads.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        const _SectionLabel(label: 'Active threads'),
+        for (final channel in _ordered(threads))
+          _rowFor(channel, indented: true),
+      ],
+    ];
+  }
+
+  List<Widget> _uncategorizedEntries(
+    List<ConversationChannel> channels,
+    List<ConversationChannel> threads,
+  ) {
+    final text = _ordered(
+      channels.where((channel) => channel.kind == ChannelKind.text),
+    );
+    final voice = _ordered(
+      channels.where((channel) => channel.kind == ChannelKind.voice),
+    );
+    return [
+      if (text.isNotEmpty) ...[
+        const _SectionLabel(label: 'Text channels'),
+        for (final channel in text) _rowFor(channel),
+      ],
+      if (threads.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        const _SectionLabel(label: 'Active threads'),
+        for (final channel in _ordered(threads))
+          _rowFor(channel, indented: true),
+      ],
+      if (voice.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        const _SectionLabel(label: 'Voice channels'),
+        for (final channel in voice) _rowFor(channel),
+      ],
+    ];
+  }
+
+  List<ConversationChannel> _visibleCategoryChannels(
+    ChannelCategory category,
+    List<ConversationChannel> channels,
+  ) {
+    final collapsed = collapsedCategoryIds.contains(category.id);
+    return _ordered(
+      channels.where(
+        (channel) =>
+            channel.parentId == category.id &&
+            (!collapsed ||
+                channel.id == selectedChannelId ||
+                channel.unread ||
+                channel.mentionCount > 0),
+      ),
+    );
+  }
+
+  List<ConversationChannel> _ordered(Iterable<ConversationChannel> source) =>
+      source.toList(growable: false)..sort((left, right) {
+        final position = left.position.compareTo(right.position);
+        return position == 0 ? left.name.compareTo(right.name) : position;
+      });
+
+  _ChannelRow _rowFor(ConversationChannel channel, {bool indented = false}) =>
+      _ChannelRow(
+        channel: channel,
+        selected: channel.id == selectedChannelId,
+        recipient: channel.recipientId == null
+            ? null
+            : workspace.memberOrNull(channel.recipientId!),
+        indented: indented,
+        onPressed: () => onSelectChannel(channel.id),
+      );
+}
+
+class _CategorySection extends StatelessWidget {
+  const _CategorySection({
+    required this.category,
+    required this.collapsed,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final ChannelCategory category;
+  final bool collapsed;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: ValueKey('category-${category.id}'),
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 28,
+              child: Row(
+                children: [
+                  Icon(
+                    collapsed ? Icons.chevron_right : Icons.expand_more,
+                    size: 16,
+                    color: context.surfaces.muted,
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(
+                      category.name.toUpperCase(),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.surfaces.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        ...children,
+      ],
+    ),
+  );
 }
 
 class _TransportStatus extends StatelessWidget {

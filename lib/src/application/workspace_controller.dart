@@ -10,6 +10,7 @@ final class WorkspaceController extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   bool _showMembers = true;
   bool _showPins = false;
+  final Set<String> _collapsedCategoryIds = {};
 
   String? get selectedSpaceId => _selectedSpaceId;
   String? get selectedChannelId => _selectedChannelId;
@@ -17,8 +18,12 @@ final class WorkspaceController extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   bool get showMembers => _showMembers;
   bool get showPins => _showPins;
+  Set<String> get collapsedCategoryIds =>
+      Set.unmodifiable(_collapsedCategoryIds);
 
   void reconcile(ChatWorkspace workspace) {
+    final categoryIds = workspace.categories.map((category) => category.id);
+    _collapsedCategoryIds.retainAll(categoryIds);
     if (_selectedSpaceId == null ||
         !workspace.spaces.any((space) => space.id == _selectedSpaceId)) {
       _selectedSpaceId = workspace.spaces.first.id;
@@ -102,6 +107,13 @@ final class WorkspaceController extends ChangeNotifier {
   void togglePins() {
     _showPins = !_showPins;
     if (_showPins) _showMembers = false;
+    notifyListeners();
+  }
+
+  void toggleCategory(String categoryId) {
+    if (!_collapsedCategoryIds.add(categoryId)) {
+      _collapsedCategoryIds.remove(categoryId);
+    }
     notifyListeners();
   }
 

@@ -3,10 +3,11 @@
 Flucord is a native Flutter desktop messaging client for Windows, macOS, and
 Linux. The Windows release is verified locally; macOS and Linux runners are
 configured but still require release verification on their native hosts. It
-provides server and channel navigation, searchable message history, replies,
-attachments, reactions, message editing and deletion, active threads, member
-roles and presence, typing indicators, local unread markers, paginated pinned
-messages, Windows notifications, close-to-tray behavior, channel deep links,
+provides server and ordered channel navigation with collapsible categories,
+searchable message history, replies, attachments, reactions, message editing
+and deletion, active threads, member roles and presence, typing indicators,
+local unread markers, paginated pinned messages, Windows notifications,
+close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, and theme switching without a
 browser runtime. Discord rich embeds retain their documented structured fields
@@ -95,6 +96,10 @@ The SQLite v6 workspace cache also retains Discord role IDs, names, ordering,
 and source colors so role mentions remain resolved during offline sessions.
 SQLite v7 adds space kinds and DM recipient identity while preserving the
 existing guild, role, message, embed, and media records during migration.
+
+SQLite v8 retains documented category channels, child `parent_id` values, and
+Discord channel positions. Collapsed categories remain client-only UI state;
+selected, unread, and mentioned channels stay visible inside them.
 
 ## Native Media
 

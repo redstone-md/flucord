@@ -250,6 +250,8 @@ final class MockChatRepository implements ChatRepository {
         name: 'general',
         topic: 'Build notes, decisions, and the work in front of us.',
         kind: ChannelKind.text,
+        position: 0,
+        parentId: 'forge-project',
         unread: true,
       ),
       ConversationChannel(
@@ -258,6 +260,8 @@ final class MockChatRepository implements ChatRepository {
         name: 'design',
         topic: 'Interface details, references, and review.',
         kind: ChannelKind.text,
+        position: 1,
+        parentId: 'forge-project',
         mentionCount: 2,
       ),
       ConversationChannel(
@@ -266,6 +270,8 @@ final class MockChatRepository implements ChatRepository {
         name: 'native-client',
         topic: 'Flutter desktop architecture and platform integration.',
         kind: ChannelKind.text,
+        position: 2,
+        parentId: 'forge-project',
       ),
       ConversationChannel(
         id: 'forge-thread-release',
@@ -282,6 +288,8 @@ final class MockChatRepository implements ChatRepository {
         name: 'workbench',
         topic: 'Open voice room',
         kind: ChannelKind.voice,
+        position: 3,
+        parentId: 'forge-project',
       ),
       ConversationChannel(
         id: 'night-ops',
@@ -474,6 +482,7 @@ final class MockChatRepository implements ChatRepository {
     ];
     return ChatWorkspace(
       spaces: MockChatSeed.spaces,
+      categories: MockChatSeed.categories,
       channels: channels,
       members: members,
       messages: messages,

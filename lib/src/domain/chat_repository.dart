@@ -66,6 +66,12 @@ final class ChannelUpsertedEvent extends ChatRepositoryEvent {
   final ConversationChannel channel;
 }
 
+final class CategoryUpsertedEvent extends ChatRepositoryEvent {
+  const CategoryUpsertedEvent(this.category);
+
+  final ChannelCategory category;
+}
+
 final class SpaceUpsertedEvent extends ChatRepositoryEvent {
   const SpaceUpsertedEvent(this.space);
 
@@ -76,6 +82,12 @@ final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 
   final String channelId;
+}
+
+final class CategoryDeletedEvent extends ChatRepositoryEvent {
+  const CategoryDeletedEvent(this.categoryId);
+
+  final String categoryId;
 }
 
 final class RepositoryStatusChangedEvent extends ChatRepositoryEvent {

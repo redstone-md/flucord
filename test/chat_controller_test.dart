@@ -254,6 +254,27 @@ void main() {
         );
       },
     );
+
+    test('applies live category updates and deletes', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      const category = ChannelCategory(
+        id: 'live-category',
+        spaceId: 'forge',
+        name: 'Operations',
+        position: 2,
+      );
+
+      repository.emit(const CategoryUpsertedEvent(category));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.workspace!.categories, contains(category));
+
+      repository.emit(CategoryDeletedEvent(category.id));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.workspace!.categories, isNot(contains(category)));
+    });
   });
 
   test('workspace state remains independent from server state', () async {

@@ -410,10 +410,14 @@ final class ChatController extends ChangeNotifier {
           _workspace = _workspace?.removeMessage(event.messageId);
         case ChannelUpsertedEvent():
           _workspace = _workspace?.upsertChannel(event.channel);
+        case CategoryUpsertedEvent():
+          _workspace = _workspace?.upsertCategory(event.category);
         case SpaceUpsertedEvent():
           _workspace = _workspace?.upsertSpace(event.space);
         case ChannelDeletedEvent():
           _workspace = _workspace?.removeChannel(event.channelId);
+        case CategoryDeletedEvent():
+          _workspace = _workspace?.removeCategory(event.categoryId);
         case MemberUpsertedEvent():
           _workspace = _workspace?.upsertMember(event.member);
         case MemberRemovedEvent():

@@ -33,6 +33,8 @@ void main() {
           name: 'general',
           topic: 'Core work',
           kind: ChannelKind.text,
+          position: 2,
+          parentId: 'category-1',
         ),
         ConversationChannel(
           id: 'thread-1',
@@ -42,6 +44,14 @@ void main() {
           kind: ChannelKind.text,
           parentId: 'channel-1',
           isThread: true,
+        ),
+      ],
+      categories: const [
+        ChannelCategory(
+          id: 'category-1',
+          spaceId: 'guild-1',
+          name: 'Operations',
+          position: 1,
         ),
       ],
       roles: const [
@@ -132,6 +142,9 @@ void main() {
     expect(restored?.spaces.single.name, 'Forge');
     expect(restored?.spaces.single.iconUrl, contains('/icons/guild-1/'));
     expect(restored?.channels.first.name, 'general');
+    expect(restored?.channels.first.position, 2);
+    expect(restored?.channels.first.parentId, 'category-1');
+    expect(restored?.categories.single.name, 'Operations');
     expect(restored?.channels.last.isThread, isTrue);
     expect(restored?.channels.last.parentId, 'channel-1');
     expect(restored?.roles.single.name, 'Operator');
@@ -339,6 +352,10 @@ void main() {
     final roleTables = await database.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'roles'",
     );
+    final categoryTables = await database.rawQuery(
+      "SELECT name FROM sqlite_master "
+      "WHERE type = 'table' AND name = 'categories'",
+    );
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
     expect(
@@ -362,7 +379,9 @@ void main() {
     expect(spaceColumns.map((row) => row['name']), contains('icon_url'));
     expect(spaceColumns.map((row) => row['name']), contains('kind'));
     expect(channelColumns.map((row) => row['name']), contains('recipient_id'));
+    expect(channelColumns.map((row) => row['name']), contains('position'));
     expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
     expect(roleTables, hasLength(1));
+    expect(categoryTables, hasLength(1));
   });
 }

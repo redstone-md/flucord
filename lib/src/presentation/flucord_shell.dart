@@ -114,6 +114,9 @@ class FlucordShell extends StatelessWidget {
                           channels: channels,
                           selectedChannelId: channelId,
                           workspace: workspace,
+                          collapsedCategoryIds:
+                              workspaceController.collapsedCategoryIds,
+                          onToggleCategory: workspaceController.toggleCategory,
                           onNewDirectMessage: () => _openDirectMessage(context),
                           onSelectChannel: (id) {
                             workspaceController.selectChannel(id);

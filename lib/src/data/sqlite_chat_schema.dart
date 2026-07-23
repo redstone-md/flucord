@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 7;
+  static const version = 8;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -22,12 +22,21 @@ abstract final class SqliteChatSchema {
       )
     ''');
     await database.execute('''
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        space_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        position INTEGER NOT NULL
+      )
+    ''');
+    await database.execute('''
       CREATE TABLE channels (
         id TEXT PRIMARY KEY,
         space_id TEXT NOT NULL,
         name TEXT NOT NULL,
         topic TEXT NOT NULL,
         kind INTEGER NOT NULL,
+        position INTEGER NOT NULL,
         unread INTEGER NOT NULL,
         mention_count INTEGER NOT NULL,
         parent_id TEXT,
@@ -138,6 +147,19 @@ abstract final class SqliteChatSchema {
         'ALTER TABLE spaces ADD kind INTEGER NOT NULL DEFAULT 0',
       );
       await database.execute('ALTER TABLE channels ADD recipient_id TEXT');
+    }
+    if (oldVersion < 8) {
+      await database.execute('''
+        CREATE TABLE categories (
+          id TEXT PRIMARY KEY,
+          space_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          position INTEGER NOT NULL
+        )
+      ''');
+      await database.execute(
+        'ALTER TABLE channels ADD position INTEGER NOT NULL DEFAULT 0',
+      );
     }
   }
 }

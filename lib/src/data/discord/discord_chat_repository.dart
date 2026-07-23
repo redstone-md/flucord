@@ -6,6 +6,7 @@ import '../../domain/chat_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_api_client.dart';
+import 'discord_channel_handler.dart';
 import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
@@ -41,6 +42,10 @@ final class DiscordChatRepository
   );
   late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
     _api,
+    _cache,
+    _mapper,
+  );
+  late final DiscordChannelHandler _channelHandler = DiscordChannelHandler(
     _cache,
     _mapper,
   );
@@ -311,17 +316,13 @@ final class DiscordChatRepository
       if (conversation != null) _emitDirectConversation(conversation);
       return;
     }
-    final channel = _mapper.channel(data, guildId);
-    if (channel == null) return;
-    await _cache.writeChannel(channel);
-    if (!_events.isClosed) _events.add(ChannelUpsertedEvent(channel));
+    final update = await _channelHandler.upsert(data, guildId);
+    if (update != null && !_events.isClosed) _events.add(update);
   }
 
   Future<void> _handleChannelDelete(Map<String, Object?> data) async {
-    final channelId = data['id'] as String?;
-    if (channelId == null) return;
-    await _cache.deleteChannel(channelId);
-    if (!_events.isClosed) _events.add(ChannelDeletedEvent(channelId));
+    final update = await _channelHandler.delete(data);
+    if (update != null && !_events.isClosed) _events.add(update);
   }
 
   Future<void> _handleMemberUpsert(Map<String, Object?> data) async {

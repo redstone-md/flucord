@@ -29,4 +29,13 @@ final class MockChatSeed {
       colorValue: 0xff59636a,
     ),
   ];
+
+  static const categories = [
+    ChannelCategory(
+      id: 'forge-project',
+      spaceId: 'forge',
+      name: 'The Forge',
+      position: 0,
+    ),
+  ];
 }
