@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:flucord/main.dart';
+import 'package:flucord/src/app.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('navigates, searches, and sends a message', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(find.text('The Forge'), findsOneWidget);
+    expect(
+      find.textContaining('Ship the vertical slice first'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('channel-forge-design')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('continuous signal'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-search')),
+      'copper',
+    );
     await tester.pump();
+    expect(find.textContaining('copper only for warnings'), findsOneWidget);
+    expect(find.textContaining('continuous signal'), findsNothing);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('message-search')), '');
+    await tester.enterText(
+      find.byKey(const ValueKey('message-composer')),
+      'Native message path confirmed.',
+    );
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Native message path confirmed.'), findsOneWidget);
   });
 }
