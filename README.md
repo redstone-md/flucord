@@ -60,10 +60,12 @@ states. Mute changes use a voice-state update without rebuilding the voice
 session.
 
 Encrypted transport readiness is not yet a live audio call. Raw microphone
-frames still need Opus encoding, DAVE frame encryption, RTP packetization and
-Discord packet encryption; received packets need the inverse pipeline and
-native playback. Screen capture is currently a local preview and is not sent to
-Discord.
+frames still need Opus encoding and Discord packet encryption; received packets
+need the inverse pipeline and native playback. The native boundary already owns
+libdave encryptors/decryptors, rotates key ratchets from applied MLS rosters,
+maps remote users to speaking SSRCs, and builds/parses RTP v2 audio headers.
+Those pieces are not yet connected to a real-time UDP media loop. Screen capture
+is currently a local preview and is not sent to Discord.
 
 ## Verify
 

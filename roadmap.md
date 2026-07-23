@@ -48,8 +48,11 @@ browser runtime or dependency on Discord's private user API.
    credentials, connects to Voice Gateway v8, performs UDP discovery, negotiates
    Discord's AEAD transport, and drives an official libdave MLS session. The UI
    exposes each signaling stage without presenting transport readiness as live
-   audio. RTP packetization, Opus encode/decode, DAVE frame encryption, packet
-   encryption, remote playback, and transmitted screen sharing remain.
+   audio. Native DAVE frame cryptors, epoch ratchet rotation, remote-user SSRC
+   mapping, and an RTP v2 audio packetizer/parser are implemented behind typed
+   boundaries. Raw PCM access, Opus encode/decode, Discord outer packet AEAD,
+   the UDP send/receive loop, remote playback, and transmitted screen sharing
+   remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
