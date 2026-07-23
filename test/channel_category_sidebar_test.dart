@@ -37,6 +37,12 @@ void main() {
 
     expect(find.text('OPERATIONS'), findsOneWidget);
     expect(find.byKey(const ValueKey('channel-random')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
+
+    final mention = tester.widget<Container>(
+      find.byKey(const ValueKey('channel-mention-alerts')),
+    );
+    expect((mention.decoration! as BoxDecoration).color, FlucordColors.mention);
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
     await tester.pump();
@@ -90,6 +96,7 @@ final _workspace = ChatWorkspace(
       position: 2,
       parentId: 'category-1',
       unread: true,
+      mentionCount: 2,
     ),
     ConversationChannel(
       id: 'random',
@@ -101,7 +108,16 @@ final _workspace = ChatWorkspace(
       parentId: 'category-1',
     ),
   ],
-  members: const [],
+  members: const [
+    Member(
+      id: 'bot-1',
+      displayName: 'Flucord Bot',
+      initials: 'FB',
+      role: 'Discord bot',
+      presence: Presence.online,
+      colorValue: 0xff5865f2,
+    ),
+  ],
   messages: const [],
   currentMemberId: 'bot-1',
 );

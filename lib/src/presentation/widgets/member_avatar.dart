@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
 
 class MemberAvatar extends StatelessWidget {
@@ -9,6 +10,7 @@ class MemberAvatar extends StatelessWidget {
     this.size = 36,
     this.showPresence = true,
     this.spaceId,
+    this.presenceBorderColor,
     super.key,
   });
 
@@ -16,13 +18,14 @@ class MemberAvatar extends StatelessWidget {
   final double size;
   final bool showPresence;
   final String? spaceId;
+  final Color? presenceBorderColor;
 
   @override
   Widget build(BuildContext context) {
     final presenceColor = switch (member.presence) {
-      Presence.online => const Color(0xff4c9b72),
-      Presence.idle => const Color(0xffb87945),
-      Presence.offline => const Color(0xff777c79),
+      Presence.online => FlucordColors.success,
+      Presence.idle => FlucordColors.warning,
+      Presence.offline => FlucordColors.offline,
     };
     return SizedBox.square(
       dimension: size,
@@ -61,7 +64,9 @@ class MemberAvatar extends StatelessWidget {
                   color: presenceColor,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color:
+                        presenceBorderColor ??
+                        Theme.of(context).scaffoldBackgroundColor,
                     width: 2,
                   ),
                 ),

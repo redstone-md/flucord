@@ -158,7 +158,7 @@ class _MessageComposerState extends State<MessageComposer> {
                           icon: Icon(
                             Icons.send,
                             size: 19,
-                            color: _canSend ? FlucordColors.signal : null,
+                            color: _canSend ? FlucordColors.brand : null,
                           ),
                           tooltip: 'Send message',
                         ),

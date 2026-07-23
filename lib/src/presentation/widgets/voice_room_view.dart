@@ -184,7 +184,7 @@ class _VoiceStage extends StatelessWidget {
                 voiceRoomStatusLabel(controller),
                 style: TextStyle(
                   color: controller.isTransportReady
-                      ? FlucordColors.signal
+                      ? FlucordColors.success
                       : context.surfaces.muted,
                   fontSize: 11,
                 ),
@@ -370,7 +370,7 @@ class _VoiceToolbar extends StatelessWidget {
             style: _controlStyle(
               context,
               foreground: controller.isScreenSharing
-                  ? FlucordColors.signal
+                  ? FlucordColors.brand
                   : null,
             ),
             icon: Icon(

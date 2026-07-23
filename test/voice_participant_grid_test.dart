@@ -28,7 +28,7 @@ void main() {
       find.byKey(const ValueKey('voice-participant-member-1')),
     );
     final decoration = tile.decoration as BoxDecoration;
-    expect(decoration.border!.top.color, FlucordColors.signal);
+    expect(decoration.border!.top.color, FlucordColors.success);
     expect(decoration.border!.top.width, 2);
     expect(tester.takeException(), isNull);
   });

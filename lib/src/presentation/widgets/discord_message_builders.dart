@@ -55,7 +55,7 @@ final class _MentionBuilder extends MarkdownElementBuilder {
         ? _workspace.roleOrNull(id)?.colorValue
         : null;
     final foreground = roleColor == null
-        ? FlucordColors.signal
+        ? FlucordColors.brand
         : Color(roleColor);
     final channel = _kind == _MentionKind.channel
         ? _workspace.channelOrNull(id)
@@ -221,7 +221,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
     TextStyle? parentStyle,
   ) => DecoratedBox(
     decoration: BoxDecoration(
-      color: FlucordColors.signal.withValues(alpha: 0.14),
+      color: FlucordColors.brand.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(3),
     ),
     child: Padding(
@@ -230,7 +230,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
       child: Text(
         '/${element.textContent}',
         style: (parentStyle ?? preferredStyle)?.copyWith(
-          color: FlucordColors.signal,
+          color: FlucordColors.brand,
           fontWeight: FontWeight.w600,
         ),
       ),

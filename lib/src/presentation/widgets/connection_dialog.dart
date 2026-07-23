@@ -250,7 +250,7 @@ class _CurrentConnection extends StatelessWidget {
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: connected ? FlucordColors.signal : context.surfaces.muted,
+              color: connected ? FlucordColors.success : context.surfaces.muted,
               shape: BoxShape.circle,
             ),
           ),

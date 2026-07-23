@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -58,7 +60,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('server rail renders guild and current member identity', (
+  testWidgets('workspace chrome renders guild and account identities', (
     tester,
   ) async {
     final workspace = ChatWorkspace(
@@ -90,14 +92,30 @@ void main() {
       MaterialApp(
         theme: FlucordTheme.dark,
         home: Scaffold(
-          body: ServerRail(
-            workspace: workspace,
-            selectedSpaceId: 'guild-1',
-            onSelectSpace: (_) {},
-            onToggleTheme: () {},
-            onOpenConnections: () {},
-            sessionMode: SessionMode.discordBot,
-            isDark: true,
+          body: Row(
+            children: [
+              ServerRail(
+                workspace: workspace,
+                selectedSpaceId: 'guild-1',
+                onSelectSpace: (_) {},
+                onToggleTheme: () {},
+                onOpenConnections: () {},
+                sessionMode: SessionMode.discordBot,
+                isDark: true,
+              ),
+              ChannelSidebar(
+                space: workspace.spaces.single,
+                channels: const [],
+                selectedChannelId: null,
+                onSelectChannel: (_) {},
+                sessionMode: SessionMode.discordBot,
+                connectionStatus: RepositoryConnectionStatus.connected,
+                workspace: workspace,
+                collapsedCategoryIds: const {},
+                onToggleCategory: (_) {},
+                onNewDirectMessage: () {},
+              ),
+            ],
           ),
         ),
       ),

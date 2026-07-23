@@ -42,7 +42,7 @@ class FailedWorkspaceView extends StatelessWidget {
           children: [
             const Icon(
               Icons.warning_amber,
-              color: FlucordColors.copper,
+              color: FlucordColors.warning,
               size: 30,
             ),
             const SizedBox(height: 12),
@@ -93,7 +93,7 @@ class ChannelFailureView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off, color: FlucordColors.copper, size: 28),
+          const Icon(Icons.cloud_off, color: FlucordColors.warning, size: 28),
           const SizedBox(height: 10),
           const Text(
             'Message history unavailable',

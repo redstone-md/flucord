@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -54,7 +55,35 @@ void main() {
 
       expect(find.text('Direct Messages'), findsOneWidget);
       expect(find.text('Jack'), findsOneWidget);
+      expect(find.text('Flucord Bot'), findsOneWidget);
+      expect(find.byKey(const ValueKey('server-rail')), findsOneWidget);
+      expect(find.byKey(const ValueKey('channel-sidebar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
       expect(find.byIcon(Icons.tag), findsNothing);
+
+      final guildButton = find.byKey(const ValueKey('space-guild-1'));
+      final guildSurface = find.descendant(
+        of: guildButton,
+        matching: find.byType(AnimatedContainer),
+      );
+      var decoration = tester
+          .widget<AnimatedContainer>(guildSurface)
+          .decoration!;
+      expect(
+        (decoration as BoxDecoration).borderRadius,
+        BorderRadius.circular(22),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(guildButton));
+      await tester.pump(const Duration(milliseconds: 160));
+      decoration = tester.widget<AnimatedContainer>(guildSurface).decoration!;
+      expect(
+        (decoration as BoxDecoration).borderRadius,
+        BorderRadius.circular(14),
+      );
+      await mouse.removePointer();
+
       await tester.tap(find.byKey(const ValueKey('new-direct-message')));
       await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
       expect(newMessages, 1);

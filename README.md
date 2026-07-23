@@ -101,6 +101,12 @@ SQLite v8 retains documented category channels, child `parent_id` values, and
 Discord channel positions. Collapsed categories remain client-only UI state;
 selected, unread, and mentioned channels stay visible inside them.
 
+The desktop workspace uses a Discord-like neutral surface hierarchy for the
+guild rail, channel list, conversation, and controls. Blurple is reserved for
+interactive focus, while presence, warnings, and mentions use independent
+semantic colors. The current account and connection state remain anchored at
+the bottom of the channel list.
+
 ## Native Media
 
 Opening a voice channel initializes the native Windows WebRTC media layer. The

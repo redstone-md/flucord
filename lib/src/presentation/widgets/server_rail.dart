@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
-import 'member_avatar.dart';
 import 'remote_identity_image.dart';
 
 class ServerRail extends StatelessWidget {
@@ -28,7 +27,6 @@ class ServerRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentMember = workspace.memberById(workspace.currentMemberId);
     final directSpaces = workspace.spaces.where(
       (space) => space.isDirectMessages,
     );
@@ -37,24 +35,23 @@ class ServerRail extends StatelessWidget {
         .where((space) => !space.isDirectMessages)
         .toList(growable: false);
     return Container(
+      key: const ValueKey('server-rail'),
       width: 72,
       decoration: BoxDecoration(
-        color: context.surfaces.canvas,
+        color: context.surfaces.rail,
         border: Border(right: BorderSide(color: context.surfaces.border)),
       ),
       child: Column(
         children: [
           const SizedBox(height: 12),
-          _BrandMark(),
-          if (directSpace != null) ...[
-            const SizedBox(height: 8),
-            _DirectMessagesButton(
-              selected: directSpace.id == selectedSpaceId,
-              onPressed: () => onSelectSpace(directSpace.id),
-            ),
-          ],
+          _HomeButton(
+            selected: directSpace?.id == selectedSpaceId,
+            onPressed: directSpace == null
+                ? null
+                : () => onSelectSpace(directSpace.id),
+          ),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Divider(height: 1, indent: 18, endIndent: 18),
           ),
           Expanded(
@@ -80,7 +77,7 @@ class ServerRail extends StatelessWidget {
                   ? Icons.link
                   : Icons.link_outlined,
               color: sessionMode == SessionMode.discordBot
-                  ? FlucordColors.signal
+                  ? FlucordColors.brand
                   : null,
             ),
             tooltip: 'Connections',
@@ -90,100 +87,33 @@ class ServerRail extends StatelessWidget {
             icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode),
             tooltip: isDark ? 'Use light theme' : 'Use dark theme',
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14, top: 4),
-            child: Tooltip(
-              message: '${currentMember.displayName} - ${currentMember.role}',
-              child: MemberAvatar(
-                member: currentMember,
-                size: 38,
-                spaceId: selectedSpaceId,
-              ),
-            ),
-          ),
+          const SizedBox(height: 10),
         ],
       ),
     );
   }
 }
 
-class _DirectMessagesButton extends StatelessWidget {
-  const _DirectMessagesButton({
-    required this.selected,
-    required this.onPressed,
-  });
+class _HomeButton extends StatelessWidget {
+  const _HomeButton({required this.selected, required this.onPressed});
 
   final bool selected;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 46,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        if (selected)
-          const Positioned(
-            left: 0,
-            child: SizedBox(
-              width: 3,
-              height: 28,
-              child: ColoredBox(color: FlucordColors.signal),
-            ),
-          ),
-        Tooltip(
-          message: 'Direct Messages',
-          child: InkWell(
-            key: const ValueKey('space-direct-messages'),
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: selected
-                    ? FlucordColors.signalDark
-                    : context.surfaces.raised,
-                borderRadius: BorderRadius.circular(selected ? 8 : 22),
-                border: Border.all(color: context.surfaces.border),
-              ),
-              child: Icon(
-                Icons.chat_bubble_outline,
-                size: 20,
-                color: selected ? Colors.white : context.surfaces.muted,
-              ),
-            ),
-          ),
-        ),
-      ],
+  Widget build(BuildContext context) => _RailButton(
+    buttonKey: const ValueKey('space-direct-messages'),
+    selected: selected,
+    onPressed: onPressed,
+    tooltip: onPressed == null ? 'Flucord' : 'Direct Messages',
+    idleColor: context.surfaces.raised,
+    activeColor: FlucordColors.brand,
+    builder: (context, active) => Icon(
+      Icons.forum_rounded,
+      size: 21,
+      color: active ? Colors.white : context.surfaces.muted,
     ),
   );
-}
-
-class _BrandMark extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Flucord',
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: FlucordColors.signalDark,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          'F',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 21,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _SpaceButton extends StatelessWidget {
@@ -198,51 +128,104 @@ class _SpaceButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
+  Widget build(BuildContext context) => _RailButton(
+    buttonKey: ValueKey('space-${space.id}'),
+    selected: selected,
+    onPressed: onPressed,
+    tooltip: space.name,
+    idleColor: Color(space.colorValue).withValues(alpha: 0.62),
+    activeColor: Color(space.colorValue),
+    builder: (_, _) => RemoteIdentityImage(
+      url: space.iconUrl,
+      imageKey: ValueKey('space-icon-${space.id}'),
+      fallback: Center(
+        child: Text(
+          space.monogram,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+typedef _RailButtonBuilder = Widget Function(BuildContext context, bool active);
+
+class _RailButton extends StatefulWidget {
+  const _RailButton({
+    required this.buttonKey,
+    required this.selected,
+    required this.onPressed,
+    required this.tooltip,
+    required this.idleColor,
+    required this.activeColor,
+    required this.builder,
+  });
+
+  final Key buttonKey;
+  final bool selected;
+  final VoidCallback? onPressed;
+  final String tooltip;
+  final Color idleColor;
+  final Color activeColor;
+  final _RailButtonBuilder builder;
+
+  @override
+  State<_RailButton> createState() => _RailButtonState();
+}
+
+class _RailButtonState extends State<_RailButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final active = widget.selected || _hovered;
+    final radius = BorderRadius.circular(active ? 14 : 22);
     return SizedBox(
       height: 46,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (selected)
+          if (widget.selected)
             Positioned(
               left: 0,
-              child: Container(
+              child: SizedBox(
                 width: 3,
                 height: 28,
-                color: FlucordColors.signal,
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
             ),
           Tooltip(
-            message: space.name,
+            message: widget.tooltip,
             preferBelow: false,
-            child: InkWell(
-              key: ValueKey('space-${space.id}'),
-              onTap: onPressed,
-              borderRadius: BorderRadius.circular(8),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Color(space.colorValue)
-                      : Color(space.colorValue).withValues(alpha: 0.62),
-                  borderRadius: BorderRadius.circular(selected ? 8 : 22),
-                ),
+            child: MouseRegion(
+              onEnter: (_) {
+                if (widget.onPressed != null) setState(() => _hovered = true);
+              },
+              onExit: (_) => setState(() => _hovered = false),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: radius,
                 clipBehavior: Clip.antiAlias,
-                child: RemoteIdentityImage(
-                  url: space.iconUrl,
-                  imageKey: ValueKey('space-icon-${space.id}'),
-                  fallback: Center(
-                    child: Text(
-                      space.monogram,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                child: InkWell(
+                  key: widget.buttonKey,
+                  onTap: widget.onPressed,
+                  borderRadius: radius,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: active ? widget.activeColor : widget.idleColor,
+                      borderRadius: radius,
                     ),
+                    clipBehavior: Clip.antiAlias,
+                    child: widget.builder(context, active),
                   ),
                 ),
               ),

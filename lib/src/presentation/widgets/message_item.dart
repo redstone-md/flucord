@@ -114,11 +114,6 @@ class _MessageItemState extends State<MessageItem> {
               color: _hovered
                   ? context.surfaces.raised.withValues(alpha: 0.45)
                   : Colors.transparent,
-              border: widget.isCurrentUser
-                  ? const Border(
-                      left: BorderSide(color: FlucordColors.signal, width: 2),
-                    )
-                  : null,
             ),
             padding: EdgeInsets.fromLTRB(20, widget.grouped ? 3 : 9, 20, 5),
             child: Row(
@@ -285,7 +280,7 @@ class _MessageItemState extends State<MessageItem> {
   Widget _reactionChip(BuildContext context, MessageReaction reaction) =>
       Material(
         color: reaction.reactedByCurrentUser
-            ? FlucordColors.signal.withValues(alpha: 0.16)
+            ? FlucordColors.brand.withValues(alpha: 0.16)
             : context.surfaces.inset,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
@@ -297,7 +292,7 @@ class _MessageItemState extends State<MessageItem> {
             decoration: BoxDecoration(
               border: Border.all(
                 color: reaction.reactedByCurrentUser
-                    ? FlucordColors.signal.withValues(alpha: 0.65)
+                    ? FlucordColors.brand.withValues(alpha: 0.65)
                     : context.surfaces.border,
               ),
               borderRadius: BorderRadius.circular(4),

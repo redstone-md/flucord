@@ -97,6 +97,10 @@ browser runtime or dependency on Discord's private user API.
 13. Completed: documented Discord category channels and channel positions flow
     through Gateway updates, immutable workspace state, SQLite, and a
     collapsible Discord-like channel sidebar.
+14. Completed: the desktop workspace uses Discord's neutral rail/sidebar/chat
+    hierarchy, blurple interaction states, semantic presence and mention
+    colors, and the familiar account panel placement without changing
+    transport behavior.
 
 ## Protocol safety
 

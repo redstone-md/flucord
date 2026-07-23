@@ -97,7 +97,7 @@ class _ParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = participant.isSpeaking
-        ? FlucordColors.signal
+        ? FlucordColors.success
         : context.surfaces.border;
     return Semantics(
       selected: participant.isSpeaking,

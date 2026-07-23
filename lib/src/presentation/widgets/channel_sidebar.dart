@@ -42,6 +42,7 @@ class ChannelSidebar extends StatelessWidget {
         .where((channel) => channel.isThread)
         .toList(growable: false);
     return Container(
+      key: const ValueKey('channel-sidebar'),
       width: 236,
       decoration: BoxDecoration(
         color: context.surfaces.surface,
@@ -71,12 +72,13 @@ class ChannelSidebar extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  key: isDirect ? const ValueKey('new-direct-message') : null,
-                  onPressed: isDirect ? onNewDirectMessage : () {},
-                  icon: Icon(isDirect ? Icons.edit_square : Icons.more_horiz),
-                  tooltip: isDirect ? 'New message' : 'Server menu',
-                ),
+                if (isDirect)
+                  IconButton(
+                    key: const ValueKey('new-direct-message'),
+                    onPressed: onNewDirectMessage,
+                    icon: const Icon(Icons.edit_square),
+                    tooltip: 'New message',
+                  ),
               ],
             ),
           ),
@@ -90,7 +92,8 @@ class ChannelSidebar extends StatelessWidget {
               ),
             ),
           ),
-          _TransportStatus(
+          _AccountPanel(
+            member: workspace.memberById(workspace.currentMemberId),
             sessionMode: sessionMode,
             connectionStatus: connectionStatus,
           ),
@@ -271,60 +274,85 @@ class _CategorySection extends StatelessWidget {
   );
 }
 
-class _TransportStatus extends StatelessWidget {
-  const _TransportStatus({
+class _AccountPanel extends StatelessWidget {
+  const _AccountPanel({
+    required this.member,
     required this.sessionMode,
     required this.connectionStatus,
   });
 
+  final Member member;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
 
   @override
   Widget build(BuildContext context) {
-    final (label, state, color) = sessionMode == SessionMode.local
-        ? ('Local workspace', 'READY', FlucordColors.signal)
+    final (status, color) = sessionMode == SessionMode.local
+        ? ('Local workspace', FlucordColors.success)
         : switch (connectionStatus) {
             RepositoryConnectionStatus.connected => (
-              'Discord Gateway',
-              'LIVE',
-              FlucordColors.signal,
+              'Bot online',
+              FlucordColors.success,
             ),
             RepositoryConnectionStatus.connecting => (
-              'Discord Gateway',
-              'CONNECTING',
-              FlucordColors.copper,
+              'Connecting...',
+              FlucordColors.warning,
             ),
             RepositoryConnectionStatus.reconnecting => (
-              'Discord Gateway',
-              'RECONNECT',
-              FlucordColors.copper,
+              'Reconnecting...',
+              FlucordColors.warning,
             ),
             RepositoryConnectionStatus.offline => (
-              'Cached workspace',
-              'OFFLINE',
+              'Offline',
               context.surfaces.muted,
             ),
           };
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      key: const ValueKey('account-panel'),
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border(top: BorderSide(color: context.surfaces.border)),
       ),
       child: Row(
         children: [
-          Icon(Icons.sensors, size: 17, color: color),
+          MemberAvatar(
+            member: member,
+            size: 32,
+            presenceBorderColor: context.surfaces.inset,
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  status,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: color, fontSize: 10),
+                ),
+              ],
             ),
           ),
-          Text(state, style: TextStyle(fontSize: 9, color: color)),
+          Tooltip(
+            message: sessionMode == SessionMode.local
+                ? 'Local workspace'
+                : 'Discord Gateway',
+            child: Icon(Icons.sensors, size: 17, color: color),
+          ),
         ],
       ),
     );
@@ -387,13 +415,7 @@ class _ChannelRow extends StatelessWidget {
             height: 34,
             child: Row(
               children: [
-                SizedBox(
-                  width: 3,
-                  child: selected
-                      ? const ColoredBox(color: FlucordColors.signal)
-                      : null,
-                ),
-                SizedBox(width: indented ? 18 : 8),
+                SizedBox(width: indented ? 18 : 10),
                 if (recipient != null)
                   MemberAvatar(member: recipient!, size: 24)
                 else
@@ -424,12 +446,13 @@ class _ChannelRow extends StatelessWidget {
                 ),
                 if (channel.mentionCount > 0)
                   Container(
+                    key: ValueKey('channel-mention-${channel.id}'),
                     constraints: const BoxConstraints(minWidth: 18),
                     height: 18,
                     padding: const EdgeInsets.symmetric(horizontal: 5),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: FlucordColors.copper,
+                      color: FlucordColors.mention,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
