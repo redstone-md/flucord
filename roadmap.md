@@ -31,8 +31,10 @@ browser runtime or dependency on Discord's private user API.
 
 1. Completed: persisted SQLite cache, secure bot credentials, REST API v10,
    Gateway heartbeat/resume, live message create/update, and offline fallback.
-2. Attachments, replies, reactions, edits, deletes, pins, and threads.
-3. Member roles, presence updates, typing indicators, and unread state.
+2. Completed: multipart attachments, replies, reaction add/remove, inline
+   edits, confirmed deletes, active thread discovery, live Gateway updates,
+   and SQLite v2 migration.
+3. Pins, member roles, presence updates, typing indicators, and unread state.
 4. Notifications, tray integration, deep links, and auto-update.
 5. Voice rooms, device selection, screen sharing, and media diagnostics.
 6. macOS and Linux packaging after Windows behavior stabilizes.
