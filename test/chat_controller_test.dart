@@ -403,6 +403,19 @@ final class _EventRepository implements ChatRepository {
       _delegate.openDirectConversation(recipientId);
 
   @override
+  Future<ConversationChannel> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) => _delegate.createThreadFromMessage(
+    channelId: channelId,
+    messageId: messageId,
+    name: name,
+    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+  );
+
+  @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,

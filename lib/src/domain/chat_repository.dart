@@ -117,6 +117,13 @@ abstract interface class ChatRepository {
 
   Future<DirectConversation> openDirectConversation(String recipientId);
 
+  Future<ConversationChannel> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  });
+
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,

@@ -123,6 +123,17 @@ final class DiscordApiClient {
         body: {'recipient_id': recipientId},
       );
 
+  Future<Map<String, Object?>> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) => _requestObject(
+    'POST',
+    '/channels/$channelId/messages/$messageId/threads',
+    body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
+  );
+
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
 

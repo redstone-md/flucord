@@ -161,6 +161,34 @@ final class DiscordChatRepository
   }
 
   @override
+  Future<ConversationChannel> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) async {
+    final workspace = await _cache.readWorkspace();
+    final parent = workspace?.channelOrNull(channelId);
+    if (parent == null) throw StateError('Parent channel is not cached');
+    final payload = await _api.createThreadFromMessage(
+      channelId: channelId,
+      messageId: messageId,
+      name: name,
+      autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    );
+    final guildId = payload['guild_id'] as String? ?? parent.spaceId;
+    final thread = _mapper.channel(payload, guildId);
+    if (thread == null || !thread.isThread) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a Discord thread channel',
+      );
+    }
+    await _cache.writeChannel(thread);
+    return thread;
+  }
+
+  @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,

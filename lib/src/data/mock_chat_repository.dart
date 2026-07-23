@@ -4,6 +4,8 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import 'mock_chat_seed.dart';
 
+part 'mock_chat_repository_mutations.dart';
+
 final class MockChatRepository implements ChatRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = _seedWorkspace();
@@ -87,6 +89,30 @@ final class MockChatRepository implements ChatRepository {
         .upsertMember(recipient)
         .upsertChannel(channel);
     return DirectConversation(channel: channel, recipient: recipient);
+  }
+
+  @override
+  Future<ConversationChannel> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) async {
+    await _wait();
+    final parent = _workspace.channelById(channelId);
+    final thread = ConversationChannel(
+      id: messageId,
+      spaceId: parent.spaceId,
+      name: name.trim(),
+      topic: '',
+      kind: ChannelKind.text,
+      position: parent.position,
+      parentId: parent.id,
+      isThread: true,
+    );
+    _workspace = _workspace.upsertChannel(thread);
+    _events.add(ChannelUpsertedEvent(thread));
+    return thread;
   }
 
   @override
@@ -204,38 +230,6 @@ final class MockChatRepository implements ChatRepository {
   @override
   Future<void> saveChannelActivity(ConversationChannel channel) async {
     _workspace = _workspace.updateChannel(channel.id, (_) => channel);
-  }
-
-  Future<void> _setReaction(
-    String messageId,
-    String emoji, {
-    required bool add,
-  }) async {
-    await _wait();
-    final message = _workspace.messages.firstWhere(
-      (candidate) => candidate.id == messageId,
-    );
-    final reactions = [...message.reactions];
-    final index = reactions.indexWhere((reaction) => reaction.key == emoji);
-    if (index < 0 && add) {
-      reactions.add(
-        MessageReaction(emojiName: emoji, count: 1, reactedByCurrentUser: true),
-      );
-    } else if (index >= 0) {
-      final current = reactions[index];
-      final count = add ? current.count + 1 : current.count - 1;
-      if (count <= 0) {
-        reactions.removeAt(index);
-      } else {
-        reactions[index] = current.copyWith(
-          count: count,
-          reactedByCurrentUser: add,
-        );
-      }
-    }
-    final updated = message.copyWith(reactions: reactions);
-    _workspace = _workspace.upsertMessage(updated);
-    _events.add(MessageUpsertedEvent(message: updated));
   }
 
   @override
