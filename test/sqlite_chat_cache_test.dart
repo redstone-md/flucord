@@ -44,6 +44,15 @@ void main() {
           isThread: true,
         ),
       ],
+      roles: const [
+        CommunityRole(
+          id: 'role-1',
+          spaceId: 'guild-1',
+          name: 'Operator',
+          position: 5,
+          colorValue: 0xff336699,
+        ),
+      ],
       members: const [
         Member(
           id: 'user-1',
@@ -125,6 +134,8 @@ void main() {
     expect(restored?.channels.first.name, 'general');
     expect(restored?.channels.last.isThread, isTrue);
     expect(restored?.channels.last.parentId, 'channel-1');
+    expect(restored?.roles.single.name, 'Operator');
+    expect(restored?.roles.single.colorValue, 0xff336699);
     expect(restored?.currentMemberId, 'user-1');
     expect(history.messages.single.body, 'SQLite path confirmed.');
     expect(history.messages.single.attachments.single.fileName, 'proof.png');
@@ -274,6 +285,9 @@ void main() {
     );
     final memberColumns = await database.rawQuery('PRAGMA table_info(members)');
     final spaceColumns = await database.rawQuery('PRAGMA table_info(spaces)');
+    final roleTables = await database.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'roles'",
+    );
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
     expect(
@@ -296,5 +310,6 @@ void main() {
     );
     expect(spaceColumns.map((row) => row['name']), contains('icon_url'));
     expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
+    expect(roleTables, hasLength(1));
   });
 }

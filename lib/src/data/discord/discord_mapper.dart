@@ -22,6 +22,7 @@ final class DiscordMapper {
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
+    final roles = <CommunityRole>[];
     final members = <String, Member>{};
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
@@ -36,6 +37,11 @@ final class DiscordMapper {
       if (mappedChannels.isEmpty) continue;
       spaces.add(_space(guild));
       channels.addAll(mappedChannels);
+      roles.addAll(
+        (rolesByGuild[guildId] ?? const []).map(
+          (payload) => role(payload, guildId),
+        ),
+      );
       for (final payload in membersByGuild[guildId] ?? const []) {
         final mapped = guildMember(
           payload,
@@ -58,6 +64,7 @@ final class DiscordMapper {
     return ChatWorkspace(
       spaces: spaces,
       channels: channels,
+      roles: roles,
       members: members.values.toList(),
       messages: const [],
       currentMemberId: currentMember.id,
@@ -237,6 +244,17 @@ final class DiscordMapper {
     'idle' || 'dnd' => Presence.idle,
     _ => Presence.offline,
   };
+
+  CommunityRole role(Map<String, Object?> payload, String guildId) {
+    final rawColor = payload['color'] as int? ?? 0;
+    return CommunityRole(
+      id: payload['id']! as String,
+      spaceId: guildId,
+      name: payload['name'] as String? ?? 'unknown-role',
+      position: payload['position'] as int? ?? 0,
+      colorValue: rawColor == 0 ? null : 0xff000000 | rawColor,
+    );
+  }
 
   static Member _mergeMembers(Member? previous, Member incoming) {
     if (previous == null) return incoming;

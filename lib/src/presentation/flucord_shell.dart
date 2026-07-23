@@ -7,6 +7,7 @@ import '../application/connection_controller.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
+import '../domain/external_link_launcher.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
@@ -25,6 +26,7 @@ class FlucordShell extends StatelessWidget {
     required this.connectionController,
     required this.workspaceController,
     required this.voiceController,
+    required this.externalLinkLauncher,
     super.key,
   });
 
@@ -32,6 +34,7 @@ class FlucordShell extends StatelessWidget {
   final ConnectionController connectionController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
+  final ExternalLinkLauncher externalLinkLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +117,7 @@ class FlucordShell extends StatelessWidget {
                       Expanded(
                         child: _ConversationPane(
                           workspace: workspace,
+                          externalLinkLauncher: externalLinkLauncher,
                           channel: channel,
                           channels: channels,
                           query: workspaceController.query,
@@ -176,6 +180,11 @@ class FlucordShell extends StatelessWidget {
                       if (showPins)
                         PinnedMessagesPanel(
                           workspace: workspace,
+                          linkLauncher: externalLinkLauncher,
+                          onSelectChannel: (id) {
+                            workspaceController.selectChannel(id);
+                            chatController.openChannel(id);
+                          },
                           channelId: channelId,
                           history: chatController.pinnedMessages(channelId),
                           isLoading: chatController.isLoadingPins(channelId),
@@ -216,6 +225,7 @@ class FlucordShell extends StatelessWidget {
 class _ConversationPane extends StatefulWidget {
   const _ConversationPane({
     required this.workspace,
+    required this.externalLinkLauncher,
     required this.channel,
     required this.channels,
     required this.query,
@@ -247,6 +257,7 @@ class _ConversationPane extends StatefulWidget {
   });
 
   final ChatWorkspace workspace;
+  final ExternalLinkLauncher externalLinkLauncher;
   final ConversationChannel channel;
   final List<ConversationChannel> channels;
   final String query;
@@ -306,6 +317,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
       ),
       ChannelKind.text => MessageList(
         workspace: widget.workspace,
+        externalLinkLauncher: widget.externalLinkLauncher,
         channel: widget.channel,
         query: widget.query,
         onReply: (message) => setState(() => _replyTo = message),
@@ -318,6 +330,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         isLoadingOlder: widget.isLoadingOlder,
         olderLoadError: widget.olderLoadError,
         onLoadOlder: widget.onLoadOlder,
+        onSelectChannel: widget.onSelectChannel,
       ),
     };
     return Column(

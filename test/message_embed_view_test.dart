@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/message_embed.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_embed_view.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -88,8 +90,43 @@ class _EmbedTestApp extends StatelessWidget {
     home: Scaffold(
       body: Align(
         alignment: Alignment.topLeft,
-        child: MessageEmbedView(embed: embed),
+        child: MessageEmbedView(
+          embed: embed,
+          workspace: _workspace,
+          linkLauncher: const _TestLinkLauncher(),
+          onSelectChannel: (_) {},
+        ),
       ),
     ),
   );
 }
+
+final class _TestLinkLauncher implements ExternalLinkLauncher {
+  const _TestLinkLauncher();
+
+  @override
+  Future<bool> open(Uri uri) async => true;
+}
+
+final _workspace = ChatWorkspace(
+  spaces: const [
+    CommunitySpace(
+      id: 'guild-1',
+      name: 'Forge',
+      monogram: 'FO',
+      colorValue: 0xff456b5a,
+    ),
+  ],
+  channels: const [
+    ConversationChannel(
+      id: 'channel-1',
+      spaceId: 'guild-1',
+      name: 'general',
+      topic: '',
+      kind: ChannelKind.text,
+    ),
+  ],
+  members: const [],
+  messages: const [],
+  currentMemberId: 'bot-1',
+);

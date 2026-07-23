@@ -75,7 +75,12 @@ browser runtime or dependency on Discord's private user API.
    bounded 100-message pages. Older pages merge without duplicate IDs, append
    to SQLite instead of replacing newer history, fall back to cached cursor
    slices offline, and preserve the visible timeline anchor when prepended.
-9. macOS and Linux packaging after Windows behavior stabilizes.
+9. Completed: native rich message content renders Discord Markdown in the
+   timeline, pins, and embed text, with resolved user/channel/role mentions,
+   custom emoji, localized timestamps, application commands, spoilers, and
+   external HTTPS links without a browser runtime. Role identity persists in
+   SQLite v6, and channel mentions reuse the native workspace navigation path.
+10. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 

@@ -10,6 +10,13 @@ documented Discord CDN guild/member identity, and theme switching without a
 browser runtime. Discord rich embeds retain their documented structured fields
 across live updates and offline cache restores.
 
+Message bodies, pinned previews, and embed text render GitHub-flavored
+Markdown plus Discord's documented user, role, and channel mentions, custom
+emoji, localized timestamps, application commands, and tap-to-reveal spoilers.
+Channel mentions navigate inside Flucord. Web links open through the native OS
+launcher only for `http` and `https` schemes; Markdown never introduces an
+embedded browser surface.
+
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the
@@ -61,6 +68,9 @@ Inline fields adapt from three columns to one as the message pane narrows;
 failed remote media renders a stable error state instead of collapsing the
 conversation. Video metadata is retained but native inline playback remains a
 later increment.
+
+The SQLite v6 workspace cache also retains Discord role IDs, names, ordering,
+and source colors so role mentions remain resolved during offline sessions.
 
 ## Native Media
 

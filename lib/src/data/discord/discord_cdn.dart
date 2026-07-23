@@ -19,6 +19,25 @@ final class DiscordCdn {
   }) =>
       _asset(['guilds', guildId, 'users', userId, 'avatars'], hash, size: size);
 
+  static String customEmoji(
+    String emojiId, {
+    bool animated = false,
+    int size = 32,
+  }) {
+    if (!_validSizes.contains(size)) {
+      throw ArgumentError.value(
+        size,
+        'size',
+        'must be a power of two, 16-4096',
+      );
+    }
+    return Uri.https(
+      'cdn.discordapp.com',
+      '/emojis/$emojiId.${animated ? 'gif' : 'webp'}',
+      {'size': '$size', 'quality': 'lossless'},
+    ).toString();
+  }
+
   static String? defaultUserAvatar(String userId) {
     final snowflake = BigInt.tryParse(userId);
     if (snowflake == null) return null;

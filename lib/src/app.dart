@@ -6,7 +6,9 @@ import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
+import 'data/native_external_link_launcher.dart';
 import 'domain/voice_audio.dart';
+import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
@@ -22,6 +24,7 @@ class FlucordApp extends StatefulWidget {
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
     this.voicePlaybackService,
+    this.externalLinkLauncher,
     super.key,
   });
 
@@ -29,6 +32,7 @@ class FlucordApp extends StatefulWidget {
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;
   final VoiceAudioPlaybackService? voicePlaybackService;
+  final ExternalLinkLauncher? externalLinkLauncher;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -97,6 +101,8 @@ class _FlucordAppState extends State<FlucordApp> {
           connectionController: _connectionController,
           workspaceController: _workspaceController,
           voiceController: _voiceController,
+          externalLinkLauncher:
+              widget.externalLinkLauncher ?? const NativeExternalLinkLauncher(),
         ),
       ),
     );

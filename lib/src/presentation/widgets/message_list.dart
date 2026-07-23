@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_item.dart';
 
@@ -19,6 +20,8 @@ class MessageList extends StatefulWidget {
     required this.isLoadingOlder,
     required this.olderLoadError,
     required this.onLoadOlder,
+    required this.externalLinkLauncher,
+    required this.onSelectChannel,
     super.key,
   });
 
@@ -35,6 +38,8 @@ class MessageList extends StatefulWidget {
   final bool isLoadingOlder;
   final Object? olderLoadError;
   final VoidCallback onLoadOlder;
+  final ExternalLinkLauncher externalLinkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   State<MessageList> createState() => _MessageListState();
@@ -230,6 +235,8 @@ class _MessageListState extends State<MessageList> {
             onToggleReaction: widget.onToggleReaction,
             onAddReaction: widget.onAddReaction,
             onTogglePin: widget.onTogglePin,
+            linkLauncher: widget.externalLinkLauncher,
+            onSelectChannel: widget.onSelectChannel,
           ),
         );
       },

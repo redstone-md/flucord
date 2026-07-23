@@ -309,6 +309,8 @@ void main() {
     expect(workspace.spaces.single.name, 'The Forge');
     expect(workspace.spaces.single.iconUrl, contains('/icons/guild-1/'));
     expect(workspace.channels.single.name, 'general');
+    expect(workspace.roles.single.name, 'Operator');
+    expect(workspace.roles.single.colorValue, 0xff336699);
     expect(
       workspace.members.firstWhere((member) => member.id == 'bot-1').role,
       'Discord bot',

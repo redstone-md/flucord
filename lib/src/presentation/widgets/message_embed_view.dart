@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/message_embed.dart';
+import '../../domain/chat_models.dart';
+import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'message_content_view.dart';
 
 class MessageEmbedView extends StatelessWidget {
-  const MessageEmbedView({required this.embed, super.key});
+  const MessageEmbedView({
+    required this.embed,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
+    super.key,
+  });
 
   final MessageEmbed embed;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +52,12 @@ class MessageEmbedView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _EmbedTop(embed: embed),
+                  _EmbedTop(
+                    embed: embed,
+                    workspace: workspace,
+                    linkLauncher: linkLauncher,
+                    onSelectChannel: onSelectChannel,
+                  ),
                   if (embed.image case final image?) ...[
                     const SizedBox(height: 10),
                     _EmbedMediaView(media: image),
@@ -63,9 +80,17 @@ class MessageEmbedView extends StatelessWidget {
 }
 
 class _EmbedTop extends StatelessWidget {
-  const _EmbedTop({required this.embed});
+  const _EmbedTop({
+    required this.embed,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
+  });
 
   final MessageEmbed embed;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +101,12 @@ class _EmbedTop extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _EmbedTextContent(embed: embed),
+              _EmbedTextContent(
+                embed: embed,
+                workspace: workspace,
+                linkLauncher: linkLauncher,
+                onSelectChannel: onSelectChannel,
+              ),
               const SizedBox(height: 10),
               _EmbedThumbnail(media: thumbnail),
             ],
@@ -85,7 +115,14 @@ class _EmbedTop extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _EmbedTextContent(embed: embed)),
+            Expanded(
+              child: _EmbedTextContent(
+                embed: embed,
+                workspace: workspace,
+                linkLauncher: linkLauncher,
+                onSelectChannel: onSelectChannel,
+              ),
+            ),
             if (thumbnail != null) ...[
               const SizedBox(width: 12),
               _EmbedThumbnail(media: thumbnail),
@@ -98,9 +135,17 @@ class _EmbedTop extends StatelessWidget {
 }
 
 class _EmbedTextContent extends StatelessWidget {
-  const _EmbedTextContent({required this.embed});
+  const _EmbedTextContent({
+    required this.embed,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
+  });
 
   final MessageEmbed embed;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -122,13 +167,21 @@ class _EmbedTextContent extends StatelessWidget {
           const SizedBox(height: 5),
         ],
         if (embed.description case final description?)
-          SelectableText(
-            description,
-            style: const TextStyle(fontSize: 12, height: 1.35),
+          MessageContentView(
+            body: description,
+            workspace: workspace,
+            linkLauncher: linkLauncher,
+            onSelectChannel: onSelectChannel,
+            textStyle: const TextStyle(fontSize: 12, height: 1.35),
           ),
         if (embed.fields.isNotEmpty) ...[
           const SizedBox(height: 10),
-          _EmbedFields(fields: embed.fields),
+          _EmbedFields(
+            fields: embed.fields,
+            workspace: workspace,
+            linkLauncher: linkLauncher,
+            onSelectChannel: onSelectChannel,
+          ),
         ],
       ],
     );
@@ -171,9 +224,17 @@ class _EmbedSource extends StatelessWidget {
 }
 
 class _EmbedFields extends StatelessWidget {
-  const _EmbedFields({required this.fields});
+  const _EmbedFields({
+    required this.fields,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
+  });
 
   final List<MessageEmbedField> fields;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +258,12 @@ class _EmbedFields extends StatelessWidget {
                 width: fields[index].isInline
                     ? inlineWidth
                     : constraints.maxWidth,
-                child: _EmbedFieldView(field: fields[index]),
+                child: _EmbedFieldView(
+                  field: fields[index],
+                  workspace: workspace,
+                  linkLauncher: linkLauncher,
+                  onSelectChannel: onSelectChannel,
+                ),
               ),
           ],
         );
@@ -207,9 +273,17 @@ class _EmbedFields extends StatelessWidget {
 }
 
 class _EmbedFieldView extends StatelessWidget {
-  const _EmbedFieldView({required this.field});
+  const _EmbedFieldView({
+    required this.field,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
+  });
 
   final MessageEmbedField field;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -222,9 +296,12 @@ class _EmbedFieldView extends StatelessWidget {
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 3),
-        SelectableText(
-          field.value,
-          style: TextStyle(
+        MessageContentView(
+          body: field.value,
+          workspace: workspace,
+          linkLauncher: linkLauncher,
+          onSelectChannel: onSelectChannel,
+          textStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontSize: 11,
             height: 1.3,

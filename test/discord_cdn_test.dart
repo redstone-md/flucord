@@ -15,6 +15,10 @@ void main() {
       DiscordCdn.guildMemberAvatar('guild-1', 'user-1', 'member-hash'),
       'https://cdn.discordapp.com/guilds/guild-1/users/user-1/avatars/member-hash.webp?size=128',
     );
+    expect(
+      DiscordCdn.customEmoji('emoji-1', animated: true),
+      'https://cdn.discordapp.com/emojis/emoji-1.gif?size=32&quality=lossless',
+    );
   });
 
   test('uses the documented default avatar index', () {
@@ -28,6 +32,10 @@ void main() {
   test('rejects unsupported CDN dimensions', () {
     expect(
       () => DiscordCdn.guildIcon('guild-1', 'hash', size: 96),
+      throwsArgumentError,
+    );
+    expect(
+      () => DiscordCdn.customEmoji('emoji-1', size: 96),
       throwsArgumentError,
     );
   });

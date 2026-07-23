@@ -20,6 +20,22 @@ final class CommunitySpace {
   final String? iconUrl;
 }
 
+final class CommunityRole {
+  const CommunityRole({
+    required this.id,
+    required this.spaceId,
+    required this.name,
+    required this.position,
+    this.colorValue,
+  });
+
+  final String id;
+  final String spaceId;
+  final String name;
+  final int position;
+  final int? colorValue;
+}
+
 final class ConversationChannel {
   const ConversationChannel({
     required this.id,
@@ -240,15 +256,18 @@ final class ChatWorkspace {
     required List<Member> members,
     required List<ChatMessage> messages,
     required this.currentMemberId,
+    List<CommunityRole> roles = const [],
   }) : spaces = List.unmodifiable(spaces),
        channels = List.unmodifiable(channels),
        members = List.unmodifiable(members),
-       messages = List.unmodifiable(messages);
+       messages = List.unmodifiable(messages),
+       roles = List.unmodifiable(roles);
 
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
   final List<Member> members;
   final List<ChatMessage> messages;
+  final List<CommunityRole> roles;
   final String currentMemberId;
 
   List<ConversationChannel> channelsFor(String spaceId) => channels
@@ -275,17 +294,33 @@ final class ChatWorkspace {
     return null;
   }
 
+  ConversationChannel? channelOrNull(String id) {
+    for (final channel in channels) {
+      if (channel.id == id) return channel;
+    }
+    return null;
+  }
+
+  CommunityRole? roleOrNull(String id) {
+    for (final role in roles) {
+      if (role.id == id) return role;
+    }
+    return null;
+  }
+
   ChatWorkspace copyWith({
     List<CommunitySpace>? spaces,
     List<ConversationChannel>? channels,
     List<Member>? members,
     List<ChatMessage>? messages,
+    List<CommunityRole>? roles,
     String? currentMemberId,
   }) => ChatWorkspace(
     spaces: spaces ?? this.spaces,
     channels: channels ?? this.channels,
     members: members ?? this.members,
     messages: messages ?? this.messages,
+    roles: roles ?? this.roles,
     currentMemberId: currentMemberId ?? this.currentMemberId,
   );
 

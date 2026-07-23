@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
+import 'message_content_view.dart';
 import 'message_embed_view.dart';
 
 class MessageItem extends StatefulWidget {
@@ -22,6 +24,8 @@ class MessageItem extends StatefulWidget {
     required this.onToggleReaction,
     required this.onAddReaction,
     required this.onTogglePin,
+    required this.linkLauncher,
+    required this.onSelectChannel,
     super.key,
   });
 
@@ -36,6 +40,8 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<void> Function(ChatMessage) onTogglePin;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   State<MessageItem> createState() => _MessageItemState();
@@ -161,9 +167,11 @@ class _MessageItemState extends State<MessageItem> {
         if (_editing)
           _editField(context)
         else if (message.body.isNotEmpty)
-          SelectableText(
-            message.body,
-            style: const TextStyle(fontSize: 13, height: 1.38),
+          MessageContentView(
+            body: message.body,
+            workspace: widget.workspace,
+            linkLauncher: widget.linkLauncher,
+            onSelectChannel: widget.onSelectChannel,
           ),
         if (message.isEdited && !_editing)
           Text(
@@ -181,6 +189,9 @@ class _MessageItemState extends State<MessageItem> {
             child: MessageEmbedView(
               key: ValueKey('message-${message.id}-embed-$index'),
               embed: message.embeds[index],
+              workspace: widget.workspace,
+              linkLauncher: widget.linkLauncher,
+              onSelectChannel: widget.onSelectChannel,
             ),
           ),
         if (message.reactions.isNotEmpty) ...[

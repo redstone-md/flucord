@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
 import 'chat_model_json.dart';
+import 'sqlite_chat_schema.dart';
 
 final class SqliteChatCache implements ChatCache {
   SqliteChatCache._(this._database);
@@ -32,122 +33,12 @@ final class SqliteChatCache implements ChatCache {
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
-        onCreate: _createSchema,
-        onUpgrade: _upgradeSchema,
+        version: SqliteChatSchema.version,
+        onCreate: SqliteChatSchema.create,
+        onUpgrade: SqliteChatSchema.upgrade,
       ),
     );
     return SqliteChatCache._(database);
-  }
-
-  static Future<void> _createSchema(Database database, int version) async {
-    await database.execute('''
-      CREATE TABLE metadata (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE spaces (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        monogram TEXT NOT NULL,
-        color_value INTEGER NOT NULL,
-        icon_url TEXT,
-        sort_index INTEGER NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE channels (
-        id TEXT PRIMARY KEY,
-        space_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        topic TEXT NOT NULL,
-        kind INTEGER NOT NULL,
-        unread INTEGER NOT NULL,
-        mention_count INTEGER NOT NULL,
-        parent_id TEXT,
-        is_thread INTEGER NOT NULL,
-        sort_index INTEGER NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE members (
-        id TEXT PRIMARY KEY,
-        display_name TEXT NOT NULL,
-        initials TEXT NOT NULL,
-        role TEXT NOT NULL,
-        presence INTEGER NOT NULL,
-        color_value INTEGER NOT NULL,
-        space_ids_json TEXT NOT NULL,
-        roles_by_space_json TEXT NOT NULL,
-        avatar_url TEXT,
-        avatar_urls_by_space_json TEXT NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE messages (
-        id TEXT PRIMARY KEY,
-        channel_id TEXT NOT NULL,
-        author_id TEXT NOT NULL,
-        body TEXT NOT NULL,
-        sent_at TEXT NOT NULL,
-        is_edited INTEGER NOT NULL,
-        attachments_json TEXT NOT NULL,
-        reply_json TEXT,
-        reactions_json TEXT NOT NULL,
-        is_pinned INTEGER NOT NULL,
-        embeds_json TEXT NOT NULL
-      )
-    ''');
-    await database.execute(
-      'CREATE INDEX messages_channel_time '
-      'ON messages(channel_id, sent_at)',
-    );
-  }
-
-  static Future<void> _upgradeSchema(
-    Database database,
-    int oldVersion,
-    int newVersion,
-  ) async {
-    if (oldVersion < 2) {
-      await database.execute('ALTER TABLE channels ADD parent_id TEXT');
-      await database.execute(
-        'ALTER TABLE channels ADD is_thread INTEGER NOT NULL DEFAULT 0',
-      );
-      await database.execute(
-        "ALTER TABLE messages ADD attachments_json TEXT NOT NULL DEFAULT '[]'",
-      );
-      await database.execute('ALTER TABLE messages ADD reply_json TEXT');
-      await database.execute(
-        "ALTER TABLE messages ADD reactions_json TEXT NOT NULL DEFAULT '[]'",
-      );
-    }
-    if (oldVersion < 3) {
-      await database.execute(
-        "ALTER TABLE members ADD space_ids_json TEXT NOT NULL DEFAULT '[]'",
-      );
-      await database.execute(
-        "ALTER TABLE members ADD roles_by_space_json TEXT NOT NULL DEFAULT '{}'",
-      );
-      await database.execute(
-        'ALTER TABLE messages ADD is_pinned INTEGER NOT NULL DEFAULT 0',
-      );
-    }
-    if (oldVersion < 4) {
-      await database.execute('ALTER TABLE spaces ADD icon_url TEXT');
-      await database.execute('ALTER TABLE members ADD avatar_url TEXT');
-      await database.execute(
-        "ALTER TABLE members ADD avatar_urls_by_space_json "
-        "TEXT NOT NULL DEFAULT '{}'",
-      );
-    }
-    if (oldVersion < 5) {
-      await database.execute(
-        "ALTER TABLE messages ADD embeds_json TEXT NOT NULL DEFAULT '[]'",
-      );
-    }
   }
 
   @override
@@ -161,11 +52,13 @@ final class SqliteChatCache implements ChatCache {
     final spaces = await _database.query('spaces', orderBy: 'sort_index');
     if (metadata.isEmpty || spaces.isEmpty) return null;
     final channels = await _database.query('channels', orderBy: 'sort_index');
+    final roles = await _database.query('roles', orderBy: 'position DESC');
     final members = await _database.query('members');
     final messages = await _database.query('messages', orderBy: 'sent_at');
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),
       channels: channels.map(_channelFromRow).toList(),
+      roles: roles.map(_roleFromRow).toList(),
       members: members.map(_memberFromRow).toList(),
       messages: messages.map(_messageFromRow).toList(),
       currentMemberId: metadata.single['value']! as String,
@@ -181,6 +74,7 @@ final class SqliteChatCache implements ChatCache {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
       await transaction.delete('spaces');
       await transaction.delete('channels');
+      await transaction.delete('roles');
       final batch = transaction.batch();
       for (var index = 0; index < workspace.spaces.length; index++) {
         batch.insert('spaces', _spaceToRow(workspace.spaces[index], index));
@@ -190,6 +84,9 @@ final class SqliteChatCache implements ChatCache {
           'channels',
           _channelToRow(workspace.channels[index], index),
         );
+      }
+      for (final role in workspace.roles) {
+        batch.insert('roles', _roleToRow(role));
       }
       for (final member in workspace.members) {
         batch.insert(
@@ -368,6 +265,22 @@ final class SqliteChatCache implements ChatCache {
         colorValue: row['color_value']! as int,
         iconUrl: row['icon_url'] as String?,
       );
+
+  static Map<String, Object?> _roleToRow(CommunityRole role) => {
+    'id': role.id,
+    'space_id': role.spaceId,
+    'name': role.name,
+    'position': role.position,
+    'color_value': role.colorValue,
+  };
+
+  static CommunityRole _roleFromRow(Map<String, Object?> row) => CommunityRole(
+    id: row['id']! as String,
+    spaceId: row['space_id']! as String,
+    name: row['name']! as String,
+    position: row['position']! as int,
+    colorValue: row['color_value'] as int?,
+  );
 
   static Map<String, Object?> _channelToRow(
     ConversationChannel channel,

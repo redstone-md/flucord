@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_list.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -93,6 +94,8 @@ Widget _host(
           isLoadingOlder: isLoadingOlder,
           olderLoadError: olderLoadError,
           onLoadOlder: onLoadOlder ?? () {},
+          externalLinkLauncher: const _TestLinkLauncher(),
+          onSelectChannel: (_) {},
         ),
       ),
     ),
@@ -130,3 +133,10 @@ const _member = Member(
   presence: Presence.online,
   colorValue: 0xff456b5a,
 );
+
+final class _TestLinkLauncher implements ExternalLinkLauncher {
+  const _TestLinkLauncher();
+
+  @override
+  Future<bool> open(Uri uri) async => true;
+}

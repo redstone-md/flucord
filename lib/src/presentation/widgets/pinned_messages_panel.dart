@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_embed_view.dart';
+import 'message_content_view.dart';
 
 class PinnedMessagesPanel extends StatelessWidget {
   const PinnedMessagesPanel({
@@ -16,6 +18,8 @@ class PinnedMessagesPanel extends StatelessWidget {
     required this.onClose,
     required this.onRefresh,
     required this.onUnpin,
+    required this.linkLauncher,
+    required this.onSelectChannel,
     super.key,
   });
 
@@ -27,6 +31,8 @@ class PinnedMessagesPanel extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onRefresh;
   final Future<void> Function(ChatMessage message) onUnpin;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +109,9 @@ class PinnedMessagesPanel extends StatelessWidget {
         message: messages[index],
         member: workspace.memberOrNull(messages[index].authorId),
         spaceId: workspace.channelById(channelId).spaceId,
+        workspace: workspace,
+        linkLauncher: linkLauncher,
+        onSelectChannel: onSelectChannel,
         onUnpin: onUnpin,
       ),
     );
@@ -114,12 +123,18 @@ class _PinnedMessageRow extends StatelessWidget {
     required this.message,
     required this.member,
     required this.spaceId,
+    required this.workspace,
+    required this.linkLauncher,
+    required this.onSelectChannel,
     required this.onUnpin,
   });
 
   final ChatMessage message;
   final Member? member;
   final String spaceId;
+  final ChatWorkspace workspace;
+  final ExternalLinkLauncher linkLauncher;
+  final ValueChanged<String> onSelectChannel;
   final Future<void> Function(ChatMessage message) onUnpin;
 
   @override
@@ -150,11 +165,17 @@ class _PinnedMessageRow extends StatelessWidget {
                 ),
                 if (message.body.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    message.body,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, height: 1.35),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 72),
+                    child: ClipRect(
+                      child: MessageContentView(
+                        body: message.body,
+                        workspace: workspace,
+                        linkLauncher: linkLauncher,
+                        onSelectChannel: onSelectChannel,
+                        textStyle: const TextStyle(fontSize: 11, height: 1.35),
+                      ),
+                    ),
                   ),
                 ],
                 if (message.attachments.isNotEmpty)
@@ -167,7 +188,12 @@ class _PinnedMessageRow extends StatelessWidget {
                 if (message.embeds.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: MessageEmbedView(embed: message.embeds.first),
+                    child: MessageEmbedView(
+                      embed: message.embeds.first,
+                      workspace: workspace,
+                      linkLauncher: linkLauncher,
+                      onSelectChannel: onSelectChannel,
+                    ),
                   ),
               ],
             ),
