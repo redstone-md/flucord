@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'application/chat_controller.dart';
@@ -7,10 +9,13 @@ import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/secure_credential_vault.dart';
 import 'presentation/flucord_shell.dart';
+import 'platform/desktop_integration.dart';
 import 'theme/flucord_theme.dart';
 
 class FlucordApp extends StatefulWidget {
-  const FlucordApp({super.key});
+  const FlucordApp({this.desktopIntegration, super.key});
+
+  final DesktopIntegration? desktopIntegration;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -31,12 +36,17 @@ class _FlucordAppState extends State<FlucordApp> {
       const DiscordRepositoryFactory(),
     );
     _workspaceController = WorkspaceController();
+    widget.desktopIntegration?.attach(
+      chatController: _chatController,
+      workspaceController: _workspaceController,
+    );
     _chatController.load();
     _connectionController.initialize();
   }
 
   @override
   void dispose() {
+    unawaited(widget.desktopIntegration?.dispose());
     _chatController.dispose();
     _connectionController.dispose();
     _workspaceController.dispose();

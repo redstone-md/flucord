@@ -14,6 +14,8 @@ final class ChatController extends ChangeNotifier {
 
   ChatRepository _repository;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
+  final StreamController<MessageUpsertedEvent> _incomingMessages =
+      StreamController.broadcast();
 
   ChatLoadState _state = ChatLoadState.idle;
   ChatWorkspace? _workspace;
@@ -31,6 +33,7 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
   String? _activeChannelId;
+  bool _isApplicationActive = true;
   bool _disposed = false;
 
   ChatLoadState get state => _state;
@@ -38,6 +41,17 @@ final class ChatController extends ChangeNotifier {
   Object? get error => _error;
   bool get isSending => _isSending;
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
+  String? get activeChannelId => _activeChannelId;
+  Stream<MessageUpsertedEvent> get incomingMessages => _incomingMessages.stream;
+
+  void setApplicationActive(bool value) {
+    if (_isApplicationActive == value) return;
+    _isApplicationActive = value;
+    if (value && _activeChannelId != null) {
+      _workspace = _workspace?.markChannelRead(_activeChannelId!);
+      notifyListeners();
+    }
+  }
 
   bool isChannelLoading(String channelId) =>
       _loadingChannels.contains(channelId);
@@ -297,12 +311,15 @@ final class ChatController extends ChangeNotifier {
             member: event.member,
           );
           if (event.isNew &&
-              event.message.channelId != _activeChannelId &&
               event.message.authorId != _workspace?.currentMemberId) {
-            _workspace = _workspace?.markChannelUnread(
-              event.message.channelId,
-              mention: event.mentionsCurrentMember,
-            );
+            _incomingMessages.add(event);
+            if (!_isApplicationActive ||
+                event.message.channelId != _activeChannelId) {
+              _workspace = _workspace?.markChannelUnread(
+                event.message.channelId,
+                mention: event.mentionsCurrentMember,
+              );
+            }
           }
         case MessageDeletedEvent():
           _workspace = _workspace?.removeMessage(event.messageId);
@@ -363,6 +380,7 @@ final class ChatController extends ChangeNotifier {
     _clearTyping();
     unawaited(_eventSubscription?.cancel());
     unawaited(_repository.close());
+    unawaited(_incomingMessages.close());
     super.dispose();
   }
 }

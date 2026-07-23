@@ -108,6 +108,7 @@ void main() {
       addTearDown(controller.dispose);
       await controller.load();
       await controller.openChannel('forge-general');
+      final incomingMessage = controller.incomingMessages.first;
 
       repository.emit(
         MessageUpsertedEvent(
@@ -130,6 +131,8 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
+      expect((await incomingMessage).message.id, 'incoming-1');
+
       final unread = controller.workspace!.channelById('forge-native');
       expect(unread.unread, isTrue);
       expect(unread.mentionCount, 1);
@@ -143,6 +146,36 @@ void main() {
       final read = controller.workspace!.channelById('forge-native');
       expect(read.unread, isFalse);
       expect(read.mentionCount, 0);
+    });
+
+    test('marks the active channel unread while the app is inactive', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      await controller.openChannel('forge-general');
+      controller.setApplicationActive(false);
+
+      repository.emit(
+        MessageUpsertedEvent(
+          message: ChatMessage(
+            id: 'background-1',
+            channelId: 'forge-general',
+            authorId: 'lena',
+            body: 'Arrived while unfocused',
+            sentAt: DateTime.now(),
+          ),
+          isNew: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.workspace!.channelById('forge-general').unread, isTrue);
+      controller.setApplicationActive(true);
+      expect(
+        controller.workspace!.channelById('forge-general').unread,
+        isFalse,
+      );
     });
   });
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/chat_models.dart';
+import 'channel_link.dart';
 
 final class WorkspaceController extends ChangeNotifier {
   String? _selectedSpaceId;
@@ -53,6 +54,27 @@ final class WorkspaceController extends ChangeNotifier {
     _selectedChannelId = channelId;
     _query = '';
     notifyListeners();
+  }
+
+  bool openChannelLink(ChatWorkspace workspace, ChannelLink link) {
+    ConversationChannel? target;
+    for (final channel in workspace.channels) {
+      if (channel.id == link.channelId && channel.spaceId == link.spaceId) {
+        target = channel;
+        break;
+      }
+    }
+    if (target == null) return false;
+
+    final changed =
+        _selectedSpaceId != link.spaceId ||
+        _selectedChannelId != link.channelId ||
+        _query.isNotEmpty;
+    _selectedSpaceId = link.spaceId;
+    _selectedChannelId = link.channelId;
+    _query = '';
+    if (changed) notifyListeners();
+    return true;
   }
 
   void setQuery(String value) {
