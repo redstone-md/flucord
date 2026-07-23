@@ -5,17 +5,25 @@ import 'package:flutter/material.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/workspace_controller.dart';
+import 'application/voice_controller.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
+import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'presentation/flucord_shell.dart';
 import 'platform/desktop_integration.dart';
+import 'domain/voice_media.dart';
 import 'theme/flucord_theme.dart';
 
 class FlucordApp extends StatefulWidget {
-  const FlucordApp({this.desktopIntegration, super.key});
+  const FlucordApp({
+    this.desktopIntegration,
+    this.voiceMediaService,
+    super.key,
+  });
 
   final DesktopIntegration? desktopIntegration;
+  final VoiceMediaService? voiceMediaService;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -25,6 +33,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ChatController _chatController;
   late final ConnectionController _connectionController;
   late final WorkspaceController _workspaceController;
+  late final VoiceController _voiceController;
 
   @override
   void initState() {
@@ -36,6 +45,9 @@ class _FlucordAppState extends State<FlucordApp> {
       const DiscordRepositoryFactory(),
     );
     _workspaceController = WorkspaceController();
+    _voiceController = VoiceController(
+      widget.voiceMediaService ?? const NoopVoiceMediaService(),
+    );
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
@@ -50,6 +62,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.dispose();
     _connectionController.dispose();
     _workspaceController.dispose();
+    _voiceController.dispose();
     super.dispose();
   }
 
@@ -67,6 +80,7 @@ class _FlucordAppState extends State<FlucordApp> {
           chatController: _chatController,
           connectionController: _connectionController,
           workspaceController: _workspaceController,
+          voiceController: _voiceController,
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/workspace_controller.dart';
+import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
@@ -16,18 +17,21 @@ import 'widgets/pinned_messages_panel.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/typing_indicator.dart';
+import 'widgets/voice_room_view.dart';
 
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
     required this.chatController,
     required this.connectionController,
     required this.workspaceController,
+    required this.voiceController,
     super.key,
   });
 
   final ChatController chatController;
   final ConnectionController connectionController;
   final WorkspaceController workspaceController;
+  final VoiceController voiceController;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +158,7 @@ class FlucordShell extends StatelessWidget {
                           onAddReaction: chatController.addReaction,
                           onTogglePin: chatController.togglePin,
                           onTyping: () => chatController.startTyping(channelId),
+                          voiceController: voiceController,
                         ),
                       ),
                       if (showPins)
@@ -222,6 +227,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onAddReaction,
     required this.onTogglePin,
     required this.onTyping,
+    required this.voiceController,
   });
 
   final ChatWorkspace workspace;
@@ -248,6 +254,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<void> Function(ChatMessage) onTogglePin;
   final VoidCallback onTyping;
+  final VoiceController voiceController;
 
   @override
   State<_ConversationPane> createState() => _ConversationPaneState();
@@ -265,7 +272,11 @@ class _ConversationPaneState extends State<_ConversationPane> {
   @override
   Widget build(BuildContext context) {
     final conversation = switch (widget.channel.kind) {
-      ChannelKind.voice => VoiceRoomView(channelName: widget.channel.name),
+      ChannelKind.voice => VoiceRoomView(
+        channelId: widget.channel.id,
+        channelName: widget.channel.name,
+        controller: widget.voiceController,
+      ),
       ChannelKind.text when widget.isLoading => const ChannelLoadingView(),
       ChannelKind.text when widget.loadError != null => ChannelFailureView(
         onRetry: widget.onRetry,

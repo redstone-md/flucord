@@ -68,34 +68,6 @@ class FailedWorkspaceView extends StatelessWidget {
   }
 }
 
-class VoiceRoomView extends StatelessWidget {
-  const VoiceRoomView({required this.channelName, super.key});
-
-  final String channelName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.graphic_eq, size: 34, color: context.surfaces.muted),
-          const SizedBox(height: 12),
-          Text(
-            channelName,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Voice transport is the next tracer bullet.',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class ChannelLoadingView extends StatelessWidget {
   const ChannelLoadingView({super.key});
 

@@ -87,4 +87,38 @@ void main() {
     expect(find.byKey(const ValueKey('pinned-messages-panel')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('opens native voice controls without media plugins', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const FlucordApp());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('channel-forge-voice')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Voice Connected'), findsOneWidget);
+    expect(find.text('Input device'), findsOneWidget);
+    expect(find.text('Output device'), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('voice-mute')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Unmute'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('voice-share-screen')));
+    await tester.pumpAndSettle();
+    expect(find.text('Share a screen or window'), findsOneWidget);
+    expect(find.text('No capture sources available'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('voice-disconnect')));
+    await tester.pumpAndSettle();
+    expect(find.text('Disconnected'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
