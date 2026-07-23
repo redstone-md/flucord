@@ -12,6 +12,10 @@ final class ConversationChannel {
     this.position = 0,
     this.parentId,
     this.isThread = false,
+    this.isArchived = false,
+    this.isLocked = false,
+    this.archiveTimestamp,
+    this.autoArchiveDurationMinutes,
     this.recipientId,
     this.unread = false,
     this.mentionCount = 0,
@@ -26,6 +30,10 @@ final class ConversationChannel {
   final int position;
   final String? parentId;
   final bool isThread;
+  final bool isArchived;
+  final bool isLocked;
+  final DateTime? archiveTimestamp;
+  final int? autoArchiveDurationMinutes;
   final String? recipientId;
   final bool unread;
   final int mentionCount;
@@ -56,6 +64,10 @@ final class ConversationChannel {
   ConversationChannel copyWith({
     bool? unread,
     int? mentionCount,
+    bool? isArchived,
+    bool? isLocked,
+    DateTime? archiveTimestamp,
+    int? autoArchiveDurationMinutes,
     Object? firstUnreadMessageId = _keepUnreadBoundary,
   }) => ConversationChannel(
     id: id,
@@ -66,6 +78,11 @@ final class ConversationChannel {
     position: position,
     parentId: parentId,
     isThread: isThread,
+    isArchived: isArchived ?? this.isArchived,
+    isLocked: isLocked ?? this.isLocked,
+    archiveTimestamp: archiveTimestamp ?? this.archiveTimestamp,
+    autoArchiveDurationMinutes:
+        autoArchiveDurationMinutes ?? this.autoArchiveDurationMinutes,
     recipientId: recipientId,
     unread: unread ?? this.unread,
     mentionCount: mentionCount ?? this.mentionCount,

@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/thread_repository.dart';
 import '../domain/voice_connection.dart';
 import 'channel_activity_persistence.dart';
 
 part 'chat_controller_events.dart';
+part 'chat_controller_threads.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -39,6 +41,7 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
+  final _archivedThreadState = _ArchivedThreadState();
   String? _activeChannelId;
   bool _isApplicationActive = true;
   bool _disposed = false;
@@ -111,6 +114,7 @@ final class ChatController extends ChangeNotifier {
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
+    _archivedThreadState.clear();
     _clearTyping();
     _activeChannelId = null;
     _connectionStatus = RepositoryConnectionStatus.offline;

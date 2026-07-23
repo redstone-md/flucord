@@ -2,11 +2,13 @@ import 'dart:async';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/thread_repository.dart';
 import 'mock_chat_seed.dart';
 
 part 'mock_chat_repository_mutations.dart';
 
-final class MockChatRepository implements ChatRepository {
+final class MockChatRepository
+    implements ChatRepository, ArchivedThreadRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = _seedWorkspace();
 
@@ -116,6 +118,12 @@ final class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ArchivedThreadPage> loadArchivedThreads(
+    String parentChannelId, {
+    DateTime? before,
+  }) => _loadArchivedThreadPage(parentChannelId, before: before);
+
+  @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
@@ -212,17 +220,6 @@ final class MockChatRepository implements ChatRepository {
     required String channelId,
     required String messageId,
   }) => _setPinned(messageId, false);
-
-  Future<void> _setPinned(String messageId, bool pinned) async {
-    await _wait();
-    final message = _workspace.messages.firstWhere(
-      (candidate) => candidate.id == messageId,
-    );
-    final updated = message.copyWith(isPinned: pinned);
-    _workspace = _workspace.upsertMessage(updated);
-    _events.add(MessageUpsertedEvent(message: updated));
-    _events.add(PinsChangedEvent(message.channelId));
-  }
 
   @override
   Future<void> startTyping(String channelId) async {}

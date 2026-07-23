@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 11;
+  static const version = 12;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -42,6 +42,10 @@ abstract final class SqliteChatSchema {
         first_unread_message_id TEXT,
         parent_id TEXT,
         is_thread INTEGER NOT NULL,
+        is_archived INTEGER NOT NULL,
+        is_locked INTEGER NOT NULL,
+        archive_timestamp TEXT,
+        auto_archive_duration INTEGER,
         recipient_id TEXT,
         sort_index INTEGER NOT NULL
       )
@@ -200,6 +204,18 @@ abstract final class SqliteChatSchema {
       ''');
       await database.execute(
         'CREATE INDEX emojis_space_name ON emojis(space_id, name)',
+      );
+    }
+    if (oldVersion < 12) {
+      await database.execute(
+        'ALTER TABLE channels ADD is_archived INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute(
+        'ALTER TABLE channels ADD is_locked INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute('ALTER TABLE channels ADD archive_timestamp TEXT');
+      await database.execute(
+        'ALTER TABLE channels ADD auto_archive_duration INTEGER',
       );
     }
   }

@@ -26,8 +26,8 @@ void main() {
           iconUrl: 'https://cdn.discordapp.com/icons/guild-1/icon.webp',
         ),
       ],
-      channels: const [
-        ConversationChannel(
+      channels: [
+        const ConversationChannel(
           id: 'channel-1',
           spaceId: 'guild-1',
           name: 'general',
@@ -47,6 +47,10 @@ void main() {
           kind: ChannelKind.text,
           parentId: 'channel-1',
           isThread: true,
+          isArchived: true,
+          isLocked: true,
+          archiveTimestamp: DateTime.utc(2026, 7, 22, 23, 30),
+          autoArchiveDurationMinutes: 1440,
         ),
       ],
       categories: const [
@@ -163,6 +167,10 @@ void main() {
     expect(restored?.categories.single.name, 'Operations');
     expect(restored?.channels.last.isThread, isTrue);
     expect(restored?.channels.last.parentId, 'channel-1');
+    expect(restored?.channels.last.isArchived, isTrue);
+    expect(restored?.channels.last.isLocked, isTrue);
+    expect(restored?.channels.last.archiveTimestamp?.toUtc().hour, 23);
+    expect(restored?.channels.last.autoArchiveDurationMinutes, 1440);
     expect(restored?.roles.single.name, 'Operator');
     expect(restored?.roles.single.colorValue, 0xff336699);
     expect(restored?.emojis.single.name, 'ship_it');
@@ -392,6 +400,16 @@ void main() {
     );
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
+    expect(channelColumns.map((row) => row['name']), contains('is_archived'));
+    expect(channelColumns.map((row) => row['name']), contains('is_locked'));
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('archive_timestamp'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('auto_archive_duration'),
+    );
     expect(
       messageColumns.map((row) => row['name']),
       contains('attachments_json'),

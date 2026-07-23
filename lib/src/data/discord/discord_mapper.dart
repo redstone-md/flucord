@@ -387,6 +387,11 @@ final class DiscordMapper {
 
   ConversationChannel? channel(Map<String, Object?> payload, String guildId) {
     final type = payload['type'] as int?;
+    final rawThreadMetadata = payload['thread_metadata'];
+    final threadMetadata = rawThreadMetadata is Map
+        ? rawThreadMetadata.cast<String, Object?>()
+        : const <String, Object?>{};
+    final archiveTimestamp = threadMetadata['archive_timestamp'] as String?;
     final kind = switch (type) {
       0 || 5 || 10 || 11 || 12 => ChannelKind.text,
       2 || 13 => ChannelKind.voice,
@@ -404,6 +409,13 @@ final class DiscordMapper {
       position: payload['position'] as int? ?? 0,
       parentId: payload['parent_id'] as String?,
       isThread: type == 10 || type == 11 || type == 12,
+      isArchived: threadMetadata['archived'] as bool? ?? false,
+      isLocked: threadMetadata['locked'] as bool? ?? false,
+      archiveTimestamp: archiveTimestamp == null
+          ? null
+          : DateTime.tryParse(archiveTimestamp)?.toLocal(),
+      autoArchiveDurationMinutes:
+          threadMetadata['auto_archive_duration'] as int?,
       unread: false,
     );
   }

@@ -1,6 +1,49 @@
 part of 'mock_chat_repository.dart';
 
 extension _MockChatRepositoryMutations on MockChatRepository {
+  Future<ArchivedThreadPage> _loadArchivedThreadPage(
+    String parentChannelId, {
+    DateTime? before,
+  }) async {
+    await _wait();
+    final parent = _workspace.channelById(parentChannelId);
+    final page = before == null ? 1 : 2;
+    ConversationChannel archivedThread(int index) => ConversationChannel(
+      id: 'archived-$parentChannelId-$index',
+      spaceId: parent.spaceId,
+      name: index == 1 ? 'release-retrospective' : 'transport-notes',
+      topic: '',
+      kind: ChannelKind.text,
+      parentId: parent.id,
+      isThread: true,
+      isArchived: true,
+      isLocked: index == 2,
+      archiveTimestamp: DateTime.utc(2026, 7, 23 - index, 1, 30),
+      autoArchiveDurationMinutes: 1440,
+    );
+
+    final threads = [archivedThread(1), if (page == 2) archivedThread(2)];
+    for (final thread in threads) {
+      _workspace = _workspace.upsertChannel(thread);
+    }
+    return ArchivedThreadPage(
+      threads: threads,
+      hasMore: page == 1,
+      nextBefore: threads.last.archiveTimestamp,
+    );
+  }
+
+  Future<void> _setPinned(String messageId, bool pinned) async {
+    await _wait();
+    final message = _workspace.messages.firstWhere(
+      (candidate) => candidate.id == messageId,
+    );
+    final updated = message.copyWith(isPinned: pinned);
+    _workspace = _workspace.upsertMessage(updated);
+    _events.add(MessageUpsertedEvent(message: updated));
+    _events.add(PinsChangedEvent(message.channelId));
+  }
+
   Future<void> _setReaction(
     String messageId,
     String emoji, {

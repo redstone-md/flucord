@@ -134,6 +134,19 @@ final class DiscordApiClient {
     body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
   );
 
+  Future<Map<String, Object?>> getPublicArchivedThreads(
+    String channelId, {
+    DateTime? before,
+    int limit = 50,
+  }) => _requestObject(
+    'GET',
+    '/channels/$channelId/threads/archived/public',
+    query: {
+      'limit': '$limit',
+      if (before != null) 'before': before.toUtc().toIso8601String(),
+    },
+  );
+
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
 

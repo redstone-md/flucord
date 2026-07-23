@@ -377,6 +377,10 @@ final class SqliteChatCache implements ChatCache {
     'first_unread_message_id': channel.firstUnreadMessageId,
     'parent_id': channel.parentId,
     'is_thread': channel.isThread ? 1 : 0,
+    'is_archived': channel.isArchived ? 1 : 0,
+    'is_locked': channel.isLocked ? 1 : 0,
+    'archive_timestamp': channel.archiveTimestamp?.toIso8601String(),
+    'auto_archive_duration': channel.autoArchiveDurationMinutes,
     'recipient_id': channel.recipientId,
     'sort_index': index,
   };
@@ -394,6 +398,12 @@ final class SqliteChatCache implements ChatCache {
         firstUnreadMessageId: row['first_unread_message_id'] as String?,
         parentId: row['parent_id'] as String?,
         isThread: row['is_thread'] == 1,
+        isArchived: row['is_archived'] == 1,
+        isLocked: row['is_locked'] == 1,
+        archiveTimestamp: row['archive_timestamp'] == null
+            ? null
+            : DateTime.parse(row['archive_timestamp']! as String),
+        autoArchiveDurationMinutes: row['auto_archive_duration'] as int?,
         recipientId: row['recipient_id'] as String?,
       );
 

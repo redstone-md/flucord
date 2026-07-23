@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_api_client.dart';
@@ -18,9 +19,10 @@ import 'discord_voice_signaling_service.dart';
 
 part 'discord_chat_repository_messages.dart';
 part 'discord_chat_repository_emojis.dart';
+part 'discord_chat_repository_threads.dart';
 
 final class DiscordChatRepository
-    implements ChatRepository, VoiceSignalingService {
+    implements ChatRepository, ArchivedThreadRepository, VoiceSignalingService {
   DiscordChatRepository(
     this._api,
     this._gateway,
@@ -166,27 +168,18 @@ final class DiscordChatRepository
     required String messageId,
     required String name,
     required int autoArchiveDurationMinutes,
-  }) async {
-    final workspace = await _cache.readWorkspace();
-    final parent = workspace?.channelOrNull(channelId);
-    if (parent == null) throw StateError('Parent channel is not cached');
-    final payload = await _api.createThreadFromMessage(
-      channelId: channelId,
-      messageId: messageId,
-      name: name,
-      autoArchiveDurationMinutes: autoArchiveDurationMinutes,
-    );
-    final guildId = payload['guild_id'] as String? ?? parent.spaceId;
-    final thread = _mapper.channel(payload, guildId);
-    if (thread == null || !thread.isThread) {
-      throw const DiscordApiException(
-        statusCode: 502,
-        message: 'Expected a Discord thread channel',
-      );
-    }
-    await _cache.writeChannel(thread);
-    return thread;
-  }
+  }) => _createMessageThread(
+    channelId: channelId,
+    messageId: messageId,
+    name: name,
+    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+  );
+
+  @override
+  Future<ArchivedThreadPage> loadArchivedThreads(
+    String parentChannelId, {
+    DateTime? before,
+  }) => _loadArchivedThreads(parentChannelId, before: before);
 
   @override
   Future<ChatMessage> sendMessage({
