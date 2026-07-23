@@ -3,17 +3,26 @@ import 'dart:async';
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/voice_connection.dart';
+import '../../domain/voice_dave.dart';
 import 'discord_api_client.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
+import 'discord_voice_signaling_service.dart';
 
-final class DiscordChatRepository implements ChatRepository {
+final class DiscordChatRepository
+    implements ChatRepository, VoiceSignalingService {
   DiscordChatRepository(
     this._api,
     this._gateway,
     this._cache, {
     DiscordMapper? mapper,
-  }) : _mapper = mapper ?? DiscordMapper() {
+    VoiceDaveService? daveService,
+  }) : _mapper = mapper ?? DiscordMapper(),
+       _voiceSignaling = DiscordVoiceSignalingService(
+         mainGateway: _gateway,
+         nativeDaveService: daveService,
+       ) {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
 
@@ -21,6 +30,7 @@ final class DiscordChatRepository implements ChatRepository {
   final DiscordGatewayClient _gateway;
   final ChatCache _cache;
   final DiscordMapper _mapper;
+  final DiscordVoiceSignalingService _voiceSignaling;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
@@ -55,6 +65,7 @@ final class DiscordChatRepository implements ChatRepository {
         rolesByGuild: _rolesByGuild,
       );
       _currentMemberId = workspace.currentMemberId;
+      _voiceSignaling.setCurrentUserId(workspace.currentMemberId);
       await _cache.writeWorkspace(workspace);
       final gatewayUrl = await _api.getGatewayUrl();
       unawaited(_gateway.connect(gatewayUrl));
@@ -450,8 +461,29 @@ final class DiscordChatRepository implements ChatRepository {
   }
 
   @override
+  Stream<VoiceSignalingEvent> get voiceEvents => _voiceSignaling.voiceEvents;
+
+  @override
+  Future<void> joinVoiceChannel({
+    required String guildId,
+    required String channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) => _voiceSignaling.joinVoiceChannel(
+    guildId: guildId,
+    channelId: channelId,
+    selfMute: selfMute,
+    selfDeaf: selfDeaf,
+  );
+
+  @override
+  Future<void> leaveVoiceChannel(String guildId) =>
+      _voiceSignaling.leaveVoiceChannel(guildId);
+
+  @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _voiceSignaling.close();
     await _gateway.close();
     _api.close();
     await _cache.close();

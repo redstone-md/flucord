@@ -85,7 +85,18 @@ final class DiscordGatewayProtocol {
   }
 }
 
-final class DiscordGatewayClient {
+abstract interface class DiscordVoiceStateGateway {
+  Stream<DiscordGatewayEvent> get events;
+
+  void updateVoiceState({
+    required String guildId,
+    required String? channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  });
+}
+
+final class DiscordGatewayClient implements DiscordVoiceStateGateway {
   DiscordGatewayClient({required String botToken})
     : _protocol = DiscordGatewayProtocol(
         token: botToken.trim(),
@@ -121,6 +132,7 @@ final class DiscordGatewayClient {
   bool _closing = false;
   final Map<String, Map<String, Object?>> _desiredVoiceStates = {};
 
+  @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
   Future<void> connect(String gatewayUrl) async {
@@ -240,6 +252,7 @@ final class DiscordGatewayClient {
     return false;
   }
 
+  @override
   void updateVoiceState({
     required String guildId,
     required String? channelId,

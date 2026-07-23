@@ -49,7 +49,14 @@ final class _IoDiscordVoiceWebSocket implements DiscordVoiceWebSocket {
       _socket.close(code, reason);
 }
 
-final class DiscordVoiceGatewayClient {
+abstract interface class DiscordVoiceClient {
+  Stream<VoiceSignalingEvent> get events;
+
+  Future<void> connect();
+  Future<void> close();
+}
+
+final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   DiscordVoiceGatewayClient({
     required VoiceServerCredentials credentials,
     required int maxDaveProtocolVersion,
@@ -92,10 +99,12 @@ final class DiscordVoiceGatewayClient {
   DiscordVoiceIpDiscovery? _discovered;
   VoiceTransportSession? _session;
 
+  @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
   Stream<Uint8List> get packets => _udpTransport.packets;
   VoiceTransportSession? get session => _session;
 
+  @override
   Future<void> connect() async {
     _closing = false;
     _failed = false;
@@ -377,6 +386,7 @@ final class DiscordVoiceGatewayClient {
     }
   }
 
+  @override
   Future<void> close() async {
     if (_closing) return;
     _closing = true;
