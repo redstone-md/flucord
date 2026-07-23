@@ -1,11 +1,25 @@
 import 'dart:typed_data';
 
+import 'voice_media.dart';
+
 final class VoiceRemoteOpusFrame {
-  VoiceRemoteOpusFrame({required this.userId, required Uint8List opus})
-    : opus = Uint8List.fromList(opus);
+  VoiceRemoteOpusFrame({
+    required this.userId,
+    required Uint8List opus,
+    this.missingFramesBefore = 0,
+  }) : opus = Uint8List.fromList(opus) {
+    if (missingFramesBefore < 0) {
+      throw RangeError.value(
+        missingFramesBefore,
+        'missingFramesBefore',
+        'must not be negative',
+      );
+    }
+  }
 
   final String userId;
   final Uint8List opus;
+  final int missingFramesBefore;
 }
 
 final class VoiceRemotePcmFrame {
@@ -30,10 +44,21 @@ abstract interface class VoiceOpusEncoder {
 
 abstract interface class VoiceOpusDecoder {
   Int16List decode(Uint8List opusFrame);
+  Int16List decodeFec(Uint8List opusFrame, {int frameDurationMs = 20});
+  Int16List conceal({int frameDurationMs = 20});
   void dispose();
 }
 
 abstract interface class VoiceOpusCodecFactory {
   VoiceOpusEncoder createEncoder();
   VoiceOpusDecoder createDecoder();
+}
+
+abstract interface class VoiceAudioPlaybackService {
+  Future<void> initialize();
+  Future<List<VoiceDevice>> enumerateOutputDevices();
+  Future<void> selectOutput(String deviceId);
+  Future<void> setEnabled(bool enabled);
+  void addPcmFrame(VoiceRemotePcmFrame frame);
+  Future<void> dispose();
 }

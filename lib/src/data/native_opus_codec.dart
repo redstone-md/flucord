@@ -77,5 +77,13 @@ final class _NativeOpusDecoder implements VoiceOpusDecoder {
   Int16List decode(Uint8List opusFrame) => _decoder.decode(input: opusFrame);
 
   @override
+  Int16List decodeFec(Uint8List opusFrame, {int frameDurationMs = 20}) =>
+      _decoder.decode(input: opusFrame, fec: true, loss: frameDurationMs);
+
+  @override
+  Int16List conceal({int frameDurationMs = 20}) =>
+      _decoder.decode(loss: frameDurationMs);
+
+  @override
   void dispose() => _decoder.destroy();
 }

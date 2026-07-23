@@ -89,6 +89,28 @@ void main() {
     expect(decryptedSequences, [10, 11, 12]);
   });
 
+  test('reports an RTP gap on the first frame after skipped loss', () async {
+    final incoming = StreamController<DiscordRtpFrame>.broadcast();
+    addTearDown(incoming.close);
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: incoming.stream,
+      encryptDave: (frame) => frame,
+      decryptDave: (_, frame) => frame,
+      sendFrame: (_) => 1,
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => 'user-1',
+    )..configure(ssrc: 42, daveEnabled: false);
+    final received = transport.remoteAudio.take(4).toList();
+
+    incoming.add(_frame(ssrc: 77, sequence: 10, payload: [10]));
+    incoming.add(_frame(ssrc: 77, sequence: 12, payload: [12]));
+    incoming.add(_frame(ssrc: 77, sequence: 13, payload: [13]));
+    incoming.add(_frame(ssrc: 77, sequence: 14, payload: [14]));
+
+    final frames = await received;
+    expect(frames.map((frame) => frame.missingFramesBefore), [0, 1, 0, 0]);
+  });
+
   test('refuses media before configure and after reset', () {
     final transport = DiscordVoiceMediaTransport(
       incomingFrames: const Stream.empty(),

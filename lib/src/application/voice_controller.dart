@@ -12,17 +12,29 @@ enum VoiceState { idle, loading, ready, failure }
 typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
 
 final class VoiceController extends ChangeNotifier {
-  VoiceController(
-    this._mediaService, {
+  factory VoiceController(
+    VoiceMediaService mediaService, {
     VoiceSignalingServiceProvider? signalingServiceProvider,
     VoiceOpusCodecFactory? audioCodecFactory,
-  }) : _signalingServiceProvider = signalingServiceProvider ?? _noSignaling,
-       _audioPipeline = audioCodecFactory == null
-           ? null
-           : VoiceAudioPipeline(
-               mediaService: _mediaService,
-               codecFactory: audioCodecFactory,
-             ) {
+    VoiceAudioPlaybackService? playbackService,
+  }) => VoiceController._(
+    mediaService,
+    signalingServiceProvider ?? _noSignaling,
+    audioCodecFactory,
+    playbackService,
+  );
+
+  VoiceController._(
+    this._mediaService,
+    this._signalingServiceProvider,
+    VoiceOpusCodecFactory? audioCodecFactory,
+    this._playbackService,
+  ) : _audioPipeline = audioCodecFactory == null
+          ? null
+          : VoiceAudioPipeline(
+              mediaService: _mediaService,
+              codecFactory: audioCodecFactory,
+            ) {
     _screenEndedSubscription = _mediaService.screenShareEnded.listen((_) {
       _isScreenSharing = false;
       if (!_disposed) notifyListeners();
@@ -31,13 +43,16 @@ final class VoiceController extends ChangeNotifier {
       _error = error;
       if (!_disposed) notifyListeners();
     });
+    _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
   }
 
   final VoiceMediaService _mediaService;
   final VoiceSignalingServiceProvider _signalingServiceProvider;
+  final VoiceAudioPlaybackService? _playbackService;
   final VoiceAudioPipeline? _audioPipeline;
   StreamSubscription<void>? _screenEndedSubscription;
   StreamSubscription<Object>? _audioErrorSubscription;
+  StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
   VoiceState _state = VoiceState.idle;
@@ -52,6 +67,7 @@ final class VoiceController extends ChangeNotifier {
   Object? _error;
   bool _isMuted = false;
   bool _isScreenSharing = false;
+  bool _isAudioPlaybackActive = false;
   bool _isBusy = false;
   bool _disposed = false;
 
@@ -74,6 +90,7 @@ final class VoiceController extends ChangeNotifier {
   bool get hasDiscordSignaling => _signalingService != null;
   bool get isTransportReady => _transportSession != null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
+  bool get isAudioPlaybackActive => _isAudioPlaybackActive;
   bool get isMuted => _isMuted;
   bool get isScreenSharing => _isScreenSharing;
   bool get isBusy => _isBusy;
@@ -85,7 +102,17 @@ final class VoiceController extends ChangeNotifier {
     notifyListeners();
     try {
       await _mediaService.initialize();
-      _devices = await _mediaService.enumerateDevices();
+      await _playbackService?.initialize();
+      final mediaDevices = await _mediaService.enumerateDevices();
+      final playbackDevices = await _playbackService?.enumerateOutputDevices();
+      _devices = playbackDevices == null
+          ? mediaDevices
+          : [
+              ...mediaDevices.where(
+                (device) => device.kind == VoiceDeviceKind.audioInput,
+              ),
+              ...playbackDevices,
+            ];
       _selectedInputId = _firstDeviceId(VoiceDeviceKind.audioInput);
       _selectedOutputId = _firstDeviceId(VoiceDeviceKind.audioOutput);
       _state = VoiceState.ready;
@@ -127,6 +154,7 @@ final class VoiceController extends ChangeNotifier {
       _connectedChannelId = channelId;
       _transportSession = null;
       await _audioPipeline?.setEnabled(false);
+      await _setPlaybackEnabled(false);
       if (signalingService != null) {
         _connectionStatus = VoiceConnectionStatus.joining;
         await signalingService.joinVoiceChannel(
@@ -171,7 +199,12 @@ final class VoiceController extends ChangeNotifier {
   Future<void> selectOutput(String deviceId) async {
     if (_selectedOutputId == deviceId) return;
     await _run(() async {
-      await _mediaService.selectAudioOutput(deviceId);
+      final playbackService = _playbackService;
+      if (playbackService == null) {
+        await _mediaService.selectAudioOutput(deviceId);
+      } else {
+        await playbackService.selectOutput(deviceId);
+      }
       _selectedOutputId = deviceId;
     });
   }
@@ -217,6 +250,7 @@ final class VoiceController extends ChangeNotifier {
   Future<void> disconnect() async {
     await _run(() async {
       await _audioPipeline?.setEnabled(false);
+      await _setPlaybackEnabled(false);
       final guildId = _connectedGuildId;
       if (guildId != null) {
         await _signalingService?.leaveVoiceChannel(guildId);
@@ -240,6 +274,7 @@ final class VoiceController extends ChangeNotifier {
         ? service as VoiceAudioTransport
         : null;
     await _audioPipeline?.bindTransport(audioTransport);
+    await _setPlaybackEnabled(false);
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
     _signalingSubscription = service?.voiceEvents.listen(
@@ -256,11 +291,13 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
-          unawaited(_audioPipeline?.setEnabled(false));
+          unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
       case VoiceTransportReadyEvent():
         _transportSession = event.session;
-        unawaited(_audioPipeline?.setEnabled(!_isMuted));
+        unawaited(
+          _applyBackgroundAudioState(uplink: !_isMuted, playback: true),
+        );
       case VoiceCredentialsReadyEvent() ||
           VoiceDaveBinaryEvent() ||
           VoiceSpeakingEvent() ||
@@ -274,7 +311,7 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
-    unawaited(_audioPipeline?.bindTransport(null));
+    unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();
   }
 
@@ -293,13 +330,58 @@ final class VoiceController extends ChangeNotifier {
     }
   }
 
+  Future<void> _setPlaybackEnabled(bool enabled) async {
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    await playbackService.setEnabled(enabled);
+    _isAudioPlaybackActive = enabled;
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> _applyBackgroundAudioState({
+    required bool uplink,
+    required bool playback,
+  }) async {
+    try {
+      await _audioPipeline?.setEnabled(uplink);
+      await _setPlaybackEnabled(playback);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  Future<void> _unbindBackgroundAudio() async {
+    try {
+      await _audioPipeline?.bindTransport(null);
+      await _setPlaybackEnabled(false);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  void _reportBackgroundError(Object error) {
+    _error = error;
+    if (!_disposed) notifyListeners();
+  }
+
+  void _handleRemotePcm(VoiceRemotePcmFrame frame) {
+    if (_disposed) return;
+    try {
+      _playbackService?.addPcmFrame(frame);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
     unawaited(_screenEndedSubscription?.cancel());
     unawaited(_audioErrorSubscription?.cancel());
+    unawaited(_remotePcmSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_audioPipeline?.dispose());
+    unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());
     super.dispose();
   }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'src/app.dart';
 import 'src/data/native_opus_codec.dart';
+import 'src/data/soloud_voice_playback_service.dart';
 import 'src/data/webrtc_voice_media_service.dart';
 import 'src/platform/desktop_integration.dart';
 import 'src/platform/windows_desktop_integration.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
       desktopIntegration: desktopIntegration,
       voiceMediaService: WebRtcVoiceMediaService(),
       voiceOpusCodecFactory: opusCodecFactory,
+      voicePlaybackService: SoLoudVoicePlaybackService(),
     ),
   );
 }

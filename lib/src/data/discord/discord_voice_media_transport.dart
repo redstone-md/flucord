@@ -115,18 +115,23 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
         ? (_remoteStates[frame.header.ssrc] = _RemoteAudioState(userId))
         : currentState;
     return [
-      for (final orderedFrame in state.reorderBuffer.add(frame))
-        _decodeRemoteFrame(userId, orderedFrame),
+      for (final ordered in state.reorderBuffer.add(frame))
+        _decodeRemoteFrame(userId, ordered),
     ];
   }
 
   VoiceRemoteOpusFrame _decodeRemoteFrame(
     String userId,
-    DiscordRtpFrame frame,
+    DiscordOrderedRtpFrame ordered,
   ) {
+    final frame = ordered.frame;
     final encrypted = Uint8List.fromList(frame.payload);
     final opus = _daveEnabled ? _decryptDave(userId, encrypted) : encrypted;
-    return VoiceRemoteOpusFrame(userId: userId, opus: opus);
+    return VoiceRemoteOpusFrame(
+      userId: userId,
+      opus: opus,
+      missingFramesBefore: ordered.missingFramesBefore,
+    );
   }
 }
 

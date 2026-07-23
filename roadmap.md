@@ -54,10 +54,11 @@ browser runtime or dependency on Discord's private user API.
    encryption now protect the typed UDP send/receive boundary, including CSRC
    and RTP extension handling. Native 48 kHz stereo PCM16 capture, deterministic
    20 ms framing, bundled libopus encoding, readiness-gated DAVE/RTP uplink,
-   speaking teardown, bounded per-SSRC RTP reordering, replay rejection, and
-   per-user remote Opus decoding are implemented. A playout-timed jitter buffer,
-   loss concealment, native PCM playback, selected output-device routing,
-   Discord interoperability testing, and transmitted screen sharing remain.
+   speaking teardown, bounded per-SSRC RTP reordering, replay rejection,
+   per-user remote Opus decoding, native PLC/FEC, a 60 ms playout buffer,
+   per-user native PCM playback, and selected output-device routing are
+   implemented. Discord interoperability testing in an actual bot voice
+   session and transmitted screen sharing remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety

@@ -66,12 +66,17 @@ then sends it through Discord's AES-256-GCM or XChaCha20-Poly1305 RTP-size UDP
 transport. Mute and disconnect finish the speaking burst before the microphone
 or voice session is torn down.
 
-This is not yet a complete live audio call. The receive boundary maps speaking
-SSRCs to users, reorders RTP across sequence wrap, rejects duplicate/replayed
-packets, decrypts DAVE, and keeps independent Opus decoder state per remote
-user. Native PCM playback still needs a playout-timed jitter buffer, loss
-concealment, and selected output-device routing. Screen capture is currently a
-local preview and is not sent to Discord.
+The receive boundary maps speaking SSRCs to users, reorders RTP across sequence
+wrap, rejects duplicate/replayed packets, decrypts DAVE, and keeps independent
+Opus decoder state per remote user. Bounded loss uses native Opus PLC/FEC;
+long gaps reset only the affected user's decoder. Decoded PCM plays through
+per-user native SoLoud streams with a 60 ms playout buffer and live Windows
+output-device switching.
+
+The media path is implemented end to end, but real Discord interoperability
+still needs verification in an actual bot voice session before the project can
+claim production-ready calls. Screen capture is currently a local preview and
+is not sent to Discord.
 
 ## Verify
 
@@ -79,6 +84,7 @@ local preview and is not sent to Discord.
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
+flutter test integration_test/voice_playback_smoke_test.dart -d windows
 flutter build windows --release
 ```
 

@@ -64,6 +64,47 @@ void main() {
     ]);
     expect(received.map((frame) => frame.samples.single), [5, 7, 9]);
   });
+
+  test('uses Opus PLC and FEC for bounded remote packet loss', () async {
+    final media = _FakeMediaService();
+    final codecs = _FakeCodecFactory();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: codecs,
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+    final received = <VoiceRemotePcmFrame>[];
+    final subscription = pipeline.remotePcm.listen(received.add);
+    addTearDown(subscription.cancel);
+
+    transport.addRemote('user-1', [9], missingFramesBefore: 3);
+    await _flushEvents();
+
+    expect(received.map((frame) => frame.samples.single), [-20, -20, -9, 9]);
+  });
+
+  test('resets per-user decoder after an unbounded packet gap', () async {
+    final media = _FakeMediaService();
+    final codecs = _FakeCodecFactory();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: codecs,
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+
+    transport.addRemote('user-1', [1]);
+    transport.addRemote('user-1', [2], missingFramesBefore: 20);
+    await _flushEvents();
+
+    expect(codecs.decoders, hasLength(2));
+    expect(codecs.decoders.first.disposed, isTrue);
+  });
 }
 
 Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
@@ -97,12 +138,22 @@ final class _FakeEncoder implements VoiceOpusEncoder {
 }
 
 final class _FakeDecoder implements VoiceOpusDecoder {
+  bool disposed = false;
+
   @override
   Int16List decode(Uint8List opusFrame) =>
       Int16List.fromList([opusFrame.first]);
 
   @override
-  void dispose() {}
+  Int16List decodeFec(Uint8List opusFrame, {int frameDurationMs = 20}) =>
+      Int16List.fromList([-opusFrame.first]);
+
+  @override
+  Int16List conceal({int frameDurationMs = 20}) =>
+      Int16List.fromList([-frameDurationMs]);
+
+  @override
+  void dispose() => disposed = true;
 }
 
 final class _FakeAudioTransport implements VoiceAudioTransport {
@@ -114,8 +165,16 @@ final class _FakeAudioTransport implements VoiceAudioTransport {
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _remote.stream;
 
-  void addRemote(String userId, List<int> opus) => _remote.add(
-    VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
+  void addRemote(
+    String userId,
+    List<int> opus, {
+    int missingFramesBefore = 0,
+  }) => _remote.add(
+    VoiceRemoteOpusFrame(
+      userId: userId,
+      opus: Uint8List.fromList(opus),
+      missingFramesBefore: missingFramesBefore,
+    ),
   );
 
   @override

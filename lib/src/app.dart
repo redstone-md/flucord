@@ -21,12 +21,14 @@ class FlucordApp extends StatefulWidget {
     this.desktopIntegration,
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
+    this.voicePlaybackService,
     super.key,
   });
 
   final DesktopIntegration? desktopIntegration;
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;
+  final VoiceAudioPlaybackService? voicePlaybackService;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -52,6 +54,7 @@ class _FlucordAppState extends State<FlucordApp> {
       widget.voiceMediaService ?? const NoopVoiceMediaService(),
       signalingServiceProvider: () => _chatController.voiceSignalingService,
       audioCodecFactory: widget.voiceOpusCodecFactory,
+      playbackService: widget.voicePlaybackService,
     );
     _chatController.addListener(_syncVoiceSignaling);
     widget.desktopIntegration?.attach(

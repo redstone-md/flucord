@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
@@ -28,6 +29,9 @@ final class VoiceAudioPipeline {
   VoiceAudioTransport? _transport;
   bool _enabled = false;
   bool _disposed = false;
+
+  static const int _frameDurationMs = 20;
+  static const int _maxConcealedFrames = 3;
 
   Stream<VoiceRemotePcmFrame> get remotePcm => _remotePcm.stream;
   Stream<Object> get errors => _errors.stream;
@@ -67,19 +71,35 @@ final class VoiceAudioPipeline {
   void _handleRemoteOpus(VoiceRemoteOpusFrame frame) {
     if (_disposed) return;
     try {
-      final decoder = _decoders.putIfAbsent(
+      var decoder = _decoders.putIfAbsent(
         frame.userId,
         _codecFactory.createDecoder,
       );
-      final samples = decoder.decode(frame.opus);
-      if (!_remotePcm.isClosed) {
-        _remotePcm.add(
-          VoiceRemotePcmFrame(userId: frame.userId, samples: samples),
+      if (frame.missingFramesBefore > _maxConcealedFrames) {
+        decoder.dispose();
+        decoder = _codecFactory.createDecoder();
+        _decoders[frame.userId] = decoder;
+      } else if (frame.missingFramesBefore > 0) {
+        for (var index = 1; index < frame.missingFramesBefore; index++) {
+          _emitRemotePcm(
+            frame.userId,
+            decoder.conceal(frameDurationMs: _frameDurationMs),
+          );
+        }
+        _emitRemotePcm(
+          frame.userId,
+          decoder.decodeFec(frame.opus, frameDurationMs: _frameDurationMs),
         );
       }
+      _emitRemotePcm(frame.userId, decoder.decode(frame.opus));
     } catch (error) {
       _emitError(error);
     }
+  }
+
+  void _emitRemotePcm(String userId, Int16List samples) {
+    if (_remotePcm.isClosed) return;
+    _remotePcm.add(VoiceRemotePcmFrame(userId: userId, samples: samples));
   }
 
   void _emitError(Object error) {

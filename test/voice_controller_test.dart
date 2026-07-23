@@ -156,6 +156,68 @@ void main() {
       expect(controller.isAudioUplinkActive, isFalse);
     },
   );
+
+  test(
+    'routes decoded voice to native playback and its output devices',
+    () async {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final playback = _FakeVoicePlaybackService();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+        playbackService: playback,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      await controller.initialize();
+      expect(playback.initialized, isTrue);
+      expect(controller.outputDevices.map((device) => device.id), [
+        'output-default',
+        'output-headset',
+      ]);
+      expect(controller.selectedOutputId, 'output-default');
+      await controller.selectOutput('output-headset');
+      expect(playback.selectedOutput, 'output-headset');
+      expect(media.selectedOutput, isNull);
+
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      await _flushEvents();
+      expect(controller.isAudioPlaybackActive, isTrue);
+      signaling.addRemote('user-1', [7]);
+      await _flushEvents();
+      expect(playback.frames.single.userId, 'user-1');
+
+      await controller.toggleMute();
+      expect(controller.isAudioPlaybackActive, isTrue);
+      await controller.disconnect();
+      expect(controller.isAudioPlaybackActive, isFalse);
+    },
+  );
+
+  test('surfaces a background playback startup failure', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final playback = _FakeVoicePlaybackService()..failOnEnable = true;
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+      audioCodecFactory: _FakeCodecFactory(),
+      playbackService: playback,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+    await _flushEvents();
+    await _flushEvents();
+
+    expect(controller.error, isA<StateError>());
+    expect(controller.isAudioPlaybackActive, isFalse);
+  });
 }
 
 const _transportSession = VoiceTransportSession(
@@ -190,6 +252,10 @@ final class _FakeVoiceSignalingService
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _remoteAudio.stream;
 
   void emit(VoiceSignalingEvent event) => _events.add(event);
+
+  void addRemote(String userId, List<int> opus) => _remoteAudio.add(
+    VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
+  );
 
   @override
   Future<void> joinVoiceChannel({
@@ -346,8 +412,59 @@ final class _FakeEncoder implements VoiceOpusEncoder {
 
 final class _FakeDecoder implements VoiceOpusDecoder {
   @override
-  Int16List decode(Uint8List opusFrame) => Int16List(0);
+  Int16List decode(Uint8List opusFrame) =>
+      Int16List.fromList([opusFrame.first, opusFrame.first]);
+
+  @override
+  Int16List decodeFec(Uint8List opusFrame, {int frameDurationMs = 20}) =>
+      Int16List(0);
+
+  @override
+  Int16List conceal({int frameDurationMs = 20}) => Int16List(0);
 
   @override
   void dispose() {}
+}
+
+final class _FakeVoicePlaybackService implements VoiceAudioPlaybackService {
+  bool initialized = false;
+  bool enabled = false;
+  bool disposed = false;
+  bool failOnEnable = false;
+  String? selectedOutput;
+  final List<VoiceRemotePcmFrame> frames = [];
+
+  @override
+  Future<void> initialize() async => initialized = true;
+
+  @override
+  Future<List<VoiceDevice>> enumerateOutputDevices() async => const [
+    VoiceDevice(
+      id: 'output-default',
+      label: 'Default output',
+      kind: VoiceDeviceKind.audioOutput,
+    ),
+    VoiceDevice(
+      id: 'output-headset',
+      label: 'Headset',
+      kind: VoiceDeviceKind.audioOutput,
+    ),
+  ];
+
+  @override
+  Future<void> selectOutput(String deviceId) async {
+    selectedOutput = deviceId;
+  }
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    if (value && failOnEnable) throw StateError('Playback device disappeared');
+    enabled = value;
+  }
+
+  @override
+  void addPcmFrame(VoiceRemotePcmFrame frame) => frames.add(frame);
+
+  @override
+  Future<void> dispose() async => disposed = true;
 }

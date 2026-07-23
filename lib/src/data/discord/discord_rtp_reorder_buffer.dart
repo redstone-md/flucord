@@ -1,5 +1,15 @@
 import 'discord_rtp_packet.dart';
 
+final class DiscordOrderedRtpFrame {
+  const DiscordOrderedRtpFrame({
+    required this.frame,
+    this.missingFramesBefore = 0,
+  });
+
+  final DiscordRtpFrame frame;
+  final int missingFramesBefore;
+}
+
 final class DiscordRtpReorderBuffer {
   DiscordRtpReorderBuffer({this.maxReorderDistance = 3}) {
     if (maxReorderDistance < 1 || maxReorderDistance >= _halfSequenceRange) {
@@ -21,7 +31,7 @@ final class DiscordRtpReorderBuffer {
 
   int get pendingCount => _pending.length;
 
-  List<DiscordRtpFrame> add(DiscordRtpFrame frame) {
+  List<DiscordOrderedRtpFrame> add(DiscordRtpFrame frame) {
     _nextSequence ??= frame.header.sequence;
     final distance = _forwardDistance(_nextSequence!, frame.header.sequence);
     if (distance >= _halfSequenceRange ||
@@ -30,8 +40,10 @@ final class DiscordRtpReorderBuffer {
     }
 
     _pending[frame.header.sequence] = frame;
-    if (distance >= maxReorderDistance) _skipMissingFrames();
-    return _drainContiguousFrames();
+    final missingFrames = distance >= maxReorderDistance
+        ? _skipMissingFrames()
+        : 0;
+    return _drainContiguousFrames(missingFrames);
   }
 
   void reset() {
@@ -39,21 +51,28 @@ final class DiscordRtpReorderBuffer {
     _nextSequence = null;
   }
 
-  void _skipMissingFrames() {
+  int _skipMissingFrames() {
     final expected = _nextSequence!;
-    _nextSequence = _pending.keys.reduce((nearest, candidate) {
+    final nearest = _pending.keys.reduce((nearest, candidate) {
       final nearestDistance = _forwardDistance(expected, nearest);
       final candidateDistance = _forwardDistance(expected, candidate);
       return candidateDistance < nearestDistance ? candidate : nearest;
     });
+    _nextSequence = nearest;
+    return _forwardDistance(expected, nearest);
   }
 
-  List<DiscordRtpFrame> _drainContiguousFrames() {
-    final ready = <DiscordRtpFrame>[];
+  List<DiscordOrderedRtpFrame> _drainContiguousFrames(int missingFrames) {
+    final ready = <DiscordOrderedRtpFrame>[];
     while (true) {
       final frame = _pending.remove(_nextSequence);
       if (frame == null) break;
-      ready.add(frame);
+      ready.add(
+        DiscordOrderedRtpFrame(
+          frame: frame,
+          missingFramesBefore: ready.isEmpty ? missingFrames : 0,
+        ),
+      );
       _nextSequence = (_nextSequence! + 1) & _sequenceMask;
     }
     return ready;

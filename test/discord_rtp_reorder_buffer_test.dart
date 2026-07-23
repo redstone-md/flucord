@@ -28,7 +28,9 @@ void main() {
     expect(_sequences(buffer.add(_frame(10))), [10]);
     expect(buffer.add(_frame(12)), isEmpty);
     expect(buffer.add(_frame(13)), isEmpty);
-    expect(_sequences(buffer.add(_frame(14))), [12, 13, 14]);
+    final recovered = buffer.add(_frame(14));
+    expect(_sequences(recovered), [12, 13, 14]);
+    expect(recovered.map((frame) => frame.missingFramesBefore), [1, 0, 0]);
     expect(buffer.add(_frame(11)), isEmpty);
   });
 
@@ -44,8 +46,9 @@ void main() {
   });
 }
 
-List<int> _sequences(List<DiscordRtpFrame> frames) =>
-    frames.map((frame) => frame.header.sequence).toList(growable: false);
+List<int> _sequences(List<DiscordOrderedRtpFrame> frames) => frames
+    .map((ordered) => ordered.frame.header.sequence)
+    .toList(growable: false);
 
 DiscordRtpFrame _frame(int sequence) => DiscordRtpFrame(
   header: DiscordRtpHeader(sequence: sequence, timestamp: sequence, ssrc: 7),

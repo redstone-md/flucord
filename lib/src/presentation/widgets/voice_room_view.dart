@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../application/voice_controller.dart';
-import '../../domain/voice_connection.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
+import 'voice_room_status.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({
@@ -177,7 +177,7 @@ class _VoiceStage extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              _statusLabel(controller),
+              voiceRoomStatusLabel(controller),
               style: TextStyle(
                 color: controller.isTransportReady
                     ? FlucordColors.signal
@@ -196,24 +196,6 @@ class _VoiceStage extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _statusLabel(VoiceController controller) {
-    if (!controller.isConnected) return 'Disconnected';
-    if (!controller.hasDiscordSignaling) return 'Local media ready';
-    return switch (controller.connectionStatus) {
-      VoiceConnectionStatus.disconnected => 'Voice transport disconnected',
-      VoiceConnectionStatus.joining => 'Joining voice channel...',
-      VoiceConnectionStatus.connecting => 'Connecting to voice server...',
-      VoiceConnectionStatus.discovering => 'Discovering UDP route...',
-      VoiceConnectionStatus.negotiating => 'Negotiating DAVE encryption...',
-      VoiceConnectionStatus.ready =>
-        controller.isAudioUplinkActive
-            ? 'Encrypted voice uplink active'
-            : 'Encrypted transport ready',
-      VoiceConnectionStatus.reconnecting => 'Reconnecting voice transport...',
-      VoiceConnectionStatus.failure => 'Voice transport failed',
-    };
   }
 }
 
