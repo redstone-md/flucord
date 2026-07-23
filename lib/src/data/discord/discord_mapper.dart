@@ -15,9 +15,12 @@ final class DiscordMapper {
     required List<Map<String, Object?>> guilds,
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
     Map<String, List<Map<String, Object?>>> threadsByGuild = const {},
+    Map<String, List<Map<String, Object?>>> membersByGuild = const {},
+    Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
+    final members = <String, Member>{};
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
       final rawChannels = [
@@ -31,12 +34,29 @@ final class DiscordMapper {
       if (mappedChannels.isEmpty) continue;
       spaces.add(_space(guild));
       channels.addAll(mappedChannels);
+      for (final payload in membersByGuild[guildId] ?? const []) {
+        final mapped = guildMember(
+          payload,
+          guildId,
+          rolesByGuild[guildId] ?? const [],
+        );
+        members[mapped.id] = _mergeMembers(members[mapped.id], mapped);
+      }
     }
-    final currentMember = member(currentUser, role: 'Discord bot');
+    final currentMember = member(
+      currentUser,
+      role: 'Discord bot',
+      presence: Presence.online,
+      spaceIds: spaces.map((space) => space.id).toSet(),
+    );
+    members[currentMember.id] = _mergeMembers(
+      members[currentMember.id],
+      currentMember,
+    );
     return ChatWorkspace(
       spaces: spaces,
       channels: channels,
-      members: [currentMember],
+      members: members.values.toList(),
       messages: const [],
       currentMemberId: currentMember.id,
     );
@@ -94,6 +114,9 @@ final class DiscordMapper {
       isEdited: payload.containsKey('edited_timestamp')
           ? payload['edited_timestamp'] != null
           : fallback?.isEdited ?? false,
+      isPinned: payload.containsKey('pinned')
+          ? payload['pinned'] == true
+          : fallback?.isPinned ?? false,
       attachments: attachments,
       reactions: reactions,
       reply: reply,
@@ -136,7 +159,14 @@ final class DiscordMapper {
     );
   }
 
-  Member member(Map<String, Object?> payload, {String role = 'Member'}) {
+  Member member(
+    Map<String, Object?> payload, {
+    String role = 'Member',
+    Presence presence = Presence.offline,
+    Set<String> spaceIds = const {},
+    Map<String, String> rolesBySpace = const {},
+    int? colorValue,
+  }) {
     final username =
         payload['global_name'] as String? ??
         payload['username'] as String? ??
@@ -146,8 +176,61 @@ final class DiscordMapper {
       displayName: username,
       initials: _monogram(username),
       role: role,
-      presence: Presence.online,
-      colorValue: _colorFor(payload['id']! as String),
+      presence: presence,
+      colorValue: colorValue ?? _colorFor(payload['id']! as String),
+      spaceIds: spaceIds,
+      rolesBySpace: rolesBySpace,
+    );
+  }
+
+  Member guildMember(
+    Map<String, Object?> payload,
+    String guildId,
+    List<Map<String, Object?>> roles,
+  ) {
+    final user = (payload['user']! as Map).cast<String, Object?>();
+    final roleIds = (payload['roles'] as List? ?? const []).whereType<String>();
+    final matchingRoles =
+        roles.where((role) => roleIds.contains(role['id'])).toList()..sort(
+          (left, right) => (right['position'] as int? ?? 0).compareTo(
+            left['position'] as int? ?? 0,
+          ),
+        );
+    final topRole = matchingRoles.isEmpty ? null : matchingRoles.first;
+    final roleName = topRole?['name'] as String? ?? 'Member';
+    final roleColor = topRole?['color'] as int? ?? 0;
+    final username =
+        payload['nick'] as String? ??
+        user['global_name'] as String? ??
+        user['username'] as String? ??
+        'Unknown';
+    final id = user['id']! as String;
+    return Member(
+      id: id,
+      displayName: username,
+      initials: _monogram(username),
+      role: roleName,
+      presence: Presence.offline,
+      colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
+      spaceIds: {guildId},
+      rolesBySpace: {guildId: roleName},
+    );
+  }
+
+  Presence presence(String status) => switch (status) {
+    'online' => Presence.online,
+    'idle' || 'dnd' => Presence.idle,
+    _ => Presence.offline,
+  };
+
+  static Member _mergeMembers(Member? previous, Member incoming) {
+    if (previous == null) return incoming;
+    return incoming.copyWith(
+      spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
+      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
+      presence: incoming.presence == Presence.offline
+          ? previous.presence
+          : incoming.presence,
     );
   }
 

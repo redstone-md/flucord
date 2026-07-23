@@ -36,6 +36,19 @@ final class MockChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ChannelHistory> loadPinnedMessages(String channelId) async {
+    await _wait();
+    return ChannelHistory(
+      channelId: channelId,
+      messages: _workspace
+          .messagesFor(channelId)
+          .where((message) => message.isPinned)
+          .toList(),
+      members: _workspace.members,
+    );
+  }
+
+  @override
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
@@ -120,6 +133,32 @@ final class MockChatRepository implements ChatRepository {
     required String messageId,
     required String emoji,
   }) => _setReaction(messageId, emoji, add: false);
+
+  @override
+  Future<void> pinMessage({
+    required String channelId,
+    required String messageId,
+  }) => _setPinned(messageId, true);
+
+  @override
+  Future<void> unpinMessage({
+    required String channelId,
+    required String messageId,
+  }) => _setPinned(messageId, false);
+
+  Future<void> _setPinned(String messageId, bool pinned) async {
+    await _wait();
+    final message = _workspace.messages.firstWhere(
+      (candidate) => candidate.id == messageId,
+    );
+    final updated = message.copyWith(isPinned: pinned);
+    _workspace = _workspace.upsertMessage(updated);
+    _events.add(MessageUpsertedEvent(message: updated));
+    _events.add(PinsChangedEvent(message.channelId));
+  }
+
+  @override
+  Future<void> startTyping(String channelId) async {}
 
   Future<void> _setReaction(
     String messageId,
@@ -360,6 +399,7 @@ final class MockChatRepository implements ChatRepository {
           MessageReaction(emojiName: '✓', count: 3, reactedByCurrentUser: true),
           MessageReaction(emojiName: '🔥', count: 2),
         ],
+        isPinned: true,
       ),
       ChatMessage(
         id: 'm5',

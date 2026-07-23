@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import '../../domain/chat_models.dart';
+import 'discord_multipart_body.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
@@ -68,6 +68,7 @@ final class DiscordApiException implements Exception {
   final String message;
 
   bool get isUnauthorized => statusCode == HttpStatus.unauthorized;
+  bool get isForbidden => statusCode == HttpStatus.forbidden;
 
   @override
   String toString() => 'Discord API $statusCode: $message';
@@ -115,6 +116,25 @@ final class DiscordApiClient {
   Future<List<Map<String, Object?>>> getGuildChannels(String guildId) =>
       _getList('/guilds/$guildId/channels');
 
+  Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
+      _getList('/guilds/$guildId/roles');
+
+  Future<List<Map<String, Object?>>> getGuildMembers(String guildId) async {
+    final members = <Map<String, Object?>>[];
+    String? after;
+    do {
+      final query = <String, String>{'limit': '1000'};
+      if (after != null) query['after'] = after;
+      final page = await _getList('/guilds/$guildId/members', query: query);
+      members.addAll(page);
+      final lastUser = page.isEmpty ? null : page.last['user'];
+      after = page.length == 1000 && lastUser is Map
+          ? lastUser['id'] as String?
+          : null;
+    } while (after != null);
+    return members;
+  }
+
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {
     int limit = 100,
@@ -122,6 +142,32 @@ final class DiscordApiClient {
     '/channels/$channelId/messages',
     query: {'limit': limit.clamp(1, 100).toString()},
   );
+
+  Future<List<Map<String, Object?>>> getChannelPins(String channelId) async {
+    final messages = <Map<String, Object?>>[];
+    String? before;
+    var hasMore = true;
+    while (hasMore) {
+      final payload = await _requestObject(
+        'GET',
+        '/channels/$channelId/messages/pins',
+        query: {'limit': '50', 'before': ?before},
+      );
+      final items = payload['items'];
+      if (items is! List) break;
+      final mappedItems = items.whereType<Map>().toList(growable: false);
+      for (final item in mappedItems) {
+        final rawMessage = item['message'];
+        if (rawMessage is Map) {
+          messages.add({...rawMessage.cast<String, Object?>(), 'pinned': true});
+        }
+      }
+      hasMore = payload['has_more'] == true && mappedItems.isNotEmpty;
+      before = hasMore ? mappedItems.last['pinned_at'] as String? : null;
+      if (hasMore && before == null) break;
+    }
+    return messages;
+  }
 
   Future<Map<String, Object?>> createMessage({
     required String channelId,
@@ -188,6 +234,20 @@ final class DiscordApiClient {
     );
   }
 
+  Future<void> pinMessage({
+    required String channelId,
+    required String messageId,
+  }) => _requestEmpty('PUT', '/channels/$channelId/messages/pins/$messageId');
+
+  Future<void> unpinMessage({
+    required String channelId,
+    required String messageId,
+  }) =>
+      _requestEmpty('DELETE', '/channels/$channelId/messages/pins/$messageId');
+
+  Future<void> startTyping(String channelId) =>
+      _requestEmpty('POST', '/channels/$channelId/typing');
+
   Future<List<Map<String, Object?>>> getGuildActiveThreads(
     String guildId,
   ) async {
@@ -208,7 +268,7 @@ final class DiscordApiClient {
     Map<String, Object?> payload,
     List<PendingAttachment> attachments,
   ) async {
-    final multipart = await _DiscordMultipartBody.build(payload, attachments);
+    final multipart = await DiscordMultipartBody.build(payload, attachments);
     final response = await _request(
       'POST',
       '/channels/$channelId/messages',
@@ -259,9 +319,10 @@ final class DiscordApiClient {
   Future<Map<String, Object?>> _requestObject(
     String method,
     String path, {
+    Map<String, String>? query,
     Map<String, Object?>? body,
   }) async {
-    final payload = await _request(method, path, body: body);
+    final payload = await _request(method, path, query: query, body: body);
     if (payload is! Map) {
       throw const DiscordApiException(
         statusCode: 502,
@@ -332,61 +393,4 @@ final class DiscordApiClient {
   }
 
   void close() => _transport.close();
-}
-
-final class _DiscordMultipartBody {
-  const _DiscordMultipartBody({required this.bytes, required this.contentType});
-
-  final List<int> bytes;
-  final String contentType;
-
-  static Future<_DiscordMultipartBody> build(
-    Map<String, Object?> payload,
-    List<PendingAttachment> attachments,
-  ) async {
-    final boundary =
-        '----flucord-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
-    final builder = BytesBuilder(copy: false);
-
-    void text(String value) => builder.add(utf8.encode(value));
-
-    text('--$boundary\r\n');
-    text('Content-Disposition: form-data; name="payload_json"\r\n');
-    text('Content-Type: application/json\r\n\r\n');
-    text(jsonEncode(payload));
-    text('\r\n');
-
-    for (var index = 0; index < attachments.length; index++) {
-      final attachment = attachments[index];
-      final safeName = attachment.name
-          .replaceAll(RegExp(r'[\r\n"]'), '_')
-          .trim();
-      text('--$boundary\r\n');
-      text(
-        'Content-Disposition: form-data; name="files[$index]"; '
-        'filename="$safeName"\r\n',
-      );
-      text('Content-Type: ${_contentTypeFor(safeName)}\r\n\r\n');
-      builder.add(await File(attachment.path).readAsBytes());
-      text('\r\n');
-    }
-    text('--$boundary--\r\n');
-    return _DiscordMultipartBody(
-      bytes: builder.takeBytes(),
-      contentType: 'multipart/form-data; boundary=$boundary',
-    );
-  }
-
-  static String _contentTypeFor(String name) {
-    final extension = name.split('.').last.toLowerCase();
-    return switch (extension) {
-      'png' => 'image/png',
-      'jpg' || 'jpeg' => 'image/jpeg',
-      'gif' => 'image/gif',
-      'webp' => 'image/webp',
-      'txt' || 'log' || 'md' => 'text/plain',
-      'pdf' => 'application/pdf',
-      _ => 'application/octet-stream',
-    };
-  }
 }

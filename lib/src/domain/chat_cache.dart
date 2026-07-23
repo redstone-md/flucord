@@ -9,9 +9,13 @@ abstract interface class ChatCache {
 
   Future<ChatMessage?> readMessage(String messageId);
 
+  Future<ChannelHistory> readPinnedMessages(String channelId);
+
   Future<void> writeChannelHistory(ChannelHistory history);
 
   Future<void> writeMessage(ChatMessage message, {Member? member});
+
+  Future<void> writeMember(Member member);
 
   Future<void> deleteMessage(String messageId);
 

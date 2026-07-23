@@ -32,7 +32,7 @@ final class SqliteChatCache implements ChatCache {
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onCreate: _createSchema,
         onUpgrade: _upgradeSchema,
       ),
@@ -77,7 +77,9 @@ final class SqliteChatCache implements ChatCache {
         initials TEXT NOT NULL,
         role TEXT NOT NULL,
         presence INTEGER NOT NULL,
-        color_value INTEGER NOT NULL
+        color_value INTEGER NOT NULL,
+        space_ids_json TEXT NOT NULL,
+        roles_by_space_json TEXT NOT NULL
       )
     ''');
     await database.execute('''
@@ -90,7 +92,8 @@ final class SqliteChatCache implements ChatCache {
         is_edited INTEGER NOT NULL,
         attachments_json TEXT NOT NULL,
         reply_json TEXT,
-        reactions_json TEXT NOT NULL
+        reactions_json TEXT NOT NULL,
+        is_pinned INTEGER NOT NULL
       )
     ''');
     await database.execute(
@@ -115,6 +118,17 @@ final class SqliteChatCache implements ChatCache {
       await database.execute('ALTER TABLE messages ADD reply_json TEXT');
       await database.execute(
         "ALTER TABLE messages ADD reactions_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+    if (oldVersion < 3) {
+      await database.execute(
+        "ALTER TABLE members ADD space_ids_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await database.execute(
+        "ALTER TABLE members ADD roles_by_space_json TEXT NOT NULL DEFAULT '{}'",
+      );
+      await database.execute(
+        'ALTER TABLE messages ADD is_pinned INTEGER NOT NULL DEFAULT 0',
       );
     }
   }
@@ -202,6 +216,24 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
+  Future<ChannelHistory> readPinnedMessages(String channelId) async {
+    final messages = await _database.query(
+      'messages',
+      where: 'channel_id = ? AND is_pinned = 1',
+      whereArgs: [channelId],
+      orderBy: 'sent_at DESC',
+    );
+    final authorIds = messages
+        .map((row) => row['author_id']! as String)
+        .toSet();
+    return ChannelHistory(
+      channelId: channelId,
+      messages: messages.map(_messageFromRow).toList(),
+      members: await _readMembers(authorIds),
+    );
+  }
+
+  @override
   Future<void> writeChannelHistory(ChannelHistory history) async {
     await _database.transaction((transaction) async {
       await transaction.delete(
@@ -245,6 +277,13 @@ final class SqliteChatCache implements ChatCache {
       );
     });
   }
+
+  @override
+  Future<void> writeMember(Member member) => _database.insert(
+    'members',
+    _memberToRow(member),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
 
   @override
   Future<void> deleteMessage(String messageId) =>
@@ -342,6 +381,8 @@ final class SqliteChatCache implements ChatCache {
     'role': member.role,
     'presence': member.presence.index,
     'color_value': member.colorValue,
+    'space_ids_json': ChatModelJson.strings(member.spaceIds),
+    'roles_by_space_json': ChatModelJson.stringMap(member.rolesBySpace),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -351,6 +392,10 @@ final class SqliteChatCache implements ChatCache {
     role: row['role']! as String,
     presence: Presence.values[row['presence']! as int],
     colorValue: row['color_value']! as int,
+    spaceIds: ChatModelJson.stringsFrom(row['space_ids_json']! as String),
+    rolesBySpace: ChatModelJson.stringMapFrom(
+      row['roles_by_space_json']! as String,
+    ),
   );
 
   static Map<String, Object?> _messageToRow(ChatMessage message) => {
@@ -363,6 +408,7 @@ final class SqliteChatCache implements ChatCache {
     'attachments_json': ChatModelJson.attachments(message.attachments),
     'reply_json': ChatModelJson.reply(message.reply),
     'reactions_json': ChatModelJson.reactions(message.reactions),
+    'is_pinned': message.isPinned ? 1 : 0,
   };
 
   static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -377,6 +423,7 @@ final class SqliteChatCache implements ChatCache {
     ),
     reply: ChatModelJson.replyFrom(row['reply_json'] as String?),
     reactions: ChatModelJson.reactionsFrom(row['reactions_json']! as String),
+    isPinned: row['is_pinned'] == 1,
   );
 
   @override

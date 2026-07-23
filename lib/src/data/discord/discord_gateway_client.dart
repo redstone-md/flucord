@@ -36,6 +36,7 @@ final class DiscordGatewayProtocol {
     'd': {
       'token': token,
       'intents': intents,
+      'large_threshold': 250,
       'properties': {
         'os': Platform.operatingSystem,
         'browser': 'flucord',
@@ -75,14 +76,20 @@ final class DiscordGatewayClient {
         token: botToken.trim(),
         intents:
             guildsIntent |
+            guildMembersIntent |
+            guildPresencesIntent |
             guildMessagesIntent |
             guildMessageReactionsIntent |
+            guildMessageTypingIntent |
             messageContentIntent,
       );
 
   static const guildsIntent = 1 << 0;
+  static const guildMembersIntent = 1 << 1;
+  static const guildPresencesIntent = 1 << 8;
   static const guildMessagesIntent = 1 << 9;
   static const guildMessageReactionsIntent = 1 << 10;
+  static const guildMessageTypingIntent = 1 << 11;
   static const messageContentIntent = 1 << 15;
 
   final DiscordGatewayProtocol _protocol;

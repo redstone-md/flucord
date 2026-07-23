@@ -152,6 +152,48 @@ void main() {
       expect(transport.requests[3].uri.toString(), contains('check%3A42/@me'));
       expect(transport.requests[4].method, 'DELETE');
     });
+
+    test('uses documented pins, members, roles, and typing routes', () async {
+      final transport = _RecordingTransport([
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '[{"id":"role-1","name":"Operator"}]',
+        ),
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '[{"user":{"id":"user-1"}}]',
+        ),
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body:
+              '{"items":[{"pinned_at":"2026-07-23T01:00:00Z","message":{"id":"m1"}}],"has_more":false}',
+        ),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+      final client = DiscordApiClient(botToken: 'token', transport: transport);
+
+      expect(await client.getGuildRoles('g1'), hasLength(1));
+      expect(await client.getGuildMembers('g1'), hasLength(1));
+      final pins = await client.getChannelPins('c1');
+      await client.pinMessage(channelId: 'c1', messageId: 'm1');
+      await client.unpinMessage(channelId: 'c1', messageId: 'm1');
+      await client.startTyping('c1');
+
+      expect(pins.single['pinned'], isTrue);
+      expect(transport.requests[1].uri.queryParameters['limit'], '1000');
+      expect(
+        transport.requests[2].uri.path,
+        '/api/v10/channels/c1/messages/pins',
+      );
+      expect(transport.requests[3].method, 'PUT');
+      expect(transport.requests[4].method, 'DELETE');
+      expect(transport.requests[5].uri.path, '/api/v10/channels/c1/typing');
+    });
   });
 
   test('gateway protocol identifies then resumes the same session', () {
@@ -159,8 +201,11 @@ void main() {
       token: 'bot-token',
       intents:
           DiscordGatewayClient.guildsIntent |
+          DiscordGatewayClient.guildMembersIntent |
+          DiscordGatewayClient.guildPresencesIntent |
           DiscordGatewayClient.guildMessagesIntent |
           DiscordGatewayClient.guildMessageReactionsIntent |
+          DiscordGatewayClient.guildMessageTypingIntent |
           DiscordGatewayClient.messageContentIntent,
     );
 
@@ -168,7 +213,8 @@ void main() {
     expect(identify['op'], 2);
     final identifyData = identify['d']! as Map<String, Object?>;
     expect(identifyData['token'], 'bot-token');
-    expect(identifyData['intents'], 34305);
+    expect(identifyData['intents'], 36611);
+    expect(identifyData['large_threshold'], 250);
 
     protocol.accept({
       'op': 0,
@@ -209,6 +255,25 @@ void main() {
           },
         ],
       },
+      rolesByGuild: {
+        'guild-1': [
+          {
+            'id': 'role-1',
+            'name': 'Operator',
+            'position': 5,
+            'color': 0x336699,
+          },
+        ],
+      },
+      membersByGuild: {
+        'guild-1': [
+          {
+            'nick': 'Mira Ops',
+            'roles': ['role-1'],
+            'user': {'id': 'user-1', 'username': 'Mira', 'global_name': null},
+          },
+        ],
+      },
     );
     final history = mapper.history('channel-1', [
       _messagePayload(id: 'new', minute: 2),
@@ -217,7 +282,14 @@ void main() {
 
     expect(workspace.spaces.single.name, 'The Forge');
     expect(workspace.channels.single.name, 'general');
-    expect(workspace.members.single.role, 'Discord bot');
+    expect(
+      workspace.members.firstWhere((member) => member.id == 'bot-1').role,
+      'Discord bot',
+    );
+    final guildMember = workspace.memberById('user-1');
+    expect(guildMember.displayName, 'Mira Ops');
+    expect(guildMember.roleFor('guild-1'), 'Operator');
+    expect(guildMember.colorValue, 0xff336699);
     expect(history.messages.map((message) => message.id), ['old', 'new']);
     expect(history.members.single.displayName, 'Mira');
 

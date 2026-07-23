@@ -7,10 +7,50 @@ sealed class ChatRepositoryEvent {
 }
 
 final class MessageUpsertedEvent extends ChatRepositoryEvent {
-  const MessageUpsertedEvent({required this.message, this.member});
+  const MessageUpsertedEvent({
+    required this.message,
+    this.member,
+    this.isNew = false,
+    this.mentionsCurrentMember = false,
+  });
 
   final ChatMessage message;
   final Member? member;
+  final bool isNew;
+  final bool mentionsCurrentMember;
+}
+
+final class MemberUpsertedEvent extends ChatRepositoryEvent {
+  const MemberUpsertedEvent(this.member);
+
+  final Member member;
+}
+
+final class MemberRemovedEvent extends ChatRepositoryEvent {
+  const MemberRemovedEvent({required this.memberId, required this.spaceId});
+
+  final String memberId;
+  final String spaceId;
+}
+
+final class PresenceChangedEvent extends ChatRepositoryEvent {
+  const PresenceChangedEvent({required this.memberId, required this.presence});
+
+  final String memberId;
+  final Presence presence;
+}
+
+final class TypingStartedEvent extends ChatRepositoryEvent {
+  const TypingStartedEvent({required this.channelId, required this.memberId});
+
+  final String channelId;
+  final String memberId;
+}
+
+final class PinsChangedEvent extends ChatRepositoryEvent {
+  const PinsChangedEvent(this.channelId);
+
+  final String channelId;
 }
 
 final class MessageDeletedEvent extends ChatRepositoryEvent {
@@ -45,6 +85,8 @@ abstract interface class ChatRepository {
 
   Future<ChannelHistory> loadChannelHistory(String channelId);
 
+  Future<ChannelHistory> loadPinnedMessages(String channelId);
+
   Future<ChatMessage> sendMessage({
     required String channelId,
     required String authorId,
@@ -75,6 +117,18 @@ abstract interface class ChatRepository {
     required String messageId,
     required String emoji,
   });
+
+  Future<void> pinMessage({
+    required String channelId,
+    required String messageId,
+  });
+
+  Future<void> unpinMessage({
+    required String channelId,
+    required String messageId,
+  });
+
+  Future<void> startTyping(String channelId);
 
   Future<void> close();
 }

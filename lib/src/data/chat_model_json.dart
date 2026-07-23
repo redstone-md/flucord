@@ -76,4 +76,16 @@ final class ChatModelJson {
             ),
           )
           .toList(growable: false);
+
+  static String strings(Iterable<String> values) => jsonEncode(values.toList());
+
+  static Set<String> stringsFrom(String source) =>
+      (jsonDecode(source) as List).whereType<String>().toSet();
+
+  static String stringMap(Map<String, String> values) => jsonEncode(values);
+
+  static Map<String, String> stringMapFrom(String source) =>
+      (jsonDecode(source) as Map).map(
+        (key, value) => MapEntry(key as String, value as String),
+      );
 }

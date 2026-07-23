@@ -50,6 +50,8 @@ void main() {
           role: 'Bot',
           presence: Presence.online,
           colorValue: 0xff48745f,
+          spaceIds: {'guild-1'},
+          rolesBySpace: {'guild-1': 'Bot'},
         ),
       ],
       messages: const [],
@@ -85,6 +87,7 @@ void main() {
           reactedByCurrentUser: true,
         ),
       ],
+      isPinned: true,
     );
 
     await cache.writeWorkspace(workspace);
@@ -109,6 +112,12 @@ void main() {
     expect(history.messages.single.reply?.messageId, 'message-0');
     expect(history.messages.single.reactions.single.count, 3);
     expect(history.members.single.displayName, 'Jack');
+    expect(history.members.single.roleFor('guild-1'), 'Bot');
+    expect(history.messages.single.isPinned, isTrue);
+    expect(
+      (await cache.readPinnedMessages('channel-1')).messages.single.id,
+      'message-1',
+    );
 
     final edited = ChatMessage(
       id: message.id,
@@ -149,6 +158,16 @@ void main() {
             )
           ''');
           await database.execute('''
+            CREATE TABLE members (
+              id TEXT PRIMARY KEY,
+              display_name TEXT NOT NULL,
+              initials TEXT NOT NULL,
+              role TEXT NOT NULL,
+              presence INTEGER NOT NULL,
+              color_value INTEGER NOT NULL
+            )
+          ''');
+          await database.execute('''
             CREATE TABLE messages (
               id TEXT PRIMARY KEY,
               channel_id TEXT NOT NULL,
@@ -176,6 +195,7 @@ void main() {
     final messageColumns = await database.rawQuery(
       'PRAGMA table_info(messages)',
     );
+    final memberColumns = await database.rawQuery('PRAGMA table_info(members)');
 
     expect(channelColumns.map((row) => row['name']), contains('is_thread'));
     expect(
@@ -185,6 +205,11 @@ void main() {
     expect(
       messageColumns.map((row) => row['name']),
       contains('reactions_json'),
+    );
+    expect(messageColumns.map((row) => row['name']), contains('is_pinned'));
+    expect(
+      memberColumns.map((row) => row['name']),
+      contains('roles_by_space_json'),
     );
   });
 }

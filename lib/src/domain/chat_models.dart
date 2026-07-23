@@ -38,6 +38,19 @@ final class ConversationChannel {
   final bool isThread;
   final bool unread;
   final int mentionCount;
+
+  ConversationChannel copyWith({bool? unread, int? mentionCount}) =>
+      ConversationChannel(
+        id: id,
+        spaceId: spaceId,
+        name: name,
+        topic: topic,
+        kind: kind,
+        parentId: parentId,
+        isThread: isThread,
+        unread: unread ?? this.unread,
+        mentionCount: mentionCount ?? this.mentionCount,
+      );
 }
 
 final class Member {
@@ -48,6 +61,8 @@ final class Member {
     required this.role,
     required this.presence,
     required this.colorValue,
+    this.spaceIds = const {},
+    this.rolesBySpace = const {},
   });
 
   final String id;
@@ -56,6 +71,28 @@ final class Member {
   final String role;
   final Presence presence;
   final int colorValue;
+  final Set<String> spaceIds;
+  final Map<String, String> rolesBySpace;
+
+  String roleFor(String spaceId) => rolesBySpace[spaceId] ?? role;
+
+  Member copyWith({
+    String? displayName,
+    String? role,
+    Presence? presence,
+    int? colorValue,
+    Set<String>? spaceIds,
+    Map<String, String>? rolesBySpace,
+  }) => Member(
+    id: id,
+    displayName: displayName ?? this.displayName,
+    initials: initials,
+    role: role ?? this.role,
+    presence: presence ?? this.presence,
+    colorValue: colorValue ?? this.colorValue,
+    spaceIds: spaceIds ?? this.spaceIds,
+    rolesBySpace: rolesBySpace ?? this.rolesBySpace,
+  );
 }
 
 final class PendingAttachment {
@@ -142,6 +179,7 @@ final class ChatMessage {
     List<MessageReaction> reactions = const [],
     this.reply,
     this.isEdited = false,
+    this.isPinned = false,
   }) : attachments = List.unmodifiable(attachments),
        reactions = List.unmodifiable(reactions);
 
@@ -154,12 +192,14 @@ final class ChatMessage {
   final MessageReply? reply;
   final List<MessageReaction> reactions;
   final bool isEdited;
+  final bool isPinned;
 
   ChatMessage copyWith({
     String? body,
     List<MessageAttachment>? attachments,
     List<MessageReaction>? reactions,
     bool? isEdited,
+    bool? isPinned,
   }) => ChatMessage(
     id: id,
     channelId: channelId,
@@ -170,6 +210,7 @@ final class ChatMessage {
     reply: reply,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,
+    isPinned: isPinned ?? this.isPinned,
   );
 }
 
@@ -249,9 +290,61 @@ final class ChatWorkspace {
     ]..sort((left, right) => left.sentAt.compareTo(right.sentAt));
     final nextMembers = member == null
         ? members
-        : [...members.where((existing) => existing.id != member.id), member];
+        : _mergeMemberInto(members, member);
     return copyWith(messages: nextMessages, members: nextMembers);
   }
+
+  ChatWorkspace upsertMember(Member member) =>
+      copyWith(members: _mergeMemberInto(members, member));
+
+  ChatWorkspace updatePresence(String memberId, Presence presence) => copyWith(
+    members: [
+      for (final member in members)
+        member.id == memberId ? member.copyWith(presence: presence) : member,
+    ],
+  );
+
+  ChatWorkspace removeMemberFromSpace(String memberId, String spaceId) {
+    final next = <Member>[];
+    for (final member in members) {
+      if (member.id != memberId) {
+        next.add(member);
+        continue;
+      }
+      final spaces = {...member.spaceIds}..remove(spaceId);
+      final roles = {...member.rolesBySpace}..remove(spaceId);
+      if (spaces.isNotEmpty || member.spaceIds.isEmpty) {
+        next.add(member.copyWith(spaceIds: spaces, rolesBySpace: roles));
+      }
+    }
+    return copyWith(members: next);
+  }
+
+  ChatWorkspace markChannelRead(String channelId) => updateChannel(
+    channelId,
+    (channel) => channel.copyWith(unread: false, mentionCount: 0),
+  );
+
+  ChatWorkspace markChannelUnread(String channelId, {required bool mention}) =>
+      updateChannel(
+        channelId,
+        (channel) => channel.copyWith(
+          unread: true,
+          mentionCount: mention
+              ? channel.mentionCount + 1
+              : channel.mentionCount,
+        ),
+      );
+
+  ChatWorkspace updateChannel(
+    String channelId,
+    ConversationChannel Function(ConversationChannel channel) update,
+  ) => copyWith(
+    channels: [
+      for (final channel in channels)
+        channel.id == channelId ? update(channel) : channel,
+    ],
+  );
 
   ChatWorkspace removeMessage(String messageId) => copyWith(
     messages: messages.where((message) => message.id != messageId).toList(),
@@ -270,6 +363,20 @@ final class ChatWorkspace {
         .where((message) => message.channelId != channelId)
         .toList(),
   );
+
+  static List<Member> _mergeMemberInto(List<Member> current, Member incoming) {
+    final existing = current.where((member) => member.id == incoming.id);
+    if (existing.isEmpty) return [...current, incoming];
+    final previous = existing.first;
+    final merged = incoming.copyWith(
+      spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
+      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
+      presence: incoming.presence == Presence.offline
+          ? previous.presence
+          : incoming.presence,
+    );
+    return [...current.where((member) => member.id != incoming.id), merged];
+  }
 }
 
 final class ChannelHistory {
