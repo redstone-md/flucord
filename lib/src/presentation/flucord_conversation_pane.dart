@@ -35,6 +35,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onToggleThreads,
     required this.onRefreshForumPosts,
     required this.onLoadMoreForumPosts,
+    required this.onLoadForumPostPreview,
     required this.onCreateForumPost,
     required this.onOpenInbox,
     required this.onSend,
@@ -81,6 +82,7 @@ class _ConversationPane extends StatefulWidget {
   final VoidCallback onToggleThreads;
   final VoidCallback onRefreshForumPosts;
   final VoidCallback onLoadMoreForumPosts;
+  final ValueChanged<String> onLoadForumPostPreview;
   final CreateForumPostCallback onCreateForumPost;
   final VoidCallback onOpenInbox;
   final SendMessageCallback onSend;
@@ -127,6 +129,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onRefresh: widget.onRefreshForumPosts,
         onLoadMore: widget.onLoadMoreForumPosts,
         onOpenPost: widget.onSelectChannel,
+        onLoadPostPreview: widget.onLoadForumPostPreview,
         onCreatePost: widget.onCreateForumPost,
       ),
       ChannelKind.text when widget.isLoading => const ChannelLoadingView(),

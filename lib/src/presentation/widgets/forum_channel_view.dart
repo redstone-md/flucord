@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_forum_post_dialog.dart';
+import 'forum_post_tile.dart';
 
 class ForumChannelView extends StatefulWidget {
   const ForumChannelView({
@@ -15,6 +16,7 @@ class ForumChannelView extends StatefulWidget {
     required this.onRefresh,
     required this.onLoadMore,
     required this.onOpenPost,
+    required this.onLoadPostPreview,
     required this.onCreatePost,
     super.key,
   });
@@ -28,6 +30,7 @@ class ForumChannelView extends StatefulWidget {
   final VoidCallback onRefresh;
   final VoidCallback onLoadMore;
   final ValueChanged<String> onOpenPost;
+  final ValueChanged<String> onLoadPostPreview;
   final CreateForumPostCallback onCreatePost;
 
   @override
@@ -81,20 +84,34 @@ class _ForumChannelViewState extends State<ForumChannelView> {
         ),
         Expanded(
           child: LayoutBuilder(
-            builder: (context, constraints) => _ForumPostSlivers(
-              workspace: widget.workspace,
-              channel: widget.channel,
-              activePosts: active,
-              archivedPosts: archived,
-              columns: constraints.maxWidth >= 720 ? 2 : 1,
-              isLoading: widget.isLoading,
-              error: widget.error,
-              canLoadMore: widget.canLoadMore,
-              hasTagFilter: _selectedTagIds.isNotEmpty,
-              onRefresh: widget.onRefresh,
-              onLoadMore: widget.onLoadMore,
-              onOpenPost: widget.onOpenPost,
-            ),
+            builder: (context, constraints) {
+              final usesGallery =
+                  widget.channel.kind == ChannelKind.media ||
+                  widget.channel.defaultForumLayout == ForumLayout.galleryView;
+              final columns = usesGallery
+                  ? constraints.maxWidth >= 1040
+                        ? 3
+                        : constraints.maxWidth >= 620
+                        ? 2
+                        : 1
+                  : 1;
+              return _ForumPostSlivers(
+                workspace: widget.workspace,
+                channel: widget.channel,
+                activePosts: active,
+                archivedPosts: archived,
+                columns: columns,
+                usesGallery: usesGallery,
+                isLoading: widget.isLoading,
+                error: widget.error,
+                canLoadMore: widget.canLoadMore,
+                hasTagFilter: _selectedTagIds.isNotEmpty,
+                onRefresh: widget.onRefresh,
+                onLoadMore: widget.onLoadMore,
+                onOpenPost: widget.onOpenPost,
+                onLoadPostPreview: widget.onLoadPostPreview,
+              );
+            },
           ),
         ),
       ],
@@ -184,6 +201,7 @@ class _ForumPostSlivers extends StatelessWidget {
     required this.activePosts,
     required this.archivedPosts,
     required this.columns,
+    required this.usesGallery,
     required this.isLoading,
     required this.error,
     required this.canLoadMore,
@@ -191,6 +209,7 @@ class _ForumPostSlivers extends StatelessWidget {
     required this.onRefresh,
     required this.onLoadMore,
     required this.onOpenPost,
+    required this.onLoadPostPreview,
   });
 
   final ChatWorkspace workspace;
@@ -198,6 +217,7 @@ class _ForumPostSlivers extends StatelessWidget {
   final List<ConversationChannel> activePosts;
   final List<ConversationChannel> archivedPosts;
   final int columns;
+  final bool usesGallery;
   final bool isLoading;
   final Object? error;
   final bool canLoadMore;
@@ -205,6 +225,7 @@ class _ForumPostSlivers extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onLoadMore;
   final ValueChanged<String> onOpenPost;
+  final ValueChanged<String> onLoadPostPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -255,14 +276,16 @@ class _ForumPostSlivers extends StatelessWidget {
         crossAxisCount: columns,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
-        mainAxisExtent: 108,
+        mainAxisExtent: usesGallery ? 244 : 108,
       ),
       delegate: SliverChildBuilderDelegate(
-        (context, index) => _ForumPostTile(
+        (context, index) => ForumPostTile(
           workspace: workspace,
           parent: channel,
           post: posts[index],
+          gallery: usesGallery,
           onPressed: () => onOpenPost(posts[index].id),
+          onLoadPreview: () => onLoadPostPreview(posts[index].id),
         ),
         childCount: posts.length,
       ),
@@ -287,135 +310,6 @@ class _ForumSectionSliver extends StatelessWidget {
           fontWeight: FontWeight.w700,
         ),
       ),
-    ),
-  );
-}
-
-class _ForumPostTile extends StatelessWidget {
-  const _ForumPostTile({
-    required this.workspace,
-    required this.parent,
-    required this.post,
-    required this.onPressed,
-  });
-
-  final ChatWorkspace workspace;
-  final ConversationChannel parent;
-  final ConversationChannel post;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final messages = workspace.messagesFor(post.id);
-    final preview = messages.isEmpty ? null : messages.first.body;
-    final tags = parent.availableTags
-        .where((tag) => post.appliedTagIds.contains(tag.id))
-        .toList(growable: false);
-    return Material(
-      color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(5),
-      child: InkWell(
-        key: ValueKey('forum-post-${post.id}'),
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(5),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border.all(color: context.surfaces.border),
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    parent.kind == ChannelKind.media
-                        ? Icons.perm_media_outlined
-                        : Icons.chat_bubble_outline,
-                    size: 16,
-                    color: context.surfaces.muted,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      post.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (post.isLocked)
-                    Icon(
-                      Icons.lock_outline,
-                      size: 14,
-                      color: context.surfaces.muted,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 7),
-              Expanded(
-                child: Text(
-                  preview?.isNotEmpty == true
-                      ? preview!
-                      : post.isArchived
-                      ? 'Archived post'
-                      : 'Open post',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.surfaces.muted,
-                    fontSize: 11,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-              if (tags.isNotEmpty)
-                Row(
-                  children: [
-                    for (final tag in tags.take(2)) ...[
-                      _PostTag(label: tag.name),
-                      const SizedBox(width: 4),
-                    ],
-                    if (tags.length > 2)
-                      Text(
-                        '+${tags.length - 2}',
-                        style: TextStyle(
-                          color: context.surfaces.muted,
-                          fontSize: 9,
-                        ),
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PostTag extends StatelessWidget {
-  const _PostTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxWidth: 96),
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(
-      color: context.surfaces.inset,
-      borderRadius: BorderRadius.circular(3),
-    ),
-    child: Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600),
     ),
   );
 }

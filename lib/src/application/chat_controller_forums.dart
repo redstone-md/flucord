@@ -1,6 +1,39 @@
 part of 'chat_controller.dart';
 
 extension ChatControllerForums on ChatController {
+  Future<void> loadForumPostPreview(String channelId) async {
+    final workspace = _workspace;
+    final channel = workspace?.channelOrNull(channelId);
+    final parent = channel?.parentId == null
+        ? null
+        : workspace?.channelOrNull(channel!.parentId!);
+    if (workspace == null ||
+        channel == null ||
+        !channel.isThread ||
+        (parent?.kind != ChannelKind.forum &&
+            parent?.kind != ChannelKind.media) ||
+        workspace.messagesFor(channelId).isNotEmpty ||
+        _loadingChannels.contains(channelId) ||
+        _loadedChannels.contains(channelId)) {
+      return;
+    }
+    _loadingChannels.add(channelId);
+    try {
+      final page = await _repository.loadChannelHistory(channelId);
+      _workspace = _workspace?.mergeInitialHistory(
+        page.history,
+        retainExisting: true,
+      );
+      _loadedChannels.add(channelId);
+      _setHistoryExhausted(channelId, !page.hasMore);
+    } on Object {
+      // Preview loading is opportunistic; opening the post retries visibly.
+    } finally {
+      _loadingChannels.remove(channelId);
+      if (!_disposed) _notify();
+    }
+  }
+
   Future<ConversationChannel?> createForumPost({
     required String channelId,
     required String name,

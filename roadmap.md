@@ -146,6 +146,10 @@ browser runtime or dependency on Discord's private user API.
     attachments, reuse one encapsulated pending-attachment selection surface
     across both composers, support attachment-only starter messages, and send
     the documented nested message metadata and files as multipart form data.
+26. Completed: honor forum list and gallery metadata with stable responsive
+    card geometry, render real starter-image previews plus video/file and error
+    fallbacks, and lazily hydrate visible post previews through the existing
+    history repository and SQLite cache without changing active navigation.
 
 ## Protocol safety
 

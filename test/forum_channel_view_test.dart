@@ -53,6 +53,7 @@ Future<void> _pumpForum(
         onRefresh: onRefresh ?? () {},
         onLoadMore: () {},
         onOpenPost: (_) {},
+        onLoadPostPreview: (_) {},
         onCreatePost: (_, _, _, _, _) async => false,
       ),
     ),

@@ -13,6 +13,15 @@ void main() {
 
     await controller.openChannel('forge-forum');
     expect(controller.archivedThreadsFor('forge-forum'), hasLength(1));
+    final archived = controller.archivedThreadsFor('forge-forum').single;
+    expect(controller.workspace!.messagesFor(archived.id), isEmpty);
+
+    await controller.loadForumPostPreview(archived.id);
+
+    expect(
+      controller.workspace!.messagesFor(archived.id).single.body,
+      'Preview for release-retrospective.',
+    );
 
     final post = await controller.createForumPost(
       channelId: 'forge-forum',

@@ -245,6 +245,9 @@ class FlucordShell extends StatelessWidget {
                                     channel.id,
                                   ),
                                 ),
+                                onLoadForumPostPreview: (postId) => unawaited(
+                                  chatController.loadForumPostPreview(postId),
+                                ),
                                 onCreateForumPost:
                                     (
                                       name,

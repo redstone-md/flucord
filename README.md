@@ -63,13 +63,19 @@ Discord `GUILD_FORUM` and `GUILD_MEDIA` channel types are retained as distinct
 native destinations instead of being discarded during bootstrap. Their
 guidelines, available tags, default archive duration, sort order, and layout
 metadata survive SQLite restoration. Opening one loads active and public
-archived posts into a responsive one- or two-column feed with tag filters,
+archived posts into a responsive list or gallery feed with tag filters,
 loading/error/empty states, and direct thread-timeline navigation. The New Post
 dialog uses the documented `POST /channels/{channel.id}/threads` payload with a
 nested starter message, up to five applied tags, and Discord's supported
 auto-archive durations. The same native file picker used by the message
 composer can attach up to ten files to the starter message, including
 attachment-only posts, through Discord's multipart payload format.
+
+Forum list layout remains a dense single-column reading surface. Media channels
+and channels configured for gallery layout use responsive one- to three-column
+cards with real starter-image previews, video/file fallbacks, and stable loading
+or broken-image states. Visible cards lazily load missing post history through
+the existing repository and SQLite cache without changing the selected channel.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.

@@ -91,7 +91,14 @@ extension _MockChatRepositoryMutations on MockChatRepository {
 
     final threads = [archivedThread(1), if (page == 2) archivedThread(2)];
     for (final thread in threads) {
-      _workspace = _workspace.upsertChannel(thread);
+      final starter = ChatMessage(
+        id: '${thread.id}-starter',
+        channelId: thread.id,
+        authorId: _workspace.currentMemberId,
+        body: 'Preview for ${thread.name}.',
+        sentAt: thread.archiveTimestamp ?? DateTime.now(),
+      );
+      _workspace = _workspace.upsertChannel(thread).upsertMessage(starter);
     }
     return ArchivedThreadPage(
       threads: threads,
