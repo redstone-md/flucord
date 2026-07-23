@@ -7,6 +7,9 @@ final class NoopVoiceMediaService implements VoiceMediaService {
   Object? get previewRenderer => null;
 
   @override
+  Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
+
+  @override
   Stream<void> get screenShareEnded => const Stream.empty();
 
   @override

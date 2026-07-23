@@ -1,0 +1,87 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/data/discord/discord_voice_media_transport.dart';
+
+void main() {
+  test(
+    'sends DAVE RTP, speaking flags, and five trailing silence frames',
+    () async {
+      final incoming = StreamController<DiscordRtpFrame>.broadcast();
+      addTearDown(incoming.close);
+      final sent = <DiscordRtpFrame>[];
+      final speaking = <bool>[];
+      final transport = DiscordVoiceMediaTransport(
+        incomingFrames: incoming.stream,
+        encryptDave: (opus) => Uint8List.fromList([0xd0, ...opus]),
+        decryptDave: (_, frame) => frame,
+        sendFrame: (frame) {
+          sent.add(frame);
+          return frame.payload.length + 12;
+        },
+        sendSpeaking: speaking.add,
+        userForSsrc: (_) => null,
+      )..configure(ssrc: 42, daveEnabled: true);
+
+      transport.sendOpusFrame(Uint8List.fromList([1, 2]));
+      transport.sendOpusFrame(Uint8List.fromList([3]));
+      await transport.finishSpeaking();
+
+      expect(speaking, [true, false]);
+      expect(sent, hasLength(7));
+      expect(sent.first.header.marker, isTrue);
+      expect(sent[1].header.marker, isFalse);
+      expect(sent.first.payload, [0xd0, 1, 2]);
+      expect(sent.last.payload, [0xd0, 0xf8, 0xff, 0xfe]);
+      expect(
+        sent.last.header.sequence,
+        (sent.first.header.sequence + 6) & 0xffff,
+      );
+    },
+  );
+
+  test('maps SSRC, decrypts DAVE, and drops unknown senders', () async {
+    final incoming = StreamController<DiscordRtpFrame>.broadcast();
+    addTearDown(incoming.close);
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: incoming.stream,
+      encryptDave: (frame) => frame,
+      decryptDave: (_, frame) => Uint8List.fromList(frame.sublist(1)),
+      sendFrame: (_) => 1,
+      sendSpeaking: (_) {},
+      userForSsrc: (ssrc) => ssrc == 77 ? 'user-1' : null,
+    )..configure(ssrc: 42, daveEnabled: true);
+    final received = transport.remoteAudio.first;
+
+    incoming.add(_frame(ssrc: 99, payload: [0xd0, 1]));
+    incoming.add(_frame(ssrc: 77, payload: [0xd0, 2, 3]));
+
+    final result = await received;
+    expect(result.userId, 'user-1');
+    expect(result.opus, [2, 3]);
+  });
+
+  test('refuses media before configure and after reset', () {
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: const Stream.empty(),
+      encryptDave: (frame) => frame,
+      decryptDave: (_, frame) => frame,
+      sendFrame: (_) => 1,
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => null,
+    );
+    final opus = Uint8List.fromList([1]);
+    expect(() => transport.sendOpusFrame(opus), throwsStateError);
+    transport.configure(ssrc: 1, daveEnabled: false);
+    transport.reset();
+    expect(() => transport.sendOpusFrame(opus), throwsStateError);
+  });
+}
+
+DiscordRtpFrame _frame({required int ssrc, required List<int> payload}) =>
+    DiscordRtpFrame(
+      header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: ssrc),
+      payload: payload,
+    );

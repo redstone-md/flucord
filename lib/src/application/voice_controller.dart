@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/voice_audio.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
+import 'voice_audio_pipeline.dart';
 
 enum VoiceState { idle, loading, ready, failure }
 
@@ -13,16 +15,29 @@ final class VoiceController extends ChangeNotifier {
   VoiceController(
     this._mediaService, {
     VoiceSignalingServiceProvider? signalingServiceProvider,
-  }) : _signalingServiceProvider = signalingServiceProvider ?? _noSignaling {
+    VoiceOpusCodecFactory? audioCodecFactory,
+  }) : _signalingServiceProvider = signalingServiceProvider ?? _noSignaling,
+       _audioPipeline = audioCodecFactory == null
+           ? null
+           : VoiceAudioPipeline(
+               mediaService: _mediaService,
+               codecFactory: audioCodecFactory,
+             ) {
     _screenEndedSubscription = _mediaService.screenShareEnded.listen((_) {
       _isScreenSharing = false;
+      if (!_disposed) notifyListeners();
+    });
+    _audioErrorSubscription = _audioPipeline?.errors.listen((error) {
+      _error = error;
       if (!_disposed) notifyListeners();
     });
   }
 
   final VoiceMediaService _mediaService;
   final VoiceSignalingServiceProvider _signalingServiceProvider;
+  final VoiceAudioPipeline? _audioPipeline;
   StreamSubscription<void>? _screenEndedSubscription;
+  StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
   VoiceState _state = VoiceState.idle;
@@ -58,6 +73,7 @@ final class VoiceController extends ChangeNotifier {
   bool get isConnected => _connectedChannelId != null;
   bool get hasDiscordSignaling => _signalingService != null;
   bool get isTransportReady => _transportSession != null;
+  bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isMuted => _isMuted;
   bool get isScreenSharing => _isScreenSharing;
   bool get isBusy => _isBusy;
@@ -110,6 +126,7 @@ final class VoiceController extends ChangeNotifier {
       _connectedGuildId = guildId;
       _connectedChannelId = channelId;
       _transportSession = null;
+      await _audioPipeline?.setEnabled(false);
       if (signalingService != null) {
         _connectionStatus = VoiceConnectionStatus.joining;
         await signalingService.joinVoiceChannel(
@@ -164,6 +181,7 @@ final class VoiceController extends ChangeNotifier {
     await _run(() async {
       _isMuted = !_isMuted;
       await _mediaService.setMicrophoneEnabled(!_isMuted);
+      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
       final guildId = _connectedGuildId;
       final channelId = _connectedChannelId;
       if (guildId != null && channelId != null) {
@@ -198,6 +216,7 @@ final class VoiceController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     await _run(() async {
+      await _audioPipeline?.setEnabled(false);
       final guildId = _connectedGuildId;
       if (guildId != null) {
         await _signalingService?.leaveVoiceChannel(guildId);
@@ -217,6 +236,10 @@ final class VoiceController extends ChangeNotifier {
     if (identical(service, _signalingService)) return;
     await _signalingSubscription?.cancel();
     _signalingService = service;
+    final audioTransport = service is VoiceAudioTransport
+        ? service as VoiceAudioTransport
+        : null;
+    await _audioPipeline?.bindTransport(audioTransport);
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
     _signalingSubscription = service?.voiceEvents.listen(
@@ -233,9 +256,11 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
+          unawaited(_audioPipeline?.setEnabled(false));
         }
       case VoiceTransportReadyEvent():
         _transportSession = event.session;
+        unawaited(_audioPipeline?.setEnabled(!_isMuted));
       case VoiceCredentialsReadyEvent() ||
           VoiceDaveBinaryEvent() ||
           VoiceSpeakingEvent() ||
@@ -249,6 +274,7 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
+    unawaited(_audioPipeline?.bindTransport(null));
     if (!_disposed) notifyListeners();
   }
 
@@ -271,7 +297,9 @@ final class VoiceController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     unawaited(_screenEndedSubscription?.cancel());
+    unawaited(_audioErrorSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
+    unawaited(_audioPipeline?.dispose());
     unawaited(_mediaService.dispose());
     super.dispose();
   }

@@ -21,6 +21,9 @@ dependencies:
   sqflite_common_ffi: ^2.4.2
   tray_manager: ^0.5.3
   window_manager: ^0.5.2
+  record: ^7.1.1
+  opus_codec: ^3.0.5
+  opus_codec_dart: ^3.0.5
 
 dev_dependencies:
   flutter_test:

@@ -30,8 +30,31 @@ final class VoiceCaptureSource {
   final Uint8List? thumbnail;
 }
 
+final class VoicePcmChunk {
+  VoicePcmChunk({
+    required Uint8List bytes,
+    required this.sampleRate,
+    required this.channels,
+  }) : bytes = Uint8List.fromList(bytes) {
+    if (sampleRate <= 0) {
+      throw ArgumentError.value(sampleRate, 'sampleRate', 'must be positive');
+    }
+    if (channels <= 0) {
+      throw ArgumentError.value(channels, 'channels', 'must be positive');
+    }
+    if (bytes.length.isOdd) {
+      throw ArgumentError.value(bytes.length, 'bytes.length', 'must be even');
+    }
+  }
+
+  final Uint8List bytes;
+  final int sampleRate;
+  final int channels;
+}
+
 abstract interface class VoiceMediaService {
   Object? get previewRenderer;
+  Stream<VoicePcmChunk> get microphonePcm;
   Stream<void> get screenShareEnded;
 
   Future<void> initialize();

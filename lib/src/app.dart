@@ -6,24 +6,27 @@ import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
+import 'domain/voice_audio.dart';
+import 'domain/voice_media.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'presentation/flucord_shell.dart';
 import 'platform/desktop_integration.dart';
-import 'domain/voice_media.dart';
 import 'theme/flucord_theme.dart';
 
 class FlucordApp extends StatefulWidget {
   const FlucordApp({
     this.desktopIntegration,
     this.voiceMediaService,
+    this.voiceOpusCodecFactory,
     super.key,
   });
 
   final DesktopIntegration? desktopIntegration;
   final VoiceMediaService? voiceMediaService;
+  final VoiceOpusCodecFactory? voiceOpusCodecFactory;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -48,6 +51,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _voiceController = VoiceController(
       widget.voiceMediaService ?? const NoopVoiceMediaService(),
       signalingServiceProvider: () => _chatController.voiceSignalingService,
+      audioCodecFactory: widget.voiceOpusCodecFactory,
     );
     _chatController.addListener(_syncVoiceSignaling);
     widget.desktopIntegration?.attach(

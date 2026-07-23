@@ -59,14 +59,18 @@ discovery, DAVE negotiation, reconnect, failure, and encrypted transport-ready
 states. Mute changes use a voice-state update without rebuilding the voice
 session.
 
-Encrypted transport readiness is not yet a live audio call. The native boundary
-owns libdave encryptors/decryptors, rotates key ratchets from applied MLS
-rosters, maps remote users to speaking SSRCs, builds/parses RTP v2 audio
-headers, and applies Discord's AES-256-GCM or XChaCha20-Poly1305 RTP-size
-transport encryption at the UDP boundary. Raw microphone frames still need
-stereo Opus encoding, a real-time UDP media loop, jitter handling, Opus decode,
-and native playback. Screen capture is currently a local preview and is not
-sent to Discord.
+Encrypted transport readiness now activates a native audio uplink. Flucord
+captures 48 kHz stereo PCM16 without a browser runtime, frames it into 20 ms
+packets, encodes Opus with the bundled native libopus, applies DAVE and RTP,
+then sends it through Discord's AES-256-GCM or XChaCha20-Poly1305 RTP-size UDP
+transport. Mute and disconnect finish the speaking burst before the microphone
+or voice session is torn down.
+
+This is not yet a complete live audio call. The receive boundary maps speaking
+SSRCs to users, decrypts DAVE, and keeps independent Opus decoder state per
+remote user, but native PCM playback still needs packet ordering, a jitter
+buffer, loss concealment, and selected output-device routing. Screen capture is
+currently a local preview and is not sent to Discord.
 
 ## Verify
 

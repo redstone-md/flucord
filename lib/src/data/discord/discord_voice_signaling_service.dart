@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_gateway_client.dart';
@@ -12,7 +14,8 @@ typedef DiscordVoiceClientFactory =
       VoiceDaveService daveService,
     );
 
-final class DiscordVoiceSignalingService implements VoiceSignalingService {
+final class DiscordVoiceSignalingService
+    implements VoiceSignalingService, VoiceAudioTransport {
   DiscordVoiceSignalingService({
     required DiscordVoiceStateGateway mainGateway,
     required VoiceDaveService? nativeDaveService,
@@ -30,17 +33,25 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
       DiscordVoiceSessionAssembler();
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
+      StreamController.broadcast();
   final Map<String, String> _desiredChannels = {};
   final Map<String, int> _generations = {};
   final Map<String, DiscordVoiceClient> _clients = {};
   final Map<String, StreamSubscription<VoiceSignalingEvent>>
   _clientSubscriptions = {};
+  final Map<String, StreamSubscription<VoiceRemoteOpusFrame>>
+  _audioSubscriptions = {};
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   String? _currentUserId;
+  String? _activeGuildId;
   bool _closed = false;
 
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _remoteAudio.stream;
 
   void setCurrentUserId(String userId) {
     _currentUserId = userId;
@@ -73,6 +84,7 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
       );
       return;
     }
+    _activeGuildId = guildId;
     if (_desiredChannels[guildId] == channelId) {
       _gateway.updateVoiceState(
         guildId: guildId,
@@ -101,6 +113,7 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
     _assembler.clear(guildId);
     _gateway.updateVoiceState(guildId: guildId, channelId: null);
     await _closeClient(guildId);
+    if (_activeGuildId == guildId) _activeGuildId = null;
     _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected));
   }
 
@@ -134,6 +147,10 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
     final client = _clientFactory(credentials, daveService);
     _clients[credentials.guildId] = client;
     _clientSubscriptions[credentials.guildId] = client.events.listen(_emit);
+    if (client case final VoiceAudioTransport audioTransport) {
+      _audioSubscriptions[credentials.guildId] = audioTransport.remoteAudio
+          .listen(_emitRemoteAudio, onError: _remoteAudio.addError);
+    }
     _emit(VoiceCredentialsReadyEvent(credentials));
     try {
       await client.connect();
@@ -145,12 +162,36 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
   }
 
   Future<void> _closeClient(String guildId) async {
+    await _audioSubscriptions.remove(guildId)?.cancel();
     await _clientSubscriptions.remove(guildId)?.cancel();
     await _clients.remove(guildId)?.close();
   }
 
+  @override
+  void sendOpusFrame(Uint8List opusFrame) {
+    final guildId = _activeGuildId;
+    final client = guildId == null ? null : _clients[guildId];
+    if (client is! VoiceAudioTransport) {
+      throw StateError('Discord voice media transport is not ready');
+    }
+    (client as VoiceAudioTransport).sendOpusFrame(opusFrame);
+  }
+
+  @override
+  Future<void> finishSpeaking() async {
+    final guildId = _activeGuildId;
+    final client = guildId == null ? null : _clients[guildId];
+    if (client is VoiceAudioTransport) {
+      await (client as VoiceAudioTransport).finishSpeaking();
+    }
+  }
+
   void _emit(VoiceSignalingEvent event) {
     if (!_events.isClosed) _events.add(event);
+  }
+
+  void _emitRemoteAudio(VoiceRemoteOpusFrame frame) {
+    if (!_remoteAudio.isClosed) _remoteAudio.add(frame);
   }
 
   Future<void> close() async {
@@ -161,6 +202,7 @@ final class DiscordVoiceSignalingService implements VoiceSignalingService {
       await _closeClient(guildId);
     }
     _assembler.clearAll();
+    await _remoteAudio.close();
     await _events.close();
   }
 

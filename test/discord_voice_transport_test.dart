@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
+import 'package:flucord/src/data/discord/discord_voice_websocket.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
@@ -16,7 +17,6 @@ void main() {
   group('Discord voice session signaling', () {
     test('uses the documented main Gateway opcode 4 payload', () {
       final protocol = DiscordGatewayProtocol(token: 'token', intents: 1);
-
       expect(
         protocol.voiceStateUpdate(
           guildId: 'guild-1',

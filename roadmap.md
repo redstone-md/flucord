@@ -52,9 +52,12 @@ browser runtime or dependency on Discord's private user API.
    mapping, and an RTP v2 audio packetizer/parser are implemented behind typed
    boundaries. AES-256-GCM and mandatory XChaCha20-Poly1305 RTP-size transport
    encryption now protect the typed UDP send/receive boundary, including CSRC
-   and RTP extension handling. Raw PCM access, Opus encode/decode, the real-time
-   UDP media loop, jitter handling, remote playback, and transmitted screen
-   sharing remain.
+   and RTP extension handling. Native 48 kHz stereo PCM16 capture, deterministic
+   20 ms framing, bundled libopus encoding, readiness-gated DAVE/RTP uplink,
+   speaking teardown, and per-user remote Opus decoding are implemented. Packet
+   ordering, jitter and replay handling, loss concealment, native PCM playback,
+   selected output-device routing, Discord interoperability testing, and
+   transmitted screen sharing remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety

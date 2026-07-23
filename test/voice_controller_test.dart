@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 
@@ -114,16 +115,79 @@ void main() {
     expect(second.joins, [('guild-1', 'voice-1', false)]);
     expect(controller.hasDiscordSignaling, isTrue);
   });
+
+  test(
+    'gates Opus uplink on transport readiness and ends speech first',
+    () async {
+      final operations = <String>[];
+      final media = _FakeVoiceMediaService(operations: operations);
+      final signaling = _FakeVoiceSignalingService(operations: operations);
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      media.addPcm(Uint8List(3840));
+      await _flushEvents();
+      expect(signaling.sentFrames, isEmpty);
+
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      await _flushEvents();
+      expect(controller.isAudioUplinkActive, isTrue);
+      media.addPcm(Uint8List(3840));
+      await _flushEvents();
+      expect(signaling.sentFrames, hasLength(1));
+
+      operations.clear();
+      await controller.toggleMute();
+      expect(operations, ['microphone:false', 'finish']);
+      expect(controller.isAudioUplinkActive, isFalse);
+
+      await controller.toggleMute();
+      media.addPcm(Uint8List(3840));
+      await _flushEvents();
+      operations.clear();
+      await controller.disconnect();
+      expect(operations.take(2), ['finish', 'leave']);
+      expect(controller.isAudioUplinkActive, isFalse);
+    },
+  );
 }
 
-final class _FakeVoiceSignalingService implements VoiceSignalingService {
+const _transportSession = VoiceTransportSession(
+  guildId: 'guild-1',
+  ssrc: 42,
+  address: '203.0.113.7',
+  port: 50000,
+  mode: 'aead_xchacha20_poly1305_rtpsize',
+  secretKey: [1, 2, 3],
+  daveProtocolVersion: 1,
+);
+
+Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
+
+final class _FakeVoiceSignalingService
+    implements VoiceSignalingService, VoiceAudioTransport {
+  _FakeVoiceSignalingService({this._operations});
+
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
+      StreamController.broadcast();
+  final List<String>? _operations;
   final List<(String, String, bool)> joins = [];
   final List<String> leftGuilds = [];
+  final List<Uint8List> sentFrames = [];
 
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _remoteAudio.stream;
 
   void emit(VoiceSignalingEvent event) => _events.add(event);
 
@@ -140,13 +204,31 @@ final class _FakeVoiceSignalingService implements VoiceSignalingService {
   @override
   Future<void> leaveVoiceChannel(String guildId) async {
     leftGuilds.add(guildId);
+    _operations?.add('leave');
   }
 
-  Future<void> close() => _events.close();
+  @override
+  void sendOpusFrame(Uint8List opusFrame) {
+    sentFrames.add(Uint8List.fromList(opusFrame));
+    _operations?.add('send');
+  }
+
+  @override
+  Future<void> finishSpeaking() async => _operations?.add('finish');
+
+  Future<void> close() async {
+    await _events.close();
+    await _remoteAudio.close();
+  }
 }
 
 final class _FakeVoiceMediaService implements VoiceMediaService {
+  _FakeVoiceMediaService({this._operations});
+
   final StreamController<void> _screenEnded = StreamController.broadcast();
+  final StreamController<VoicePcmChunk> _microphone =
+      StreamController.broadcast();
+  final List<String>? _operations;
   final List<String?> startedInputs = [];
   bool microphoneEnabled = true;
   bool microphoneStopped = false;
@@ -156,8 +238,15 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
 
   void endScreenShare() => _screenEnded.add(null);
 
+  void addPcm(Uint8List bytes) => _microphone.add(
+    VoicePcmChunk(bytes: bytes, sampleRate: 48000, channels: 2),
+  );
+
   @override
   Object? get previewRenderer => null;
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
 
   @override
   Stream<void> get screenShareEnded => _screenEnded.stream;
@@ -207,6 +296,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {
     microphoneEnabled = enabled;
+    _operations?.add('microphone:$enabled');
   }
 
   @override
@@ -222,15 +312,42 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   @override
   Future<void> stopMicrophone() async {
     microphoneStopped = true;
+    _operations?.add('microphone:stop');
   }
 
   @override
   Future<void> stopScreenShare() async {
     screenStopped = true;
+    _operations?.add('screen:stop');
   }
 
   @override
   Future<void> dispose() async {
     await _screenEnded.close();
+    await _microphone.close();
   }
+}
+
+final class _FakeCodecFactory implements VoiceOpusCodecFactory {
+  @override
+  VoiceOpusDecoder createDecoder() => _FakeDecoder();
+
+  @override
+  VoiceOpusEncoder createEncoder() => _FakeEncoder();
+}
+
+final class _FakeEncoder implements VoiceOpusEncoder {
+  @override
+  Uint8List encode(Int16List pcm) => Uint8List.fromList([pcm.length & 0xff]);
+
+  @override
+  void dispose() {}
+}
+
+final class _FakeDecoder implements VoiceOpusDecoder {
+  @override
+  Int16List decode(Uint8List opusFrame) => Int16List(0);
+
+  @override
+  void dispose() {}
 }

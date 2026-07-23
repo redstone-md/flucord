@@ -1,55 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
+import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
+import 'discord_voice_media_transport.dart';
 import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
-
-abstract interface class DiscordVoiceWebSocket {
-  Stream<Object?> get messages;
-  int? get closeCode;
-
-  void send(Object data);
-  Future<void> close([int? code, String? reason]);
-}
-
-abstract interface class DiscordVoiceSocketConnector {
-  Future<DiscordVoiceWebSocket> connect(Uri uri);
-}
-
-final class IoDiscordVoiceSocketConnector
-    implements DiscordVoiceSocketConnector {
-  const IoDiscordVoiceSocketConnector();
-
-  @override
-  Future<DiscordVoiceWebSocket> connect(Uri uri) async =>
-      _IoDiscordVoiceWebSocket(await WebSocket.connect(uri.toString()));
-}
-
-final class _IoDiscordVoiceWebSocket implements DiscordVoiceWebSocket {
-  _IoDiscordVoiceWebSocket(this._socket);
-
-  final WebSocket _socket;
-
-  @override
-  Stream<Object?> get messages => _socket;
-
-  @override
-  int? get closeCode => _socket.closeCode;
-
-  @override
-  void send(Object data) => _socket.add(data);
-
-  @override
-  Future<void> close([int? code, String? reason]) =>
-      _socket.close(code, reason);
-}
+import 'discord_voice_websocket.dart';
 
 abstract interface class DiscordVoiceClient {
   Stream<VoiceSignalingEvent> get events;
@@ -58,7 +20,8 @@ abstract interface class DiscordVoiceClient {
   Future<void> close();
 }
 
-final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
+final class DiscordVoiceGatewayClient
+    implements DiscordVoiceClient, VoiceAudioTransport {
   DiscordVoiceGatewayClient({
     required VoiceServerCredentials credentials,
     required int maxDaveProtocolVersion,
@@ -78,7 +41,17 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
              ),
        _socketConnector =
            socketConnector ?? const IoDiscordVoiceSocketConnector(),
-       _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport();
+       _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport() {
+    _mediaTransport = DiscordVoiceMediaTransport(
+      incomingFrames: audioPackets,
+      encryptDave: encryptDaveAudioFrame,
+      decryptDave: (userId, frame) =>
+          decryptDaveAudioFrame(userId: userId, encryptedFrame: frame),
+      sendFrame: sendAudioFrame,
+      sendSpeaking: setSpeaking,
+      userForSsrc: userIdForSsrc,
+    );
+  }
 
   final DiscordVoiceGatewayProtocol _protocol;
   final DiscordVoiceDaveController? _daveController;
@@ -86,6 +59,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   final DiscordVoiceUdpTransport _udpTransport;
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+  late final DiscordVoiceMediaTransport _mediaTransport;
 
   DiscordVoiceWebSocket? _socket;
   StreamSubscription<Object?>? _socketSubscription;
@@ -109,6 +83,8 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
       _udpTransport.packets.map(_decryptAudioPacket);
   VoiceTransportSession? get session => _session;
   String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _mediaTransport.remoteAudio;
 
   @override
   Future<void> connect() async {
@@ -354,6 +330,10 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
       secretKey: description.secretKey,
       daveProtocolVersion: description.daveProtocolVersion,
     );
+    _mediaTransport.configure(
+      ssrc: ssrc,
+      daveEnabled: description.daveProtocolVersion > 0,
+    );
     _canResume = true;
     _emitStatus(VoiceConnectionStatus.ready);
     if (!_events.isClosed) _events.add(VoiceTransportReadyEvent(_session!));
@@ -369,6 +349,13 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     if (cipher == null) throw StateError('Voice transport is not ready');
     return _udpTransport.send(cipher.encryptFrame(frame));
   }
+
+  @override
+  void sendOpusFrame(Uint8List opusFrame) =>
+      _mediaTransport.sendOpusFrame(opusFrame);
+
+  @override
+  Future<void> finishSpeaking() => _mediaTransport.finishSpeaking();
 
   DiscordRtpFrame _decryptAudioPacket(Uint8List packet) {
     final cipher = _transportCipher;
@@ -432,6 +419,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     _heartbeatTimer = null;
     _discovered = null;
     _session = null;
+    _mediaTransport.reset();
     _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     unawaited(_socketSubscription?.cancel());
@@ -451,6 +439,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     unawaited(_socket?.close());
     _discovered = null;
     _session = null;
+    _mediaTransport.reset();
     _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     _daveController?.dispose();
@@ -483,6 +472,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    _mediaTransport.reset();
     _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     _daveController?.dispose();

@@ -207,7 +207,10 @@ class _VoiceStage extends StatelessWidget {
       VoiceConnectionStatus.connecting => 'Connecting to voice server...',
       VoiceConnectionStatus.discovering => 'Discovering UDP route...',
       VoiceConnectionStatus.negotiating => 'Negotiating DAVE encryption...',
-      VoiceConnectionStatus.ready => 'Encrypted transport ready',
+      VoiceConnectionStatus.ready =>
+        controller.isAudioUplinkActive
+            ? 'Encrypted voice uplink active'
+            : 'Encrypted transport ready',
       VoiceConnectionStatus.reconnecting => 'Reconnecting voice transport...',
       VoiceConnectionStatus.failure => 'Voice transport failed',
     };
