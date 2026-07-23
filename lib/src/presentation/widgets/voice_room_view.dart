@@ -163,7 +163,7 @@ class _VoiceStage extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              controller.isConnected ? 'Voice Connected' : 'Disconnected',
+              controller.isConnected ? 'Media Ready' : 'Disconnected',
               style: TextStyle(
                 color: controller.isConnected
                     ? FlucordColors.signal
