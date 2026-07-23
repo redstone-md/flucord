@@ -39,6 +39,14 @@ picker sends Unicode glyphs or Discord's documented `name:id` custom reaction
 key, remains mounted while the pointer crosses from a message hover action into
 the overlay, and renders known custom reactions as compact native image glyphs.
 
+Documented guild sticker catalogs load through REST, replace atomically on
+`GUILD_STICKERS_UPDATE`, and persist with their names, tags, availability, and
+format metadata. The composer opens a searchable anchored sticker picker and
+sends one to three selected IDs through Create Message. PNG, APNG, and GIF
+assets render through Flutter's native image codec; Lottie JSON renders through
+the native cross-platform Lottie canvas. Both paths keep stable geometry plus
+loading and failure states without an embedded browser.
+
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the
@@ -213,6 +221,10 @@ indices remain stable during migration.
 SQLite v14 retains each message's complete poll payload, including answer
 counts and current-bot vote flags, so result and expiry state survive an offline
 restart. Poll-only Inbox mentions use the question as their native preview.
+
+SQLite v15 retains message sticker items and each guild's searchable sticker
+catalog. Gateway catalog replacement deletes stale rows for that guild before
+writing the new snapshot, while unrelated guild catalogs remain intact.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

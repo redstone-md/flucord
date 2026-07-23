@@ -7,6 +7,7 @@ import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
 import 'emoji_picker.dart';
 import 'pending_attachment_strip.dart';
+import 'sticker_picker.dart';
 
 typedef SendMessageCallback =
     Future<bool> Function(
@@ -20,9 +21,11 @@ class MessageComposer extends StatefulWidget {
     required this.channelName,
     required this.spaceName,
     required this.customEmojis,
+    required this.guildStickers,
     required this.isSending,
     required this.onSend,
     required this.onCreatePoll,
+    required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
     this.attachmentPicker = const NativePendingAttachmentPicker(),
@@ -34,9 +37,11 @@ class MessageComposer extends StatefulWidget {
   final String channelName;
   final String spaceName;
   final List<GuildEmoji> customEmojis;
+  final List<GuildSticker> guildStickers;
   final bool isSending;
   final SendMessageCallback onSend;
   final CreatePollCallback onCreatePoll;
+  final SendStickersCallback onSendStickers;
   final ChatMessage? replyTo;
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
@@ -176,7 +181,7 @@ class _MessageComposerState extends State<MessageComposer> {
                     tooltip: 'Add attachment',
                   ),
                   suffixIconConstraints: const BoxConstraints.tightFor(
-                    width: 144,
+                    width: 192,
                     height: 48,
                   ),
                   suffixIcon: Row(
@@ -186,6 +191,11 @@ class _MessageComposerState extends State<MessageComposer> {
                         spaceName: widget.spaceName,
                         customEmojis: widget.customEmojis,
                         onSelected: _insertEmoji,
+                      ),
+                      StickerPickerButton(
+                        stickers: widget.guildStickers,
+                        isSending: widget.isSending,
+                        onSend: widget.onSendStickers,
                       ),
                       IconButton(
                         key: const ValueKey('create-poll'),

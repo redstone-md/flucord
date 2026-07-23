@@ -130,6 +130,9 @@ class _MessageListState extends State<MessageList> {
           final author = source.workspace.memberById(message.authorId);
           return message.body.toLowerCase().contains(query) ||
               author.displayName.toLowerCase().contains(query) ||
+              message.stickers.any(
+                (sticker) => sticker.name.toLowerCase().contains(query),
+              ) ||
               message.attachments.any(
                 (attachment) =>
                     attachment.fileName.toLowerCase().contains(query),

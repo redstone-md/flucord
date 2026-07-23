@@ -44,6 +44,31 @@ final class MockChatSeed {
     GuildEmoji(id: 'ship-green', spaceId: 'forge', name: 'ship_green'),
   ];
 
+  static final stickers = [
+    GuildSticker(
+      item: const MessageSticker(
+        id: 'forge-signal',
+        name: 'Native signal',
+        format: StickerFormat.png,
+        url: 'https://cdn.discordapp.com/stickers/forge-signal.png',
+      ),
+      spaceId: 'forge',
+      tags: const ['signal', 'native'],
+      available: true,
+    ),
+    GuildSticker(
+      item: const MessageSticker(
+        id: 'forge-relay',
+        name: 'Relay click',
+        format: StickerFormat.lottie,
+        url: 'https://cdn.discordapp.com/stickers/forge-relay.json',
+      ),
+      spaceId: 'forge',
+      tags: const ['relay', 'deploy'],
+      available: true,
+    ),
+  ];
+
   static ChatMessage inboxMention(DateTime now) => ChatMessage(
     id: 'design-mention',
     channelId: 'forge-design',
@@ -61,6 +86,7 @@ final class MockChatSeed {
     spaces: spaces,
     categories: categories,
     emojis: emojis,
+    stickers: stickers,
     channels: channels,
     members: members,
     messages: messages,

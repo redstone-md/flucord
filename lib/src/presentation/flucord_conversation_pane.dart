@@ -40,6 +40,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onOpenInbox,
     required this.onSend,
     required this.onCreatePoll,
+    required this.onSendStickers,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
@@ -89,6 +90,7 @@ class _ConversationPane extends StatefulWidget {
   final VoidCallback onOpenInbox;
   final SendMessageCallback onSend;
   final CreatePollCallback onCreatePoll;
+  final Future<bool> Function(List<String>) onSendStickers;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
@@ -197,6 +199,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
             channelName: widget.channel.name,
             spaceName: widget.workspace.spaceById(widget.channel.spaceId).name,
             customEmojis: widget.workspace.emojisFor(widget.channel.spaceId),
+            guildStickers: widget.workspace.stickersFor(widget.channel.spaceId),
             isSending: widget.isSending,
             replyTo: _replyTo,
             replyAuthor: _replyTo == null
@@ -205,6 +208,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
             onCancelReply: () => setState(() => _replyTo = null),
             onTyping: widget.onTyping,
             onCreatePoll: widget.onCreatePoll,
+            onSendStickers: widget.onSendStickers,
             onSend: (body, attachments, replyToMessageId) async {
               final sent = await widget.onSend(
                 body,

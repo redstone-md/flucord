@@ -409,6 +409,7 @@ String _messagePreview(ChatMessage message) {
   if (body.isNotEmpty) return body;
   final question = message.poll?.question.trim();
   if (question != null && question.isNotEmpty) return question;
+  if (message.stickers.isNotEmpty) return message.stickers.first.name;
   return 'Attachment or embed';
 }
 

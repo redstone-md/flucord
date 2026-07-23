@@ -13,6 +13,7 @@ import 'message_attachment_view.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
 import 'message_poll_view.dart';
+import 'message_sticker_view.dart';
 import 'remote_identity_image.dart';
 
 class MessageItem extends StatefulWidget {
@@ -196,6 +197,8 @@ class _MessageItemState extends State<MessageItem> {
               onSelectChannel: widget.onSelectChannel,
             ),
           ),
+        if (message.stickers.isNotEmpty)
+          MessageStickerStrip(stickers: message.stickers),
         if (message.poll case final poll?)
           Padding(
             padding: const EdgeInsets.only(top: 7),

@@ -289,6 +289,11 @@ class FlucordShell extends StatelessWidget {
                                       channelId: channel.id,
                                       poll: poll,
                                     ),
+                                onSendStickers: (stickerIds) =>
+                                    chatController.sendStickers(
+                                      channelId: channel.id,
+                                      stickerIds: stickerIds,
+                                    ),
                                 onEdit: chatController.editMessage,
                                 onDelete: chatController.deleteMessage,
                                 onToggleReaction: chatController.toggleReaction,

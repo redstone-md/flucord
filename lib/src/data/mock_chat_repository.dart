@@ -4,19 +4,22 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
 import 'mock_chat_seed.dart';
 
 part 'mock_chat_repository_mutations.dart';
 part 'mock_chat_repository_polls.dart';
+part 'mock_chat_repository_stickers.dart';
 
 final class MockChatRepository
-    with _MockChatRepositoryPolls
+    with _MockChatRepositoryPolls, _MockChatRepositoryStickers
     implements
         ChatRepository,
         ArchivedThreadRepository,
         ForumPostRepository,
-        PollRepository {
+        PollRepository,
+        StickerRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = MockChatSeed.withForums(_seedWorkspace());
 

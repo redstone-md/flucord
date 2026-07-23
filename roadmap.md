@@ -155,6 +155,10 @@ browser runtime or dependency on Discord's private user API.
     Gateway vote add/remove events live, and render native responsive results
     in timelines, pinned messages, and poll-only Inbox previews. Voting remains
     absent because Discord exposes no documented bot mutation for casting one.
+28. Completed: retain documented guild sticker catalogs and message sticker
+    items, synchronize catalog replacements through `GUILD_STICKERS_UPDATE`,
+    send up to three guild sticker IDs through Create Message, and expose a
+    searchable native picker plus browser-free inline rendering.
 
 ## Protocol safety
 

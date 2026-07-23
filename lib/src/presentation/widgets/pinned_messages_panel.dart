@@ -7,6 +7,7 @@ import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_embed_view.dart';
 import 'message_poll_view.dart';
+import 'message_sticker_view.dart';
 import 'message_content_view.dart';
 
 class PinnedMessagesPanel extends StatelessWidget {
@@ -196,6 +197,8 @@ class _PinnedMessageRow extends StatelessWidget {
                       onSelectChannel: onSelectChannel,
                     ),
                   ),
+                if (message.stickers.isNotEmpty)
+                  MessageStickerStrip(stickers: message.stickers),
                 if (message.poll case final poll?)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
