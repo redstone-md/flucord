@@ -118,6 +118,8 @@ final class Member {
 }
 
 final class PendingAttachment {
+  static const maxCount = 10;
+
   const PendingAttachment({
     required this.name,
     required this.path,

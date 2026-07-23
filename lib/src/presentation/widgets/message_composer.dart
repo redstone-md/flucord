@@ -1,10 +1,11 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../pending_attachment_picker.dart';
 import 'emoji_picker.dart';
+import 'pending_attachment_strip.dart';
 
 typedef SendMessageCallback =
     Future<bool> Function(
@@ -22,6 +23,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSend,
     required this.onCancelReply,
     required this.onTyping,
+    this.attachmentPicker = const NativePendingAttachmentPicker(),
     this.replyTo,
     this.replyAuthor,
     super.key,
@@ -36,6 +38,7 @@ class MessageComposer extends StatefulWidget {
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
+  final PendingAttachmentPicker attachmentPicker;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -44,7 +47,7 @@ class MessageComposer extends StatefulWidget {
 class _MessageComposerState extends State<MessageComposer> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final List<PendingAttachment> _attachments = [];
+  final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
   bool _hasContent = false;
 
   bool get _canSend => _hasContent || _attachments.isNotEmpty;
@@ -71,23 +74,15 @@ class _MessageComposerState extends State<MessageComposer> {
 
   Future<void> _pickAttachments() async {
     try {
-      final result = await FilePicker.pickFiles(
-        dialogTitle: 'Attach files',
-        allowMultiple: true,
-        lockParentWindow: true,
-      );
-      if (!mounted || result == null) return;
-      setState(() {
-        for (final file in result.files) {
-          final path = file.path;
-          if (path == null || _attachments.any((item) => item.path == path)) {
-            continue;
-          }
-          _attachments.add(
-            PendingAttachment(name: file.name, path: path, size: file.size),
-          );
-        }
-      });
+      final picked = await widget.attachmentPicker.pick();
+      if (!mounted || picked.isEmpty) return;
+      final reachedLimit = _attachments.merge(picked);
+      setState(() {});
+      if (reachedLimit) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You can attach up to 10 files.')),
+        );
+      }
       _focusNode.requestFocus();
     } on Object {
       if (!mounted) return;
@@ -101,7 +96,7 @@ class _MessageComposerState extends State<MessageComposer> {
     if (!_canSend || widget.isSending) return;
     final sent = await widget.onSend(
       _controller.text,
-      List.unmodifiable(_attachments),
+      _attachments.items,
       widget.replyTo?.id,
     );
     if (!mounted || !sent) return;
@@ -138,7 +133,14 @@ class _MessageComposerState extends State<MessageComposer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.replyTo != null) _replyBar(context),
-          if (_attachments.isNotEmpty) _attachmentStrip(context),
+          if (_attachments.isNotEmpty) ...[
+            PendingAttachmentStrip(
+              attachments: _attachments.items,
+              enabled: !widget.isSending,
+              onRemove: (index) => setState(() => _attachments.removeAt(index)),
+            ),
+            const SizedBox(height: 6),
+          ],
           CallbackShortcuts(
             bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
             child: Focus(
@@ -243,52 +245,6 @@ class _MessageComposerState extends State<MessageComposer> {
           tooltip: 'Cancel reply',
         ),
       ],
-    ),
-  );
-
-  Widget _attachmentStrip(BuildContext context) => Container(
-    height: 54,
-    margin: const EdgeInsets.only(bottom: 6),
-    alignment: Alignment.centerLeft,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: _attachments.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 6),
-      itemBuilder: (context, index) {
-        final attachment = _attachments[index];
-        return Container(
-          width: 190,
-          padding: const EdgeInsets.only(left: 10),
-          decoration: BoxDecoration(
-            color: context.surfaces.inset,
-            border: Border.all(color: context.surfaces.border),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.insert_drive_file_outlined,
-                size: 18,
-                color: context.surfaces.muted,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  attachment.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
-              IconButton(
-                onPressed: () => setState(() => _attachments.removeAt(index)),
-                icon: const Icon(Icons.close, size: 15),
-                tooltip: 'Remove attachment',
-              ),
-            ],
-          ),
-        );
-      },
     ),
   );
 }
