@@ -7,7 +7,8 @@ roles and presence, typing indicators, local unread markers, paginated pinned
 messages, Windows notifications, close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, and theme switching without a
-browser runtime.
+browser runtime. Discord rich embeds retain their documented structured fields
+across live updates and offline cache restores.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -48,6 +49,13 @@ Guild icons, global user avatars, guild-specific member avatars, and Discord's
 default avatars use documented public CDN routes. Their URLs persist in the
 SQLite v4 cache; unavailable images fall back to deterministic initials without
 changing navigation, message, member-list, or voice-room geometry.
+
+Rich message embeds preserve author, provider, title, description, fields,
+source color, media metadata, footer, and timestamp in the SQLite v5 cache.
+Inline fields adapt from three columns to one as the message pane narrows;
+failed remote media renders a stable error state instead of collapsing the
+conversation. Video metadata is retained but native inline playback remains a
+later increment.
 
 ## Native Media
 

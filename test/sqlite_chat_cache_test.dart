@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/message_embed.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -93,6 +94,17 @@ void main() {
           reactedByCurrentUser: true,
         ),
       ],
+      embeds: [
+        MessageEmbed(
+          type: 'rich',
+          title: 'Build report',
+          description: 'All native checks passed.',
+          colorValue: 0x4c9b72,
+          fields: const [
+            MessageEmbedField(name: 'Tests', value: '91', isInline: true),
+          ],
+        ),
+      ],
       isPinned: true,
     );
 
@@ -118,6 +130,8 @@ void main() {
     expect(history.messages.single.attachments.single.fileName, 'proof.png');
     expect(history.messages.single.reply?.messageId, 'message-0');
     expect(history.messages.single.reactions.single.count, 3);
+    expect(history.messages.single.embeds.single.title, 'Build report');
+    expect(history.messages.single.embeds.single.fields.single.value, '91');
     expect(history.members.single.displayName, 'Jack');
     expect(history.members.single.roleFor('guild-1'), 'Bot');
     expect(history.members.single.avatarUrl, contains('/avatars/user-1/'));
@@ -239,5 +253,6 @@ void main() {
       contains('avatar_urls_by_space_json'),
     );
     expect(spaceColumns.map((row) => row['name']), contains('icon_url'));
+    expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
   });
 }

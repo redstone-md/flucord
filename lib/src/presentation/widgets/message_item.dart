@@ -7,6 +7,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
+import 'message_embed_view.dart';
 
 class MessageItem extends StatefulWidget {
   const MessageItem({
@@ -173,6 +174,14 @@ class _MessageItemState extends State<MessageItem> {
           Padding(
             padding: const EdgeInsets.only(top: 7),
             child: MessageAttachmentView(attachment: attachment),
+          ),
+        for (var index = 0; index < message.embeds.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: MessageEmbedView(
+              key: ValueKey('message-${message.id}-embed-$index'),
+              embed: message.embeds[index],
+            ),
           ),
         if (message.reactions.isNotEmpty) ...[
           const SizedBox(height: 6),

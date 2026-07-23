@@ -32,7 +32,7 @@ final class SqliteChatCache implements ChatCache {
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: _createSchema,
         onUpgrade: _upgradeSchema,
       ),
@@ -96,7 +96,8 @@ final class SqliteChatCache implements ChatCache {
         attachments_json TEXT NOT NULL,
         reply_json TEXT,
         reactions_json TEXT NOT NULL,
-        is_pinned INTEGER NOT NULL
+        is_pinned INTEGER NOT NULL,
+        embeds_json TEXT NOT NULL
       )
     ''');
     await database.execute(
@@ -140,6 +141,11 @@ final class SqliteChatCache implements ChatCache {
       await database.execute(
         "ALTER TABLE members ADD avatar_urls_by_space_json "
         "TEXT NOT NULL DEFAULT '{}'",
+      );
+    }
+    if (oldVersion < 5) {
+      await database.execute(
+        "ALTER TABLE messages ADD embeds_json TEXT NOT NULL DEFAULT '[]'",
       );
     }
   }
@@ -430,6 +436,7 @@ final class SqliteChatCache implements ChatCache {
     'reply_json': ChatModelJson.reply(message.reply),
     'reactions_json': ChatModelJson.reactions(message.reactions),
     'is_pinned': message.isPinned ? 1 : 0,
+    'embeds_json': ChatModelJson.embeds(message.embeds),
   };
 
   static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -445,6 +452,7 @@ final class SqliteChatCache implements ChatCache {
     reply: ChatModelJson.replyFrom(row['reply_json'] as String?),
     reactions: ChatModelJson.reactionsFrom(row['reactions_json']! as String),
     isPinned: row['is_pinned'] == 1,
+    embeds: ChatModelJson.embedsFrom(row['embeds_json']! as String),
   );
 
   @override

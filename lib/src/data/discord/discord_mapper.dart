@@ -1,4 +1,5 @@
 import '../../domain/chat_models.dart';
+import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
 
 final class DiscordMapper {
@@ -98,6 +99,9 @@ final class DiscordMapper {
               .map((item) => _reaction(item.cast<String, Object?>()))
               .toList()
         : fallback?.reactions ?? const <MessageReaction>[];
+    final embeds = payload.containsKey('embeds')
+        ? MessageEmbedCodec.listFrom(payload['embeds'])
+        : fallback?.embeds ?? const [];
     final referenced = payload['referenced_message'];
     final reply = referenced is Map
         ? _reply(referenced.cast<String, Object?>())
@@ -119,6 +123,7 @@ final class DiscordMapper {
           ? payload['pinned'] == true
           : fallback?.isPinned ?? false,
       attachments: attachments,
+      embeds: embeds,
       reactions: reactions,
       reply: reply,
     );

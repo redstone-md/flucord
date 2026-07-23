@@ -305,6 +305,8 @@ void main() {
     );
     expect(history.messages.map((message) => message.id), ['old', 'new']);
     expect(history.members.single.displayName, 'Mira');
+    expect(history.messages.first.embeds.single.title, 'Release status');
+    expect(history.messages.first.embeds.single.fields, hasLength(2));
 
     final edited = mapper.message({
       'id': 'new',
@@ -314,6 +316,7 @@ void main() {
     expect(edited.body, 'message new');
     expect(edited.authorId, 'user-1');
     expect(edited.isEdited, isTrue);
+    expect(edited.embeds.single.title, 'Release status');
   });
 }
 
@@ -327,6 +330,18 @@ Map<String, Object?> _messagePayload({
   'timestamp': '2026-07-23T02:0$minute:00Z',
   'edited_timestamp': null,
   'attachments': <Object?>[],
+  'embeds': [
+    {
+      'type': 'rich',
+      'title': 'Release status',
+      'description': 'Native build complete',
+      'color': 0x4c9b72,
+      'fields': [
+        {'name': 'Platform', 'value': 'Windows', 'inline': true},
+        {'name': 'Mode', 'value': 'Release', 'inline': true},
+      ],
+    },
+  ],
   'author': {
     'id': 'user-1',
     'username': 'Mira',

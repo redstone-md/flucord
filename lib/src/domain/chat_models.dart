@@ -1,3 +1,5 @@
+import 'message_embed.dart';
+
 enum ChannelKind { text, voice }
 
 enum Presence { online, idle, offline }
@@ -188,11 +190,13 @@ final class ChatMessage {
     required this.body,
     required this.sentAt,
     List<MessageAttachment> attachments = const [],
+    List<MessageEmbed> embeds = const [],
     List<MessageReaction> reactions = const [],
     this.reply,
     this.isEdited = false,
     this.isPinned = false,
   }) : attachments = List.unmodifiable(attachments),
+       embeds = List.unmodifiable(embeds),
        reactions = List.unmodifiable(reactions);
 
   final String id;
@@ -201,6 +205,7 @@ final class ChatMessage {
   final String body;
   final DateTime sentAt;
   final List<MessageAttachment> attachments;
+  final List<MessageEmbed> embeds;
   final MessageReply? reply;
   final List<MessageReaction> reactions;
   final bool isEdited;
@@ -209,6 +214,7 @@ final class ChatMessage {
   ChatMessage copyWith({
     String? body,
     List<MessageAttachment>? attachments,
+    List<MessageEmbed>? embeds,
     List<MessageReaction>? reactions,
     bool? isEdited,
     bool? isPinned,
@@ -219,6 +225,7 @@ final class ChatMessage {
     body: body ?? this.body,
     sentAt: sentAt,
     attachments: attachments ?? this.attachments,
+    embeds: embeds ?? this.embeds,
     reply: reply,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,

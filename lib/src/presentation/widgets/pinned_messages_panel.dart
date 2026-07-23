@@ -4,6 +4,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
+import 'message_embed_view.dart';
 
 class PinnedMessagesPanel extends StatelessWidget {
   const PinnedMessagesPanel({
@@ -162,6 +163,11 @@ class _PinnedMessageRow extends StatelessWidget {
                     child: MessageAttachmentView(
                       attachment: message.attachments.first,
                     ),
+                  ),
+                if (message.embeds.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: MessageEmbedView(embed: message.embeds.first),
                   ),
               ],
             ),

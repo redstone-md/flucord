@@ -66,7 +66,12 @@ browser runtime or dependency on Discord's private user API.
    guild-specific member avatars flow through immutable identity models,
    SQLite v4, messages, pins, member lists, the server rail, and voice rooms.
    Network failures retain deterministic initials without shifting layout.
-7. macOS and Linux packaging after Windows behavior stabilizes.
+7. Completed: documented Discord message embeds now survive REST history,
+   partial Gateway updates, and SQLite v5. The message and pins surfaces render
+   author/provider metadata, title, description, adaptive inline fields,
+   source color, image/thumbnail error states, footer, and timestamp while
+   preserving video metadata for a later native player.
+8. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 
