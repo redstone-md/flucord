@@ -1,6 +1,7 @@
 import '../../domain/chat_models.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
+import 'discord_mention_matcher.dart';
 
 final class DiscordMappedDirectMessage {
   const DiscordMappedDirectMessage({
@@ -134,15 +135,16 @@ final class DiscordMapper {
 
   ChannelHistory history(
     String channelId,
-    List<Map<String, Object?>> payloads,
-  ) {
+    List<Map<String, Object?>> payloads, {
+    String? currentMemberId,
+  }) {
     final members = <String, Member>{};
     final messages = <ChatMessage>[];
     for (final payload in payloads.reversed) {
       final authorPayload = (payload['author']! as Map).cast<String, Object?>();
       final author = member(authorPayload);
       members[author.id] = author;
-      messages.add(message(payload));
+      messages.add(message(payload, currentMemberId: currentMemberId));
     }
     return ChannelHistory(
       channelId: channelId,
@@ -151,7 +153,11 @@ final class DiscordMapper {
     );
   }
 
-  ChatMessage message(Map<String, Object?> payload, {ChatMessage? fallback}) {
+  ChatMessage message(
+    Map<String, Object?> payload, {
+    ChatMessage? fallback,
+    String? currentMemberId,
+  }) {
     final rawContent = payload.containsKey('content')
         ? payload['content'] as String? ?? ''
         : fallback?.body ?? '';
@@ -190,6 +196,9 @@ final class DiscordMapper {
       isPinned: payload.containsKey('pinned')
           ? payload['pinned'] == true
           : fallback?.isPinned ?? false,
+      mentionsCurrentMember: payload.containsKey('mentions')
+          ? DiscordMentionMatcher.containsUser(payload, currentMemberId)
+          : fallback?.mentionsCurrentMember ?? false,
       attachments: attachments,
       embeds: embeds,
       reactions: reactions,

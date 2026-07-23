@@ -80,6 +80,7 @@ final class ChatMessage {
     this.reply,
     this.isEdited = false,
     this.isPinned = false,
+    this.mentionsCurrentMember = false,
   }) : attachments = List.unmodifiable(attachments),
        embeds = List.unmodifiable(embeds),
        reactions = List.unmodifiable(reactions);
@@ -95,6 +96,7 @@ final class ChatMessage {
   final List<MessageReaction> reactions;
   final bool isEdited;
   final bool isPinned;
+  final bool mentionsCurrentMember;
 
   ChatMessage copyWith({
     String? body,
@@ -103,6 +105,7 @@ final class ChatMessage {
     List<MessageReaction>? reactions,
     bool? isEdited,
     bool? isPinned,
+    bool? mentionsCurrentMember,
   }) => ChatMessage(
     id: id,
     channelId: channelId,
@@ -115,5 +118,6 @@ final class ChatMessage {
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,
     isPinned: isPinned ?? this.isPinned,
+    mentionsCurrentMember: mentionsCurrentMember ?? this.mentionsCurrentMember,
   );
 }

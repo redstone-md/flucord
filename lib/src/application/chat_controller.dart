@@ -7,6 +7,8 @@ import '../domain/chat_repository.dart';
 import '../domain/voice_connection.dart';
 import 'channel_activity_persistence.dart';
 
+part 'chat_controller_events.dart';
+
 enum ChatLoadState { idle, loading, ready, failure }
 
 final class ChatController extends ChangeNotifier {
@@ -142,7 +144,11 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
-  Future<void> openChannel(String channelId, {bool refresh = false}) async {
+  Future<void> openChannel(
+    String channelId, {
+    bool refresh = false,
+    String? anchorMessageId,
+  }) async {
     final previousChannelId = _activeChannelId;
     if (previousChannelId != null && previousChannelId != channelId) {
       _workspace = _workspace?.clearChannelUnreadBoundary(previousChannelId);
@@ -163,7 +169,10 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await _repository.loadChannelHistory(channelId);
-      _workspace = _workspace?.mergeInitialHistory(page.history);
+      _workspace = _workspace?.mergeInitialHistory(
+        page.history,
+        retainExisting: anchorMessageId != null,
+      );
       _loadedChannels.add(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
     } catch (error) {
@@ -401,75 +410,26 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
-  void _listenToRepository() {
-    _eventSubscription = _repository.events.listen((event) {
-      switch (event) {
-        case MessageUpsertedEvent():
-          _workspace = _workspace?.upsertMessage(
-            event.message,
-            member: event.member,
-          );
-          if (event.isNew &&
-              event.message.authorId != _workspace?.currentMemberId) {
-            _incomingMessages.add(event);
-            if (!_isApplicationActive ||
-                event.message.channelId != _activeChannelId) {
-              _workspace = _workspace?.markChannelUnread(
-                event.message.channelId,
-                messageId: event.message.id,
-                mention: event.mentionsCurrentMember,
-              );
-              _persistChannelActivity(event.message.channelId);
-            }
-          }
-        case MessageDeletedEvent():
-          _workspace = _workspace?.removeMessage(event.messageId);
-        case ChannelUpsertedEvent():
-          _workspace = _workspace?.upsertChannel(event.channel);
-        case CategoryUpsertedEvent():
-          _workspace = _workspace?.upsertCategory(event.category);
-        case SpaceUpsertedEvent():
-          _workspace = _workspace?.upsertSpace(event.space);
-        case ChannelDeletedEvent():
-          _workspace = _workspace?.removeChannel(event.channelId);
-        case CategoryDeletedEvent():
-          _workspace = _workspace?.removeCategory(event.categoryId);
-        case MemberUpsertedEvent():
-          _workspace = _workspace?.upsertMember(event.member);
-        case MemberRemovedEvent():
-          _workspace = _workspace?.removeMemberFromSpace(
-            event.memberId,
-            event.spaceId,
-          );
-        case PresenceChangedEvent():
-          _workspace = _workspace?.updatePresence(
-            event.memberId,
-            event.presence,
-          );
-        case TypingStartedEvent():
-          _handleTyping(event);
-        case PinsChangedEvent():
-          if (_pinnedMessages.containsKey(event.channelId)) {
-            unawaited(loadPinnedMessages(event.channelId, refresh: true));
-          }
-        case RepositoryStatusChangedEvent():
-          _connectionStatus = event.status;
-      }
-      notifyListeners();
-    });
-  }
-
-  void _handleTyping(TypingStartedEvent event) {
-    if (event.memberId == _workspace?.currentMemberId) return;
-    final members = _typingMembers.putIfAbsent(event.channelId, () => {});
-    members.add(event.memberId);
-    final key = '${event.channelId}:${event.memberId}';
-    _typingTimers[key]?.cancel();
-    _typingTimers[key] = Timer(const Duration(seconds: 9), () {
-      _typingMembers[event.channelId]?.remove(event.memberId);
-      _typingTimers.remove(key);
-      if (!_disposed) notifyListeners();
-    });
+  void markAllChannelsRead() {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    final activeIds = workspace.channels
+        .where((channel) => channel.unread || channel.mentionCount > 0)
+        .map((channel) => channel.id)
+        .toSet();
+    if (activeIds.isEmpty) return;
+    _workspace = workspace.copyWith(
+      channels: [
+        for (final channel in workspace.channels)
+          activeIds.contains(channel.id)
+              ? channel.markRead().clearUnreadBoundary()
+              : channel,
+      ],
+    );
+    for (final channelId in activeIds) {
+      _persistChannelActivity(channelId);
+    }
+    notifyListeners();
   }
 
   void _clearTyping() {
@@ -484,6 +444,8 @@ final class ChatController extends ChangeNotifier {
   void _persistChannelActivity(String channelId) => unawaited(
     ChannelActivityPersistence.save(_repository, _workspace, channelId),
   );
+
+  void _notify() => notifyListeners();
 
   @override
   void dispose() {

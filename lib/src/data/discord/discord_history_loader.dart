@@ -4,13 +4,19 @@ import 'discord_api_client.dart';
 import 'discord_mapper.dart';
 
 final class DiscordHistoryLoader {
-  const DiscordHistoryLoader(this._api, this._mapper, this._cache);
+  const DiscordHistoryLoader(
+    this._api,
+    this._mapper,
+    this._cache, [
+    this._currentMemberId,
+  ]);
 
   static const pageSize = 100;
 
   final DiscordApiClient _api;
   final DiscordMapper _mapper;
   final ChatCache _cache;
+  final String? Function()? _currentMemberId;
 
   Future<ChannelHistoryPage> load(
     String channelId, {
@@ -22,7 +28,11 @@ final class DiscordHistoryLoader {
         limit: pageSize,
         beforeMessageId: beforeMessageId,
       );
-      final history = _mapper.history(channelId, payloads);
+      final history = _mapper.history(
+        channelId,
+        payloads,
+        currentMemberId: _currentMemberId?.call(),
+      );
       await _cache.writeChannelHistory(history, replaceExisting: false);
       return ChannelHistoryPage(
         history: history,

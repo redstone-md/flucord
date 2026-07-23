@@ -12,10 +12,11 @@ import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
-import 'discord_mention_matcher.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
+
+part 'discord_chat_repository_messages.dart';
 
 final class DiscordChatRepository
     implements ChatRepository, VoiceSignalingService {
@@ -41,6 +42,7 @@ final class DiscordChatRepository
     _api,
     _mapper,
     _cache,
+    () => _currentMemberId,
   );
   late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
     _api,
@@ -126,6 +128,7 @@ final class DiscordChatRepository
       final history = _mapper.history(
         channelId,
         await _api.getChannelPins(channelId),
+        currentMemberId: _currentMemberId,
       );
       for (final member in history.members) {
         await _cache.writeMember(member);
@@ -167,7 +170,7 @@ final class DiscordChatRepository
       attachments: attachments,
       replyToMessageId: replyToMessageId,
     );
-    final message = _mapper.message(payload);
+    final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);
     return message;
   }
@@ -184,7 +187,11 @@ final class DiscordChatRepository
       content: body,
     );
     final fallback = await _cache.readMessage(messageId);
-    final message = _mapper.message(payload, fallback: fallback);
+    final message = _mapper.message(
+      payload,
+      fallback: fallback,
+      currentMemberId: _currentMemberId,
+    );
     await _cache.writeMessage(message);
     return message;
   }
@@ -411,56 +418,6 @@ final class DiscordChatRepository
         _handlePresence(raw.cast<String, Object?>());
       }
     }
-  }
-
-  Future<void> _handleMessageDispatch(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'] as String?;
-    if (messageId == null) return;
-    final currentUserId = _currentMemberId;
-    if (event.name == 'MESSAGE_CREATE' && currentUserId != null) {
-      final conversation = await _directMessages.acceptMessage(
-        event.data,
-        currentUserId,
-      );
-      if (conversation != null) _emitDirectConversation(conversation);
-    }
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = _mapper.message(event.data, fallback: fallback);
-    final authorPayload = event.data['author'];
-    final member = authorPayload is Map
-        ? _mapper.member(
-            authorPayload.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
-    await _cache.writeMessage(message, member: member);
-    if (!_events.isClosed) {
-      _events.add(
-        MessageUpsertedEvent(
-          message: message,
-          member: member,
-          isNew: event.name == 'MESSAGE_CREATE',
-          mentionsCurrentMember: DiscordMentionMatcher.containsUser(
-            event.data,
-            _currentMemberId,
-          ),
-        ),
-      );
-    }
-  }
-
-  void _emitDirectConversation(DirectConversation conversation) {
-    if (_events.isClosed) return;
-    _events.add(SpaceUpsertedEvent(_directMessages.space));
-    _events.add(MemberUpsertedEvent(conversation.recipient));
-    _events.add(ChannelUpsertedEvent(conversation.channel));
   }
 
   @override

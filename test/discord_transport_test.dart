@@ -331,8 +331,8 @@ void main() {
     );
     final history = mapper.history('channel-1', [
       _messagePayload(id: 'new', minute: 2),
-      _messagePayload(id: 'old', minute: 1),
-    ]);
+      _messagePayload(id: 'old', minute: 1, mentionBot: true),
+    ], currentMemberId: 'bot-1');
 
     expect(workspace.spaces.single.name, 'The Forge');
     expect(workspace.spaces.single.iconUrl, contains('/icons/guild-1/'));
@@ -356,6 +356,8 @@ void main() {
     expect(history.members.single.displayName, 'Mira');
     expect(history.messages.first.embeds.single.title, 'Release status');
     expect(history.messages.first.embeds.single.fields, hasLength(2));
+    expect(history.messages.first.mentionsCurrentMember, isTrue);
+    expect(history.messages.last.mentionsCurrentMember, isFalse);
 
     final edited = mapper.message({
       'id': 'new',
@@ -366,6 +368,18 @@ void main() {
     expect(edited.authorId, 'user-1');
     expect(edited.isEdited, isTrue);
     expect(edited.embeds.single.title, 'Release status');
+    expect(edited.mentionsCurrentMember, isFalse);
+
+    final retainedMention = mapper.message(
+      {
+        'id': 'old',
+        'channel_id': 'channel-1',
+        'edited_timestamp': '2026-07-23T02:04:00Z',
+      },
+      fallback: history.messages.first,
+      currentMemberId: 'bot-1',
+    );
+    expect(retainedMention.mentionsCurrentMember, isTrue);
   });
 
   test('mapper builds a direct message inbox with recipient identity', () {
@@ -405,6 +419,7 @@ void main() {
 Map<String, Object?> _messagePayload({
   required String id,
   required int minute,
+  bool mentionBot = false,
 }) => {
   'id': id,
   'channel_id': 'channel-1',
@@ -412,6 +427,9 @@ Map<String, Object?> _messagePayload({
   'timestamp': '2026-07-23T02:0$minute:00Z',
   'edited_timestamp': null,
   'attachments': <Object?>[],
+  'mentions': [
+    if (mentionBot) {'id': 'bot-1'},
+  ],
   'embeds': [
     {
       'type': 'rich',

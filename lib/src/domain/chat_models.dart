@@ -306,9 +306,14 @@ final class ChatWorkspace {
     return copyWith(members: memberMap.values.toList(), messages: nextMessages);
   }
 
-  ChatWorkspace mergeInitialHistory(ChannelHistory history) => mergeHistory(
+  ChatWorkspace mergeInitialHistory(
+    ChannelHistory history, {
+    bool retainExisting = false,
+  }) => mergeHistory(
     history,
-    replaceChannel: channelById(history.channelId).firstUnreadMessageId == null,
+    replaceChannel:
+        !retainExisting &&
+        channelById(history.channelId).firstUnreadMessageId == null,
   );
 
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {

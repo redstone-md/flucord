@@ -128,6 +128,7 @@ void main() {
         ),
       ],
       isPinned: true,
+      mentionsCurrentMember: true,
     );
 
     await cache.writeWorkspace(workspace);
@@ -170,6 +171,7 @@ void main() {
       contains('/guilds/guild-1/users/user-1/'),
     );
     expect(history.messages.single.isPinned, isTrue);
+    expect(history.messages.single.mentionsCurrentMember, isTrue);
     expect(
       (await cache.readPinnedMessages('channel-1')).messages.single.id,
       'message-1',
@@ -397,6 +399,10 @@ void main() {
       contains('first_unread_message_id'),
     );
     expect(messageColumns.map((row) => row['name']), contains('embeds_json'));
+    expect(
+      messageColumns.map((row) => row['name']),
+      contains('mentions_current_member'),
+    );
     expect(roleTables, hasLength(1));
     expect(categoryTables, hasLength(1));
   });

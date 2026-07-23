@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
-import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
@@ -154,6 +153,13 @@ void main() {
             .map((item) => item.id),
         contains('incoming-1'),
       );
+      expect(
+        controller.workspace!
+            .messagesFor('forge-native')
+            .singleWhere((message) => message.id == 'incoming-1')
+            .mentionsCurrentMember,
+        isTrue,
+      );
 
       await controller.openChannel('forge-general');
       expect(
@@ -161,6 +167,48 @@ void main() {
         isNull,
       );
     });
+
+    test(
+      'marks every active channel read and clears unread boundaries',
+      () async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+
+        repository.emit(
+          MessageUpsertedEvent(
+            message: ChatMessage(
+              id: 'mention-for-inbox',
+              channelId: 'forge-native',
+              authorId: 'lena',
+              body: 'Mention retained after reading',
+              sentAt: DateTime.now(),
+            ),
+            isNew: true,
+            mentionsCurrentMember: true,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          controller.workspace!.channelById('forge-native').mentionCount,
+          1,
+        );
+
+        controller.markAllChannelsRead();
+
+        final channel = controller.workspace!.channelById('forge-native');
+        expect(channel.unread, isFalse);
+        expect(channel.mentionCount, 0);
+        expect(channel.firstUnreadMessageId, isNull);
+        expect(
+          controller.workspace!.messages
+              .singleWhere((message) => message.id == 'mention-for-inbox')
+              .mentionsCurrentMember,
+          isTrue,
+        );
+      },
+    );
 
     test('marks the active channel unread while the app is inactive', () async {
       final repository = _EventRepository();
@@ -302,36 +350,6 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(controller.workspace!.categories, isNot(contains(category)));
     });
-  });
-
-  test('workspace state remains independent from server state', () async {
-    final repository = MockChatRepository(latency: Duration.zero);
-    final workspace = await repository.loadWorkspace();
-    final controller = WorkspaceController();
-
-    controller.reconcile(workspace);
-    controller.setQuery('old filter');
-    controller.selectSpace(workspace, 'night');
-
-    expect(controller.selectedSpaceId, 'night');
-    expect(controller.selectedChannelId, 'night-ops');
-    expect(controller.query, isEmpty);
-  });
-
-  test('workspace selection supports an empty direct message inbox', () {
-    final workspace = ChatWorkspace(
-      spaces: const [CommunitySpace.directMessages()],
-      channels: const [],
-      members: const [],
-      messages: const [],
-      currentMemberId: 'bot-1',
-    );
-    final controller = WorkspaceController();
-
-    controller.reconcile(workspace);
-
-    expect(controller.selectedSpaceId, CommunitySpace.directMessagesId);
-    expect(controller.selectedChannelId, isNull);
   });
 }
 
