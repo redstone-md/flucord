@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
@@ -12,27 +13,30 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('uses the documented guild emoji REST route and maps syntax', () async {
+  test('uses documented sticker list and Create Message payloads', () async {
     final transport = _QueueTransport([
-      const DiscordHttpResponse(
-        statusCode: 200,
-        headers: {},
-        body:
-            '[{"id":"emoji-1","name":"ship_it","animated":true,"available":true}]',
-      ),
+      _response('[${_stickerJson('sticker-1', 'Signal', 2)}]'),
+      _response(_messageJson),
     ]);
     final client = DiscordApiClient(botToken: 'token', transport: transport);
 
-    final payloads = await client.getGuildEmojis('guild-1');
-    final emoji = DiscordMapper().emoji(payloads.single, 'guild-1');
+    final catalog = await client.getGuildStickers('guild-1');
+    final sticker = DiscordMapper().guildSticker(catalog.single, 'guild-1');
+    await client.createMessage(
+      channelId: 'channel-1',
+      content: '',
+      stickerIds: const ['sticker-1'],
+    );
 
-    expect(transport.paths.single, '/api/v10/guilds/guild-1/emojis');
-    expect(emoji.messageSyntax, '<a:ship_it:emoji-1>');
-    expect(emoji.reactionKey, 'ship_it:emoji-1');
-    expect(emoji.imageUrl, contains('/emojis/emoji-1.gif'));
+    expect(transport.paths[0], '/api/v10/guilds/guild-1/stickers');
+    expect(sticker.item.format.name, 'apng');
+    expect(sticker.tags, ['signal', 'native']);
+    expect(sticker.item.url, endsWith('/stickers/sticker-1.png'));
+    final body = jsonDecode(utf8.decode(transport.bodies[1]!)) as Map;
+    expect(body['sticker_ids'], ['sticker-1']);
   });
 
-  test('replaces and persists a guild emoji catalog from Gateway', () async {
+  test('replaces and persists a guild sticker catalog from Gateway', () async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
@@ -45,8 +49,8 @@ void main() {
       _response('{"threads":[]}'),
       _response('[]'),
       _response('[]'),
-      _response('[{"id":"emoji-old","name":"old","animated":false}]'),
       _response('[]'),
+      _response('[${_stickerJson('sticker-old', 'Old signal', 1)}]'),
       _response('{"url":"wss://gateway.discord.gg"}'),
     ]);
     final repository = DiscordChatRepository(
@@ -57,34 +61,38 @@ void main() {
     addTearDown(repository.close);
 
     final workspace = await repository.loadWorkspace();
-    expect(workspace.emojis.single.id, 'emoji-old');
+    expect(workspace.stickers.single.id, 'sticker-old');
     final emitted = repository.events
-        .firstWhere((event) => event is GuildEmojisReplacedEvent)
-        .then((event) => event as GuildEmojisReplacedEvent);
+        .firstWhere((event) => event is GuildStickersReplacedEvent)
+        .then((event) => event as GuildStickersReplacedEvent);
 
     gateway.emit(
       DiscordGatewayDispatch(
-        name: 'GUILD_EMOJIS_UPDATE',
-        data: const {
+        name: 'GUILD_STICKERS_UPDATE',
+        data: {
           'guild_id': 'guild-1',
-          'emojis': [
-            {
-              'id': 'emoji-new',
-              'name': 'new_signal',
-              'animated': true,
-              'available': true,
-            },
-          ],
+          'stickers': [jsonDecode(_stickerJson('sticker-new', 'New relay', 3))],
         },
       ),
     );
 
     final event = await emitted.timeout(const Duration(seconds: 2));
-    expect(event.emojis.single.messageSyntax, '<a:new_signal:emoji-new>');
+    expect(event.stickers.single.item.format.name, 'lottie');
     final restored = await cache.readWorkspace();
-    expect(restored?.emojis.single.id, 'emoji-new');
+    expect(restored?.stickers.single.id, 'sticker-new');
   });
 }
+
+String _stickerJson(String id, String name, int format) =>
+    '{"id":"$id","name":"$name","description":"Native",'
+    '"tags":"signal,native","format_type":$format,"available":true}';
+
+const _messageJson =
+    '{"id":"message-1","channel_id":"channel-1",'
+    '"author":{"id":"bot-1"},"content":"",'
+    '"timestamp":"2026-07-23T03:47:00Z","attachments":[],"embeds":[],'
+    '"reactions":[],"sticker_items":['
+    '{"id":"sticker-1","name":"Signal","format_type":2}]}';
 
 DiscordHttpResponse _response(String body) =>
     DiscordHttpResponse(statusCode: 200, headers: const {}, body: body);
@@ -118,6 +126,7 @@ final class _QueueTransport implements DiscordHttpTransport {
 
   final List<DiscordHttpResponse> _responses;
   final List<String> paths = [];
+  final List<List<int>?> bodies = [];
 
   @override
   Future<DiscordHttpResponse> send({
@@ -127,6 +136,7 @@ final class _QueueTransport implements DiscordHttpTransport {
     List<int>? body,
   }) async {
     paths.add(uri.path);
+    bodies.add(body);
     return _responses.removeAt(0);
   }
 

@@ -1,3 +1,5 @@
+import '../../domain/chat_models.dart';
+
 final class DiscordCdn {
   const DiscordCdn._();
 
@@ -35,6 +37,18 @@ final class DiscordCdn {
       'cdn.discordapp.com',
       '/emojis/$emojiId.${animated ? 'gif' : 'webp'}',
       {'size': '$size', 'quality': 'lossless'},
+    ).toString();
+  }
+
+  static String sticker(String stickerId, StickerFormat format) {
+    final extension = switch (format) {
+      StickerFormat.lottie => 'json',
+      StickerFormat.gif => 'gif',
+      _ => 'png',
+    };
+    return Uri.https(
+      'cdn.discordapp.com',
+      '/stickers/$stickerId.$extension',
     ).toString();
   }
 

@@ -4,6 +4,7 @@ import 'discord_cdn.dart';
 import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
+part 'discord_sticker_mapper.dart';
 
 final class DiscordMappedDirectMessage {
   const DiscordMappedDirectMessage({
@@ -34,6 +35,7 @@ final class DiscordMapper {
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
     Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
     Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
+    Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
     List<Map<String, Object?>> directChannels = const [],
     bool includeDirectMessagesSpace = false,
   }) {
@@ -42,6 +44,7 @@ final class DiscordMapper {
     final categories = <ChannelCategory>[];
     final roles = <CommunityRole>[];
     final emojis = <GuildEmoji>[];
+    final stickers = <GuildSticker>[];
     final members = <String, Member>{};
     if (includeDirectMessagesSpace || directChannels.isNotEmpty) {
       spaces.add(directMessagesSpace);
@@ -80,6 +83,11 @@ final class DiscordMapper {
           (payload) => emoji(payload, guildId),
         ),
       );
+      stickers.addAll(
+        (stickersByGuild[guildId] ?? const []).map(
+          (payload) => guildSticker(payload, guildId),
+        ),
+      );
       for (final payload in membersByGuild[guildId] ?? const []) {
         final mapped = guildMember(
           payload,
@@ -107,6 +115,7 @@ final class DiscordMapper {
       members: members.values.toList(),
       messages: const [],
       emojis: emojis,
+      stickers: stickers,
       currentMemberId: currentMember.id,
     );
   }
@@ -202,6 +211,9 @@ final class DiscordMapper {
     final poll = payload.containsKey('poll')
         ? _mapPoll(payload['poll'])
         : fallback?.poll;
+    final stickers = payload.containsKey('sticker_items')
+        ? _mapStickerItems(payload['sticker_items'])
+        : fallback?.stickers ?? const [];
     final referenced = payload['referenced_message'];
     final reply = referenced is Map
         ? _reply(referenced.cast<String, Object?>())
@@ -228,6 +240,7 @@ final class DiscordMapper {
       attachments: attachments,
       embeds: embeds,
       reactions: reactions,
+      stickers: stickers,
       poll: poll,
       reply: reply,
     );

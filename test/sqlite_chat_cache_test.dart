@@ -150,6 +150,14 @@ void main() {
         allowMultiselect: false,
         isFinalized: false,
       ),
+      stickers: const [
+        MessageSticker(
+          id: 'sticker-1',
+          name: 'Native signal',
+          format: StickerFormat.apng,
+          url: 'https://cdn.discordapp.com/stickers/sticker-1.png',
+        ),
+      ],
       isPinned: true,
       mentionsCurrentMember: true,
     );
@@ -195,6 +203,8 @@ void main() {
     expect(history.messages.single.poll?.question, 'Which cache ships?');
     expect(history.messages.single.poll?.answers.first.count, 7);
     expect(history.messages.single.poll?.expiry?.toUtc().day, 24);
+    expect(history.messages.single.stickers.single.name, 'Native signal');
+    expect(history.messages.single.stickers.single.format, StickerFormat.apng);
     expect(history.members.single.displayName, 'Jack');
     expect(history.members.single.roleFor('guild-1'), 'Bot');
     expect(history.members.single.avatarUrl, contains('/avatars/user-1/'));
@@ -475,6 +485,7 @@ void main() {
       contains('mentions_current_member'),
     );
     expect(messageColumns.map((row) => row['name']), contains('poll_json'));
+    expect(messageColumns.map((row) => row['name']), contains('stickers_json'));
     expect(roleTables, hasLength(1));
     expect(categoryTables, hasLength(1));
     expect(emojiTables, hasLength(1));

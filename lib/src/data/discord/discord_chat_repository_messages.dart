@@ -1,5 +1,58 @@
 part of 'discord_chat_repository.dart';
 
+mixin _DiscordChatRepositoryMessageMutations {
+  DiscordApiClient get _api;
+  DiscordMapper get _mapper;
+  ChatCache get _cache;
+  String? get _currentMemberId;
+
+  Future<ChatMessage> sendMessage({
+    required String channelId,
+    required String authorId,
+    required String body,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
+  }) async {
+    final payload = await _api.createMessage(
+      channelId: channelId,
+      content: body,
+      attachments: attachments,
+      replyToMessageId: replyToMessageId,
+    );
+    final message = _mapper.message(payload, currentMemberId: _currentMemberId);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  Future<ChatMessage> editMessage({
+    required String channelId,
+    required String messageId,
+    required String body,
+  }) async {
+    final payload = await _api.editMessage(
+      channelId: channelId,
+      messageId: messageId,
+      content: body,
+    );
+    final fallback = await _cache.readMessage(messageId);
+    final message = _mapper.message(
+      payload,
+      fallback: fallback,
+      currentMemberId: _currentMemberId,
+    );
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  }) async {
+    await _api.deleteMessage(channelId: channelId, messageId: messageId);
+    await _cache.deleteMessage(messageId);
+  }
+}
+
 extension _DiscordChatRepositoryMessages on DiscordChatRepository {
   Future<void> _handleMessageDispatch(DiscordGatewayDispatch event) async {
     final messageId = event.data['id'] as String?;

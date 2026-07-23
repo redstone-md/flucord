@@ -85,6 +85,16 @@ final class GuildEmojisReplacedEvent extends ChatRepositoryEvent {
   final List<GuildEmoji> emojis;
 }
 
+final class GuildStickersReplacedEvent extends ChatRepositoryEvent {
+  const GuildStickersReplacedEvent({
+    required this.spaceId,
+    required this.stickers,
+  });
+
+  final String spaceId;
+  final List<GuildSticker> stickers;
+}
+
 final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 

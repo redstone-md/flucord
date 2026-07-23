@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 14;
+  static const version = 15;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -92,7 +92,8 @@ abstract final class SqliteChatSchema {
         is_pinned INTEGER NOT NULL,
         embeds_json TEXT NOT NULL,
         mentions_current_member INTEGER NOT NULL,
-        poll_json TEXT
+        poll_json TEXT,
+        stickers_json TEXT NOT NULL
       )
     ''');
     await database.execute('''
@@ -108,6 +109,7 @@ abstract final class SqliteChatSchema {
     await database.execute(
       'CREATE INDEX emojis_space_name ON emojis(space_id, name)',
     );
+    await _createGuildStickers(database);
     await database.execute(
       'CREATE INDEX messages_channel_time '
       'ON messages(channel_id, sent_at)',
@@ -246,5 +248,30 @@ abstract final class SqliteChatSchema {
     if (oldVersion < 14) {
       await database.execute('ALTER TABLE messages ADD poll_json TEXT');
     }
+    if (oldVersion < 15) {
+      await database.execute(
+        "ALTER TABLE messages ADD stickers_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await _createGuildStickers(database);
+    }
+  }
+
+  static Future<void> _createGuildStickers(DatabaseExecutor database) async {
+    await database.execute('''
+      CREATE TABLE guild_stickers (
+        id TEXT PRIMARY KEY,
+        space_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        tags_json TEXT NOT NULL,
+        format_type INTEGER NOT NULL,
+        available INTEGER NOT NULL,
+        url TEXT NOT NULL
+      )
+    ''');
+    await database.execute(
+      'CREATE INDEX guild_stickers_space_name '
+      'ON guild_stickers(space_id, name)',
+    );
   }
 }

@@ -26,6 +26,11 @@ abstract interface class ChatCache {
 
   Future<void> replaceGuildEmojis(String spaceId, List<GuildEmoji> emojis);
 
+  Future<void> replaceGuildStickers(
+    String spaceId,
+    List<GuildSticker> stickers,
+  );
+
   Future<void> deleteMessage(String messageId);
 
   Future<void> writeChannel(ConversationChannel channel);

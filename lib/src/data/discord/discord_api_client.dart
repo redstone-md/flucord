@@ -182,6 +182,9 @@ final class DiscordApiClient {
   Future<List<Map<String, Object?>>> getGuildEmojis(String guildId) =>
       _getList('/guilds/$guildId/emojis');
 
+  Future<List<Map<String, Object?>>> getGuildStickers(String guildId) =>
+      _getList('/guilds/$guildId/stickers');
+
   Future<List<Map<String, Object?>>> getGuildMembers(String guildId) async {
     final members = <Map<String, Object?>>[];
     String? after;
@@ -242,12 +245,17 @@ final class DiscordApiClient {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     PendingPoll? poll,
+    List<String> stickerIds = const [],
   }) {
+    if (stickerIds.length > 3) {
+      throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
+    }
     final payload = <String, Object?>{
       'content': content,
       if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
       if (poll != null) 'poll': DiscordPollCodec.request(poll),
+      if (stickerIds.isNotEmpty) 'sticker_ids': stickerIds,
       if (attachments.isNotEmpty)
         'attachments': [
           for (var index = 0; index < attachments.length; index++)

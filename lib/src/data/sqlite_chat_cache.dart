@@ -8,13 +8,18 @@ import '../domain/chat_models.dart';
 import 'chat_model_json.dart';
 import 'sqlite_chat_schema.dart';
 import 'sqlite_guild_emoji_store.dart';
+import 'sqlite_guild_sticker_store.dart';
 
-final class SqliteChatCache implements ChatCache {
-  SqliteChatCache._(this._database)
-    : _emojiStore = SqliteGuildEmojiStore(_database);
+part 'sqlite_chat_cache_expressions.dart';
+part 'sqlite_chat_cache_entities.dart';
 
+final class SqliteChatCache
+    with _SqliteChatCacheExpressions, _SqliteChatCacheEntities
+    implements ChatCache {
+  SqliteChatCache._(this._database);
+
+  @override
   final Database _database;
-  final SqliteGuildEmojiStore _emojiStore;
 
   static Future<SqliteChatCache> openDefault() async {
     sqfliteFfiInit();
@@ -59,7 +64,7 @@ final class SqliteChatCache implements ChatCache {
     final roles = await _database.query('roles', orderBy: 'position DESC');
     final members = await _database.query('members');
     final messages = await _database.query('messages', orderBy: 'sent_at');
-    final emojis = await _emojiStore.readAll();
+    final (emojis, stickers) = await _readGuildExpressions();
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),
       channels: channels.map(_channelFromRow).toList(),
@@ -68,6 +73,7 @@ final class SqliteChatCache implements ChatCache {
       members: members.map(_memberFromRow).toList(),
       messages: messages.map(_messageFromRow).toList(),
       emojis: emojis,
+      stickers: stickers,
       currentMemberId: metadata.single['value']! as String,
     );
   }
@@ -83,7 +89,7 @@ final class SqliteChatCache implements ChatCache {
       await transaction.delete('channels');
       await transaction.delete('categories');
       await transaction.delete('roles');
-      await _emojiStore.writeAll(transaction, workspace.emojis);
+      await _writeGuildExpressions(transaction, workspace);
       final batch = transaction.batch();
       for (var index = 0; index < workspace.spaces.length; index++) {
         batch.insert('spaces', _spaceToRow(workspace.spaces[index], index));
@@ -210,13 +216,6 @@ final class SqliteChatCache implements ChatCache {
   }
 
   @override
-  Future<void> writeMember(Member member) => _database.insert(
-    'members',
-    _memberToRow(member),
-    conflictAlgorithm: ConflictAlgorithm.replace,
-  );
-
-  @override
   Future<void> writeSpace(CommunitySpace space) async {
     final existing = await _database.query(
       'spaces',
@@ -238,17 +237,6 @@ final class SqliteChatCache implements ChatCache {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
-
-  @override
-  Future<void> writeCategory(ChannelCategory category) => _database.insert(
-    'categories',
-    _categoryToRow(category),
-    conflictAlgorithm: ConflictAlgorithm.replace,
-  );
-
-  @override
-  Future<void> replaceGuildEmojis(String spaceId, List<GuildEmoji> emojis) =>
-      _emojiStore.replaceForSpace(spaceId, emojis);
 
   @override
   Future<void> deleteMessage(String messageId) =>
@@ -472,6 +460,7 @@ final class SqliteChatCache implements ChatCache {
     'embeds_json': ChatModelJson.embeds(message.embeds),
     'mentions_current_member': message.mentionsCurrentMember ? 1 : 0,
     'poll_json': ChatModelJson.poll(message.poll),
+    'stickers_json': ChatModelJson.stickers(message.stickers),
   };
 
   static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -490,6 +479,7 @@ final class SqliteChatCache implements ChatCache {
     embeds: ChatModelJson.embedsFrom(row['embeds_json']! as String),
     mentionsCurrentMember: row['mentions_current_member'] == 1,
     poll: ChatModelJson.pollFrom(row['poll_json'] as String?),
+    stickers: ChatModelJson.stickersFrom(row['stickers_json']! as String),
   );
 
   @override

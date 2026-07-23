@@ -2,10 +2,12 @@ import 'message_embed.dart';
 
 part 'message_models.dart';
 part 'message_poll.dart';
+part 'message_sticker.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
 part 'forum_models.dart';
 part 'guild_emoji.dart';
+part 'guild_sticker.dart';
 
 enum ChannelKind { text, voice, forum, media }
 
@@ -142,13 +144,15 @@ final class ChatWorkspace {
     List<CommunityRole> roles = const [],
     List<ChannelCategory> categories = const [],
     List<GuildEmoji> emojis = const [],
+    List<GuildSticker> stickers = const [],
   }) : spaces = List.unmodifiable(spaces),
        channels = List.unmodifiable(channels),
        members = List.unmodifiable(members),
        messages = List.unmodifiable(messages),
        roles = List.unmodifiable(roles),
        categories = List.unmodifiable(categories),
-       emojis = List.unmodifiable(emojis);
+       emojis = List.unmodifiable(emojis),
+       stickers = List.unmodifiable(stickers);
 
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
@@ -157,6 +161,7 @@ final class ChatWorkspace {
   final List<CommunityRole> roles;
   final List<ChannelCategory> categories;
   final List<GuildEmoji> emojis;
+  final List<GuildSticker> stickers;
   final String currentMemberId;
 
   List<ConversationChannel> channelsFor(String spaceId) => channels
@@ -209,6 +214,7 @@ final class ChatWorkspace {
     List<CommunityRole>? roles,
     List<ChannelCategory>? categories,
     List<GuildEmoji>? emojis,
+    List<GuildSticker>? stickers,
     String? currentMemberId,
   }) => ChatWorkspace(
     spaces: spaces ?? this.spaces,
@@ -218,6 +224,7 @@ final class ChatWorkspace {
     roles: roles ?? this.roles,
     categories: categories ?? this.categories,
     emojis: emojis ?? this.emojis,
+    stickers: stickers ?? this.stickers,
     currentMemberId: currentMemberId ?? this.currentMemberId,
   );
 

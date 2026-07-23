@@ -19,6 +19,11 @@ extension _ChatControllerEvents on ChatController {
             event.spaceId,
             event.emojis,
           );
+        case GuildStickersReplacedEvent():
+          _workspace = _workspace?.replaceGuildStickers(
+            event.spaceId,
+            event.stickers,
+          );
         case ChannelDeletedEvent():
           _workspace = _workspace?.removeChannel(event.channelId);
         case CategoryDeletedEvent():

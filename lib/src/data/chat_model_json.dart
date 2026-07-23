@@ -4,6 +4,7 @@ import '../domain/chat_models.dart';
 import '../domain/message_embed.dart';
 import 'message_embed_codec.dart';
 import 'message_poll_codec.dart';
+import 'message_sticker_codec.dart';
 
 final class ChatModelJson {
   const ChatModelJson._();
@@ -47,6 +48,12 @@ final class ChatModelJson {
 
   static MessagePoll? pollFrom(String? source) =>
       MessagePollCodec.decode(source);
+
+  static String stickers(List<MessageSticker> value) =>
+      MessageStickerCodec.encode(value);
+
+  static List<MessageSticker> stickersFrom(String source) =>
+      MessageStickerCodec.decode(source);
 
   static String? reply(MessageReply? value) => value == null
       ? null

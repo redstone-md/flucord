@@ -5,6 +5,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
 import '../../domain/poll_repository.dart';
+import '../../domain/sticker_repository.dart';
 import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
@@ -26,14 +27,19 @@ part 'discord_chat_repository_threads.dart';
 part 'discord_chat_repository_forums.dart';
 part 'discord_chat_repository_pins.dart';
 part 'discord_chat_repository_polls.dart';
+part 'discord_chat_repository_stickers.dart';
 
 final class DiscordChatRepository
-    with _DiscordChatRepositoryPolls
+    with
+        _DiscordChatRepositoryMessageMutations,
+        _DiscordChatRepositoryPolls,
+        _DiscordChatRepositoryStickers
     implements
         ChatRepository,
         ArchivedThreadRepository,
         ForumPostRepository,
         PollRepository,
+        StickerRepository,
         VoiceSignalingService {
   DiscordChatRepository(
     this._api,
@@ -99,6 +105,7 @@ final class DiscordChatRepository
       final threadsByGuild = <String, List<Map<String, Object?>>>{};
       final membersByGuild = <String, List<Map<String, Object?>>>{};
       final emojisByGuild = <String, List<Map<String, Object?>>>{};
+      final stickersByGuild = <String, List<Map<String, Object?>>>{};
       for (final guild in guilds) {
         final guildId = guild['id']! as String;
         channelsByGuild[guildId] = await _api.getGuildChannels(guildId);
@@ -106,6 +113,7 @@ final class DiscordChatRepository
         _rolesByGuild[guildId] = await _api.getGuildRoles(guildId);
         membersByGuild[guildId] = await _guildMemberLoader.load(guildId);
         emojisByGuild[guildId] = await _api.getGuildEmojis(guildId);
+        stickersByGuild[guildId] = await _api.getGuildStickers(guildId);
       }
       final cached = await _cache.readWorkspace();
       final workspace = _mapper
@@ -117,6 +125,7 @@ final class DiscordChatRepository
             membersByGuild: membersByGuild,
             rolesByGuild: _rolesByGuild,
             emojisByGuild: emojisByGuild,
+            stickersByGuild: stickersByGuild,
             includeDirectMessagesSpace: true,
           )
           .retainDirectMessagesFrom(cached)
@@ -195,55 +204,6 @@ final class DiscordChatRepository
     attachments: attachments,
     appliedTagIds: appliedTagIds,
   );
-
-  @override
-  Future<ChatMessage> sendMessage({
-    required String channelId,
-    required String authorId,
-    required String body,
-    List<PendingAttachment> attachments = const [],
-    String? replyToMessageId,
-  }) async {
-    final payload = await _api.createMessage(
-      channelId: channelId,
-      content: body,
-      attachments: attachments,
-      replyToMessageId: replyToMessageId,
-    );
-    final message = _mapper.message(payload, currentMemberId: _currentMemberId);
-    await _cache.writeMessage(message);
-    return message;
-  }
-
-  @override
-  Future<ChatMessage> editMessage({
-    required String channelId,
-    required String messageId,
-    required String body,
-  }) async {
-    final payload = await _api.editMessage(
-      channelId: channelId,
-      messageId: messageId,
-      content: body,
-    );
-    final fallback = await _cache.readMessage(messageId);
-    final message = _mapper.message(
-      payload,
-      fallback: fallback,
-      currentMemberId: _currentMemberId,
-    );
-    await _cache.writeMessage(message);
-    return message;
-  }
-
-  @override
-  Future<void> deleteMessage({
-    required String channelId,
-    required String messageId,
-  }) async {
-    await _api.deleteMessage(channelId: channelId, messageId: messageId);
-    await _cache.deleteMessage(messageId);
-  }
 
   @override
   Future<void> addReaction({
@@ -341,6 +301,8 @@ final class DiscordChatRepository
             _handleGuildSnapshot(event.data);
           case 'GUILD_EMOJIS_UPDATE':
             unawaited(_handleGuildEmojis(event.data));
+          case 'GUILD_STICKERS_UPDATE':
+            unawaited(_handleGuildStickers(event.data));
         }
     }
   }
