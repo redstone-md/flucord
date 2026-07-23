@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import '../../domain/chat_models.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
@@ -18,7 +21,7 @@ abstract interface class DiscordHttpTransport {
     required String method,
     required Uri uri,
     required Map<String, String> headers,
-    String? body,
+    List<int>? body,
   });
 
   void close();
@@ -35,12 +38,12 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
     required String method,
     required Uri uri,
     required Map<String, String> headers,
-    String? body,
+    List<int>? body,
   }) async {
     final request = await _client.openUrl(method, uri);
     headers.forEach(request.headers.set);
     if (body != null) {
-      request.add(utf8.encode(body));
+      request.add(body);
     }
     final response = await request.close();
     final responseHeaders = <String, String>{};
@@ -123,11 +126,103 @@ final class DiscordApiClient {
   Future<Map<String, Object?>> createMessage({
     required String channelId,
     required String content,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
+  }) {
+    final payload = <String, Object?>{
+      'content': content,
+      if (replyToMessageId != null)
+        'message_reference': {'message_id': replyToMessageId},
+      if (attachments.isNotEmpty)
+        'attachments': [
+          for (var index = 0; index < attachments.length; index++)
+            {'id': index, 'filename': attachments[index].name},
+        ],
+    };
+    if (attachments.isEmpty) {
+      return _requestObject(
+        'POST',
+        '/channels/$channelId/messages',
+        body: payload,
+      );
+    }
+    return _createMultipartMessage(channelId, payload, attachments);
+  }
+
+  Future<Map<String, Object?>> editMessage({
+    required String channelId,
+    required String messageId,
+    required String content,
   }) => _requestObject(
-    'POST',
-    '/channels/$channelId/messages',
+    'PATCH',
+    '/channels/$channelId/messages/$messageId',
     body: {'content': content},
   );
+
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  }) => _requestEmpty('DELETE', '/channels/$channelId/messages/$messageId');
+
+  Future<void> addReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) {
+    final encodedEmoji = Uri.encodeComponent(emoji);
+    return _requestEmpty(
+      'PUT',
+      '/channels/$channelId/messages/$messageId/reactions/$encodedEmoji/@me',
+    );
+  }
+
+  Future<void> removeReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) {
+    final encodedEmoji = Uri.encodeComponent(emoji);
+    return _requestEmpty(
+      'DELETE',
+      '/channels/$channelId/messages/$messageId/reactions/$encodedEmoji/@me',
+    );
+  }
+
+  Future<List<Map<String, Object?>>> getGuildActiveThreads(
+    String guildId,
+  ) async {
+    final payload = await _requestObject(
+      'GET',
+      '/guilds/$guildId/threads/active',
+    );
+    final threads = payload['threads'];
+    if (threads is! List) return const [];
+    return threads
+        .whereType<Map>()
+        .map((thread) => thread.cast<String, Object?>())
+        .toList(growable: false);
+  }
+
+  Future<Map<String, Object?>> _createMultipartMessage(
+    String channelId,
+    Map<String, Object?> payload,
+    List<PendingAttachment> attachments,
+  ) async {
+    final multipart = await _DiscordMultipartBody.build(payload, attachments);
+    final response = await _request(
+      'POST',
+      '/channels/$channelId/messages',
+      rawBody: multipart.bytes,
+      contentType: multipart.contentType,
+    );
+    if (response is! Map) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a JSON object',
+      );
+    }
+    return response.cast<String, Object?>();
+  }
 
   Future<String> getGatewayUrl() async {
     final payload = await _getObject('/gateway/bot');
@@ -176,16 +271,21 @@ final class DiscordApiClient {
     return payload.cast<String, Object?>();
   }
 
+  Future<void> _requestEmpty(String method, String path) async {
+    await _request(method, path);
+  }
+
   Future<Object?> _request(
     String method,
     String path, {
     Map<String, String>? query,
     Map<String, Object?>? body,
+    List<int>? rawBody,
+    String contentType = 'application/json',
   }) async {
-    final uri = _baseUri.replace(
-      path: '${_baseUri.path}$path',
-      queryParameters: query,
-    );
+    final uri = Uri.parse(
+      '${_baseUri.toString()}$path',
+    ).replace(queryParameters: query);
     for (var attempt = 0; attempt < 3; attempt++) {
       final response = await _transport.send(
         method: method,
@@ -193,10 +293,10 @@ final class DiscordApiClient {
         headers: {
           HttpHeaders.authorizationHeader: 'Bot $_botToken',
           HttpHeaders.acceptHeader: 'application/json',
-          HttpHeaders.contentTypeHeader: 'application/json',
+          HttpHeaders.contentTypeHeader: contentType,
           HttpHeaders.userAgentHeader: _userAgent,
         },
-        body: body == null ? null : jsonEncode(body),
+        body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
       );
       final payload = response.body.isEmpty ? null : jsonDecode(response.body);
       if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
@@ -232,4 +332,61 @@ final class DiscordApiClient {
   }
 
   void close() => _transport.close();
+}
+
+final class _DiscordMultipartBody {
+  const _DiscordMultipartBody({required this.bytes, required this.contentType});
+
+  final List<int> bytes;
+  final String contentType;
+
+  static Future<_DiscordMultipartBody> build(
+    Map<String, Object?> payload,
+    List<PendingAttachment> attachments,
+  ) async {
+    final boundary =
+        '----flucord-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
+    final builder = BytesBuilder(copy: false);
+
+    void text(String value) => builder.add(utf8.encode(value));
+
+    text('--$boundary\r\n');
+    text('Content-Disposition: form-data; name="payload_json"\r\n');
+    text('Content-Type: application/json\r\n\r\n');
+    text(jsonEncode(payload));
+    text('\r\n');
+
+    for (var index = 0; index < attachments.length; index++) {
+      final attachment = attachments[index];
+      final safeName = attachment.name
+          .replaceAll(RegExp(r'[\r\n"]'), '_')
+          .trim();
+      text('--$boundary\r\n');
+      text(
+        'Content-Disposition: form-data; name="files[$index]"; '
+        'filename="$safeName"\r\n',
+      );
+      text('Content-Type: ${_contentTypeFor(safeName)}\r\n\r\n');
+      builder.add(await File(attachment.path).readAsBytes());
+      text('\r\n');
+    }
+    text('--$boundary--\r\n');
+    return _DiscordMultipartBody(
+      bytes: builder.takeBytes(),
+      contentType: 'multipart/form-data; boundary=$boundary',
+    );
+  }
+
+  static String _contentTypeFor(String name) {
+    final extension = name.split('.').last.toLowerCase();
+    return switch (extension) {
+      'png' => 'image/png',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'txt' || 'log' || 'md' => 'text/plain',
+      'pdf' => 'application/pdf',
+      _ => 'application/octet-stream',
+    };
+  }
 }

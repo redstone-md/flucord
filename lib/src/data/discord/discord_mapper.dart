@@ -14,13 +14,18 @@ final class DiscordMapper {
     required Map<String, Object?> currentUser,
     required List<Map<String, Object?>> guilds,
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
+    Map<String, List<Map<String, Object?>>> threadsByGuild = const {},
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
     for (final guild in guilds) {
       final guildId = guild['id']! as String;
-      final mappedChannels = (channelsByGuild[guildId] ?? const [])
-          .map((channel) => _channel(channel, guildId))
+      final rawChannels = [
+        ...(channelsByGuild[guildId] ?? const []),
+        ...(threadsByGuild[guildId] ?? const []),
+      ];
+      final mappedChannels = rawChannels
+          .map((channel) => this.channel(channel, guildId))
           .whereType<ConversationChannel>()
           .toList();
       if (mappedChannels.isEmpty) continue;
@@ -60,25 +65,74 @@ final class DiscordMapper {
     final rawContent = payload.containsKey('content')
         ? payload['content'] as String? ?? ''
         : fallback?.body ?? '';
-    final attachments = payload['attachments'];
-    final body = rawContent.isNotEmpty
-        ? rawContent
-        : attachments is List && attachments.isNotEmpty
-        ? '[Attachment]'
-        : '[Message without text content]';
+    final attachments = payload.containsKey('attachments')
+        ? (payload['attachments'] as List? ?? const [])
+              .whereType<Map>()
+              .map((item) => _attachment(item.cast<String, Object?>()))
+              .toList()
+        : fallback?.attachments ?? const <MessageAttachment>[];
+    final reactions = payload.containsKey('reactions')
+        ? (payload['reactions'] as List? ?? const [])
+              .whereType<Map>()
+              .map((item) => _reaction(item.cast<String, Object?>()))
+              .toList()
+        : fallback?.reactions ?? const <MessageReaction>[];
+    final referenced = payload['referenced_message'];
+    final reply = referenced is Map
+        ? _reply(referenced.cast<String, Object?>())
+        : fallback?.reply;
     return ChatMessage(
       id: payload['id'] as String? ?? fallback!.id,
       channelId: payload['channel_id'] as String? ?? fallback!.channelId,
       authorId: payload['author'] is Map
           ? (payload['author']! as Map)['id']! as String
           : fallback!.authorId,
-      body: body,
+      body: rawContent,
       sentAt: payload['timestamp'] is String
           ? DateTime.parse(payload['timestamp']! as String).toLocal()
           : fallback!.sentAt,
       isEdited: payload.containsKey('edited_timestamp')
           ? payload['edited_timestamp'] != null
           : fallback?.isEdited ?? false,
+      attachments: attachments,
+      reactions: reactions,
+      reply: reply,
+    );
+  }
+
+  MessageAttachment _attachment(Map<String, Object?> payload) =>
+      MessageAttachment(
+        id: payload['id'] as String? ?? '',
+        fileName: payload['filename'] as String? ?? 'attachment',
+        url: payload['url'] as String? ?? '',
+        size: payload['size'] as int? ?? 0,
+        contentType: payload['content_type'] as String?,
+        width: payload['width'] as int?,
+        height: payload['height'] as int?,
+      );
+
+  MessageReaction _reaction(Map<String, Object?> payload) {
+    final emoji =
+        (payload['emoji'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
+    return MessageReaction(
+      emojiName: emoji['name'] as String? ?? '?',
+      emojiId: emoji['id'] as String?,
+      animated: emoji['animated'] as bool? ?? false,
+      count: payload['count'] as int? ?? 0,
+      reactedByCurrentUser: payload['me'] as bool? ?? false,
+    );
+  }
+
+  MessageReply? _reply(Map<String, Object?> payload) {
+    final id = payload['id'] as String?;
+    final author = payload['author'];
+    final authorId = author is Map ? author['id'] as String? : null;
+    if (id == null || authorId == null) return null;
+    return MessageReply(
+      messageId: id,
+      authorId: authorId,
+      body: payload['content'] as String? ?? '',
     );
   }
 
@@ -108,10 +162,10 @@ final class DiscordMapper {
     );
   }
 
-  ConversationChannel? _channel(Map<String, Object?> payload, String guildId) {
+  ConversationChannel? channel(Map<String, Object?> payload, String guildId) {
     final type = payload['type'] as int?;
     final kind = switch (type) {
-      0 || 5 => ChannelKind.text,
+      0 || 5 || 10 || 11 || 12 => ChannelKind.text,
       2 || 13 => ChannelKind.voice,
       _ => null,
     };
@@ -124,6 +178,8 @@ final class DiscordMapper {
           payload['topic'] as String? ??
           (kind == ChannelKind.voice ? 'Discord voice channel' : ''),
       kind: kind,
+      parentId: payload['parent_id'] as String?,
+      isThread: type == 10 || type == 11 || type == 12,
       unread: false,
     );
   }

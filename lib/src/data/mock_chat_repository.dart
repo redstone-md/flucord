@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 
@@ -8,15 +10,18 @@ final class MockChatRepository implements ChatRepository {
   final Duration latency;
   ChatWorkspace _workspace;
   int _messageSequence = 100;
+  final StreamController<ChatRepositoryEvent> _events =
+      StreamController.broadcast();
 
   @override
-  Stream<ChatRepositoryEvent> get events => Stream.value(
-    const RepositoryStatusChangedEvent(RepositoryConnectionStatus.connected),
-  );
+  Stream<ChatRepositoryEvent> get events => _events.stream;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {
     await _wait();
+    _events.add(
+      const RepositoryStatusChangedEvent(RepositoryConnectionStatus.connected),
+    );
     return _workspace;
   }
 
@@ -35,6 +40,8 @@ final class MockChatRepository implements ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
   }) async {
     await _wait();
     final message = ChatMessage(
@@ -43,11 +50,107 @@ final class MockChatRepository implements ChatRepository {
       authorId: authorId,
       body: body.trim(),
       sentAt: DateTime.now(),
+      attachments: [
+        for (var index = 0; index < attachments.length; index++)
+          MessageAttachment(
+            id: 'local-attachment-$index',
+            fileName: attachments[index].name,
+            url: attachments[index].path,
+            size: attachments[index].size,
+          ),
+      ],
+      reply: _replyFor(replyToMessageId),
     );
     _workspace = _workspace.copyWith(
       messages: [..._workspace.messages, message],
     );
     return message;
+  }
+
+  MessageReply? _replyFor(String? messageId) {
+    if (messageId == null) return null;
+    final original = _workspace.messages.firstWhere(
+      (message) => message.id == messageId,
+    );
+    return MessageReply(
+      messageId: original.id,
+      authorId: original.authorId,
+      body: original.body,
+    );
+  }
+
+  @override
+  Future<ChatMessage> editMessage({
+    required String channelId,
+    required String messageId,
+    required String body,
+  }) async {
+    await _wait();
+    final current = _workspace.messages.firstWhere(
+      (message) => message.id == messageId && message.channelId == channelId,
+    );
+    final edited = current.copyWith(body: body.trim(), isEdited: true);
+    _workspace = _workspace.upsertMessage(edited);
+    _events.add(MessageUpsertedEvent(message: edited));
+    return edited;
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  }) async {
+    await _wait();
+    _workspace = _workspace.removeMessage(messageId);
+    _events.add(
+      MessageDeletedEvent(messageId: messageId, channelId: channelId),
+    );
+  }
+
+  @override
+  Future<void> addReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _setReaction(messageId, emoji, add: true);
+
+  @override
+  Future<void> removeReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _setReaction(messageId, emoji, add: false);
+
+  Future<void> _setReaction(
+    String messageId,
+    String emoji, {
+    required bool add,
+  }) async {
+    await _wait();
+    final message = _workspace.messages.firstWhere(
+      (candidate) => candidate.id == messageId,
+    );
+    final reactions = [...message.reactions];
+    final index = reactions.indexWhere((reaction) => reaction.key == emoji);
+    if (index < 0 && add) {
+      reactions.add(
+        MessageReaction(emojiName: emoji, count: 1, reactedByCurrentUser: true),
+      );
+    } else if (index >= 0) {
+      final current = reactions[index];
+      final count = add ? current.count + 1 : current.count - 1;
+      if (count <= 0) {
+        reactions.removeAt(index);
+      } else {
+        reactions[index] = current.copyWith(
+          count: count,
+          reactedByCurrentUser: add,
+        );
+      }
+    }
+    final updated = message.copyWith(reactions: reactions);
+    _workspace = _workspace.upsertMessage(updated);
+    _events.add(MessageUpsertedEvent(message: updated));
   }
 
   @override

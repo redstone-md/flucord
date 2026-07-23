@@ -73,11 +73,16 @@ final class DiscordGatewayClient {
   DiscordGatewayClient({required String botToken})
     : _protocol = DiscordGatewayProtocol(
         token: botToken.trim(),
-        intents: guildsIntent | guildMessagesIntent | messageContentIntent,
+        intents:
+            guildsIntent |
+            guildMessagesIntent |
+            guildMessageReactionsIntent |
+            messageContentIntent,
       );
 
   static const guildsIntent = 1 << 0;
   static const guildMessagesIntent = 1 << 9;
+  static const guildMessageReactionsIntent = 1 << 10;
   static const messageContentIntent = 1 << 15;
 
   final DiscordGatewayProtocol _protocol;

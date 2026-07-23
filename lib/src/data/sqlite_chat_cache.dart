@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
+import 'chat_model_json.dart';
 
 final class SqliteChatCache implements ChatCache {
   SqliteChatCache._(this._database);
@@ -30,7 +31,11 @@ final class SqliteChatCache implements ChatCache {
     sqfliteFfiInit();
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
-      options: OpenDatabaseOptions(version: 1, onCreate: _createSchema),
+      options: OpenDatabaseOptions(
+        version: 2,
+        onCreate: _createSchema,
+        onUpgrade: _upgradeSchema,
+      ),
     );
     return SqliteChatCache._(database);
   }
@@ -60,6 +65,8 @@ final class SqliteChatCache implements ChatCache {
         kind INTEGER NOT NULL,
         unread INTEGER NOT NULL,
         mention_count INTEGER NOT NULL,
+        parent_id TEXT,
+        is_thread INTEGER NOT NULL,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -80,13 +87,36 @@ final class SqliteChatCache implements ChatCache {
         author_id TEXT NOT NULL,
         body TEXT NOT NULL,
         sent_at TEXT NOT NULL,
-        is_edited INTEGER NOT NULL
+        is_edited INTEGER NOT NULL,
+        attachments_json TEXT NOT NULL,
+        reply_json TEXT,
+        reactions_json TEXT NOT NULL
       )
     ''');
     await database.execute(
       'CREATE INDEX messages_channel_time '
       'ON messages(channel_id, sent_at)',
     );
+  }
+
+  static Future<void> _upgradeSchema(
+    Database database,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) {
+      await database.execute('ALTER TABLE channels ADD parent_id TEXT');
+      await database.execute(
+        'ALTER TABLE channels ADD is_thread INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute(
+        "ALTER TABLE messages ADD attachments_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await database.execute('ALTER TABLE messages ADD reply_json TEXT');
+      await database.execute(
+        "ALTER TABLE messages ADD reactions_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
   }
 
   @override
@@ -216,6 +246,39 @@ final class SqliteChatCache implements ChatCache {
     });
   }
 
+  @override
+  Future<void> deleteMessage(String messageId) =>
+      _database.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+
+  @override
+  Future<void> writeChannel(ConversationChannel channel) async {
+    final countRows = await _database.rawQuery(
+      'SELECT COUNT(*) AS channel_count FROM channels',
+    );
+    final count = countRows.single['channel_count'] as int?;
+    await _database.insert(
+      'channels',
+      _channelToRow(channel, count ?? 0),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> deleteChannel(String channelId) async {
+    await _database.transaction((transaction) async {
+      await transaction.delete(
+        'messages',
+        where: 'channel_id = ?',
+        whereArgs: [channelId],
+      );
+      await transaction.delete(
+        'channels',
+        where: 'id = ?',
+        whereArgs: [channelId],
+      );
+    });
+  }
+
   Future<List<Member>> _readMembers(Set<String> ids) async {
     if (ids.isEmpty) return [];
     final placeholders = List.filled(ids.length, '?').join(',');
@@ -243,7 +306,7 @@ final class SqliteChatCache implements ChatCache {
         colorValue: row['color_value']! as int,
       );
 
-  static Map<String, Object> _channelToRow(
+  static Map<String, Object?> _channelToRow(
     ConversationChannel channel,
     int index,
   ) => {
@@ -254,6 +317,8 @@ final class SqliteChatCache implements ChatCache {
     'kind': channel.kind.index,
     'unread': channel.unread ? 1 : 0,
     'mention_count': channel.mentionCount,
+    'parent_id': channel.parentId,
+    'is_thread': channel.isThread ? 1 : 0,
     'sort_index': index,
   };
 
@@ -266,6 +331,8 @@ final class SqliteChatCache implements ChatCache {
         kind: ChannelKind.values[row['kind']! as int],
         unread: row['unread'] == 1,
         mentionCount: row['mention_count']! as int,
+        parentId: row['parent_id'] as String?,
+        isThread: row['is_thread'] == 1,
       );
 
   static Map<String, Object> _memberToRow(Member member) => {
@@ -286,13 +353,16 @@ final class SqliteChatCache implements ChatCache {
     colorValue: row['color_value']! as int,
   );
 
-  static Map<String, Object> _messageToRow(ChatMessage message) => {
+  static Map<String, Object?> _messageToRow(ChatMessage message) => {
     'id': message.id,
     'channel_id': message.channelId,
     'author_id': message.authorId,
     'body': message.body,
     'sent_at': message.sentAt.toUtc().toIso8601String(),
     'is_edited': message.isEdited ? 1 : 0,
+    'attachments_json': ChatModelJson.attachments(message.attachments),
+    'reply_json': ChatModelJson.reply(message.reply),
+    'reactions_json': ChatModelJson.reactions(message.reactions),
   };
 
   static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -302,6 +372,11 @@ final class SqliteChatCache implements ChatCache {
     body: row['body']! as String,
     sentAt: DateTime.parse(row['sent_at']! as String).toLocal(),
     isEdited: row['is_edited'] == 1,
+    attachments: ChatModelJson.attachmentsFrom(
+      row['attachments_json']! as String,
+    ),
+    reply: ChatModelJson.replyFrom(row['reply_json'] as String?),
+    reactions: ChatModelJson.reactionsFrom(row['reactions_json']! as String),
   );
 
   @override

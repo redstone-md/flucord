@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 
 void main() {
   group('DiscordApiClient', () {
@@ -61,7 +63,7 @@ void main() {
         final request = successTransport.requests.single;
         expect(request.method, 'POST');
         expect(request.uri.path, '/api/v10/channels/c1/messages');
-        expect(jsonDecode(request.body!)['content'], 'hello');
+        expect(jsonDecode(utf8.decode(request.body!))['content'], 'hello');
 
         final rejected = DiscordApiClient(
           botToken: 'never-print-this',
@@ -87,6 +89,69 @@ void main() {
         );
       },
     );
+
+    test('sends documented multipart replies and message actions', () async {
+      final directory = await Directory.systemTemp.createTemp('flucord-test-');
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}${Platform.pathSeparator}notes.txt');
+      await file.writeAsString('attachment bytes');
+      final transport = _RecordingTransport([
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '{"id":"m2"}',
+        ),
+        const DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '{"id":"m2","content":"edited"}',
+        ),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+      final client = DiscordApiClient(botToken: 'token', transport: transport);
+
+      await client.createMessage(
+        channelId: 'c1',
+        content: 'reply',
+        replyToMessageId: 'm1',
+        attachments: [
+          PendingAttachment(name: 'notes.txt', path: file.path, size: 16),
+        ],
+      );
+      await client.editMessage(
+        channelId: 'c1',
+        messageId: 'm2',
+        content: 'edited',
+      );
+      await client.deleteMessage(channelId: 'c1', messageId: 'm2');
+      await client.addReaction(
+        channelId: 'c1',
+        messageId: 'm1',
+        emoji: 'check:42',
+      );
+      await client.removeReaction(
+        channelId: 'c1',
+        messageId: 'm1',
+        emoji: 'check:42',
+      );
+
+      final multipart = transport.requests.first;
+      expect(
+        multipart.headers['content-type'],
+        startsWith('multipart/form-data'),
+      );
+      final multipartText = utf8.decode(multipart.body!);
+      expect(multipartText, contains('name="payload_json"'));
+      expect(multipartText, contains('"message_id":"m1"'));
+      expect(multipartText, contains('name="files[0]"'));
+      expect(multipartText, contains('attachment bytes'));
+      expect(transport.requests[1].method, 'PATCH');
+      expect(transport.requests[2].method, 'DELETE');
+      expect(transport.requests[3].uri.toString(), contains('check%3A42/@me'));
+      expect(transport.requests[4].method, 'DELETE');
+    });
   });
 
   test('gateway protocol identifies then resumes the same session', () {
@@ -95,6 +160,7 @@ void main() {
       intents:
           DiscordGatewayClient.guildsIntent |
           DiscordGatewayClient.guildMessagesIntent |
+          DiscordGatewayClient.guildMessageReactionsIntent |
           DiscordGatewayClient.messageContentIntent,
     );
 
@@ -102,7 +168,7 @@ void main() {
     expect(identify['op'], 2);
     final identifyData = identify['d']! as Map<String, Object?>;
     expect(identifyData['token'], 'bot-token');
-    expect(identifyData['intents'], 33281);
+    expect(identifyData['intents'], 34305);
 
     protocol.accept({
       'op': 0,
@@ -190,7 +256,7 @@ final class _RecordedRequest {
   final String method;
   final Uri uri;
   final Map<String, String> headers;
-  final String? body;
+  final List<int>? body;
 }
 
 final class _RecordingTransport implements DiscordHttpTransport {
@@ -204,7 +270,7 @@ final class _RecordingTransport implements DiscordHttpTransport {
     required String method,
     required Uri uri,
     required Map<String, String> headers,
-    String? body,
+    List<int>? body,
   }) async {
     requests.add(
       _RecordedRequest(

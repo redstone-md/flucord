@@ -13,5 +13,11 @@ abstract interface class ChatCache {
 
   Future<void> writeMessage(ChatMessage message, {Member? member});
 
+  Future<void> deleteMessage(String messageId);
+
+  Future<void> writeChannel(ConversationChannel channel);
+
+  Future<void> deleteChannel(String channelId);
+
   Future<void> close();
 }

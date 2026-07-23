@@ -24,6 +24,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadedChannels = {};
   final Set<String> _loadingChannels = {};
   final Map<String, Object> _channelErrors = {};
+  bool _disposed = false;
 
   ChatLoadState get state => _state;
   ChatWorkspace? get workspace => _workspace;
@@ -92,17 +93,21 @@ final class ChatController extends ChangeNotifier {
       _channelErrors[channelId] = error;
     } finally {
       _loadingChannels.remove(channelId);
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
   Future<bool> sendMessage({
     required String channelId,
     required String body,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
   }) async {
     final workspace = _workspace;
     final content = body.trim();
-    if (workspace == null || content.isEmpty || _isSending) {
+    if (workspace == null ||
+        (content.isEmpty && attachments.isEmpty) ||
+        _isSending) {
       return false;
     }
 
@@ -113,6 +118,8 @@ final class ChatController extends ChangeNotifier {
         channelId: channelId,
         authorId: workspace.currentMemberId,
         body: content,
+        attachments: attachments,
+        replyToMessageId: replyToMessageId,
       );
       _workspace = _workspace?.upsertMessage(message);
       return true;
@@ -125,6 +132,61 @@ final class ChatController extends ChangeNotifier {
     }
   }
 
+  Future<bool> editMessage(ChatMessage message, String body) async {
+    final content = body.trim();
+    if (content.isEmpty || _isSending) return false;
+    _isSending = true;
+    notifyListeners();
+    try {
+      final updated = await _repository.editMessage(
+        channelId: message.channelId,
+        messageId: message.id,
+        body: content,
+      );
+      _workspace = _workspace?.upsertMessage(updated);
+      return true;
+    } catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _isSending = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteMessage(ChatMessage message) async {
+    try {
+      await _repository.deleteMessage(
+        channelId: message.channelId,
+        messageId: message.id,
+      );
+      _workspace = _workspace?.removeMessage(message.id);
+    } catch (error) {
+      _error = error;
+    }
+    notifyListeners();
+  }
+
+  Future<void> toggleReaction(ChatMessage message, MessageReaction reaction) =>
+      reaction.reactedByCurrentUser
+      ? _repository.removeReaction(
+          channelId: message.channelId,
+          messageId: message.id,
+          emoji: reaction.key,
+        )
+      : _repository.addReaction(
+          channelId: message.channelId,
+          messageId: message.id,
+          emoji: reaction.key,
+        );
+
+  Future<void> addReaction(ChatMessage message, String emoji) =>
+      _repository.addReaction(
+        channelId: message.channelId,
+        messageId: message.id,
+        emoji: emoji,
+      );
+
   void _listenToRepository() {
     _eventSubscription = _repository.events.listen((event) {
       switch (event) {
@@ -133,6 +195,12 @@ final class ChatController extends ChangeNotifier {
             event.message,
             member: event.member,
           );
+        case MessageDeletedEvent():
+          _workspace = _workspace?.removeMessage(event.messageId);
+        case ChannelUpsertedEvent():
+          _workspace = _workspace?.upsertChannel(event.channel);
+        case ChannelDeletedEvent():
+          _workspace = _workspace?.removeChannel(event.channelId);
         case RepositoryStatusChangedEvent():
           _connectionStatus = event.status;
       }
@@ -142,6 +210,7 @@ final class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_eventSubscription?.cancel());
     unawaited(_repository.close());
     super.dispose();

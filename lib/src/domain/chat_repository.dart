@@ -13,6 +13,25 @@ final class MessageUpsertedEvent extends ChatRepositoryEvent {
   final Member? member;
 }
 
+final class MessageDeletedEvent extends ChatRepositoryEvent {
+  const MessageDeletedEvent({required this.messageId, required this.channelId});
+
+  final String messageId;
+  final String channelId;
+}
+
+final class ChannelUpsertedEvent extends ChatRepositoryEvent {
+  const ChannelUpsertedEvent(this.channel);
+
+  final ConversationChannel channel;
+}
+
+final class ChannelDeletedEvent extends ChatRepositoryEvent {
+  const ChannelDeletedEvent(this.channelId);
+
+  final String channelId;
+}
+
 final class RepositoryStatusChangedEvent extends ChatRepositoryEvent {
   const RepositoryStatusChangedEvent(this.status);
 
@@ -30,6 +49,31 @@ abstract interface class ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
+  });
+
+  Future<ChatMessage> editMessage({
+    required String channelId,
+    required String messageId,
+    required String body,
+  });
+
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  });
+
+  Future<void> addReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  });
+
+  Future<void> removeReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
   });
 
   Future<void> close();

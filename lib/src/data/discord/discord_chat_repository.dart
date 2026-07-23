@@ -24,6 +24,7 @@ final class DiscordChatRepository implements ChatRepository {
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
+  String? _currentMemberId;
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
@@ -35,15 +36,19 @@ final class DiscordChatRepository implements ChatRepository {
       final user = await _api.getCurrentUser();
       final guilds = await _api.getCurrentUserGuilds();
       final channelsByGuild = <String, List<Map<String, Object?>>>{};
+      final threadsByGuild = <String, List<Map<String, Object?>>>{};
       for (final guild in guilds) {
         final guildId = guild['id']! as String;
         channelsByGuild[guildId] = await _api.getGuildChannels(guildId);
+        threadsByGuild[guildId] = await _api.getGuildActiveThreads(guildId);
       }
       final workspace = _mapper.workspace(
         currentUser: user,
         guilds: guilds,
         channelsByGuild: channelsByGuild,
+        threadsByGuild: threadsByGuild,
       );
+      _currentMemberId = workspace.currentMemberId;
       await _cache.writeWorkspace(workspace);
       final gatewayUrl = await _api.getGatewayUrl();
       unawaited(_gateway.connect(gatewayUrl));
@@ -79,15 +84,67 @@ final class DiscordChatRepository implements ChatRepository {
     required String channelId,
     required String authorId,
     required String body,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
   }) async {
     final payload = await _api.createMessage(
       channelId: channelId,
       content: body,
+      attachments: attachments,
+      replyToMessageId: replyToMessageId,
     );
     final message = _mapper.message(payload);
     await _cache.writeMessage(message);
     return message;
   }
+
+  @override
+  Future<ChatMessage> editMessage({
+    required String channelId,
+    required String messageId,
+    required String body,
+  }) async {
+    final payload = await _api.editMessage(
+      channelId: channelId,
+      messageId: messageId,
+      content: body,
+    );
+    final fallback = await _cache.readMessage(messageId);
+    final message = _mapper.message(payload, fallback: fallback);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  }) async {
+    await _api.deleteMessage(channelId: channelId, messageId: messageId);
+    await _cache.deleteMessage(messageId);
+  }
+
+  @override
+  Future<void> addReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.addReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+  );
+
+  @override
+  Future<void> removeReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _api.removeReaction(
+    channelId: channelId,
+    messageId: messageId,
+    emoji: emoji,
+  );
 
   void _onGatewayEvent(DiscordGatewayEvent event) {
     switch (event) {
@@ -102,11 +159,93 @@ final class DiscordChatRepository implements ChatRepository {
             RepositoryConnectionStatus.reconnecting,
         });
       case DiscordGatewayDispatch():
-        if (event.name != 'MESSAGE_CREATE' && event.name != 'MESSAGE_UPDATE') {
-          return;
+        switch (event.name) {
+          case 'MESSAGE_CREATE' || 'MESSAGE_UPDATE':
+            unawaited(_handleMessageDispatch(event));
+          case 'MESSAGE_DELETE':
+            unawaited(_handleMessageDelete(event.data));
+          case 'MESSAGE_REACTION_ADD' || 'MESSAGE_REACTION_REMOVE':
+            unawaited(_handleReaction(event));
+          case 'THREAD_CREATE' || 'THREAD_UPDATE':
+            unawaited(_handleThreadUpsert(event.data));
+          case 'THREAD_DELETE':
+            unawaited(_handleThreadDelete(event.data));
         }
-        unawaited(_handleMessageDispatch(event));
     }
+  }
+
+  Future<void> _handleMessageDelete(Map<String, Object?> data) async {
+    final messageId = data['id'] as String?;
+    final channelId = data['channel_id'] as String?;
+    if (messageId == null || channelId == null) return;
+    await _cache.deleteMessage(messageId);
+    if (!_events.isClosed) {
+      _events.add(
+        MessageDeletedEvent(messageId: messageId, channelId: channelId),
+      );
+    }
+  }
+
+  Future<void> _handleReaction(DiscordGatewayDispatch event) async {
+    final messageId = event.data['message_id'] as String?;
+    final emojiPayload = event.data['emoji'];
+    if (messageId == null || emojiPayload is! Map) return;
+    final message = await _cache.readMessage(messageId);
+    if (message == null) return;
+    final emoji = emojiPayload.cast<String, Object?>();
+    final name = emoji['name'] as String?;
+    if (name == null) return;
+    final id = emoji['id'] as String?;
+    final key = id == null ? name : '$name:$id';
+    final add = event.name == 'MESSAGE_REACTION_ADD';
+    final byCurrentUser = event.data['user_id'] == _currentMemberId;
+    final reactions = [...message.reactions];
+    final index = reactions.indexWhere((reaction) => reaction.key == key);
+    if (index < 0 && add) {
+      reactions.add(
+        MessageReaction(
+          emojiName: name,
+          emojiId: id,
+          animated: emoji['animated'] as bool? ?? false,
+          count: 1,
+          reactedByCurrentUser: byCurrentUser,
+        ),
+      );
+    } else if (index >= 0) {
+      final current = reactions[index];
+      final count = current.count + (add ? 1 : -1);
+      if (count <= 0) {
+        reactions.removeAt(index);
+      } else {
+        reactions[index] = current.copyWith(
+          count: count,
+          reactedByCurrentUser: byCurrentUser
+              ? add
+              : current.reactedByCurrentUser,
+        );
+      }
+    }
+    final updated = message.copyWith(reactions: reactions);
+    await _cache.writeMessage(updated);
+    if (!_events.isClosed) {
+      _events.add(MessageUpsertedEvent(message: updated));
+    }
+  }
+
+  Future<void> _handleThreadUpsert(Map<String, Object?> data) async {
+    final guildId = data['guild_id'] as String?;
+    if (guildId == null) return;
+    final channel = _mapper.channel(data, guildId);
+    if (channel == null) return;
+    await _cache.writeChannel(channel);
+    if (!_events.isClosed) _events.add(ChannelUpsertedEvent(channel));
+  }
+
+  Future<void> _handleThreadDelete(Map<String, Object?> data) async {
+    final channelId = data['id'] as String?;
+    if (channelId == null) return;
+    await _cache.deleteChannel(channelId);
+    if (!_events.isClosed) _events.add(ChannelDeletedEvent(channelId));
   }
 
   Future<void> _handleMessageDispatch(DiscordGatewayDispatch event) async {
