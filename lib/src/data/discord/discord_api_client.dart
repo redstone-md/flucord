@@ -147,6 +147,23 @@ final class DiscordApiClient {
     },
   );
 
+  Future<Map<String, Object?>> createForumPost({
+    required String channelId,
+    required String name,
+    required String content,
+    required int autoArchiveDurationMinutes,
+    List<String> appliedTagIds = const [],
+  }) => _requestObject(
+    'POST',
+    '/channels/$channelId/threads',
+    body: {
+      'name': name,
+      'auto_archive_duration': autoArchiveDurationMinutes,
+      'message': {'content': content},
+      if (appliedTagIds.isNotEmpty) 'applied_tags': appliedTagIds,
+    },
+  );
+
   Future<List<Map<String, Object?>>> getGuildRoles(String guildId) =>
       _getList('/guilds/$guildId/roles');
 

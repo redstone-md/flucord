@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/forum_repository.dart';
 import '../domain/thread_repository.dart';
 import '../domain/voice_connection.dart';
 import 'channel_activity_persistence.dart';
 
 part 'chat_controller_events.dart';
 part 'chat_controller_threads.dart';
+part 'chat_controller_forums.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -140,7 +142,7 @@ final class ChatController extends ChangeNotifier {
     final workspace = _workspace;
     if (_state == ChatLoadState.ready && workspace != null) {
       final textChannels = workspace.channels.where(
-        (channel) => channel.kind == ChannelKind.text,
+        (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
       );
       if (textChannels.isNotEmpty) {
         unawaited(openChannel(textChannels.first.id));
@@ -161,6 +163,13 @@ final class ChatController extends ChangeNotifier {
     _activeChannelId = channelId;
     _workspace = _workspace?.markChannelRead(channelId);
     _persistChannelActivity(channelId);
+    final channel = _workspace?.channelOrNull(channelId);
+    if (channel?.kind == ChannelKind.forum ||
+        channel?.kind == ChannelKind.media) {
+      notifyListeners();
+      await loadArchivedThreads(channelId, refresh: refresh);
+      return;
+    }
     if (_workspace == null ||
         _loadingChannels.contains(channelId) ||
         (_loadedChannels.contains(channelId) && !refresh)) {
@@ -198,36 +207,6 @@ final class ChatController extends ChangeNotifier {
           .upsertChannel(conversation.channel);
       notifyListeners();
       return conversation.channel.id;
-    } catch (error) {
-      _error = error;
-      notifyListeners();
-      return null;
-    }
-  }
-
-  Future<ConversationChannel?> createThreadFromMessage(
-    ChatMessage message, {
-    required String name,
-    required int autoArchiveDurationMinutes,
-  }) async {
-    final normalizedName = name.trim();
-    if (_workspace == null ||
-        normalizedName.isEmpty ||
-        normalizedName.length > 100 ||
-        !const {60, 1440, 4320, 10080}.contains(autoArchiveDurationMinutes)) {
-      return null;
-    }
-    try {
-      final thread = await _repository.createThreadFromMessage(
-        channelId: message.channelId,
-        messageId: message.id,
-        name: normalizedName,
-        autoArchiveDurationMinutes: autoArchiveDurationMinutes,
-      );
-      _workspace = _workspace?.upsertChannel(thread);
-      _error = null;
-      notifyListeners();
-      return thread;
     } catch (error) {
       _error = error;
       notifyListeners();

@@ -66,4 +66,45 @@ final class MockChatSeed {
     messages: messages,
     currentMemberId: 'jack',
   );
+
+  static ChatWorkspace withForums(ChatWorkspace workspace) {
+    const forum = ConversationChannel(
+      id: 'forge-forum',
+      spaceId: 'forge',
+      name: 'field-reports',
+      topic: 'Post implementation reports and attach a subsystem tag.',
+      kind: ChannelKind.forum,
+      position: 4,
+      parentId: 'forge-project',
+      availableTags: [
+        ForumTag(id: 'tag-client', name: 'Client', moderated: false),
+        ForumTag(id: 'tag-transport', name: 'Transport', moderated: false),
+      ],
+      defaultAutoArchiveDurationMinutes: 1440,
+      defaultSortOrder: ForumSortOrder.latestActivity,
+      defaultForumLayout: ForumLayout.listView,
+    );
+    const post = ConversationChannel(
+      id: 'forge-forum-bootstrap',
+      spaceId: 'forge',
+      name: 'bootstrap-report',
+      topic: '',
+      kind: ChannelKind.text,
+      parentId: 'forge-forum',
+      isThread: true,
+      appliedTagIds: ['tag-client'],
+      autoArchiveDurationMinutes: 1440,
+    );
+    final message = ChatMessage(
+      id: 'forge-forum-bootstrap-starter',
+      channelId: post.id,
+      authorId: 'fly',
+      body: 'Native bootstrap and cache restore are stable.',
+      sentAt: DateTime.now().subtract(const Duration(hours: 4)),
+    );
+    return workspace.copyWith(
+      channels: [...workspace.channels, forum, post],
+      messages: [...workspace.messages, message],
+    );
+  }
 }

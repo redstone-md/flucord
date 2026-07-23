@@ -3,9 +3,10 @@ import 'message_embed.dart';
 part 'message_models.dart';
 part 'channel_category.dart';
 part 'conversation_channel.dart';
+part 'forum_models.dart';
 part 'guild_emoji.dart';
 
-enum ChannelKind { text, voice }
+enum ChannelKind { text, voice, forum, media }
 
 enum Presence { online, idle, offline }
 

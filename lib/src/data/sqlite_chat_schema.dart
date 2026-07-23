@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 12;
+  static const version = 13;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -46,6 +46,11 @@ abstract final class SqliteChatSchema {
         is_locked INTEGER NOT NULL,
         archive_timestamp TEXT,
         auto_archive_duration INTEGER,
+        available_tags_json TEXT NOT NULL,
+        applied_tag_ids_json TEXT NOT NULL,
+        default_auto_archive_duration INTEGER,
+        default_sort_order INTEGER,
+        default_forum_layout INTEGER,
         recipient_id TEXT,
         sort_index INTEGER NOT NULL
       )
@@ -216,6 +221,25 @@ abstract final class SqliteChatSchema {
       await database.execute('ALTER TABLE channels ADD archive_timestamp TEXT');
       await database.execute(
         'ALTER TABLE channels ADD auto_archive_duration INTEGER',
+      );
+    }
+    if (oldVersion < 13) {
+      await database.execute(
+        "ALTER TABLE channels ADD available_tags_json "
+        "TEXT NOT NULL DEFAULT '[]'",
+      );
+      await database.execute(
+        "ALTER TABLE channels ADD applied_tag_ids_json "
+        "TEXT NOT NULL DEFAULT '[]'",
+      );
+      await database.execute(
+        'ALTER TABLE channels ADD default_auto_archive_duration INTEGER',
+      );
+      await database.execute(
+        'ALTER TABLE channels ADD default_sort_order INTEGER',
+      );
+      await database.execute(
+        'ALTER TABLE channels ADD default_forum_layout INTEGER',
       );
     }
   }

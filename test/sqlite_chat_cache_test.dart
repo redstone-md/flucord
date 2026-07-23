@@ -404,6 +404,26 @@ void main() {
     expect(channelColumns.map((row) => row['name']), contains('is_locked'));
     expect(
       channelColumns.map((row) => row['name']),
+      contains('available_tags_json'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('applied_tag_ids_json'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('default_auto_archive_duration'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('default_sort_order'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
+      contains('default_forum_layout'),
+    );
+    expect(
+      channelColumns.map((row) => row['name']),
       contains('archive_timestamp'),
     );
     expect(

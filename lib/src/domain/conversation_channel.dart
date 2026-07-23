@@ -16,6 +16,11 @@ final class ConversationChannel {
     this.isLocked = false,
     this.archiveTimestamp,
     this.autoArchiveDurationMinutes,
+    this.availableTags = const [],
+    this.appliedTagIds = const [],
+    this.defaultAutoArchiveDurationMinutes,
+    this.defaultSortOrder,
+    this.defaultForumLayout,
     this.recipientId,
     this.unread = false,
     this.mentionCount = 0,
@@ -34,6 +39,11 @@ final class ConversationChannel {
   final bool isLocked;
   final DateTime? archiveTimestamp;
   final int? autoArchiveDurationMinutes;
+  final List<ForumTag> availableTags;
+  final List<String> appliedTagIds;
+  final int? defaultAutoArchiveDurationMinutes;
+  final ForumSortOrder? defaultSortOrder;
+  final ForumLayout? defaultForumLayout;
   final String? recipientId;
   final bool unread;
   final int mentionCount;
@@ -68,6 +78,11 @@ final class ConversationChannel {
     bool? isLocked,
     DateTime? archiveTimestamp,
     int? autoArchiveDurationMinutes,
+    List<ForumTag>? availableTags,
+    List<String>? appliedTagIds,
+    int? defaultAutoArchiveDurationMinutes,
+    ForumSortOrder? defaultSortOrder,
+    ForumLayout? defaultForumLayout,
     Object? firstUnreadMessageId = _keepUnreadBoundary,
   }) => ConversationChannel(
     id: id,
@@ -83,6 +98,13 @@ final class ConversationChannel {
     archiveTimestamp: archiveTimestamp ?? this.archiveTimestamp,
     autoArchiveDurationMinutes:
         autoArchiveDurationMinutes ?? this.autoArchiveDurationMinutes,
+    availableTags: availableTags ?? this.availableTags,
+    appliedTagIds: appliedTagIds ?? this.appliedTagIds,
+    defaultAutoArchiveDurationMinutes:
+        defaultAutoArchiveDurationMinutes ??
+        this.defaultAutoArchiveDurationMinutes,
+    defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
+    defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
     recipientId: recipientId,
     unread: unread ?? this.unread,
     mentionCount: mentionCount ?? this.mentionCount,

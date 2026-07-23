@@ -392,9 +392,26 @@ final class DiscordMapper {
         ? rawThreadMetadata.cast<String, Object?>()
         : const <String, Object?>{};
     final archiveTimestamp = threadMetadata['archive_timestamp'] as String?;
+    final availableTags = (payload['available_tags'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (raw) => ForumTag(
+            id: raw['id']! as String,
+            name: raw['name'] as String? ?? '',
+            moderated: raw['moderated'] == true,
+            emojiId: raw['emoji_id'] as String?,
+            emojiName: raw['emoji_name'] as String?,
+          ),
+        )
+        .toList(growable: false);
+    final appliedTagIds = (payload['applied_tags'] as List? ?? const [])
+        .whereType<String>()
+        .toList(growable: false);
     final kind = switch (type) {
       0 || 5 || 10 || 11 || 12 => ChannelKind.text,
       2 || 13 => ChannelKind.voice,
+      15 => ChannelKind.forum,
+      16 => ChannelKind.media,
       _ => null,
     };
     if (kind == null) return null;
@@ -416,6 +433,21 @@ final class DiscordMapper {
           : DateTime.tryParse(archiveTimestamp)?.toLocal(),
       autoArchiveDurationMinutes:
           threadMetadata['auto_archive_duration'] as int?,
+      availableTags: List.unmodifiable(availableTags),
+      appliedTagIds: List.unmodifiable(appliedTagIds),
+      defaultAutoArchiveDurationMinutes:
+          payload['default_auto_archive_duration'] as int?,
+      defaultSortOrder: switch (payload['default_sort_order']) {
+        0 => ForumSortOrder.latestActivity,
+        1 => ForumSortOrder.creationDate,
+        _ => null,
+      },
+      defaultForumLayout: switch (payload['default_forum_layout']) {
+        0 => ForumLayout.notSet,
+        1 => ForumLayout.listView,
+        2 => ForumLayout.galleryView,
+        _ => null,
+      },
       unread: false,
     );
   }

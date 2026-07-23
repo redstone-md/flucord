@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/forum_repository.dart';
 import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
@@ -20,9 +21,15 @@ import 'discord_voice_signaling_service.dart';
 part 'discord_chat_repository_messages.dart';
 part 'discord_chat_repository_emojis.dart';
 part 'discord_chat_repository_threads.dart';
+part 'discord_chat_repository_forums.dart';
+part 'discord_chat_repository_pins.dart';
 
 final class DiscordChatRepository
-    implements ChatRepository, ArchivedThreadRepository, VoiceSignalingService {
+    implements
+        ChatRepository,
+        ArchivedThreadRepository,
+        ForumPostRepository,
+        VoiceSignalingService {
   DiscordChatRepository(
     this._api,
     this._gateway,
@@ -129,27 +136,8 @@ final class DiscordChatRepository
   }) => _historyLoader.load(channelId, beforeMessageId: beforeMessageId);
 
   @override
-  Future<ChannelHistory> loadPinnedMessages(String channelId) async {
-    try {
-      final history = _mapper.history(
-        channelId,
-        await _api.getChannelPins(channelId),
-        currentMemberId: _currentMemberId,
-      );
-      for (final member in history.members) {
-        await _cache.writeMember(member);
-      }
-      for (final message in history.messages) {
-        await _cache.writeMessage(message);
-      }
-      return history;
-    } catch (error) {
-      if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readPinnedMessages(channelId);
-      if (cached.messages.isNotEmpty) return cached;
-      rethrow;
-    }
-  }
+  Future<ChannelHistory> loadPinnedMessages(String channelId) =>
+      _loadPinnedMessages(channelId);
 
   @override
   Future<DirectConversation> openDirectConversation(String recipientId) async {
@@ -180,6 +168,21 @@ final class DiscordChatRepository
     String parentChannelId, {
     DateTime? before,
   }) => _loadArchivedThreads(parentChannelId, before: before);
+
+  @override
+  Future<CreatedForumPost> createForumPost({
+    required String channelId,
+    required String name,
+    required String content,
+    required int autoArchiveDurationMinutes,
+    List<String> appliedTagIds = const [],
+  }) => _createForumPost(
+    channelId: channelId,
+    name: name,
+    content: content,
+    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    appliedTagIds: appliedTagIds,
+  );
 
   @override
   Future<ChatMessage> sendMessage({

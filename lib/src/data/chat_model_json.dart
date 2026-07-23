@@ -96,4 +96,30 @@ final class ChatModelJson {
       (jsonDecode(source) as Map).map(
         (key, value) => MapEntry(key as String, value as String),
       );
+
+  static String forumTags(List<ForumTag> values) => jsonEncode([
+    for (final value in values)
+      {
+        'id': value.id,
+        'name': value.name,
+        'moderated': value.moderated,
+        'emoji_id': value.emojiId,
+        'emoji_name': value.emojiName,
+      },
+  ]);
+
+  static List<ForumTag> forumTagsFrom(String source) => List.unmodifiable(
+    (jsonDecode(source) as List).whereType<Map>().map(
+      (raw) => ForumTag(
+        id: raw['id'] as String,
+        name: raw['name'] as String,
+        moderated: raw['moderated'] as bool,
+        emojiId: raw['emoji_id'] as String?,
+        emojiName: raw['emoji_name'] as String?,
+      ),
+    ),
+  );
+
+  static List<String> stringListFrom(String source) =>
+      List.unmodifiable((jsonDecode(source) as List).whereType<String>());
 }

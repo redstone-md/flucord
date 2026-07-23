@@ -1,6 +1,36 @@
 part of 'chat_controller.dart';
 
 extension ChatControllerThreads on ChatController {
+  Future<ConversationChannel?> createThreadFromMessage(
+    ChatMessage message, {
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) async {
+    final normalizedName = name.trim();
+    if (_workspace == null ||
+        normalizedName.isEmpty ||
+        normalizedName.length > 100 ||
+        !const {60, 1440, 4320, 10080}.contains(autoArchiveDurationMinutes)) {
+      return null;
+    }
+    try {
+      final thread = await _repository.createThreadFromMessage(
+        channelId: message.channelId,
+        messageId: message.id,
+        name: normalizedName,
+        autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+      );
+      _workspace = _workspace?.upsertChannel(thread);
+      _error = null;
+      _notify();
+      return thread;
+    } catch (error) {
+      _error = error;
+      _notify();
+      return null;
+    }
+  }
+
   List<ConversationChannel> archivedThreadsFor(String parentChannelId) {
     final loaded = _archivedThreadState.threads[parentChannelId];
     if (loaded != null) return List.unmodifiable(loaded);

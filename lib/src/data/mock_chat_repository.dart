@@ -2,15 +2,16 @@ import 'dart:async';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/forum_repository.dart';
 import '../domain/thread_repository.dart';
 import 'mock_chat_seed.dart';
 
 part 'mock_chat_repository_mutations.dart';
 
 final class MockChatRepository
-    implements ChatRepository, ArchivedThreadRepository {
+    implements ChatRepository, ArchivedThreadRepository, ForumPostRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
-    : _workspace = _seedWorkspace();
+    : _workspace = MockChatSeed.withForums(_seedWorkspace());
 
   final Duration latency;
   ChatWorkspace _workspace;
@@ -99,29 +100,32 @@ final class MockChatRepository
     required String messageId,
     required String name,
     required int autoArchiveDurationMinutes,
-  }) async {
-    await _wait();
-    final parent = _workspace.channelById(channelId);
-    final thread = ConversationChannel(
-      id: messageId,
-      spaceId: parent.spaceId,
-      name: name.trim(),
-      topic: '',
-      kind: ChannelKind.text,
-      position: parent.position,
-      parentId: parent.id,
-      isThread: true,
-    );
-    _workspace = _workspace.upsertChannel(thread);
-    _events.add(ChannelUpsertedEvent(thread));
-    return thread;
-  }
+  }) => _createMessageThread(
+    channelId: channelId,
+    messageId: messageId,
+    name: name,
+  );
 
   @override
   Future<ArchivedThreadPage> loadArchivedThreads(
     String parentChannelId, {
     DateTime? before,
   }) => _loadArchivedThreadPage(parentChannelId, before: before);
+
+  @override
+  Future<CreatedForumPost> createForumPost({
+    required String channelId,
+    required String name,
+    required String content,
+    required int autoArchiveDurationMinutes,
+    List<String> appliedTagIds = const [],
+  }) => _createForumPost(
+    channelId: channelId,
+    name: name,
+    content: content,
+    autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    appliedTagIds: appliedTagIds,
+  );
 
   @override
   Future<ChatMessage> sendMessage({

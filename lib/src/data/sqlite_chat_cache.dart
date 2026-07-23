@@ -381,6 +381,11 @@ final class SqliteChatCache implements ChatCache {
     'is_locked': channel.isLocked ? 1 : 0,
     'archive_timestamp': channel.archiveTimestamp?.toIso8601String(),
     'auto_archive_duration': channel.autoArchiveDurationMinutes,
+    'available_tags_json': ChatModelJson.forumTags(channel.availableTags),
+    'applied_tag_ids_json': ChatModelJson.strings(channel.appliedTagIds),
+    'default_auto_archive_duration': channel.defaultAutoArchiveDurationMinutes,
+    'default_sort_order': channel.defaultSortOrder?.index,
+    'default_forum_layout': channel.defaultForumLayout?.index,
     'recipient_id': channel.recipientId,
     'sort_index': index,
   };
@@ -404,6 +409,20 @@ final class SqliteChatCache implements ChatCache {
             ? null
             : DateTime.parse(row['archive_timestamp']! as String),
         autoArchiveDurationMinutes: row['auto_archive_duration'] as int?,
+        availableTags: ChatModelJson.forumTagsFrom(
+          row['available_tags_json']! as String,
+        ),
+        appliedTagIds: ChatModelJson.stringListFrom(
+          row['applied_tag_ids_json']! as String,
+        ),
+        defaultAutoArchiveDurationMinutes:
+            row['default_auto_archive_duration'] as int?,
+        defaultSortOrder: row['default_sort_order'] == null
+            ? null
+            : ForumSortOrder.values[row['default_sort_order']! as int],
+        defaultForumLayout: row['default_forum_layout'] == null
+            ? null
+            : ForumLayout.values[row['default_forum_layout']! as int],
         recipientId: row['recipient_id'] as String?,
       );
 

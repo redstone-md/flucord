@@ -1,6 +1,63 @@
 part of 'mock_chat_repository.dart';
 
 extension _MockChatRepositoryMutations on MockChatRepository {
+  Future<ConversationChannel> _createMessageThread({
+    required String channelId,
+    required String messageId,
+    required String name,
+  }) async {
+    await _wait();
+    final parent = _workspace.channelById(channelId);
+    final thread = ConversationChannel(
+      id: messageId,
+      spaceId: parent.spaceId,
+      name: name.trim(),
+      topic: '',
+      kind: ChannelKind.text,
+      position: parent.position,
+      parentId: parent.id,
+      isThread: true,
+    );
+    _workspace = _workspace.upsertChannel(thread);
+    _events.add(ChannelUpsertedEvent(thread));
+    return thread;
+  }
+
+  Future<CreatedForumPost> _createForumPost({
+    required String channelId,
+    required String name,
+    required String content,
+    required int autoArchiveDurationMinutes,
+    required List<String> appliedTagIds,
+  }) async {
+    await _wait();
+    final parent = _workspace.channelById(channelId);
+    final id = 'forum-post-${_messageSequence++}';
+    final thread = ConversationChannel(
+      id: id,
+      spaceId: parent.spaceId,
+      name: name.trim(),
+      topic: '',
+      kind: ChannelKind.text,
+      position: parent.position,
+      parentId: parent.id,
+      isThread: true,
+      appliedTagIds: List.unmodifiable(appliedTagIds),
+      autoArchiveDurationMinutes: autoArchiveDurationMinutes,
+    );
+    final message = ChatMessage(
+      id: '$id-starter',
+      channelId: id,
+      authorId: _workspace.currentMemberId,
+      body: content.trim(),
+      sentAt: DateTime.now(),
+    );
+    _workspace = _workspace.upsertChannel(thread).upsertMessage(message);
+    _events.add(ChannelUpsertedEvent(thread));
+    _events.add(MessageUpsertedEvent(message: message));
+    return CreatedForumPost(thread: thread, initialMessage: message);
+  }
+
   Future<ArchivedThreadPage> _loadArchivedThreadPage(
     String parentChannelId, {
     DateTime? before,
