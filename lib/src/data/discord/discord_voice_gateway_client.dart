@@ -5,8 +5,10 @@ import 'dart:typed_data';
 
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
+import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
+import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 
 abstract interface class DiscordVoiceWebSocket {
@@ -99,10 +101,12 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
   String? _mode;
   DiscordVoiceIpDiscovery? _discovered;
   VoiceTransportSession? _session;
+  DiscordVoiceTransportCipher? _transportCipher;
 
   @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
-  Stream<Uint8List> get packets => _udpTransport.packets;
+  Stream<DiscordRtpFrame> get audioPackets =>
+      _udpTransport.packets.map(_decryptAudioPacket);
   VoiceTransportSession? get session => _session;
   String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
 
@@ -331,6 +335,12 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     }
     try {
       _daveController?.activate(description.daveProtocolVersion);
+      _replaceTransportCipher(
+        DiscordVoiceTransportCipher(
+          mode: mode,
+          secretKey: description.secretKey,
+        ),
+      );
     } catch (error) {
       _fail(error);
       return;
@@ -354,7 +364,17 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     if (ssrc != null) _send(_protocol.speaking(ssrc: ssrc, enabled: enabled));
   }
 
-  int sendPacket(Uint8List packet) => _udpTransport.send(packet);
+  int sendAudioFrame(DiscordRtpFrame frame) {
+    final cipher = _transportCipher;
+    if (cipher == null) throw StateError('Voice transport is not ready');
+    return _udpTransport.send(cipher.encryptFrame(frame));
+  }
+
+  DiscordRtpFrame _decryptAudioPacket(Uint8List packet) {
+    final cipher = _transportCipher;
+    if (cipher == null) throw StateError('Voice transport is not ready');
+    return cipher.decryptPacket(packet);
+  }
 
   Uint8List encryptDaveAudioFrame(Uint8List opusFrame) {
     final controller = _daveController;
@@ -412,6 +432,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     _heartbeatTimer = null;
     _discovered = null;
     _session = null;
+    _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
@@ -430,6 +451,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     unawaited(_socket?.close());
     _discovered = null;
     _session = null;
+    _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.failure, error: error);
@@ -437,6 +459,11 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
 
   void _send(Map<String, Object?> payload) {
     _socket?.send(jsonEncode(payload));
+  }
+
+  void _replaceTransportCipher(DiscordVoiceTransportCipher? cipher) {
+    _transportCipher?.dispose();
+    _transportCipher = cipher;
   }
 
   void _emitStatus(VoiceConnectionStatus status, {Object? error}) {
@@ -456,6 +483,7 @@ final class DiscordVoiceGatewayClient implements DiscordVoiceClient {
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    _replaceTransportCipher(null);
     _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.disconnected);

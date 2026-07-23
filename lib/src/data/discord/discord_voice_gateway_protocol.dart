@@ -1,5 +1,7 @@
 import '../../domain/voice_connection.dart';
 
+import 'discord_voice_transport_cipher.dart';
+
 final class DiscordVoiceReady {
   const DiscordVoiceReady({
     required this.ssrc,
@@ -66,10 +68,7 @@ final class DiscordVoiceGatewayProtocol {
     required this.maxDaveProtocolVersion,
   });
 
-  static const preferredModes = [
-    'aead_aes256_gcm_rtpsize',
-    'aead_xchacha20_poly1305_rtpsize',
-  ];
+  static const preferredModes = DiscordVoiceTransportMode.preferred;
 
   final VoiceServerCredentials credentials;
   final int maxDaveProtocolVersion;

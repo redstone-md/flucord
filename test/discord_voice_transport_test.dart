@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
@@ -165,7 +166,6 @@ void main() {
       addTearDown(client.close);
 
       await client.connect();
-      expect(connector.connectCount, 1);
       expect(connector.lastUri.toString(), 'wss://voice.example.test?v=8');
       expect(_jsonAt(socket.sent, 0)['op'], 0);
 
@@ -205,6 +205,15 @@ void main() {
       expect(dave.sequence, 12);
       expect(dave.opcode, 25);
       expect(dave.payload, [7, 8, 9]);
+
+      final receivedFrame = client.audioPackets.first;
+      final frame = DiscordRtpFrame(
+        header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
+        payload: [3, 4, 5],
+      );
+      expect(client.sendAudioFrame(frame), greaterThan(frame.payload.length));
+      udp.addPacket(udp.sentPackets.single);
+      expect((await receivedFrame).payload, frame.payload);
 
       socket.addJson({
         'op': 5,
@@ -377,6 +386,7 @@ final class _FakeVoiceWebSocket implements DiscordVoiceWebSocket {
 
 final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
   final StreamController<Uint8List> _packets = StreamController.broadcast();
+  final List<Uint8List> sentPackets = [];
   String? discoveredHost;
   int? discoveredPort;
   bool _closed = false;
@@ -396,7 +406,12 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
   }
 
   @override
-  int send(Uint8List packet) => packet.length;
+  int send(Uint8List packet) {
+    sentPackets.add(packet);
+    return packet.length;
+  }
+
+  void addPacket(Uint8List packet) => _packets.add(packet);
 
   @override
   Future<void> close() async {

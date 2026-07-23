@@ -50,9 +50,11 @@ browser runtime or dependency on Discord's private user API.
    exposes each signaling stage without presenting transport readiness as live
    audio. Native DAVE frame cryptors, epoch ratchet rotation, remote-user SSRC
    mapping, and an RTP v2 audio packetizer/parser are implemented behind typed
-   boundaries. Raw PCM access, Opus encode/decode, Discord outer packet AEAD,
-   the UDP send/receive loop, remote playback, and transmitted screen sharing
-   remain.
+   boundaries. AES-256-GCM and mandatory XChaCha20-Poly1305 RTP-size transport
+   encryption now protect the typed UDP send/receive boundary, including CSRC
+   and RTP extension handling. Raw PCM access, Opus encode/decode, the real-time
+   UDP media loop, jitter handling, remote playback, and transmitted screen
+   sharing remain.
 6. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
