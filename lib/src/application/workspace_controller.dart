@@ -6,6 +6,7 @@ import 'channel_link.dart';
 final class WorkspaceController extends ChangeNotifier {
   String? _selectedSpaceId;
   String? _selectedChannelId;
+  String? _targetMessageId;
   String _query = '';
   ThemeMode _themeMode = ThemeMode.dark;
   bool _showMembers = true;
@@ -14,6 +15,7 @@ final class WorkspaceController extends ChangeNotifier {
 
   String? get selectedSpaceId => _selectedSpaceId;
   String? get selectedChannelId => _selectedChannelId;
+  String? get targetMessageId => _targetMessageId;
   String get query => _query;
   ThemeMode get themeMode => _themeMode;
   bool get showMembers => _showMembers;
@@ -31,10 +33,12 @@ final class WorkspaceController extends ChangeNotifier {
     final availableChannels = workspace.channelsFor(_selectedSpaceId!);
     if (availableChannels.isEmpty) {
       _selectedChannelId = null;
+      _targetMessageId = null;
       return;
     }
     if (_selectedChannelId == null ||
         !availableChannels.any((channel) => channel.id == _selectedChannelId)) {
+      _targetMessageId = null;
       _selectedChannelId = availableChannels
           .firstWhere(
             (channel) => channel.kind == ChannelKind.text,
@@ -60,15 +64,28 @@ final class WorkspaceController extends ChangeNotifier {
           orElse: () => channels.first,
         )
         .id;
+    _targetMessageId = null;
     _query = '';
     notifyListeners();
   }
 
   void selectChannel(String channelId) {
-    if (_selectedChannelId == channelId) return;
+    if (_selectedChannelId == channelId && _targetMessageId == null) return;
     _selectedChannelId = channelId;
+    _targetMessageId = null;
     _query = '';
     notifyListeners();
+  }
+
+  void selectMessage(String channelId, String messageId) {
+    final changed =
+        _selectedChannelId != channelId ||
+        _targetMessageId != messageId ||
+        _query.isNotEmpty;
+    _selectedChannelId = channelId;
+    _targetMessageId = messageId;
+    _query = '';
+    if (changed) notifyListeners();
   }
 
   bool openChannelLink(ChatWorkspace workspace, ChannelLink link) {
@@ -87,14 +104,16 @@ final class WorkspaceController extends ChangeNotifier {
         _query.isNotEmpty;
     _selectedSpaceId = link.spaceId;
     _selectedChannelId = link.channelId;
+    _targetMessageId = null;
     _query = '';
     if (changed) notifyListeners();
     return true;
   }
 
   void setQuery(String value) {
-    if (_query == value) return;
+    if (_query == value && (value.isEmpty || _targetMessageId == null)) return;
     _query = value;
+    if (value.isNotEmpty) _targetMessageId = null;
     notifyListeners();
   }
 

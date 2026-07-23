@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
+import '../application/inbox_catalog.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
@@ -13,6 +14,7 @@ import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/direct_message_views.dart';
+import 'widgets/inbox_dialog.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
@@ -22,6 +24,8 @@ import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_room_view.dart';
+
+part 'flucord_shell_navigation.dart';
 
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
@@ -79,6 +83,7 @@ class FlucordShell extends StatelessWidget {
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
+            final inboxSummary = InboxCatalog.fromWorkspace(workspace).summary;
             return Scaffold(
               body: LayoutBuilder(
                 builder: (context, constraints) {
@@ -138,11 +143,14 @@ class FlucordShell extends StatelessWidget {
                                 channel: channel,
                                 channels: channels,
                                 query: workspaceController.query,
+                                targetMessageId:
+                                    workspaceController.targetMessageId,
                                 compact: !showChannels,
                                 allowMemberPanel:
                                     membersFit && !space.isDirectMessages,
                                 showMembers: showMembers,
                                 showPins: showPins,
+                                inboxSummary: inboxSummary,
                                 typingMembers: chatController.typingMembersFor(
                                   channel.id,
                                 ),
@@ -183,6 +191,7 @@ class FlucordShell extends StatelessWidget {
                                     );
                                   }
                                 },
+                                onOpenInbox: () => _openInbox(context),
                                 onSend: (body, attachments, replyToMessageId) =>
                                     chatController.sendMessage(
                                       channelId: channel.id,
@@ -243,53 +252,6 @@ class FlucordShell extends StatelessWidget {
       },
     );
   }
-
-  void _openConnections(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => ConnectionDialog(controller: connectionController),
-    );
-  }
-
-  void _openQuickSwitcherDestination(QuickSwitcherDestination destination) {
-    final workspace = chatController.workspace;
-    if (workspace == null) return;
-    workspaceController.selectSpace(workspace, destination.spaceId);
-    final channelId = destination.channelId;
-    if (channelId != null) workspaceController.selectChannel(channelId);
-    final selectedChannelId = workspaceController.selectedChannelId;
-    if (selectedChannelId != null) {
-      unawaited(chatController.openChannel(selectedChannelId));
-    }
-  }
-
-  Future<void> _openDirectMessage(BuildContext context) async {
-    final recipientId = await showDialog<String>(
-      context: context,
-      builder: (_) => const DirectMessageDialog(),
-    );
-    if (recipientId == null || !context.mounted) return;
-    await _openDirectConversation(context, recipientId);
-  }
-
-  Future<void> _openDirectConversation(
-    BuildContext context,
-    String recipientId,
-  ) async {
-    final channelId = await chatController.openDirectConversation(recipientId);
-    if (!context.mounted) return;
-    if (channelId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Direct message could not be opened')),
-      );
-      return;
-    }
-    final workspace = chatController.workspace!;
-    final channel = workspace.channelById(channelId);
-    workspaceController.selectSpace(workspace, channel.spaceId);
-    workspaceController.selectChannel(channel.id);
-    unawaited(chatController.openChannel(channel.id));
-  }
 }
 
 class _ConversationPane extends StatefulWidget {
@@ -299,10 +261,12 @@ class _ConversationPane extends StatefulWidget {
     required this.channel,
     required this.channels,
     required this.query,
+    required this.targetMessageId,
     required this.compact,
     required this.allowMemberPanel,
     required this.showMembers,
     required this.showPins,
+    required this.inboxSummary,
     required this.typingMembers,
     required this.isSending,
     required this.isLoading,
@@ -316,6 +280,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onQueryChanged,
     required this.onToggleMembers,
     required this.onTogglePins,
+    required this.onOpenInbox,
     required this.onSend,
     required this.onEdit,
     required this.onDelete,
@@ -331,10 +296,12 @@ class _ConversationPane extends StatefulWidget {
   final ConversationChannel channel;
   final List<ConversationChannel> channels;
   final String query;
+  final String? targetMessageId;
   final bool compact;
   final bool allowMemberPanel;
   final bool showMembers;
   final bool showPins;
+  final InboxSummary inboxSummary;
   final List<Member> typingMembers;
   final bool isSending;
   final bool isLoading;
@@ -348,6 +315,7 @@ class _ConversationPane extends StatefulWidget {
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
+  final VoidCallback onOpenInbox;
   final SendMessageCallback onSend;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
@@ -390,6 +358,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         externalLinkLauncher: widget.externalLinkLauncher,
         channel: widget.channel,
         query: widget.query,
+        targetMessageId: widget.targetMessageId,
         onReply: (message) => setState(() => _replyTo = message),
         onEdit: widget.onEdit,
         onDelete: widget.onDelete,
@@ -413,10 +382,12 @@ class _ConversationPaneState extends State<_ConversationPane> {
           allowMemberPanel: widget.allowMemberPanel,
           showMembers: widget.showMembers,
           showPins: widget.showPins,
+          inboxSummary: widget.inboxSummary,
           onSelectChannel: widget.onSelectChannel,
           onQueryChanged: widget.onQueryChanged,
           onToggleMembers: widget.onToggleMembers,
           onTogglePins: widget.onTogglePins,
+          onOpenInbox: widget.onOpenInbox,
         ),
         Expanded(child: conversation),
         if (widget.channel.kind == ChannelKind.text)

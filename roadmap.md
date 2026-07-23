@@ -116,6 +116,11 @@ browser runtime or dependency on Discord's private user API.
     searchable destination catalog. The overlay preserves local unread and
     mention state, supports Ctrl+K, arrow-key, Enter, Escape, mouse, and screen
     reader navigation, and routes through the existing workspace/chat boundary.
+19. Completed: a native Discord-style Inbox retains exact current-bot mention
+    messages through Gateway, REST history, and SQLite v10, aggregates unread
+    channels across every space, exposes a familiar header activity control,
+    supports mark-all-read, and jumps from unread or mention entries into the
+    native timeline.
 
 ## Protocol safety
 

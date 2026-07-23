@@ -7,11 +7,14 @@ import 'anchored_scroll_controller.dart';
 import 'message_item.dart';
 import 'unread_message_boundary.dart';
 
+part 'message_list_states.dart';
+
 class MessageList extends StatefulWidget {
   const MessageList({
     required this.workspace,
     required this.channel,
     required this.query,
+    required this.targetMessageId,
     required this.onReply,
     required this.onEdit,
     required this.onDelete,
@@ -30,6 +33,7 @@ class MessageList extends StatefulWidget {
   final ChatWorkspace workspace;
   final ConversationChannel channel;
   final String query;
+  final String? targetMessageId;
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
@@ -69,6 +73,7 @@ class _MessageListState extends State<MessageList> {
     final unreadChanged =
         oldWidget.channel.firstUnreadMessageId !=
         widget.channel.firstUnreadMessageId;
+    final targetChanged = oldWidget.targetMessageId != widget.targetMessageId;
     final previousFirstId = previousMessages.isEmpty
         ? null
         : previousMessages.first.id;
@@ -84,6 +89,8 @@ class _MessageListState extends State<MessageList> {
       _readyForHistoryPaging = false;
       _didReachUnread = false;
       _scheduleInitialPosition();
+    } else if (targetChanged && _targetMessageId != null) {
+      _scrollToMessage(_targetMessageId!, animate: false);
     } else if (unreadChanged && _unreadMessageId != null) {
       _didReachUnread = false;
       _scrollToUnread(animate: false);
@@ -106,6 +113,9 @@ class _MessageListState extends State<MessageList> {
 
   String? get _unreadMessageId =>
       widget.query.trim().isEmpty ? widget.channel.firstUnreadMessageId : null;
+
+  String? get _targetMessageId =>
+      widget.query.trim().isEmpty ? widget.targetMessageId : null;
 
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
@@ -142,6 +152,10 @@ class _MessageListState extends State<MessageList> {
   }
 
   void _scheduleInitialPosition() {
+    if (_targetMessageId case final String targetMessageId) {
+      _scrollToMessage(targetMessageId, animate: false);
+      return;
+    }
     if (_unreadMessageId == null) {
       _scrollToEnd(jump: true);
       return;
@@ -150,16 +164,29 @@ class _MessageListState extends State<MessageList> {
   }
 
   void _scrollToUnread({required bool animate, int attempt = 0}) {
+    final messageId = _unreadMessageId;
+    if (messageId == null) return;
+    _scrollToMessage(
+      messageId,
+      animate: animate,
+      attempt: attempt,
+      marksUnread: true,
+    );
+  }
+
+  void _scrollToMessage(
+    String messageId, {
+    required bool animate,
+    int attempt = 0,
+    bool marksUnread = false,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      final messageId = _unreadMessageId;
       final messages = _visibleMessages;
-      final index = messageId == null
-          ? -1
-          : messages.indexWhere((message) => message.id == messageId);
+      final index = messages.indexWhere((message) => message.id == messageId);
       if (index < 0) return;
       final key = _messageKeys.putIfAbsent(
-        messageId!,
+        messageId,
         () => GlobalKey(debugLabel: 'message-anchor-$messageId'),
       );
       final targetContext = key.currentContext;
@@ -170,7 +197,9 @@ class _MessageListState extends State<MessageList> {
           duration: animate ? const Duration(milliseconds: 180) : Duration.zero,
           curve: Curves.easeOut,
         );
-        if (!_didReachUnread) setState(() => _didReachUnread = true);
+        if (marksUnread && !_didReachUnread) {
+          setState(() => _didReachUnread = true);
+        }
         return;
       }
       final position = _scrollController.position;
@@ -189,7 +218,12 @@ class _MessageListState extends State<MessageList> {
         _scrollController.jumpTo(estimate);
       }
       if (attempt < 4) {
-        _scrollToUnread(animate: animate, attempt: attempt + 1);
+        _scrollToMessage(
+          messageId,
+          animate: animate,
+          attempt: attempt + 1,
+          marksUnread: marksUnread,
+        );
       }
     });
   }
@@ -310,27 +344,33 @@ class _MessageListState extends State<MessageList> {
                   message.id,
                   () => GlobalKey(debugLabel: 'message-anchor-${message.id}'),
                 ),
-                child: Column(
-                  children: [
-                    if (startsUnread) const UnreadMessageBoundary(),
-                    MessageItem(
-                      key: ValueKey('message-${message.id}'),
-                      message: message,
-                      member: widget.workspace.memberById(message.authorId),
-                      workspace: widget.workspace,
-                      grouped: grouped,
-                      isCurrentUser:
-                          message.authorId == widget.workspace.currentMemberId,
-                      onReply: widget.onReply,
-                      onEdit: widget.onEdit,
-                      onDelete: widget.onDelete,
-                      onToggleReaction: widget.onToggleReaction,
-                      onAddReaction: widget.onAddReaction,
-                      onTogglePin: widget.onTogglePin,
-                      linkLauncher: widget.externalLinkLauncher,
-                      onSelectChannel: widget.onSelectChannel,
-                    ),
-                  ],
+                child: ColoredBox(
+                  color: message.id == _targetMessageId
+                      ? FlucordColors.brand.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                  child: Column(
+                    children: [
+                      if (startsUnread) const UnreadMessageBoundary(),
+                      MessageItem(
+                        key: ValueKey('message-${message.id}'),
+                        message: message,
+                        member: widget.workspace.memberById(message.authorId),
+                        workspace: widget.workspace,
+                        grouped: grouped,
+                        isCurrentUser:
+                            message.authorId ==
+                            widget.workspace.currentMemberId,
+                        onReply: widget.onReply,
+                        onEdit: widget.onEdit,
+                        onDelete: widget.onDelete,
+                        onToggleReaction: widget.onToggleReaction,
+                        onAddReaction: widget.onAddReaction,
+                        onTogglePin: widget.onTogglePin,
+                        linkLauncher: widget.externalLinkLauncher,
+                        onSelectChannel: widget.onSelectChannel,
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -345,132 +385,6 @@ class _MessageListState extends State<MessageList> {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _HistoryBoundary extends StatelessWidget {
-  const _HistoryBoundary({
-    required this.isLoading,
-    required this.error,
-    required this.onLoad,
-  });
-
-  final bool isLoading;
-  final Object? error;
-  final VoidCallback onLoad;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      key: const ValueKey('history-boundary'),
-      height: 48,
-      child: Center(
-        child: isLoading
-            ? const SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : error != null
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Older messages unavailable',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 10,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    key: const ValueKey('retry-older-messages'),
-                    onPressed: onLoad,
-                    tooltip: 'Retry older messages',
-                    icon: const Icon(Icons.refresh, size: 16),
-                  ),
-                ],
-              )
-            : TextButton.icon(
-                key: const ValueKey('load-older-messages'),
-                onPressed: onLoad,
-                icon: const Icon(Icons.arrow_upward, size: 14),
-                label: const Text(
-                  'Load older messages',
-                  style: TextStyle(fontSize: 10),
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _ChannelStart extends StatelessWidget {
-  const _ChannelStart({required this.channel});
-
-  final ConversationChannel channel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            channel.isThread ? Icons.forum_outlined : Icons.tag,
-            size: 28,
-            color: context.surfaces.muted,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${channel.isThread ? '' : '# '}${channel.name}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            channel.topic,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageEmptyState extends StatelessWidget {
-  const _MessageEmptyState({required this.hasQuery});
-
-  final bool hasQuery;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hasQuery ? Icons.search_off : Icons.forum_outlined,
-              size: 30,
-              color: context.surfaces.muted,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              hasQuery ? 'No matching messages' : 'No messages yet',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              hasQuery
-                  ? 'Try a different phrase, author, or filename.'
-                  : 'Start the conversation from the field below.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

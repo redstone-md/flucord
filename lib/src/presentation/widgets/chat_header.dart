@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../application/inbox_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'inbox_dialog.dart';
 
 class ChatHeader extends StatelessWidget {
   const ChatHeader({
@@ -12,10 +14,12 @@ class ChatHeader extends StatelessWidget {
     required this.allowMemberPanel,
     required this.showMembers,
     required this.showPins,
+    required this.inboxSummary,
     required this.onSelectChannel,
     required this.onQueryChanged,
     required this.onToggleMembers,
     required this.onTogglePins,
+    required this.onOpenInbox,
     super.key,
   });
 
@@ -26,10 +30,12 @@ class ChatHeader extends StatelessWidget {
   final bool allowMemberPanel;
   final bool showMembers;
   final bool showPins;
+  final InboxSummary inboxSummary;
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
+  final VoidCallback onOpenInbox;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +113,11 @@ class ChatHeader extends StatelessWidget {
                   width: 190,
                   child: _SearchField(query: query, onChanged: onQueryChanged),
                 ),
+              const SizedBox(width: 4),
+              InboxActivityButton(
+                summary: inboxSummary,
+                onPressed: onOpenInbox,
+              ),
               if (channel.kind == ChannelKind.text) ...[
                 const SizedBox(width: 4),
                 IconButton(

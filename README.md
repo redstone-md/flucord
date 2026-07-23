@@ -10,9 +10,9 @@ local unread markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, anchored member profile
-popovers, a global native Quick Switcher, and theme switching without a browser
-runtime. Local unread bursts open at a Discord-like NEW boundary in the message
-timeline. Discord rich
+popovers, a global native Quick Switcher, a cross-server Inbox, and theme
+switching without a browser runtime. Local unread bursts open at a Discord-like
+NEW boundary in the message timeline. Discord rich
 embeds retain their documented structured fields across live updates and
 offline cache restores. Video attachments and embed video metadata play
 through a native Windows texture.
@@ -100,6 +100,14 @@ Enter, Escape, mouse selection, and screen-reader semantics. Navigation reuses
 the same workspace and history-loading boundary as the server rail and channel
 sidebar.
 
+The header Inbox aggregates unread text channels from every guild and cached
+bot Direct Message space. Its Unreads tab shows the exact
+`Server / #channel` path and local mention count; its Mentions tab retains the
+actual messages that mention the connected bot even after their counters are
+cleared. Selecting an entry opens the destination and positions the native
+timeline at the unread boundary or exact mention message. Mark all as read
+clears local channel activity without deleting retained mention history.
+
 Guild icons, global user avatars, guild-specific member avatars, and Discord's
 default avatars use documented public CDN routes. Their URLs persist in the
 SQLite v4 cache; unavailable images fall back to deterministic initials without
@@ -124,6 +132,9 @@ selected, unread, and mentioned channels stay visible inside them.
 SQLite v9 retains the first local unread message ID separately from unread and
 mention counters. A fresh REST bootstrap restores those local activity fields
 for matching channels without allowing Gateway metadata updates to erase them.
+
+SQLite v10 retains whether each cached message explicitly mentions the current
+bot, allowing the native Inbox to restore exact mention entries offline.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

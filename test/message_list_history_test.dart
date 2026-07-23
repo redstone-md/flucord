@@ -97,6 +97,21 @@ void main() {
     expect(find.byKey(const ValueKey('unread-message-boundary')), findsNothing);
     expect(find.textContaining('Message 15'), findsOneWidget);
   });
+
+  testWidgets('positions the timeline at an explicit inbox message', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _host(List.generate(50, _message), targetMessageId: 'm012'),
+    );
+    await tester.pumpAndSettle();
+
+    final target = find.byKey(const ValueKey('message-m012'));
+    expect(target, findsOneWidget);
+    expect(tester.getTopLeft(target).dy, inInclusiveRange(60, 250));
+  });
 }
 
 Widget _host(
@@ -106,6 +121,7 @@ Widget _host(
   VoidCallback? onLoadOlder,
   ConversationChannel channel = _channel,
   String query = '',
+  String? targetMessageId,
 }) {
   return MaterialApp(
     theme: FlucordTheme.dark,
@@ -123,6 +139,7 @@ Widget _host(
           ),
           channel: channel,
           query: query,
+          targetMessageId: targetMessageId,
           onReply: (_) {},
           onEdit: (_, _) async => true,
           onDelete: (_) async {},

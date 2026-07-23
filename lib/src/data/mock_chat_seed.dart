@@ -38,4 +38,13 @@ final class MockChatSeed {
       position: 0,
     ),
   ];
+
+  static ChatMessage inboxMention(DateTime now) => ChatMessage(
+    id: 'design-mention',
+    channelId: 'forge-design',
+    authorId: 'mira',
+    body: '<@jack> the Inbox path now lands on this exact review note.',
+    sentAt: now.subtract(const Duration(hours: 1, minutes: 42)),
+    mentionsCurrentMember: true,
+  );
 }

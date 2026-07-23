@@ -446,6 +446,7 @@ final class MockChatRepository implements ChatRepository {
             'Agreed. One green accent, copper only for warnings. Everything else stays graphite.',
         sentAt: now.subtract(const Duration(hours: 1, minutes: 56)),
       ),
+      MockChatSeed.inboxMention(now),
       ChatMessage(
         id: 'm7',
         channelId: 'forge-native',
