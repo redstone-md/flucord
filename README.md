@@ -10,8 +10,9 @@ local unread markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, anchored member profile
-popovers, and theme switching without a browser runtime. Local unread bursts
-open at a Discord-like NEW boundary in the message timeline. Discord rich
+popovers, a global native Quick Switcher, and theme switching without a browser
+runtime. Local unread bursts open at a Discord-like NEW boundary in the message
+timeline. Discord rich
 embeds retain their documented structured fields across live updates and
 offline cache restores. Video attachments and embed video metadata play
 through a native Windows texture.
@@ -90,6 +91,14 @@ and numeric mention badges are capped visually at `99+`. Each unread burst
 also retains its first message ID. Opening the channel clears its counters but
 keeps a semantic NEW divider in the timeline until the reader leaves the
 channel, backgrounds the app again, or sends a message.
+
+Press `Ctrl+K` anywhere in the ready workspace to open the native Quick
+Switcher. It searches servers, bot Direct Messages, text and voice channels,
+and active threads by their full destination path. Results remain grouped by
+kind, carry local unread and mention indicators, and support arrow keys,
+Enter, Escape, mouse selection, and screen-reader semantics. Navigation reuses
+the same workspace and history-loading boundary as the server rail and channel
+sidebar.
 
 Guild icons, global user avatars, guild-specific member avatars, and Discord's
 default avatars use documented public CDN routes. Their URLs persist in the

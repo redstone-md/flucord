@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
+import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
@@ -16,6 +17,7 @@ import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/pinned_messages_panel.dart';
+import 'widgets/quick_switcher.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/typing_indicator.dart';
@@ -232,6 +234,9 @@ class FlucordShell extends StatelessWidget {
                   );
                 },
               ),
+            ).withQuickSwitcher(
+              workspace: workspace,
+              onSelected: _openQuickSwitcherDestination,
             );
           },
         );
@@ -244,6 +249,18 @@ class FlucordShell extends StatelessWidget {
       context: context,
       builder: (context) => ConnectionDialog(controller: connectionController),
     );
+  }
+
+  void _openQuickSwitcherDestination(QuickSwitcherDestination destination) {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
+    workspaceController.selectSpace(workspace, destination.spaceId);
+    final channelId = destination.channelId;
+    if (channelId != null) workspaceController.selectChannel(channelId);
+    final selectedChannelId = workspaceController.selectedChannelId;
+    if (selectedChannelId != null) {
+      unawaited(chatController.openChannel(selectedChannelId));
+    }
   }
 
   Future<void> _openDirectMessage(BuildContext context) async {

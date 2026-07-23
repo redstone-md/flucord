@@ -111,6 +111,11 @@ browser runtime or dependency on Discord's private user API.
 17. Completed: guild member rows open an anchored native profile popover
     with guild identity, presence, role, copyable user ID, keyboard dismissal,
     and a direct transition into the documented bot DM flow.
+18. Completed: a native Discord-style Quick Switcher projects guilds,
+    Direct Messages, text and voice channels, and active threads into one
+    searchable destination catalog. The overlay preserves local unread and
+    mention state, supports Ctrl+K, arrow-key, Enter, Escape, mouse, and screen
+    reader navigation, and routes through the existing workspace/chat boundary.
 
 ## Protocol safety
 
