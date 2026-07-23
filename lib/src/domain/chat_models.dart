@@ -157,6 +157,12 @@ final class MessageAttachment {
   final int? height;
 
   bool get isImage => contentType?.startsWith('image/') ?? false;
+
+  bool get isVideo {
+    if (contentType?.startsWith('video/') ?? false) return true;
+    final path = fileName.toLowerCase();
+    return const ['.mp4', '.mov', '.webm', '.mkv'].any(path.endsWith);
+  }
 }
 
 final class MessageReply {

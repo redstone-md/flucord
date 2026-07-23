@@ -80,7 +80,12 @@ browser runtime or dependency on Discord's private user API.
    custom emoji, localized timestamps, application commands, spoilers, and
    external HTTPS links without a browser runtime. Role identity persists in
    SQLite v6, and channel mentions reuse the native workspace navigation path.
-10. macOS and Linux packaging after Windows behavior stabilizes.
+10. Completed: Windows-native inline video for Discord attachments and embed
+    video metadata, with stable responsive geometry, explicit loading/error
+    states, play/pause, mute, seek, duration, fullscreen, and deterministic
+    teardown. A local MP4 integration smoke verifies the native texture and
+    playback commands without network access or an embedded browser surface.
+11. macOS and Linux packaging after Windows behavior stabilizes.
 
 ## Protocol safety
 

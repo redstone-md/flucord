@@ -2,16 +2,32 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'native_inline_video_player.dart';
 
 class MessageAttachmentView extends StatelessWidget {
-  const MessageAttachmentView({required this.attachment, super.key});
+  const MessageAttachmentView({
+    required this.attachment,
+    this.inlineVideoBuilder = buildNativeInlineVideo,
+    super.key,
+  });
 
   final MessageAttachment attachment;
+  final InlineVideoBuilder inlineVideoBuilder;
 
   @override
   Widget build(BuildContext context) {
     if (attachment.isImage && attachment.url.isNotEmpty) {
       return _ImageAttachment(attachment: attachment);
+    }
+    if (attachment.isVideo && attachment.url.isNotEmpty) {
+      final ratio = attachment.width != null && attachment.height != null
+          ? attachment.width! / attachment.height!
+          : 16 / 9;
+      return inlineVideoBuilder(
+        key: ValueKey('attachment-video-${attachment.id}'),
+        url: attachment.url,
+        aspectRatio: ratio,
+      );
     }
     return _FileAttachment(attachment: attachment);
   }

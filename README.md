@@ -8,7 +8,8 @@ messages, Windows notifications, close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 documented Discord CDN guild/member identity, and theme switching without a
 browser runtime. Discord rich embeds retain their documented structured fields
-across live updates and offline cache restores.
+across live updates and offline cache restores. Video attachments and embed
+video metadata play through a native Windows texture.
 
 Message bodies, pinned previews, and embed text render GitHub-flavored
 Markdown plus Discord's documented user, role, and channel mentions, custom
@@ -66,8 +67,8 @@ Rich message embeds preserve author, provider, title, description, fields,
 source color, media metadata, footer, and timestamp in the SQLite v5 cache.
 Inline fields adapt from three columns to one as the message pane narrows;
 failed remote media renders a stable error state instead of collapsing the
-conversation. Video metadata is retained but native inline playback remains a
-later increment.
+conversation. Video attachments and embed video URLs render inline with native
+play/pause, mute, seek, duration, fullscreen, loading, retry, and error states.
 
 The SQLite v6 workspace cache also retains Discord role IDs, names, ordering,
 and source colors so role mentions remain resolved during offline sessions.
@@ -79,6 +80,12 @@ voice surface supports microphone mute, input/output device selection,
 screen/window source selection, live desktop-capture preview, and deterministic
 track teardown. This path uses native WebRTC textures and devices, not a web
 view.
+
+Inline message video uses `media_kit` with the packaged Windows native video
+libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
+bot authorization, personal tokens, fingerprints, private client headers, or a
+web view. Player resources and stream subscriptions are released when their
+message leaves the widget tree.
 
 For Discord repositories, Flucord also performs the documented main Gateway
 voice-state exchange, Voice Gateway v8 heartbeat and resume flow, UDP address
@@ -113,6 +120,7 @@ is not sent to Discord.
 dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze
 flutter test
+flutter test integration_test/inline_video_playback_smoke_test.dart -d windows
 flutter test integration_test/voice_playback_smoke_test.dart -d windows
 flutter build windows --release
 ```

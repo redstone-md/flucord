@@ -4,6 +4,7 @@ import 'package:flucord/src/domain/message_embed.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_embed_view.dart';
+import 'package:flucord/src/presentation/widgets/native_inline_video_player.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
@@ -48,41 +49,73 @@ void main() {
     expect(find.byIcon(Icons.broken_image_outlined), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('renders embed video through the native video boundary', (
+    tester,
+  ) async {
+    String? source;
+    await tester.pumpWidget(
+      _EmbedTestApp(
+        embed: _embed(withVideo: true),
+        inlineVideoBuilder: ({required url, required aspectRatio, key}) {
+          source = url;
+          return SizedBox(key: key, width: 320, height: 180);
+        },
+      ),
+    );
+
+    expect(source, 'https://proxy.example/release.mp4');
+    expect(find.byKey(const ValueKey('embed-image')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
-MessageEmbed _embed({bool withMedia = false}) => MessageEmbed(
-  type: 'rich',
-  title: 'Deploy complete',
-  description: 'Windows package is ready.',
-  colorValue: 0x4c9b72,
-  timestamp: DateTime.utc(2026, 7, 23, 3, 47),
-  author: const MessageEmbedAuthor(name: 'Build service'),
-  footer: const MessageEmbedFooter(text: 'main'),
-  image: withMedia
-      ? const MessageEmbedMedia(
-          url: 'https://invalid.example/image.png',
-          width: 1200,
-          height: 630,
-        )
-      : null,
-  thumbnail: withMedia
-      ? const MessageEmbedMedia(
-          url: 'https://invalid.example/thumb.png',
-          width: 128,
-          height: 128,
-        )
-      : null,
-  fields: const [
-    MessageEmbedField(name: 'Tests', value: '91 passed', isInline: true),
-    MessageEmbedField(name: 'Platform', value: 'Windows', isInline: true),
-    MessageEmbedField(name: 'Mode', value: 'Release', isInline: true),
-  ],
-);
+MessageEmbed _embed({bool withMedia = false, bool withVideo = false}) =>
+    MessageEmbed(
+      type: 'rich',
+      title: 'Deploy complete',
+      description: 'Windows package is ready.',
+      colorValue: 0x4c9b72,
+      timestamp: DateTime.utc(2026, 7, 23, 3, 47),
+      author: const MessageEmbedAuthor(name: 'Build service'),
+      footer: const MessageEmbedFooter(text: 'main'),
+      image: withMedia
+          ? const MessageEmbedMedia(
+              url: 'https://invalid.example/image.png',
+              width: 1200,
+              height: 630,
+            )
+          : null,
+      thumbnail: withMedia
+          ? const MessageEmbedMedia(
+              url: 'https://invalid.example/thumb.png',
+              width: 128,
+              height: 128,
+            )
+          : null,
+      video: withVideo
+          ? const MessageEmbedMedia(
+              url: 'https://video.example/release.mp4',
+              proxyUrl: 'https://proxy.example/release.mp4',
+              width: 1920,
+              height: 1080,
+            )
+          : null,
+      fields: const [
+        MessageEmbedField(name: 'Tests', value: '91 passed', isInline: true),
+        MessageEmbedField(name: 'Platform', value: 'Windows', isInline: true),
+        MessageEmbedField(name: 'Mode', value: 'Release', isInline: true),
+      ],
+    );
 
 class _EmbedTestApp extends StatelessWidget {
-  const _EmbedTestApp({required this.embed});
+  const _EmbedTestApp({
+    required this.embed,
+    this.inlineVideoBuilder = buildNativeInlineVideo,
+  });
 
   final MessageEmbed embed;
+  final InlineVideoBuilder inlineVideoBuilder;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -95,6 +128,7 @@ class _EmbedTestApp extends StatelessWidget {
           workspace: _workspace,
           linkLauncher: const _TestLinkLauncher(),
           onSelectChannel: (_) {},
+          inlineVideoBuilder: inlineVideoBuilder,
         ),
       ),
     ),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'src/app.dart';
 import 'src/data/native_opus_codec.dart';
@@ -11,6 +12,7 @@ import 'src/platform/windows_desktop_integration.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   final DesktopIntegration? desktopIntegration = Platform.isWindows
       ? WindowsDesktopIntegration()
       : null;

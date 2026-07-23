@@ -5,6 +5,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_content_view.dart';
+import 'native_inline_video_player.dart';
 
 class MessageEmbedView extends StatelessWidget {
   const MessageEmbedView({
@@ -12,6 +13,7 @@ class MessageEmbedView extends StatelessWidget {
     required this.workspace,
     required this.linkLauncher,
     required this.onSelectChannel,
+    this.inlineVideoBuilder = buildNativeInlineVideo,
     super.key,
   });
 
@@ -19,6 +21,7 @@ class MessageEmbedView extends StatelessWidget {
   final ChatWorkspace workspace;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
+  final InlineVideoBuilder inlineVideoBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +61,16 @@ class MessageEmbedView extends StatelessWidget {
                     linkLauncher: linkLauncher,
                     onSelectChannel: onSelectChannel,
                   ),
-                  if (embed.image case final image?) ...[
+                  if (embed.video case final video?) ...[
+                    const SizedBox(height: 10),
+                    inlineVideoBuilder(
+                      key: ValueKey(
+                        'embed-video-${video.proxyUrl ?? video.url}',
+                      ),
+                      url: video.proxyUrl ?? video.url,
+                      aspectRatio: video.aspectRatio,
+                    ),
+                  ] else if (embed.image case final image?) ...[
                     const SizedBox(height: 10),
                     _EmbedMediaView(media: image),
                   ],
@@ -357,6 +369,7 @@ class _RemoteEmbedImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.network(
+      key: const ValueKey('embed-image'),
       media.proxyUrl ?? media.url,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => ColoredBox(
