@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../domain/discord_relationship.dart';
 import '../domain/discord_social_sdk.dart';
+import 'discord_social_relationship_mapper.dart';
 
 abstract interface class DiscordSocialSdkPlatformChannel {
   Future<Object?> invoke(String method);
@@ -31,8 +33,7 @@ final class NativeDiscordSocialSdkGateway implements DiscordSocialSdkGateway {
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async {
-    if (kIsWeb ||
-        (_targetPlatform ?? defaultTargetPlatform) != TargetPlatform.windows) {
+    if (!_isSupportedPlatform) {
       return DiscordSocialSdkAvailability.unsupportedPlatform;
     }
     try {
@@ -48,6 +49,31 @@ final class NativeDiscordSocialSdkGateway implements DiscordSocialSdkGateway {
       return DiscordSocialSdkAvailability.failure('channel_failure');
     }
   }
+
+  @override
+  Future<List<DiscordRelationship>> fetchRelationships() async {
+    if (!_isSupportedPlatform) {
+      throw const DiscordSocialSdkException('unsupported_platform');
+    }
+    try {
+      final response = await _channel.invoke('getRelationships');
+      return DiscordSocialRelationshipMapper.decode(response);
+    } on MissingPluginException {
+      throw const DiscordSocialSdkException('unsupported_platform');
+    } on PlatformException catch (error) {
+      throw DiscordSocialSdkException(_safeCode(error.code));
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_response');
+    } on DiscordSocialSdkException {
+      rethrow;
+    } on Object {
+      throw const DiscordSocialSdkException('channel_failure');
+    }
+  }
+
+  bool get _isSupportedPlatform =>
+      !kIsWeb &&
+      (_targetPlatform ?? defaultTargetPlatform) == TargetPlatform.windows;
 
   static DiscordSocialSdkAvailability _decode(Object? response) {
     if (response is! Map<Object?, Object?>) {

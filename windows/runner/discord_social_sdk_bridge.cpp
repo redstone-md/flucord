@@ -36,6 +36,19 @@ DiscordSocialSdkBridge::DiscordSocialSdkBridge(
           result->Success(GetAvailabilityPayload());
           return;
         }
+        if (call.method_name() == "getRelationships") {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+          result->Error(
+              "not_authenticated",
+              "The Discord Social SDK package is linked, but its native "
+              "account session has not been authenticated.");
+#else
+          result->Error(
+              "sdk_not_bundled",
+              "The Discord Social SDK package is not linked into this build.");
+#endif
+          return;
+        }
         result->NotImplemented();
       });
 }

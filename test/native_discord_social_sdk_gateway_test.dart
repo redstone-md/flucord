@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
@@ -70,6 +71,43 @@ void main() {
       DiscordSocialSdkAvailabilityStatus.unsupportedPlatform,
     );
     expect(channel.calls, isEmpty);
+  });
+
+  test('maps native relationship payloads through the same channel', () async {
+    final gateway = NativeDiscordSocialSdkGateway(
+      _Channel([
+        {
+          'id': 'user-1',
+          'display_name': 'Ada',
+          'status': 'online',
+          'relationship_type': 'friend',
+        },
+      ]),
+      TargetPlatform.windows,
+    );
+
+    final relationships = await gateway.fetchRelationships();
+
+    expect(relationships.single.user.displayName, 'Ada');
+    expect(relationships.single.user.status.name, 'online');
+  });
+
+  test('preserves native relationship error codes', () async {
+    final gateway = NativeDiscordSocialSdkGateway(
+      _Channel.error(PlatformException(code: 'not_authenticated')),
+      TargetPlatform.windows,
+    );
+
+    await expectLater(
+      gateway.fetchRelationships(),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'not_authenticated',
+        ),
+      ),
+    );
   });
 }
 

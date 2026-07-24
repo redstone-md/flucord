@@ -1,3 +1,5 @@
+import 'discord_relationship.dart';
+
 enum DiscordSocialSdkAvailabilityStatus {
   ready,
   sdkNotBundled,
@@ -42,4 +44,6 @@ final class DiscordSocialSdkAvailability {
 
 abstract interface class DiscordSocialSdkGateway {
   Future<DiscordSocialSdkAvailability> checkAvailability();
+
+  Future<List<DiscordRelationship>> fetchRelationships();
 }

@@ -216,9 +216,9 @@ Membership responses are cached per server and never unlock chat resources.
 The same native rail exposes an account-home destination. It renders the
 documented `/users/@me/connections` result from the `connections` scope with
 service, username, verification, visibility, and activity status while keeping
-Friends and Direct Messages visibly locked. Connected accounts also appear in
-the Connections settings surface. Older saved grants may need to be unlinked
-and linked again to add the new scopes.
+Friends and Direct Messages visibly locked in an ordinary OAuth-only build.
+Connected accounts also appear in the Connections settings surface. Older saved
+grants may need to be unlinked and linked again to add the new scopes.
 
 The account-home profile header also retains the documented current-user
 banner, accent color, legacy discriminator, locale, verification, MFA state,
@@ -242,6 +242,15 @@ The include directory and import library must be supplied together and are
 validated before compilation. A linked capability is only a package handshake;
 native SDK authentication and `Client::GetRelationships()` synchronization are
 still required before Flucord can render real friends.
+
+The Dart side already owns an immutable Social SDK relationship contract for
+friends, incoming/outgoing requests, provisional users, spam-request metadata,
+and online/idle/do-not-disturb/offline presence. A typed
+`getRelationships` platform method maps those values into a native Friends
+directory with separate pending, online, offline, loading, empty,
+authorization-required, and retry states. The default Windows runner rejects
+that method with `sdk_not_bundled`; a package-linked runner currently returns
+`not_authenticated`. Neither path invents data or falls back to Bot API.
 
 ## Run
 

@@ -5,7 +5,9 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
   testWidgets('production bootstrap renders an honest disconnected state', (
@@ -93,6 +95,35 @@ void main() {
       expect(find.text('Verified · MFA enabled · en-US'), findsOneWidget);
     },
   );
+
+  testWidgets('app wiring replaces the OAuth placeholder with native friends', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      FlucordApp(
+        credentialVault: _EmptyCredentialVault(),
+        chatRepositoryFactory: _UnusedRepositoryFactory(),
+        discordOAuthAccountGateway: _OAuthGateway(
+          restoredAccount: _oauthAccount(),
+        ),
+        discordSocialSdkGateway: _ReadySocialGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('discord-friend-friend-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('ONLINE — 1'), findsOneWidget);
+    expect(find.text('Discord Social SDK is not bundled'), findsNothing);
+  });
 
   testWidgets('link and unlink transition the disconnected native shell', (
     tester,
@@ -192,6 +223,24 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 
   @override
   Future<DiscordOAuthAccount?> restore() async => restoredAccount;
+}
+
+final class _ReadySocialGateway implements DiscordSocialSdkGateway {
+  @override
+  Future<DiscordSocialSdkAvailability> checkAvailability() async =>
+      DiscordSocialSdkAvailability.ready;
+
+  @override
+  Future<List<DiscordRelationship>> fetchRelationships() async => [
+    DiscordRelationship(
+      user: DiscordRelationshipUser(
+        id: 'friend-1',
+        displayName: 'Ada',
+        status: DiscordPresenceStatus.online,
+      ),
+      kind: DiscordRelationshipKind.friend,
+    ),
+  ];
 }
 
 DiscordOAuthAccount _oauthAccount() => DiscordOAuthAccount(

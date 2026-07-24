@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_friend_directory.dart';
 import 'discord_social_sdk_status.dart';
+import 'discord_social_sdk_scope.dart';
 import 'oauth_account_footer.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
@@ -14,6 +17,7 @@ class OAuthAccountSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final socialSdk = DiscordSocialSdkScope.of(context);
     return Container(
       key: const ValueKey('oauth-account-sidebar'),
       width: 236,
@@ -45,7 +49,10 @@ class OAuthAccountSidebar extends StatelessWidget {
                 _SidebarItem(
                   icon: Icons.people_outline,
                   label: 'Friends',
-                  detail: 'Unavailable through OAuth',
+                  detail:
+                      socialSdk.state == DiscordSocialSdkControllerState.ready
+                      ? 'Native social'
+                      : 'Unavailable through OAuth',
                 ),
                 const SizedBox(height: 16),
                 Padding(
@@ -83,6 +90,9 @@ class OAuthAccountHomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final socialSdk = DiscordSocialSdkScope.of(context);
+    final socialReady =
+        socialSdk.state == DiscordSocialSdkControllerState.ready;
     return Column(
       key: const ValueKey('oauth-account-home-view'),
       children: [
@@ -102,36 +112,44 @@ class OAuthAccountHomeView extends StatelessWidget {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
-              Icon(Icons.lock_outline, size: 16, color: context.surfaces.muted),
+              Icon(
+                socialReady ? Icons.people_outline : Icons.lock_outline,
+                size: 16,
+                color: socialReady
+                    ? FlucordColors.success
+                    : context.surfaces.muted,
+              ),
               const SizedBox(width: 6),
               Text(
-                'OAuth account',
+                socialReady ? 'Social SDK' : 'OAuth account',
                 style: TextStyle(color: context.surfaces.muted, fontSize: 11),
               ),
             ],
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _AccountProfileCard(account: account),
-                    const SizedBox(height: 20),
-                    const DiscordSocialSdkStatusPanel(),
-                    const SizedBox(height: 20),
-                    OAuthConnectedAccountDirectory(
-                      connections: account.connections,
+          child: socialReady
+              ? const DiscordFriendDirectory()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AccountProfileCard(account: account),
+                          const SizedBox(height: 20),
+                          const DiscordSocialSdkStatusPanel(),
+                          const SizedBox(height: 20),
+                          OAuthConnectedAccountDirectory(
+                            connections: account.connections,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
       ],
     );

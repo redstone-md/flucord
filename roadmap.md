@@ -269,9 +269,16 @@ browser runtime or dependency on Discord's private user API.
     relationship access without routing user features through Bot REST. The
     first Windows tracer bullet reports whether the separately distributed SDK
     is linked, keeps the default build functional when it is absent, and
-    surfaces that exact state in Friends. Native SDK authentication and
-    `GetRelationships()` synchronization remain the next increment after an
-    approved Developer Portal SDK package is available.
+    surfaces that exact state in Friends. Native SDK authentication and the
+    live `GetRelationships()` call remain after an approved Developer Portal
+    SDK package is available.
+52. Completed: carry Social SDK relationships through immutable friend,
+    request, presence, and provisional-user models; expose a typed native
+    `getRelationships` channel contract; and replace the Friends placeholder
+    with loading, empty, failure, request, online, and offline native states.
+    The default runner returns an explicit unbundled error, while a linked
+    runner returns authorization-required rather than fabricating relationships
+    before SDK authentication is verified against the approved package.
 
 ## Protocol safety
 

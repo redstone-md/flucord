@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/discord_social_sdk_controller.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
@@ -71,4 +72,7 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
     calls++;
     return _check();
   }
+
+  @override
+  Future<List<DiscordRelationship>> fetchRelationships() async => const [];
 }

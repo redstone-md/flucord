@@ -4,6 +4,7 @@ import 'package:flucord/src/application/oauth_guild_directory_controller.dart';
 import 'package:flucord/src/application/oauth_guild_membership_controller.dart';
 import 'package:flucord/src/application/discord_social_sdk_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_guild_workspace.dart';
@@ -202,6 +203,9 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
       DiscordSocialSdkAvailability.sdkNotBundled;
+
+  @override
+  Future<List<DiscordRelationship>> fetchRelationships() async => const [];
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {
