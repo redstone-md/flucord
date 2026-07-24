@@ -19,7 +19,7 @@ ConnectionController
 DiscordOAuthUserSession
   <- NativeDiscordOAuthAccountService
      <- system browser authorization + PKCE S256
-     <- flucord://oauth/discord/callback + state validation
+     <- cross-platform flucord://oauth/discord/callback + state validation
      <- public-client code exchange / refresh rotation
      <- operating-system OAuth grant vault
   -> DiscordOAuthIdentityClient (Bearer authorization)
@@ -76,6 +76,18 @@ to a user's channel history. Flucord also does not infer chat access from
 - Widgets and application controllers see only `DiscordOAuthAccount` profile
   metadata. Access tokens, refresh tokens, authorization codes, and the PKCE
   verifier remain inside data-layer services and the credential vault.
+
+## Desktop protocol delivery
+
+`DesktopProtocolRouter` is the single parser for channel navigation and OAuth
+callbacks. Windows and macOS feed it from `protocol_handler`; macOS also
+declares `flucord` in `CFBundleURLTypes`. Linux does not pretend the plugin has
+support it lacks: the GTK runner is a unique `GApplication`, forwards secondary
+`flucord://` invocations over a native Flutter method channel, and receives a
+cold-start URL through Dart entrypoint arguments. A native queue and explicit
+Dart readiness handshake prevent callbacks from being lost while the Flutter
+isolate starts. The packaged `.desktop` file declares
+`x-scheme-handler/flucord` for the system MIME application registry.
 
 ## Adapter requirements
 

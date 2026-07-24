@@ -21,9 +21,18 @@ void main() {
   test('configures a branded Linux runner', () {
     final cmake = File('linux/CMakeLists.txt').readAsStringSync();
     final runner = File('linux/runner/my_application.cc').readAsStringSync();
+    final desktop = File('linux/dev.flucord.app.desktop').readAsStringSync();
 
     expect(cmake, contains('set(APPLICATION_ID "dev.flucord.app")'));
+    expect(cmake, contains('dev.flucord.app.desktop'));
     expect(runner, contains('gtk_window_set_title(window, "Flucord")'));
+    expect(runner, contains('G_APPLICATION_HANDLES_COMMAND_LINE'));
+    expect(runner, contains('"flucord/protocol"'));
+    expect(runner, contains('g_queue_push_tail'));
+    expect(runner, contains('"ready"'));
+    expect(runner, contains('fl_method_channel_invoke_method'));
+    expect(desktop, contains('MimeType=x-scheme-handler/flucord;'));
+    expect(desktop, contains('Exec=flucord %u'));
   });
 
   test('grants the sandboxed macOS runner required capabilities', () {
@@ -45,9 +54,19 @@ void main() {
     );
     expect(infoPlist, contains('<key>NSMicrophoneUsageDescription</key>'));
     expect(infoPlist, contains('<key>NSScreenCaptureUsageDescription</key>'));
+    expect(infoPlist, contains('<key>CFBundleURLTypes</key>'));
+    expect(infoPlist, contains('<string>flucord</string>'));
     for (final entitlements in [debugEntitlements, releaseEntitlements]) {
       expect(entitlements, contains('com.apple.security.network.client'));
       expect(entitlements, contains('com.apple.security.device.audio-input'));
     }
+  });
+
+  test('selects a protocol integration for every desktop host', () {
+    final mainSource = File('lib/main.dart').readAsStringSync();
+
+    expect(mainSource, contains('WindowsDesktopIntegration()'));
+    expect(mainSource, contains('MacosDesktopIntegration()'));
+    expect(mainSource, contains('LinuxDesktopIntegration('));
   });
 }

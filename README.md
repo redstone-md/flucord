@@ -242,6 +242,9 @@ requires the PulseAudio utilities and FFmpeg available to the desktop session.
      --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
    ```
 
+   Use `-d macos` or `-d linux` on the corresponding native host with the same
+   `--dart-define`.
+
 4. Open Connections and select **Link account**. Flucord requests only
    `identify` and `guilds`, then shows the linked identity and server count.
 
@@ -440,7 +443,7 @@ capture capabilities in its sandbox configuration.
 The release executable is written to
 `build\windows\x64\runner\Release\flucord.exe`.
 
-## Windows Integration
+## Desktop Protocol Integration
 
 Flucord registers links in this form and forwards them to the existing app
 instance:
@@ -452,6 +455,22 @@ flucord://channels/{serverId}/{channelId}
 The same registered protocol receives the state-validated OAuth callback at
 `flucord://oauth/discord/callback`; channel navigation and authorization are
 parsed as separate routes.
+
+Windows dynamically registers the scheme and forwards a second invocation to
+the existing native window. macOS declares `flucord` in `CFBundleURLTypes` and
+uses the native plugin event path. Linux uses a unique GTK application and a
+native method channel to forward later invocations to the first process.
+
+Linux packages must install `linux/dev.flucord.app.desktop` where the desktop
+environment can index it and make the handler authoritative. For a conventional
+system package whose `flucord` executable is on `PATH`:
+
+```bash
+install -Dm644 linux/dev.flucord.app.desktop \
+  ~/.local/share/applications/dev.flucord.app.desktop
+xdg-mime default dev.flucord.app.desktop x-scheme-handler/flucord
+update-desktop-database ~/.local/share/applications
+```
 
 Incoming messages raise native Windows notifications while Flucord is not
 focused. Their native preview describes system events and falls back to poll,

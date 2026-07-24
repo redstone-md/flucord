@@ -220,6 +220,11 @@ browser runtime or dependency on Discord's private user API.
     refresh-token rotation, a separate operating-system grant vault, restored
     profile/server metadata, and a native connection surface that cannot be
     mistaken for the Bot chat transport.
+42. Completed: route channel links and OAuth callbacks through one typed desktop
+    parser; add the declared macOS URL scheme; and implement Linux cold-start
+    plus single-instance forwarded activation through a native GTK method
+    channel and `x-scheme-handler/flucord` desktop entry. macOS/Linux release
+    execution still requires verification on their native hosts.
 
 ## Protocol safety
 

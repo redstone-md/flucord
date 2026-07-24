@@ -15,6 +15,7 @@ import '../application/workspace_controller.dart';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import 'desktop_integration.dart';
+import 'desktop_protocol_router.dart';
 
 final class WindowsDesktopIntegration
     with WindowListener, TrayListener, ProtocolListener
@@ -24,11 +25,8 @@ final class WindowsDesktopIntegration
   );
 
   ChatController? _chatController;
-  WorkspaceController? _workspaceController;
   StreamSubscription<MessageUpsertedEvent>? _messageSubscription;
-  ChannelLink? _pendingLink;
-  Uri? _pendingProtocolUri;
-  void Function(Uri uri)? _protocolUriHandler;
+  final DesktopProtocolRouter _protocolRouter = DesktopProtocolRouter();
   bool _windowReady = false;
   bool _notifierReady = false;
   bool _trayReady = false;
@@ -54,17 +52,15 @@ final class WindowsDesktopIntegration
     required void Function(Uri uri) onProtocolUri,
   }) {
     _chatController = chatController;
-    _workspaceController = workspaceController;
-    _protocolUriHandler = onProtocolUri;
+    _protocolRouter.attach(
+      chatController: chatController,
+      workspaceController: workspaceController,
+      onProtocolUri: onProtocolUri,
+    );
     chatController.addListener(_handleChatChanged);
     _messageSubscription = chatController.incomingMessages.listen(
       (event) => unawaited(_showMessageNotification(event)),
     );
-    final pendingProtocolUri = _pendingProtocolUri;
-    if (pendingProtocolUri != null) {
-      _pendingProtocolUri = null;
-      onProtocolUri(pendingProtocolUri);
-    }
     _handleChatChanged();
   }
 
@@ -98,7 +94,7 @@ final class WindowsDesktopIntegration
       _protocolReady = true;
       final initialUrl = await protocolHandler.getInitialUrl();
       if (initialUrl != null && initialUrl.isNotEmpty) {
-        _receiveProtocolUrl(initialUrl);
+        _protocolRouter.receive(initialUrl);
       }
     } catch (error) {
       _debugFailure('protocol handler', error);
@@ -153,7 +149,7 @@ final class WindowsDesktopIntegration
   }
 
   void _handleChatChanged() {
-    _openPendingLink();
+    _protocolRouter.flushChannelLink();
     final workspace = _chatController?.workspace;
     if (!_trayReady || workspace == null) return;
     final unreadCount = workspace.channels.where((item) => item.unread).length;
@@ -233,28 +229,8 @@ final class WindowsDesktopIntegration
   }
 
   Future<void> _activateLink(ChannelLink link) async {
-    _pendingLink = link;
     await _showWindow();
-    _openPendingLink();
-  }
-
-  void _openPendingLink() {
-    final link = _pendingLink;
-    final chatController = _chatController;
-    final workspaceController = _workspaceController;
-    final workspace = chatController?.workspace;
-    if (link == null ||
-        chatController == null ||
-        workspaceController == null ||
-        workspace == null) {
-      return;
-    }
-    if (!workspaceController.openChannelLink(workspace, link)) {
-      _pendingLink = null;
-      return;
-    }
-    _pendingLink = null;
-    unawaited(chatController.openChannel(link.channelId));
+    _protocolRouter.receive(link.toUri().toString());
   }
 
   Future<void> _showWindow() async {
@@ -267,36 +243,8 @@ final class WindowsDesktopIntegration
 
   @override
   void onProtocolUrlReceived(String url) {
-    final link = ChannelLink.tryParse(url);
-    if (link != null) {
-      unawaited(_activateLink(link));
-      return;
-    }
-    final uri = Uri.tryParse(url);
-    if (uri == null || uri.scheme != ChannelLink.scheme) return;
     unawaited(_showWindow());
-    final handler = _protocolUriHandler;
-    if (handler == null) {
-      _pendingProtocolUri = uri;
-    } else {
-      handler(uri);
-    }
-  }
-
-  void _receiveProtocolUrl(String url) {
-    final link = ChannelLink.tryParse(url);
-    if (link != null) {
-      _pendingLink = link;
-      return;
-    }
-    final uri = Uri.tryParse(url);
-    if (uri == null || uri.scheme != ChannelLink.scheme) return;
-    final handler = _protocolUriHandler;
-    if (handler == null) {
-      _pendingProtocolUri = uri;
-    } else {
-      handler(uri);
-    }
+    _protocolRouter.receive(url);
   }
 
   @override
@@ -349,7 +297,7 @@ final class WindowsDesktopIntegration
     if (_disposed) return;
     _disposed = true;
     _chatController?.removeListener(_handleChatChanged);
-    _protocolUriHandler = null;
+    _protocolRouter.detach();
     await _messageSubscription?.cancel();
     if (_protocolReady) protocolHandler.removeListener(this);
     if (_trayReady) {

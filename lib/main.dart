@@ -9,13 +9,19 @@ import 'src/data/native_voice_message_recorder.dart';
 import 'src/data/soloud_voice_playback_service.dart';
 import 'src/data/webrtc_voice_media_service.dart';
 import 'src/platform/desktop_integration.dart';
+import 'src/platform/linux_desktop_integration.dart';
+import 'src/platform/macos_desktop_integration.dart';
 import 'src/platform/windows_desktop_integration.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final DesktopIntegration? desktopIntegration = Platform.isWindows
       ? WindowsDesktopIntegration()
+      : Platform.isMacOS
+      ? MacosDesktopIntegration()
+      : Platform.isLinux
+      ? LinuxDesktopIntegration(initialArguments: arguments)
       : null;
   await desktopIntegration?.initialize();
   final opusCodecFactory = await NativeOpusCodecFactory.initialize();
