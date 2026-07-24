@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'native_inline_video_player.dart';
+import 'native_voice_message_player.dart';
 
 class MessageAttachmentView extends StatelessWidget {
   const MessageAttachmentView({
     required this.attachment,
     this.inlineVideoBuilder = buildNativeInlineVideo,
+    this.inlineVoiceBuilder = buildNativeVoiceMessage,
     super.key,
   });
 
   final MessageAttachment attachment;
   final InlineVideoBuilder inlineVideoBuilder;
+  final InlineVoiceBuilder inlineVoiceBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +30,14 @@ class MessageAttachmentView extends StatelessWidget {
         key: ValueKey('attachment-video-${attachment.id}'),
         url: attachment.url,
         aspectRatio: ratio,
+      );
+    }
+    if (attachment.isAudio && attachment.url.isNotEmpty) {
+      return inlineVoiceBuilder(
+        key: ValueKey('attachment-audio-${attachment.id}'),
+        url: attachment.url,
+        duration: attachment.duration,
+        waveform: attachment.waveform,
       );
     }
     return _FileAttachment(attachment: attachment);

@@ -12,6 +12,7 @@ native forum and media-channel feeds, member roles and presence, local unread
 markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
+native voice-message waveform playback,
 documented Discord CDN guild/member identity, anchored member profile
 popovers, a global native Quick Switcher, a cross-server Inbox, and theme
 switching without a browser runtime. The composer includes a searchable native
@@ -136,6 +137,14 @@ retry from creating a duplicate message. A native composer toggle sends without
 raising push notifications through `SUPPRESS_NOTIFICATIONS`. Message hover
 actions can suppress or restore rich embeds through the documented Edit Message
 flags contract while preserving every unrelated and unknown flag bit.
+
+Incoming Discord voice messages retain the documented `IS_VOICE_MESSAGE` flag,
+single audio attachment, fractional duration, and base64 waveform. They render
+as a compact native player with play/pause, buffering and retry states, elapsed
+time, and click-or-drag waveform seeking. Playback uses `media_kit` without a
+browser surface. Discord forbids editing voice messages, so Flucord removes the
+edit action and rejects the mutation before it reaches the repository. Native
+microphone recording and voice-message upload are not implemented yet.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -283,7 +292,9 @@ existing references and supplies safe empty snapshot defaults.
 
 SQLite v19 retains each message's complete raw Discord flags. Fresh and partial
 Gateway payloads preserve unknown bits, silent-send state, and suppressed-embed
-state across live updates, restarts, and future flag additions.
+state across live updates, restarts, and future flag additions. The existing
+attachment JSON also retains optional voice-message duration and waveform data,
+so no destructive table migration is needed for cached audio metadata.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for
@@ -304,6 +315,11 @@ libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
 bot authorization, personal tokens, fingerprints, private client headers, or a
 web view. Player resources and stream subscriptions are released when their
 message leaves the widget tree.
+
+Voice-message audio uses the same packaged native media runtime without a video
+texture. Discord's sampled waveform is decoded locally into a compact seek
+surface, while the attachment duration keeps stable timeline geometry before
+media probing completes.
 
 For Discord repositories, Flucord also performs the documented main Gateway
 voice-state exchange, Voice Gateway v8 heartbeat and resume flow, UDP address

@@ -369,7 +369,7 @@ class _MessageItemState extends State<MessageItem> {
             onPressed: () =>
                 unawaited(widget.onToggleSuppressEmbeds(widget.message)),
           ),
-        if (widget.isCurrentUser)
+        if (widget.isCurrentUser && widget.message.canEdit)
           _ActionButton(
             icon: Icons.edit_outlined,
             tooltip: 'Edit',

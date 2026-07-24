@@ -344,7 +344,7 @@ final class ChatController extends ChangeNotifier {
 
   Future<bool> editMessage(ChatMessage message, String body) async {
     final content = body.trim();
-    if (content.isEmpty || _isSending) return false;
+    if (!message.canEdit || content.isEmpty || _isSending) return false;
     _isSending = true;
     notifyListeners();
     try {

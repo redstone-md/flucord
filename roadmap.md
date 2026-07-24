@@ -180,6 +180,12 @@ browser runtime or dependency on Discord's private user API.
     idempotent Create Message nonces, expose native silent sending through
     `SUPPRESS_NOTIFICATIONS`, and suppress or restore embeds through the
     documented Edit Message flags contract.
+34. In progress: retain documented voice-message duration and waveform metadata
+    through REST, partial Gateway updates, forward snapshots, and SQLite; render
+    audio attachments through a compact native waveform player with seek,
+    buffering, retry, responsive geometry, and deterministic teardown; and
+    prevent edits forbidden by Discord. Native microphone recording, Ogg/Opus
+    packaging, waveform sampling, and voice-message upload remain.
 
 ## Protocol safety
 
