@@ -125,6 +125,39 @@ void main() {
     expect(find.text('Discord Social SDK is not bundled'), findsNothing);
   });
 
+  testWidgets('Friends recovery uses the unified account coordinator', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final oauthGateway = _OAuthGateway(restoredAccount: _oauthAccount());
+    final socialGateway = _ReadySocialGateway(
+      restoredAuthentication: DiscordSocialSdkAuthentication.signedOut,
+    );
+
+    await tester.pumpWidget(
+      FlucordApp(
+        credentialVault: _EmptyCredentialVault(),
+        chatRepositoryFactory: _UnusedRepositoryFactory(),
+        discordOAuthAccountGateway: oauthGateway,
+        discordSocialSdkGateway: socialGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('discord-friends-authorize')));
+    await tester.pumpAndSettle();
+
+    expect(oauthGateway.authorizeCalls, 0);
+    expect(socialGateway.authorizeCalls, 1);
+    expect(
+      find.byKey(const ValueKey('discord-friend-friend-1')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('link and unlink transition the disconnected native shell', (
     tester,
   ) async {
@@ -189,6 +222,7 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 
   final DiscordOAuthAccount? restoredAccount;
   final DiscordOAuthAccount? authorizedAccount;
+  int authorizeCalls = 0;
   int clearCalls = 0;
 
   @override
@@ -196,6 +230,7 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 
   @override
   Future<DiscordOAuthAccount> authorize() {
+    authorizeCalls++;
     final account = authorizedAccount;
     if (account == null) {
       throw StateError('Authorization is not part of this test.');
@@ -226,9 +261,18 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 }
 
 final class _ReadySocialGateway implements DiscordSocialSdkGateway {
+  _ReadySocialGateway({
+    this.restoredAuthentication = DiscordSocialSdkAuthentication.ready,
+  });
+
+  final DiscordSocialSdkAuthentication restoredAuthentication;
+  int authorizeCalls = 0;
+
   @override
-  Future<DiscordSocialSdkAuthentication> authorize() async =>
-      DiscordSocialSdkAuthentication.ready;
+  Future<DiscordSocialSdkAuthentication> authorize() async {
+    authorizeCalls++;
+    return DiscordSocialSdkAuthentication.ready;
+  }
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
@@ -251,7 +295,7 @@ final class _ReadySocialGateway implements DiscordSocialSdkGateway {
 
   @override
   Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
-      DiscordSocialSdkAuthentication.ready;
+      restoredAuthentication;
 
   @override
   Future<void> updateRelationship({

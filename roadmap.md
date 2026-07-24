@@ -322,6 +322,10 @@ browser runtime or dependency on Discord's private user API.
     boundary. Retain the documented Bot adapter only behind the explicit
     `FLUCORD_ENABLE_BOT_TRANSPORT=true` developer flag and a collapsed,
     separately labelled settings section.
+60. Completed: coordinate ordinary OAuth and native Social SDK authorization
+    through one normal-account connect, completion, and disconnect surface.
+    Keep both grants, refresh lifecycles, vaults, and failure states independent
+    while routing Friends recovery through the same account coordinator.
 
 ## Protocol safety
 

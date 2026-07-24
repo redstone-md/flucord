@@ -52,6 +52,11 @@ Connections → **Connect Discord** requests `identify`, `guilds`,
 SDK package uses the same public application ID and its own grant vault for
 approved relationship and Direct Message access.
 
+`DiscordAccountConnectionController` presents these independent lifecycles as
+one onboarding action. It completes ordinary OAuth first, invokes native Social
+SDK authorization only when that package is available, and disconnects both
+grants without copying access or refresh tokens between controllers or vaults.
+
 For the optional developer transport, create a Discord application bot, enable
 the Message Content, Server Members, and Presence intents, and install it with
 the permissions required by the test server. Then opt in explicitly:

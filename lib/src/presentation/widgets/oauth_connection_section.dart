@@ -1,27 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../../application/discord_oauth_controller.dart';
+import '../../application/discord_account_connection_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
 
 class OAuthConnectionSection extends StatelessWidget {
-  const OAuthConnectionSection({
-    required this.controller,
-    required this.onLink,
-    required this.onUnlink,
-    super.key,
-  });
+  const OAuthConnectionSection({required this.controller, super.key});
 
-  final DiscordOAuthController controller;
-  final Future<void> Function() onLink;
-  final Future<void> Function() onUnlink;
+  final DiscordAccountConnectionController controller;
 
   @override
   Widget build(BuildContext context) {
     final account = controller.account;
-    final linked = controller.state == DiscordOAuthLinkState.linked;
+    final linked = controller.oauthLinked;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -33,7 +26,7 @@ class OAuthConnectionSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Connect your normal Discord identity through OAuth. The native Social SDK separately provides approved friends and Direct Messages; OAuth alone does not expose channel history or a user Gateway session.',
+            'One account action coordinates your normal OAuth identity and the native Social SDK grant for approved friends and Direct Messages. Their credentials remain separate.',
             style: TextStyle(
               color: context.surfaces.muted,
               fontSize: 11,
@@ -41,13 +34,7 @@ class OAuthConnectionSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _OAuthIdentityTile(
-            controller: controller,
-            account: account,
-            linked: linked,
-            onLink: onLink,
-            onUnlink: onUnlink,
-          ),
+          _OAuthIdentityTile(controller: controller, account: account),
           if (linked && account != null) ...[
             const SizedBox(height: 16),
             OAuthConnectedAccountDirectory(connections: account.connections),
@@ -61,40 +48,20 @@ class OAuthConnectionSection extends StatelessWidget {
 }
 
 class _OAuthIdentityTile extends StatelessWidget {
-  const _OAuthIdentityTile({
-    required this.controller,
-    required this.account,
-    required this.linked,
-    required this.onLink,
-    required this.onUnlink,
-  });
+  const _OAuthIdentityTile({required this.controller, required this.account});
 
-  final DiscordOAuthController controller;
+  final DiscordAccountConnectionController controller;
   final DiscordOAuthAccount? account;
-  final bool linked;
-  final Future<void> Function() onLink;
-  final Future<void> Function() onUnlink;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = linked
-        ? FlucordColors.success
-        : controller.state == DiscordOAuthLinkState.failure
+    final failed = controller.state == DiscordAccountConnectionState.failure;
+    final statusColor = failed
         ? FlucordColors.danger
+        : controller.isConnected
+        ? FlucordColors.success
         : context.surfaces.muted;
-    final status = switch (controller.state) {
-      DiscordOAuthLinkState.unavailable =>
-        'Account linking is unavailable in this build.',
-      DiscordOAuthLinkState.restoring => 'Restoring saved authorization…',
-      DiscordOAuthLinkState.authorizing =>
-        'Waiting for Discord in your system browser…',
-      DiscordOAuthLinkState.linked =>
-        '${account?.displayName ?? 'Discord account'} · '
-            '${account?.guildCount ?? 0} servers',
-      DiscordOAuthLinkState.failure =>
-        controller.errorMessage ?? 'Account linking failed.',
-      DiscordOAuthLinkState.idle => 'No Discord account linked.',
-    };
+    final status = _connectionStatus(controller, account);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -111,39 +78,72 @@ class _OAuthIdentityTile extends StatelessWidget {
               status,
               key: const ValueKey('discord-oauth-status'),
               style: TextStyle(
-                color: controller.state == DiscordOAuthLinkState.failure
-                    ? FlucordColors.danger
-                    : null,
+                color: failed ? FlucordColors.danger : null,
                 fontSize: 12,
               ),
             ),
           ),
           const SizedBox(width: 12),
-          if (linked)
+          if (controller.isFullyConnected)
             TextButton(
               key: const ValueKey('unlink-discord-account'),
-              onPressed: controller.isBusy ? null : onUnlink,
-              child: const Text('Unlink'),
+              onPressed: controller.canDisconnect
+                  ? controller.disconnect
+                  : null,
+              child: const Text('Disconnect'),
             )
-          else
+          else ...[
+            if (controller.isConnected)
+              IconButton(
+                key: const ValueKey('unlink-discord-account'),
+                onPressed: controller.canDisconnect
+                    ? controller.disconnect
+                    : null,
+                icon: const Icon(Icons.link_off_outlined, size: 17),
+                tooltip: 'Disconnect Discord',
+              ),
             FilledButton.icon(
               key: const ValueKey('link-discord-account'),
-              onPressed: !controller.isConfigured || controller.isBusy
-                  ? null
-                  : onLink,
+              onPressed: controller.canConnect ? controller.connect : null,
               icon: controller.isBusy
                   ? const SizedBox.square(
                       dimension: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Connect Discord'),
+              label: Text(
+                controller.isConnected ? 'Complete setup' : 'Connect Discord',
+              ),
             ),
+          ],
         ],
       ),
     );
   }
 }
+
+String _connectionStatus(
+  DiscordAccountConnectionController controller,
+  DiscordOAuthAccount? account,
+) => switch (controller.state) {
+  DiscordAccountConnectionState.unavailable =>
+    'Discord account authorization is unavailable in this build.',
+  DiscordAccountConnectionState.disconnected => 'No Discord account connected.',
+  DiscordAccountConnectionState.connecting =>
+    'Waiting for Discord authorization…',
+  DiscordAccountConnectionState.disconnecting =>
+    'Disconnecting Discord account…',
+  DiscordAccountConnectionState.failure =>
+    controller.errorMessage ?? 'Discord account connection failed.',
+  DiscordAccountConnectionState.partiallyConnected =>
+    controller.needsSocial
+        ? '${account?.displayName ?? 'Discord account'} · Complete native social authorization'
+        : 'Native social access connected · Complete profile authorization',
+  DiscordAccountConnectionState.connected =>
+    controller.socialConnected
+        ? '${account?.displayName ?? 'Discord account'} · ${account?.guildCount ?? 0} servers · Friends and DMs connected'
+        : '${account?.displayName ?? 'Discord account'} · ${account?.guildCount ?? 0} servers',
+};
 
 class _OAuthAvatar extends StatelessWidget {
   const _OAuthAvatar({required this.account, required this.color});

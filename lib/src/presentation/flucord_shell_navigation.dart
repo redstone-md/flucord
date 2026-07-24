@@ -2,11 +2,12 @@ part of 'flucord_shell.dart';
 
 extension _FlucordShellNavigation on FlucordShell {
   void _openConnections(BuildContext context) {
+    final accountController = DiscordAccountConnectionScope.of(context);
     showDialog<void>(
       context: context,
       builder: (context) => ConnectionDialog(
         controller: connectionController,
-        oauthController: discordOAuthController,
+        accountController: accountController,
       ),
     );
   }

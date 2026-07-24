@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
+import 'application/discord_account_connection_controller.dart';
 import 'application/discord_friends_controller.dart';
 import 'application/discord_oauth_controller.dart';
 import 'application/discord_social_dm_controller.dart';
@@ -38,6 +39,7 @@ import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'data/secure_discord_oauth_vault.dart';
 import 'presentation/flucord_shell.dart';
+import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
 import 'presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'presentation/widgets/discord_social_dm_scope.dart';
@@ -124,6 +126,8 @@ class FlucordApp extends StatefulWidget {
 class _FlucordAppState extends State<FlucordApp> {
   late final ChatController _chatController;
   late final ConnectionController _connectionController;
+  late final DiscordAccountConnectionController
+  _discordAccountConnectionController;
   late final DiscordFriendsController _discordFriendsController;
   late final DiscordOAuthController _discordOAuthController;
   late final DiscordSocialDmController _discordSocialDmController;
@@ -164,6 +168,10 @@ class _FlucordAppState extends State<FlucordApp> {
     final socialSdkGateway =
         widget.discordSocialSdkGateway ?? NativeDiscordSocialSdkGateway();
     _discordSocialSdkController = DiscordSocialSdkController(socialSdkGateway);
+    _discordAccountConnectionController = DiscordAccountConnectionController(
+      _discordOAuthController,
+      _discordSocialSdkController,
+    );
     _discordFriendsController = DiscordFriendsController(socialSdkGateway);
     _discordSocialPresenceController = DiscordSocialPresenceController(
       socialSdkGateway is DiscordSocialPresenceGateway
@@ -218,6 +226,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.dispose();
     _connectionController.dispose();
     _oauthGuildMembershipController.dispose();
+    _discordAccountConnectionController.dispose();
     _discordOAuthController.dispose();
     _discordSocialSdkController.dispose();
     _discordFriendsController.dispose();
@@ -268,29 +277,32 @@ class _FlucordAppState extends State<FlucordApp> {
         theme: FlucordTheme.light,
         darkTheme: FlucordTheme.dark,
         themeMode: _workspaceController.themeMode,
-        home: DiscordSocialSdkScope(
-          controller: _discordSocialSdkController,
-          child: DiscordSocialPresenceScope(
-            controller: _discordSocialPresenceController,
-            child: DiscordSocialDmNavigationScope(
-              controller: _discordSocialDmNavigationController,
-              child: DiscordSocialDmScope(
-                controller: _discordSocialDmController,
-                child: DiscordFriendsScope(
-                  controller: _discordFriendsController,
-                  child: FlucordShell(
-                    chatController: _chatController,
-                    connectionController: _connectionController,
-                    discordOAuthController: _discordOAuthController,
-                    oauthGuildDirectoryController:
-                        _oauthGuildDirectoryController,
-                    oauthGuildMembershipController:
-                        _oauthGuildMembershipController,
-                    workspaceController: _workspaceController,
-                    voiceController: _voiceController,
-                    voiceMessageRecorder: widget.voiceMessageRecorder,
-                    attachmentDownloadService: _attachmentDownloadService,
-                    externalLinkLauncher: _externalLinkLauncher,
+        home: DiscordAccountConnectionScope(
+          controller: _discordAccountConnectionController,
+          child: DiscordSocialSdkScope(
+            controller: _discordSocialSdkController,
+            child: DiscordSocialPresenceScope(
+              controller: _discordSocialPresenceController,
+              child: DiscordSocialDmNavigationScope(
+                controller: _discordSocialDmNavigationController,
+                child: DiscordSocialDmScope(
+                  controller: _discordSocialDmController,
+                  child: DiscordFriendsScope(
+                    controller: _discordFriendsController,
+                    child: FlucordShell(
+                      chatController: _chatController,
+                      connectionController: _connectionController,
+                      discordOAuthController: _discordOAuthController,
+                      oauthGuildDirectoryController:
+                          _oauthGuildDirectoryController,
+                      oauthGuildMembershipController:
+                          _oauthGuildMembershipController,
+                      workspaceController: _workspaceController,
+                      voiceController: _voiceController,
+                      voiceMessageRecorder: widget.voiceMessageRecorder,
+                      attachmentDownloadService: _attachmentDownloadService,
+                      externalLinkLauncher: _externalLinkLauncher,
+                    ),
                   ),
                 ),
               ),

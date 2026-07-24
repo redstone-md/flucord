@@ -4,6 +4,8 @@ import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_social_sdk.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
 
 void main() {
@@ -23,7 +25,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Discord account'), findsOneWidget);
-    expect(find.text('No Discord account linked.'), findsOneWidget);
+    expect(find.text('No Discord account connected.'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('link-discord-account')));
     await tester.pumpAndSettle();
 
@@ -47,7 +49,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('unlink-discord-account')));
     await tester.pumpAndSettle();
 
-    expect(find.text('No Discord account linked.'), findsOneWidget);
+    expect(find.text('No Discord account connected.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('discord-oauth-guild-directory')),
       findsNothing,
@@ -106,6 +108,42 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('one account action connects and disconnects both grants', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final oauthGateway = _OAuthGateway();
+    final socialGateway = _SocialGateway();
+
+    await tester.pumpWidget(
+      FlucordApp.demo(
+        discordOAuthAccountGateway: oauthGateway,
+        discordSocialSdkGateway: socialGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-connections')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('link-discord-account')));
+    await tester.pumpAndSettle();
+
+    expect(oauthGateway.authorizeCalls, 1);
+    expect(socialGateway.authorizeCalls, 1);
+    expect(
+      find.text('Jack · 2 servers · Friends and DMs connected'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('unlink-discord-account')));
+    await tester.pumpAndSettle();
+
+    expect(oauthGateway.clearCalls, 1);
+    expect(socialGateway.disconnectCalls, 1);
+    expect(find.text('No Discord account connected.'), findsOneWidget);
   });
 
   testWidgets('reveals bot credentials only in an explicit developer build', (
@@ -288,4 +326,35 @@ final class _DesktopIntegration implements DesktopIntegration {
 
   @override
   Future<void> initialize() async {}
+}
+
+final class _SocialGateway implements DiscordSocialSdkGateway {
+  int authorizeCalls = 0;
+  int disconnectCalls = 0;
+
+  @override
+  Future<DiscordSocialSdkAuthentication> authorize() async {
+    authorizeCalls++;
+    return DiscordSocialSdkAuthentication.ready;
+  }
+
+  @override
+  Future<DiscordSocialSdkAvailability> checkAvailability() async =>
+      DiscordSocialSdkAvailability.ready;
+
+  @override
+  Future<void> disconnect() async => disconnectCalls++;
+
+  @override
+  Future<List<DiscordRelationship>> fetchRelationships() async => const [];
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      DiscordSocialSdkAuthentication.signedOut;
+
+  @override
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  }) async {}
 }

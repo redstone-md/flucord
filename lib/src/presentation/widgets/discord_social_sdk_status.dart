@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_social_sdk.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_account_connection_scope.dart';
 import 'discord_social_sdk_scope.dart';
 
 class DiscordSocialSdkStatusPanel extends StatelessWidget {
@@ -11,6 +12,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = DiscordSocialSdkScope.of(context);
+    final accountController = DiscordAccountConnectionScope.maybeOf(context);
     final presentation = _presentation(controller);
     return Container(
       key: const ValueKey('discord-social-sdk-status'),
@@ -66,7 +68,8 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 8),
                     child: FilledButton(
                       key: const ValueKey('discord-social-sdk-authorize'),
-                      onPressed: controller.authorize,
+                      onPressed:
+                          accountController?.connect ?? controller.authorize,
                       child: const Text('Connect Discord'),
                     ),
                   ),
@@ -75,8 +78,10 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 8),
                     child: OutlinedButton(
                       key: const ValueKey('discord-social-sdk-disconnect'),
-                      onPressed: controller.disconnect,
-                      child: const Text('Disconnect social session'),
+                      onPressed:
+                          accountController?.disconnect ??
+                          controller.disconnect,
+                      child: const Text('Disconnect Discord'),
                     ),
                   ),
               ],

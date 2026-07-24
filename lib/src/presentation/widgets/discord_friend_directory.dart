@@ -6,6 +6,7 @@ import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friend_actions.dart';
+import 'discord_account_connection_scope.dart';
 import 'discord_friends_scope.dart';
 import 'discord_social_sdk_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
@@ -19,6 +20,7 @@ class DiscordFriendDirectory extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = DiscordFriendsScope.of(context);
     final socialController = DiscordSocialSdkScope.of(context);
+    final accountController = DiscordAccountConnectionScope.maybeOf(context);
     final dmController = DiscordSocialDmScope.of(context);
     final dmNavigation = DiscordSocialDmNavigationScope.of(context);
     return switch (controller.state) {
@@ -37,7 +39,7 @@ class DiscordFriendDirectory extends StatelessWidget {
             'Connect your Discord account through the native Social SDK to synchronize friends.',
         action: FilledButton(
           key: const ValueKey('discord-friends-authorize'),
-          onPressed: socialController.authorize,
+          onPressed: accountController?.connect ?? socialController.authorize,
           child: const Text('Connect Discord'),
         ),
       ),
