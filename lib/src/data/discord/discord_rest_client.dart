@@ -107,9 +107,8 @@ final class DiscordBearerAuthorization extends DiscordRestAuthorization {
 
 typedef DelayFunction = Future<void> Function(Duration duration);
 
-final class DiscordRestClient {
-  DiscordRestClient({
-    required this._authorization,
+final class DiscordHttpExecutor {
+  DiscordHttpExecutor({
     DiscordHttpTransport? transport,
     DelayFunction? delay,
     Uri? baseUri,
@@ -117,12 +116,82 @@ final class DiscordRestClient {
        _delay = delay ?? Future<void>.delayed,
        _baseUri = baseUri ?? Uri.parse('https://discord.com/api/v10');
 
-  static const _userAgent = 'Flucord/0.1.0 (native Flutter client)';
-
-  final DiscordRestAuthorization _authorization;
   final DiscordHttpTransport _transport;
   final DelayFunction _delay;
   final Uri _baseUri;
+
+  Future<Object?> execute(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    required Map<String, String> headers,
+    List<int>? body,
+  }) async {
+    final uri = Uri.parse(
+      '${_baseUri.toString()}$path',
+    ).replace(queryParameters: query);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final response = await _transport.send(
+        method: method,
+        uri: uri,
+        headers: headers,
+        body: body,
+      );
+      final payload = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
+        await _delay(_retryAfter(payload, response.headers));
+        continue;
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw DiscordApiException(
+          statusCode: response.statusCode,
+          message: _errorMessage(payload),
+        );
+      }
+      return payload;
+    }
+    throw const DiscordApiException(
+      statusCode: 429,
+      message: 'Rate limit retry budget exhausted',
+    );
+  }
+
+  static Duration _retryAfter(Object? payload, Map<String, String> headers) {
+    num? seconds;
+    if (payload is Map) seconds = payload['retry_after'] as num?;
+    seconds ??= num.tryParse(headers['retry-after'] ?? '');
+    return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());
+  }
+
+  static String _errorMessage(Object? payload) {
+    if (payload is Map) {
+      for (final key in const ['message', 'error_description', 'error']) {
+        final value = payload[key];
+        if (value is String && value.isNotEmpty) return value;
+      }
+    }
+    return 'Request failed';
+  }
+
+  void close() => _transport.close();
+}
+
+final class DiscordRestClient {
+  DiscordRestClient({
+    required this._authorization,
+    DiscordHttpTransport? transport,
+    DelayFunction? delay,
+    Uri? baseUri,
+  }) : _executor = DiscordHttpExecutor(
+         transport: transport,
+         delay: delay,
+         baseUri: baseUri,
+       );
+
+  static const _userAgent = 'Flucord/0.1.0 (native Flutter client)';
+
+  final DiscordRestAuthorization _authorization;
+  final DiscordHttpExecutor _executor;
 
   Future<Map<String, Object?>> getObject(String path) =>
       requestObject('GET', path);
@@ -171,56 +240,20 @@ final class DiscordRestClient {
     Map<String, Object?>? body,
     List<int>? rawBody,
     String contentType = 'application/json',
-  }) async {
-    final uri = Uri.parse(
-      '${_baseUri.toString()}$path',
-    ).replace(queryParameters: query);
-    for (var attempt = 0; attempt < 3; attempt++) {
-      final response = await _transport.send(
-        method: method,
-        uri: uri,
-        headers: {
-          HttpHeaders.authorizationHeader: _authorization._headerValue,
-          HttpHeaders.acceptHeader: 'application/json',
-          HttpHeaders.contentTypeHeader: contentType,
-          HttpHeaders.userAgentHeader: _userAgent,
-        },
-        body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
-      );
-      final payload = response.body.isEmpty ? null : jsonDecode(response.body);
-      if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
-        await _delay(_retryAfter(payload, response.headers));
-        continue;
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw DiscordApiException(
-          statusCode: response.statusCode,
-          message: _errorMessage(payload),
-        );
-      }
-      return payload;
-    }
-    throw const DiscordApiException(
-      statusCode: 429,
-      message: 'Rate limit retry budget exhausted',
-    );
-  }
+  }) => _executor.execute(
+    method,
+    path,
+    query: query,
+    headers: {
+      HttpHeaders.authorizationHeader: _authorization._headerValue,
+      HttpHeaders.acceptHeader: 'application/json',
+      HttpHeaders.contentTypeHeader: contentType,
+      HttpHeaders.userAgentHeader: _userAgent,
+    },
+    body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
+  );
 
-  static Duration _retryAfter(Object? payload, Map<String, String> headers) {
-    num? seconds;
-    if (payload is Map) seconds = payload['retry_after'] as num?;
-    seconds ??= num.tryParse(headers['retry-after'] ?? '');
-    return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());
-  }
-
-  static String _errorMessage(Object? payload) {
-    if (payload is Map && payload['message'] is String) {
-      return payload['message']! as String;
-    }
-    return 'Request failed';
-  }
-
-  void close() => _transport.close();
+  void close() => _executor.close();
 
   @override
   String toString() => 'DiscordRestClient($_authorization)';

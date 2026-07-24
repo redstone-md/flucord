@@ -215,6 +215,11 @@ browser runtime or dependency on Discord's private user API.
     Bearer values behind one retry/rate-limit executor. Keep the full chat and
     `/gateway/bot` facade Bot-only, and add a scope- and expiry-gated OAuth
     identity tracer for documented `/users/@me` and `/users/@me/guilds` access.
+41. Completed: add a native OAuth2 public-client lifecycle with PKCE S256,
+    state-bound `flucord://` callbacks, client-secret-free code exchange,
+    refresh-token rotation, a separate operating-system grant vault, restored
+    profile/server metadata, and a native connection surface that cannot be
+    mistaken for the Bot chat transport.
 
 ## Protocol safety
 

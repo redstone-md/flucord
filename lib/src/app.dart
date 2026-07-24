@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
+import 'application/discord_oauth_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
 import 'data/native_attachment_download_service.dart';
 import 'data/native_external_link_launcher.dart';
+import 'data/discord/discord_oauth_account_service.dart';
 import 'domain/attachment_download.dart';
+import 'domain/discord_oauth.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
@@ -17,6 +20,7 @@ import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
+import 'data/secure_discord_oauth_vault.dart';
 import 'presentation/flucord_shell.dart';
 import 'platform/desktop_integration.dart';
 import 'theme/flucord_theme.dart';
@@ -30,6 +34,7 @@ class FlucordApp extends StatefulWidget {
     this.voiceMessageRecorder,
     this.attachmentDownloadService,
     this.externalLinkLauncher,
+    this.discordOAuthAccountGateway,
     super.key,
   });
 
@@ -40,6 +45,7 @@ class FlucordApp extends StatefulWidget {
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService? attachmentDownloadService;
   final ExternalLinkLauncher? externalLinkLauncher;
+  final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -48,9 +54,11 @@ class FlucordApp extends StatefulWidget {
 class _FlucordAppState extends State<FlucordApp> {
   late final ChatController _chatController;
   late final ConnectionController _connectionController;
+  late final DiscordOAuthController _discordOAuthController;
   late final WorkspaceController _workspaceController;
   late final VoiceController _voiceController;
   late final AttachmentDownloadService _attachmentDownloadService;
+  late final ExternalLinkLauncher _externalLinkLauncher;
 
   @override
   void initState() {
@@ -60,6 +68,16 @@ class _FlucordAppState extends State<FlucordApp> {
       _chatController,
       const SecureCredentialVault(),
       const DiscordBotRepositoryFactory(),
+    );
+    _externalLinkLauncher =
+        widget.externalLinkLauncher ?? const NativeExternalLinkLauncher();
+    _discordOAuthController = DiscordOAuthController(
+      widget.discordOAuthAccountGateway ??
+          NativeDiscordOAuthAccountService(
+            configuration: DiscordOAuthConfiguration.fromEnvironment(),
+            launcher: _externalLinkLauncher,
+            vault: const SecureDiscordOAuthGrantVault(),
+          ),
     );
     _workspaceController = WorkspaceController();
     _attachmentDownloadService =
@@ -74,9 +92,13 @@ class _FlucordAppState extends State<FlucordApp> {
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
+      onProtocolUri: (uri) {
+        unawaited(_discordOAuthController.handleProtocolUri(uri));
+      },
     );
     _chatController.load();
     _connectionController.initialize();
+    _discordOAuthController.initialize();
   }
 
   @override
@@ -85,6 +107,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.removeListener(_syncVoiceSignaling);
     _chatController.dispose();
     _connectionController.dispose();
+    _discordOAuthController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
@@ -110,12 +133,12 @@ class _FlucordAppState extends State<FlucordApp> {
         home: FlucordShell(
           chatController: _chatController,
           connectionController: _connectionController,
+          discordOAuthController: _discordOAuthController,
           workspaceController: _workspaceController,
           voiceController: _voiceController,
           voiceMessageRecorder: widget.voiceMessageRecorder,
           attachmentDownloadService: _attachmentDownloadService,
-          externalLinkLauncher:
-              widget.externalLinkLauncher ?? const NativeExternalLinkLauncher(),
+          externalLinkLauncher: _externalLinkLauncher,
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/connection_controller.dart';
+import '../application/discord_oauth_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
@@ -42,6 +43,7 @@ class FlucordShell extends StatelessWidget {
   const FlucordShell({
     required this.chatController,
     required this.connectionController,
+    required this.discordOAuthController,
     required this.workspaceController,
     required this.voiceController,
     required this.voiceMessageRecorder,
@@ -52,6 +54,7 @@ class FlucordShell extends StatelessWidget {
 
   final ChatController chatController;
   final ConnectionController connectionController;
+  final DiscordOAuthController discordOAuthController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final VoiceMessageRecorder? voiceMessageRecorder;

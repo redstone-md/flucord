@@ -27,6 +27,8 @@ final class WindowsDesktopIntegration
   WorkspaceController? _workspaceController;
   StreamSubscription<MessageUpsertedEvent>? _messageSubscription;
   ChannelLink? _pendingLink;
+  Uri? _pendingProtocolUri;
+  void Function(Uri uri)? _protocolUriHandler;
   bool _windowReady = false;
   bool _notifierReady = false;
   bool _trayReady = false;
@@ -49,13 +51,20 @@ final class WindowsDesktopIntegration
   void attach({
     required ChatController chatController,
     required WorkspaceController workspaceController,
+    required void Function(Uri uri) onProtocolUri,
   }) {
     _chatController = chatController;
     _workspaceController = workspaceController;
+    _protocolUriHandler = onProtocolUri;
     chatController.addListener(_handleChatChanged);
     _messageSubscription = chatController.incomingMessages.listen(
       (event) => unawaited(_showMessageNotification(event)),
     );
+    final pendingProtocolUri = _pendingProtocolUri;
+    if (pendingProtocolUri != null) {
+      _pendingProtocolUri = null;
+      onProtocolUri(pendingProtocolUri);
+    }
     _handleChatChanged();
   }
 
@@ -89,7 +98,7 @@ final class WindowsDesktopIntegration
       _protocolReady = true;
       final initialUrl = await protocolHandler.getInitialUrl();
       if (initialUrl != null && initialUrl.isNotEmpty) {
-        _pendingLink = ChannelLink.tryParse(initialUrl);
+        _receiveProtocolUrl(initialUrl);
       }
     } catch (error) {
       _debugFailure('protocol handler', error);
@@ -259,7 +268,35 @@ final class WindowsDesktopIntegration
   @override
   void onProtocolUrlReceived(String url) {
     final link = ChannelLink.tryParse(url);
-    if (link != null) unawaited(_activateLink(link));
+    if (link != null) {
+      unawaited(_activateLink(link));
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != ChannelLink.scheme) return;
+    unawaited(_showWindow());
+    final handler = _protocolUriHandler;
+    if (handler == null) {
+      _pendingProtocolUri = uri;
+    } else {
+      handler(uri);
+    }
+  }
+
+  void _receiveProtocolUrl(String url) {
+    final link = ChannelLink.tryParse(url);
+    if (link != null) {
+      _pendingLink = link;
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != ChannelLink.scheme) return;
+    final handler = _protocolUriHandler;
+    if (handler == null) {
+      _pendingProtocolUri = uri;
+    } else {
+      handler(uri);
+    }
   }
 
   @override
@@ -312,6 +349,7 @@ final class WindowsDesktopIntegration
     if (_disposed) return;
     _disposed = true;
     _chatController?.removeListener(_handleChatChanged);
+    _protocolUriHandler = null;
     await _messageSubscription?.cancel();
     if (_protocolReady) protocolHandler.removeListener(this);
     if (_trayReady) {

@@ -4,7 +4,10 @@ extension _FlucordShellNavigation on FlucordShell {
   void _openConnections(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (context) => ConnectionDialog(controller: connectionController),
+      builder: (context) => ConnectionDialog(
+        controller: connectionController,
+        oauthController: discordOAuthController,
+      ),
     );
   }
 

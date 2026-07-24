@@ -183,6 +183,15 @@ Gateway events and restored from the SQLite v7 cache. Member profiles retain
 the guild avatar, presence and role context, expose a copyable user ID, dismiss
 with Escape or an outside click, and disable messaging the current bot user.
 
+Flucord can separately link a normal Discord identity through the documented
+OAuth2 public-client flow. Authorization opens the operating system browser;
+the application itself remains native and contains no WebView or browser
+runtime. PKCE S256 and a random `state` protect the callback, and the rotating
+refresh grant is stored in the operating-system credential vault. The linked
+profile and basic server directory remain separate from the Bot chat session
+because ordinary OAuth scopes do not grant channel-message or user Gateway
+access.
+
 ## Run
 
 ```powershell
@@ -214,6 +223,31 @@ requires the PulseAudio utilities and FFmpeg available to the desktop session.
 5. Enter the bot token. When remembering it, Flucord stores a versioned session
    credential through the operating-system vault rather than SQLite or logs.
    Existing Windows `discord_bot_token` records migrate on the next connection.
+
+## Link a Discord account
+
+1. In the Discord Developer Portal, enable **Public Client** for the
+   application.
+2. Register this exact OAuth2 redirect URI:
+
+   ```text
+   flucord://oauth/discord/callback
+   ```
+
+3. Build or run Flucord with the public application ID. No client secret is
+   included in the desktop binary:
+
+   ```powershell
+   flutter run -d windows `
+     --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
+   ```
+
+4. Open Connections and select **Link account**. Flucord requests only
+   `identify` and `guilds`, then shows the linked identity and server count.
+
+This link does not turn OAuth into a full-chat transport. Message history,
+normal user Direct Messages, read state, and a user Gateway session remain
+outside Discord's documented third-party OAuth contract.
 
 Flucord uses documented bot authorization, an explicit user agent, Gateway
 intents, heartbeat/resume, and REST rate-limit retries. It deliberately does
@@ -414,6 +448,10 @@ instance:
 ```text
 flucord://channels/{serverId}/{channelId}
 ```
+
+The same registered protocol receives the state-validated OAuth callback at
+`flucord://oauth/discord/callback`; channel navigation and authorization are
+parsed as separate routes.
 
 Incoming messages raise native Windows notifications while Flucord is not
 focused. Their native preview describes system events and falls back to poll,

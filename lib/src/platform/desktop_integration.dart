@@ -7,6 +7,7 @@ abstract interface class DesktopIntegration {
   void attach({
     required ChatController chatController,
     required WorkspaceController workspaceController,
+    required void Function(Uri uri) onProtocolUri,
   });
 
   Future<void> dispose();

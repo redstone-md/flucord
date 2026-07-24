@@ -17,8 +17,12 @@ ConnectionController
   -> DiscordApiClient (Bot-only) + DiscordGatewayClient (Bot-only)
 
 DiscordOAuthUserSession
-  -> DiscordOAuthIdentityClient
-  -> DiscordRestClient (Bearer authorization)
+  <- NativeDiscordOAuthAccountService
+     <- system browser authorization + PKCE S256
+     <- flucord://oauth/discord/callback + state validation
+     <- public-client code exchange / refresh rotation
+     <- operating-system OAuth grant vault
+  -> DiscordOAuthIdentityClient (Bearer authorization)
   -> /users/@me + /users/@me/guilds only
 ```
 
@@ -61,9 +65,17 @@ to a user's channel history. Flucord also does not infer chat access from
 - The legacy `discord_bot_token` key remains readable and is deleted after the
   next successful versioned write.
 - OAuth access tokens are not persisted by the Bot credential codec. The OAuth
-  identity adapter rejects expired sessions and missing scopes before network
-  access. A future authorization-code subsystem must still own login, expiry
-  scheduling, refresh-token rotation, revocation, and secure persistence.
+  account service uses a separate versioned grant record containing the access
+  token, rotated refresh token, granted scopes, and expiry. It refreshes before
+  identity access and writes the replacement grant through the operating-system
+  credential vault.
+- The native public-client flow generates a fresh PKCE verifier and random
+  `state` for every attempt. The token exchange sends `client_id`, never embeds
+  a client secret, and accepts the callback only on the exact registered
+  `flucord://oauth/discord/callback` route.
+- Widgets and application controllers see only `DiscordOAuthAccount` profile
+  metadata. Access tokens, refresh tokens, authorization codes, and the PKCE
+  verifier remain inside data-layer services and the credential vault.
 
 ## Adapter requirements
 
