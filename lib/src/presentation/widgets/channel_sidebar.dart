@@ -5,6 +5,7 @@ import '../../domain/chat_repository.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'account_panel.dart';
+import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 
 class ChannelSidebar extends StatelessWidget {
@@ -19,6 +20,10 @@ class ChannelSidebar extends StatelessWidget {
     required this.collapsedCategoryIds,
     required this.onToggleCategory,
     required this.onNewDirectMessage,
+    this.scheduledEventCount = 0,
+    this.isLoadingScheduledEvents = false,
+    this.scheduledEventsError,
+    this.onOpenEvents,
     super.key,
   });
 
@@ -32,6 +37,10 @@ class ChannelSidebar extends StatelessWidget {
   final Set<String> collapsedCategoryIds;
   final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
+  final int scheduledEventCount;
+  final bool isLoadingScheduledEvents;
+  final Object? scheduledEventsError;
+  final VoidCallback? onOpenEvents;
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +137,10 @@ class ChannelSidebar extends StatelessWidget {
     final categories = [...workspace.categoriesFor(space.id)]
       ..sort((left, right) => left.position.compareTo(right.position));
     if (categories.isEmpty) {
-      return _uncategorizedEntries(regularChannels, threads);
+      return [
+        ..._eventEntries(),
+        ..._uncategorizedEntries(regularChannels, threads),
+      ];
     }
     final categoryIds = categories.map((category) => category.id).toSet();
     final uncategorized = _ordered(
@@ -138,6 +150,7 @@ class ChannelSidebar extends StatelessWidget {
       ),
     );
     return [
+      ..._eventEntries(),
       if (uncategorized.isNotEmpty) ...[
         const _SectionLabel(label: 'Channels'),
         for (final channel in uncategorized) _rowFor(channel),
@@ -162,6 +175,23 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in _ordered(threads))
           _rowFor(channel, indented: true),
       ],
+    ];
+  }
+
+  List<Widget> _eventEntries() {
+    if (scheduledEventCount == 0 &&
+        !isLoadingScheduledEvents &&
+        scheduledEventsError == null) {
+      return const [];
+    }
+    return [
+      GuildEventsSidebarButton(
+        count: scheduledEventCount,
+        isLoading: isLoadingScheduledEvents,
+        hasError: scheduledEventsError != null,
+        onPressed: onOpenEvents ?? () {},
+      ),
+      const SizedBox(height: 10),
     ];
   }
 

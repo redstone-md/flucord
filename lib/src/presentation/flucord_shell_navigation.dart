@@ -28,6 +28,29 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
+  Future<void> _openScheduledEvents(
+    BuildContext context,
+    CommunitySpace space,
+  ) async {
+    final channelId = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.58),
+      builder: (_) => ListenableBuilder(
+        listenable: chatController,
+        builder: (dialogContext, _) => GuildScheduledEventsDialog(
+          space: space,
+          workspace: chatController.workspace!,
+          events: chatController.scheduledEventsFor(space.id),
+          isLoading: chatController.isLoadingScheduledEvents(space.id),
+          error: chatController.scheduledEventsError(space.id),
+          onRefresh: () => chatController.loadScheduledEvents(space.id),
+        ),
+      ),
+    );
+    if (channelId == null || !context.mounted) return;
+    _openDestination(spaceId: space.id, channelId: channelId);
+  }
+
   void _openQuickSwitcherDestination(QuickSwitcherDestination destination) =>
       _openDestination(
         spaceId: destination.spaceId,

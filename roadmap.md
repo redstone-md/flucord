@@ -159,6 +159,10 @@ browser runtime or dependency on Discord's private user API.
     items, synchronize catalog replacements through `GUILD_STICKERS_UPDATE`,
     send up to three guild sticker IDs through Create Message, and expose a
     searchable native picker plus browser-free inline rendering.
+29. Completed: load documented guild scheduled events with subscriber counts,
+    persist them in SQLite v16, apply create/update/delete and subscriber
+    Gateway events live, and expose a native server-level Events surface with
+    direct navigation to associated voice and stage channels.
 
 ## Protocol safety
 

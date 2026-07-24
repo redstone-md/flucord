@@ -47,6 +47,15 @@ assets render through Flutter's native image codec; Lottie JSON renders through
 the native cross-platform Lottie canvas. Both paths keep stable geometry plus
 loading and failure states without an embedded browser.
 
+Guild scheduled events load through the documented REST route with subscriber
+counts and persist independently in SQLite. The `GUILD_SCHEDULED_EVENT_CREATE`,
+`UPDATE`, `DELETE`, `USER_ADD`, and `USER_REMOVE` Gateway dispatches update the
+server catalog live. A compact Events entry in the guild channel sidebar opens
+a native live/upcoming surface with stable loading, empty, and retry states;
+voice and stage events navigate directly to their associated native room while
+external events retain their documented location without inventing a private
+subscription mutation.
+
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the
@@ -225,6 +234,11 @@ restart. Poll-only Inbox mentions use the question as their native preview.
 SQLite v15 retains message sticker items and each guild's searchable sticker
 catalog. Gateway catalog replacement deletes stale rows for that guild before
 writing the new snapshot, while unrelated guild catalogs remain intact.
+
+SQLite v16 retains guild scheduled-event identity, location, associated
+channel, start/end time, entity type, lifecycle status, and subscriber count.
+Catalog refresh replaces only the selected guild, while Gateway updates use
+point writes and deletes so unrelated server events remain available offline.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

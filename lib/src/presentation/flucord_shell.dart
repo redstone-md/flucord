@@ -17,6 +17,7 @@ import 'widgets/create_forum_post_dialog.dart';
 import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/forum_channel_view.dart';
+import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
@@ -143,6 +144,15 @@ class FlucordShell extends StatelessWidget {
                               workspaceController.collapsedCategoryIds,
                           onToggleCategory: workspaceController.toggleCategory,
                           onNewDirectMessage: () => _openDirectMessage(context),
+                          scheduledEventCount: chatController
+                              .scheduledEventsFor(space.id)
+                              .length,
+                          isLoadingScheduledEvents: chatController
+                              .isLoadingScheduledEvents(space.id),
+                          scheduledEventsError: chatController
+                              .scheduledEventsError(space.id),
+                          onOpenEvents: () =>
+                              _openScheduledEvents(context, space),
                           onSelectChannel: (id) {
                             workspaceController.selectChannel(id);
                             chatController.openChannel(id);
