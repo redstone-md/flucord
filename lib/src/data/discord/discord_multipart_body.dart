@@ -56,6 +56,7 @@ final class DiscordMultipartBody {
       'webp' => 'image/webp',
       'txt' || 'log' || 'md' => 'text/plain',
       'pdf' => 'application/pdf',
+      'ogg' || 'opus' => 'audio/ogg',
       _ => 'application/octet-stream',
     };
   }

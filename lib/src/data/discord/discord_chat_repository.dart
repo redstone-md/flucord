@@ -13,6 +13,8 @@ import '../../domain/sticker_repository.dart';
 import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
+import '../../domain/voice_message_recorder.dart';
+import '../../domain/voice_message_repository.dart';
 import 'discord_api_client.dart';
 import 'discord_channel_handler.dart';
 import 'discord_direct_messages.dart';
@@ -35,6 +37,7 @@ part 'discord_chat_repository_polls.dart';
 part 'discord_chat_repository_reactions.dart';
 part 'discord_chat_repository_forwards.dart';
 part 'discord_chat_repository_stickers.dart';
+part 'discord_chat_repository_voice_messages.dart';
 part 'discord_chat_repository_scheduled_events.dart';
 
 final class DiscordChatRepository
@@ -44,6 +47,7 @@ final class DiscordChatRepository
         _DiscordChatRepositoryReactions,
         _DiscordChatRepositoryForwards,
         _DiscordChatRepositoryStickers,
+        _DiscordChatRepositoryVoiceMessages,
         _DiscordChatRepositoryScheduledEvents
     implements
         ChatRepository,
@@ -55,6 +59,7 @@ final class DiscordChatRepository
         MessageFlagRepository,
         ScheduledEventRepository,
         StickerRepository,
+        VoiceMessageRepository,
         VoiceSignalingService {
   DiscordChatRepository(
     this._api,

@@ -10,6 +10,8 @@ import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/voice_message_recorder.dart';
+import '../domain/voice_message_repository.dart';
 import 'mock_chat_seed.dart';
 
 part 'mock_chat_repository_mutations.dart';
@@ -18,6 +20,7 @@ part 'mock_chat_repository_reactions.dart';
 part 'mock_chat_repository_forwards.dart';
 part 'mock_chat_repository_message_flags.dart';
 part 'mock_chat_repository_stickers.dart';
+part 'mock_chat_repository_voice_messages.dart';
 part 'mock_chat_repository_scheduled_events.dart';
 part 'mock_chat_repository_direct_messages.dart';
 
@@ -28,6 +31,7 @@ final class MockChatRepository
         _MockChatRepositoryForwards,
         _MockChatRepositoryMessageFlags,
         _MockChatRepositoryStickers,
+        _MockChatRepositoryVoiceMessages,
         _MockChatRepositoryScheduledEvents,
         _MockChatRepositoryDirectMessages
     implements
@@ -39,7 +43,8 @@ final class MockChatRepository
         MessageForwardRepository,
         MessageFlagRepository,
         ScheduledEventRepository,
-        StickerRepository {
+        StickerRepository,
+        VoiceMessageRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = MockChatSeed.withSystemMessages(
         MockChatSeed.withForums(_seedWorkspace()),

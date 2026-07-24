@@ -13,6 +13,8 @@ import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
 import '../domain/voice_connection.dart';
+import '../domain/voice_message_recorder.dart';
+import '../domain/voice_message_repository.dart';
 import 'channel_activity_persistence.dart';
 
 part 'chat_controller_events.dart';
@@ -23,6 +25,7 @@ part 'chat_controller_reactions.dart';
 part 'chat_controller_forwards.dart';
 part 'chat_controller_message_flags.dart';
 part 'chat_controller_stickers.dart';
+part 'chat_controller_voice_messages.dart';
 part 'chat_controller_scheduled_events.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
