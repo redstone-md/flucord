@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_friend_actions.dart';
 import 'discord_friends_scope.dart';
 import 'remote_identity_image.dart';
 
@@ -44,6 +45,7 @@ class DiscordFriendDirectory extends StatelessWidget {
         ),
       ),
       DiscordFriendsLoadState.ready => _ReadyFriendDirectory(
+        controller: controller,
         relationships: controller.relationships,
       ),
     };
@@ -51,8 +53,12 @@ class DiscordFriendDirectory extends StatelessWidget {
 }
 
 class _ReadyFriendDirectory extends StatelessWidget {
-  const _ReadyFriendDirectory({required this.relationships});
+  const _ReadyFriendDirectory({
+    required this.controller,
+    required this.relationships,
+  });
 
+  final DiscordFriendsController controller;
   final List<DiscordRelationship> relationships;
 
   @override
@@ -84,6 +90,7 @@ class _ReadyFriendDirectory extends StatelessWidget {
           ),
         ),
         final DiscordRelationship relationship => _FriendRow(
+          controller: controller,
           relationship: relationship,
         ),
         _ => const SizedBox.shrink(),
@@ -129,13 +136,15 @@ class _ReadyFriendDirectory extends StatelessWidget {
 }
 
 class _FriendRow extends StatelessWidget {
-  const _FriendRow({required this.relationship});
+  const _FriendRow({required this.controller, required this.relationship});
 
+  final DiscordFriendsController controller;
   final DiscordRelationship relationship;
 
   @override
   Widget build(BuildContext context) {
     final user = relationship.user;
+    final mutationFailed = controller.mutationErrorFor(user.id) != null;
     return Semantics(
       label: '${user.displayName}, ${_relationshipDetail(relationship)}',
       child: Container(
@@ -165,32 +174,25 @@ class _FriendRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _relationshipDetail(relationship),
+                    mutationFailed
+                        ? 'Relationship action failed · Try again'
+                        : _relationshipDetail(relationship),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: context.surfaces.muted,
+                      color: mutationFailed
+                          ? FlucordColors.danger
+                          : context.surfaces.muted,
                       fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
-            if (relationship.kind == DiscordRelationshipKind.incomingRequest)
-              Icon(
-                Icons.mark_email_unread_outlined,
-                size: 17,
-                color: relationship.isSpamRequest
-                    ? FlucordColors.warning
-                    : context.surfaces.muted,
-              )
-            else if (relationship.kind ==
-                DiscordRelationshipKind.outgoingRequest)
-              Icon(
-                Icons.schedule_outlined,
-                size: 17,
-                color: context.surfaces.muted,
-              ),
+            DiscordFriendActions(
+              controller: controller,
+              relationship: relationship,
+            ),
           ],
         ),
       ),

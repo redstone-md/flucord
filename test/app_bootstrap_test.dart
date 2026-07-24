@@ -241,6 +241,12 @@ final class _ReadySocialGateway implements DiscordSocialSdkGateway {
       kind: DiscordRelationshipKind.friend,
     ),
   ];
+
+  @override
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  }) async {}
 }
 
 DiscordOAuthAccount _oauthAccount() => DiscordOAuthAccount(

@@ -279,6 +279,11 @@ browser runtime or dependency on Discord's private user API.
     The default runner returns an explicit unbundled error, while a linked
     runner returns authorization-required rather than fabricating relationships
     before SDK authentication is verified against the approved package.
+53. Completed: add typed Social SDK relationship mutations for accepting and
+    rejecting incoming requests, cancelling outgoing requests, removing
+    friends, and blocking users. Keep per-user pending and failure state in the
+    Friends controller, require confirmation for destructive actions, and keep
+    unsupported native builds explicit instead of applying local-only changes.
 
 ## Protocol safety
 

@@ -75,4 +75,10 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
 
   @override
   Future<List<DiscordRelationship>> fetchRelationships() async => const [];
+
+  @override
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  }) async {}
 }

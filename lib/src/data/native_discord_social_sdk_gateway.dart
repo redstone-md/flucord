@@ -6,7 +6,7 @@ import '../domain/discord_social_sdk.dart';
 import 'discord_social_relationship_mapper.dart';
 
 abstract interface class DiscordSocialSdkPlatformChannel {
-  Future<Object?> invoke(String method);
+  Future<Object?> invoke(String method, [Object? arguments]);
 }
 
 final class FlutterDiscordSocialSdkPlatformChannel
@@ -18,8 +18,8 @@ final class FlutterDiscordSocialSdkPlatformChannel
   final MethodChannel _channel;
 
   @override
-  Future<Object?> invoke(String method) =>
-      _channel.invokeMethod<Object?>(method);
+  Future<Object?> invoke(String method, [Object? arguments]) =>
+      _channel.invokeMethod<Object?>(method, arguments);
 }
 
 final class NativeDiscordSocialSdkGateway implements DiscordSocialSdkGateway {
@@ -71,6 +71,30 @@ final class NativeDiscordSocialSdkGateway implements DiscordSocialSdkGateway {
     }
   }
 
+  @override
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  }) async {
+    if (!_isSupportedPlatform) {
+      throw const DiscordSocialSdkException('unsupported_platform');
+    }
+    try {
+      await _channel.invoke('updateRelationship', {
+        'user_id': userId,
+        'action': _actionName(action),
+      });
+    } on MissingPluginException {
+      throw const DiscordSocialSdkException('unsupported_platform');
+    } on PlatformException catch (error) {
+      throw DiscordSocialSdkException(_safeCode(error.code));
+    } on DiscordSocialSdkException {
+      rethrow;
+    } on Object {
+      throw const DiscordSocialSdkException('channel_failure');
+    }
+  }
+
   bool get _isSupportedPlatform =>
       !kIsWeb &&
       (_targetPlatform ?? defaultTargetPlatform) == TargetPlatform.windows;
@@ -99,4 +123,13 @@ final class NativeDiscordSocialSdkGateway implements DiscordSocialSdkGateway {
         .replaceAll(RegExp(r'^_+|_+$'), '');
     return normalized.isEmpty ? 'unknown' : normalized;
   }
+
+  static String _actionName(DiscordRelationshipAction action) =>
+      switch (action) {
+        DiscordRelationshipAction.acceptRequest => 'accept_request',
+        DiscordRelationshipAction.rejectRequest => 'reject_request',
+        DiscordRelationshipAction.cancelRequest => 'cancel_request',
+        DiscordRelationshipAction.removeFriend => 'remove_friend',
+        DiscordRelationshipAction.blockUser => 'block_user',
+      };
 }

@@ -28,5 +28,18 @@ void main() {
         ),
       ),
     );
+    await expectLater(
+      gateway.updateRelationship(
+        userId: '123456789',
+        action: DiscordRelationshipAction.acceptRequest,
+      ),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
   });
 }

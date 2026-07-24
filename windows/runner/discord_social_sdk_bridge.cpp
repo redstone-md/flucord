@@ -49,6 +49,19 @@ DiscordSocialSdkBridge::DiscordSocialSdkBridge(
 #endif
           return;
         }
+        if (call.method_name() == "updateRelationship") {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+          result->Error(
+              "not_authenticated",
+              "Relationship mutations require an authenticated Discord "
+              "Social SDK account session.");
+#else
+          result->Error(
+              "sdk_not_bundled",
+              "The Discord Social SDK package is not linked into this build.");
+#endif
+          return;
+        }
         result->NotImplemented();
       });
 }

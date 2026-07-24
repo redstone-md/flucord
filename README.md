@@ -251,6 +251,13 @@ directory with separate pending, online, offline, loading, empty,
 authorization-required, and retry states. The default Windows runner rejects
 that method with `sdk_not_bundled`; a package-linked runner currently returns
 `not_authenticated`. Neither path invents data or falls back to Bot API.
+The same typed channel now accepts relationship mutations for incoming-request
+accept/reject, outgoing-request cancellation, Discord/game friend removal, and
+blocking. Actions are gated by the current relationship type, track pending and
+failure state per user, and update the visible directory only after the native
+operation succeeds. Remove and block require an explicit confirmation. Until
+the native Social SDK session is authenticated, the runner rejects mutations
+with the same honest transport error and never applies local-only changes.
 
 ## Run
 

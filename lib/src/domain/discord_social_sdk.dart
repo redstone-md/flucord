@@ -46,4 +46,9 @@ abstract interface class DiscordSocialSdkGateway {
   Future<DiscordSocialSdkAvailability> checkAvailability();
 
   Future<List<DiscordRelationship>> fetchRelationships();
+
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  });
 }

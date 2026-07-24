@@ -109,6 +109,28 @@ void main() {
       ),
     );
   });
+
+  test(
+    'maps typed relationship mutations to the native wire contract',
+    () async {
+      final channel = _Channel(null);
+      final gateway = NativeDiscordSocialSdkGateway(
+        channel,
+        TargetPlatform.windows,
+      );
+
+      await gateway.updateRelationship(
+        userId: '123456789012345678',
+        action: DiscordRelationshipAction.blockUser,
+      );
+
+      expect(channel.calls, ['updateRelationship']);
+      expect(channel.arguments.single, {
+        'user_id': '123456789012345678',
+        'action': 'block_user',
+      });
+    },
+  );
 }
 
 final class _Channel implements DiscordSocialSdkPlatformChannel {
@@ -119,10 +141,12 @@ final class _Channel implements DiscordSocialSdkPlatformChannel {
   final Object? _response;
   final Object? _error;
   final List<String> calls = [];
+  final List<Object?> arguments = [];
 
   @override
-  Future<Object?> invoke(String method) async {
+  Future<Object?> invoke(String method, [Object? arguments]) async {
     calls.add(method);
+    this.arguments.add(arguments);
     if (_error case final error?) throw error;
     return _response;
   }

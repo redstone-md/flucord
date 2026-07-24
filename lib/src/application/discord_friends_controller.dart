@@ -21,6 +21,8 @@ final class DiscordFriendsController extends ChangeNotifier {
 
   DiscordFriendsLoadState _state = DiscordFriendsLoadState.idle;
   List<DiscordRelationship> _relationships = const [];
+  final Set<String> _mutatingUserIds = {};
+  final Map<String, String> _mutationErrors = {};
   Future<void>? _inFlight;
   bool _sdkReady = false;
   bool _initialized = false;
@@ -29,6 +31,8 @@ final class DiscordFriendsController extends ChangeNotifier {
 
   DiscordFriendsLoadState get state => _state;
   List<DiscordRelationship> get relationships => _relationships;
+  bool isMutating(String userId) => _mutatingUserIds.contains(userId);
+  String? mutationErrorFor(String userId) => _mutationErrors[userId];
 
   void reconcileAvailability(DiscordSocialSdkAvailability? availability) {
     final sdkReady = availability?.isReady ?? false;
@@ -37,6 +41,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _initialized = false;
     _generation++;
     _inFlight = null;
+    _mutatingUserIds.clear();
+    _mutationErrors.clear();
     if (!sdkReady) {
       _relationships = const [];
       _state = DiscordFriendsLoadState.unavailable;
@@ -58,6 +64,42 @@ final class DiscordFriendsController extends ChangeNotifier {
 
   Future<void> retry() => _sdkReady ? _startLoad() : Future<void>.value();
 
+  Future<bool> updateRelationship(
+    DiscordRelationship relationship,
+    DiscordRelationshipAction action,
+  ) async {
+    final userId = relationship.user.id;
+    if (_disposed ||
+        _state != DiscordFriendsLoadState.ready ||
+        !relationship.supports(action) ||
+        _mutatingUserIds.contains(userId)) {
+      return false;
+    }
+    final generation = _generation;
+    _mutatingUserIds.add(userId);
+    _mutationErrors.remove(userId);
+    notifyListeners();
+    var succeeded = false;
+    try {
+      await _gateway.updateRelationship(userId: userId, action: action);
+      if (!_accepts(generation)) return false;
+      _applyConfirmedMutation(userId, action);
+      succeeded = true;
+    } on DiscordSocialSdkException catch (error) {
+      if (!_accepts(generation)) return false;
+      _mutationErrors[userId] = error.code;
+    } on Object {
+      if (!_accepts(generation)) return false;
+      _mutationErrors[userId] = 'mutation_failure';
+    } finally {
+      if (!_disposed && generation == _generation) {
+        _mutatingUserIds.remove(userId);
+        notifyListeners();
+      }
+    }
+    return succeeded;
+  }
+
   Future<void> _startLoad() {
     if (_disposed) return Future<void>.value();
     return _inFlight ??= _load().whenComplete(() => _inFlight = null);
@@ -73,6 +115,7 @@ final class DiscordFriendsController extends ChangeNotifier {
       _relationships = List.unmodifiable(
         <DiscordRelationship>[...relationships]..sort(_compareRelationships),
       );
+      _mutationErrors.clear();
       _state = DiscordFriendsLoadState.ready;
     } on DiscordSocialSdkException catch (error) {
       if (!_accepts(generation)) return;
@@ -94,6 +137,23 @@ final class DiscordFriendsController extends ChangeNotifier {
   bool _accepts(int generation) =>
       !_disposed && _sdkReady && generation == _generation;
 
+  void _applyConfirmedMutation(
+    String userId,
+    DiscordRelationshipAction action,
+  ) {
+    final updated = <DiscordRelationship>[];
+    for (final relationship in _relationships) {
+      if (relationship.user.id != userId) {
+        updated.add(relationship);
+      } else if (action == DiscordRelationshipAction.acceptRequest) {
+        updated.add(relationship.withKind(DiscordRelationshipKind.friend));
+      }
+    }
+    updated.sort(_compareRelationships);
+    _relationships = List.unmodifiable(updated);
+    _mutationErrors.remove(userId);
+  }
+
   static int _compareRelationships(
     DiscordRelationship left,
     DiscordRelationship right,
@@ -106,6 +166,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _relationships = const [];
+    _mutatingUserIds.clear();
+    _mutationErrors.clear();
     super.dispose();
   }
 }

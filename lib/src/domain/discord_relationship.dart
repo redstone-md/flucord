@@ -9,6 +9,14 @@ enum DiscordRelationshipKind {
 
 enum DiscordPresenceStatus { online, idle, doNotDisturb, offline, unknown }
 
+enum DiscordRelationshipAction {
+  acceptRequest,
+  rejectRequest,
+  cancelRequest,
+  removeFriend,
+  blockUser,
+}
+
 final class DiscordRelationshipUser {
   factory DiscordRelationshipUser({
     required String id,
@@ -82,6 +90,36 @@ final class DiscordRelationship {
   bool get isPending =>
       kind == DiscordRelationshipKind.incomingRequest ||
       kind == DiscordRelationshipKind.outgoingRequest;
+
+  bool supports(DiscordRelationshipAction action) => switch ((kind, action)) {
+    (
+      DiscordRelationshipKind.incomingRequest,
+      DiscordRelationshipAction.acceptRequest ||
+          DiscordRelationshipAction.rejectRequest ||
+          DiscordRelationshipAction.blockUser,
+    ) =>
+      true,
+    (
+      DiscordRelationshipKind.outgoingRequest,
+      DiscordRelationshipAction.cancelRequest ||
+          DiscordRelationshipAction.blockUser,
+    ) =>
+      true,
+    (
+      DiscordRelationshipKind.friend,
+      DiscordRelationshipAction.removeFriend ||
+          DiscordRelationshipAction.blockUser,
+    ) =>
+      true,
+    _ => false,
+  };
+
+  DiscordRelationship withKind(DiscordRelationshipKind nextKind) =>
+      DiscordRelationship(
+        user: user,
+        kind: nextKind,
+        isSpamRequest: isSpamRequest,
+      );
 }
 
 final class DiscordSocialSdkException implements Exception {

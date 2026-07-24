@@ -90,6 +90,7 @@ void main() {
         _relationship(
           id: 'compact-1',
           name: 'A very long Discord display name from the night shift',
+          kind: DiscordRelationshipKind.incomingRequest,
           status: DiscordPresenceStatus.doNotDisturb,
         ),
       ],
@@ -104,24 +105,110 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('accepts an incoming request from its native row actions', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [
+        _relationship(
+          id: 'request-1',
+          name: 'Ada',
+          kind: DiscordRelationshipKind.incomingRequest,
+        ),
+      ],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+
+    await tester.tap(
+      find.byKey(const ValueKey('discord-friend-accept-request-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      harness.gateway.mutations.single.action,
+      DiscordRelationshipAction.acceptRequest,
+    );
+    expect(find.text('PENDING — 1'), findsNothing);
+    expect(find.text('OFFLINE — 1'), findsOneWidget);
+  });
+
+  testWidgets('confirms removal before mutating a native friendship', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [_relationship(id: 'friend-1', name: 'Ada')],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+
+    await tester.tap(
+      find.byKey(const ValueKey('discord-friend-more-friend-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove Friend'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove Friend Ada?'), findsOneWidget);
+    expect(harness.gateway.mutations, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('confirm-relationship-action')));
+    await tester.pumpAndSettle();
+
+    expect(
+      harness.gateway.mutations.single.action,
+      DiscordRelationshipAction.removeFriend,
+    );
+    expect(find.byKey(const ValueKey('discord-friend-friend-1')), findsNothing);
+    expect(find.byKey(const ValueKey('discord-friends-empty')), findsOneWidget);
+  });
+
+  testWidgets('retains a request row when its native action fails', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [
+        _relationship(
+          id: 'request-1',
+          name: 'Ada',
+          kind: DiscordRelationshipKind.incomingRequest,
+        ),
+      ],
+      mutationError: 'rate_limited',
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness);
+
+    await tester.tap(
+      find.byKey(const ValueKey('discord-friend-reject-request-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('discord-friend-request-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Relationship action failed · Try again'), findsOneWidget);
+  });
 }
 
 Future<_ControllerHarness> _harnessFor(
   DiscordSocialSdkAvailability availability, {
   List<DiscordRelationship> relationships = const [],
   String? relationshipError,
+  String? mutationError,
 }) async {
-  final gateway = _SocialGateway(
-    availability,
-    relationships,
-    relationshipError,
-  );
+  final gateway = _SocialGateway(availability, relationships, relationshipError)
+    ..mutationError = mutationError;
   final social = DiscordSocialSdkController(gateway);
   final friends = DiscordFriendsController(gateway);
   await social.initialize();
   friends.reconcileAvailability(social.availability);
   await friends.initialize();
-  return _ControllerHarness(social, friends);
+  return _ControllerHarness(social, friends, gateway);
 }
 
 Future<void> _pumpAccountHome(
@@ -155,15 +242,14 @@ Future<void> _pumpAccountHome(
 }
 
 final class _SocialGateway implements DiscordSocialSdkGateway {
-  const _SocialGateway(
-    this.availability,
-    this.relationships,
-    this.relationshipError,
-  );
+  _SocialGateway(this.availability, this.relationships, this.relationshipError);
 
   final DiscordSocialSdkAvailability availability;
   final List<DiscordRelationship> relationships;
   final String? relationshipError;
+  final List<({String userId, DiscordRelationshipAction action})> mutations =
+      [];
+  String? mutationError;
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
@@ -176,13 +262,23 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
     }
     return relationships;
   }
+
+  @override
+  Future<void> updateRelationship({
+    required String userId,
+    required DiscordRelationshipAction action,
+  }) async {
+    mutations.add((userId: userId, action: action));
+    if (mutationError case final code?) throw DiscordSocialSdkException(code);
+  }
 }
 
 final class _ControllerHarness {
-  const _ControllerHarness(this.social, this.friends);
+  const _ControllerHarness(this.social, this.friends, this.gateway);
 
   final DiscordSocialSdkController social;
   final DiscordFriendsController friends;
+  final _SocialGateway gateway;
 
   void dispose() {
     social.dispose();
