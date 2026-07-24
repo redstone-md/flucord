@@ -37,6 +37,12 @@ or indeterminate progress and explicit cancellation. Flucord writes a sibling
 complete, and performs the final replacement only after byte-count validation;
 failures remain retryable on the attachment without leaving partial files.
 
+Image attachments open in a native browser-free lightbox that preserves the
+conversation behind it. The viewer supports mouse/trackpad pan and zoom,
+toolbar zoom/reset controls, double-click reset, Ctrl shortcuts, Escape close,
+compact-window geometry, loading and error states, and the same shared Save As
+transfer state as the message attachment.
+
 The composer emoji control opens an anchored native picker, searches common
 Unicode shortcodes and the selected server's documented custom emoji, and
 inserts the result at the current caret or selection. Guild emoji load through

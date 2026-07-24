@@ -199,6 +199,9 @@ browser runtime or dependency on Discord's private user API.
     retry, server-filename sanitization, sibling partial-file cleanup, and
     replacement that preserves an existing destination until the response is
     complete and its byte count has been validated.
+37. Completed: open image attachments in a native browser-free lightbox with
+    shared download state, pan, bounded zoom, reset, desktop shortcuts,
+    loading/error states, focus restoration, and compact-window geometry.
 
 ## Protocol safety
 
