@@ -130,6 +130,13 @@ Gateway poll-vote add/remove events update the cached counts live. Discord does
 not document a bot operation for casting a poll vote, so Flucord does not expose
 a voting control that would require a private user endpoint.
 
+Standard, reply, attachment, poll-only, and sticker-only sends carry a compact
+client nonce with Discord's documented `enforce_nonce` switch, preventing a
+retry from creating a duplicate message. A native composer toggle sends without
+raising push notifications through `SUPPRESS_NOTIFICATIONS`. Message hover
+actions can suppress or restore rich embeds through the documented Edit Message
+flags contract while preserving every unrelated and unknown flag bit.
+
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
 Documented bot Direct Messages can be opened by a recipient's numeric Discord
@@ -274,6 +281,10 @@ message snapshots, including content, timestamps, flags, attachments, embeds,
 stickers, mentions, and opaque component payloads. The v17 migration preserves
 existing references and supplies safe empty snapshot defaults.
 
+SQLite v19 retains each message's complete raw Discord flags. Fresh and partial
+Gateway payloads preserve unknown bits, silent-send state, and suppressed-embed
+state across live updates, restarts, and future flag additions.
+
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for
 interactive focus, while presence, warnings, and mentions use independent
@@ -318,8 +329,9 @@ output-device switching.
 
 The media path is implemented end to end, but real Discord interoperability
 still needs verification in an actual bot voice session before the project can
-claim production-ready calls. Screen capture is currently a local preview and
-is not sent to Discord.
+claim production-ready calls. Discord's public bot voice contract documents
+Opus audio transport but no outbound screen-video payload, so screen capture is
+currently a local preview and is not sent to Discord.
 
 ## Verify
 

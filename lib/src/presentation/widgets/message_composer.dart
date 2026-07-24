@@ -14,6 +14,7 @@ typedef SendMessageCallback =
       String body,
       List<PendingAttachment> attachments,
       String? replyToMessageId,
+      bool suppressNotifications,
     );
 
 class MessageComposer extends StatefulWidget {
@@ -57,6 +58,7 @@ class _MessageComposerState extends State<MessageComposer> {
   final FocusNode _focusNode = FocusNode();
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
   bool _hasContent = false;
+  bool _suppressNotifications = false;
 
   bool get _canSend => _hasContent || _attachments.isNotEmpty;
 
@@ -67,6 +69,7 @@ class _MessageComposerState extends State<MessageComposer> {
       _controller.clear();
       _attachments.clear();
       _hasContent = false;
+      _suppressNotifications = false;
     }
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
       _focusNode.requestFocus();
@@ -106,12 +109,14 @@ class _MessageComposerState extends State<MessageComposer> {
       _controller.text,
       _attachments.items,
       widget.replyTo?.id,
+      _suppressNotifications,
     );
     if (!mounted || !sent) return;
     _controller.clear();
     setState(() {
       _hasContent = false;
       _attachments.clear();
+      _suppressNotifications = false;
     });
     _focusNode.requestFocus();
   }
@@ -181,7 +186,7 @@ class _MessageComposerState extends State<MessageComposer> {
                     tooltip: 'Add attachment',
                   ),
                   suffixIconConstraints: const BoxConstraints.tightFor(
-                    width: 192,
+                    width: 240,
                     height: 48,
                   ),
                   suffixIcon: Row(
@@ -207,6 +212,33 @@ class _MessageComposerState extends State<MessageComposer> {
                         onPressed: widget.isSending ? null : _showPollDialog,
                         icon: const Icon(Icons.poll_outlined, size: 19),
                         tooltip: 'Create poll',
+                      ),
+                      IconButton(
+                        key: const ValueKey('send-silently'),
+                        constraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
+                        padding: EdgeInsets.zero,
+                        isSelected: _suppressNotifications,
+                        onPressed: widget.isSending
+                            ? null
+                            : () => setState(
+                                () => _suppressNotifications =
+                                    !_suppressNotifications,
+                              ),
+                        icon: const Icon(
+                          Icons.notifications_outlined,
+                          size: 19,
+                        ),
+                        selectedIcon: const Icon(
+                          Icons.notifications_off_outlined,
+                          size: 19,
+                          color: FlucordColors.brand,
+                        ),
+                        tooltip: _suppressNotifications
+                            ? 'Send with notifications'
+                            : 'Send silently',
                       ),
                       if (widget.isSending)
                         const SizedBox.square(

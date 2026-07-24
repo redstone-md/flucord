@@ -28,6 +28,7 @@ class MessageList extends StatefulWidget {
     required this.onTogglePin,
     required this.onEndPoll,
     required this.onForward,
+    required this.onToggleSuppressEmbeds,
     required this.canLoadOlder,
     required this.isLoadingOlder,
     required this.olderLoadError,
@@ -51,6 +52,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
+  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final bool canLoadOlder;
   final bool isLoadingOlder;
   final Object? olderLoadError;
@@ -397,6 +399,7 @@ class _MessageListState extends State<MessageList> {
                           onTogglePin: widget.onTogglePin,
                           onEndPoll: widget.onEndPoll,
                           onForward: widget.onForward,
+                          onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                           linkLauncher: widget.externalLinkLauncher,
                           onSelectChannel: widget.onSelectChannel,
                         ),

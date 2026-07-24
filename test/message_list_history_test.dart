@@ -152,6 +152,7 @@ Widget _host(
           onTogglePin: (_) async {},
           onEndPoll: (_) async => true,
           onForward: (_, _) async => true,
+          onToggleSuppressEmbeds: (_) async => true,
           canLoadOlder: true,
           isLoadingOlder: isLoadingOlder,
           olderLoadError: olderLoadError,

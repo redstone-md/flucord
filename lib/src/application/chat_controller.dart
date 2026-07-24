@@ -6,6 +6,7 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/message_forward_repository.dart';
+import '../domain/message_flag_repository.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
@@ -20,6 +21,7 @@ part 'chat_controller_forums.dart';
 part 'chat_controller_polls.dart';
 part 'chat_controller_reactions.dart';
 part 'chat_controller_forwards.dart';
+part 'chat_controller_message_flags.dart';
 part 'chat_controller_stickers.dart';
 part 'chat_controller_scheduled_events.dart';
 
@@ -306,6 +308,7 @@ final class ChatController extends ChangeNotifier {
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    bool suppressNotifications = false,
   }) async {
     final workspace = _workspace;
     final content = body.trim();
@@ -324,6 +327,7 @@ final class ChatController extends ChangeNotifier {
         body: content,
         attachments: attachments,
         replyToMessageId: replyToMessageId,
+        suppressNotifications: suppressNotifications,
       );
       _workspace = _workspace?.upsertMessage(message);
       _workspace = _workspace?.clearChannelUnreadBoundary(channelId);

@@ -50,6 +50,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onTogglePin,
     required this.onEndPoll,
     required this.onForward,
+    required this.onToggleSuppressEmbeds,
     required this.onTyping,
     required this.voiceController,
   });
@@ -102,6 +103,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
+  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final VoidCallback onTyping;
   final VoiceController voiceController;
 
@@ -162,6 +164,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onTogglePin: widget.onTogglePin,
         onEndPoll: widget.onEndPoll,
         onForward: widget.onForward,
+        onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
         canLoadOlder: widget.canLoadOlder,
         isLoadingOlder: widget.isLoadingOlder,
         olderLoadError: widget.olderLoadError,
@@ -215,15 +218,22 @@ class _ConversationPaneState extends State<_ConversationPane> {
             onTyping: widget.onTyping,
             onCreatePoll: widget.onCreatePoll,
             onSendStickers: widget.onSendStickers,
-            onSend: (body, attachments, replyToMessageId) async {
-              final sent = await widget.onSend(
-                body,
-                attachments,
-                replyToMessageId,
-              );
-              if (mounted && sent) setState(() => _replyTo = null);
-              return sent;
-            },
+            onSend:
+                (
+                  body,
+                  attachments,
+                  replyToMessageId,
+                  suppressNotifications,
+                ) async {
+                  final sent = await widget.onSend(
+                    body,
+                    attachments,
+                    replyToMessageId,
+                    suppressNotifications,
+                  );
+                  if (mounted && sent) setState(() => _replyTo = null);
+                  return sent;
+                },
           ),
       ],
     );

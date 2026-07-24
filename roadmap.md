@@ -176,6 +176,10 @@ browser runtime or dependency on Discord's private user API.
     supported messages through the documented Create Message reference into a
     searchable text/DM/thread destination with loading, failure, and direct
     navigation states.
+33. Completed: retain documented message flags in SQLite v19, enforce
+    idempotent Create Message nonces, expose native silent sending through
+    `SUPPRESS_NOTIFICATIONS`, and suppress or restore embeds through the
+    documented Edit Message flags contract.
 
 ## Protocol safety
 

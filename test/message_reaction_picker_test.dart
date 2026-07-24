@@ -49,6 +49,7 @@ void main() {
                 onTogglePin: (_) async {},
                 onEndPoll: (_) async => true,
                 onForward: (_, _) async => true,
+                onToggleSuppressEmbeds: (_) async => true,
                 linkLauncher: const _TestLinkLauncher(),
                 onSelectChannel: (_) {},
               ),

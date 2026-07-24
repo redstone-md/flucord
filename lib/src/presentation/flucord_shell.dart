@@ -289,12 +289,19 @@ class FlucordShell extends StatelessWidget {
                                       return true;
                                     },
                                 onOpenInbox: () => _openInbox(context),
-                                onSend: (body, attachments, replyToMessageId) =>
-                                    chatController.sendMessage(
+                                onSend:
+                                    (
+                                      body,
+                                      attachments,
+                                      replyToMessageId,
+                                      suppressNotifications,
+                                    ) => chatController.sendMessage(
                                       channelId: channel.id,
                                       body: body,
                                       attachments: attachments,
                                       replyToMessageId: replyToMessageId,
+                                      suppressNotifications:
+                                          suppressNotifications,
                                     ),
                                 onCreatePoll: (poll) =>
                                     chatController.createPoll(
@@ -344,6 +351,8 @@ class FlucordShell extends StatelessWidget {
                                   );
                                   return true;
                                 },
+                                onToggleSuppressEmbeds:
+                                    chatController.toggleSuppressEmbeds,
                                 onTyping: () =>
                                     chatController.startTyping(channel.id),
                                 voiceController: voiceController,

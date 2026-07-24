@@ -36,6 +36,7 @@ class MessageItem extends StatefulWidget {
     required this.onTogglePin,
     required this.onEndPoll,
     required this.onForward,
+    required this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
     super.key,
@@ -56,6 +57,7 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
+  final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -207,17 +209,18 @@ class _MessageItemState extends State<MessageItem> {
             padding: const EdgeInsets.only(top: 7),
             child: MessageAttachmentView(attachment: attachment),
           ),
-        for (var index = 0; index < message.embeds.length; index++)
-          Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: MessageEmbedView(
-              key: ValueKey('message-${message.id}-embed-$index'),
-              embed: message.embeds[index],
-              workspace: widget.workspace,
-              linkLauncher: widget.linkLauncher,
-              onSelectChannel: widget.onSelectChannel,
+        if (!message.suppressesEmbeds)
+          for (var index = 0; index < message.embeds.length; index++)
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: MessageEmbedView(
+                key: ValueKey('message-${message.id}-embed-$index'),
+                embed: message.embeds[index],
+                workspace: widget.workspace,
+                linkLauncher: widget.linkLauncher,
+                onSelectChannel: widget.onSelectChannel,
+              ),
             ),
-          ),
         if (message.stickers.isNotEmpty)
           MessageStickerStrip(stickers: message.stickers),
         if (message.poll case final poll?)
@@ -353,6 +356,18 @@ class _MessageItemState extends State<MessageItem> {
             icon: Icons.forward_outlined,
             tooltip: 'Forward',
             onPressed: _showForwardDialog,
+          ),
+        if (widget.message.embeds.isNotEmpty || widget.message.suppressesEmbeds)
+          _ActionButton(
+            buttonKey: ValueKey('suppress-embeds-${widget.message.id}'),
+            icon: widget.message.suppressesEmbeds
+                ? Icons.link_outlined
+                : Icons.link_off_outlined,
+            tooltip: widget.message.suppressesEmbeds
+                ? 'Show embeds'
+                : 'Suppress embeds',
+            onPressed: () =>
+                unawaited(widget.onToggleSuppressEmbeds(widget.message)),
           ),
         if (widget.isCurrentUser)
           _ActionButton(
