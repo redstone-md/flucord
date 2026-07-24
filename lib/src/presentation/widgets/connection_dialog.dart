@@ -113,7 +113,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                       contentPadding: EdgeInsets.zero,
                       controlAffinity: ListTileControlAffinity.leading,
                       title: const Text(
-                        'Remember in Windows Credential Manager',
+                        'Remember in the system credential vault',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -241,7 +241,7 @@ class _CurrentConnection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = controller.mode == SessionMode.discordBot;
+    final connected = controller.mode == SessionMode.discord;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
       child: Row(
@@ -257,7 +257,9 @@ class _CurrentConnection extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              connected ? 'Discord bot connected' : 'Local workspace active',
+              connected
+                  ? '${controller.activeSession?.displayName ?? 'Discord'} connected'
+                  : 'Local workspace active',
               style: const TextStyle(fontSize: 12),
             ),
           ),

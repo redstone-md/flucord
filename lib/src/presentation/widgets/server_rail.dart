@@ -79,10 +79,10 @@ class ServerRail extends StatelessWidget {
             key: const ValueKey('open-connections'),
             onPressed: onOpenConnections,
             icon: Icon(
-              sessionMode == SessionMode.discordBot
+              sessionMode == SessionMode.discord
                   ? Icons.link
                   : Icons.link_outlined,
-              color: sessionMode == SessionMode.discordBot
+              color: sessionMode == SessionMode.discord
                   ? FlucordColors.brand
                   : null,
             ),

@@ -1,7 +1,9 @@
+import 'discord_session.dart';
+
 abstract interface class CredentialVault {
-  Future<String?> readDiscordBotToken();
+  Future<DiscordAccountSession?> readDiscordSession();
 
-  Future<void> writeDiscordBotToken(String token);
+  Future<void> writeDiscordSession(DiscordAccountSession session);
 
-  Future<void> clearDiscordBotToken();
+  Future<void> clearDiscordSession();
 }

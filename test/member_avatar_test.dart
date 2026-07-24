@@ -100,7 +100,7 @@ void main() {
                 onSelectSpace: (_) {},
                 onToggleTheme: () {},
                 onOpenConnections: () {},
-                sessionMode: SessionMode.discordBot,
+                sessionMode: SessionMode.discord,
                 isDark: true,
               ),
               ChannelSidebar(
@@ -108,7 +108,7 @@ void main() {
                 channels: const [],
                 selectedChannelId: null,
                 onSelectChannel: (_) {},
-                sessionMode: SessionMode.discordBot,
+                sessionMode: SessionMode.discord,
                 connectionStatus: RepositoryConnectionStatus.connected,
                 workspace: workspace,
                 collapsedCategoryIds: const {},

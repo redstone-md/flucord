@@ -20,7 +20,7 @@ void main() {
             onSelectSpace: (value) => selectedSpace = value,
             onToggleTheme: () {},
             onOpenConnections: () {},
-            sessionMode: SessionMode.discordBot,
+            sessionMode: SessionMode.discord,
             isDark: true,
           ),
         ),

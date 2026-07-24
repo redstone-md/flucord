@@ -29,7 +29,7 @@ void main() {
                   onSelectSpace: (value) => selectedSpace = value,
                   onToggleTheme: () {},
                   onOpenConnections: () {},
-                  sessionMode: SessionMode.discordBot,
+                  sessionMode: SessionMode.discord,
                   isDark: true,
                 ),
                 ChannelSidebar(
@@ -39,7 +39,7 @@ void main() {
                   ),
                   selectedChannelId: 'dm-1',
                   onSelectChannel: (_) {},
-                  sessionMode: SessionMode.discordBot,
+                  sessionMode: SessionMode.discord,
                   connectionStatus: RepositoryConnectionStatus.connected,
                   workspace: _workspace,
                   collapsedCategoryIds: const {},

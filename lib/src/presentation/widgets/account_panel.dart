@@ -24,7 +24,7 @@ class AccountPanel extends StatelessWidget {
         ? ('Local workspace', FlucordColors.success)
         : switch (connectionStatus) {
             RepositoryConnectionStatus.connected => (
-              'Bot online',
+              'Discord online',
               FlucordColors.success,
             ),
             RepositoryConnectionStatus.connecting => (

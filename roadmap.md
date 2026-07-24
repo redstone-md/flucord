@@ -206,12 +206,18 @@ browser runtime or dependency on Discord's private user API.
     message attachment set and navigate multi-image messages or forwarded
     snapshots inside the lightbox with bounded arrows, Left/Right shortcuts,
     a position counter, and zoom reset between images.
+39. Completed: replace the generic raw bot-token connection path with typed
+    Discord account sessions, explicit transport capabilities, a domain-owned
+    repository factory, an explicit Bot adapter, and a versioned secure-vault
+    codec that migrates the legacy bot-token key. Documented OAuth scopes remain
+    capability-limited and cannot be mistaken for full chat/Gateway access.
 
 ## Protocol safety
 
 - Use only documented Discord bot REST and Gateway contracts.
 - Never accept personal account tokens or impersonate official client headers.
-- Store bot credentials with the operating system credential vault.
+- Store supported session credentials with the operating system credential
+  vault and keep transport secrets out of logs and SQLite.
 - Keep rate-limit handling and Gateway reconnect behavior covered by tests.
 - Add OAuth2 only for scopes explicitly supported by Discord's public API.
 

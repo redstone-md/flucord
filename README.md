@@ -211,13 +211,22 @@ requires the PulseAudio utilities and FFmpeg available to the desktop session.
    messages written by other members. Read Message History is also required by
    Discord's public archived-thread route.
 4. Open Connections from the link icon in the Flucord server rail.
-5. Enter the bot token. When remembering it, Flucord stores it through Windows
-   Credential Manager rather than SQLite or application logs.
+5. Enter the bot token. When remembering it, Flucord stores a versioned session
+   credential through the operating-system vault rather than SQLite or logs.
+   Existing Windows `discord_bot_token` records migrate on the next connection.
 
 Flucord uses documented bot authorization, an explicit user agent, Gateway
 intents, heartbeat/resume, and REST rate-limit retries. It deliberately does
 not send private Discord-client headers such as `X-Super-Properties` or use
 user-account token flows.
+
+The application layer does not accept an untyped token string. It owns a typed
+`DiscordAccountSession`, an explicit capability set, and a domain repository
+factory. The current concrete full-chat adapter is
+`DiscordBotRepositoryFactory`; documented OAuth user sessions can represent
+authorized identity, guild-directory, approved DM-directory, or voice scopes,
+but are rejected before IO when a caller requests chat/Gateway capabilities
+that those scopes do not provide. See [session transport architecture](docs/SESSION_TRANSPORT.md).
 
 Discord intentionally returns no bot DM inbox through `READY.private_channels`
 or `GET /users/@me/channels`. Flucord therefore builds the bot inbox from

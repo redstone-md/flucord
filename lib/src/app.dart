@@ -59,7 +59,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _connectionController = ConnectionController(
       _chatController,
       const SecureCredentialVault(),
-      const DiscordRepositoryFactory(),
+      const DiscordBotRepositoryFactory(),
     );
     _workspaceController = WorkspaceController();
     _attachmentDownloadService =
