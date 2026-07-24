@@ -146,3 +146,40 @@ class EmptyWorkspaceView extends StatelessWidget {
     );
   }
 }
+
+class DisconnectedWorkspaceView extends StatelessWidget {
+  const DisconnectedWorkspaceView({required this.onOpenConnections, super.key});
+
+  final VoidCallback onOpenConnections;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.link_off, size: 30, color: context.surfaces.muted),
+            const SizedBox(height: 12),
+            const Text(
+              'No chat transport connected',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'A linked Discord identity alone cannot open messages.',
+              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const ValueKey('open-disconnected-connections'),
+              onPressed: onOpenConnections,
+              icon: const Icon(Icons.link, size: 16),
+              label: const Text('Connections'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

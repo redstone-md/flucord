@@ -8,7 +8,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 

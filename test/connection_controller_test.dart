@@ -45,7 +45,7 @@ void main() {
     },
   );
 
-  test('rejects an unauthorized token and restores local workspace', () async {
+  test('rejects an unauthorized token and disconnects cleanly', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final controller = ConnectionController(
       chat,
@@ -61,10 +61,10 @@ void main() {
     );
 
     expect(connected, isFalse);
-    expect(controller.mode, SessionMode.local);
+    expect(controller.mode, SessionMode.disconnected);
     expect(controller.errorMessage, 'Discord rejected this bot token.');
     expect(chat.state, ChatLoadState.ready);
-    expect(chat.workspace?.spaces.first.name, 'The Forge');
+    expect(chat.workspace?.spaces, isEmpty);
   });
 
   test('does not create a repository for empty input', () async {
@@ -106,7 +106,7 @@ void main() {
     expect(controller.errorMessage, contains('credential vault'));
   });
 
-  test('restores a typed session from the credential vault', () async {
+  test('automatically restores a typed session from the vault', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final vault = _MemoryCredentialVault()
       ..session = DiscordBotSession('saved-token');
@@ -115,16 +115,82 @@ void main() {
     );
     final controller = ConnectionController(chat, vault, factory);
     addTearDown(chat.dispose);
-    await chat.load();
 
     await controller.initialize();
-    final connected = await controller.connectSavedCredential();
 
     expect(controller.hasSavedCredential, isTrue);
-    expect(connected, isTrue);
+    expect(controller.mode, SessionMode.discord);
+    expect(controller.state, ConnectionActionState.connected);
     expect(factory.receivedSession, isA<DiscordBotSession>());
     expect(factory.receivedSession?.transportCredential, 'saved-token');
+    expect(vault.writeCalls, 0);
   });
+
+  test(
+    'opens an empty disconnected workspace without a saved session',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final controller = ConnectionController(
+        chat,
+        _MemoryCredentialVault(),
+        _CountingRepositoryFactory(),
+      );
+      addTearDown(chat.dispose);
+
+      await controller.initialize();
+
+      expect(controller.mode, SessionMode.disconnected);
+      expect(controller.state, ConnectionActionState.idle);
+      expect(chat.state, ChatLoadState.ready);
+      expect(chat.workspace?.spaces, isEmpty);
+    },
+  );
+
+  test('a rejected saved session never reveals demo servers', () async {
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    final vault = _MemoryCredentialVault()
+      ..session = DiscordBotSession('rejected-token');
+    final controller = ConnectionController(
+      chat,
+      vault,
+      _RejectingRepositoryFactory(),
+    );
+    addTearDown(chat.dispose);
+
+    await controller.initialize();
+
+    expect(controller.mode, SessionMode.disconnected);
+    expect(controller.state, ConnectionActionState.failure);
+    expect(controller.hasSavedCredential, isTrue);
+    expect(chat.workspace?.spaces, isEmpty);
+    expect(
+      chat.workspace?.spaces.any((space) => space.name == 'The Forge'),
+      isFalse,
+    );
+  });
+
+  test(
+    'explicit demo initialization does not restore a saved session',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryCredentialVault()
+        ..session = DiscordBotSession('saved-token');
+      final factory = _CountingRepositoryFactory();
+      final controller = ConnectionController(
+        chat,
+        vault,
+        factory,
+        initialMode: SessionMode.demo,
+      );
+      addTearDown(chat.dispose);
+
+      await controller.initialize(restoreSavedSession: false);
+
+      expect(controller.mode, SessionMode.demo);
+      expect(chat.workspace?.spaces.first.name, 'The Forge');
+      expect(factory.calls, 0);
+    },
+  );
 
   test('rejects a scoped OAuth session at the full-chat boundary', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
@@ -146,7 +212,7 @@ void main() {
     );
 
     expect(connected, isFalse);
-    expect(controller.mode, SessionMode.local);
+    expect(controller.mode, SessionMode.disconnected);
     expect(controller.activeSession, isNull);
     expect(
       controller.errorMessage,
@@ -157,6 +223,7 @@ void main() {
 
 final class _MemoryCredentialVault implements CredentialVault {
   DiscordAccountSession? session;
+  int writeCalls = 0;
 
   String? get token => session?.transportCredential;
 
@@ -167,8 +234,10 @@ final class _MemoryCredentialVault implements CredentialVault {
   Future<DiscordAccountSession?> readDiscordSession() async => session;
 
   @override
-  Future<void> writeDiscordSession(DiscordAccountSession session) async =>
-      this.session = session;
+  Future<void> writeDiscordSession(DiscordAccountSession session) async {
+    writeCalls++;
+    this.session = session;
+  }
 }
 
 final class _FailingCredentialVault implements CredentialVault {

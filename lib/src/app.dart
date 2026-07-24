@@ -7,10 +7,14 @@ import 'application/connection_controller.dart';
 import 'application/discord_oauth_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
+import 'data/disconnected_chat_repository.dart';
 import 'data/native_attachment_download_service.dart';
 import 'data/native_external_link_launcher.dart';
 import 'data/discord/discord_oauth_account_service.dart';
 import 'domain/attachment_download.dart';
+import 'domain/chat_repository.dart';
+import 'domain/chat_repository_factory.dart';
+import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
@@ -27,6 +31,11 @@ import 'theme/flucord_theme.dart';
 
 class FlucordApp extends StatefulWidget {
   const FlucordApp({
+    this.initialRepository,
+    this.initialSessionMode = SessionMode.disconnected,
+    this.restoreSavedSession = true,
+    this.credentialVault,
+    this.chatRepositoryFactory,
     this.desktopIntegration,
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
@@ -38,6 +47,36 @@ class FlucordApp extends StatefulWidget {
     super.key,
   });
 
+  factory FlucordApp.demo({
+    DesktopIntegration? desktopIntegration,
+    VoiceMediaService? voiceMediaService,
+    VoiceOpusCodecFactory? voiceOpusCodecFactory,
+    VoiceAudioPlaybackService? voicePlaybackService,
+    VoiceMessageRecorder? voiceMessageRecorder,
+    AttachmentDownloadService? attachmentDownloadService,
+    ExternalLinkLauncher? externalLinkLauncher,
+    DiscordOAuthAccountGateway? discordOAuthAccountGateway,
+    Key? key,
+  }) => FlucordApp(
+    initialRepository: MockChatRepository(),
+    initialSessionMode: SessionMode.demo,
+    restoreSavedSession: false,
+    desktopIntegration: desktopIntegration,
+    voiceMediaService: voiceMediaService,
+    voiceOpusCodecFactory: voiceOpusCodecFactory,
+    voicePlaybackService: voicePlaybackService,
+    voiceMessageRecorder: voiceMessageRecorder,
+    attachmentDownloadService: attachmentDownloadService,
+    externalLinkLauncher: externalLinkLauncher,
+    discordOAuthAccountGateway: discordOAuthAccountGateway,
+    key: key,
+  );
+
+  final ChatRepository? initialRepository;
+  final SessionMode initialSessionMode;
+  final bool restoreSavedSession;
+  final CredentialVault? credentialVault;
+  final ChatRepositoryFactory? chatRepositoryFactory;
   final DesktopIntegration? desktopIntegration;
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;
@@ -63,11 +102,14 @@ class _FlucordAppState extends State<FlucordApp> {
   @override
   void initState() {
     super.initState();
-    _chatController = ChatController(MockChatRepository());
+    _chatController = ChatController(
+      widget.initialRepository ?? const DisconnectedChatRepository(),
+    );
     _connectionController = ConnectionController(
       _chatController,
-      const SecureCredentialVault(),
-      const DiscordBotRepositoryFactory(),
+      widget.credentialVault ?? const SecureCredentialVault(),
+      widget.chatRepositoryFactory ?? const DiscordBotRepositoryFactory(),
+      initialMode: widget.initialSessionMode,
     );
     _externalLinkLauncher =
         widget.externalLinkLauncher ?? const NativeExternalLinkLauncher();
@@ -96,8 +138,9 @@ class _FlucordAppState extends State<FlucordApp> {
         unawaited(_discordOAuthController.handleProtocolUri(uri));
       },
     );
-    _chatController.load();
-    _connectionController.initialize();
+    _connectionController.initialize(
+      restoreSavedSession: widget.restoreSavedSession,
+    );
     _discordOAuthController.initialize();
   }
 

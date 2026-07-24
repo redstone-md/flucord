@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/disconnected_chat_repository.dart';
 import '../data/discord/discord_api_client.dart';
-import '../data/mock_chat_repository.dart';
 import '../domain/chat_repository_factory.dart';
 import '../domain/credential_vault.dart';
 import '../domain/discord_session.dart';
 import 'chat_controller.dart';
 
-enum SessionMode { local, discord }
+enum SessionMode { disconnected, demo, discord }
 
 enum ConnectionActionState { idle, connecting, connected, failure }
 
@@ -15,14 +15,15 @@ final class ConnectionController extends ChangeNotifier {
   ConnectionController(
     this._chatController,
     this._credentialVault,
-    this._repositoryFactory,
-  );
+    this._repositoryFactory, {
+    SessionMode initialMode = SessionMode.disconnected,
+  }) : _mode = initialMode;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
 
-  SessionMode _mode = SessionMode.local;
+  SessionMode _mode;
   ConnectionActionState _state = ConnectionActionState.idle;
   bool _hasSavedCredential = false;
   DiscordAccountSession? _activeSession;
@@ -37,12 +38,33 @@ final class ConnectionController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isBusy => _state == ConnectionActionState.connecting;
 
-  Future<void> initialize() async {
+  Future<void> initialize({bool restoreSavedSession = true}) async {
+    if (!restoreSavedSession) {
+      await _chatController.load();
+      notifyListeners();
+      return;
+    }
+    DiscordAccountSession? session;
     try {
-      _hasSavedCredential = await _credentialVault.readDiscordSession() != null;
+      session = await _credentialVault.readDiscordSession();
+      _hasSavedCredential = session != null;
     } catch (_) {
       _hasSavedCredential = false;
+      await _ensureDisconnectedWorkspace();
+      _mode = SessionMode.disconnected;
+      _state = ConnectionActionState.failure;
+      _errorMessage = 'The system credential vault could not be read.';
+      notifyListeners();
+      return;
     }
+    if (session != null) {
+      await _connect(session, remember: true, persistCredential: false);
+      return;
+    }
+    await _ensureDisconnectedWorkspace();
+    _mode = SessionMode.disconnected;
+    _state = ConnectionActionState.idle;
+    _errorMessage = null;
     notifyListeners();
   }
 
@@ -78,7 +100,7 @@ final class ConnectionController extends ChangeNotifier {
         notifyListeners();
         return false;
       }
-      return _connect(session, remember: true);
+      return _connect(session, remember: true, persistCredential: false);
     } catch (_) {
       _state = ConnectionActionState.failure;
       _errorMessage = 'The system credential vault could not be read.';
@@ -90,6 +112,7 @@ final class ConnectionController extends ChangeNotifier {
   Future<bool> _connect(
     DiscordAccountSession session, {
     required bool remember,
+    bool persistCredential = true,
   }) async {
     _state = ConnectionActionState.connecting;
     _errorMessage = null;
@@ -98,8 +121,8 @@ final class ConnectionController extends ChangeNotifier {
       final repository = await _repositoryFactory.create(session);
       await _chatController.useRepository(repository);
     } catch (error) {
-      await _chatController.useRepository(MockChatRepository());
-      _mode = SessionMode.local;
+      await _ensureDisconnectedWorkspace();
+      _mode = SessionMode.disconnected;
       _activeSession = null;
       _state = ConnectionActionState.failure;
       _errorMessage = _messageFor(error, session);
@@ -109,6 +132,11 @@ final class ConnectionController extends ChangeNotifier {
     _mode = SessionMode.discord;
     _activeSession = session;
     _state = ConnectionActionState.connected;
+    if (!persistCredential) {
+      _hasSavedCredential = remember;
+      notifyListeners();
+      return true;
+    }
     try {
       if (remember) {
         await _credentialVault.writeDiscordSession(session);
@@ -126,12 +154,9 @@ final class ConnectionController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> useLocalWorkspace() async {
-    if (_mode != SessionMode.local ||
-        _chatController.state == ChatLoadState.failure) {
-      await _chatController.useRepository(MockChatRepository());
-    }
-    _mode = SessionMode.local;
+  Future<void> disconnect() async {
+    await _ensureDisconnectedWorkspace();
+    _mode = SessionMode.disconnected;
     _activeSession = null;
     _state = ConnectionActionState.idle;
     _errorMessage = null;
@@ -144,6 +169,20 @@ final class ConnectionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _ensureDisconnectedWorkspace() async {
+    if (_mode == SessionMode.disconnected &&
+        _chatController.state != ChatLoadState.failure) {
+      if (_chatController.state == ChatLoadState.idle) {
+        await _chatController.load();
+      }
+      if (_chatController.state == ChatLoadState.ready &&
+          _chatController.workspace?.spaces.isEmpty == true) {
+        return;
+      }
+    }
+    await _chatController.useRepository(const DisconnectedChatRepository());
+  }
+
   static String _messageFor(Object error, DiscordAccountSession session) {
     if (error is UnsupportedDiscordSessionException) {
       return 'This authorized Discord session does not expose full chat and Gateway access.';
@@ -151,6 +190,6 @@ final class ConnectionController extends ChangeNotifier {
     if (error is DiscordApiException && error.isUnauthorized) {
       return 'Discord rejected this ${session.credentialLabel}.';
     }
-    return 'Discord is unreachable. The local workspace was restored.';
+    return 'Discord is unreachable. No chat transport is connected.';
   }
 }

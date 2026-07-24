@@ -42,8 +42,8 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     if (connected && mounted) Navigator.of(context).pop();
   }
 
-  Future<void> _useLocal() async {
-    await widget.controller.useLocalWorkspace();
+  Future<void> _disconnect() async {
+    await widget.controller.disconnect();
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -90,7 +90,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               const Text(
-                                'Discord bot',
+                                'Bot transport (optional)',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -98,7 +98,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Use an application bot token. Personal account tokens are not accepted.',
+                                'This opens channels as an application bot, not as your linked Discord identity. Personal account tokens are not accepted.',
                                 style: TextStyle(
                                   color: context.surfaces.muted,
                                   fontSize: 11,
@@ -184,13 +184,16 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                                     const SizedBox(width: 4),
                                   ],
                                   const Spacer(),
-                                  OutlinedButton(
-                                    onPressed: widget.controller.isBusy
-                                        ? null
-                                        : _useLocal,
-                                    child: const Text('Use local'),
-                                  ),
-                                  const SizedBox(width: 8),
+                                  if (widget.controller.mode !=
+                                      SessionMode.disconnected) ...[
+                                    OutlinedButton(
+                                      onPressed: widget.controller.isBusy
+                                          ? null
+                                          : _disconnect,
+                                      child: const Text('Disconnect'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
                                   FilledButton.icon(
                                     key: const ValueKey('connect-discord'),
                                     onPressed: widget.controller.isBusy
@@ -391,7 +394,20 @@ class _CurrentConnection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = controller.mode == SessionMode.discord;
+    final (label, color) = switch (controller.mode) {
+      SessionMode.disconnected => (
+        'No chat transport connected',
+        context.surfaces.muted,
+      ),
+      SessionMode.demo => (
+        'Demo workspace active',
+        Theme.of(context).colorScheme.primary,
+      ),
+      SessionMode.discord => (
+        '${controller.activeSession?.displayName ?? 'Discord'} connected',
+        FlucordColors.success,
+      ),
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
       child: Row(
@@ -399,20 +415,10 @@ class _CurrentConnection extends StatelessWidget {
           Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: connected ? FlucordColors.success : context.surfaces.muted,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              connected
-                  ? '${controller.activeSession?.displayName ?? 'Discord'} connected'
-                  : 'Local workspace active',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
         ],
       ),
     );

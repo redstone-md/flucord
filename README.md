@@ -23,6 +23,13 @@ embeds retain their documented structured fields across live updates and
 offline cache restores. Video attachments and embed video metadata play
 through a native Windows texture.
 
+Production startup never substitutes synthetic servers for Discord state. It
+restores a supported saved session automatically; without one, Flucord shows an
+explicit disconnected workspace. The deterministic `MockChatRepository` is
+available only through `FlucordApp.demo()` for tests and deliberate demos.
+Bot chat remains an optional, clearly labelled transport rather than a normal
+user-account login.
+
 Message bodies, pinned previews, and embed text render GitHub-flavored
 Markdown plus Discord's documented user, role, and channel mentions, custom
 emoji, localized timestamps, application commands, and tap-to-reveal spoilers.

@@ -8,7 +8,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
@@ -78,7 +78,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(700, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-pins')));
@@ -94,7 +94,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('channel-forge-native')));
@@ -146,7 +146,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(700, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-threads')));
@@ -167,7 +167,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     expect(
@@ -239,7 +239,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(700, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Choose channel'));
@@ -258,7 +258,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('member-row-mira')));
@@ -283,7 +283,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1280, 760));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const FlucordApp());
+    await tester.pumpWidget(FlucordApp.demo());
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('channel-forge-voice')));

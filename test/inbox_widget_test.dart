@@ -89,7 +89,7 @@ void main() {
 Future<void> _pumpDesktopApp(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1440, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(const FlucordApp());
+  await tester.pumpWidget(FlucordApp.demo());
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
 }

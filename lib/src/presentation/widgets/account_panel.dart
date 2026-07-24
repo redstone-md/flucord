@@ -20,26 +20,40 @@ class AccountPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (status, color) = sessionMode == SessionMode.local
-        ? ('Local workspace', FlucordColors.success)
-        : switch (connectionStatus) {
-            RepositoryConnectionStatus.connected => (
-              'Discord online',
-              FlucordColors.success,
-            ),
-            RepositoryConnectionStatus.connecting => (
-              'Connecting...',
-              FlucordColors.warning,
-            ),
-            RepositoryConnectionStatus.reconnecting => (
-              'Reconnecting...',
-              FlucordColors.warning,
-            ),
-            RepositoryConnectionStatus.offline => (
-              'Offline',
-              context.surfaces.muted,
-            ),
-          };
+    final (status, color, tooltip) = switch (sessionMode) {
+      SessionMode.disconnected => (
+        'Disconnected',
+        context.surfaces.muted,
+        'No chat transport',
+      ),
+      SessionMode.demo => (
+        'Demo workspace',
+        Theme.of(context).colorScheme.primary,
+        'Deterministic demo data',
+      ),
+      SessionMode.discord => switch (connectionStatus) {
+        RepositoryConnectionStatus.connected => (
+          'Discord online',
+          FlucordColors.success,
+          'Discord Gateway',
+        ),
+        RepositoryConnectionStatus.connecting => (
+          'Connecting...',
+          FlucordColors.warning,
+          'Discord Gateway',
+        ),
+        RepositoryConnectionStatus.reconnecting => (
+          'Reconnecting...',
+          FlucordColors.warning,
+          'Discord Gateway',
+        ),
+        RepositoryConnectionStatus.offline => (
+          'Offline',
+          context.surfaces.muted,
+          'Discord Gateway',
+        ),
+      },
+    };
     return Container(
       key: const ValueKey('account-panel'),
       height: 56,
@@ -81,9 +95,7 @@ class AccountPanel extends StatelessWidget {
             ),
           ),
           Tooltip(
-            message: sessionMode == SessionMode.local
-                ? 'Local workspace'
-                : 'Discord Gateway',
+            message: tooltip,
             child: Icon(Icons.sensors, size: 17, color: color),
           ),
         ],

@@ -14,7 +14,9 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final gateway = _OAuthGateway();
 
-    await tester.pumpWidget(FlucordApp(discordOAuthAccountGateway: gateway));
+    await tester.pumpWidget(
+      FlucordApp.demo(discordOAuthAccountGateway: gateway),
+    );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('open-connections')));
@@ -26,7 +28,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Jack · 2 servers'), findsOneWidget);
-    expect(find.text('Local workspace active'), findsOneWidget);
+    expect(find.text('Demo workspace active'), findsOneWidget);
     expect(gateway.authorizeCalls, 1);
 
     await tester.tap(find.byKey(const ValueKey('unlink-discord-account')));
@@ -44,7 +46,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      FlucordApp(discordOAuthAccountGateway: _OAuthGateway()),
+      FlucordApp.demo(discordOAuthAccountGateway: _OAuthGateway()),
     );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
@@ -61,7 +63,7 @@ void main() {
     final desktop = _DesktopIntegration();
 
     await tester.pumpWidget(
-      FlucordApp(
+      FlucordApp.demo(
         discordOAuthAccountGateway: gateway,
         desktopIntegration: desktop,
       ),

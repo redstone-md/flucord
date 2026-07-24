@@ -64,9 +64,10 @@ class FlucordShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: chatController,
-      builder: (context, _) {
-        return switch (chatController.state) {
+      listenable: connectionController,
+      builder: (context, _) => ListenableBuilder(
+        listenable: chatController,
+        builder: (context, _) => switch (chatController.state) {
           ChatLoadState.idle ||
           ChatLoadState.loading => const LoadingWorkspaceView(),
           ChatLoadState.failure => FailedWorkspaceView(
@@ -76,13 +77,18 @@ class FlucordShell extends StatelessWidget {
             context,
             chatController.workspace!,
           ),
-        };
-      },
+        },
+      ),
     );
   }
 
   Widget _buildWorkspace(BuildContext context, ChatWorkspace workspace) {
     if (workspace.spaces.isEmpty) {
+      if (connectionController.mode == SessionMode.disconnected) {
+        return DisconnectedWorkspaceView(
+          onOpenConnections: () => _openConnections(context),
+        );
+      }
       return EmptyWorkspaceView(
         onOpenConnections: () => _openConnections(context),
       );

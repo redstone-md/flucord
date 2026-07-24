@@ -23,7 +23,7 @@ void main() {
               channels: _workspace.channels,
               selectedChannelId: controller.selectedChannelId,
               onSelectChannel: controller.selectChannel,
-              sessionMode: SessionMode.local,
+              sessionMode: SessionMode.demo,
               connectionStatus: RepositoryConnectionStatus.connected,
               workspace: _workspace,
               collapsedCategoryIds: controller.collapsedCategoryIds,

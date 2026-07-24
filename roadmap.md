@@ -12,8 +12,8 @@ browser runtime or dependency on Discord's private user API.
 - Keep remote/server state behind an asynchronous repository contract.
 - Keep synchronous workspace state in a separate controller.
 - Keep domain models independent from Flutter widgets.
-- Keep the initial transport deterministic and local so the UI and tests do not
-  depend on network access.
+- Keep deterministic demo data behind an explicit demo bootstrap so production
+  never presents synthetic servers as real Discord state.
 - Add real transports as repository implementations, not widget changes.
 
 ## Tracer bullet
@@ -235,6 +235,12 @@ browser runtime or dependency on Discord's private user API.
     Windows, macOS, and Linux while preserving the Windows update action. Window
     close hides only after tray initialization succeeds; Linux packages require
     AppIndicator and GNOME needs its corresponding shell extension.
+45. Completed: replace the production mock bootstrap and every connection
+    failure fallback with an explicit disconnected repository, automatically
+    restore a supported saved session, and isolate deterministic workspace data
+    behind `FlucordApp.demo()`. The shell, account panel, and connection dialog
+    now distinguish disconnected, demo, and Discord transport state without
+    implying that linked OAuth identity grants message access.
 
 ## Protocol safety
 
