@@ -13,6 +13,17 @@ final class AttachmentDownloadController extends ChangeNotifier {
 
   AttachmentDownloadController._(this.attachment, this._service);
 
+  static bool supports(
+    MessageAttachment attachment,
+    AttachmentDownloadService? service,
+  ) {
+    final uri = Uri.tryParse(attachment.url);
+    return service != null &&
+        uri != null &&
+        uri.host.isNotEmpty &&
+        (uri.scheme == 'https' || uri.scheme == 'http');
+  }
+
   final MessageAttachment attachment;
   final AttachmentDownloadService _service;
 

@@ -6,25 +6,42 @@ import '../../theme/flucord_theme.dart';
 import '../attachment_download_controller.dart';
 import 'attachment_download_button.dart';
 
-class ImageAttachmentViewer extends StatefulWidget {
-  const ImageAttachmentViewer({
+part 'image_attachment_gallery_controls.dart';
+
+typedef ImageAttachmentBuilder =
+    Widget Function(BuildContext context, MessageAttachment attachment);
+
+@immutable
+final class ImageAttachmentViewerEntry {
+  const ImageAttachmentViewerEntry({
     required this.attachment,
-    required this.onClose,
     this.downloadController,
-    this.imageBuilder,
-    super.key,
   });
 
   final MessageAttachment attachment;
-  final VoidCallback onClose;
   final AttachmentDownloadController? downloadController;
-  final WidgetBuilder? imageBuilder;
+}
+
+class ImageAttachmentViewer extends StatefulWidget {
+  ImageAttachmentViewer({
+    required List<ImageAttachmentViewerEntry> entries,
+    required this.initialAttachmentId,
+    required this.onClose,
+    this.imageBuilder,
+    super.key,
+  }) : assert(entries.isNotEmpty),
+       entries = List.unmodifiable(entries);
+
+  final List<ImageAttachmentViewerEntry> entries;
+  final String initialAttachmentId;
+  final VoidCallback onClose;
+  final ImageAttachmentBuilder? imageBuilder;
 
   static Future<void> show(
     BuildContext context, {
-    required MessageAttachment attachment,
-    AttachmentDownloadController? downloadController,
-    WidgetBuilder? imageBuilder,
+    required List<ImageAttachmentViewerEntry> entries,
+    required String initialAttachmentId,
+    ImageAttachmentBuilder? imageBuilder,
   }) async {
     final previousFocus = FocusManager.instance.primaryFocus;
     await showGeneralDialog<void>(
@@ -34,8 +51,8 @@ class ImageAttachmentViewer extends StatefulWidget {
       barrierColor: Colors.black.withValues(alpha: 0.88),
       transitionDuration: const Duration(milliseconds: 140),
       pageBuilder: (routeContext, _, _) => ImageAttachmentViewer(
-        attachment: attachment,
-        downloadController: downloadController,
+        entries: entries,
+        initialAttachmentId: initialAttachmentId,
         imageBuilder: imageBuilder,
         onClose: () => Navigator.of(routeContext).pop(),
       ),
@@ -60,7 +77,20 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
 
   final TransformationController _transformationController =
       TransformationController();
+  late int _index;
   double _scale = 1;
+
+  ImageAttachmentViewerEntry get _entry => widget.entries[_index];
+  MessageAttachment get _attachment => _entry.attachment;
+
+  @override
+  void initState() {
+    super.initState();
+    final requestedIndex = widget.entries.indexWhere(
+      (entry) => entry.attachment.id == widget.initialAttachmentId,
+    );
+    _index = requestedIndex < 0 ? 0 : requestedIndex;
+  }
 
   @override
   void dispose() {
@@ -72,7 +102,7 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
   Widget build(BuildContext context) => Semantics(
     scopesRoute: true,
     namesRoute: true,
-    label: 'Image viewer · ${widget.attachment.fileName}',
+    label: 'Image viewer · ${_attachment.fileName}',
     explicitChildNodes: true,
     child: Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
@@ -85,6 +115,8 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
             _ZoomImageIntent(false),
         SingleActivator(LogicalKeyboardKey.digit0, control: true):
             _ResetImageIntent(),
+        SingleActivator(LogicalKeyboardKey.arrowLeft): _NavigateImageIntent(-1),
+        SingleActivator(LogicalKeyboardKey.arrowRight): _NavigateImageIntent(1),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
@@ -103,6 +135,12 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
           _ResetImageIntent: CallbackAction<_ResetImageIntent>(
             onInvoke: (_) {
               _reset();
+              return null;
+            },
+          ),
+          _NavigateImageIntent: CallbackAction<_NavigateImageIntent>(
+            onInvoke: (intent) {
+              _navigate(intent.delta);
               return null;
             },
           ),
@@ -131,10 +169,10 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
                         child: Padding(
                           padding: const EdgeInsets.all(32),
                           child:
-                              widget.imageBuilder?.call(context) ??
+                              widget.imageBuilder?.call(context, _attachment) ??
                               _NetworkViewerImage(
-                                attachment: widget.attachment,
-                                canSave: widget.downloadController != null,
+                                attachment: _attachment,
+                                canSave: _entry.downloadController != null,
                               ),
                         ),
                       ),
@@ -144,15 +182,44 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
                 Align(
                   alignment: Alignment.topCenter,
                   child: _ViewerToolbar(
-                    attachment: widget.attachment,
+                    attachment: _attachment,
                     scale: _scale,
-                    downloadController: widget.downloadController,
+                    downloadController: _entry.downloadController,
                     onZoomOut: () => _zoom(false),
                     onReset: _reset,
                     onZoomIn: () => _zoom(true),
                     onClose: widget.onClose,
                   ),
                 ),
+                if (widget.entries.length > 1) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _GalleryNavigationButton(
+                      key: const ValueKey('image-viewer-previous'),
+                      icon: Icons.chevron_left,
+                      tooltip: 'Previous image · Left',
+                      onPressed: _index > 0 ? () => _navigate(-1) : null,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _GalleryNavigationButton(
+                      key: const ValueKey('image-viewer-next'),
+                      icon: Icons.chevron_right,
+                      tooltip: 'Next image · Right',
+                      onPressed: _index < widget.entries.length - 1
+                          ? () => _navigate(1)
+                          : null,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: _GalleryCounter(
+                      index: _index,
+                      total: widget.entries.length,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -180,6 +247,16 @@ class _ImageAttachmentViewerState extends State<ImageAttachmentViewer> {
   void _reset() {
     _transformationController.value = Matrix4.identity();
     if (_scale != 1) setState(() => _scale = 1);
+  }
+
+  void _navigate(int delta) {
+    final next = _index + delta;
+    if (next < 0 || next >= widget.entries.length) return;
+    _transformationController.value = Matrix4.identity();
+    setState(() {
+      _index = next;
+      _scale = 1;
+    });
   }
 }
 
@@ -368,4 +445,10 @@ class _ZoomImageIntent extends Intent {
 
 class _ResetImageIntent extends Intent {
   const _ResetImageIntent();
+}
+
+class _NavigateImageIntent extends Intent {
+  const _NavigateImageIntent(this.delta);
+
+  final int delta;
 }

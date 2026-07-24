@@ -15,13 +15,17 @@ class MessageAttachmentView extends StatefulWidget {
   const MessageAttachmentView({
     required this.attachment,
     this.downloadService,
+    this.downloadController,
+    this.imageGallery = const [],
     this.inlineVideoBuilder = buildNativeInlineVideo,
     this.inlineVoiceBuilder = buildNativeVoiceMessage,
     super.key,
-  });
+  }) : assert(downloadService == null || downloadController == null);
 
   final MessageAttachment attachment;
   final AttachmentDownloadService? downloadService;
+  final AttachmentDownloadController? downloadController;
+  final List<ImageAttachmentViewerEntry> imageGallery;
   final InlineVideoBuilder inlineVideoBuilder;
   final InlineVoiceBuilder inlineVoiceBuilder;
 
@@ -30,9 +34,11 @@ class MessageAttachmentView extends StatefulWidget {
 }
 
 class _MessageAttachmentViewState extends State<MessageAttachmentView> {
-  AttachmentDownloadController? _downloadController;
+  AttachmentDownloadController? _ownedDownloadController;
 
   MessageAttachment get _attachment => widget.attachment;
+  AttachmentDownloadController? get _downloadController =>
+      widget.downloadController ?? _ownedDownloadController;
 
   @override
   void initState() {
@@ -40,39 +46,35 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
     _replaceDownloadController();
   }
 
-  bool get _canDownload {
-    final uri = Uri.tryParse(_attachment.url);
-    return widget.downloadService != null &&
-        uri != null &&
-        uri.host.isNotEmpty &&
-        (uri.scheme == 'https' || uri.scheme == 'http');
-  }
+  bool get _canDownload => _downloadController != null;
 
   @override
   void didUpdateWidget(covariant MessageAttachmentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.attachment.id != widget.attachment.id ||
         oldWidget.attachment.url != widget.attachment.url ||
-        oldWidget.downloadService != widget.downloadService) {
+        oldWidget.downloadService != widget.downloadService ||
+        oldWidget.downloadController != widget.downloadController) {
       _replaceDownloadController();
     }
   }
 
   @override
   void dispose() {
-    _downloadController?.dispose();
+    _ownedDownloadController?.dispose();
     super.dispose();
   }
 
   void _replaceDownloadController() {
-    _downloadController?.dispose();
+    _ownedDownloadController?.dispose();
+    _ownedDownloadController = null;
+    if (widget.downloadController != null) return;
     final service = widget.downloadService;
-    _downloadController = service == null || !_canDownload
-        ? null
-        : AttachmentDownloadController(
-            attachment: _attachment,
-            service: service,
-          );
+    if (!AttachmentDownloadController.supports(_attachment, service)) return;
+    _ownedDownloadController = AttachmentDownloadController(
+      attachment: _attachment,
+      service: service!,
+    );
   }
 
   @override
@@ -84,8 +86,8 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
         onOpen: () => unawaited(
           ImageAttachmentViewer.show(
             context,
-            attachment: _attachment,
-            downloadController: _downloadController,
+            entries: _resolvedImageGallery,
+            initialAttachmentId: _attachment.id,
           ),
         ),
       );
@@ -136,6 +138,19 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
     controller: _downloadController!,
     overlaid: overlaid,
   );
+
+  List<ImageAttachmentViewerEntry> get _resolvedImageGallery {
+    final gallery = widget.imageGallery;
+    if (gallery.any((entry) => entry.attachment.id == _attachment.id)) {
+      return gallery;
+    }
+    return [
+      ImageAttachmentViewerEntry(
+        attachment: _attachment,
+        downloadController: _downloadController,
+      ),
+    ];
+  }
 }
 
 class _ImageAttachment extends StatelessWidget {

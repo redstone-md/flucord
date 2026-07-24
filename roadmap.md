@@ -202,6 +202,10 @@ browser runtime or dependency on Discord's private user API.
 37. Completed: open image attachments in a native browser-free lightbox with
     shared download state, pan, bounded zoom, reset, desktop shortcuts,
     loading/error states, focus restoration, and compact-window geometry.
+38. Completed: retain one encapsulated download-controller registry per
+    message attachment set and navigate multi-image messages or forwarded
+    snapshots inside the lightbox with bounded arrows, Left/Right shortcuts,
+    a position counter, and zoom reset between images.
 
 ## Protocol safety
 

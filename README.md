@@ -41,7 +41,9 @@ Image attachments open in a native browser-free lightbox that preserves the
 conversation behind it. The viewer supports mouse/trackpad pan and zoom,
 toolbar zoom/reset controls, double-click reset, Ctrl shortcuts, Escape close,
 compact-window geometry, loading and error states, and the same shared Save As
-transfer state as the message attachment.
+transfer state as the message attachment. Messages and forwarded snapshots with
+multiple images expose bounded previous/next controls, Left/Right shortcuts,
+and a stable position counter without conflicting with image pan gestures.
 
 The composer emoji control opens an anchored native picker, searches common
 Unicode shortcodes and the selected server's documented custom emoji, and

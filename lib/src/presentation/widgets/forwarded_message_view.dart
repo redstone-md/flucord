@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
-import 'message_attachment_view.dart';
+import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
 import 'message_sticker_view.dart';
@@ -50,11 +50,8 @@ class ForwardedMessageView extends StatelessWidget {
               onSelectChannel: onSelectChannel,
             ),
           ],
-          for (final attachment in snapshot.attachments)
-            Padding(
-              padding: const EdgeInsets.only(top: 7),
-              child: MessageAttachmentView(attachment: attachment),
-            ),
+          if (snapshot.attachments.isNotEmpty)
+            MessageAttachmentGallery(attachments: snapshot.attachments),
           for (var index = 0; index < snapshot.embeds.length; index++)
             Padding(
               padding: const EdgeInsets.only(top: 7),

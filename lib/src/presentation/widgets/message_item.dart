@@ -11,7 +11,7 @@ import 'create_thread_dialog.dart';
 import 'emoji_picker.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
-import 'message_attachment_view.dart';
+import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
 import 'message_forward_dialog.dart';
@@ -207,13 +207,10 @@ class _MessageItemState extends State<MessageItem> {
             '(edited)',
             style: TextStyle(color: context.surfaces.muted, fontSize: 9),
           ),
-        for (final attachment in message.attachments)
-          Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: MessageAttachmentView(
-              attachment: attachment,
-              downloadService: widget.attachmentDownloadService,
-            ),
+        if (message.attachments.isNotEmpty)
+          MessageAttachmentGallery(
+            attachments: message.attachments,
+            downloadService: widget.attachmentDownloadService,
           ),
         if (!message.suppressesEmbeds)
           for (var index = 0; index < message.embeds.length; index++)
