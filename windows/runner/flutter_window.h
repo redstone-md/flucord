@@ -8,6 +8,8 @@
 
 #include "win32_window.h"
 
+class DiscordSocialSdkBridge;
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -28,6 +30,9 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Application-owned bridge for the separately distributed Social SDK.
+  std::unique_ptr<DiscordSocialSdkBridge> discord_social_sdk_bridge_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

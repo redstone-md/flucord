@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_social_sdk_status.dart';
 import 'oauth_account_footer.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
@@ -121,37 +122,10 @@ class OAuthAccountHomeView extends StatelessWidget {
                   children: [
                     _AccountProfileCard(account: account),
                     const SizedBox(height: 20),
+                    const DiscordSocialSdkStatusPanel(),
+                    const SizedBox(height: 20),
                     OAuthConnectedAccountDirectory(
                       connections: account.connections,
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: context.surfaces.border),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 16,
-                            color: context.surfaces.muted,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Discord does not expose friends or direct messages through this public OAuth authorization.',
-                              style: TextStyle(
-                                color: context.surfaces.muted,
-                                fontSize: 11,
-                                height: 1.35,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),

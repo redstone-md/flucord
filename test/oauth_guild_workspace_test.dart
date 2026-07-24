@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/oauth_guild_directory_controller.dart';
 import 'package:flucord/src/application/oauth_guild_membership_controller.dart';
+import 'package:flucord/src/application/discord_social_sdk_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
+import 'package:flucord/src/domain/discord_social_sdk.dart';
+import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_guild_workspace.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -40,23 +43,29 @@ void main() {
     final membershipController = OAuthGuildMembershipController(_OAuthGateway())
       ..reconcileAccount(account.id);
     addTearDown(membershipController.dispose);
+    final socialController = DiscordSocialSdkController(_SocialGateway());
+    await socialController.initialize();
+    addTearDown(socialController.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => OAuthGuildWorkspace(
-            account: account,
-            accountHomeSelected: controller.accountHomeSelected,
-            membershipController: membershipController,
-            selectedGuildId: controller.selectedGuildId,
-            onOpenAccountHome: controller.selectAccountHome,
-            onSelectGuild: (guildId) =>
-                controller.selectGuild(account, guildId),
-            onOpenConnections: () {},
-            onToggleTheme: () {},
-            isDark: true,
+        home: DiscordSocialSdkScope(
+          controller: socialController,
+          child: ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => OAuthGuildWorkspace(
+              account: account,
+              accountHomeSelected: controller.accountHomeSelected,
+              membershipController: membershipController,
+              selectedGuildId: controller.selectedGuildId,
+              onOpenAccountHome: controller.selectAccountHome,
+              onSelectGuild: (guildId) =>
+                  controller.selectGuild(account, guildId),
+              onOpenConnections: () {},
+              onToggleTheme: () {},
+              isDark: true,
+            ),
           ),
         ),
       ),
@@ -125,23 +134,29 @@ void main() {
     final membershipController = OAuthGuildMembershipController(gateway)
       ..reconcileAccount(account.id);
     addTearDown(membershipController.dispose);
+    final socialController = DiscordSocialSdkController(_SocialGateway());
+    await socialController.initialize();
+    addTearDown(socialController.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
-        home: ListenableBuilder(
-          listenable: directoryController,
-          builder: (context, _) => OAuthGuildWorkspace(
-            account: account,
-            accountHomeSelected: directoryController.accountHomeSelected,
-            membershipController: membershipController,
-            selectedGuildId: directoryController.selectedGuildId,
-            onOpenAccountHome: directoryController.selectAccountHome,
-            onSelectGuild: (guildId) =>
-                directoryController.selectGuild(account, guildId),
-            onOpenConnections: () {},
-            onToggleTheme: () {},
-            isDark: true,
+        home: DiscordSocialSdkScope(
+          controller: socialController,
+          child: ListenableBuilder(
+            listenable: directoryController,
+            builder: (context, _) => OAuthGuildWorkspace(
+              account: account,
+              accountHomeSelected: directoryController.accountHomeSelected,
+              membershipController: membershipController,
+              selectedGuildId: directoryController.selectedGuildId,
+              onOpenAccountHome: directoryController.selectAccountHome,
+              onSelectGuild: (guildId) =>
+                  directoryController.selectGuild(account, guildId),
+              onOpenConnections: () {},
+              onToggleTheme: () {},
+              isDark: true,
+            ),
           ),
         ),
       ),
@@ -181,6 +196,12 @@ void main() {
     expect(gateway.guildIds, const ['guild-1', 'guild-2']);
     expect(tester.takeException(), isNull);
   });
+}
+
+final class _SocialGateway implements DiscordSocialSdkGateway {
+  @override
+  Future<DiscordSocialSdkAvailability> checkAvailability() async =>
+      DiscordSocialSdkAvailability.sdkNotBundled;
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {

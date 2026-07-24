@@ -2,6 +2,45 @@
 cmake_minimum_required(VERSION 3.14)
 project(flucord LANGUAGES CXX)
 
+set(FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR "" CACHE PATH
+  "Directory containing discord_partner_sdk/discordpp.h")
+set(FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY "" CACHE FILEPATH
+  "Exact Discord Social SDK import library path")
+set(FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME "" CACHE FILEPATH
+  "Exact Discord Social SDK runtime library path")
+
+if((FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR AND
+    NOT FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY) OR
+   (FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY AND
+    NOT FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR))
+  message(FATAL_ERROR
+    "Discord Social SDK requires both FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR and FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY")
+endif()
+
+set(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED OFF)
+if(FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR AND
+   FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY)
+  if(NOT IS_DIRECTORY "${FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR}")
+    message(FATAL_ERROR
+      "Discord Social SDK include directory does not exist: ${FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR}")
+  endif()
+  if(NOT EXISTS "${FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR}/discord_partner_sdk/discordpp.h")
+    message(FATAL_ERROR
+      "Discord Social SDK header was not found below the configured include directory")
+  endif()
+  if(NOT EXISTS "${FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY}")
+    message(FATAL_ERROR
+      "Discord Social SDK import library does not exist: ${FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY}")
+  endif()
+  set(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED ON)
+endif()
+
+if(FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME AND
+   NOT EXISTS "${FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME}")
+  message(FATAL_ERROR
+    "Discord Social SDK runtime does not exist: ${FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME}")
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "flucord")
@@ -87,6 +126,11 @@ if(NOT EXISTS "${LIBDAVE_DLL}")
 endif()
 install(FILES "${LIBDAVE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
+
+if(FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME)
+  install(FILES "${FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+endif()
 
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"

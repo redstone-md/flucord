@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "discord_social_sdk_bridge.h"
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -25,6 +26,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  discord_social_sdk_bridge_ = std::make_unique<DiscordSocialSdkBridge>(
+      flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +43,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  discord_social_sdk_bridge_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

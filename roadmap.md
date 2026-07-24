@@ -265,6 +265,13 @@ browser runtime or dependency on Discord's private user API.
     including legacy username context, banner, accent color, locale,
     verification, MFA, and public flags, then render a responsive native
     Discord-like profile header without requesting the optional email scope.
+51. Completed: introduce a native Discord Social SDK capability boundary for
+    relationship access without routing user features through Bot REST. The
+    first Windows tracer bullet reports whether the separately distributed SDK
+    is linked, keeps the default build functional when it is absent, and
+    surfaces that exact state in Friends. Native SDK authentication and
+    `GetRelationships()` synchronization remain the next increment after an
+    approved Developer Portal SDK package is available.
 
 ## Protocol safety
 

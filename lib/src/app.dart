@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/discord_oauth_controller.dart';
+import 'application/discord_social_sdk_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
 import 'application/oauth_guild_membership_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
 import 'data/disconnected_chat_repository.dart';
 import 'data/native_attachment_download_service.dart';
+import 'data/native_discord_social_sdk_gateway.dart';
 import 'data/native_external_link_launcher.dart';
 import 'data/discord/discord_oauth_account_service.dart';
 import 'domain/attachment_download.dart';
@@ -18,6 +20,7 @@ import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
 import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
+import 'domain/discord_social_sdk.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
@@ -28,6 +31,7 @@ import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'data/secure_discord_oauth_vault.dart';
 import 'presentation/flucord_shell.dart';
+import 'presentation/widgets/discord_social_sdk_scope.dart';
 import 'platform/desktop_integration.dart';
 import 'theme/flucord_theme.dart';
 
@@ -46,6 +50,7 @@ class FlucordApp extends StatefulWidget {
     this.attachmentDownloadService,
     this.externalLinkLauncher,
     this.discordOAuthAccountGateway,
+    this.discordSocialSdkGateway,
     super.key,
   });
 
@@ -58,6 +63,7 @@ class FlucordApp extends StatefulWidget {
     AttachmentDownloadService? attachmentDownloadService,
     ExternalLinkLauncher? externalLinkLauncher,
     DiscordOAuthAccountGateway? discordOAuthAccountGateway,
+    DiscordSocialSdkGateway? discordSocialSdkGateway,
     Key? key,
   }) => FlucordApp(
     initialRepository: MockChatRepository(),
@@ -71,6 +77,7 @@ class FlucordApp extends StatefulWidget {
     attachmentDownloadService: attachmentDownloadService,
     externalLinkLauncher: externalLinkLauncher,
     discordOAuthAccountGateway: discordOAuthAccountGateway,
+    discordSocialSdkGateway: discordSocialSdkGateway,
     key: key,
   );
 
@@ -87,6 +94,7 @@ class FlucordApp extends StatefulWidget {
   final AttachmentDownloadService? attachmentDownloadService;
   final ExternalLinkLauncher? externalLinkLauncher;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
+  final DiscordSocialSdkGateway? discordSocialSdkGateway;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -96,6 +104,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ChatController _chatController;
   late final ConnectionController _connectionController;
   late final DiscordOAuthController _discordOAuthController;
+  late final DiscordSocialSdkController _discordSocialSdkController;
   late final OAuthGuildDirectoryController _oauthGuildDirectoryController;
   late final OAuthGuildMembershipController _oauthGuildMembershipController;
   late final WorkspaceController _workspaceController;
@@ -125,6 +134,9 @@ class _FlucordAppState extends State<FlucordApp> {
           vault: const SecureDiscordOAuthGrantVault(),
         );
     _discordOAuthController = DiscordOAuthController(oauthGateway);
+    _discordSocialSdkController = DiscordSocialSdkController(
+      widget.discordSocialSdkGateway ?? const NativeDiscordSocialSdkGateway(),
+    );
     _oauthGuildMembershipController = OAuthGuildMembershipController(
       oauthGateway,
     );
@@ -151,6 +163,7 @@ class _FlucordAppState extends State<FlucordApp> {
       restoreSavedSession: widget.restoreSavedSession,
     );
     _discordOAuthController.initialize();
+    _discordSocialSdkController.initialize();
   }
 
   @override
@@ -162,6 +175,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _connectionController.dispose();
     _oauthGuildMembershipController.dispose();
     _discordOAuthController.dispose();
+    _discordSocialSdkController.dispose();
     _oauthGuildDirectoryController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
@@ -191,17 +205,20 @@ class _FlucordAppState extends State<FlucordApp> {
         theme: FlucordTheme.light,
         darkTheme: FlucordTheme.dark,
         themeMode: _workspaceController.themeMode,
-        home: FlucordShell(
-          chatController: _chatController,
-          connectionController: _connectionController,
-          discordOAuthController: _discordOAuthController,
-          oauthGuildDirectoryController: _oauthGuildDirectoryController,
-          oauthGuildMembershipController: _oauthGuildMembershipController,
-          workspaceController: _workspaceController,
-          voiceController: _voiceController,
-          voiceMessageRecorder: widget.voiceMessageRecorder,
-          attachmentDownloadService: _attachmentDownloadService,
-          externalLinkLauncher: _externalLinkLauncher,
+        home: DiscordSocialSdkScope(
+          controller: _discordSocialSdkController,
+          child: FlucordShell(
+            chatController: _chatController,
+            connectionController: _connectionController,
+            discordOAuthController: _discordOAuthController,
+            oauthGuildDirectoryController: _oauthGuildDirectoryController,
+            oauthGuildMembershipController: _oauthGuildMembershipController,
+            workspaceController: _workspaceController,
+            voiceController: _voiceController,
+            voiceMessageRecorder: widget.voiceMessageRecorder,
+            attachmentDownloadService: _attachmentDownloadService,
+            externalLinkLauncher: _externalLinkLauncher,
+          ),
         ),
       ),
     );

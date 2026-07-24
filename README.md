@@ -226,6 +226,22 @@ and public flags returned by `identify`; it does not request the optional email
 scope. Discord Friends are not exposed by a public REST route: official access
 requires the separately distributed native Discord Social SDK, acceptance of
 its terms, and application approval, so Flucord does not fabricate that data.
+The Windows runner now exposes a typed `flucord/social_sdk` capability bridge.
+An ordinary build reports `sdk_not_bundled`; it never substitutes Bot API data
+for relationships. A build with an approved SDK package must configure these
+exact CMake cache paths instead of relying on guessed package filenames:
+
+- `FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR`: directory containing
+  `discord_partner_sdk/discordpp.h`.
+- `FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY`: exact import-library path supplied by
+  the downloaded package.
+- `FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME`: optional exact runtime-library path to
+  install beside `flucord.exe`.
+
+The include directory and import library must be supplied together and are
+validated before compilation. A linked capability is only a package handshake;
+native SDK authentication and `Client::GetRelationships()` synchronization are
+still required before Flucord can render real friends.
 
 ## Run
 
@@ -469,6 +485,7 @@ currently a local preview and is not sent to Discord.
 dart format --output=none --set-exit-if-changed lib test integration_test
 flutter analyze
 flutter test
+flutter test integration_test/discord_social_sdk_bridge_smoke_test.dart -d windows
 flutter test integration_test/inline_video_playback_smoke_test.dart -d windows
 flutter test integration_test/voice_playback_smoke_test.dart -d windows
 flutter build windows --release
