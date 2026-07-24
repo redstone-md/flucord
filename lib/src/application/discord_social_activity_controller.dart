@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/discord_relationship.dart';
 import '../domain/discord_social_activity.dart';
+import '../domain/discord_social_call.dart';
 import '../domain/discord_social_sdk.dart';
 
 final class DiscordSocialActivityController extends ChangeNotifier {
@@ -12,7 +13,13 @@ final class DiscordSocialActivityController extends ChangeNotifier {
   DiscordSocialActivityController(
     this._gateway, {
     DiscordSocialActivityEvents? events,
-  }) {
+    DiscordSocialCallGateway? callGateway,
+    DiscordSocialCallEvents? callEvents,
+  }) : _callGateway =
+           callGateway ??
+           (_gateway is DiscordSocialCallGateway
+               ? _gateway as DiscordSocialCallGateway
+               : null) {
     final eventSource =
         events ??
         (_gateway is DiscordSocialActivityEvents
@@ -21,21 +28,37 @@ final class DiscordSocialActivityController extends ChangeNotifier {
     _inviteSubscription = eventSource?.activityInviteEvents.listen(
       _onInviteEvent,
     );
+    final callEventSource =
+        callEvents ??
+        (_gateway is DiscordSocialCallEvents
+            ? _gateway as DiscordSocialCallEvents
+            : null);
+    _callSubscription = callEventSource?.activityCallEvents.listen(
+      _onCallState,
+    );
   }
 
   final DiscordSocialActivityGateway? _gateway;
+  final DiscordSocialCallGateway? _callGateway;
   StreamSubscription<DiscordSocialActivityInviteEvent>? _inviteSubscription;
+  StreamSubscription<DiscordSocialCallState>? _callSubscription;
   List<DiscordSocialActivityInvite> _invites = const [];
   final Set<String> _acceptingInviteIds = {};
   final Set<String> _invitingUserIds = {};
   final Map<String, String> _inviteErrors = {};
   DiscordSocialActivitySession? _session;
+  DiscordSocialCallState? _call;
+  String? _callError;
+  bool _callPending = false;
   bool _sessionReady = false;
   bool _disposed = false;
   int _generation = 0;
 
   List<DiscordSocialActivityInvite> get invites => _invites;
   DiscordSocialActivitySession? get session => _session;
+  DiscordSocialCallState? get call => _call;
+  String? get callError => _callError;
+  bool get callPending => _callPending;
   bool get canUseActivities => _sessionReady && _gateway != null;
   bool isAccepting(String inviteId) => _acceptingInviteIds.contains(inviteId);
   bool isInviting(String userId) => _invitingUserIds.contains(userId);
@@ -54,6 +77,9 @@ final class DiscordSocialActivityController extends ChangeNotifier {
     _invitingUserIds.clear();
     _inviteErrors.clear();
     _session = null;
+    _call = null;
+    _callError = null;
+    _callPending = false;
     if (!_disposed) notifyListeners();
   }
 
@@ -74,6 +100,7 @@ final class DiscordSocialActivityController extends ChangeNotifier {
       final session = await gateway.sendActivityInvite(userId);
       if (!_accepts(generation)) return false;
       _session = session;
+      await _startVoice(generation);
       return true;
     } on DiscordSocialSdkException catch (error) {
       if (_accepts(generation)) {
@@ -110,6 +137,7 @@ final class DiscordSocialActivityController extends ChangeNotifier {
       if (!_accepts(generation)) return false;
       _session = session;
       _removeInvite(invite.key);
+      await _startVoice(generation);
       return true;
     } on DiscordSocialSdkException catch (error) {
       if (_accepts(generation)) {
@@ -137,9 +165,45 @@ final class DiscordSocialActivityController extends ChangeNotifier {
   }
 
   void clearSessionNotice() {
-    if (_session == null || _disposed) return;
+    if (_session == null ||
+        _disposed ||
+        _callPending ||
+        _call?.isActive == true) {
+      return;
+    }
     _session = null;
+    _call = null;
+    _callError = null;
     notifyListeners();
+  }
+
+  Future<bool> startVoice() => _startVoice(_generation);
+
+  Future<bool> toggleMuted() {
+    final current = _call;
+    return _mutateCall(
+      (gateway) => gateway.setActivityCallMuted(
+        lobbyId: current!.lobbyId,
+        muted: !current.selfMuted,
+      ),
+    );
+  }
+
+  Future<bool> toggleDeafened() {
+    final current = _call;
+    return _mutateCall(
+      (gateway) => gateway.setActivityCallDeafened(
+        lobbyId: current!.lobbyId,
+        deafened: !current.selfDeafened,
+      ),
+    );
+  }
+
+  Future<bool> leaveVoice() {
+    final current = _call;
+    return _mutateCall(
+      (gateway) => gateway.leaveActivityCall(current!.lobbyId),
+    );
   }
 
   void _onInviteEvent(DiscordSocialActivityInviteEvent event) {
@@ -164,6 +228,75 @@ final class DiscordSocialActivityController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onCallState(DiscordSocialCallState state) {
+    if (!canUseActivities || _disposed || state.lobbyId != _session?.lobbyId) {
+      return;
+    }
+    _call = state;
+    _callError = null;
+    notifyListeners();
+  }
+
+  Future<bool> _startVoice(int generation) async {
+    final session = _session;
+    final gateway = _callGateway;
+    if (!_accepts(generation) ||
+        session == null ||
+        gateway == null ||
+        _callPending ||
+        (_call?.isActive == true && _call?.lobbyId == session.lobbyId)) {
+      return false;
+    }
+    return _performCallMutation(
+      generation,
+      () => gateway.startActivityCall(session.lobbyId),
+    );
+  }
+
+  Future<bool> _mutateCall(
+    Future<DiscordSocialCallState> Function(DiscordSocialCallGateway gateway)
+    mutation,
+  ) {
+    final gateway = _callGateway;
+    final current = _call;
+    if (!canUseActivities ||
+        gateway == null ||
+        current == null ||
+        !current.isActive ||
+        _callPending) {
+      return Future.value(false);
+    }
+    return _performCallMutation(_generation, () => mutation(gateway));
+  }
+
+  Future<bool> _performCallMutation(
+    int generation,
+    Future<DiscordSocialCallState> Function() mutation,
+  ) async {
+    _callPending = true;
+    _callError = null;
+    notifyListeners();
+    try {
+      final state = await mutation();
+      if (!_accepts(generation) || state.lobbyId != _session?.lobbyId) {
+        return false;
+      }
+      _call = state;
+      return true;
+    } on DiscordSocialSdkException catch (error) {
+      if (_accepts(generation)) _callError = error.code;
+      return false;
+    } on Object {
+      if (_accepts(generation)) _callError = 'activity_call_failed';
+      return false;
+    } finally {
+      if (_accepts(generation)) {
+        _callPending = false;
+        notifyListeners();
+      }
+    }
+  }
+
   void _removeInvite(String inviteId) {
     _invites = List.unmodifiable(
       _invites.where((invite) => invite.key != inviteId),
@@ -178,6 +311,7 @@ final class DiscordSocialActivityController extends ChangeNotifier {
     _disposed = true;
     _generation++;
     unawaited(_inviteSubscription?.cancel());
+    unawaited(_callSubscription?.cancel());
     super.dispose();
   }
 }

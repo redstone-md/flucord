@@ -169,5 +169,22 @@ void main() {
         ),
       ),
     );
+    for (final operation in <Future<Object?>>[
+      gateway.startActivityCall('700'),
+      gateway.setActivityCallMuted(lobbyId: '700', muted: true),
+      gateway.setActivityCallDeafened(lobbyId: '700', deafened: true),
+      gateway.leaveActivityCall('700'),
+    ]) {
+      await expectLater(
+        operation,
+        throwsA(
+          isA<DiscordSocialSdkException>().having(
+            (error) => error.code,
+            'code',
+            'sdk_not_bundled',
+          ),
+        ),
+      );
+    }
   });
 }

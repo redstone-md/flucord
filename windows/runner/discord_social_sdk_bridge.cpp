@@ -1,5 +1,6 @@
 #include "discord_social_sdk_bridge.h"
 #include "discord_social_sdk_activity_bridge.h"
+#include "discord_social_sdk_call_bridge.h"
 #include "discord_social_sdk_chat_bridge.h"
 #include "discord_social_sdk_relationship_bridge.h"
 #include "discord_social_sdk_wire.h"
@@ -61,6 +62,8 @@ class DiscordSocialSdkBridge::Impl {
     activity_bridge_ =
         std::make_unique<DiscordSocialSdkActivityBridge>(client_.get(),
                                                          channel_);
+    call_bridge_ =
+        std::make_unique<DiscordSocialSdkCallBridge>(client_.get(), channel_);
     relationship_bridge_ =
         std::make_unique<DiscordSocialSdkRelationshipBridge>(client_.get(),
                                                               channel_);
@@ -98,6 +101,10 @@ class DiscordSocialSdkBridge::Impl {
       activity_bridge_->Handle(call, std::move(result));
       return;
     }
+    if (call_bridge_->CanHandle(call.method_name())) {
+      call_bridge_->Handle(call, std::move(result));
+      return;
+    }
     if (chat_bridge_->CanHandle(call.method_name())) {
       chat_bridge_->Handle(call, std::move(result));
       return;
@@ -113,6 +120,10 @@ class DiscordSocialSdkBridge::Impl {
         call.method_name() == "setOnlineStatus" ||
         call.method_name() == "sendActivityInvite" ||
         call.method_name() == "acceptActivityInvite" ||
+        call.method_name() == "startActivityCall" ||
+        call.method_name() == "setActivityCallMuted" ||
+        call.method_name() == "setActivityCallDeafened" ||
+        call.method_name() == "leaveActivityCall" ||
         call.method_name() == "getDmConversations" ||
         call.method_name() == "getDmMessages" ||
         call.method_name() == "sendDmMessage" ||
@@ -317,6 +328,7 @@ class DiscordSocialSdkBridge::Impl {
   void NotifyAuthenticationExpired() {
     grant_ = Grant{};
     activity_bridge_->ResetSession();
+    call_bridge_->ResetSession();
     channel_->InvokeMethod(
         "authenticationExpired",
         std::make_unique<flutter::EncodableValue>());
@@ -332,6 +344,7 @@ class DiscordSocialSdkBridge::Impl {
     refresh_in_flight_ = false;
     grant_ = Grant{};
     activity_bridge_->ResetSession();
+    call_bridge_->ResetSession();
     client_->Disconnect();
     result->Success();
   }
@@ -351,6 +364,7 @@ class DiscordSocialSdkBridge::Impl {
 
   std::unique_ptr<discordpp::Client> client_;
   std::unique_ptr<DiscordSocialSdkActivityBridge> activity_bridge_;
+  std::unique_ptr<DiscordSocialSdkCallBridge> call_bridge_;
   std::unique_ptr<DiscordSocialSdkChatBridge> chat_bridge_;
   std::unique_ptr<DiscordSocialSdkRelationshipBridge> relationship_bridge_;
   std::shared_ptr<MethodResult> pending_auth_result_;

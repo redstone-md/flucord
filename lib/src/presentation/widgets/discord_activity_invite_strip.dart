@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_social_activity_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_activity.dart';
+import '../../domain/discord_social_call.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
@@ -15,6 +16,10 @@ class DiscordActivityInviteStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = DiscordSocialActivityScope.maybeOf(context);
     if (controller == null) return const SizedBox.shrink();
+    if (controller.session case final session?
+        when controller.call?.isActive == true || controller.callPending) {
+      return _JoinedSession(controller: controller, session: session);
+    }
     if (controller.invites case [final invite, ...]) {
       return _IncomingInvite(
         controller: controller,
@@ -129,33 +134,151 @@ class _JoinedSession extends StatelessWidget {
   final DiscordSocialActivitySession session;
 
   @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('discord-activity-session-joined'),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-    decoration: BoxDecoration(
-      color: context.surfaces.inset,
-      border: Border(bottom: BorderSide(color: context.surfaces.border)),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.sports_esports_outlined, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Joined Flucord activity lobby · ${session.lobbyId}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) {
+    final call = controller.call;
+    final active = call?.isActive == true;
+    return Container(
+      key: const ValueKey('discord-activity-session-joined'),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.surfaces.inset,
+        border: Border(bottom: BorderSide(color: context.surfaces.border)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.headset_mic_outlined, size: 18, color: _statusColor(call)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _title(call),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _detail(call),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: controller.callError == null
+                        ? context.surfaces.muted
+                        : FlucordColors.danger,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        IconButton(
-          key: const ValueKey('dismiss-activity-session-notice'),
-          tooltip: 'Dismiss lobby notice',
-          visualDensity: VisualDensity.compact,
-          onPressed: controller.clearSessionNotice,
-          icon: const Icon(Icons.close, size: 16),
-        ),
-      ],
-    ),
+          if (controller.callPending)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (!active)
+            FilledButton(
+              key: const ValueKey('start-activity-voice'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: controller.startVoice,
+              child: const Text('Join voice'),
+            )
+          else ...[
+            _CallButton(
+              key: const ValueKey('toggle-activity-mute'),
+              tooltip: call!.selfMuted ? 'Unmute' : 'Mute',
+              icon: call.selfMuted ? Icons.mic_off : Icons.mic,
+              active: call.selfMuted,
+              onPressed: controller.toggleMuted,
+            ),
+            _CallButton(
+              key: const ValueKey('toggle-activity-deafen'),
+              tooltip: call.selfDeafened ? 'Undeafen' : 'Deafen',
+              icon: call.selfDeafened
+                  ? Icons.headset_off
+                  : Icons.headphones_outlined,
+              active: call.selfDeafened,
+              onPressed: controller.toggleDeafened,
+            ),
+            _CallButton(
+              key: const ValueKey('leave-activity-voice'),
+              tooltip: 'Leave activity voice',
+              icon: Icons.call_end,
+              color: FlucordColors.danger,
+              onPressed: controller.leaveVoice,
+            ),
+          ],
+          if (!active && !controller.callPending)
+            IconButton(
+              key: const ValueKey('dismiss-activity-session-notice'),
+              tooltip: 'Dismiss lobby notice',
+              visualDensity: VisualDensity.compact,
+              onPressed: controller.clearSessionNotice,
+              icon: const Icon(Icons.close, size: 16),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Color? _statusColor(DiscordSocialCallState? call) => switch (call?.status) {
+    DiscordSocialCallStatus.connected => FlucordColors.success,
+    DiscordSocialCallStatus.reconnecting => FlucordColors.warning,
+    DiscordSocialCallStatus.disconnected => FlucordColors.danger,
+    _ => null,
+  };
+
+  String _title(DiscordSocialCallState? call) => switch (call?.status) {
+    DiscordSocialCallStatus.connected => 'Activity voice connected',
+    DiscordSocialCallStatus.reconnecting => 'Activity voice reconnecting',
+    DiscordSocialCallStatus.disconnecting => 'Leaving activity voice',
+    DiscordSocialCallStatus.joining ||
+    DiscordSocialCallStatus.connecting ||
+    DiscordSocialCallStatus.signalingConnected => 'Connecting activity voice',
+    _ => 'Joined Flucord activity lobby',
+  };
+
+  String _detail(DiscordSocialCallState? call) {
+    if (controller.callError != null) return 'Voice connection failed · Retry';
+    if (call?.isActive != true) return 'Lobby ${session.lobbyId} · Voice idle';
+    final count = call!.participantUserIds.length;
+    return 'Lobby ${session.lobbyId} · $count voice participant${count == 1 ? '' : 's'}';
+  }
+}
+
+class _CallButton extends StatelessWidget {
+  const _CallButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.active = false,
+    this.color,
+    super.key,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool active;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tooltip,
+    visualDensity: VisualDensity.compact,
+    color: color ?? (active ? FlucordColors.brand : null),
+    onPressed: onPressed,
+    icon: Icon(icon, size: 18),
   );
 }

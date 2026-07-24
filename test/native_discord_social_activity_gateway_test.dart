@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
 import 'package:flucord/src/domain/discord_social_activity.dart';
+import 'package:flucord/src/domain/discord_social_call.dart';
 
 void main() {
   test('maps activity send and accept to the native wire contract', () async {
@@ -58,6 +59,46 @@ void main() {
 
     await expectation;
   });
+
+  test('maps activity voice controls and live state callbacks', () async {
+    final channel = _Channel(_callPayload());
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    final started = await gateway.startActivityCall('700');
+    await gateway.setActivityCallMuted(lobbyId: '700', muted: true);
+    await gateway.setActivityCallDeafened(lobbyId: '700', deafened: true);
+    await gateway.leaveActivityCall('700');
+
+    expect(started.status, DiscordSocialCallStatus.connected);
+    expect(channel.calls, [
+      'startActivityCall',
+      'setActivityCallMuted',
+      'setActivityCallDeafened',
+      'leaveActivityCall',
+    ]);
+    expect(channel.arguments, [
+      {'lobby_id': '700'},
+      {'lobby_id': '700', 'value': true},
+      {'lobby_id': '700', 'value': true},
+      {'lobby_id': '700'},
+    ]);
+
+    final expectation = expectLater(
+      gateway.activityCallEvents,
+      emits(
+        isA<DiscordSocialCallState>().having(
+          (state) => state.participantUserIds,
+          'participants',
+          ['500'],
+        ),
+      ),
+    );
+    await channel.emit('socialActivityCallChanged', _callPayload());
+    await expectation;
+  });
 }
 
 DiscordSocialActivityInvite _invite() => DiscordSocialActivityInvite(
@@ -82,6 +123,14 @@ Map<String, Object> _payload() => {
   'session_id': 'session',
   'invite_type': 'join',
   'is_valid': true,
+};
+
+Map<String, Object> _callPayload() => {
+  'lobby_id': '700',
+  'status': 'connected',
+  'participant_user_ids': ['500'],
+  'self_muted': false,
+  'self_deafened': false,
 };
 
 final class _Channel implements DiscordSocialSdkPlatformChannel {

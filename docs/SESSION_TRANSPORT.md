@@ -150,10 +150,19 @@ to a user's channel history. Flucord also does not infer chat access from
   create/update callbacks retain the exact invite object, and
   `AcceptActivityInvite` returns the secret used for the recipient's lobby
   join. Activity-lobby state is isolated from normal DM state and is never
-  labelled as a direct call; audio is not yet attached to that lobby.
+  labelled as a direct call. After either side owns the lobby ID, the native
+  bridge uses documented `StartCall(lobbyId)` audio, retains the returned
+  `discordpp::Call`, forwards its status and participant callbacks, applies
+  self-mute and self-deafen through that exact call, and leaves through
+  `EndCalls`. Flutter retains only typed call state and never handles PCM or
+  Discord voice credentials itself.
   Lobby secrets are generated with operating-system cryptographic randomness,
   cross only the private platform channel, remain outside controllers and
   persistence, and are wiped from the native bridge when the SDK session ends.
+  Call handles and participant state are also memory-only and are discarded on
+  Social SDK disconnect or authentication expiry. This remains an activity
+  lobby call rather than an ordinary user-DM call, because the documented SDK
+  still does not expose a DM channel/lobby ID for direct calling.
 - Social SDK grants have their own versioned operating-system vault record.
   The Windows bridge owns one persistent `discordpp::Client`, performs the SDK
   PKCE/refresh flow, waits for `Client::Status::Ready`, and pumps callbacks on

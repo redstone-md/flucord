@@ -7,10 +7,12 @@ export 'discord_social_sdk_platform_channel.dart';
 
 import '../domain/discord_relationship.dart';
 import '../domain/discord_social_activity.dart';
+import '../domain/discord_social_call.dart';
 import '../domain/discord_social_dm.dart';
 import '../domain/discord_social_presence.dart';
 import '../domain/discord_social_sdk.dart';
 import 'discord_social_activity_mapper.dart';
+import 'discord_social_call_mapper.dart';
 import 'discord_social_dm_mapper.dart';
 import 'discord_social_lobby_secret.dart';
 import 'discord_social_relationship_mapper.dart';
@@ -28,6 +30,8 @@ final class NativeDiscordSocialSdkGateway
         DiscordSocialPresenceGateway,
         DiscordSocialActivityGateway,
         DiscordSocialActivityEvents,
+        DiscordSocialCallGateway,
+        DiscordSocialCallEvents,
         DiscordSocialDmGateway,
         DiscordSocialDmEvents {
   NativeDiscordSocialSdkGateway({
@@ -57,6 +61,8 @@ final class NativeDiscordSocialSdkGateway
       StreamController.broadcast(sync: true);
   final StreamController<DiscordSocialActivityInviteEvent> _activityInvites =
       StreamController.broadcast(sync: true);
+  final StreamController<DiscordSocialCallState> _activityCalls =
+      StreamController.broadcast(sync: true);
 
   @override
   Stream<DiscordSocialSdkAuthentication> get authenticationChanges =>
@@ -72,6 +78,10 @@ final class NativeDiscordSocialSdkGateway
   @override
   Stream<DiscordSocialActivityInviteEvent> get activityInviteEvents =>
       _activityInvites.stream;
+
+  @override
+  Stream<DiscordSocialCallState> get activityCallEvents =>
+      _activityCalls.stream;
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async {
@@ -339,6 +349,26 @@ final class NativeDiscordSocialSdkGateway
     }
   }
 
+  @override
+  Future<DiscordSocialCallState> startActivityCall(String lobbyId) =>
+      _callMutation('startActivityCall', lobbyId);
+
+  @override
+  Future<DiscordSocialCallState> setActivityCallMuted({
+    required String lobbyId,
+    required bool muted,
+  }) => _callMutation('setActivityCallMuted', lobbyId, value: muted);
+
+  @override
+  Future<DiscordSocialCallState> setActivityCallDeafened({
+    required String lobbyId,
+    required bool deafened,
+  }) => _callMutation('setActivityCallDeafened', lobbyId, value: deafened);
+
+  @override
+  Future<DiscordSocialCallState> leaveActivityCall(String lobbyId) =>
+      _callMutation('leaveActivityCall', lobbyId);
+
   Future<Object?> _handleNativeCall(String method, Object? arguments) async {
     if (method == 'authenticationGrantChanged') {
       await _persistGrant(arguments);
@@ -381,12 +411,38 @@ final class NativeDiscordSocialSdkGateway
       }
       return null;
     }
+    if (method == 'socialActivityCallChanged') {
+      try {
+        _activityCalls.add(DiscordSocialCallMapper.state(arguments));
+      } on Object {
+        throw const DiscordSocialSdkException('invalid_activity_call_event');
+      }
+      return null;
+    }
     throw MissingPluginException('Unknown Social SDK event: $method');
   }
 
   Future<void> _persistGrant(Object? response) async {
     final grant = DiscordSocialSdkResponseCodec.grant(response, _clock);
     await _vault.write(grant);
+  }
+
+  Future<DiscordSocialCallState> _callMutation(
+    String method,
+    String lobbyId, {
+    bool? value,
+  }) async {
+    _requireSupportedPlatform();
+    try {
+      return DiscordSocialCallMapper.state(
+        await _invoke(
+          method,
+          arguments: {'lobby_id': lobbyId.trim(), 'value': ?value},
+        ),
+      );
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_activity_call_response');
+    }
   }
 
   Future<DiscordSocialSdkAuthentication> _currentAuthentication() async =>

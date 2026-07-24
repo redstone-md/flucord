@@ -347,8 +347,15 @@ browser runtime or dependency on Discord's private user API.
     through Rich Presence, invite a friend, receive create/update callbacks,
     accept the exact invite object, and join the returned lobby secret. Surface
     incoming and joined state in Friends without presenting an activity lobby
-    as an ordinary Discord DM call. Audio attachment to this lobby remains a
-    later increment, and package-linked validation still needs the approved SDK.
+    as an ordinary Discord DM call. Package-linked validation still needs the
+    approved SDK.
+65. Completed: attach documented Social SDK audio to the joined activity lobby
+    with `StartCall(lobbyId)`, retain the native `Call`, synchronize connection
+    status and participants, and expose self-mute, self-deafen, retry, and leave
+    controls in the compact Friends strip. Keep call state memory-only and
+    separate from normal DM state. The default unbundled Windows bridge remains
+    release/smoke verified; package-linked compilation and live-account audio
+    validation still require the separately approved SDK download.
 
 ## Protocol safety
 

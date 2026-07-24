@@ -264,7 +264,10 @@ bridge creates an ephemeral SDK lobby, publishes its join secret through Rich
 Presence, sends the invite, retains incoming invite callbacks, and joins the
 secret returned by `AcceptActivityInvite`. This is labelled as an activity
 lobby throughout the UI; it is not represented as a normal DM voice call, and
-the current increment does not attach audio to the joined lobby.
+the joined lobby now starts a documented Social SDK voice call with live
+connection status and participant count. The native Friends strip exposes
+self-mute, self-deafen, retry, and leave controls while keeping this activity
+voice path separate from ordinary Discord DM calls.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and
