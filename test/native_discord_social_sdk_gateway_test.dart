@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_social_dm.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
@@ -134,6 +135,99 @@ void main() {
       });
     },
   );
+
+  test('maps native DM summaries through the official chat method', () async {
+    final channel = _Channel([
+      {
+        'user_id': '101',
+        'last_message_id': '901',
+        'display_name': 'Ada',
+        'username': 'ada',
+        'status': 'online',
+        'is_provisional': false,
+      },
+    ]);
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    final conversations = await gateway.fetchConversations();
+
+    expect(channel.calls, ['getDmConversations']);
+    expect(conversations.single.user.displayName, 'Ada');
+    expect(conversations.single.lastMessageId, '901');
+  });
+
+  test('bounds DM history and preserves the native wire identifiers', () async {
+    final channel = _Channel([
+      {
+        'id': '901',
+        'conversation_user_id': '101',
+        'author_id': '101',
+        'recipient_id': '202',
+        'author_display_name': 'Ada',
+        'content': 'hello',
+        'sent_timestamp': 1771718400000,
+        'edited_timestamp': 0,
+        'authored_by_current_user': false,
+      },
+    ]);
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    final messages = await gateway.fetchMessages(userId: '101', limit: 400);
+
+    expect(channel.calls, ['getDmMessages']);
+    expect(channel.arguments.single, {'user_id': '101', 'limit': 100});
+    expect(messages.single.content, 'hello');
+  });
+
+  test('sends DMs and decodes live message events', () async {
+    final channel = _Channel({'message_id': '902'});
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    final messageId = await gateway.sendMessage(
+      userId: '101',
+      content: ' hello ',
+    );
+    final eventExpectation = expectLater(
+      gateway.socialDmEvents,
+      emits(
+        isA<DiscordSocialDmEvent>()
+            .having(
+              (event) => event.type,
+              'type',
+              DiscordSocialDmEventType.created,
+            )
+            .having((event) => event.message?.content, 'content', 'live'),
+      ),
+    );
+    await channel.emit('socialMessageChanged', {
+      'type': 'created',
+      'message': {
+        'id': '902',
+        'conversation_user_id': '101',
+        'author_id': '202',
+        'recipient_id': '101',
+        'author_display_name': 'Jack',
+        'content': 'live',
+        'sent_timestamp': 1771718400000,
+        'edited_timestamp': 0,
+        'authored_by_current_user': true,
+      },
+    });
+    await eventExpectation;
+
+    expect(messageId, '902');
+    expect(channel.calls, ['sendDmMessage']);
+    expect(channel.arguments.single, {'user_id': '101', 'content': ' hello '});
+  });
 
   test(
     'authorizes through the native PKCE bridge and persists its grant',

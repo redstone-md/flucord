@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../application/discord_social_dm_controller.dart';
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friend_directory.dart';
+import 'discord_social_dm_navigation_scope.dart';
+import 'discord_social_dm_scope.dart';
+import 'discord_social_dm_view.dart';
 import 'discord_social_sdk_status.dart';
 import 'discord_social_sdk_scope.dart';
 import 'oauth_account_footer.dart';
@@ -18,6 +25,8 @@ class OAuthAccountSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final socialSdk = DiscordSocialSdkScope.of(context);
+    final dmController = DiscordSocialDmScope.of(context);
+    final navigation = DiscordSocialDmNavigationScope.of(context);
     return Container(
       key: const ValueKey('oauth-account-sidebar'),
       width: 236,
@@ -53,12 +62,14 @@ class OAuthAccountSidebar extends StatelessWidget {
                       socialSdk.state == DiscordSocialSdkControllerState.ready
                       ? 'Native social'
                       : 'Unavailable through OAuth',
+                  selected: navigation.friendsSelected,
+                  onTap: navigation.showFriends,
                 ),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    'CONNECTED ACCOUNTS · ${account.connectionCount}',
+                    'DIRECT MESSAGES',
                     style: TextStyle(
                       color: context.surfaces.muted,
                       fontSize: 10,
@@ -67,12 +78,46 @@ class OAuthAccountSidebar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                for (final connection in account.connections.take(6))
-                  _SidebarItem(
-                    icon: Icons.link,
-                    label: connection.name,
-                    detail: connection.type,
-                  ),
+                if (dmController.state == DiscordSocialDmLoadState.loading)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else if (dmController.state == DiscordSocialDmLoadState.ready &&
+                    dmController.conversations.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      'No recent conversations',
+                      style: TextStyle(
+                        color: context.surfaces.muted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  )
+                else
+                  for (final conversation in dmController.conversations)
+                    _SidebarItem(
+                      key: ValueKey(
+                        'social-dm-conversation-${conversation.user.id}',
+                      ),
+                      icon: Icons.person_outline,
+                      label: conversation.user.displayName,
+                      detail: _presenceLabel(conversation.user.status),
+                      selected:
+                          navigation.selectedUserId == conversation.user.id,
+                      onTap: () {
+                        navigation.openConversation(conversation.user.id);
+                        unawaited(
+                          dmController.loadMessages(conversation.user.id),
+                        );
+                      },
+                    ),
               ],
             ),
           ),
@@ -91,8 +136,20 @@ class OAuthAccountHomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final socialSdk = DiscordSocialSdkScope.of(context);
+    final dmController = DiscordSocialDmScope.of(context);
+    final navigation = DiscordSocialDmNavigationScope.of(context);
     final socialAvailable = socialSdk.availability?.isReady ?? false;
     final socialReady = socialSdk.isAuthenticated;
+    final selectedUserId = navigation.selectedUserId;
+    if (selectedUserId case final userId?) {
+      final conversation = dmController.conversationFor(userId);
+      if (conversation != null) {
+        return DiscordSocialDmView(
+          controller: dmController,
+          user: conversation.user,
+        );
+      }
+    }
     return Column(
       key: const ValueKey('oauth-account-home-view'),
       children: [
@@ -287,41 +344,65 @@ class _SidebarItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.detail,
+    this.selected = false,
+    this.onTap,
+    super.key,
   });
 
   final IconData icon;
   final String label;
   final String detail;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: context.surfaces.muted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11),
+    return Material(
+      color: selected ? context.surfaces.raised : Colors.transparent,
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: context.surfaces.muted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.surfaces.muted,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 9),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
+
+String _presenceLabel(DiscordPresenceStatus status) => switch (status) {
+  DiscordPresenceStatus.online => 'Online',
+  DiscordPresenceStatus.idle => 'Idle',
+  DiscordPresenceStatus.doNotDisturb => 'Do Not Disturb',
+  DiscordPresenceStatus.offline => 'Offline',
+  DiscordPresenceStatus.unknown => 'Direct Message',
+};

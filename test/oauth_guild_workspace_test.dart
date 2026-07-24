@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/oauth_guild_directory_controller.dart';
 import 'package:flucord/src/application/oauth_guild_membership_controller.dart';
+import 'package:flucord/src/application/discord_social_dm_controller.dart';
+import 'package:flucord/src/application/discord_social_dm_navigation_controller.dart';
 import 'package:flucord/src/application/discord_social_sdk_controller.dart';
+import 'package:flucord/src/data/unavailable_discord_social_dm_gateway.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
+import 'package:flucord/src/presentation/widgets/discord_social_dm_navigation_scope.dart';
+import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_guild_workspace.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -47,25 +52,37 @@ void main() {
     final socialController = DiscordSocialSdkController(_SocialGateway());
     await socialController.initialize();
     addTearDown(socialController.dispose);
+    final dmController = DiscordSocialDmController(
+      const UnavailableDiscordSocialDmGateway(),
+    );
+    final dmNavigation = DiscordSocialDmNavigationController();
+    addTearDown(dmController.dispose);
+    addTearDown(dmNavigation.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
         home: DiscordSocialSdkScope(
           controller: socialController,
-          child: ListenableBuilder(
-            listenable: controller,
-            builder: (context, _) => OAuthGuildWorkspace(
-              account: account,
-              accountHomeSelected: controller.accountHomeSelected,
-              membershipController: membershipController,
-              selectedGuildId: controller.selectedGuildId,
-              onOpenAccountHome: controller.selectAccountHome,
-              onSelectGuild: (guildId) =>
-                  controller.selectGuild(account, guildId),
-              onOpenConnections: () {},
-              onToggleTheme: () {},
-              isDark: true,
+          child: DiscordSocialDmNavigationScope(
+            controller: dmNavigation,
+            child: DiscordSocialDmScope(
+              controller: dmController,
+              child: ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) => OAuthGuildWorkspace(
+                  account: account,
+                  accountHomeSelected: controller.accountHomeSelected,
+                  membershipController: membershipController,
+                  selectedGuildId: controller.selectedGuildId,
+                  onOpenAccountHome: controller.selectAccountHome,
+                  onSelectGuild: (guildId) =>
+                      controller.selectGuild(account, guildId),
+                  onOpenConnections: () {},
+                  onToggleTheme: () {},
+                  isDark: true,
+                ),
+              ),
             ),
           ),
         ),
@@ -138,25 +155,37 @@ void main() {
     final socialController = DiscordSocialSdkController(_SocialGateway());
     await socialController.initialize();
     addTearDown(socialController.dispose);
+    final dmController = DiscordSocialDmController(
+      const UnavailableDiscordSocialDmGateway(),
+    );
+    final dmNavigation = DiscordSocialDmNavigationController();
+    addTearDown(dmController.dispose);
+    addTearDown(dmNavigation.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
         home: DiscordSocialSdkScope(
           controller: socialController,
-          child: ListenableBuilder(
-            listenable: directoryController,
-            builder: (context, _) => OAuthGuildWorkspace(
-              account: account,
-              accountHomeSelected: directoryController.accountHomeSelected,
-              membershipController: membershipController,
-              selectedGuildId: directoryController.selectedGuildId,
-              onOpenAccountHome: directoryController.selectAccountHome,
-              onSelectGuild: (guildId) =>
-                  directoryController.selectGuild(account, guildId),
-              onOpenConnections: () {},
-              onToggleTheme: () {},
-              isDark: true,
+          child: DiscordSocialDmNavigationScope(
+            controller: dmNavigation,
+            child: DiscordSocialDmScope(
+              controller: dmController,
+              child: ListenableBuilder(
+                listenable: directoryController,
+                builder: (context, _) => OAuthGuildWorkspace(
+                  account: account,
+                  accountHomeSelected: directoryController.accountHomeSelected,
+                  membershipController: membershipController,
+                  selectedGuildId: directoryController.selectedGuildId,
+                  onOpenAccountHome: directoryController.selectAccountHome,
+                  onSelectGuild: (guildId) =>
+                      directoryController.selectGuild(account, guildId),
+                  onOpenConnections: () {},
+                  onToggleTheme: () {},
+                  isDark: true,
+                ),
+              ),
             ),
           ),
         ),

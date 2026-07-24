@@ -1,10 +1,11 @@
 #include "discord_social_sdk_bridge.h"
+#include "discord_social_sdk_chat_bridge.h"
+#include "discord_social_sdk_wire.h"
 
 #include <flutter/standard_method_codec.h>
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -15,7 +16,10 @@
 
 namespace {
 
-using MethodResult = flutter::MethodResult<flutter::EncodableValue>;
+using discord_social_sdk_wire::InvalidArguments;
+using discord_social_sdk_wire::MethodResult;
+using discord_social_sdk_wire::SnowflakeArgument;
+using discord_social_sdk_wire::StringArgument;
 
 flutter::EncodableValue AvailabilityPayload() {
 #if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
@@ -26,52 +30,6 @@ flutter::EncodableValue AvailabilityPayload() {
   flutter::EncodableMap payload;
   payload[flutter::EncodableValue("status")] = flutter::EncodableValue(status);
   return flutter::EncodableValue(payload);
-}
-
-const flutter::EncodableMap* ArgumentsOf(const flutter::MethodCall<>& call) {
-  const auto* arguments = call.arguments();
-  return arguments == nullptr
-             ? nullptr
-             : std::get_if<flutter::EncodableMap>(arguments);
-}
-
-std::optional<std::string> StringArgument(const flutter::MethodCall<>& call,
-                                          const std::string& key) {
-  const auto* arguments = ArgumentsOf(call);
-  if (arguments == nullptr) {
-    return std::nullopt;
-  }
-  const auto iterator = arguments->find(flutter::EncodableValue(key));
-  if (iterator == arguments->end()) {
-    return std::nullopt;
-  }
-  const auto* value = std::get_if<std::string>(&iterator->second);
-  if (value == nullptr || value->empty()) {
-    return std::nullopt;
-  }
-  return *value;
-}
-
-std::optional<uint64_t> SnowflakeArgument(const flutter::MethodCall<>& call,
-                                          const std::string& key) {
-  const auto value = StringArgument(call, key);
-  if (!value) {
-    return std::nullopt;
-  }
-  try {
-    size_t parsed = 0;
-    const auto result = std::stoull(*value, &parsed);
-    if (parsed != value->size() || result == 0) {
-      return std::nullopt;
-    }
-    return result;
-  } catch (...) {
-    return std::nullopt;
-  }
-}
-
-void InvalidArguments(std::unique_ptr<MethodResult> result) {
-  result->Error("invalid_arguments", "Required Social SDK arguments are invalid.");
 }
 
 }  // namespace
@@ -96,6 +54,8 @@ class DiscordSocialSdkBridge::Impl {
         });
     client_->SetTokenExpirationCallback(
         [this]() { RefreshExpiringToken(); });
+    chat_bridge_ =
+        std::make_unique<DiscordSocialSdkChatBridge>(client_.get(), channel_);
 #endif
   }
 
@@ -126,12 +86,19 @@ class DiscordSocialSdkBridge::Impl {
       UpdateRelationship(call, std::move(result));
       return;
     }
+    if (chat_bridge_->CanHandle(call.method_name())) {
+      chat_bridge_->Handle(call, std::move(result));
+      return;
+    }
 #else
     if (call.method_name() == "authorize" ||
         call.method_name() == "restoreSession" ||
         call.method_name() == "disconnect" ||
         call.method_name() == "getRelationships" ||
-        call.method_name() == "updateRelationship") {
+        call.method_name() == "updateRelationship" ||
+        call.method_name() == "getDmConversations" ||
+        call.method_name() == "getDmMessages" ||
+        call.method_name() == "sendDmMessage") {
       result->Error(
           "sdk_not_bundled",
           "The Discord Social SDK package is not linked into this build.");
@@ -451,6 +418,7 @@ class DiscordSocialSdkBridge::Impl {
   }
 
   std::unique_ptr<discordpp::Client> client_;
+  std::unique_ptr<DiscordSocialSdkChatBridge> chat_bridge_;
   std::shared_ptr<MethodResult> pending_auth_result_;
   Grant grant_;
   uint64_t application_id_ = 0;

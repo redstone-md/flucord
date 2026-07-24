@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/discord_relationship.dart';
+import '../domain/discord_social_dm.dart';
 import '../domain/discord_social_sdk.dart';
+import 'discord_social_dm_mapper.dart';
 import 'discord_social_relationship_mapper.dart';
 import 'secure_discord_social_sdk_vault.dart';
 
@@ -60,7 +62,11 @@ final class DiscordSocialSdkConfiguration {
 }
 
 final class NativeDiscordSocialSdkGateway
-    implements DiscordSocialSdkGateway, DiscordSocialSdkAuthenticationEvents {
+    implements
+        DiscordSocialSdkGateway,
+        DiscordSocialSdkAuthenticationEvents,
+        DiscordSocialDmGateway,
+        DiscordSocialDmEvents {
   NativeDiscordSocialSdkGateway({
     DiscordSocialSdkPlatformChannel? channel,
     this._targetPlatform,
@@ -80,10 +86,15 @@ final class NativeDiscordSocialSdkGateway
   final DiscordSocialSdkClock _clock;
   final StreamController<DiscordSocialSdkAuthentication> _authChanges =
       StreamController.broadcast(sync: true);
+  final StreamController<DiscordSocialDmEvent> _dmEvents =
+      StreamController.broadcast(sync: true);
 
   @override
   Stream<DiscordSocialSdkAuthentication> get authenticationChanges =>
       _authChanges.stream;
+
+  @override
+  Stream<DiscordSocialDmEvent> get socialDmEvents => _dmEvents.stream;
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async {
@@ -155,6 +166,60 @@ final class NativeDiscordSocialSdkGateway
   }
 
   @override
+  Future<List<DiscordSocialDmConversation>> fetchConversations() async {
+    _requireSupportedPlatform();
+    try {
+      return DiscordSocialDmMapper.conversations(
+        await _invoke('getDmConversations'),
+      );
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_dm_response');
+    }
+  }
+
+  @override
+  Future<List<DiscordSocialDmMessage>> fetchMessages({
+    required String userId,
+    int limit = 100,
+  }) async {
+    _requireSupportedPlatform();
+    try {
+      return DiscordSocialDmMapper.messages(
+        await _invoke(
+          'getDmMessages',
+          arguments: {'user_id': userId, 'limit': limit.clamp(1, 100)},
+        ),
+      );
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_dm_response');
+    }
+  }
+
+  @override
+  Future<String> sendMessage({
+    required String userId,
+    required String content,
+  }) async {
+    _requireSupportedPlatform();
+    if (content.trim().isEmpty || content.length > 2000) {
+      throw const DiscordSocialSdkException('invalid_message_content');
+    }
+    final response = await _invoke(
+      'sendDmMessage',
+      arguments: {'user_id': userId, 'content': content},
+    );
+    if (response case {'message_id': final Object? rawId}) {
+      final messageId = switch (rawId) {
+        final String value => value.trim(),
+        final int value => value.toString(),
+        _ => '',
+      };
+      if (messageId.isNotEmpty) return messageId;
+    }
+    throw const DiscordSocialSdkException('invalid_dm_response');
+  }
+
+  @override
   Future<List<DiscordRelationship>> fetchRelationships() async {
     _requireSupportedPlatform();
     try {
@@ -194,6 +259,14 @@ final class NativeDiscordSocialSdkGateway
     if (method == 'authenticationExpired') {
       await _vault.clear();
       _authChanges.add(DiscordSocialSdkAuthentication.signedOut);
+      return null;
+    }
+    if (method == 'socialMessageChanged' || method == 'socialMessageDeleted') {
+      try {
+        _dmEvents.add(DiscordSocialDmMapper.event(method, arguments));
+      } on FormatException {
+        throw const DiscordSocialSdkException('invalid_dm_event');
+      }
       return null;
     }
     throw MissingPluginException('Unknown Social SDK event: $method');

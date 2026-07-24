@@ -291,6 +291,15 @@ browser runtime or dependency on Discord's private user API.
     bridge exposes live relationships and mutations without sharing OAuth or
     Bot credentials. Package-linked compilation and live-account validation
     still require the separately approved SDK download.
+55. Completed: add an authenticated Social SDK Direct Message tracer bullet
+    with conversation summaries, bounded message history, exact-content
+    sending, and live create/update/delete synchronization. The native account
+    workspace now exposes a Discord-like DM sidebar, friend-to-chat navigation,
+    chronological timeline, and 2,000-character composer while keeping this
+    user-account transport independent from the Bot repository. The default
+    Windows runner and its unbundled-SDK contract are release/smoke verified;
+    package-linked compilation and live-account validation still require the
+    separately approved SDK download.
 
 ## Protocol safety
 

@@ -8,11 +8,13 @@ class DiscordFriendActions extends StatelessWidget {
   const DiscordFriendActions({
     required this.controller,
     required this.relationship,
+    this.onMessage,
     super.key,
   });
 
   final DiscordFriendsController controller;
   final DiscordRelationship relationship;
+  final VoidCallback? onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +29,14 @@ class DiscordFriendActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (relationship.kind == DiscordRelationshipKind.friend &&
+            onMessage != null)
+          _ActionButton(
+            key: ValueKey('discord-friend-message-$userId'),
+            tooltip: 'Message',
+            icon: Icons.chat_bubble_outline,
+            onPressed: onMessage!,
+          ),
         if (relationship.kind == DiscordRelationshipKind.incomingRequest) ...[
           _ActionButton(
             key: ValueKey('discord-friend-accept-$userId'),

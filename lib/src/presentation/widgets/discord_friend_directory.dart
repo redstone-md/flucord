@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../application/discord_friends_controller.dart';
@@ -6,6 +8,8 @@ import '../../theme/flucord_theme.dart';
 import 'discord_friend_actions.dart';
 import 'discord_friends_scope.dart';
 import 'discord_social_sdk_scope.dart';
+import 'discord_social_dm_navigation_scope.dart';
+import 'discord_social_dm_scope.dart';
 import 'remote_identity_image.dart';
 
 class DiscordFriendDirectory extends StatelessWidget {
@@ -15,6 +19,8 @@ class DiscordFriendDirectory extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = DiscordFriendsScope.of(context);
     final socialController = DiscordSocialSdkScope.of(context);
+    final dmController = DiscordSocialDmScope.of(context);
+    final dmNavigation = DiscordSocialDmNavigationScope.of(context);
     return switch (controller.state) {
       DiscordFriendsLoadState.idle ||
       DiscordFriendsLoadState.loading => const _FriendsState(
@@ -54,6 +60,11 @@ class DiscordFriendDirectory extends StatelessWidget {
       DiscordFriendsLoadState.ready => _ReadyFriendDirectory(
         controller: controller,
         relationships: controller.relationships,
+        onMessage: (user) {
+          dmController.ensureConversation(user);
+          dmNavigation.openConversation(user.id);
+          unawaited(dmController.loadMessages(user.id));
+        },
       ),
     };
   }
@@ -63,10 +74,12 @@ class _ReadyFriendDirectory extends StatelessWidget {
   const _ReadyFriendDirectory({
     required this.controller,
     required this.relationships,
+    required this.onMessage,
   });
 
   final DiscordFriendsController controller;
   final List<DiscordRelationship> relationships;
+  final ValueChanged<DiscordRelationshipUser> onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +112,7 @@ class _ReadyFriendDirectory extends StatelessWidget {
         final DiscordRelationship relationship => _FriendRow(
           controller: controller,
           relationship: relationship,
+          onMessage: () => onMessage(relationship.user),
         ),
         _ => const SizedBox.shrink(),
       },
@@ -143,10 +157,15 @@ class _ReadyFriendDirectory extends StatelessWidget {
 }
 
 class _FriendRow extends StatelessWidget {
-  const _FriendRow({required this.controller, required this.relationship});
+  const _FriendRow({
+    required this.controller,
+    required this.relationship,
+    required this.onMessage,
+  });
 
   final DiscordFriendsController controller;
   final DiscordRelationship relationship;
+  final VoidCallback onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +218,7 @@ class _FriendRow extends StatelessWidget {
             DiscordFriendActions(
               controller: controller,
               relationship: relationship,
+              onMessage: onMessage,
             ),
           ],
         ),

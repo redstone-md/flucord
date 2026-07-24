@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/discord_friends_controller.dart';
+import 'package:flucord/src/application/discord_social_dm_controller.dart';
+import 'package:flucord/src/application/discord_social_dm_navigation_controller.dart';
 import 'package:flucord/src/application/discord_social_sdk_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
+import 'package:flucord/src/data/unavailable_discord_social_dm_gateway.dart';
 import 'package:flucord/src/presentation/widgets/discord_friends_scope.dart';
 import 'package:flucord/src/presentation/widgets/discord_social_sdk_scope.dart';
+import 'package:flucord/src/presentation/widgets/discord_social_dm_navigation_scope.dart';
+import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -225,15 +230,24 @@ Future<_ControllerHarness> _harnessFor(
   )..mutationError = mutationError;
   final social = DiscordSocialSdkController(gateway);
   final friends = DiscordFriendsController(gateway);
+  final dms = DiscordSocialDmController(
+    const UnavailableDiscordSocialDmGateway(),
+  );
+  final dmNavigation = DiscordSocialDmNavigationController();
   social.addListener(() {
     friends.reconcileSession(
+      social.availability,
+      authenticated: social.isAuthenticated,
+    );
+    dms.reconcileSession(
       social.availability,
       authenticated: social.isAuthenticated,
     );
   });
   await social.initialize();
   await friends.initialize();
-  return _ControllerHarness(social, friends, gateway);
+  await dms.initialize();
+  return _ControllerHarness(social, friends, dms, dmNavigation, gateway);
 }
 
 Future<void> _pumpAccountHome(
@@ -248,14 +262,20 @@ Future<void> _pumpAccountHome(
       theme: FlucordTheme.dark,
       home: DiscordSocialSdkScope(
         controller: harness.social,
-        child: DiscordFriendsScope(
-          controller: harness.friends,
-          child: Scaffold(
-            body: OAuthAccountHomeView(
-              account: DiscordOAuthAccount(
-                id: 'user-1',
-                username: 'jack',
-                displayName: 'Jack',
+        child: DiscordSocialDmNavigationScope(
+          controller: harness.dmNavigation,
+          child: DiscordSocialDmScope(
+            controller: harness.dms,
+            child: DiscordFriendsScope(
+              controller: harness.friends,
+              child: Scaffold(
+                body: OAuthAccountHomeView(
+                  account: DiscordOAuthAccount(
+                    id: 'user-1',
+                    username: 'jack',
+                    displayName: 'Jack',
+                  ),
+                ),
               ),
             ),
           ),
@@ -319,15 +339,25 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
 }
 
 final class _ControllerHarness {
-  const _ControllerHarness(this.social, this.friends, this.gateway);
+  const _ControllerHarness(
+    this.social,
+    this.friends,
+    this.dms,
+    this.dmNavigation,
+    this.gateway,
+  );
 
   final DiscordSocialSdkController social;
   final DiscordFriendsController friends;
+  final DiscordSocialDmController dms;
+  final DiscordSocialDmNavigationController dmNavigation;
   final _SocialGateway gateway;
 
   void dispose() {
     social.dispose();
     friends.dispose();
+    dms.dispose();
+    dmNavigation.dispose();
   }
 }
 
