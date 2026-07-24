@@ -10,6 +10,7 @@ import 'data/native_external_link_launcher.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
+import 'domain/voice_message_recorder.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/noop_voice_media_service.dart';
@@ -24,6 +25,7 @@ class FlucordApp extends StatefulWidget {
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
     this.voicePlaybackService,
+    this.voiceMessageRecorder,
     this.externalLinkLauncher,
     super.key,
   });
@@ -32,6 +34,7 @@ class FlucordApp extends StatefulWidget {
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;
   final VoiceAudioPlaybackService? voicePlaybackService;
+  final VoiceMessageRecorder? voiceMessageRecorder;
   final ExternalLinkLauncher? externalLinkLauncher;
 
   @override
@@ -77,6 +80,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _connectionController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
+    unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
   }
 
@@ -101,6 +105,7 @@ class _FlucordAppState extends State<FlucordApp> {
           connectionController: _connectionController,
           workspaceController: _workspaceController,
           voiceController: _voiceController,
+          voiceMessageRecorder: widget.voiceMessageRecorder,
           externalLinkLauncher:
               widget.externalLinkLauncher ?? const NativeExternalLinkLauncher(),
         ),

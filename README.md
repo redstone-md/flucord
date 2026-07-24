@@ -12,7 +12,7 @@ native forum and media-channel feeds, member roles and presence, local unread
 markers, paginated pinned messages, Windows notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
-native voice-message waveform playback,
+native voice-message recording and waveform playback,
 documented Discord CDN guild/member identity, anchored member profile
 popovers, a global native Quick Switcher, a cross-server Inbox, and theme
 switching without a browser runtime. The composer includes a searchable native
@@ -143,8 +143,12 @@ single audio attachment, fractional duration, and base64 waveform. They render
 as a compact native player with play/pause, buffering and retry states, elapsed
 time, and click-or-drag waveform seeking. Playback uses `media_kit` without a
 browser surface. Discord forbids editing voice messages, so Flucord removes the
-edit action and rejects the mutation before it reaches the repository. Native
-microphone recording and voice-message upload are not implemented yet.
+edit action and rejects the mutation before it reaches the repository. An empty
+composer exposes a microphone control that records native 48 kHz stereo PCM,
+encodes it with the bundled libopus boundary, packages Ogg/Opus locally, and
+uploads the documented duration, waveform, flag, and single audio attachment.
+The live waveform row supports cancel and stop-and-send; failed uploads retain
+only the recorder-owned temporary file for explicit retry or discard.
 
 The application can also connect to Discord through the documented Bot REST
 API v10 and Gateway. It does not accept or emulate personal account tokens.
@@ -170,7 +174,8 @@ a macOS release on Windows or a Linux release on macOS/Windows.
 Ubuntu/Debian Linux builds need Flutter's desktop toolchain plus
 `libgtk-3-dev` and `libsecret-1-dev`; the latter backs bot-token storage through
 the desktop keyring. A Secret Service provider such as GNOME Keyring or KWallet
-must be available at runtime.
+must be available at runtime. Native microphone capture through `record` also
+requires the PulseAudio utilities and FFmpeg available to the desktop session.
 
 ## Connect Discord
 

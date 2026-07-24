@@ -24,6 +24,7 @@ void main() {
           body: Align(
             alignment: Alignment.bottomCenter,
             child: MessageComposer(
+              channelId: 'channel-1',
               channelName: 'native',
               spaceName: 'Forge',
               customEmojis: const [],

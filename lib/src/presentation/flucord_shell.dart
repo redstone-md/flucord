@@ -10,6 +10,7 @@ import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
 import '../domain/external_link_launcher.dart';
+import '../domain/voice_message_recorder.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
@@ -41,6 +42,7 @@ class FlucordShell extends StatelessWidget {
     required this.connectionController,
     required this.workspaceController,
     required this.voiceController,
+    required this.voiceMessageRecorder,
     required this.externalLinkLauncher,
     super.key,
   });
@@ -49,6 +51,7 @@ class FlucordShell extends StatelessWidget {
   final ConnectionController connectionController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
+  final VoiceMessageRecorder? voiceMessageRecorder;
   final ExternalLinkLauncher externalLinkLauncher;
 
   @override
@@ -356,6 +359,12 @@ class FlucordShell extends StatelessWidget {
                                 onTyping: () =>
                                     chatController.startTyping(channel.id),
                                 voiceController: voiceController,
+                                voiceMessageRecorder: voiceMessageRecorder,
+                                onSendVoiceMessage: (voiceMessage) =>
+                                    chatController.sendVoiceMessage(
+                                      channelId: channel.id,
+                                      voiceMessage: voiceMessage,
+                                    ),
                               ),
                       ),
                       if (showPins && channel != null)

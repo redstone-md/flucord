@@ -53,6 +53,8 @@ class _ConversationPane extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.onTyping,
     required this.voiceController,
+    required this.voiceMessageRecorder,
+    required this.onSendVoiceMessage,
   });
 
   final ChatWorkspace workspace;
@@ -106,6 +108,8 @@ class _ConversationPane extends StatefulWidget {
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final VoidCallback onTyping;
   final VoiceController voiceController;
+  final VoiceMessageRecorder? voiceMessageRecorder;
+  final SendVoiceMessageCallback onSendVoiceMessage;
 
   @override
   State<_ConversationPane> createState() => _ConversationPaneState();
@@ -205,6 +209,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
           const LockedThreadComposerNotice()
         else if (widget.channel.kind == ChannelKind.text)
           MessageComposer(
+            channelId: widget.channel.id,
             channelName: widget.channel.name,
             spaceName: widget.workspace.spaceById(widget.channel.spaceId).name,
             customEmojis: widget.workspace.emojisFor(widget.channel.spaceId),
@@ -218,6 +223,8 @@ class _ConversationPaneState extends State<_ConversationPane> {
             onTyping: widget.onTyping,
             onCreatePoll: widget.onCreatePoll,
             onSendStickers: widget.onSendStickers,
+            voiceMessageRecorder: widget.voiceMessageRecorder,
+            onSendVoiceMessage: widget.onSendVoiceMessage,
             onSend:
                 (
                   body,

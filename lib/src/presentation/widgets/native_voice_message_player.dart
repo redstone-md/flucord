@@ -279,7 +279,7 @@ class VoiceMessageControls extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: _WaveformSeekSurface(
+            child: VoiceWaveformSurface(
               samples: samples,
               progress: progress,
               enabled: durationMicros > 0,
@@ -288,7 +288,7 @@ class VoiceMessageControls extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            _formatDuration(
+            formatVoiceDuration(
               state.position > Duration.zero ? state.position : state.duration,
             ),
             key: const ValueKey('voice-message-time'),
@@ -302,26 +302,33 @@ class VoiceMessageControls extends StatelessWidget {
       ),
     );
   }
-
-  static String _formatDuration(Duration value) {
-    final minutes = value.inMinutes.toString().padLeft(2, '0');
-    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
 }
 
-class _WaveformSeekSurface extends StatelessWidget {
-  const _WaveformSeekSurface({
+String formatVoiceDuration(Duration value) {
+  final minutes = value.inMinutes.toString().padLeft(2, '0');
+  final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
+class VoiceWaveformSurface extends StatelessWidget {
+  const VoiceWaveformSurface({
     required this.samples,
-    required this.progress,
-    required this.enabled,
-    required this.onSeekFraction,
+    this.progress = 0,
+    this.enabled = false,
+    this.onSeekFraction,
+    this.activeColor,
+    this.inactiveColor,
+    this.semanticsLabel = 'Voice message waveform',
+    super.key,
   });
 
   final List<double> samples;
   final double progress;
   final bool enabled;
-  final ValueChanged<double> onSeekFraction;
+  final ValueChanged<double>? onSeekFraction;
+  final Color? activeColor;
+  final Color? inactiveColor;
+  final String semanticsLabel;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -330,11 +337,11 @@ class _WaveformSeekSurface extends StatelessWidget {
       builder: (context, constraints) {
         void seek(Offset position) {
           if (!enabled || constraints.maxWidth <= 0) return;
-          onSeekFraction(position.dx / constraints.maxWidth);
+          onSeekFraction?.call(position.dx / constraints.maxWidth);
         }
 
         return Semantics(
-          label: 'Voice message waveform',
+          label: semanticsLabel,
           value: '${(progress * 100).round()}%',
           child: MouseRegion(
             cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
@@ -347,8 +354,10 @@ class _WaveformSeekSurface extends StatelessWidget {
                 painter: _VoiceWaveformPainter(
                   samples: samples,
                   progress: progress,
-                  active: FlucordColors.brand,
-                  inactive: context.surfaces.muted.withValues(alpha: 0.58),
+                  active: activeColor ?? FlucordColors.brand,
+                  inactive:
+                      inactiveColor ??
+                      context.surfaces.muted.withValues(alpha: 0.58),
                 ),
               ),
             ),

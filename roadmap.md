@@ -180,12 +180,15 @@ browser runtime or dependency on Discord's private user API.
     idempotent Create Message nonces, expose native silent sending through
     `SUPPRESS_NOTIFICATIONS`, and suppress or restore embeds through the
     documented Edit Message flags contract.
-34. In progress: retain documented voice-message duration and waveform metadata
+34. Completed: retain documented voice-message duration and waveform metadata
     through REST, partial Gateway updates, forward snapshots, and SQLite; render
     audio attachments through a compact native waveform player with seek,
     buffering, retry, responsive geometry, and deterministic teardown; and
-    prevent edits forbidden by Discord. Native microphone recording, Ogg/Opus
-    packaging, waveform sampling, and voice-message upload remain.
+    prevent edits forbidden by Discord. Record native 48 kHz stereo PCM, encode
+    it through the bundled libopus boundary, mux deterministic Ogg/Opus, sample
+    the documented base64 waveform, and upload the exact voice-message multipart
+    contract. The composer owns record, cancel, stop-and-send, retained retry,
+    channel-change cleanup, and compact-width states without browser surfaces.
 
 ## Protocol safety
 
