@@ -48,7 +48,7 @@ class OAuthAccountFooter extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '@${account.username}',
+                  account.usernameLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: context.surfaces.muted, fontSize: 10),

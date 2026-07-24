@@ -29,7 +29,10 @@ void main() {
         headers: {},
         body:
             '{"id":"123456789012345678","username":"jack",'
-            '"global_name":"Jack","avatar":"avatar-hash"}',
+            '"global_name":"Jack","discriminator":"0",'
+            '"avatar":"avatar-hash","banner":"banner-hash",'
+            '"accent_color":5793266,"locale":"en-US",'
+            '"verified":true,"mfa_enabled":true,"public_flags":64}',
       ),
       DiscordHttpResponse(
         statusCode: 200,
@@ -80,6 +83,13 @@ void main() {
     final account = await authorization;
 
     expect(account.displayName, 'Jack');
+    expect(account.usernameLabel, '@jack');
+    expect(account.bannerUrl, contains('/banners/123456789012345678/'));
+    expect(account.accentColor, 5793266);
+    expect(account.locale, 'en-US');
+    expect(account.isVerified, isTrue);
+    expect(account.mfaEnabled, isTrue);
+    expect(account.publicFlags, 64);
     expect(account.guildCount, 2);
     expect(account.guilds.first.name, 'The Forge');
     expect(account.guilds.first.isOwner, isTrue);

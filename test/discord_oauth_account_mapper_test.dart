@@ -11,7 +11,14 @@ void main() {
         'id': '123456789012345678',
         'username': 'jack',
         'global_name': 'Jack',
+        'discriminator': '0042',
         'avatar': 'avatar-hash',
+        'banner': 'banner-hash',
+        'accent_color': 0x5865F2,
+        'locale': 'en-US',
+        'verified': true,
+        'mfa_enabled': true,
+        'public_flags': 64,
       },
       guilds: const [
         {
@@ -43,6 +50,13 @@ void main() {
     );
 
     expect(account.displayName, 'Jack');
+    expect(account.usernameLabel, 'jack#0042');
+    expect(account.bannerUrl, contains('/banners/123456789012345678/'));
+    expect(account.accentColor, 0x5865F2);
+    expect(account.locale, 'en-US');
+    expect(account.isVerified, isTrue);
+    expect(account.mfaEnabled, isTrue);
+    expect(account.publicFlags, 64);
     expect(account.guildCount, 1);
     final guild = account.guilds.single;
     expect(guild.name, 'The Forge');

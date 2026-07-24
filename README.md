@@ -220,6 +220,13 @@ Friends and Direct Messages visibly locked. Connected accounts also appear in
 the Connections settings surface. Older saved grants may need to be unlinked
 and linked again to add the new scopes.
 
+The account-home profile header also retains the documented current-user
+banner, accent color, legacy discriminator, locale, verification, MFA state,
+and public flags returned by `identify`; it does not request the optional email
+scope. Discord Friends are not exposed by a public REST route: official access
+requires the separately distributed native Discord Social SDK, acceptance of
+its terms, and application approval, so Flucord does not fabricate that data.
+
 ## Run
 
 ```powershell

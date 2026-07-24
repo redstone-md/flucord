@@ -16,6 +16,12 @@ void main() {
       id: 'user-1',
       username: 'jack',
       displayName: 'Jack',
+      discriminator: '0042',
+      accentColor: 0x5865F2,
+      locale: 'en-US',
+      isVerified: true,
+      mfaEnabled: true,
+      publicFlags: 64,
       guilds: [
         DiscordOAuthGuild(id: 'guild-1', name: 'The Forge'),
         DiscordOAuthGuild(id: 'guild-2', name: 'Night Shift'),
@@ -70,6 +76,17 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Night Shift'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('oauth-account-home-view')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('oauth-account-sidebar')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('oauth-account-profile-banner')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -82,6 +99,12 @@ void main() {
       id: 'user-1',
       username: 'jack',
       displayName: 'Jack',
+      discriminator: '0042',
+      accentColor: 0x5865F2,
+      locale: 'en-US',
+      isVerified: true,
+      mfaEnabled: true,
+      publicFlags: 64,
       guilds: [
         DiscordOAuthGuild(id: 'guild-1', name: 'The Forge'),
         DiscordOAuthGuild(id: 'guild-2', name: 'Night Shift'),
@@ -141,6 +164,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('jack.fm'), findsWidgets);
+    expect(find.text('jack#0042'), findsWidgets);
+    expect(
+      find.text('Verified · MFA enabled · en-US · Badges 0x40'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('oauth-account-profile-banner')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('oauth-guild-guild-2')));
     await tester.pumpAndSettle();

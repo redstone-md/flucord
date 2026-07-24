@@ -12,6 +12,10 @@ void main() {
       'https://cdn.discordapp.com/avatars/user-1/a_avatar-hash.gif?size=256',
     );
     expect(
+      DiscordCdn.userBanner('user-1', 'banner-hash'),
+      'https://cdn.discordapp.com/banners/user-1/banner-hash.webp?size=512',
+    );
+    expect(
       DiscordCdn.guildMemberAvatar('guild-1', 'user-1', 'member-hash'),
       'https://cdn.discordapp.com/guilds/guild-1/users/user-1/avatars/member-hash.webp?size=128',
     );

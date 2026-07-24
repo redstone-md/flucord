@@ -230,14 +230,31 @@ final class DiscordOAuthAccount {
     required String id,
     required String username,
     required String displayName,
+    String? discriminator,
     String? avatarUrl,
+    String? bannerUrl,
+    int? accentColor,
+    String? locale,
+    bool isVerified = false,
+    bool mfaEnabled = false,
+    int publicFlags = 0,
     Iterable<DiscordOAuthGuild> guilds = const [],
     Iterable<DiscordOAuthConnection> connections = const [],
   }) => DiscordOAuthAccount._(
     id: id,
     username: username,
     displayName: displayName,
+    discriminator: _optionalText(discriminator),
     avatarUrl: avatarUrl,
+    bannerUrl: bannerUrl,
+    accentColor:
+        accentColor != null && accentColor >= 0 && accentColor <= 0xFFFFFF
+        ? accentColor
+        : null,
+    locale: _optionalText(locale),
+    isVerified: isVerified,
+    mfaEnabled: mfaEnabled,
+    publicFlags: publicFlags < 0 ? 0 : publicFlags,
     guilds: List.unmodifiable(guilds),
     connections: List.unmodifiable(connections),
   );
@@ -246,7 +263,14 @@ final class DiscordOAuthAccount {
     required this.id,
     required this.username,
     required this.displayName,
+    required this.discriminator,
     required this.avatarUrl,
+    required this.bannerUrl,
+    required this.accentColor,
+    required this.locale,
+    required this.isVerified,
+    required this.mfaEnabled,
+    required this.publicFlags,
     required this.guilds,
     required this.connections,
   });
@@ -254,12 +278,28 @@ final class DiscordOAuthAccount {
   final String id;
   final String username;
   final String displayName;
+  final String? discriminator;
   final String? avatarUrl;
+  final String? bannerUrl;
+  final int? accentColor;
+  final String? locale;
+  final bool isVerified;
+  final bool mfaEnabled;
+  final int publicFlags;
   final List<DiscordOAuthGuild> guilds;
   final List<DiscordOAuthConnection> connections;
 
   int get guildCount => guilds.length;
   int get connectionCount => connections.length;
+
+  String get usernameLabel => discriminator != null && discriminator != '0'
+      ? '$username#$discriminator'
+      : '@$username';
+
+  static String? _optionalText(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
 }
 
 abstract interface class DiscordOAuthGrantVault {

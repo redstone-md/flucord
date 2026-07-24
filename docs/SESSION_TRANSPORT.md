@@ -85,6 +85,12 @@ to a user's channel history. Flucord also does not infer chat access from
   for the documented `guilds.members.read` endpoint. It caches current-user
   membership independently from selection, rejects stale responses after an
   account change, and retains no access or refresh tokens.
+- The `identify` account snapshot includes only documented current-user profile
+  metadata: banner/accent, discriminator, locale, verification, MFA, and public
+  flags. Email remains absent because Flucord does not request `email`.
+- `relationships.read` belongs to the separately distributed native Discord
+  Social SDK and requires its terms plus application approval. It is not a
+  public REST relationship endpoint and is never emulated with private routes.
 
 ## Desktop protocol delivery
 

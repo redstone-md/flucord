@@ -90,6 +90,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('jack.fm'), findsWidgets);
+      expect(find.text('Verified · MFA enabled · en-US'), findsOneWidget);
     },
   );
 
@@ -197,6 +198,10 @@ DiscordOAuthAccount _oauthAccount() => DiscordOAuthAccount(
   id: 'user-1',
   username: 'jack',
   displayName: 'Jack',
+  accentColor: 0x5865F2,
+  locale: 'en-US',
+  isVerified: true,
+  mfaEnabled: true,
   guilds: [
     DiscordOAuthGuild(
       id: 'guild-1',

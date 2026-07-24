@@ -18,17 +18,29 @@ final class DiscordOAuthAccountMapper {
     }
     final globalName = user['global_name'];
     final avatar = user['avatar'];
+    final banner = user['banner'];
+    final accentColor = user['accent_color'];
+    final discriminator = user['discriminator'];
+    final locale = user['locale'];
+    final publicFlags = user['public_flags'];
     return DiscordOAuthAccount(
       id: id,
       username: username,
       displayName: globalName is String && globalName.isNotEmpty
           ? globalName
           : username,
+      discriminator: discriminator is String ? discriminator : null,
       avatarUrl: DiscordCdn.userAvatar(
         id,
         avatar is String ? avatar : null,
         size: 64,
       ),
+      bannerUrl: DiscordCdn.userBanner(id, banner is String ? banner : null),
+      accentColor: accentColor is int ? accentColor : null,
+      locale: locale is String ? locale : null,
+      isVerified: user['verified'] == true,
+      mfaEnabled: user['mfa_enabled'] == true,
+      publicFlags: publicFlags is int ? publicFlags : 0,
       guilds: guilds.map(_mapGuild).whereType<DiscordOAuthGuild>(),
       connections: connections
           .map(_mapConnection)

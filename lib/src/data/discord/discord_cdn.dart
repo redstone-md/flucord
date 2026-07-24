@@ -16,6 +16,9 @@ final class DiscordCdn {
       ? defaultUserAvatar(userId)
       : _asset(['avatars', userId], hash, size: size);
 
+  static String? userBanner(String userId, String? hash, {int size = 512}) =>
+      _asset(['banners', userId], hash, size: size);
+
   static String? guildMemberAvatar(
     String guildId,
     String userId,

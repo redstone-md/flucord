@@ -261,6 +261,10 @@ browser runtime or dependency on Discord's private user API.
     current user's verified and visible third-party account directory as
     immutable server state, and expose it through a Discord-like account-home
     destination plus Connections settings without implying DM or friend access.
+50. Completed: retain the documented current-user `identify` profile metadata,
+    including legacy username context, banner, accent color, locale,
+    verification, MFA, and public flags, then render a responsive native
+    Discord-like profile header without requesting the optional email scope.
 
 ## Protocol safety
 

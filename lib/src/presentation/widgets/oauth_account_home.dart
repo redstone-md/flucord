@@ -171,51 +171,117 @@ class _AccountProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = account.accentColor == null
+        ? context.surfaces.raised
+        : Color(0xFF000000 | account.accentColor!);
+    final metadata = <String>[
+      if (account.isVerified) 'Verified',
+      if (account.mfaEnabled) 'MFA enabled',
+      ?account.locale,
+      if (account.publicFlags > 0)
+        'Badges 0x${account.publicFlags.toRadixString(16).toUpperCase()}',
+    ];
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Row(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          ClipOval(
-            child: SizedBox.square(
-              dimension: 52,
-              child: RemoteIdentityImage(
-                url: account.avatarUrl,
-                fallback: ColoredBox(
-                  color: context.surfaces.raised,
-                  child: const Icon(Icons.person_outline, size: 24),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                key: const ValueKey('oauth-account-profile-banner'),
+                height: 92,
+                child: RemoteIdentityImage(
+                  url: account.bannerUrl,
+                  fallback: ColoredBox(color: accent),
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 36, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            account.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (account.isVerified)
+                          const Tooltip(
+                            message: 'Verified Discord account',
+                            child: Icon(
+                              Icons.verified_outlined,
+                              size: 17,
+                              color: FlucordColors.success,
+                            ),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      account.usernameLabel,
+                      style: TextStyle(
+                        color: context.surfaces.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (metadata.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        metadata.join(' · '),
+                        key: const ValueKey('oauth-account-profile-metadata'),
+                        style: TextStyle(
+                          color: context.surfaces.muted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 5),
+                    Text(
+                      '${account.guildCount} servers · ${account.connectionCount} connected accounts',
+                      style: TextStyle(
+                        color: context.surfaces.muted,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  account.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+          Positioned(
+            left: 16,
+            top: 64,
+            child: Container(
+              width: 58,
+              height: 58,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: context.surfaces.inset,
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: RemoteIdentityImage(
+                  url: account.avatarUrl,
+                  fallback: ColoredBox(
+                    color: context.surfaces.raised,
+                    child: const Icon(Icons.person_outline, size: 24),
                   ),
                 ),
-                Text(
-                  '@${account.username}',
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 11),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${account.guildCount} servers · ${account.connectionCount} connected accounts',
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 10),
-                ),
-              ],
+              ),
             ),
           ),
         ],
