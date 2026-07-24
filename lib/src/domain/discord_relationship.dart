@@ -130,3 +130,7 @@ final class DiscordSocialSdkException implements Exception {
   @override
   String toString() => 'DiscordSocialSdkException($code)';
 }
+
+abstract interface class DiscordSocialFriendRequestGateway {
+  Future<void> sendFriendRequest(String userId);
+}

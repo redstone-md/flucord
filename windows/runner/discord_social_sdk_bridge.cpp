@@ -96,6 +96,7 @@ class DiscordSocialSdkBridge::Impl {
         call.method_name() == "disconnect" ||
         call.method_name() == "getRelationships" ||
         call.method_name() == "updateRelationship" ||
+        call.method_name() == "sendFriendRequest" ||
         call.method_name() == "setOnlineStatus" ||
         call.method_name() == "getDmConversations" ||
         call.method_name() == "getDmMessages" ||

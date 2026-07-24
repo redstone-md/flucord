@@ -137,6 +137,19 @@ void main() {
     },
   );
 
+  test('maps Discord friend requests to the native wire contract', () async {
+    final channel = _Channel(null);
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    await gateway.sendFriendRequest(' 123456789012345678 ');
+
+    expect(channel.calls, ['sendFriendRequest']);
+    expect(channel.arguments.single, {'user_id': '123456789012345678'});
+  });
+
   test('maps online status and live user updates to typed contracts', () async {
     final channel = _Channel(null);
     final gateway = NativeDiscordSocialSdkGateway(

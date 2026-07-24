@@ -28,9 +28,13 @@ final class DiscordFriendsController extends ChangeNotifier {
     _relationshipSubscription = eventSource?.relationshipUpdates.listen(
       _handleRelationshipUpdate,
     );
+    _friendRequestGateway = _gateway is DiscordSocialFriendRequestGateway
+        ? _gateway as DiscordSocialFriendRequestGateway
+        : null;
   }
 
   final DiscordSocialSdkGateway _gateway;
+  late final DiscordSocialFriendRequestGateway? _friendRequestGateway;
 
   DiscordFriendsLoadState _state = DiscordFriendsLoadState.idle;
   List<DiscordRelationship> _relationships = const [];
@@ -41,6 +45,8 @@ final class DiscordFriendsController extends ChangeNotifier {
   Future<void>? _inFlight;
   Future<void>? _liveRefresh;
   String? _liveSyncError;
+  String? _friendRequestError;
+  bool _sendingFriendRequest = false;
   bool _liveRefreshQueued = false;
   bool _sdkReady = false;
   bool _authenticated = false;
@@ -53,6 +59,13 @@ final class DiscordFriendsController extends ChangeNotifier {
   bool isMutating(String userId) => _mutatingUserIds.contains(userId);
   String? mutationErrorFor(String userId) => _mutationErrors[userId];
   String? get liveSyncError => _liveSyncError;
+  String? get friendRequestError => _friendRequestError;
+  bool get isSendingFriendRequest => _sendingFriendRequest;
+  bool get canSendFriendRequest =>
+      _sdkReady &&
+      _authenticated &&
+      _friendRequestGateway != null &&
+      !_sendingFriendRequest;
 
   void reconcileSession(
     DiscordSocialSdkAvailability? availability, {
@@ -68,6 +81,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _mutatingUserIds.clear();
     _mutationErrors.clear();
     _liveSyncError = null;
+    _friendRequestError = null;
+    _sendingFriendRequest = false;
     _liveRefreshQueued = false;
     if (!sdkReady) {
       _relationships = const [];
@@ -133,6 +148,46 @@ final class DiscordFriendsController extends ChangeNotifier {
     return succeeded;
   }
 
+  Future<bool> sendFriendRequest(String userId) async {
+    final normalizedUserId = userId.trim();
+    final gateway = _friendRequestGateway;
+    if (!_isSnowflake(normalizedUserId)) {
+      _friendRequestError = 'invalid_user_id';
+      if (!_disposed) notifyListeners();
+      return false;
+    }
+    if (!canSendFriendRequest || gateway == null || _disposed) return false;
+    final generation = _generation;
+    _sendingFriendRequest = true;
+    _friendRequestError = null;
+    notifyListeners();
+    try {
+      await gateway.sendFriendRequest(normalizedUserId);
+      if (!_accepts(generation)) return false;
+      _queueLiveRefresh();
+      return true;
+    } on DiscordSocialSdkException catch (error) {
+      if (_accepts(generation)) _friendRequestError = error.code;
+      return false;
+    } on Object {
+      if (_accepts(generation)) {
+        _friendRequestError = 'friend_request_failed';
+      }
+      return false;
+    } finally {
+      if (_accepts(generation)) {
+        _sendingFriendRequest = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void clearFriendRequestError() {
+    if (_friendRequestError == null || _disposed) return;
+    _friendRequestError = null;
+    notifyListeners();
+  }
+
   Future<void> _startLoad() {
     if (_disposed) return Future<void>.value();
     return _inFlight ??= _load().whenComplete(() => _inFlight = null);
@@ -173,6 +228,11 @@ final class DiscordFriendsController extends ChangeNotifier {
         _state != DiscordFriendsLoadState.ready) {
       return;
     }
+    _queueLiveRefresh();
+  }
+
+  void _queueLiveRefresh() {
+    if (_disposed || !_sdkReady || !_authenticated) return;
     _liveRefreshQueued = true;
     _liveRefresh ??= _drainLiveRefresh().whenComplete(() {
       _liveRefresh = null;
@@ -232,6 +292,11 @@ final class DiscordFriendsController extends ChangeNotifier {
     <DiscordRelationship>[...relationships]..sort(_compareRelationships),
   );
 
+  static bool _isSnowflake(String value) {
+    final parsed = BigInt.tryParse(value);
+    return parsed != null && parsed > BigInt.zero && parsed.bitLength <= 64;
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -239,6 +304,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _relationships = const [];
     _mutatingUserIds.clear();
     _mutationErrors.clear();
+    _friendRequestError = null;
+    _sendingFriendRequest = false;
     _liveRefreshQueued = false;
     unawaited(_relationshipSubscription?.cancel());
     super.dispose();

@@ -78,6 +78,45 @@ void main() {
     );
   });
 
+  testWidgets('sends a friend request from the native Friends header', (
+    tester,
+  ) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness);
+
+    await tester.tap(find.byKey(const ValueKey('discord-add-friend')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('discord-add-friend-dialog')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('discord-add-friend-user-id')),
+      '0',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('discord-add-friend-submit')));
+    await tester.pumpAndSettle();
+    expect(harness.friends.friendRequestError, 'invalid_user_id');
+    expect(find.text('Enter a valid numeric Discord user ID.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('discord-add-friend-user-id')),
+      '123456789012345678',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('discord-add-friend-submit')));
+    await tester.pumpAndSettle();
+
+    expect(harness.gateway.friendRequests, ['123456789012345678']);
+    expect(
+      find.byKey(const ValueKey('discord-add-friend-dialog')),
+      findsNothing,
+    );
+  });
+
   testWidgets('edits and confirms deletion from native message actions', (
     tester,
   ) async {
@@ -237,6 +276,7 @@ final class _DmHarness {
 final class _SocialDmGateway
     implements
         DiscordSocialSdkGateway,
+        DiscordSocialFriendRequestGateway,
         DiscordSocialDmGateway,
         DiscordSocialDmEvents {
   final StreamController<DiscordSocialDmEvent> _events =
@@ -245,6 +285,8 @@ final class _SocialDmGateway
   final List<({String userId, String messageId, String content})> edited = [];
   final List<({String userId, String messageId})> deleted = [];
   final List<bool> showingChat = [];
+  final List<String> friendRequests = [];
+  final List<DiscordRelationship> relationships = [_friend];
   final Map<String, List<DiscordSocialDmMessage>> _messages = {
     'friend-1': [
       DiscordSocialDmMessage(
@@ -299,7 +341,18 @@ final class _SocialDmGateway
   }) async => _messages[userId] ?? const [];
 
   @override
-  Future<List<DiscordRelationship>> fetchRelationships() async => [_friend];
+  Future<List<DiscordRelationship>> fetchRelationships() async => relationships;
+
+  @override
+  Future<void> sendFriendRequest(String userId) async {
+    friendRequests.add(userId);
+    relationships.add(
+      DiscordRelationship(
+        user: DiscordRelationshipUser(id: userId, displayName: userId),
+        kind: DiscordRelationshipKind.outgoingRequest,
+      ),
+    );
+  }
 
   @override
   Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>

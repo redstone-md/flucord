@@ -311,6 +311,12 @@ browser runtime or dependency on Discord's private user API.
     idle, do-not-disturb, and invisible status mutation from the native account
     footer. Keep this live user path independent from Bot Gateway presence and
     preserve the unbundled Windows runner contract.
+58. Completed: send standard Discord friend requests by documented user ID,
+    synchronize created and relationship-group changes live, and expose a
+    Discord-like Add Friend action with pending, validation, and failure states.
+    Direct user voice calling remains outside the public contract because the
+    documented call API requires a lobby/channel ID that user-DM summaries do
+    not expose.
 
 ## Protocol safety
 

@@ -11,9 +11,15 @@ final class DiscordFriendsScope
   }) : super(notifier: controller);
 
   static DiscordFriendsController of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<DiscordFriendsScope>();
-    assert(scope != null, 'DiscordFriendsScope is missing above this widget.');
-    return scope!.notifier!;
+    final controller = maybeOf(context);
+    assert(
+      controller != null,
+      'DiscordFriendsScope is missing above this widget.',
+    );
+    return controller!;
   }
+
+  static DiscordFriendsController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<DiscordFriendsScope>()
+      ?.notifier;
 }

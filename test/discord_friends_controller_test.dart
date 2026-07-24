@@ -162,6 +162,39 @@ void main() {
     expect(gateway.relationshipCalls, 2);
     expect(controller.liveSyncError, isNull);
   });
+
+  test('sends a standard Discord friend request by user ID', () async {
+    final gateway = _FriendsGateway([_friend('1', 'Ada')]);
+    final controller = DiscordFriendsController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+
+    expect(await controller.sendFriendRequest(' 123456789012345678 '), isTrue);
+    await pumpEventQueue();
+
+    expect(gateway.friendRequests, ['123456789012345678']);
+    expect(controller.friendRequestError, isNull);
+    expect(controller.isSendingFriendRequest, isFalse);
+  });
+
+  test('validates friend IDs before invoking the native SDK', () async {
+    final gateway = _FriendsGateway([_friend('1', 'Ada')]);
+    final controller = DiscordFriendsController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+
+    expect(await controller.sendFriendRequest('not-an-id'), isFalse);
+    expect(controller.friendRequestError, 'invalid_user_id');
+    expect(gateway.friendRequests, isEmpty);
+  });
 }
 
 DiscordRelationship _friend(
@@ -184,7 +217,10 @@ DiscordRelationship _request(String id, String displayName) =>
     );
 
 final class _FriendsGateway
-    implements DiscordSocialSdkGateway, DiscordSocialRelationshipEvents {
+    implements
+        DiscordSocialSdkGateway,
+        DiscordSocialFriendRequestGateway,
+        DiscordSocialRelationshipEvents {
   _FriendsGateway(this.relationships) : _errorCode = null;
 
   _FriendsGateway.error(String code)
@@ -198,6 +234,7 @@ final class _FriendsGateway
   int relationshipCalls = 0;
   final List<({String userId, DiscordRelationshipAction action})> mutations =
       [];
+  final List<String> friendRequests = [];
   Completer<void>? mutationCompleter;
   String? mutationError;
 
@@ -225,6 +262,12 @@ final class _FriendsGateway
     relationshipCalls++;
     if (_errorCode case final code?) throw DiscordSocialSdkException(code);
     return relationships;
+  }
+
+  @override
+  Future<void> sendFriendRequest(String userId) async {
+    friendRequests.add(userId);
+    if (mutationError case final code?) throw DiscordSocialSdkException(code);
   }
 
   @override

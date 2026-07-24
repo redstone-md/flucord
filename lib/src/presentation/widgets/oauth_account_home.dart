@@ -7,7 +7,9 @@ import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_add_friend_dialog.dart';
 import 'discord_friend_directory.dart';
+import 'discord_friends_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
 import 'discord_social_dm_scope.dart';
 import 'discord_social_dm_view.dart';
@@ -136,6 +138,7 @@ class OAuthAccountHomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final socialSdk = DiscordSocialSdkScope.of(context);
+    final friendsController = DiscordFriendsScope.maybeOf(context);
     final dmController = DiscordSocialDmScope.of(context);
     final navigation = DiscordSocialDmNavigationScope.of(context);
     final socialAvailable = socialSdk.availability?.isReady ?? false;
@@ -169,6 +172,26 @@ class OAuthAccountHomeView extends StatelessWidget {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
+              if (socialAvailable && friendsController != null) ...[
+                TextButton(
+                  key: const ValueKey('discord-add-friend'),
+                  onPressed: friendsController.canSendFriendRequest
+                      ? () => showDiscordAddFriendDialog(
+                          context,
+                          friendsController,
+                        )
+                      : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: FlucordColors.success,
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: const Text('Add Friend'),
+                ),
+                const SizedBox(width: 10),
+              ],
               Icon(
                 socialReady ? Icons.people_outline : Icons.lock_outline,
                 size: 16,

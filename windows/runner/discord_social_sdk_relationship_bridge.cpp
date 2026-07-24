@@ -81,12 +81,20 @@ class DiscordSocialSdkRelationshipBridge::Impl {
 #if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
     client_->SetUserUpdatedCallback(
         [this](uint64_t user_id) { NotifyUserUpdated(user_id); });
+    client_->SetRelationshipCreatedCallback(
+        [this](uint64_t user_id, bool is_discord_relationship_update) {
+          if (is_discord_relationship_update) {
+            NotifyUserUpdated(user_id);
+          }
+        });
+    client_->SetRelationshipGroupsUpdatedCallback(
+        [this](uint64_t user_id) { NotifyUserUpdated(user_id); });
 #endif
   }
 
   bool CanHandle(const std::string& method) const {
     return method == "getRelationships" || method == "updateRelationship" ||
-           method == "setOnlineStatus";
+           method == "sendFriendRequest" || method == "setOnlineStatus";
   }
 
   void Handle(const flutter::MethodCall<>& call,
@@ -101,6 +109,8 @@ class DiscordSocialSdkRelationshipBridge::Impl {
       GetRelationships(std::move(result));
     } else if (call.method_name() == "updateRelationship") {
       UpdateRelationship(call, std::move(result));
+    } else if (call.method_name() == "sendFriendRequest") {
+      SendFriendRequest(call, std::move(result));
     } else {
       SetOnlineStatus(call, std::move(result));
     }
@@ -187,6 +197,25 @@ class DiscordSocialSdkRelationshipBridge::Impl {
           } else {
             pending->Error("status_update_failed",
                            "Discord rejected the online status update.");
+          }
+        });
+  }
+
+  void SendFriendRequest(const flutter::MethodCall<>& call,
+                         std::unique_ptr<MethodResult> result) {
+    const auto user_id = SnowflakeArgument(call, "user_id");
+    if (!user_id) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    auto pending = std::shared_ptr<MethodResult>(std::move(result));
+    client_->SendDiscordFriendRequestById(
+        *user_id, [pending](const discordpp::ClientResult& sdk_result) {
+          if (sdk_result.Successful()) {
+            pending->Success();
+          } else {
+            pending->Error("friend_request_failed",
+                           "Discord rejected the friend request.");
           }
         });
   }

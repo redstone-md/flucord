@@ -43,6 +43,16 @@ void main() {
       ),
     );
     await expectLater(
+      gateway.sendFriendRequest('123456789'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
       gateway.fetchConversations(),
       throwsA(
         isA<DiscordSocialSdkException>().having(
