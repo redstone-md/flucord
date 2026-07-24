@@ -4,6 +4,7 @@ import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
+import '../../domain/message_forward_repository.dart';
 import '../../domain/poll_repository.dart';
 import '../../domain/reaction_repository.dart';
 import '../../domain/scheduled_event_repository.dart';
@@ -30,6 +31,7 @@ part 'discord_chat_repository_forums.dart';
 part 'discord_chat_repository_pins.dart';
 part 'discord_chat_repository_polls.dart';
 part 'discord_chat_repository_reactions.dart';
+part 'discord_chat_repository_forwards.dart';
 part 'discord_chat_repository_stickers.dart';
 part 'discord_chat_repository_scheduled_events.dart';
 
@@ -38,6 +40,7 @@ final class DiscordChatRepository
         _DiscordChatRepositoryMessageMutations,
         _DiscordChatRepositoryPolls,
         _DiscordChatRepositoryReactions,
+        _DiscordChatRepositoryForwards,
         _DiscordChatRepositoryStickers,
         _DiscordChatRepositoryScheduledEvents
     implements
@@ -46,6 +49,7 @@ final class DiscordChatRepository
         ForumPostRepository,
         PollRepository,
         ReactionRepository,
+        MessageForwardRepository,
         ScheduledEventRepository,
         StickerRepository,
         VoiceSignalingService {

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
+import '../domain/message_forward_repository.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
@@ -13,6 +14,7 @@ import 'mock_chat_seed.dart';
 part 'mock_chat_repository_mutations.dart';
 part 'mock_chat_repository_polls.dart';
 part 'mock_chat_repository_reactions.dart';
+part 'mock_chat_repository_forwards.dart';
 part 'mock_chat_repository_stickers.dart';
 part 'mock_chat_repository_scheduled_events.dart';
 part 'mock_chat_repository_direct_messages.dart';
@@ -21,6 +23,7 @@ final class MockChatRepository
     with
         _MockChatRepositoryPolls,
         _MockChatRepositoryReactions,
+        _MockChatRepositoryForwards,
         _MockChatRepositoryStickers,
         _MockChatRepositoryScheduledEvents,
         _MockChatRepositoryDirectMessages
@@ -30,6 +33,7 @@ final class MockChatRepository
         ForumPostRepository,
         PollRepository,
         ReactionRepository,
+        MessageForwardRepository,
         ScheduledEventRepository,
         StickerRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
@@ -42,6 +46,7 @@ final class MockChatRepository
   ChatWorkspace _workspace;
   @override
   int _messageSequence = 100;
+  @override
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
 

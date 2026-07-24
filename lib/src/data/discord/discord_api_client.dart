@@ -8,6 +8,7 @@ import 'discord_poll_codec.dart';
 
 part 'discord_api_client_scheduled_events.dart';
 part 'discord_api_client_reactions.dart';
+part 'discord_api_client_forwards.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({

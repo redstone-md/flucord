@@ -50,6 +50,8 @@ final class ConversationChannel {
   final String? firstUnreadMessageId;
 
   bool get isDirectMessage => recipientId != null;
+  bool get canAcceptMessageForward =>
+      kind == ChannelKind.text && !(isThread && isArchived && isLocked);
 
   ConversationChannel markUnread({
     required String messageId,
