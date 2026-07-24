@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/foundation.dart';
 import 'package:protocol_handler/protocol_handler.dart';
-import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../application/channel_link.dart';
@@ -13,10 +11,23 @@ import '../application/workspace_controller.dart';
 import 'desktop_integration.dart';
 import 'desktop_message_notification_controller.dart';
 import 'desktop_protocol_router.dart';
+import 'desktop_tray_coordinator.dart';
 
 final class WindowsDesktopIntegration
-    with WindowListener, TrayListener, ProtocolListener
+    with WindowListener, ProtocolListener
     implements DesktopIntegration {
+  WindowsDesktopIntegration() {
+    _desktopTray = DesktopTrayCoordinator(
+      showWindow: _showWindow,
+      quit: _quit,
+      checkForUpdates: _checkForUpdates,
+      configuration: DesktopTrayConfiguration(
+        includeUpdateAction: true,
+        updateActionEnabled: _hasValidFeedUrl,
+      ),
+    );
+  }
+
   static const _updateFeedUrl = String.fromEnvironment(
     'FLUCORD_UPDATE_FEED_URL',
   );
@@ -25,13 +36,12 @@ final class WindowsDesktopIntegration
   final DesktopProtocolRouter _protocolRouter = DesktopProtocolRouter();
   final DesktopMessageNotificationController _messageNotifications =
       DesktopMessageNotificationController(isFocused: windowManager.isFocused);
+  late final DesktopTrayCoordinator _desktopTray;
   bool _windowReady = false;
-  bool _trayReady = false;
   bool _protocolReady = false;
   bool _updaterReady = false;
   bool _allowClose = false;
   bool _disposed = false;
-  int? _lastUnreadCount;
 
   @override
   Future<void> initialize() async {
@@ -58,6 +68,7 @@ final class WindowsDesktopIntegration
       chatController: chatController,
       onActivateLink: _activateLink,
     );
+    _desktopTray.attach(chatController);
     chatController.addListener(_handleChatChanged);
     _handleChatChanged();
   }
@@ -66,7 +77,6 @@ final class WindowsDesktopIntegration
     try {
       await windowManager.ensureInitialized();
       windowManager.addListener(this);
-      await windowManager.setPreventClose(true);
       _windowReady = true;
     } catch (error) {
       _debugFailure('window manager', error);
@@ -92,33 +102,9 @@ final class WindowsDesktopIntegration
   }
 
   Future<void> _initializeTray() async {
-    try {
-      final executableDirectory = File(Platform.resolvedExecutable).parent.path;
-      final iconPath =
-          '$executableDirectory${Platform.pathSeparator}data'
-          '${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}'
-          'windows${Platform.pathSeparator}runner${Platform.pathSeparator}'
-          'resources${Platform.pathSeparator}app_icon.ico';
-      await trayManager.setIcon(iconPath);
-      await trayManager.setToolTip('Flucord');
-      await trayManager.setContextMenu(
-        Menu(
-          items: [
-            MenuItem(key: 'show_window', label: 'Open Flucord'),
-            MenuItem(
-              key: 'check_updates',
-              label: 'Check for updates',
-              disabled: !_hasValidFeedUrl,
-            ),
-            MenuItem.separator(),
-            MenuItem(key: 'exit_app', label: 'Quit Flucord'),
-          ],
-        ),
-      );
-      trayManager.addListener(this);
-      _trayReady = true;
-    } catch (error) {
-      _debugFailure('tray', error);
+    await _desktopTray.initialize();
+    if (_windowReady && _desktopTray.isReady) {
+      await windowManager.setPreventClose(true);
     }
   }
 
@@ -140,15 +126,6 @@ final class WindowsDesktopIntegration
 
   void _handleChatChanged() {
     _protocolRouter.flushChannelLink();
-    final workspace = _chatController?.workspace;
-    if (!_trayReady || workspace == null) return;
-    final unreadCount = workspace.channels.where((item) => item.unread).length;
-    if (_lastUnreadCount == unreadCount) return;
-    _lastUnreadCount = unreadCount;
-    final tooltip = unreadCount == 0
-        ? 'Flucord'
-        : 'Flucord - $unreadCount unread';
-    unawaited(trayManager.setToolTip(tooltip));
   }
 
   Future<void> _activateLink(ChannelLink link) async {
@@ -171,28 +148,8 @@ final class WindowsDesktopIntegration
   }
 
   @override
-  void onTrayIconMouseDown() => unawaited(_showWindow());
-
-  @override
-  void onTrayIconRightMouseDown() {
-    unawaited(trayManager.popUpContextMenu());
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    switch (menuItem.key) {
-      case 'show_window':
-        unawaited(_showWindow());
-      case 'check_updates':
-        if (_updaterReady) unawaited(autoUpdater.checkForUpdates());
-      case 'exit_app':
-        unawaited(_quit());
-    }
-  }
-
-  @override
   void onWindowClose() {
-    if (!_allowClose) {
+    if (!_allowClose && _desktopTray.isReady) {
       _chatController?.setApplicationActive(false);
       unawaited(windowManager.hide());
     }
@@ -204,11 +161,16 @@ final class WindowsDesktopIntegration
   @override
   void onWindowBlur() => _chatController?.setApplicationActive(false);
 
+  Future<void> _checkForUpdates() async {
+    if (_updaterReady) await autoUpdater.checkForUpdates();
+  }
+
   Future<void> _quit() async {
     _allowClose = true;
-    await windowManager.setPreventClose(false);
-    if (_trayReady) await trayManager.destroy();
-    await windowManager.close();
+    if (_windowReady) {
+      await windowManager.setPreventClose(false);
+      await windowManager.close();
+    }
   }
 
   void _debugFailure(String feature, Object error) {
@@ -222,11 +184,8 @@ final class WindowsDesktopIntegration
     _chatController?.removeListener(_handleChatChanged);
     _protocolRouter.detach();
     await _messageNotifications.dispose();
+    await _desktopTray.dispose();
     if (_protocolReady) protocolHandler.removeListener(this);
-    if (_trayReady) {
-      trayManager.removeListener(this);
-      await trayManager.destroy();
-    }
     if (_windowReady) windowManager.removeListener(this);
   }
 }

@@ -14,6 +14,7 @@ void main() {
     const channel = MethodChannel('flucord/protocol-test');
     const windowChannel = MethodChannel('window_manager');
     const notificationChannel = MethodChannel('local_notifier');
+    const trayChannel = MethodChannel('tray_manager');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     final nativeCalls = <MethodCall>[];
@@ -31,6 +32,7 @@ void main() {
       if (call.method == 'setup') return true;
       return null;
     });
+    messenger.setMockMethodCallHandler(trayChannel, (call) async => null);
     final integration = LinuxDesktopIntegration(
       initialArguments: const [
         '--ignored',
@@ -43,12 +45,13 @@ void main() {
     final received = <Uri>[];
     addTearDown(chat.dispose);
     addTearDown(workspace.dispose);
-    addTearDown(integration.dispose);
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     addTearDown(() => messenger.setMockMethodCallHandler(windowChannel, null));
     addTearDown(
       () => messenger.setMockMethodCallHandler(notificationChannel, null),
     );
+    addTearDown(() => messenger.setMockMethodCallHandler(trayChannel, null));
+    addTearDown(integration.dispose);
 
     await integration.initialize();
     expect(nativeCalls, hasLength(1));

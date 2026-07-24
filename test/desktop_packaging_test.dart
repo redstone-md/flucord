@@ -79,6 +79,11 @@ void main() {
     expect(mainSource, contains('LinuxDesktopIntegration('));
     for (final integration in [windows, macos, linux]) {
       expect(integration, contains('DesktopMessageNotificationController'));
+      expect(integration, contains('DesktopTrayCoordinator'));
     }
+    expect(
+      File('pubspec.yaml').readAsStringSync(),
+      contains('app_icon_32.png'),
+    );
   });
 }

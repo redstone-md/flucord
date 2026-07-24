@@ -229,6 +229,12 @@ browser runtime or dependency on Discord's private user API.
     notification lifetime, and click routing into one native desktop controller;
     enable it on Windows, macOS, and Linux; and keep focus-driven unread state
     synchronized on every desktop host. Linux packaging requires `libnotify`.
+44. Completed: replace the Windows-only tray path with one native desktop
+    coordinator, materialize platform icon assets without bundle-path guesses,
+    expose unread counts through the tooltip/menu, and provide Open/Quit on
+    Windows, macOS, and Linux while preserving the Windows update action. Window
+    close hides only after tray initialization succeeds; Linux packages require
+    AppIndicator and GNOME needs its corresponding shell extension.
 
 ## Protocol safety
 

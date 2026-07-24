@@ -10,7 +10,7 @@ active-thread discovery and creation,
 archived-thread browsing,
 native forum and media-channel feeds, member roles and presence, local unread
 markers, paginated pinned messages, native desktop notifications,
-close-to-tray behavior, channel deep links,
+cross-platform tray lifecycle, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 native voice-message recording and waveform playback,
 documented Discord CDN guild/member identity, anchored member profile
@@ -204,12 +204,13 @@ On the corresponding native host, use `flutter run -d macos` or
 a macOS release on Windows or a Linux release on macOS/Windows.
 
 Ubuntu/Debian Linux builds need Flutter's desktop toolchain plus
-`libgtk-3-dev`, `libnotify-dev`, and `libsecret-1-dev`; `libnotify` delivers
-native message notifications, while `libsecret` backs credential storage
-through the desktop keyring. A Secret Service provider such as GNOME Keyring
-or KWallet must be available at runtime. Native microphone capture through
-`record` also requires the PulseAudio utilities and FFmpeg available to the
-desktop session.
+`libgtk-3-dev`, `libnotify-dev`, `libayatana-appindicator3-dev`, and
+`libsecret-1-dev`; `libnotify` delivers native message notifications,
+AppIndicator owns the tray menu, and `libsecret` backs credential storage
+through the desktop keyring. GNOME also needs its AppIndicator shell extension
+enabled. A Secret Service provider such as GNOME Keyring or KWallet must be
+available at runtime. Native microphone capture through `record` also requires
+the PulseAudio utilities and FFmpeg available to the desktop session.
 
 ## Connect Discord
 
@@ -480,6 +481,14 @@ and falls back to poll, sticker, attachment, or embed content for messages
 without text. Clicking a notification restores the native window and opens its
 channel. Closing the Windows window hides it in the notification area; use
 `Quit Flucord` from the tray menu to stop that process.
+
+The same native tray lifecycle now runs on macOS and Linux. Its Open item and
+tooltip/menu label reflect the local unread-channel count, and Quit performs a
+deterministic tray teardown before closing the window. Closing a desktop window
+hides it only after its tray was created successfully; if tray initialization
+fails, the normal close path remains available instead of trapping a headless
+process. Linux deployments must provide the AppIndicator package and, on
+GNOME, its shell extension so the icon is actually visible.
 
 Automatic updates are disabled unless a release is built with an HTTPS
 WinSparkle appcast:
