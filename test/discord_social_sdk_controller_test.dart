@@ -99,6 +99,7 @@ void main() {
   test('disconnects an authenticated native session', () async {
     final gateway = _SocialGateway(
       () async => DiscordSocialSdkAvailability.ready,
+      restored: DiscordSocialSdkAuthentication.readyFor('123456789'),
     );
     final controller = DiscordSocialSdkController(gateway);
     addTearDown(controller.dispose);
@@ -107,7 +108,22 @@ void main() {
     await controller.disconnect();
 
     expect(controller.state, DiscordSocialSdkControllerState.signedOut);
+    expect(controller.authenticatedUserId, isNull);
     expect(gateway.disconnectCalls, 1);
+  });
+
+  test('retains the authenticated Social SDK user identity', () async {
+    final controller = DiscordSocialSdkController(
+      _SocialGateway(
+        () async => DiscordSocialSdkAvailability.ready,
+        restored: DiscordSocialSdkAuthentication.readyFor('123456789'),
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.initialize();
+
+    expect(controller.authenticatedUserId, '123456789');
   });
 
   test('leaves ready state when the native refresh grant expires', () async {

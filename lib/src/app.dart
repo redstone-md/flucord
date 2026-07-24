@@ -203,6 +203,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.addListener(_syncVoiceSignaling);
     _discordOAuthController.addListener(_syncOAuthAccount);
     _discordSocialSdkController.addListener(_syncSocialSdkAvailability);
+    _discordAccountConnectionController.addListener(_syncSocialSdkAvailability);
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
@@ -223,6 +224,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.removeListener(_syncVoiceSignaling);
     _discordOAuthController.removeListener(_syncOAuthAccount);
     _discordSocialSdkController.removeListener(_syncSocialSdkAvailability);
+    _discordAccountConnectionController.removeListener(
+      _syncSocialSdkAvailability,
+    );
     _chatController.dispose();
     _connectionController.dispose();
     _oauthGuildMembershipController.dispose();
@@ -255,15 +259,15 @@ class _FlucordAppState extends State<FlucordApp> {
   void _syncSocialSdkAvailability() {
     _discordFriendsController.reconcileSession(
       _discordSocialSdkController.availability,
-      authenticated: _discordSocialSdkController.isAuthenticated,
+      authenticated: _discordAccountConnectionController.socialAccessAllowed,
     );
     _discordSocialDmController.reconcileSession(
       _discordSocialSdkController.availability,
-      authenticated: _discordSocialSdkController.isAuthenticated,
+      authenticated: _discordAccountConnectionController.socialAccessAllowed,
     );
     _discordSocialPresenceController.reconcileSession(
       _discordSocialSdkController.availability,
-      authenticated: _discordSocialSdkController.isAuthenticated,
+      authenticated: _discordAccountConnectionController.socialAccessAllowed,
     );
   }
 

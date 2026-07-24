@@ -19,6 +19,7 @@ void main() {
       expect(harness.socialGateway.authorizeCalls, 1);
       expect(harness.account.oauthLinked, isTrue);
       expect(harness.account.socialConnected, isTrue);
+      expect(harness.account.socialAccessAllowed, isTrue);
       expect(harness.account.state, DiscordAccountConnectionState.connected);
     },
   );
@@ -89,6 +90,26 @@ void main() {
     expect(harness.account.isConnected, isFalse);
     expect(harness.account.state, DiscordAccountConnectionState.disconnected);
   });
+
+  test('rejects a different Social SDK identity and retries only it', () async {
+    final harness = await _Harness.create(socialUserId: 'user-2');
+    addTearDown(harness.dispose);
+
+    expect(await harness.account.connect(), isFalse);
+
+    expect(harness.account.hasIdentityMismatch, isTrue);
+    expect(harness.account.socialAccessAllowed, isFalse);
+    expect(harness.socialGateway.disconnectCalls, 1);
+    expect(harness.oauthGateway.authorizeCalls, 1);
+
+    harness.socialGateway.authorizedUserId = 'user-1';
+    expect(await harness.account.connect(), isTrue);
+
+    expect(harness.account.hasIdentityMismatch, isFalse);
+    expect(harness.account.socialAccessAllowed, isTrue);
+    expect(harness.oauthGateway.authorizeCalls, 1);
+    expect(harness.socialGateway.authorizeCalls, 2);
+  });
 }
 
 final class _Harness {
@@ -105,11 +126,13 @@ final class _Harness {
         DiscordSocialSdkAvailability.ready,
     bool oauthFailure = false,
     bool socialFailure = false,
+    String socialUserId = 'user-1',
   }) async {
     final oauthGateway = _OAuthGateway(failAuthorization: oauthFailure);
     final socialGateway = _SocialGateway(
       availability: availability,
       failAuthorization: socialFailure,
+      authorizedUserId: socialUserId,
     );
     final oauth = DiscordOAuthController(oauthGateway);
     final social = DiscordSocialSdkController(socialGateway);
@@ -173,10 +196,15 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 }
 
 final class _SocialGateway implements DiscordSocialSdkGateway {
-  _SocialGateway({required this.availability, required this.failAuthorization});
+  _SocialGateway({
+    required this.availability,
+    required this.failAuthorization,
+    required this.authorizedUserId,
+  });
 
   final DiscordSocialSdkAvailability availability;
   bool failAuthorization;
+  String authorizedUserId;
   int authorizeCalls = 0;
   int disconnectCalls = 0;
 
@@ -186,7 +214,7 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
     if (failAuthorization) {
       throw const DiscordSocialSdkException('authorization_failed');
     }
-    return DiscordSocialSdkAuthentication.ready;
+    return DiscordSocialSdkAuthentication.readyFor(authorizedUserId);
   }
 
   @override

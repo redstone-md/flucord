@@ -34,6 +34,7 @@ final class DiscordSocialSdkController extends ChangeNotifier {
   DiscordSocialSdkControllerState _state = DiscordSocialSdkControllerState.idle;
   DiscordSocialSdkAvailability? _availability;
   String? _failureCode;
+  String? _authenticatedUserId;
   Future<void>? _inFlight;
   bool _initialized = false;
   bool _disposed = false;
@@ -42,6 +43,7 @@ final class DiscordSocialSdkController extends ChangeNotifier {
   DiscordSocialSdkControllerState get state => _state;
   DiscordSocialSdkAvailability? get availability => _availability;
   String? get failureCode => _failureCode;
+  String? get authenticatedUserId => _authenticatedUserId;
   bool get isAuthenticated => _state == DiscordSocialSdkControllerState.ready;
 
   Future<void> initialize() {
@@ -142,6 +144,7 @@ final class DiscordSocialSdkController extends ChangeNotifier {
     try {
       await _gateway.disconnect();
       if (!_accepts(generation)) return;
+      _authenticatedUserId = null;
       _state = DiscordSocialSdkControllerState.signedOut;
     } on DiscordSocialSdkException catch (error) {
       if (!_accepts(generation)) return;
@@ -155,6 +158,9 @@ final class DiscordSocialSdkController extends ChangeNotifier {
 
   void _applyAuthentication(DiscordSocialSdkAuthentication authentication) {
     _failureCode = null;
+    _authenticatedUserId = authentication.isReady
+        ? authentication.userId
+        : null;
     _state = switch (authentication.status) {
       DiscordSocialSdkAuthenticationStatus.ready =>
         DiscordSocialSdkControllerState.ready,
@@ -167,6 +173,7 @@ final class DiscordSocialSdkController extends ChangeNotifier {
 
   void _fail(String code) {
     _failureCode = code.trim().isEmpty ? 'unknown_failure' : code.trim();
+    _authenticatedUserId = null;
     _state = DiscordSocialSdkControllerState.failure;
   }
 

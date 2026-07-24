@@ -56,6 +56,12 @@ approved relationship and Direct Message access.
 one onboarding action. It completes ordinary OAuth first, invokes native Social
 SDK authorization only when that package is available, and disconnects both
 grants without copying access or refresh tokens between controllers or vaults.
+After every native authorization or refresh restore, the bridge reads the
+crash-safe `Client::GetCurrentUserV2()` identity and compares its snowflake with
+the ordinary OAuth `/users/@me` account. Friends, Direct Messages, and presence
+remain unavailable until the IDs match. A mismatch clears only the Social SDK
+grant, retains the linked OAuth profile, and retries only native social
+authorization so data from another Discord account cannot cross the boundary.
 
 For the optional developer transport, create a Discord application bot, enable
 the Message Content, Server Members, and Presence intents, and install it with

@@ -335,7 +335,7 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
   @override
   Future<DiscordSocialSdkAuthentication> authorize() async {
     authorizeCalls++;
-    return DiscordSocialSdkAuthentication.ready;
+    return DiscordSocialSdkAuthentication.readyFor('123456789012345678');
   }
 
   @override

@@ -158,6 +158,33 @@ void main() {
     );
   });
 
+  testWidgets('a mismatched Social SDK account never exposes friend data', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final socialGateway = _ReadySocialGateway(
+      restoredAuthentication: DiscordSocialSdkAuthentication.readyFor('user-2'),
+    );
+
+    await tester.pumpWidget(
+      FlucordApp(
+        credentialVault: _EmptyCredentialVault(),
+        chatRepositoryFactory: _UnusedRepositoryFactory(),
+        discordOAuthAccountGateway: _OAuthGateway(
+          restoredAccount: _oauthAccount(),
+        ),
+        discordSocialSdkGateway: socialGateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('discord-friend-friend-1')), findsNothing);
+    expect(socialGateway.disconnectCalls, 1);
+  });
+
   testWidgets('link and unlink transition the disconnected native shell', (
     tester,
   ) async {
@@ -261,17 +288,19 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 }
 
 final class _ReadySocialGateway implements DiscordSocialSdkGateway {
-  _ReadySocialGateway({
-    this.restoredAuthentication = DiscordSocialSdkAuthentication.ready,
-  });
+  _ReadySocialGateway({DiscordSocialSdkAuthentication? restoredAuthentication})
+    : restoredAuthentication =
+          restoredAuthentication ??
+          DiscordSocialSdkAuthentication.readyFor('user-1');
 
   final DiscordSocialSdkAuthentication restoredAuthentication;
   int authorizeCalls = 0;
+  int disconnectCalls = 0;
 
   @override
   Future<DiscordSocialSdkAuthentication> authorize() async {
     authorizeCalls++;
-    return DiscordSocialSdkAuthentication.ready;
+    return DiscordSocialSdkAuthentication.readyFor('user-1');
   }
 
   @override
@@ -279,7 +308,7 @@ final class _ReadySocialGateway implements DiscordSocialSdkGateway {
       DiscordSocialSdkAvailability.ready;
 
   @override
-  Future<void> disconnect() async {}
+  Future<void> disconnect() async => disconnectCalls++;
 
   @override
   Future<List<DiscordRelationship>> fetchRelationships() async => [

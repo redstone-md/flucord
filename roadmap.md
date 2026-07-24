@@ -326,6 +326,11 @@ browser runtime or dependency on Discord's private user API.
     through one normal-account connect, completion, and disconnect surface.
     Keep both grants, refresh lifecycles, vaults, and failure states independent
     while routing Friends recovery through the same account coordinator.
+61. Completed: bind every authenticated Social SDK session to its crash-safe
+    `GetCurrentUserV2()` snowflake and verify it against the linked OAuth
+    identity before exposing friends, Direct Messages, or presence. Reject and
+    clear only mismatched native grants so recovery reauthorizes the missing
+    social step without discarding the verified OAuth profile.
 
 ## Protocol safety
 

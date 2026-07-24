@@ -82,6 +82,10 @@ class DiscordSocialSdkBridge::Impl {
       Disconnect(std::move(result));
       return;
     }
+    if (call.method_name() == "getCurrentUser") {
+      GetCurrentUser(std::move(result));
+      return;
+    }
     if (relationship_bridge_->CanHandle(call.method_name())) {
       relationship_bridge_->Handle(call, std::move(result));
       return;
@@ -94,6 +98,7 @@ class DiscordSocialSdkBridge::Impl {
     if (call.method_name() == "authorize" ||
         call.method_name() == "restoreSession" ||
         call.method_name() == "disconnect" ||
+        call.method_name() == "getCurrentUser" ||
         call.method_name() == "getRelationships" ||
         call.method_name() == "updateRelationship" ||
         call.method_name() == "sendFriendRequest" ||
@@ -317,6 +322,19 @@ class DiscordSocialSdkBridge::Impl {
     grant_ = Grant{};
     client_->Disconnect();
     result->Success();
+  }
+
+  void GetCurrentUser(std::unique_ptr<MethodResult> result) const {
+    const auto user = client_->GetCurrentUserV2();
+    if (!user || user->Id() == 0) {
+      result->Error("current_user_unavailable",
+                    "The authenticated Social SDK user is unavailable.");
+      return;
+    }
+    flutter::EncodableMap payload;
+    payload[flutter::EncodableValue("user_id")] =
+        flutter::EncodableValue(std::to_string(user->Id()));
+    result->Success(flutter::EncodableValue(payload));
   }
 
   std::unique_ptr<discordpp::Client> client_;

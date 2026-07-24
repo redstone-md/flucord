@@ -10,19 +10,34 @@ enum DiscordSocialSdkAvailabilityStatus {
 enum DiscordSocialSdkAuthenticationStatus { ready, signedOut, unconfigured }
 
 final class DiscordSocialSdkAuthentication {
-  const DiscordSocialSdkAuthentication._(this.status);
+  const DiscordSocialSdkAuthentication._(this.status, this.userId);
 
   static const ready = DiscordSocialSdkAuthentication._(
     DiscordSocialSdkAuthenticationStatus.ready,
+    null,
   );
   static const signedOut = DiscordSocialSdkAuthentication._(
     DiscordSocialSdkAuthenticationStatus.signedOut,
+    null,
   );
   static const unconfigured = DiscordSocialSdkAuthentication._(
     DiscordSocialSdkAuthenticationStatus.unconfigured,
+    null,
   );
 
+  factory DiscordSocialSdkAuthentication.readyFor(String userId) {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'Must not be empty.');
+    }
+    return DiscordSocialSdkAuthentication._(
+      DiscordSocialSdkAuthenticationStatus.ready,
+      normalized,
+    );
+  }
+
   final DiscordSocialSdkAuthenticationStatus status;
+  final String? userId;
 
   bool get isReady => status == DiscordSocialSdkAuthenticationStatus.ready;
 }
@@ -75,6 +90,10 @@ abstract interface class DiscordSocialSdkGrantVault {
 
 abstract interface class DiscordSocialSdkAuthenticationEvents {
   Stream<DiscordSocialSdkAuthentication> get authenticationChanges;
+}
+
+abstract interface class DiscordSocialCurrentUserGateway {
+  Future<String> fetchCurrentUserId();
 }
 
 final class DiscordSocialSdkAvailability {

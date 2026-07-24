@@ -18,6 +18,7 @@ final class NativeDiscordSocialSdkGateway
     implements
         DiscordSocialSdkGateway,
         DiscordSocialSdkAuthenticationEvents,
+        DiscordSocialCurrentUserGateway,
         DiscordSocialFriendRequestGateway,
         DiscordSocialRelationshipEvents,
         DiscordSocialPresenceGateway,
@@ -95,8 +96,12 @@ final class NativeDiscordSocialSdkGateway
         },
       );
       await _persistGrant(response);
-      return DiscordSocialSdkAuthentication.ready;
+      return await _currentAuthentication();
     } on DiscordSocialSdkException catch (error) {
+      if (_invalidIdentityCodes.contains(error.code)) {
+        await _discardInvalidIdentity();
+        return DiscordSocialSdkAuthentication.signedOut;
+      }
       if (!_invalidGrantCodes.contains(error.code)) rethrow;
       await _vault.clear();
       return DiscordSocialSdkAuthentication.signedOut;
@@ -110,12 +115,34 @@ final class NativeDiscordSocialSdkGateway
       return DiscordSocialSdkAuthentication.unconfigured;
     }
     _requireSupportedPlatform();
-    final response = await _invoke(
-      'authorize',
-      arguments: {'client_id': configuration.clientId},
-    );
-    await _persistGrant(response);
-    return DiscordSocialSdkAuthentication.ready;
+    try {
+      final response = await _invoke(
+        'authorize',
+        arguments: {'client_id': configuration.clientId},
+      );
+      await _persistGrant(response);
+      return await _currentAuthentication();
+    } on DiscordSocialSdkException catch (error) {
+      if (_invalidIdentityCodes.contains(error.code)) {
+        await _discardInvalidIdentity();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String> fetchCurrentUserId() async {
+    _requireSupportedPlatform();
+    final response = await _invoke('getCurrentUser');
+    if (response case {'user_id': final Object? rawId}) {
+      final userId = switch (rawId) {
+        final String value => value.trim(),
+        final int value => value.toString(),
+        _ => '',
+      };
+      if (RegExp(r'^[1-9][0-9]*$').hasMatch(userId)) return userId;
+    }
+    throw const DiscordSocialSdkException('invalid_identity_response');
   }
 
   @override
@@ -264,7 +291,7 @@ final class NativeDiscordSocialSdkGateway
   Future<Object?> _handleNativeCall(String method, Object? arguments) async {
     if (method == 'authenticationGrantChanged') {
       await _persistGrant(arguments);
-      _authChanges.add(DiscordSocialSdkAuthentication.ready);
+      _authChanges.add(await _currentAuthentication());
       return null;
     }
     if (method == 'authenticationExpired') {
@@ -298,6 +325,18 @@ final class NativeDiscordSocialSdkGateway
   Future<void> _persistGrant(Object? response) async {
     final grant = _decodeGrant(response);
     await _vault.write(grant);
+  }
+
+  Future<DiscordSocialSdkAuthentication> _currentAuthentication() async =>
+      DiscordSocialSdkAuthentication.readyFor(await fetchCurrentUserId());
+
+  Future<void> _discardInvalidIdentity() async {
+    try {
+      await _invoke('disconnect');
+    } on DiscordSocialSdkException {
+      // The local grant must still be discarded if native teardown fails.
+    }
+    await _vault.clear();
   }
 
   Future<Object?> _invoke(String method, {Object? arguments}) async {
@@ -421,5 +460,9 @@ final class NativeDiscordSocialSdkGateway
     'not_authenticated',
     'refresh_failed',
     'authorization_expired',
+  };
+  static const _invalidIdentityCodes = {
+    'current_user_unavailable',
+    'invalid_identity_response',
   };
 }

@@ -311,8 +311,12 @@ void main() {
       final authentication = await gateway.authorize();
 
       expect(authentication.isReady, isTrue);
-      expect(channel.calls, ['authorize']);
-      expect(channel.arguments.single, {'client_id': clientId});
+      expect(authentication.userId, '123456789012345678');
+      expect(channel.calls, ['authorize', 'getCurrentUser']);
+      expect(channel.arguments, [
+        {'client_id': clientId},
+        null,
+      ]);
       expect(vault.grant?.refreshToken, 'refresh-secret');
       expect(vault.grant?.expiresAt, DateTime.utc(2026, 2, 22, 1));
     },
@@ -352,11 +356,12 @@ void main() {
     final authentication = await gateway.restoreAuthentication();
 
     expect(authentication.isReady, isTrue);
-    expect(channel.calls, ['restoreSession']);
-    expect(channel.arguments.single, {
-      'client_id': clientId,
-      'refresh_token': 'old-refresh',
-    });
+    expect(authentication.userId, '123456789012345678');
+    expect(channel.calls, ['restoreSession', 'getCurrentUser']);
+    expect(channel.arguments, [
+      {'client_id': clientId, 'refresh_token': 'old-refresh'},
+      null,
+    ]);
     expect(vault.grant?.refreshToken, 'refresh-secret');
   });
 
@@ -384,7 +389,7 @@ void main() {
   test(
     'persists a background token rotation delivered by native code',
     () async {
-      final channel = _Channel(null);
+      final channel = _Channel(_grantPayload());
       final vault = _MemoryGrantVault();
       final gateway = NativeDiscordSocialSdkGateway(
         channel: channel,
@@ -427,6 +432,7 @@ void main() {
 }
 
 Map<String, Object> _grantPayload() => {
+  'user_id': '123456789012345678',
   'access_token': 'access-secret',
   'refresh_token': 'refresh-secret',
   'expires_in': 3600,

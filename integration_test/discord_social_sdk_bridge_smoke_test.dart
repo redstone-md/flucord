@@ -20,6 +20,16 @@ void main() {
       DiscordSocialSdkAvailabilityStatus.sdkNotBundled,
     );
     await expectLater(
+      gateway.fetchCurrentUserId(),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
       gateway.fetchRelationships(),
       throwsA(
         isA<DiscordSocialSdkException>().having(
