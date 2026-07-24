@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/discord_oauth_controller.dart';
+import 'application/oauth_guild_directory_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
 import 'data/disconnected_chat_repository.dart';
@@ -94,6 +95,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ChatController _chatController;
   late final ConnectionController _connectionController;
   late final DiscordOAuthController _discordOAuthController;
+  late final OAuthGuildDirectoryController _oauthGuildDirectoryController;
   late final WorkspaceController _workspaceController;
   late final VoiceController _voiceController;
   late final AttachmentDownloadService _attachmentDownloadService;
@@ -121,6 +123,7 @@ class _FlucordAppState extends State<FlucordApp> {
             vault: const SecureDiscordOAuthGrantVault(),
           ),
     );
+    _oauthGuildDirectoryController = OAuthGuildDirectoryController();
     _workspaceController = WorkspaceController();
     _attachmentDownloadService =
         widget.attachmentDownloadService ?? NativeAttachmentDownloadService();
@@ -151,6 +154,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _chatController.dispose();
     _connectionController.dispose();
     _discordOAuthController.dispose();
+    _oauthGuildDirectoryController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
@@ -177,6 +181,7 @@ class _FlucordAppState extends State<FlucordApp> {
           chatController: _chatController,
           connectionController: _connectionController,
           discordOAuthController: _discordOAuthController,
+          oauthGuildDirectoryController: _oauthGuildDirectoryController,
           workspaceController: _workspaceController,
           voiceController: _voiceController,
           voiceMessageRecorder: widget.voiceMessageRecorder,

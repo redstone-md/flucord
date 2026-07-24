@@ -7,6 +7,7 @@ import '../application/composer_autocomplete_catalog.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/inbox_catalog.dart';
+import '../application/oauth_guild_directory_controller.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
@@ -27,6 +28,7 @@ import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_forward_dialog.dart';
 import 'widgets/message_list.dart';
+import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
 import 'widgets/reaction_details_dialog.dart';
@@ -44,6 +46,7 @@ class FlucordShell extends StatelessWidget {
     required this.chatController,
     required this.connectionController,
     required this.discordOAuthController,
+    required this.oauthGuildDirectoryController,
     required this.workspaceController,
     required this.voiceController,
     required this.voiceMessageRecorder,
@@ -55,6 +58,7 @@ class FlucordShell extends StatelessWidget {
   final ChatController chatController;
   final ConnectionController connectionController;
   final DiscordOAuthController discordOAuthController;
+  final OAuthGuildDirectoryController oauthGuildDirectoryController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -64,20 +68,23 @@ class FlucordShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: connectionController,
+      listenable: discordOAuthController,
       builder: (context, _) => ListenableBuilder(
-        listenable: chatController,
-        builder: (context, _) => switch (chatController.state) {
-          ChatLoadState.idle ||
-          ChatLoadState.loading => const LoadingWorkspaceView(),
-          ChatLoadState.failure => FailedWorkspaceView(
-            onRetry: chatController.load,
-          ),
-          ChatLoadState.ready => _buildWorkspace(
-            context,
-            chatController.workspace!,
-          ),
-        },
+        listenable: connectionController,
+        builder: (context, _) => ListenableBuilder(
+          listenable: chatController,
+          builder: (context, _) => switch (chatController.state) {
+            ChatLoadState.idle ||
+            ChatLoadState.loading => const LoadingWorkspaceView(),
+            ChatLoadState.failure => FailedWorkspaceView(
+              onRetry: chatController.load,
+            ),
+            ChatLoadState.ready => _buildWorkspace(
+              context,
+              chatController.workspace!,
+            ),
+          },
+        ),
       ),
     );
   }
@@ -85,6 +92,22 @@ class FlucordShell extends StatelessWidget {
   Widget _buildWorkspace(BuildContext context, ChatWorkspace workspace) {
     if (workspace.spaces.isEmpty) {
       if (connectionController.mode == SessionMode.disconnected) {
+        final account = discordOAuthController.account;
+        if (account != null) {
+          oauthGuildDirectoryController.reconcile(account);
+          return ListenableBuilder(
+            listenable: oauthGuildDirectoryController,
+            builder: (context, _) => OAuthGuildWorkspace(
+              account: account,
+              selectedGuildId: oauthGuildDirectoryController.selectedGuildId,
+              onSelectGuild: (guildId) =>
+                  oauthGuildDirectoryController.selectGuild(account, guildId),
+              onOpenConnections: () => _openConnections(context),
+              onToggleTheme: workspaceController.toggleTheme,
+              isDark: workspaceController.themeMode == ThemeMode.dark,
+            ),
+          );
+        }
         return DisconnectedWorkspaceView(
           onOpenConnections: () => _openConnections(context),
         );

@@ -200,6 +200,13 @@ ownership, permission, feature, and approximate member/presence metadata. They
 remain separate from the Bot chat session because ordinary OAuth scopes do not
 grant channel-message or user Gateway access.
 
+When no chat transport is active, a restored linked identity now opens its
+authorized servers in the main native rail/sidebar workspace instead of hiding
+them inside Connections. Server selection, responsive compact layout, linked
+identity footer, and owner/admin/member context remain available, while the
+channel and message surfaces stay explicitly locked because OAuth does not
+provide those resources.
+
 ## Run
 
 ```powershell

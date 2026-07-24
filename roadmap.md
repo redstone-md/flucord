@@ -247,6 +247,11 @@ browser runtime or dependency on Discord's private user API.
     render the result as a bounded native list in Connections. Every row keeps
     the no-message-access boundary visible instead of conflating OAuth identity
     with the Bot chat transport.
+47. Completed: promote a restored linked identity into a responsive native
+    guild-directory workspace when no chat transport is connected. A dedicated
+    client-state controller owns server selection; the Discord-like rail,
+    sidebar, identity footer, and content header use real OAuth guild metadata,
+    while locked channel/message surfaces keep unsupported data visibly absent.
 
 ## Protocol safety
 

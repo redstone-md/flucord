@@ -77,6 +77,9 @@ to a user's channel history. Flucord also does not infer chat access from
   profile and `DiscordOAuthGuild` directory metadata. Access tokens, refresh
   tokens, authorization codes, and the PKCE verifier remain inside data-layer
   services and the credential vault.
+- `OAuthGuildDirectoryController` owns only the selected authorized guild ID.
+  It projects the immutable OAuth directory into the disconnected native shell
+  and never manufactures channels, messages, read state, or Gateway presence.
 
 ## Desktop protocol delivery
 
