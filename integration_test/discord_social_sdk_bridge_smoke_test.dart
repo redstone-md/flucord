@@ -173,6 +173,11 @@ void main() {
       gateway.startActivityCall('700'),
       gateway.setActivityCallMuted(lobbyId: '700', muted: true),
       gateway.setActivityCallDeafened(lobbyId: '700', deafened: true),
+      gateway.setActivityParticipantMuted(
+        lobbyId: '700',
+        userId: '123456789',
+        muted: true,
+      ),
       gateway.leaveActivityCall('700'),
     ]) {
       await expectLater(

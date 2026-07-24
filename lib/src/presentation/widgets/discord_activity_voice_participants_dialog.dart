@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../application/discord_social_activity_controller.dart';
@@ -62,6 +64,13 @@ class _ParticipantsDialog extends StatelessWidget {
                       return _ParticipantRow(
                         user: _userFor(userId),
                         speaking: call?.isSpeaking(userId) == true,
+                        currentUser: userId == call?.currentUserId,
+                        locallyMuted: call?.isLocallyMuted(userId) == true,
+                        pending: controller.isParticipantMutePending(userId),
+                        error: controller.participantMuteErrorFor(userId),
+                        onToggleMuted: () => unawaited(
+                          controller.toggleParticipantMuted(userId),
+                        ),
                       );
                     },
                   ),
@@ -130,14 +139,31 @@ class _Header extends StatelessWidget {
 }
 
 class _ParticipantRow extends StatelessWidget {
-  const _ParticipantRow({required this.user, required this.speaking});
+  const _ParticipantRow({
+    required this.user,
+    required this.speaking,
+    required this.currentUser,
+    required this.locallyMuted,
+    required this.pending,
+    required this.error,
+    required this.onToggleMuted,
+  });
 
   final DiscordRelationshipUser user;
   final bool speaking;
+  final bool currentUser;
+  final bool locallyMuted;
+  final bool pending;
+  final String? error;
+  final VoidCallback onToggleMuted;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: '${user.displayName}, ${speaking ? 'speaking' : 'connected'}',
+    label: [
+      currentUser ? 'You' : user.displayName,
+      speaking ? 'speaking' : 'connected',
+      if (locallyMuted) 'locally muted',
+    ].join(', '),
     child: Padding(
       key: ValueKey('activity-voice-participant-${user.id}'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -162,7 +188,7 @@ class _ParticipantRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  user.displayName,
+                  currentUser ? 'You' : user.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -172,7 +198,7 @@ class _ParticipantRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  speaking ? 'Speaking' : 'Connected',
+                  _connectionLabel,
                   style: TextStyle(
                     color: speaking
                         ? FlucordColors.success
@@ -180,6 +206,14 @@ class _ParticipantRow extends StatelessWidget {
                     fontSize: 11,
                   ),
                 ),
+                if (error != null) ...[
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Could not update local volume',
+                    key: ValueKey('activity-participant-mute-error'),
+                    style: TextStyle(color: FlucordColors.danger, fontSize: 10),
+                  ),
+                ],
               ],
             ),
           ),
@@ -189,10 +223,49 @@ class _ParticipantRow extends StatelessWidget {
               color: FlucordColors.success,
               size: 20,
             ),
+          if (!currentUser) ...[
+            const SizedBox(width: 4),
+            if (pending)
+              SizedBox.square(
+                key: ValueKey('activity-participant-mute-pending-${user.id}'),
+                dimension: 32,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              IconButton(
+                key: ValueKey('toggle-activity-participant-mute-${user.id}'),
+                tooltip: error != null
+                    ? 'Retry local volume change'
+                    : locallyMuted
+                    ? 'Unmute ${user.displayName}'
+                    : 'Mute ${user.displayName}',
+                visualDensity: VisualDensity.compact,
+                onPressed: onToggleMuted,
+                icon: Icon(
+                  error != null
+                      ? Icons.refresh
+                      : locallyMuted
+                      ? Icons.volume_off_outlined
+                      : Icons.volume_up_outlined,
+                  size: 19,
+                  color: locallyMuted
+                      ? FlucordColors.brand
+                      : context.surfaces.muted,
+                ),
+              ),
+          ],
         ],
       ),
     ),
   );
+
+  String get _connectionLabel {
+    final status = speaking ? 'Speaking' : 'Connected';
+    return locallyMuted ? '$status · Locally muted' : status;
+  }
 }
 
 class _EmptyParticipants extends StatelessWidget {

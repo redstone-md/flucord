@@ -362,6 +362,12 @@ browser runtime or dependency on Discord's private user API.
     identity fallbacks, speaking semantics, and live updates while open. Keep
     the default unbundled bridge verified. Audio-device selection remains after
     approved package headers expose exact enumeration and output signatures.
+67. Completed: add documented per-participant local audio control through
+    `Call::SetLocalMute`/`GetLocalMute`, carry the authenticated self identity
+    through every call snapshot, reject self and stale participant targets, and
+    expose independent mute/unmute progress, failure retry, and accessible
+    state in the compact participant panel without suppressing speaking state.
+    Keep local volume state memory-only and isolated from self mute/deafen.
 
 ## Protocol safety
 

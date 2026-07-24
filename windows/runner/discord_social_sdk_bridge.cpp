@@ -123,6 +123,7 @@ class DiscordSocialSdkBridge::Impl {
         call.method_name() == "startActivityCall" ||
         call.method_name() == "setActivityCallMuted" ||
         call.method_name() == "setActivityCallDeafened" ||
+        call.method_name() == "setActivityParticipantMuted" ||
         call.method_name() == "leaveActivityCall" ||
         call.method_name() == "getDmConversations" ||
         call.method_name() == "getDmMessages" ||

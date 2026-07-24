@@ -70,6 +70,11 @@ void main() {
     final started = await gateway.startActivityCall('700');
     await gateway.setActivityCallMuted(lobbyId: '700', muted: true);
     await gateway.setActivityCallDeafened(lobbyId: '700', deafened: true);
+    await gateway.setActivityParticipantMuted(
+      lobbyId: '700',
+      userId: ' 500 ',
+      muted: true,
+    );
     await gateway.leaveActivityCall('700');
 
     expect(started.status, DiscordSocialCallStatus.connected);
@@ -77,12 +82,14 @@ void main() {
       'startActivityCall',
       'setActivityCallMuted',
       'setActivityCallDeafened',
+      'setActivityParticipantMuted',
       'leaveActivityCall',
     ]);
     expect(channel.arguments, [
       {'lobby_id': '700'},
       {'lobby_id': '700', 'value': true},
       {'lobby_id': '700', 'value': true},
+      {'lobby_id': '700', 'user_id': '500', 'value': true},
       {'lobby_id': '700'},
     ]);
 
@@ -127,9 +134,11 @@ Map<String, Object> _payload() => {
 
 Map<String, Object> _callPayload() => {
   'lobby_id': '700',
+  'current_user_id': '900',
   'status': 'connected',
   'participant_user_ids': ['500'],
   'speaking_user_ids': ['500'],
+  'locally_muted_user_ids': const [],
   'self_muted': false,
   'self_deafened': false,
 };

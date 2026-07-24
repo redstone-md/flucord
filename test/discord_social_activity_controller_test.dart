@@ -134,6 +134,69 @@ void main() {
     expect(controller.call?.isConnected, isTrue);
     expect(controller.callError, isNull);
   });
+
+  test('locally mutes only a remote activity voice participant', () async {
+    final gateway = _ActivityGateway();
+    final controller = DiscordSocialActivityController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.sendInvite(_friend);
+    gateway.emitCall(
+      _callState(participants: const ['900', '500'], speaking: const ['500']),
+    );
+    final participantMuteGate = Completer<void>();
+    gateway.participantMuteGate = participantMuteGate;
+
+    final pending = controller.toggleParticipantMuted('500');
+
+    expect(controller.isParticipantMutePending('500'), isTrue);
+    expect(controller.callPending, isFalse);
+    expect(await controller.toggleParticipantMuted('500'), isFalse);
+    participantMuteGate.complete();
+    expect(await pending, isTrue);
+    expect(controller.call?.isLocallyMuted('500'), isTrue);
+    expect(controller.call?.isSpeaking('500'), isTrue);
+    expect(controller.participantMuteErrorFor('500'), isNull);
+    expect(gateway.participantMuteRequests, ['500:true']);
+
+    expect(await controller.toggleParticipantMuted('500'), isTrue);
+    expect(controller.call?.isLocallyMuted('500'), isFalse);
+    expect(gateway.participantMuteRequests, ['500:true', '500:false']);
+    expect(await controller.toggleParticipantMuted('900'), isFalse);
+    expect(await controller.toggleParticipantMuted('999'), isFalse);
+  });
+
+  test(
+    'keeps participant mute failures retryable and clears stale rows',
+    () async {
+      final gateway = _ActivityGateway()..failNextParticipantMute = true;
+      final controller = DiscordSocialActivityController(gateway);
+      addTearDown(controller.dispose);
+      controller.reconcileSession(
+        DiscordSocialSdkAvailability.ready,
+        authenticated: true,
+      );
+      await controller.sendInvite(_friend);
+      gateway.emitCall(_callState(participants: const ['900', '500']));
+
+      expect(await controller.toggleParticipantMuted('500'), isFalse);
+      expect(
+        controller.participantMuteErrorFor('500'),
+        'activity_participant_mute_failed',
+      );
+      expect(await controller.toggleParticipantMuted('500'), isTrue);
+      expect(controller.participantMuteErrorFor('500'), isNull);
+
+      gateway.failNextParticipantMute = true;
+      expect(await controller.toggleParticipantMuted('500'), isFalse);
+      gateway.emitCall(_callState(participants: const ['900']));
+      expect(controller.participantMuteErrorFor('500'), isNull);
+      expect(controller.isParticipantMutePending('500'), isFalse);
+    },
+  );
 }
 
 final _friend = DiscordRelationship(
@@ -173,6 +236,9 @@ final class _ActivityGateway
       StreamController.broadcast(sync: true);
   DiscordSocialCallState call = _callState();
   bool failNextStart = false;
+  bool failNextParticipantMute = false;
+  Completer<void>? participantMuteGate;
+  final List<String> participantMuteRequests = [];
 
   @override
   Stream<DiscordSocialActivityInviteEvent> get activityInviteEvents =>
@@ -182,7 +248,10 @@ final class _ActivityGateway
   Stream<DiscordSocialCallState> get activityCallEvents => _callEvents.stream;
 
   void emit(DiscordSocialActivityInviteEvent event) => _events.add(event);
-  void emitCall(DiscordSocialCallState state) => _callEvents.add(state);
+  void emitCall(DiscordSocialCallState state) {
+    call = state;
+    _callEvents.add(state);
+  }
 
   @override
   Future<DiscordSocialActivitySession> acceptActivityInvite(
@@ -228,6 +297,37 @@ final class _ActivityGateway
   }
 
   @override
+  Future<DiscordSocialCallState> setActivityParticipantMuted({
+    required String lobbyId,
+    required String userId,
+    required bool muted,
+  }) async {
+    participantMuteRequests.add('$userId:$muted');
+    if (failNextParticipantMute) {
+      failNextParticipantMute = false;
+      throw const DiscordSocialSdkException('activity_participant_mute_failed');
+    }
+    final gate = participantMuteGate;
+    participantMuteGate = null;
+    await gate?.future;
+    final locallyMuted = call.locallyMutedUserIds.toSet();
+    if (muted) {
+      locallyMuted.add(userId);
+    } else {
+      locallyMuted.remove(userId);
+    }
+    call = _callState(
+      status: call.status,
+      participants: call.participantUserIds,
+      speaking: call.speakingUserIds,
+      muted: call.selfMuted,
+      deafened: call.selfDeafened,
+      locallyMuted: locallyMuted.toList(),
+    );
+    return call;
+  }
+
+  @override
   Future<DiscordSocialCallState> leaveActivityCall(String lobbyId) async {
     call = _callState(status: DiscordSocialCallStatus.disconnected);
     return call;
@@ -240,11 +340,14 @@ DiscordSocialCallState _callState({
   List<String> speaking = const [],
   bool muted = false,
   bool deafened = false,
+  List<String> locallyMuted = const [],
 }) => DiscordSocialCallState(
   lobbyId: '700',
+  currentUserId: '900',
   status: status,
   participantUserIds: participants,
   speakingUserIds: speaking,
+  locallyMutedUserIds: locallyMuted,
   selfMuted: muted,
   selfDeafened: deafened,
 );

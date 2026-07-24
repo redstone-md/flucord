@@ -37,7 +37,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Activity voice connected'), findsOneWidget);
-    expect(find.textContaining('1 voice participant'), findsOneWidget);
+    expect(find.textContaining('2 voice participants'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('show-activity-voice-participants')),
@@ -48,14 +48,52 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('You'), findsOneWidget);
     expect(find.text('Speaking'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('toggle-activity-participant-mute-900')),
+      findsNothing,
+    );
 
-    harness.activityGateway.emitCall(
-      _callState(participants: const ['500', '999'], speaking: false),
+    final participantMuteGate = Completer<void>();
+    harness.activityGateway.participantMuteGate = participantMuteGate;
+    await tester.tap(
+      find.byKey(const ValueKey('toggle-activity-participant-mute-500')),
     );
     await tester.pump();
-    expect(find.text('2 participants'), findsOneWidget);
-    expect(find.text('Connected'), findsNWidgets(2));
+    expect(
+      find.byKey(const ValueKey('activity-participant-mute-pending-500')),
+      findsOneWidget,
+    );
+    participantMuteGate.complete();
+    await tester.pumpAndSettle();
+    expect(harness.activityGateway.call.isLocallyMuted('500'), isTrue);
+    expect(find.text('Speaking · Locally muted'), findsOneWidget);
+    expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('toggle-activity-participant-mute-500')),
+    );
+    await tester.pumpAndSettle();
+    expect(harness.activityGateway.call.isLocallyMuted('500'), isFalse);
+
+    harness.activityGateway.failNextParticipantMute = true;
+    await tester.tap(
+      find.byKey(const ValueKey('toggle-activity-participant-mute-500')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Could not update local volume'), findsOneWidget);
+    expect(find.byTooltip('Retry local volume change'), findsOneWidget);
+    await tester.tap(find.byTooltip('Retry local volume change'));
+    await tester.pumpAndSettle();
+    expect(harness.activityGateway.call.isLocallyMuted('500'), isTrue);
+
+    harness.activityGateway.emitCall(
+      _callState(participants: const ['900', '500', '999'], speaking: false),
+    );
+    await tester.pump();
+    expect(find.text('3 participants'), findsOneWidget);
+    expect(find.text('Connected'), findsNWidgets(3));
     expect(find.text('Discord user · 999'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('close-activity-voice-participants')),
@@ -166,6 +204,8 @@ final class _ActivityGateway
   final StreamController<DiscordSocialCallState> _callEvents =
       StreamController.broadcast(sync: true);
   DiscordSocialCallState call = _callState();
+  bool failNextParticipantMute = false;
+  Completer<void>? participantMuteGate;
 
   @override
   Stream<DiscordSocialActivityInviteEvent> get activityInviteEvents =>
@@ -227,6 +267,36 @@ final class _ActivityGateway
   }
 
   @override
+  Future<DiscordSocialCallState> setActivityParticipantMuted({
+    required String lobbyId,
+    required String userId,
+    required bool muted,
+  }) async {
+    if (failNextParticipantMute) {
+      failNextParticipantMute = false;
+      throw const DiscordSocialSdkException('activity_participant_mute_failed');
+    }
+    final gate = participantMuteGate;
+    participantMuteGate = null;
+    await gate?.future;
+    final locallyMuted = call.locallyMutedUserIds.toSet();
+    if (muted) {
+      locallyMuted.add(userId);
+    } else {
+      locallyMuted.remove(userId);
+    }
+    call = _callState(
+      status: call.status,
+      muted: call.selfMuted,
+      deafened: call.selfDeafened,
+      speaking: call.speakingUserIds.isNotEmpty,
+      participants: call.participantUserIds,
+      locallyMuted: locallyMuted.toList(),
+    );
+    return call;
+  }
+
+  @override
   Future<DiscordSocialCallState> leaveActivityCall(String lobbyId) async {
     call = _callState(status: DiscordSocialCallStatus.disconnected);
     return call;
@@ -238,12 +308,15 @@ DiscordSocialCallState _callState({
   bool muted = false,
   bool deafened = false,
   bool speaking = true,
-  List<String> participants = const ['500'],
+  List<String> participants = const ['900', '500'],
+  List<String> locallyMuted = const [],
 }) => DiscordSocialCallState(
   lobbyId: '700',
+  currentUserId: '900',
   status: status,
   participantUserIds: participants,
   speakingUserIds: speaking ? const ['500'] : const [],
+  locallyMutedUserIds: locallyMuted,
   selfMuted: muted,
   selfDeafened: deafened,
 );

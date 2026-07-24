@@ -269,7 +269,10 @@ connection status and participant count. The native Friends strip exposes
 self-mute, self-deafen, retry, and leave controls while keeping this activity
 voice path separate from ordinary Discord DM calls. A compact participant
 panel resolves known friend identities and follows the documented speaking
-callback live, including accessible speaking/connected state.
+callback live, including accessible speaking/connected state. It identifies
+the current account as **You** and gives every other live participant an
+independent local mute/unmute control backed by the call's documented
+`SetLocalMute`; per-row progress and retry state never hide speaking activity.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and

@@ -16,6 +16,7 @@ import 'discord_social_call_mapper.dart';
 import 'discord_social_dm_mapper.dart';
 import 'discord_social_lobby_secret.dart';
 import 'discord_social_relationship_mapper.dart';
+import 'discord_social_sdk_event_router.dart';
 import 'discord_social_sdk_platform_channel.dart';
 import 'discord_social_sdk_response_codec.dart';
 import 'secure_discord_social_sdk_vault.dart';
@@ -44,7 +45,17 @@ final class NativeDiscordSocialSdkGateway
   }) : _channel = channel ?? FlutterDiscordSocialSdkPlatformChannel(),
        _configuration =
            configuration ?? DiscordSocialSdkConfiguration.fromEnvironment() {
-    _channel.setNativeHandler(_handleNativeCall);
+    _eventRouter = DiscordSocialSdkEventRouter(
+      persistGrant: _persistGrant,
+      clearGrant: _vault.clear,
+      currentAuthentication: _currentAuthentication,
+      authentications: _authChanges,
+      dmEvents: _dmEvents,
+      relationshipUpdates: _relationshipUpdates,
+      activityInvites: _activityInvites,
+      activityCalls: _activityCalls,
+    );
+    _channel.setNativeHandler(_eventRouter.handle);
   }
 
   final DiscordSocialSdkPlatformChannel _channel;
@@ -53,6 +64,7 @@ final class NativeDiscordSocialSdkGateway
   final DiscordSocialSdkGrantVault _vault;
   final DiscordSocialSdkClock _clock;
   final DiscordSocialActivitySecretFactory _activitySecretFactory;
+  late final DiscordSocialSdkEventRouter _eventRouter;
   final StreamController<DiscordSocialSdkAuthentication> _authChanges =
       StreamController.broadcast(sync: true);
   final StreamController<DiscordSocialDmEvent> _dmEvents =
@@ -366,61 +378,20 @@ final class NativeDiscordSocialSdkGateway
   }) => _callMutation('setActivityCallDeafened', lobbyId, value: deafened);
 
   @override
+  Future<DiscordSocialCallState> setActivityParticipantMuted({
+    required String lobbyId,
+    required String userId,
+    required bool muted,
+  }) => _callMutation(
+    'setActivityParticipantMuted',
+    lobbyId,
+    userId: userId,
+    value: muted,
+  );
+
+  @override
   Future<DiscordSocialCallState> leaveActivityCall(String lobbyId) =>
       _callMutation('leaveActivityCall', lobbyId);
-
-  Future<Object?> _handleNativeCall(String method, Object? arguments) async {
-    if (method == 'authenticationGrantChanged') {
-      await _persistGrant(arguments);
-      _authChanges.add(await _currentAuthentication());
-      return null;
-    }
-    if (method == 'authenticationExpired') {
-      await _vault.clear();
-      _authChanges.add(DiscordSocialSdkAuthentication.signedOut);
-      return null;
-    }
-    if (method == 'socialMessageChanged' || method == 'socialMessageDeleted') {
-      try {
-        _dmEvents.add(DiscordSocialDmMapper.event(method, arguments));
-      } on FormatException {
-        throw const DiscordSocialSdkException('invalid_dm_event');
-      }
-      return null;
-    }
-    if (method == 'socialUserUpdated') {
-      try {
-        _relationshipUpdates.add(
-          DiscordSocialRelationshipUpdate(
-            userId: DiscordSocialSdkResponseCodec.requiredIdentifier(
-              arguments,
-              'user_id',
-            ),
-          ),
-        );
-      } on ArgumentError {
-        throw const DiscordSocialSdkException('invalid_relationship_event');
-      }
-      return null;
-    }
-    if (method == 'socialActivityInviteChanged') {
-      try {
-        _activityInvites.add(DiscordSocialActivityMapper.event(arguments));
-      } on Object {
-        throw const DiscordSocialSdkException('invalid_activity_event');
-      }
-      return null;
-    }
-    if (method == 'socialActivityCallChanged') {
-      try {
-        _activityCalls.add(DiscordSocialCallMapper.state(arguments));
-      } on Object {
-        throw const DiscordSocialSdkException('invalid_activity_call_event');
-      }
-      return null;
-    }
-    throw MissingPluginException('Unknown Social SDK event: $method');
-  }
 
   Future<void> _persistGrant(Object? response) async {
     final grant = DiscordSocialSdkResponseCodec.grant(response, _clock);
@@ -430,14 +401,20 @@ final class NativeDiscordSocialSdkGateway
   Future<DiscordSocialCallState> _callMutation(
     String method,
     String lobbyId, {
+    String? userId,
     bool? value,
   }) async {
     _requireSupportedPlatform();
+    final normalizedUserId = userId?.trim();
     try {
       return DiscordSocialCallMapper.state(
         await _invoke(
           method,
-          arguments: {'lobby_id': lobbyId.trim(), 'value': ?value},
+          arguments: {
+            'lobby_id': lobbyId.trim(),
+            'user_id': ?normalizedUserId,
+            'value': ?value,
+          },
         ),
       );
     } on FormatException {

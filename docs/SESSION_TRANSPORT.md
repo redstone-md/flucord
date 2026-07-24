@@ -154,9 +154,13 @@ to a user's channel history. Flucord also does not infer chat access from
   bridge uses documented `StartCall(lobbyId)` audio, retains the returned
   `discordpp::Call`, forwards its status, participant, and speaking callbacks,
   applies self-mute and self-deafen through that exact call, and leaves through
-  `EndCalls`. The bridge owns an in-memory speaking-user set, removes users when
-  speaking stops or they leave, and projects only typed snowflakes into
-  Flutter. Flutter never handles PCM or Discord voice credentials itself.
+  `EndCalls`. Remote participant volume is local-only: the bridge validates a
+  live non-self participant, applies documented `Call::SetLocalMute`, and
+  projects `Call::GetLocalMute` plus the authenticated current-user snowflake
+  back into immutable Flutter state. The bridge owns an in-memory speaking-user
+  set, removes users when speaking stops or they leave, and projects only typed
+  snowflakes into Flutter. Flutter never handles PCM or Discord voice
+  credentials itself.
   Lobby secrets are generated with operating-system cryptographic randomness,
   cross only the private platform channel, remain outside controllers and
   persistence, and are wiped from the native bridge when the SDK session ends.
@@ -166,6 +170,9 @@ to a user's channel history. Flucord also does not infer chat access from
   still does not expose a DM channel/lobby ID for direct calling.
   Known participant snowflakes resolve through the existing live relationship
   directory; unknown participants retain a non-fabricated identity fallback.
+  The current account is labelled **You** and has no remote-mute action. Other
+  rows retain independent pending/error state, and speaking remains visible
+  while their audio is locally muted.
   Audio-device selection remains pending until the approved SDK package can
   supply exact input/output enumeration signatures for package-linked testing.
 - Social SDK grants have their own versioned operating-system vault record.
