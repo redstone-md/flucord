@@ -4,6 +4,7 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
 import 'mock_chat_seed.dart';
@@ -11,14 +12,21 @@ import 'mock_chat_seed.dart';
 part 'mock_chat_repository_mutations.dart';
 part 'mock_chat_repository_polls.dart';
 part 'mock_chat_repository_stickers.dart';
+part 'mock_chat_repository_scheduled_events.dart';
+part 'mock_chat_repository_direct_messages.dart';
 
 final class MockChatRepository
-    with _MockChatRepositoryPolls, _MockChatRepositoryStickers
+    with
+        _MockChatRepositoryPolls,
+        _MockChatRepositoryStickers,
+        _MockChatRepositoryScheduledEvents,
+        _MockChatRepositoryDirectMessages
     implements
         ChatRepository,
         ArchivedThreadRepository,
         ForumPostRepository,
         PollRepository,
+        ScheduledEventRepository,
         StickerRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
     : _workspace = MockChatSeed.withForums(_seedWorkspace());
@@ -76,34 +84,6 @@ final class MockChatRepository
           .toList(),
       members: _workspace.members,
     );
-  }
-
-  @override
-  Future<DirectConversation> openDirectConversation(String recipientId) async {
-    await _wait();
-    final recipient = Member(
-      id: recipientId,
-      displayName: 'User $recipientId',
-      initials: 'U',
-      role: 'Direct message',
-      presence: Presence.offline,
-      colorValue: 0xff59636a,
-      spaceIds: const {CommunitySpace.directMessagesId},
-    );
-    const space = CommunitySpace.directMessages();
-    final channel = ConversationChannel(
-      id: 'dm-$recipientId',
-      spaceId: space.id,
-      name: recipient.displayName,
-      topic: 'Direct message with ${recipient.displayName}',
-      kind: ChannelKind.text,
-      recipientId: recipient.id,
-    );
-    _workspace = _workspace
-        .upsertSpace(space)
-        .upsertMember(recipient)
-        .upsertChannel(channel);
-    return DirectConversation(channel: channel, recipient: recipient);
   }
 
   @override

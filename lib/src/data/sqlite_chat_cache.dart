@@ -8,6 +8,7 @@ import '../domain/chat_models.dart';
 import 'chat_model_json.dart';
 import 'sqlite_chat_schema.dart';
 import 'sqlite_guild_emoji_store.dart';
+import 'sqlite_guild_scheduled_event_store.dart';
 import 'sqlite_guild_sticker_store.dart';
 
 part 'sqlite_chat_cache_expressions.dart';

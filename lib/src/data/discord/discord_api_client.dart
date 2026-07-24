@@ -5,6 +5,8 @@ import '../../domain/chat_models.dart';
 import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
 
+part 'discord_api_client_scheduled_events.dart';
+
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
     required this.statusCode,

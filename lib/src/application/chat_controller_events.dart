@@ -24,6 +24,10 @@ extension _ChatControllerEvents on ChatController {
             event.spaceId,
             event.stickers,
           );
+        case GuildScheduledEventUpsertedEvent():
+          _upsertScheduledEvent(event.event);
+        case GuildScheduledEventDeletedEvent():
+          _deleteScheduledEvent(event.spaceId, event.eventId);
         case ChannelDeletedEvent():
           _workspace = _workspace?.removeChannel(event.channelId);
         case CategoryDeletedEvent():

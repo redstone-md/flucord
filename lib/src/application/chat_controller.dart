@@ -6,6 +6,7 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
 import '../domain/voice_connection.dart';
@@ -16,6 +17,7 @@ part 'chat_controller_threads.dart';
 part 'chat_controller_forums.dart';
 part 'chat_controller_polls.dart';
 part 'chat_controller_stickers.dart';
+part 'chat_controller_scheduled_events.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -44,6 +46,9 @@ final class ChatController extends ChangeNotifier {
   final Map<String, ChannelHistory> _pinnedMessages = {};
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
+  final Map<String, List<GuildScheduledEvent>> _scheduledEventsBySpace = {};
+  final Set<String> _loadingScheduledEventSpaces = {};
+  final Map<String, Object> _scheduledEventErrors = {};
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
@@ -120,6 +125,9 @@ final class ChatController extends ChangeNotifier {
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
+    _scheduledEventsBySpace.clear();
+    _loadingScheduledEventSpaces.clear();
+    _scheduledEventErrors.clear();
     _archivedThreadState.clear();
     _clearTyping();
     _activeChannelId = null;
@@ -137,6 +145,7 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       _workspace = await _repository.loadWorkspace();
+      await _loadScheduledEventsForWorkspace();
       _state = ChatLoadState.ready;
     } catch (error) {
       _error = error;

@@ -8,6 +8,7 @@ part 'conversation_channel.dart';
 part 'forum_models.dart';
 part 'guild_emoji.dart';
 part 'guild_sticker.dart';
+part 'guild_scheduled_event.dart';
 
 enum ChannelKind { text, voice, forum, media }
 

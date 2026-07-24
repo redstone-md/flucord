@@ -31,6 +31,17 @@ abstract interface class ChatCache {
     List<GuildSticker> stickers,
   );
 
+  Future<List<GuildScheduledEvent>> readGuildScheduledEvents(String spaceId);
+
+  Future<void> replaceGuildScheduledEvents(
+    String spaceId,
+    List<GuildScheduledEvent> events,
+  );
+
+  Future<void> writeGuildScheduledEvent(GuildScheduledEvent event);
+
+  Future<void> deleteGuildScheduledEvent(String eventId);
+
   Future<void> deleteMessage(String messageId);
 
   Future<void> writeChannel(ConversationChannel channel);

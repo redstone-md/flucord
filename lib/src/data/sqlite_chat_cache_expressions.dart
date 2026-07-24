@@ -28,4 +28,24 @@ mixin _SqliteChatCacheExpressions implements ChatCache {
     String spaceId,
     List<GuildSticker> stickers,
   ) => SqliteGuildStickerStore(_database).replaceForSpace(spaceId, stickers);
+
+  @override
+  Future<List<GuildScheduledEvent>> readGuildScheduledEvents(String spaceId) =>
+      SqliteGuildScheduledEventStore(_database).readForSpace(spaceId);
+
+  @override
+  Future<void> replaceGuildScheduledEvents(
+    String spaceId,
+    List<GuildScheduledEvent> events,
+  ) => SqliteGuildScheduledEventStore(
+    _database,
+  ).replaceForSpace(spaceId, events);
+
+  @override
+  Future<void> writeGuildScheduledEvent(GuildScheduledEvent event) =>
+      SqliteGuildScheduledEventStore(_database).write(event);
+
+  @override
+  Future<void> deleteGuildScheduledEvent(String eventId) =>
+      SqliteGuildScheduledEventStore(_database).delete(eventId);
 }

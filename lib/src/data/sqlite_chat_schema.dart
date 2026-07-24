@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 15;
+  static const version = 16;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -110,6 +110,7 @@ abstract final class SqliteChatSchema {
       'CREATE INDEX emojis_space_name ON emojis(space_id, name)',
     );
     await _createGuildStickers(database);
+    await _createGuildScheduledEvents(database);
     await database.execute(
       'CREATE INDEX messages_channel_time '
       'ON messages(channel_id, sent_at)',
@@ -254,6 +255,9 @@ abstract final class SqliteChatSchema {
       );
       await _createGuildStickers(database);
     }
+    if (oldVersion < 16) {
+      await _createGuildScheduledEvents(database);
+    }
   }
 
   static Future<void> _createGuildStickers(DatabaseExecutor database) async {
@@ -272,6 +276,30 @@ abstract final class SqliteChatSchema {
     await database.execute(
       'CREATE INDEX guild_stickers_space_name '
       'ON guild_stickers(space_id, name)',
+    );
+  }
+
+  static Future<void> _createGuildScheduledEvents(
+    DatabaseExecutor database,
+  ) async {
+    await database.execute('''
+      CREATE TABLE guild_scheduled_events (
+        id TEXT PRIMARY KEY,
+        space_id TEXT NOT NULL,
+        channel_id TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        location TEXT,
+        scheduled_start_time TEXT NOT NULL,
+        scheduled_end_time TEXT,
+        entity_type INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        interested_count INTEGER NOT NULL
+      )
+    ''');
+    await database.execute(
+      'CREATE INDEX guild_scheduled_events_space_start '
+      'ON guild_scheduled_events(space_id, scheduled_start_time)',
     );
   }
 }

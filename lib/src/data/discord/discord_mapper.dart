@@ -5,6 +5,7 @@ import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
 part 'discord_sticker_mapper.dart';
+part 'discord_scheduled_event_mapper.dart';
 
 final class DiscordMappedDirectMessage {
   const DiscordMappedDirectMessage({

@@ -254,6 +254,7 @@ void main() {
           DiscordGatewayClient.directMessageReactionsIntent |
           DiscordGatewayClient.directMessageTypingIntent |
           DiscordGatewayClient.messageContentIntent |
+          DiscordGatewayClient.guildScheduledEventsIntent |
           DiscordGatewayClient.guildMessagePollsIntent |
           DiscordGatewayClient.directMessagePollsIntent,
     );
@@ -262,7 +263,7 @@ void main() {
     expect(identify['op'], 2);
     final identifyData = identify['d']! as Map<String, Object?>;
     expect(identifyData['token'], 'bot-token');
-    expect(identifyData['intents'], 50396931);
+    expect(identifyData['intents'], 50462467);
     expect(identifyData['large_threshold'], 250);
 
     protocol.accept({

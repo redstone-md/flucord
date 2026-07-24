@@ -95,6 +95,22 @@ final class GuildStickersReplacedEvent extends ChatRepositoryEvent {
   final List<GuildSticker> stickers;
 }
 
+final class GuildScheduledEventUpsertedEvent extends ChatRepositoryEvent {
+  const GuildScheduledEventUpsertedEvent(this.event);
+
+  final GuildScheduledEvent event;
+}
+
+final class GuildScheduledEventDeletedEvent extends ChatRepositoryEvent {
+  const GuildScheduledEventDeletedEvent({
+    required this.spaceId,
+    required this.eventId,
+  });
+
+  final String spaceId;
+  final String eventId;
+}
+
 final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 

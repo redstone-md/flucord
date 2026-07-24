@@ -118,6 +118,7 @@ final class DiscordGatewayClient implements DiscordChatGateway {
             directMessageReactionsIntent |
             directMessageTypingIntent |
             messageContentIntent |
+            guildScheduledEventsIntent |
             guildMessagePollsIntent |
             directMessagePollsIntent,
       );
@@ -132,6 +133,7 @@ final class DiscordGatewayClient implements DiscordChatGateway {
   static const directMessageReactionsIntent = 1 << 13;
   static const directMessageTypingIntent = 1 << 14;
   static const messageContentIntent = 1 << 15;
+  static const guildScheduledEventsIntent = 1 << 16;
   static const guildMessagePollsIntent = 1 << 24;
   static const directMessagePollsIntent = 1 << 25;
 

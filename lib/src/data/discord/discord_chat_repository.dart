@@ -5,6 +5,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
 import '../../domain/poll_repository.dart';
+import '../../domain/scheduled_event_repository.dart';
 import '../../domain/sticker_repository.dart';
 import '../../domain/thread_repository.dart';
 import '../../domain/voice_connection.dart';
@@ -28,17 +29,20 @@ part 'discord_chat_repository_forums.dart';
 part 'discord_chat_repository_pins.dart';
 part 'discord_chat_repository_polls.dart';
 part 'discord_chat_repository_stickers.dart';
+part 'discord_chat_repository_scheduled_events.dart';
 
 final class DiscordChatRepository
     with
         _DiscordChatRepositoryMessageMutations,
         _DiscordChatRepositoryPolls,
-        _DiscordChatRepositoryStickers
+        _DiscordChatRepositoryStickers,
+        _DiscordChatRepositoryScheduledEvents
     implements
         ChatRepository,
         ArchivedThreadRepository,
         ForumPostRepository,
         PollRepository,
+        ScheduledEventRepository,
         StickerRepository,
         VoiceSignalingService {
   DiscordChatRepository(
@@ -303,6 +307,12 @@ final class DiscordChatRepository
             unawaited(_handleGuildEmojis(event.data));
           case 'GUILD_STICKERS_UPDATE':
             unawaited(_handleGuildStickers(event.data));
+          case 'GUILD_SCHEDULED_EVENT_CREATE' ||
+              'GUILD_SCHEDULED_EVENT_UPDATE' ||
+              'GUILD_SCHEDULED_EVENT_DELETE' ||
+              'GUILD_SCHEDULED_EVENT_USER_ADD' ||
+              'GUILD_SCHEDULED_EVENT_USER_REMOVE':
+            unawaited(_handleGuildScheduledEvent(event));
         }
     }
   }
