@@ -167,6 +167,9 @@ browser runtime or dependency on Discord's private user API.
     SQLite v17, preserve them across partial Gateway updates, and render native
     timeline rows for join, pin, boost, thread, stage, subscription, discovery,
     and incident system messages.
+31. Completed: retain documented normal and burst reaction metadata, page
+    reacting users through Get Reactions with type and snowflake cursors, and
+    expose a compact native reaction ledger with retry-safe pagination.
 
 ## Protocol safety
 

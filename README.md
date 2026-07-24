@@ -38,6 +38,11 @@ The same guild-aware catalog powers the message reaction action. Its anchored
 picker sends Unicode glyphs or Discord's documented `name:id` custom reaction
 key, remains mounted while the pointer crosses from a message hover action into
 the overlay, and renders known custom reactions as compact native image glyphs.
+Reaction details open from the message action bar or a reaction's secondary
+click. A native ledger pages documented User objects through Get Reactions,
+keeps normal and super reactions distinct, preserves loaded people across
+retryable failures, and retains burst counts/colors in the existing message
+cache.
 
 Documented guild sticker catalogs load through REST, replace atomically on
 `GUILD_STICKERS_UPDATE`, and persist with their names, tags, availability, and

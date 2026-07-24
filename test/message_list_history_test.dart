@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
+import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/presentation/widgets/message_list.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -144,6 +145,8 @@ Widget _host(
           onEdit: (_, _) async => true,
           onDelete: (_) async {},
           onToggleReaction: (_, _) async {},
+          onLoadReactionUsers: (_, _, _, _) async =>
+              const ReactionUsersPage(users: [], hasMore: false),
           onAddReaction: (_, _) async {},
           onCreateThread: (_, _, _) async => true,
           onTogglePin: (_) async {},

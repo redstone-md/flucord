@@ -5,6 +5,7 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'anchored_scroll_controller.dart';
 import 'message_item.dart';
+import 'reaction_details_dialog.dart';
 import 'system_message_item.dart';
 import 'unread_message_boundary.dart';
 
@@ -20,6 +21,7 @@ class MessageList extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
+    required this.onLoadReactionUsers,
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
@@ -41,6 +43,7 @@ class MessageList extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
+  final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
@@ -385,6 +388,7 @@ class _MessageListState extends State<MessageList> {
                           onEdit: widget.onEdit,
                           onDelete: widget.onDelete,
                           onToggleReaction: widget.onToggleReaction,
+                          onLoadReactionUsers: widget.onLoadReactionUsers,
                           onAddReaction: widget.onAddReaction,
                           onCreateThread: widget.onCreateThread,
                           onTogglePin: widget.onTogglePin,

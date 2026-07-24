@@ -24,6 +24,7 @@ import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
+import 'widgets/reaction_details_dialog.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
@@ -307,6 +308,8 @@ class FlucordShell extends StatelessWidget {
                                 onEdit: chatController.editMessage,
                                 onDelete: chatController.deleteMessage,
                                 onToggleReaction: chatController.toggleReaction,
+                                onLoadReactionUsers:
+                                    chatController.loadReactionUsers,
                                 onAddReaction: chatController.addReaction,
                                 onCreateThread:
                                     (message, name, duration) async {

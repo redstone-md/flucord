@@ -3,17 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
+import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
-  testWidgets('adds a guild reaction from the anchored message picker', (
+  testWidgets('uses the anchored picker and opens reaction details', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(800, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final semantics = tester.ensureSemantics();
     String? selectedReaction;
+    var detailLoads = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -33,6 +35,13 @@ void main() {
                 onEdit: (_, _) async => true,
                 onDelete: (_) async {},
                 onToggleReaction: (_, _) async {},
+                onLoadReactionUsers: (_, _, _, _) async {
+                  detailLoads++;
+                  return const ReactionUsersPage(
+                    users: [_member],
+                    hasMore: false,
+                  );
+                },
                 onAddReaction: (_, emoji) async {
                   selectedReaction = emoji;
                 },
@@ -106,6 +115,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(selectedReaction, '🚀');
+
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const ValueKey('reaction-message'))),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('view-reactions-message-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Reactions'), findsOneWidget);
+    expect(detailLoads, 1);
     semantics.dispose();
   });
 }

@@ -44,6 +44,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleReaction,
+    required this.onLoadReactionUsers,
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
@@ -94,6 +95,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
+  final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
@@ -152,6 +154,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onEdit: widget.onEdit,
         onDelete: widget.onDelete,
         onToggleReaction: widget.onToggleReaction,
+        onLoadReactionUsers: widget.onLoadReactionUsers,
         onAddReaction: widget.onAddReaction,
         onCreateThread: widget.onCreateThread,
         onTogglePin: widget.onTogglePin,
