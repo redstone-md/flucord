@@ -5,6 +5,7 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'anchored_scroll_controller.dart';
 import 'message_item.dart';
+import 'system_message_item.dart';
 import 'unread_message_boundary.dart';
 
 part 'message_list_states.dart';
@@ -342,8 +343,10 @@ class _MessageListState extends State<MessageList> {
               final startsUnread = message.id == _unreadMessageId;
               final grouped =
                   !startsUnread &&
+                  !message.isSystem &&
                   message.reply == null &&
                   previous != null &&
+                  !previous.isSystem &&
                   previous.authorId == message.authorId &&
                   message.sentAt.difference(previous.sentAt).inMinutes < 7;
               return KeyedSubtree(
@@ -358,26 +361,37 @@ class _MessageListState extends State<MessageList> {
                   child: Column(
                     children: [
                       if (startsUnread) const UnreadMessageBoundary(),
-                      MessageItem(
-                        key: ValueKey('message-${message.id}'),
-                        message: message,
-                        member: widget.workspace.memberById(message.authorId),
-                        workspace: widget.workspace,
-                        grouped: grouped,
-                        isCurrentUser:
-                            message.authorId ==
-                            widget.workspace.currentMemberId,
-                        onReply: widget.onReply,
-                        onEdit: widget.onEdit,
-                        onDelete: widget.onDelete,
-                        onToggleReaction: widget.onToggleReaction,
-                        onAddReaction: widget.onAddReaction,
-                        onCreateThread: widget.onCreateThread,
-                        onTogglePin: widget.onTogglePin,
-                        onEndPoll: widget.onEndPoll,
-                        linkLauncher: widget.externalLinkLauncher,
-                        onSelectChannel: widget.onSelectChannel,
-                      ),
+                      if (message.isSystem)
+                        SystemMessageItem(
+                          key: ValueKey('message-${message.id}'),
+                          message: message,
+                          member: widget.workspace.memberById(message.authorId),
+                          workspace: widget.workspace,
+                          onJumpToMessage: (messageId) =>
+                              _scrollToMessage(messageId, animate: true),
+                          onSelectChannel: widget.onSelectChannel,
+                        )
+                      else
+                        MessageItem(
+                          key: ValueKey('message-${message.id}'),
+                          message: message,
+                          member: widget.workspace.memberById(message.authorId),
+                          workspace: widget.workspace,
+                          grouped: grouped,
+                          isCurrentUser:
+                              message.authorId ==
+                              widget.workspace.currentMemberId,
+                          onReply: widget.onReply,
+                          onEdit: widget.onEdit,
+                          onDelete: widget.onDelete,
+                          onToggleReaction: widget.onToggleReaction,
+                          onAddReaction: widget.onAddReaction,
+                          onCreateThread: widget.onCreateThread,
+                          onTogglePin: widget.onTogglePin,
+                          onEndPoll: widget.onEndPoll,
+                          linkLauncher: widget.externalLinkLauncher,
+                          onSelectChannel: widget.onSelectChannel,
+                        ),
                     ],
                   ),
                 ),

@@ -163,6 +163,10 @@ browser runtime or dependency on Discord's private user API.
     persist them in SQLite v16, apply create/update/delete and subscriber
     Gateway events live, and expose a native server-level Events surface with
     direct navigation to associated voice and stage channels.
+30. Completed: retain documented Discord message types and references in
+    SQLite v17, preserve them across partial Gateway updates, and render native
+    timeline rows for join, pin, boost, thread, stage, subscription, discovery,
+    and incident system messages.
 
 ## Protocol safety
 

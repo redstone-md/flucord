@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../application/inbox_catalog.dart';
+import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
@@ -322,7 +323,7 @@ class _MentionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = _messagePreview(entry.message);
+    final preview = _messagePreview(entry.message, entry.author.displayName);
     final label =
         '${entry.author.displayName} in ${entry.path}, $preview, '
         '${_relativeTime(entry.message.sentAt)}';
@@ -404,7 +405,8 @@ class _MentionRow extends StatelessWidget {
   }
 }
 
-String _messagePreview(ChatMessage message) {
+String _messagePreview(ChatMessage message, String authorName) {
+  if (message.isSystem) return SystemMessageText.describe(message, authorName);
   final body = message.body.trim();
   if (body.isNotEmpty) return body;
   final question = message.poll?.question.trim();

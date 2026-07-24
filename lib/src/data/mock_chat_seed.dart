@@ -133,4 +133,41 @@ final class MockChatSeed {
       messages: [...workspace.messages, message],
     );
   }
+
+  static ChatWorkspace withSystemMessages(ChatWorkspace workspace) {
+    final now = DateTime.now();
+    final messages = [
+      ...workspace.messages,
+      ChatMessage(
+        id: 'forge-join-system',
+        channelId: 'forge-general',
+        authorId: 'omar',
+        body: '',
+        sentAt: now.subtract(const Duration(minutes: 52)),
+        type: DiscordMessageType.userJoin,
+      ),
+      ChatMessage(
+        id: 'forge-pin-system',
+        channelId: 'forge-general',
+        authorId: 'jack',
+        body: '',
+        sentAt: now.subtract(const Duration(minutes: 17)),
+        type: DiscordMessageType.channelPinnedMessage,
+        reference: const MessageReference(
+          messageId: 'm4',
+          channelId: 'forge-general',
+        ),
+      ),
+      ChatMessage(
+        id: 'forge-thread-system',
+        channelId: 'forge-native',
+        authorId: 'roman',
+        body: 'release-checklist',
+        sentAt: now.subtract(const Duration(minutes: 7)),
+        type: DiscordMessageType.threadCreated,
+        reference: const MessageReference(channelId: 'forge-thread-release'),
+      ),
+    ]..sort((left, right) => left.sentAt.compareTo(right.sentAt));
+    return workspace.copyWith(messages: messages);
+  }
 }

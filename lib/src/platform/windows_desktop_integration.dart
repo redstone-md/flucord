@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../application/channel_link.dart';
 import '../application/chat_controller.dart';
+import '../application/system_message_text.dart';
 import '../application/workspace_controller.dart';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
@@ -175,7 +176,7 @@ final class WindowsDesktopIntegration
       identifier: 'flucord-${event.message.id}',
       title: '${author?.displayName ?? 'New message'} - #${channel.name}',
       subtitle: space?.name,
-      body: _notificationBody(event.message),
+      body: _notificationBody(event.message, author?.displayName),
     );
     notification.onClick = () => unawaited(_activateLink(link));
     try {
@@ -185,13 +186,22 @@ final class WindowsDesktopIntegration
     }
   }
 
-  String _notificationBody(ChatMessage message) {
-    var body = message.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+  String _notificationBody(ChatMessage message, String? authorName) {
+    var body = message.isSystem
+        ? SystemMessageText.describe(message, authorName ?? 'Someone')
+        : message.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (body.isEmpty) {
+      final question = message.poll?.question.trim();
+      if (question != null && question.isNotEmpty) return question;
+      if (message.stickers.isNotEmpty) return message.stickers.first.name;
       final count = message.attachments.length;
       body = count == 1
           ? 'Attachment: ${message.attachments.first.fileName}'
-          : '$count attachments';
+          : count > 1
+          ? '$count attachments'
+          : message.embeds.isNotEmpty
+          ? 'Embedded content'
+          : 'New message';
     }
     return body.length <= 180 ? body : '${body.substring(0, 177)}...';
   }

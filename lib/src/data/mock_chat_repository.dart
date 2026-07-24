@@ -29,7 +29,9 @@ final class MockChatRepository
         ScheduledEventRepository,
         StickerRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
-    : _workspace = MockChatSeed.withForums(_seedWorkspace());
+    : _workspace = MockChatSeed.withSystemMessages(
+        MockChatSeed.withForums(_seedWorkspace()),
+      );
 
   final Duration latency;
   @override

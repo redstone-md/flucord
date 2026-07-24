@@ -56,6 +56,14 @@ voice and stage events navigate directly to their associated native room while
 external events retain their documented location without inventing a private
 subscription mutation.
 
+Documented Discord message types and message references survive REST history,
+partial Gateway updates, and offline restoration. Native system rows cover
+member joins, pins, boosts, thread creation, Stage changes, subscriptions,
+Server Discovery changes, and incident reports without presenting them as
+ordinary authored chat. Pin rows jump to the referenced message and thread rows
+open the referenced native conversation. The same system-event descriptions
+feed Inbox previews and Windows notifications.
+
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
 the visible message anchored. Loaded pages are upserted into SQLite, so the
@@ -240,6 +248,10 @@ channel, start/end time, entity type, lifecycle status, and subscriber count.
 Catalog refresh replaces only the selected guild, while Gateway updates use
 point writes and deletes so unrelated server events remain available offline.
 
+SQLite v17 retains each message's documented type plus referenced message and
+channel IDs. Partial Gateway updates preserve the cached values when Discord
+omits them, keeping system-row actions available after live edits and restarts.
+
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for
 interactive focus, while presence, warnings, and mentions use independent
@@ -317,7 +329,9 @@ flucord://channels/{serverId}/{channelId}
 ```
 
 Incoming messages raise native Windows notifications while Flucord is not
-focused. Clicking a notification restores the window and opens its channel.
+focused. Their native preview describes system events and falls back to poll,
+sticker, attachment, or embed content for messages without text. Clicking a
+notification restores the window and opens its channel.
 Closing the window hides it in the notification area; use `Quit Flucord` from
 the tray menu to stop the process.
 
