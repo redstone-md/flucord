@@ -422,12 +422,14 @@ final class _EventRepository implements ChatRepository {
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    bool suppressNotifications = false,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
     body: body,
     attachments: attachments,
     replyToMessageId: replyToMessageId,
+    suppressNotifications: suppressNotifications,
   );
 
   @override

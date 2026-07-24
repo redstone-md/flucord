@@ -5,6 +5,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
 import '../../domain/message_forward_repository.dart';
+import '../../domain/message_flag_repository.dart';
 import '../../domain/poll_repository.dart';
 import '../../domain/reaction_repository.dart';
 import '../../domain/scheduled_event_repository.dart';
@@ -19,6 +20,7 @@ import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
+import 'discord_message_nonce_factory.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';
@@ -50,6 +52,7 @@ final class DiscordChatRepository
         PollRepository,
         ReactionRepository,
         MessageForwardRepository,
+        MessageFlagRepository,
         ScheduledEventRepository,
         StickerRepository,
         VoiceSignalingService {
@@ -58,8 +61,11 @@ final class DiscordChatRepository
     this._gateway,
     this._cache, {
     DiscordMapper? mapper,
+    DiscordMessageNonceFactory? messageNonceFactory,
     VoiceDaveService? daveService,
   }) : _mapper = mapper ?? DiscordMapper(),
+       _messageNonceFactory =
+           messageNonceFactory ?? DiscordMessageNonceFactory(),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
@@ -74,6 +80,8 @@ final class DiscordChatRepository
   final ChatCache _cache;
   @override
   final DiscordMapper _mapper;
+  @override
+  final DiscordMessageNonceFactory _messageNonceFactory;
   late final DiscordHistoryLoader _historyLoader = DiscordHistoryLoader(
     _api,
     _mapper,

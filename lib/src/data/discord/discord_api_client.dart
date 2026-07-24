@@ -9,6 +9,7 @@ import 'discord_poll_codec.dart';
 part 'discord_api_client_scheduled_events.dart';
 part 'discord_api_client_reactions.dart';
 part 'discord_api_client_forwards.dart';
+part 'discord_api_client_messages.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({
@@ -244,62 +245,10 @@ final class DiscordApiClient {
     return messages;
   }
 
-  Future<Map<String, Object?>> createMessage({
-    required String channelId,
-    required String content,
-    List<PendingAttachment> attachments = const [],
-    String? replyToMessageId,
-    PendingPoll? poll,
-    List<String> stickerIds = const [],
-  }) {
-    if (stickerIds.length > 3) {
-      throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
-    }
-    final payload = <String, Object?>{
-      'content': content,
-      if (replyToMessageId != null)
-        'message_reference': {'message_id': replyToMessageId},
-      if (poll != null) 'poll': DiscordPollCodec.request(poll),
-      if (stickerIds.isNotEmpty) 'sticker_ids': stickerIds,
-      if (attachments.isNotEmpty)
-        'attachments': [
-          for (var index = 0; index < attachments.length; index++)
-            {'id': index, 'filename': attachments[index].name},
-        ],
-    };
-    if (attachments.isEmpty) {
-      return _requestObject(
-        'POST',
-        '/channels/$channelId/messages',
-        body: payload,
-      );
-    }
-    return _createMultipartObject(
-      '/channels/$channelId/messages',
-      payload,
-      attachments,
-    );
-  }
-
-  Future<Map<String, Object?>> editMessage({
-    required String channelId,
-    required String messageId,
-    required String content,
-  }) => _requestObject(
-    'PATCH',
-    '/channels/$channelId/messages/$messageId',
-    body: {'content': content},
-  );
-
   Future<Map<String, Object?>> endPoll({
     required String channelId,
     required String messageId,
   }) => _requestObject('POST', '/channels/$channelId/polls/$messageId/expire');
-
-  Future<void> deleteMessage({
-    required String channelId,
-    required String messageId,
-  }) => _requestEmpty('DELETE', '/channels/$channelId/messages/$messageId');
 
   Future<void> addReaction({
     required String channelId,

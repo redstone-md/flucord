@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
+import 'package:flucord/src/data/discord/discord_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
+import 'package:flucord/src/data/discord/discord_message_nonce_factory.dart';
 import 'package:flucord/src/data/discord/discord_poll_vote_handler.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -97,6 +100,46 @@ void main() {
       transport.requests.last.uri.path,
       '/api/v10/channels/channel-1/polls/poll-1/expire',
     );
+  });
+
+  test('repository enforces an idempotency nonce for poll creation', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final fixedClock = DateTime.utc(2026, 7, 24, 3, 47);
+    final expectedNonce =
+        '${fixedClock.microsecondsSinceEpoch.toRadixString(36)}00';
+    final transport = _RecordingTransport([
+      DiscordHttpResponse(
+        statusCode: 200,
+        headers: const {},
+        body: jsonEncode(_messagePayload(count: 0)),
+      ),
+    ]);
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      _FakeGateway(),
+      cache,
+      messageNonceFactory: DiscordMessageNonceFactory(clock: () => fixedClock),
+    );
+    addTearDown(repository.close);
+
+    await repository.createPoll(
+      channelId: 'channel-1',
+      authorId: 'bot-1',
+      poll: PendingPoll(
+        question: 'Which build ships?',
+        answers: const ['Stable', 'Canary'],
+        durationHours: 72,
+        allowMultiselect: true,
+      ),
+    );
+
+    final body =
+        jsonDecode(utf8.decode(transport.requests.single.body!)) as Map;
+    expect(body['nonce'], expectedNonce);
+    expect(body['enforce_nonce'], isTrue);
   });
 
   test('applies live poll vote add and remove events to cache', () async {
@@ -200,4 +243,26 @@ final class _RecordingTransport implements DiscordHttpTransport {
 
   @override
   void close() {}
+}
+
+final class _FakeGateway implements DiscordChatGateway {
+  final StreamController<DiscordGatewayEvent> _events =
+      StreamController.broadcast();
+
+  @override
+  Stream<DiscordGatewayEvent> get events => _events.stream;
+
+  @override
+  Future<void> connect(String gatewayUrl) async {}
+
+  @override
+  void updateVoiceState({
+    required String guildId,
+    required String? channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) {}
+
+  @override
+  Future<void> close() => _events.close();
 }

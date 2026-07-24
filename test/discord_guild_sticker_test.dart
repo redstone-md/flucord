@@ -6,6 +6,7 @@ import 'package:flucord/src/data/discord/discord_api_client.dart';
 import 'package:flucord/src/data/discord/discord_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
+import 'package:flucord/src/data/discord/discord_message_nonce_factory.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -34,6 +35,35 @@ void main() {
     expect(sticker.item.url, endsWith('/stickers/sticker-1.png'));
     final body = jsonDecode(utf8.decode(transport.bodies[1]!)) as Map;
     expect(body['sticker_ids'], ['sticker-1']);
+  });
+
+  test('repository enforces an idempotency nonce for sticker sends', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final fixedClock = DateTime.utc(2026, 7, 24, 3, 47);
+    final expectedNonce =
+        '${fixedClock.microsecondsSinceEpoch.toRadixString(36)}00';
+    final transport = _QueueTransport([_response(_messageJson)]);
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      _FakeGateway(),
+      cache,
+      messageNonceFactory: DiscordMessageNonceFactory(clock: () => fixedClock),
+    );
+    addTearDown(repository.close);
+
+    await repository.sendStickers(
+      channelId: 'channel-1',
+      authorId: 'bot-1',
+      stickerIds: const ['sticker-1'],
+    );
+
+    final body = jsonDecode(utf8.decode(transport.bodies.single!)) as Map;
+    expect(body['sticker_ids'], ['sticker-1']);
+    expect(body['nonce'], expectedNonce);
+    expect(body['enforce_nonce'], isTrue);
   });
 
   test('replaces and persists a guild sticker catalog from Gateway', () async {

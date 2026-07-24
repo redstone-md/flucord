@@ -4,6 +4,7 @@ mixin _DiscordChatRepositoryStickers implements StickerRepository {
   DiscordApiClient get _api;
   DiscordMapper get _mapper;
   ChatCache get _cache;
+  DiscordMessageNonceFactory get _messageNonceFactory;
   String? get _currentMemberId;
   StreamController<ChatRepositoryEvent> get _events;
 
@@ -20,6 +21,8 @@ mixin _DiscordChatRepositoryStickers implements StickerRepository {
       channelId: channelId,
       content: '',
       stickerIds: stickerIds,
+      nonce: _messageNonceFactory.next(),
+      enforceNonce: true,
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);

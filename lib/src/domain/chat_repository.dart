@@ -156,6 +156,7 @@ abstract interface class ChatRepository {
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    bool suppressNotifications = false,
   });
 
   Future<ChatMessage> editMessage({

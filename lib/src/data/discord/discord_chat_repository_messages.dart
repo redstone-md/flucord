@@ -1,10 +1,11 @@
 part of 'discord_chat_repository.dart';
 
-mixin _DiscordChatRepositoryMessageMutations {
+mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
   DiscordApiClient get _api;
   DiscordMapper get _mapper;
   ChatCache get _cache;
   String? get _currentMemberId;
+  DiscordMessageNonceFactory get _messageNonceFactory;
 
   Future<ChatMessage> sendMessage({
     required String channelId,
@@ -12,14 +13,40 @@ mixin _DiscordChatRepositoryMessageMutations {
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    bool suppressNotifications = false,
   }) async {
     final payload = await _api.createMessage(
       channelId: channelId,
       content: body,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
+      nonce: _messageNonceFactory.next(),
+      enforceNonce: true,
+      suppressNotifications: suppressNotifications,
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  @override
+  Future<ChatMessage> setSuppressEmbeds({
+    required String channelId,
+    required String messageId,
+    required bool suppress,
+  }) async {
+    final fallback = await _cache.readMessage(messageId);
+    final payload = await _api.editMessageFlags(
+      channelId: channelId,
+      messageId: messageId,
+      suppressEmbeds: suppress,
+      componentsV2: fallback?.hasFlag(DiscordMessageFlag.componentsV2) ?? false,
+    );
+    final message = _mapper.message(
+      payload,
+      fallback: fallback,
+      currentMemberId: _currentMemberId,
+    );
     await _cache.writeMessage(message);
     return message;
   }

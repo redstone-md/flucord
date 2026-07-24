@@ -4,6 +4,7 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
   DiscordApiClient get _api;
   DiscordMapper get _mapper;
   ChatCache get _cache;
+  DiscordMessageNonceFactory get _messageNonceFactory;
   String? get _currentMemberId;
   StreamController<ChatRepositoryEvent> get _events;
 
@@ -27,6 +28,8 @@ mixin _DiscordChatRepositoryPolls implements PollRepository {
       channelId: channelId,
       content: '',
       poll: poll,
+      nonce: _messageNonceFactory.next(),
+      enforceNonce: true,
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);

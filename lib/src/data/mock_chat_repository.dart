@@ -4,6 +4,7 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/message_forward_repository.dart';
+import '../domain/message_flag_repository.dart';
 import '../domain/poll_repository.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
@@ -15,6 +16,7 @@ part 'mock_chat_repository_mutations.dart';
 part 'mock_chat_repository_polls.dart';
 part 'mock_chat_repository_reactions.dart';
 part 'mock_chat_repository_forwards.dart';
+part 'mock_chat_repository_message_flags.dart';
 part 'mock_chat_repository_stickers.dart';
 part 'mock_chat_repository_scheduled_events.dart';
 part 'mock_chat_repository_direct_messages.dart';
@@ -24,6 +26,7 @@ final class MockChatRepository
         _MockChatRepositoryPolls,
         _MockChatRepositoryReactions,
         _MockChatRepositoryForwards,
+        _MockChatRepositoryMessageFlags,
         _MockChatRepositoryStickers,
         _MockChatRepositoryScheduledEvents,
         _MockChatRepositoryDirectMessages
@@ -34,6 +37,7 @@ final class MockChatRepository
         PollRepository,
         ReactionRepository,
         MessageForwardRepository,
+        MessageFlagRepository,
         ScheduledEventRepository,
         StickerRepository {
   MockChatRepository({this.latency = const Duration(milliseconds: 240)})
@@ -139,6 +143,7 @@ final class MockChatRepository
     required String body,
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
+    bool suppressNotifications = false,
   }) async {
     await _wait();
     final message = ChatMessage(
@@ -157,6 +162,9 @@ final class MockChatRepository
           ),
       ],
       reply: _replyFor(replyToMessageId),
+      flags: suppressNotifications
+          ? DiscordMessageFlag.suppressNotifications.bit
+          : 0,
     );
     _workspace = _workspace.copyWith(
       messages: [..._workspace.messages, message],
