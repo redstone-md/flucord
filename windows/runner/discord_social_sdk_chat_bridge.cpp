@@ -15,6 +15,7 @@
 
 namespace {
 
+using discord_social_sdk_wire::BoolArgument;
 using discord_social_sdk_wire::Int32Argument;
 using discord_social_sdk_wire::InvalidArguments;
 using discord_social_sdk_wire::MethodResult;
@@ -82,12 +83,17 @@ class DiscordSocialSdkChatBridge::Impl {
 
   bool CanHandle(const std::string& method) const {
     return method == "getDmConversations" || method == "getDmMessages" ||
-           method == "sendDmMessage";
+           method == "sendDmMessage" || method == "editDmMessage" ||
+           method == "deleteDmMessage" || method == "setShowingChat";
   }
 
   void Handle(const flutter::MethodCall<>& call,
               std::unique_ptr<MethodResult> result) {
 #if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+    if (call.method_name() == "setShowingChat") {
+      SetShowingChat(call, std::move(result));
+      return;
+    }
     if (client_->GetStatus() != discordpp::Client::Status::Ready) {
       result->Error("not_authenticated",
                     "Direct messages require a ready Social SDK session.");
@@ -97,8 +103,12 @@ class DiscordSocialSdkChatBridge::Impl {
       GetConversations(std::move(result));
     } else if (call.method_name() == "getDmMessages") {
       GetMessages(call, std::move(result));
-    } else {
+    } else if (call.method_name() == "sendDmMessage") {
       SendMessage(call, std::move(result));
+    } else if (call.method_name() == "editDmMessage") {
+      EditMessage(call, std::move(result));
+    } else {
+      DeleteMessage(call, std::move(result));
     }
 #else
     result->Error("sdk_not_bundled",
@@ -198,6 +208,61 @@ class DiscordSocialSdkChatBridge::Impl {
               flutter::EncodableValue(std::to_string(message_id));
           pending->Success(flutter::EncodableValue(payload));
         });
+  }
+
+  void EditMessage(const flutter::MethodCall<>& call,
+                   std::unique_ptr<MethodResult> result) {
+    const auto user_id = SnowflakeArgument(call, "user_id");
+    const auto message_id = SnowflakeArgument(call, "message_id");
+    const auto content = StringArgument(call, "content");
+    if (!user_id || !message_id || !content ||
+        Utf8CodePointCount(*content) > kMaximumMessageLength) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    auto pending = std::shared_ptr<MethodResult>(std::move(result));
+    client_->EditUserMessage(
+        *user_id, *message_id, *content,
+        [pending](const discordpp::ClientResult& sdk_result) {
+          if (sdk_result.Successful()) {
+            pending->Success();
+          } else {
+            pending->Error("dm_edit_failed",
+                           "Discord rejected the message edit.");
+          }
+        });
+  }
+
+  void DeleteMessage(const flutter::MethodCall<>& call,
+                     std::unique_ptr<MethodResult> result) {
+    const auto user_id = SnowflakeArgument(call, "user_id");
+    const auto message_id = SnowflakeArgument(call, "message_id");
+    if (!user_id || !message_id) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    auto pending = std::shared_ptr<MethodResult>(std::move(result));
+    client_->DeleteUserMessage(
+        *user_id, *message_id,
+        [pending](const discordpp::ClientResult& sdk_result) {
+          if (sdk_result.Successful()) {
+            pending->Success();
+          } else {
+            pending->Error("dm_delete_failed",
+                           "Discord rejected the message deletion.");
+          }
+        });
+  }
+
+  void SetShowingChat(const flutter::MethodCall<>& call,
+                      std::unique_ptr<MethodResult> result) {
+    const auto showing = BoolArgument(call, "showing");
+    if (!showing) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    client_->SetShowingChat(*showing);
+    result->Success();
   }
 
   std::optional<flutter::EncodableValue> MessagePayload(

@@ -7,6 +7,7 @@ import '../../application/discord_social_dm_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_dm.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_social_dm_message_row.dart';
 
 class DiscordSocialDmView extends StatefulWidget {
   const DiscordSocialDmView({
@@ -23,18 +24,46 @@ class DiscordSocialDmView extends StatefulWidget {
 }
 
 class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
+  late final AppLifecycleListener _lifecycleListener;
+  late bool _foreground;
+
   @override
   void initState() {
     super.initState();
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _foreground =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: _handleLifecycleState,
+    );
     unawaited(widget.controller.loadMessages(widget.user.id));
+    unawaited(widget.controller.setShowingChat(_foreground));
   }
 
   @override
   void didUpdateWidget(DiscordSocialDmView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      unawaited(oldWidget.controller.setShowingChat(false));
+      unawaited(widget.controller.setShowingChat(_foreground));
+    }
     if (oldWidget.user.id != widget.user.id) {
       unawaited(widget.controller.loadMessages(widget.user.id));
     }
+  }
+
+  void _handleLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (_foreground == foreground) return;
+    _foreground = foreground;
+    unawaited(widget.controller.setShowingChat(foreground));
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    unawaited(widget.controller.setShowingChat(false));
+    super.dispose();
   }
 
   @override
@@ -47,6 +76,7 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
           _DmHeader(user: widget.user),
           Expanded(
             child: _DmTimeline(
+              controller: widget.controller,
               user: widget.user,
               messages: widget.controller.messagesFor(widget.user.id),
               loading: widget.controller.isLoadingMessages(widget.user.id),
@@ -105,6 +135,7 @@ class _DmHeader extends StatelessWidget {
 
 class _DmTimeline extends StatelessWidget {
   const _DmTimeline({
+    required this.controller,
     required this.user,
     required this.messages,
     required this.loading,
@@ -112,6 +143,7 @@ class _DmTimeline extends StatelessWidget {
     required this.onRetry,
   });
 
+  final DiscordSocialDmController controller;
   final DiscordRelationshipUser user;
   final List<DiscordSocialDmMessage> messages;
   final bool loading;
@@ -150,91 +182,12 @@ class _DmTimeline extends StatelessWidget {
       key: const ValueKey('social-dm-timeline'),
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
       itemCount: messages.length,
-      itemBuilder: (context, index) => _DmMessageRow(message: messages[index]),
-    );
-  }
-}
-
-class _DmMessageRow extends StatelessWidget {
-  const _DmMessageRow({required this.message});
-
-  final DiscordSocialDmMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    final author = message.authorDisplayName.isEmpty
-        ? (message.authoredByCurrentUser ? 'You' : 'Unknown user')
-        : message.authorDisplayName;
-    return Padding(
-      key: ValueKey('social-dm-message-${message.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: context.surfaces.raised,
-            child: Text(
-              author.characters.first.toUpperCase(),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        author,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      _timestamp(message.sentAt),
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: 9,
-                      ),
-                    ),
-                    if (message.editedAt != null) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        '(edited)',
-                        style: TextStyle(
-                          color: context.surfaces.muted,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                SelectableText(
-                  message.content,
-                  style: const TextStyle(fontSize: 13, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-        ],
+      itemBuilder: (context, index) => DiscordSocialDmMessageRow(
+        key: ValueKey('social-dm-message-${messages[index].id}'),
+        controller: controller,
+        message: messages[index],
       ),
     );
-  }
-
-  static String _timestamp(DateTime value) {
-    final local = value.toLocal();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '${local.day}/${local.month}/${local.year} $hour:$minute';
   }
 }
 

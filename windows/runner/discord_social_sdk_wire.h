@@ -28,6 +28,10 @@ std::optional<int32_t> Int32Argument(
     const flutter::MethodCall<>& call,
     const std::string& key);
 
+std::optional<bool> BoolArgument(
+    const flutter::MethodCall<>& call,
+    const std::string& key);
+
 void InvalidArguments(std::unique_ptr<MethodResult> result);
 
 }  // namespace discord_social_sdk_wire

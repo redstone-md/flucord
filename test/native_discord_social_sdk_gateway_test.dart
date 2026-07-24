@@ -229,6 +229,33 @@ void main() {
     expect(channel.arguments.single, {'user_id': '101', 'content': ' hello '});
   });
 
+  test('maps edit, delete, and chat visibility to native methods', () async {
+    final channel = _Channel(null);
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+
+    await gateway.editMessage(
+      userId: '101',
+      messageId: '902',
+      content: ' edited ',
+    );
+    await gateway.deleteMessage(userId: '101', messageId: '902');
+    await gateway.setShowingChat(true);
+
+    expect(channel.calls, [
+      'editDmMessage',
+      'deleteDmMessage',
+      'setShowingChat',
+    ]);
+    expect(channel.arguments, [
+      {'user_id': '101', 'message_id': '902', 'content': ' edited '},
+      {'user_id': '101', 'message_id': '902'},
+      {'showing': true},
+    ]);
+  });
+
   test(
     'authorizes through the native PKCE bridge and persists its grant',
     () async {

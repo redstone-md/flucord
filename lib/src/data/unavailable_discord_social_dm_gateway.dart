@@ -20,4 +20,21 @@ final class UnavailableDiscordSocialDmGateway
     required String userId,
     required String content,
   }) => Future.error(const DiscordSocialSdkException('unsupported_platform'));
+
+  @override
+  Future<void> editMessage({
+    required String userId,
+    required String messageId,
+    required String content,
+  }) => Future.error(const DiscordSocialSdkException('unsupported_platform'));
+
+  @override
+  Future<void> deleteMessage({
+    required String userId,
+    required String messageId,
+  }) => Future.error(const DiscordSocialSdkException('unsupported_platform'));
+
+  @override
+  Future<void> setShowingChat(bool showing) =>
+      Future.error(const DiscordSocialSdkException('unsupported_platform'));
 }

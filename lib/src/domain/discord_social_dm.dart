@@ -61,6 +61,19 @@ final class DiscordSocialDmMessage {
   final DateTime sentAt;
   final DateTime? editedAt;
   final bool authoredByCurrentUser;
+
+  DiscordSocialDmMessage withContent(String nextContent) =>
+      DiscordSocialDmMessage(
+        id: id,
+        conversationUserId: conversationUserId,
+        authorId: authorId,
+        recipientId: recipientId,
+        authorDisplayName: authorDisplayName,
+        content: nextContent,
+        sentAt: sentAt,
+        editedAt: editedAt,
+        authoredByCurrentUser: authoredByCurrentUser,
+      );
 }
 
 enum DiscordSocialDmEventType { created, updated, deleted }
@@ -88,6 +101,19 @@ abstract interface class DiscordSocialDmGateway {
   });
 
   Future<String> sendMessage({required String userId, required String content});
+
+  Future<void> editMessage({
+    required String userId,
+    required String messageId,
+    required String content,
+  });
+
+  Future<void> deleteMessage({
+    required String userId,
+    required String messageId,
+  });
+
+  Future<void> setShowingChat(bool showing);
 }
 
 abstract interface class DiscordSocialDmEvents {

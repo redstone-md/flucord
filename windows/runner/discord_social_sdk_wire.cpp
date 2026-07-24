@@ -70,6 +70,21 @@ std::optional<int32_t> Int32Argument(
   return std::nullopt;
 }
 
+std::optional<bool> BoolArgument(
+    const flutter::MethodCall<>& call,
+    const std::string& key) {
+  const auto* arguments = ArgumentsOf(call);
+  if (arguments == nullptr) {
+    return std::nullopt;
+  }
+  const auto iterator = arguments->find(flutter::EncodableValue(key));
+  if (iterator == arguments->end()) {
+    return std::nullopt;
+  }
+  const auto* value = std::get_if<bool>(&iterator->second);
+  return value == nullptr ? std::nullopt : std::optional<bool>(*value);
+}
+
 void InvalidArguments(std::unique_ptr<MethodResult> result) {
   result->Error("invalid_arguments",
                 "Required Social SDK arguments are invalid.");

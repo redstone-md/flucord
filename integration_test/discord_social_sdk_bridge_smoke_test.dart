@@ -71,5 +71,39 @@ void main() {
         ),
       ),
     );
+    await expectLater(
+      gateway.editMessage(
+        userId: '123456789',
+        messageId: '987654321',
+        content: 'edited smoke',
+      ),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.deleteMessage(userId: '123456789', messageId: '987654321'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.setShowingChat(true),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
   });
 }

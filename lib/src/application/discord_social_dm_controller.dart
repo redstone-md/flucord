@@ -30,11 +30,14 @@ final class DiscordSocialDmController extends ChangeNotifier {
   final Map<String, List<DiscordSocialDmMessage>> _messages = {};
   final Set<String> _loadingUserIds = {};
   final Set<String> _sendingUserIds = {};
+  final Set<String> _mutatingMessageIds = {};
   final Map<String, String> _messageErrors = {};
+  final Map<String, String> _messageActionErrors = {};
   Future<void>? _conversationLoad;
   bool _sdkReady = false;
   bool _authenticated = false;
   bool _initialized = false;
+  bool _showingChat = false;
   bool _disposed = false;
   int _generation = 0;
 
@@ -44,7 +47,11 @@ final class DiscordSocialDmController extends ChangeNotifier {
       _messages[userId] ?? const [];
   bool isLoadingMessages(String userId) => _loadingUserIds.contains(userId);
   bool isSending(String userId) => _sendingUserIds.contains(userId);
+  bool isMutatingMessage(String messageId) =>
+      _mutatingMessageIds.contains(messageId);
   String? messageErrorFor(String userId) => _messageErrors[userId];
+  String? messageActionErrorFor(String messageId) =>
+      _messageActionErrors[messageId];
 
   DiscordSocialDmConversation? conversationFor(String userId) {
     for (final conversation in _conversations) {
@@ -60,6 +67,7 @@ final class DiscordSocialDmController extends ChangeNotifier {
     final sdkReady = availability?.isReady ?? false;
     final nextAuthenticated = sdkReady && authenticated;
     if (_sdkReady == sdkReady && _authenticated == nextAuthenticated) return;
+    if (_showingChat) unawaited(setShowingChat(false));
     _sdkReady = sdkReady;
     _authenticated = nextAuthenticated;
     _initialized = false;
@@ -67,7 +75,9 @@ final class DiscordSocialDmController extends ChangeNotifier {
     _generation++;
     _loadingUserIds.clear();
     _sendingUserIds.clear();
+    _mutatingMessageIds.clear();
     _messageErrors.clear();
+    _messageActionErrors.clear();
     if (!sdkReady) {
       _clear(DiscordSocialDmLoadState.unavailable);
       return;
@@ -151,6 +161,41 @@ final class DiscordSocialDmController extends ChangeNotifier {
     }
   }
 
+  Future<bool> editMessage(String userId, String messageId, String content) {
+    if (content.trim().isEmpty || content.length > 2000) {
+      return Future.value(false);
+    }
+    return _mutateMessage(
+      userId: userId,
+      messageId: messageId,
+      operation: () => _gateway.editMessage(
+        userId: userId,
+        messageId: messageId,
+        content: content,
+      ),
+      replacementContent: content,
+      refreshAfterSuccess: true,
+    );
+  }
+
+  Future<bool> deleteMessage(String userId, String messageId) => _mutateMessage(
+    userId: userId,
+    messageId: messageId,
+    operation: () =>
+        _gateway.deleteMessage(userId: userId, messageId: messageId),
+    removeAfterSuccess: true,
+  );
+
+  Future<void> setShowingChat(bool showing) async {
+    if (_disposed || !_authenticated || _showingChat == showing) return;
+    _showingChat = showing;
+    try {
+      await _gateway.setShowingChat(showing);
+    } on Object {
+      if (showing && !_disposed && _showingChat) _showingChat = false;
+    }
+  }
+
   void ensureConversation(DiscordRelationshipUser user) {
     if (conversationFor(user.id) != null) return;
     _conversations = List.unmodifiable([
@@ -188,11 +233,7 @@ final class DiscordSocialDmController extends ChangeNotifier {
     if (!_authenticated || _disposed) return;
     final message = event.message;
     if (event.type == DiscordSocialDmEventType.deleted || message == null) {
-      for (final userId in _messages.keys.toList(growable: false)) {
-        _messages[userId] = List.unmodifiable(
-          _messages[userId]!.where((item) => item.id != event.messageId),
-        );
-      }
+      _removeMessage(event.messageId);
       notifyListeners();
       return;
     }
@@ -217,6 +258,74 @@ final class DiscordSocialDmController extends ChangeNotifier {
     });
     _conversationLoad = operation;
     return operation;
+  }
+
+  Future<bool> _mutateMessage({
+    required String userId,
+    required String messageId,
+    required Future<void> Function() operation,
+    bool refreshAfterSuccess = false,
+    bool removeAfterSuccess = false,
+    String? replacementContent,
+  }) async {
+    final message = _messageFor(userId, messageId);
+    if (!_authenticated ||
+        _disposed ||
+        message?.authoredByCurrentUser != true ||
+        _mutatingMessageIds.contains(messageId)) {
+      return false;
+    }
+    final generation = _generation;
+    _mutatingMessageIds.add(messageId);
+    _messageActionErrors.remove(messageId);
+    notifyListeners();
+    try {
+      await operation();
+      if (!_accepts(generation)) return false;
+      if (removeAfterSuccess) _removeMessage(messageId);
+      if (replacementContent != null) {
+        _replaceMessageContent(userId, messageId, replacementContent);
+      }
+      if (refreshAfterSuccess) await loadMessages(userId, refresh: true);
+      return true;
+    } on DiscordSocialSdkException catch (error) {
+      if (_accepts(generation)) _messageActionErrors[messageId] = error.code;
+      return false;
+    } on Object {
+      if (_accepts(generation)) {
+        _messageActionErrors[messageId] = 'message_mutation_failed';
+      }
+      return false;
+    } finally {
+      if (_accepts(generation)) {
+        _mutatingMessageIds.remove(messageId);
+        notifyListeners();
+      }
+    }
+  }
+
+  DiscordSocialDmMessage? _messageFor(String userId, String messageId) {
+    for (final message in _messages[userId] ?? const []) {
+      if (message.id == messageId) return message;
+    }
+    return null;
+  }
+
+  void _removeMessage(String messageId) {
+    for (final userId in _messages.keys.toList(growable: false)) {
+      _messages[userId] = List.unmodifiable(
+        _messages[userId]!.where((item) => item.id != messageId),
+      );
+    }
+  }
+
+  void _replaceMessageContent(String userId, String messageId, String content) {
+    final messages = _messages[userId];
+    if (messages == null) return;
+    _messages[userId] = List.unmodifiable([
+      for (final message in messages)
+        if (message.id == messageId) message.withContent(content) else message,
+    ]);
   }
 
   void _clear(DiscordSocialDmLoadState nextState) {
@@ -250,6 +359,7 @@ final class DiscordSocialDmController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_showingChat) unawaited(setShowingChat(false));
     _disposed = true;
     _generation++;
     unawaited(_eventSubscription?.cancel());

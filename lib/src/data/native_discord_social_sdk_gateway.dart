@@ -201,9 +201,7 @@ final class NativeDiscordSocialSdkGateway
     required String content,
   }) async {
     _requireSupportedPlatform();
-    if (content.trim().isEmpty || content.length > 2000) {
-      throw const DiscordSocialSdkException('invalid_message_content');
-    }
+    _validateMessageContent(content);
     final response = await _invoke(
       'sendDmMessage',
       arguments: {'user_id': userId, 'content': content},
@@ -217,6 +215,42 @@ final class NativeDiscordSocialSdkGateway
       if (messageId.isNotEmpty) return messageId;
     }
     throw const DiscordSocialSdkException('invalid_dm_response');
+  }
+
+  @override
+  Future<void> editMessage({
+    required String userId,
+    required String messageId,
+    required String content,
+  }) async {
+    _requireSupportedPlatform();
+    _validateMessageContent(content);
+    await _invoke(
+      'editDmMessage',
+      arguments: {
+        'user_id': userId,
+        'message_id': messageId,
+        'content': content,
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String userId,
+    required String messageId,
+  }) async {
+    _requireSupportedPlatform();
+    await _invoke(
+      'deleteDmMessage',
+      arguments: {'user_id': userId, 'message_id': messageId},
+    );
+  }
+
+  @override
+  Future<void> setShowingChat(bool showing) async {
+    _requireSupportedPlatform();
+    await _invoke('setShowingChat', arguments: {'showing': showing});
   }
 
   @override
@@ -354,6 +388,12 @@ final class NativeDiscordSocialSdkGateway
         .replaceAll(RegExp('[^a-z0-9_]+'), '_')
         .replaceAll(RegExp(r'^_+|_+$'), '');
     return normalized.isEmpty ? 'unknown' : normalized;
+  }
+
+  static void _validateMessageContent(String content) {
+    if (content.trim().isEmpty || content.length > 2000) {
+      throw const DiscordSocialSdkException('invalid_message_content');
+    }
   }
 
   static String _actionName(DiscordRelationshipAction action) =>

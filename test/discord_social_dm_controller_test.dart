@@ -85,6 +85,105 @@ void main() {
     expect(controller.isSending('1'), isFalse);
   });
 
+  test(
+    'edits and deletes only messages authored by the current user',
+    () async {
+      final gateway = _DmGateway(
+        conversations: [_conversation('1', 'Ada', '11')],
+        messages: {
+          '1': [
+            _message('10', '1', content: 'mine', authoredByCurrentUser: true),
+            _message('11', '1', content: 'theirs'),
+          ],
+        },
+      );
+      final controller = DiscordSocialDmController(gateway);
+      addTearDown(controller.dispose);
+      controller.reconcileSession(
+        DiscordSocialSdkAvailability.ready,
+        authenticated: true,
+      );
+      await controller.initialize();
+      await controller.loadMessages('1');
+
+      expect(await controller.editMessage('1', '11', 'forged'), isFalse);
+      expect(await controller.editMessage('1', '10', 'edited mine'), isTrue);
+      expect(controller.messagesFor('1').first.content, 'edited mine');
+      expect(gateway.edited.single.messageId, '10');
+
+      expect(await controller.deleteMessage('1', '10'), isTrue);
+      expect(controller.messagesFor('1').map((message) => message.id), ['11']);
+      expect(gateway.deleted.single, (userId: '1', messageId: '10'));
+    },
+  );
+
+  test('retains a per-message mutation error after native rejection', () async {
+    final gateway = _DmGateway(
+      conversations: [_conversation('1', 'Ada', '10')],
+      messages: {
+        '1': [_message('10', '1', authoredByCurrentUser: true)],
+      },
+    )..mutationError = 'rate_limited';
+    final controller = DiscordSocialDmController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+    await controller.loadMessages('1');
+
+    expect(await controller.editMessage('1', '10', 'edited'), isFalse);
+    expect(controller.messageActionErrorFor('10'), 'rate_limited');
+    expect(controller.isMutatingMessage('10'), isFalse);
+  });
+
+  test('keeps a confirmed edit when history refresh fails', () async {
+    final gateway = _DmGateway(
+      conversations: [_conversation('1', 'Ada', '10')],
+      messages: {
+        '1': [_message('10', '1', content: 'old', authoredByCurrentUser: true)],
+      },
+    );
+    final controller = DiscordSocialDmController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+    await controller.loadMessages('1');
+    gateway.fetchError = 'network_down';
+
+    expect(await controller.editMessage('1', '10', 'confirmed'), isTrue);
+    expect(controller.messagesFor('1').single.content, 'confirmed');
+    expect(controller.messageErrorFor('1'), 'network_down');
+  });
+
+  test('deduplicates showing-chat state and clears it on sign-out', () async {
+    final gateway = _DmGateway(
+      conversations: [_conversation('1', 'Ada', '10')],
+      messages: const {},
+    );
+    final controller = DiscordSocialDmController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+
+    await controller.setShowingChat(true);
+    await controller.setShowingChat(true);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: false,
+    );
+    await pumpEventQueue();
+
+    expect(gateway.showingChat, [true, false]);
+  });
+
   test('clears DM state when the Social SDK session expires', () async {
     final gateway = _DmGateway(
       conversations: [_conversation('1', 'Ada', '10')],
@@ -122,15 +221,16 @@ DiscordSocialDmMessage _message(
   String userId, {
   int minute = 0,
   String content = 'message',
+  bool authoredByCurrentUser = false,
 }) => DiscordSocialDmMessage(
   id: id,
   conversationUserId: userId,
-  authorId: userId,
-  recipientId: 'current',
-  authorDisplayName: 'Ada',
+  authorId: authoredByCurrentUser ? 'current' : userId,
+  recipientId: authoredByCurrentUser ? userId : 'current',
+  authorDisplayName: authoredByCurrentUser ? 'Jack' : 'Ada',
   content: content,
   sentAt: DateTime.utc(2026, 2, 22, 0, minute),
-  authoredByCurrentUser: false,
+  authoredByCurrentUser: authoredByCurrentUser,
 );
 
 final class _DmGateway
@@ -143,6 +243,11 @@ final class _DmGateway
       StreamController.broadcast(sync: true);
   final List<({String userId, int limit})> messageRequests = [];
   final List<({String userId, String content})> sent = [];
+  final List<({String userId, String messageId, String content})> edited = [];
+  final List<({String userId, String messageId})> deleted = [];
+  final List<bool> showingChat = [];
+  String? mutationError;
+  String? fetchError;
 
   @override
   Stream<DiscordSocialDmEvent> get socialDmEvents => _events.stream;
@@ -159,6 +264,7 @@ final class _DmGateway
     int limit = 100,
   }) async {
     messageRequests.add((userId: userId, limit: limit));
+    if (fetchError case final error?) throw DiscordSocialSdkException(error);
     return messages[userId] ?? const [];
   }
 
@@ -180,5 +286,55 @@ final class _DmGateway
     );
     messages[userId] = [...messages[userId] ?? const [], message];
     return message.id;
+  }
+
+  @override
+  Future<void> editMessage({
+    required String userId,
+    required String messageId,
+    required String content,
+  }) async {
+    edited.add((userId: userId, messageId: messageId, content: content));
+    if (mutationError case final error?) {
+      throw DiscordSocialSdkException(error);
+    }
+    messages[userId] = [
+      for (final message in messages[userId] ?? const [])
+        if (message.id == messageId)
+          DiscordSocialDmMessage(
+            id: message.id,
+            conversationUserId: message.conversationUserId,
+            authorId: message.authorId,
+            recipientId: message.recipientId,
+            authorDisplayName: message.authorDisplayName,
+            content: content,
+            sentAt: message.sentAt,
+            editedAt: DateTime.utc(2026, 2, 22, 2),
+            authoredByCurrentUser: message.authoredByCurrentUser,
+          )
+        else
+          message,
+    ];
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String userId,
+    required String messageId,
+  }) async {
+    deleted.add((userId: userId, messageId: messageId));
+    if (mutationError case final error?) {
+      throw DiscordSocialSdkException(error);
+    }
+    messages[userId] = List.of(
+      (messages[userId] ?? const []).where(
+        (message) => message.id != messageId,
+      ),
+    );
+  }
+
+  @override
+  Future<void> setShowingChat(bool showing) async {
+    showingChat.add(showing);
   }
 }

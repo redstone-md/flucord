@@ -98,7 +98,10 @@ class DiscordSocialSdkBridge::Impl {
         call.method_name() == "updateRelationship" ||
         call.method_name() == "getDmConversations" ||
         call.method_name() == "getDmMessages" ||
-        call.method_name() == "sendDmMessage") {
+        call.method_name() == "sendDmMessage" ||
+        call.method_name() == "editDmMessage" ||
+        call.method_name() == "deleteDmMessage" ||
+        call.method_name() == "setShowingChat") {
       result->Error(
           "sdk_not_bundled",
           "The Discord Social SDK package is not linked into this build.");

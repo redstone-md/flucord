@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/discord_friends_controller.dart';
 import 'package:flucord/src/application/discord_social_dm_controller.dart';
@@ -74,6 +76,71 @@ void main() {
       find.byKey(const ValueKey('social-dm-view-friend-1')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('edits and confirms deletion from native message actions', (
+    tester,
+  ) async {
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness);
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(const ValueKey('social-dm-message-message-2'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(row));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('social-dm-edit-message-2')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('social-dm-edit-field-message-2')),
+      'edited message',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('edited message'), findsOneWidget);
+    expect(harness.gateway.edited.single.messageId, 'message-2');
+
+    await mouse.moveTo(tester.getCenter(row));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('social-dm-delete-message-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete message?'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-confirm-delete-message-2')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(row, findsNothing);
+    expect(harness.gateway.deleted.single.messageId, 'message-2');
+    await mouse.removePointer();
+  });
+
+  testWidgets('coordinates Discord notification suppression with lifecycle', (
+    tester,
+  ) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final harness = await _DmHarness.create();
+    addTearDown(harness.dispose);
+    await _pumpWorkspace(tester, harness);
+    await tester.tap(
+      find.byKey(const ValueKey('social-dm-conversation-friend-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(harness.gateway.showingChat, [true]);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    harness.navigation.showFriends();
+    await tester.pump();
+
+    expect(harness.gateway.showingChat, [true, false, true, false]);
   });
 }
 
@@ -175,6 +242,9 @@ final class _SocialDmGateway
   final StreamController<DiscordSocialDmEvent> _events =
       StreamController.broadcast(sync: true);
   final List<({String userId, String content})> sent = [];
+  final List<({String userId, String messageId, String content})> edited = [];
+  final List<({String userId, String messageId})> deleted = [];
+  final List<bool> showingChat = [];
   final Map<String, List<DiscordSocialDmMessage>> _messages = {
     'friend-1': [
       DiscordSocialDmMessage(
@@ -186,6 +256,16 @@ final class _SocialDmGateway
         content: 'first message',
         sentAt: DateTime.utc(2026, 2, 22),
         authoredByCurrentUser: false,
+      ),
+      DiscordSocialDmMessage(
+        id: 'message-2',
+        conversationUserId: 'friend-1',
+        authorId: 'current',
+        recipientId: 'friend-1',
+        authorDisplayName: 'Jack',
+        content: 'my message',
+        sentAt: DateTime.utc(2026, 2, 22, 0, 1),
+        authoredByCurrentUser: true,
       ),
     ],
   };
@@ -232,7 +312,7 @@ final class _SocialDmGateway
   }) async {
     sent.add((userId: userId, content: content));
     final message = DiscordSocialDmMessage(
-      id: 'message-2',
+      id: 'message-3',
       conversationUserId: userId,
       authorId: 'current',
       recipientId: userId,
@@ -243,6 +323,50 @@ final class _SocialDmGateway
     );
     _messages[userId] = [..._messages[userId] ?? const [], message];
     return message.id;
+  }
+
+  @override
+  Future<void> editMessage({
+    required String userId,
+    required String messageId,
+    required String content,
+  }) async {
+    edited.add((userId: userId, messageId: messageId, content: content));
+    _messages[userId] = [
+      for (final message in _messages[userId] ?? const [])
+        if (message.id == messageId)
+          DiscordSocialDmMessage(
+            id: message.id,
+            conversationUserId: message.conversationUserId,
+            authorId: message.authorId,
+            recipientId: message.recipientId,
+            authorDisplayName: message.authorDisplayName,
+            content: content,
+            sentAt: message.sentAt,
+            editedAt: DateTime.utc(2026, 2, 22, 0, 2),
+            authoredByCurrentUser: message.authoredByCurrentUser,
+          )
+        else
+          message,
+    ];
+  }
+
+  @override
+  Future<void> deleteMessage({
+    required String userId,
+    required String messageId,
+  }) async {
+    deleted.add((userId: userId, messageId: messageId));
+    _messages[userId] = List.of(
+      (_messages[userId] ?? const []).where(
+        (message) => message.id != messageId,
+      ),
+    );
+  }
+
+  @override
+  Future<void> setShowingChat(bool showing) async {
+    showingChat.add(showing);
   }
 
   @override

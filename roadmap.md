@@ -300,6 +300,12 @@ browser runtime or dependency on Discord's private user API.
     Windows runner and its unbundled-SDK contract are release/smoke verified;
     package-linked compilation and live-account validation still require the
     separately approved SDK download.
+56. Completed: add official Social SDK editing and deletion for messages
+    authored by the current user, including per-message pending/failure state,
+    confirmed local projection across refresh failures, and Discord-like hover
+    plus inline-edit controls. `SetShowingChat` now follows native DM visibility
+    and Flutter desktop lifecycle, so the Discord desktop app suppresses
+    duplicate notifications only while Flucord actively presents chat.
 
 ## Protocol safety
 
