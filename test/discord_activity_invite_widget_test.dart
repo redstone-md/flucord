@@ -39,6 +39,29 @@ void main() {
     expect(find.text('Activity voice connected'), findsOneWidget);
     expect(find.textContaining('1 voice participant'), findsOneWidget);
 
+    await tester.tap(
+      find.byKey(const ValueKey('show-activity-voice-participants')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('activity-voice-participant-500')),
+      findsOneWidget,
+    );
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('Speaking'), findsOneWidget);
+
+    harness.activityGateway.emitCall(
+      _callState(participants: const ['500', '999'], speaking: false),
+    );
+    await tester.pump();
+    expect(find.text('2 participants'), findsOneWidget);
+    expect(find.text('Connected'), findsNWidgets(2));
+    expect(find.text('Discord user · 999'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('close-activity-voice-participants')),
+    );
+    await tester.pumpAndSettle();
+
     harness.activityGateway.emit(_invite);
     await tester.pump();
     expect(find.byKey(const ValueKey('toggle-activity-mute')), findsOneWidget);
@@ -155,6 +178,11 @@ final class _ActivityGateway
     DiscordSocialActivityInviteEvent(invite: invite, updated: false),
   );
 
+  void emitCall(DiscordSocialCallState state) {
+    call = state;
+    _callEvents.add(state);
+  }
+
   @override
   Future<DiscordSocialActivitySession> acceptActivityInvite(
     DiscordSocialActivityInvite invite,
@@ -177,7 +205,11 @@ final class _ActivityGateway
     required String lobbyId,
     required bool muted,
   }) async {
-    call = _callState(muted: muted, deafened: call.selfDeafened);
+    call = _callState(
+      muted: muted,
+      deafened: call.selfDeafened,
+      speaking: call.speakingUserIds.isNotEmpty,
+    );
     return call;
   }
 
@@ -186,7 +218,11 @@ final class _ActivityGateway
     required String lobbyId,
     required bool deafened,
   }) async {
-    call = _callState(muted: call.selfMuted, deafened: deafened);
+    call = _callState(
+      muted: call.selfMuted,
+      deafened: deafened,
+      speaking: call.speakingUserIds.isNotEmpty,
+    );
     return call;
   }
 
@@ -201,10 +237,13 @@ DiscordSocialCallState _callState({
   DiscordSocialCallStatus status = DiscordSocialCallStatus.connected,
   bool muted = false,
   bool deafened = false,
+  bool speaking = true,
+  List<String> participants = const ['500'],
 }) => DiscordSocialCallState(
   lobbyId: '700',
   status: status,
-  participantUserIds: const ['500'],
+  participantUserIds: participants,
+  speakingUserIds: speaking ? const ['500'] : const [],
   selfMuted: muted,
   selfDeafened: deafened,
 );

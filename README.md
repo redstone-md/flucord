@@ -267,7 +267,9 @@ lobby throughout the UI; it is not represented as a normal DM voice call, and
 the joined lobby now starts a documented Social SDK voice call with live
 connection status and participant count. The native Friends strip exposes
 self-mute, self-deafen, retry, and leave controls while keeping this activity
-voice path separate from ordinary Discord DM calls.
+voice path separate from ordinary Discord DM calls. A compact participant
+panel resolves known friend identities and follows the documented speaking
+callback live, including accessible speaking/connected state.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and

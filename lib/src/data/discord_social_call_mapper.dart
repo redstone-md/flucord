@@ -6,7 +6,9 @@ abstract final class DiscordSocialCallMapper {
       throw const FormatException('Activity call payload must be a map.');
     }
     final participants = payload['participant_user_ids'];
+    final speaking = payload['speaking_user_ids'];
     if (participants is! List<Object?> ||
+        speaking is! List<Object?> ||
         payload['self_muted'] is! bool ||
         payload['self_deafened'] is! bool) {
       throw const FormatException('Activity call payload is incomplete.');
@@ -25,6 +27,7 @@ abstract final class DiscordSocialCallMapper {
           _ => DiscordSocialCallStatus.unknown,
         },
         participantUserIds: participants.map(_identifier),
+        speakingUserIds: speaking.map(_identifier),
         selfMuted: payload['self_muted']! as bool,
         selfDeafened: payload['self_deafened']! as bool,
       );

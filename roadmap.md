@@ -356,6 +356,12 @@ browser runtime or dependency on Discord's private user API.
     separate from normal DM state. The default unbundled Windows bridge remains
     release/smoke verified; package-linked compilation and live-account audio
     validation still require the separately approved SDK download.
+66. Completed: synchronize documented per-user speaking changes from the
+    retained Social SDK `Call`, clear speaking state when users stop or leave,
+    and expose a responsive native participant panel with known friend avatars,
+    identity fallbacks, speaking semantics, and live updates while open. Keep
+    the default unbundled bridge verified. Audio-device selection remains after
+    approved package headers expose exact enumeration and output signatures.
 
 ## Protocol safety
 

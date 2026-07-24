@@ -103,8 +103,11 @@ void main() {
       expect(await controller.toggleDeafened(), isTrue);
       expect(controller.call?.selfDeafened, isTrue);
 
-      gateway.emitCall(_callState(participants: const ['500', '501']));
+      gateway.emitCall(
+        _callState(participants: const ['500', '501'], speaking: const ['501']),
+      );
       expect(controller.call?.participantUserIds, ['500', '501']);
+      expect(controller.call?.isSpeaking('501'), isTrue);
 
       expect(await controller.leaveVoice(), isTrue);
       expect(controller.call?.status, DiscordSocialCallStatus.disconnected);
@@ -234,12 +237,14 @@ final class _ActivityGateway
 DiscordSocialCallState _callState({
   DiscordSocialCallStatus status = DiscordSocialCallStatus.connected,
   List<String> participants = const ['500'],
+  List<String> speaking = const [],
   bool muted = false,
   bool deafened = false,
 }) => DiscordSocialCallState(
   lobbyId: '700',
   status: status,
   participantUserIds: participants,
+  speakingUserIds: speaking,
   selfMuted: muted,
   selfDeafened: deafened,
 );

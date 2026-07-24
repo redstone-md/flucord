@@ -14,6 +14,7 @@ final class DiscordSocialCallState {
     required String lobbyId,
     required DiscordSocialCallStatus status,
     required Iterable<String> participantUserIds,
+    required Iterable<String> speakingUserIds,
     required bool selfMuted,
     required bool selfDeafened,
   }) {
@@ -21,10 +22,14 @@ final class DiscordSocialCallState {
     final participants = participantUserIds
         .map((id) => _snowflake(id, 'participantUserIds'))
         .toSet();
+    final speaking = speakingUserIds
+        .map((id) => _snowflake(id, 'speakingUserIds'))
+        .toSet();
     return DiscordSocialCallState._(
       lobbyId: normalizedLobbyId,
       status: status,
       participantUserIds: List.unmodifiable(participants),
+      speakingUserIds: List.unmodifiable(speaking),
       selfMuted: selfMuted,
       selfDeafened: selfDeafened,
     );
@@ -34,6 +39,7 @@ final class DiscordSocialCallState {
     required this.lobbyId,
     required this.status,
     required this.participantUserIds,
+    required this.speakingUserIds,
     required this.selfMuted,
     required this.selfDeafened,
   });
@@ -41,10 +47,12 @@ final class DiscordSocialCallState {
   final String lobbyId;
   final DiscordSocialCallStatus status;
   final List<String> participantUserIds;
+  final List<String> speakingUserIds;
   final bool selfMuted;
   final bool selfDeafened;
 
   bool get isConnected => status == DiscordSocialCallStatus.connected;
+  bool isSpeaking(String userId) => speakingUserIds.contains(userId);
   bool get isActive => switch (status) {
     DiscordSocialCallStatus.disconnected => false,
     DiscordSocialCallStatus.unknown => false,

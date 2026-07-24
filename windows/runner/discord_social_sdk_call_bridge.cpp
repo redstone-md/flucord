@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -48,6 +49,8 @@ flutter::EncodableValue DisconnectedPayload(uint64_t lobby_id) {
       flutter::EncodableValue("disconnected");
   payload[flutter::EncodableValue("participant_user_ids")] =
       flutter::EncodableValue(flutter::EncodableList{});
+  payload[flutter::EncodableValue("speaking_user_ids")] =
+      flutter::EncodableValue(flutter::EncodableList{});
   payload[flutter::EncodableValue("self_muted")] =
       flutter::EncodableValue(false);
   payload[flutter::EncodableValue("self_deafened")] =
@@ -56,10 +59,15 @@ flutter::EncodableValue DisconnectedPayload(uint64_t lobby_id) {
 }
 
 flutter::EncodableValue CallPayload(uint64_t lobby_id,
-                                    discordpp::Call& call) {
+                                    discordpp::Call& call,
+                                    const std::set<uint64_t>& speaking_users) {
   flutter::EncodableList participants;
   for (const auto user_id : call.GetParticipants()) {
     participants.emplace_back(std::to_string(user_id));
+  }
+  flutter::EncodableList speaking;
+  for (const auto user_id : speaking_users) {
+    speaking.emplace_back(std::to_string(user_id));
   }
   flutter::EncodableMap payload;
   payload[flutter::EncodableValue("lobby_id")] =
@@ -68,6 +76,8 @@ flutter::EncodableValue CallPayload(uint64_t lobby_id,
       flutter::EncodableValue(CallStatusName(call.GetStatus()));
   payload[flutter::EncodableValue("participant_user_ids")] =
       flutter::EncodableValue(participants);
+  payload[flutter::EncodableValue("speaking_user_ids")] =
+      flutter::EncodableValue(speaking);
   payload[flutter::EncodableValue("self_muted")] =
       flutter::EncodableValue(call.GetSelfMute());
   payload[flutter::EncodableValue("self_deafened")] =
@@ -95,6 +105,7 @@ class DiscordSocialSdkCallBridge::Impl {
 #if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
     call_.reset();
     active_lobby_id_ = 0;
+    speaking_user_ids_.clear();
 #endif
   }
 
@@ -129,7 +140,8 @@ class DiscordSocialSdkCallBridge::Impl {
       return;
     }
     if (call_ && active_lobby_id_ == *lobby_id) {
-      result->Success(CallPayload(active_lobby_id_, *call_));
+      result->Success(
+          CallPayload(active_lobby_id_, *call_, speaking_user_ids_));
       return;
     }
     if (call_) {
@@ -138,6 +150,7 @@ class DiscordSocialSdkCallBridge::Impl {
       return;
     }
     active_lobby_id_ = *lobby_id;
+    speaking_user_ids_.clear();
     call_ = std::make_unique<discordpp::Call>(
         client_->StartCall(active_lobby_id_));
     call_->SetStatusChangedCallback(
@@ -145,8 +158,23 @@ class DiscordSocialSdkCallBridge::Impl {
           NotifyCallState();
         });
     call_->SetParticipantChangedCallback(
-        [this](uint64_t, bool) { NotifyCallState(); });
-    result->Success(CallPayload(active_lobby_id_, *call_));
+        [this](uint64_t user_id, bool added) {
+          if (!added) {
+            speaking_user_ids_.erase(user_id);
+          }
+          NotifyCallState();
+        });
+    call_->SetSpeakingStatusChangedCallback(
+        [this](uint64_t user_id, bool speaking) {
+          if (speaking) {
+            speaking_user_ids_.insert(user_id);
+          } else {
+            speaking_user_ids_.erase(user_id);
+          }
+          NotifyCallState();
+        });
+    result->Success(
+        CallPayload(active_lobby_id_, *call_, speaking_user_ids_));
   }
 
   void SetVoiceState(const flutter::MethodCall<>& method_call,
@@ -162,7 +190,8 @@ class DiscordSocialSdkCallBridge::Impl {
     } else {
       call_->SetSelfDeaf(*value);
     }
-    const auto payload = CallPayload(active_lobby_id_, *call_);
+    const auto payload =
+        CallPayload(active_lobby_id_, *call_, speaking_user_ids_);
     result->Success(payload);
     NotifyCallState();
   }
@@ -186,6 +215,7 @@ class DiscordSocialSdkCallBridge::Impl {
           }
           call_.reset();
           active_lobby_id_ = 0;
+          speaking_user_ids_.clear();
           const auto payload = DisconnectedPayload(ending_lobby_id);
           pending->Success(payload);
           channel_->InvokeMethod(
@@ -198,7 +228,8 @@ class DiscordSocialSdkCallBridge::Impl {
     if (!call_ || active_lobby_id_ == 0) {
       return;
     }
-    const auto payload = CallPayload(active_lobby_id_, *call_);
+    const auto payload =
+        CallPayload(active_lobby_id_, *call_, speaking_user_ids_);
     channel_->InvokeMethod(
         "socialActivityCallChanged",
         std::make_unique<flutter::EncodableValue>(payload));
@@ -206,6 +237,7 @@ class DiscordSocialSdkCallBridge::Impl {
 
   uint64_t active_lobby_id_ = 0;
   std::unique_ptr<discordpp::Call> call_;
+  std::set<uint64_t> speaking_user_ids_;
 #endif
 
   discordpp::Client* client_;

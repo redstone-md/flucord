@@ -8,6 +8,7 @@ void main() {
       'lobby_id': '700',
       'status': 'connected',
       'participant_user_ids': ['500', 501, '500'],
+      'speaking_user_ids': ['501'],
       'self_muted': true,
       'self_deafened': false,
     });
@@ -15,6 +16,8 @@ void main() {
     expect(state.lobbyId, '700');
     expect(state.status, DiscordSocialCallStatus.connected);
     expect(state.participantUserIds, ['500', '501']);
+    expect(state.speakingUserIds, ['501']);
+    expect(state.isSpeaking('501'), isTrue);
     expect(state.selfMuted, isTrue);
     expect(state.selfDeafened, isFalse);
     expect(state.isActive, isTrue);
@@ -30,6 +33,7 @@ void main() {
         'lobby_id': '0',
         'status': 'disconnected',
         'participant_user_ids': const [],
+        'speaking_user_ids': const [],
         'self_muted': false,
         'self_deafened': false,
       }),

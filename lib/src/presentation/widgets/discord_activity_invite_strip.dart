@@ -5,6 +5,7 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_activity.dart';
 import '../../domain/discord_social_call.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_activity_voice_participants_dialog.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
 import 'discord_social_activity_scope.dart';
@@ -195,9 +196,23 @@ class _JoinedSession extends StatelessWidget {
               child: const Text('Join voice'),
             )
           else ...[
+            Badge(
+              label: Text('${call!.participantUserIds.length}'),
+              backgroundColor: context.surfaces.control,
+              textColor: Theme.of(context).colorScheme.onSurface,
+              child: _CallButton(
+                key: const ValueKey('show-activity-voice-participants'),
+                tooltip: 'Voice participants',
+                icon: Icons.group_outlined,
+                onPressed: () => showDiscordActivityVoiceParticipantsDialog(
+                  context,
+                  controller,
+                ),
+              ),
+            ),
             _CallButton(
               key: const ValueKey('toggle-activity-mute'),
-              tooltip: call!.selfMuted ? 'Unmute' : 'Mute',
+              tooltip: call.selfMuted ? 'Unmute' : 'Mute',
               icon: call.selfMuted ? Icons.mic_off : Icons.mic,
               active: call.selfMuted,
               onPressed: controller.toggleMuted,

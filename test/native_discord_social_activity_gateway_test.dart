@@ -89,11 +89,11 @@ void main() {
     final expectation = expectLater(
       gateway.activityCallEvents,
       emits(
-        isA<DiscordSocialCallState>().having(
-          (state) => state.participantUserIds,
-          'participants',
-          ['500'],
-        ),
+        isA<DiscordSocialCallState>()
+            .having((state) => state.participantUserIds, 'participants', [
+              '500',
+            ])
+            .having((state) => state.speakingUserIds, 'speaking', ['500']),
       ),
     );
     await channel.emit('socialActivityCallChanged', _callPayload());
@@ -129,6 +129,7 @@ Map<String, Object> _callPayload() => {
   'lobby_id': '700',
   'status': 'connected',
   'participant_user_ids': ['500'],
+  'speaking_user_ids': ['500'],
   'self_muted': false,
   'self_deafened': false,
 };
