@@ -32,6 +32,8 @@ void main() {
                 'filename': 'notes.txt',
                 'url': 'https://cdn.discordapp.com/notes.txt',
                 'size': 42,
+                'duration_secs': 4.25,
+                'waveform': 'AECA/w==',
               },
             ],
             'embeds': [
@@ -61,6 +63,8 @@ void main() {
     expect(snapshot.editedAt, isNotNull);
     expect(snapshot.flags, 16384);
     expect(snapshot.attachments.single.fileName, 'notes.txt');
+    expect(snapshot.attachments.single.durationSecs, 4.25);
+    expect(snapshot.attachments.single.waveform, 'AECA/w==');
     expect(snapshot.embeds.single.title, 'Release');
     expect(snapshot.stickers.single.name, 'Ship');
     expect(snapshot.mentionedUserIds, {'user-1'});

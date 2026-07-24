@@ -95,6 +95,8 @@ final class MessageAttachment {
     this.contentType,
     this.width,
     this.height,
+    this.durationSecs,
+    this.waveform,
   });
 
   final String id;
@@ -104,8 +106,14 @@ final class MessageAttachment {
   final String? contentType;
   final int? width;
   final int? height;
+  final double? durationSecs;
+  final String? waveform;
 
   bool get isImage => contentType?.startsWith('image/') ?? false;
+  bool get isAudio => contentType?.startsWith('audio/') ?? false;
+  Duration? get duration => durationSecs == null
+      ? null
+      : Duration(milliseconds: (durationSecs! * 1000).round());
 
   bool get isVideo {
     if (contentType?.startsWith('video/') ?? false) return true;
@@ -288,6 +296,8 @@ final class ChatMessage {
 
   bool get isSystem => type.isSystem;
   bool hasFlag(DiscordMessageFlag flag) => flags & flag.bit != 0;
+  bool get isVoiceMessage => hasFlag(DiscordMessageFlag.voiceMessage);
+  bool get canEdit => !isVoiceMessage;
   bool get suppressesEmbeds => hasFlag(DiscordMessageFlag.suppressEmbeds);
   bool get suppressesNotifications =>
       hasFlag(DiscordMessageFlag.suppressNotifications);

@@ -24,6 +24,8 @@ abstract final class MessageAttachmentCodec {
         contentType: raw['content_type'] as String?,
         width: raw['width'] as int?,
         height: raw['height'] as int?,
+        durationSecs: (raw['duration_secs'] as num?)?.toDouble(),
+        waveform: raw['waveform'] as String?,
       );
 
   static Map<String, Object?> toMap(MessageAttachment attachment) => {
@@ -34,5 +36,7 @@ abstract final class MessageAttachmentCodec {
     'content_type': attachment.contentType,
     'width': attachment.width,
     'height': attachment.height,
+    'duration_secs': attachment.durationSecs,
+    'waveform': attachment.waveform,
   };
 }
