@@ -5,10 +5,13 @@ import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
+  const clientId = '123456789012345678';
+  final configuration = DiscordSocialSdkConfiguration(clientId: clientId);
+
   test('maps a linked native SDK response', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel({'status': 'ready'}),
-      TargetPlatform.windows,
+      channel: _Channel({'status': 'ready'}),
+      targetPlatform: TargetPlatform.windows,
     );
 
     final availability = await gateway.checkAvailability();
@@ -19,8 +22,8 @@ void main() {
 
   test('maps a Windows build without the SDK package', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel({'status': 'sdk_not_bundled'}),
-      TargetPlatform.windows,
+      channel: _Channel({'status': 'sdk_not_bundled'}),
+      targetPlatform: TargetPlatform.windows,
     );
 
     final availability = await gateway.checkAvailability();
@@ -33,8 +36,8 @@ void main() {
 
   test('maps a missing native bridge to an unsupported platform', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel.error(MissingPluginException()),
-      TargetPlatform.windows,
+      channel: _Channel.error(MissingPluginException()),
+      targetPlatform: TargetPlatform.windows,
     );
 
     final availability = await gateway.checkAvailability();
@@ -47,8 +50,8 @@ void main() {
 
   test('keeps platform failures typed and redacted', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel.error(PlatformException(code: 'SDK Load Failed!')),
-      TargetPlatform.windows,
+      channel: _Channel.error(PlatformException(code: 'SDK Load Failed!')),
+      targetPlatform: TargetPlatform.windows,
     );
 
     final availability = await gateway.checkAvailability();
@@ -60,8 +63,8 @@ void main() {
   test('does not call the Windows bridge on another platform', () async {
     final channel = _Channel({'status': 'ready'});
     final gateway = NativeDiscordSocialSdkGateway(
-      channel,
-      TargetPlatform.linux,
+      channel: channel,
+      targetPlatform: TargetPlatform.linux,
     );
 
     final availability = await gateway.checkAvailability();
@@ -75,7 +78,7 @@ void main() {
 
   test('maps native relationship payloads through the same channel', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel([
+      channel: _Channel([
         {
           'id': 'user-1',
           'display_name': 'Ada',
@@ -83,7 +86,7 @@ void main() {
           'relationship_type': 'friend',
         },
       ]),
-      TargetPlatform.windows,
+      targetPlatform: TargetPlatform.windows,
     );
 
     final relationships = await gateway.fetchRelationships();
@@ -94,8 +97,8 @@ void main() {
 
   test('preserves native relationship error codes', () async {
     final gateway = NativeDiscordSocialSdkGateway(
-      _Channel.error(PlatformException(code: 'not_authenticated')),
-      TargetPlatform.windows,
+      channel: _Channel.error(PlatformException(code: 'not_authenticated')),
+      targetPlatform: TargetPlatform.windows,
     );
 
     await expectLater(
@@ -115,8 +118,8 @@ void main() {
     () async {
       final channel = _Channel(null);
       final gateway = NativeDiscordSocialSdkGateway(
-        channel,
-        TargetPlatform.windows,
+        channel: channel,
+        targetPlatform: TargetPlatform.windows,
       );
 
       await gateway.updateRelationship(
@@ -131,7 +134,151 @@ void main() {
       });
     },
   );
+
+  test(
+    'authorizes through the native PKCE bridge and persists its grant',
+    () async {
+      final channel = _Channel(_grantPayload());
+      final vault = _MemoryGrantVault();
+      final gateway = NativeDiscordSocialSdkGateway(
+        channel: channel,
+        targetPlatform: TargetPlatform.windows,
+        configuration: configuration,
+        vault: vault,
+        clock: () => DateTime.utc(2026, 2, 22),
+      );
+
+      final authentication = await gateway.authorize();
+
+      expect(authentication.isReady, isTrue);
+      expect(channel.calls, ['authorize']);
+      expect(channel.arguments.single, {'client_id': clientId});
+      expect(vault.grant?.refreshToken, 'refresh-secret');
+      expect(vault.grant?.expiresAt, DateTime.utc(2026, 2, 22, 1));
+    },
+  );
+
+  test(
+    'returns signed out without touching native code when no grant exists',
+    () async {
+      final channel = _Channel(_grantPayload());
+      final gateway = NativeDiscordSocialSdkGateway(
+        channel: channel,
+        targetPlatform: TargetPlatform.windows,
+        configuration: configuration,
+        vault: _MemoryGrantVault(),
+      );
+
+      final authentication = await gateway.restoreAuthentication();
+
+      expect(
+        authentication.status,
+        DiscordSocialSdkAuthenticationStatus.signedOut,
+      );
+      expect(channel.calls, isEmpty);
+    },
+  );
+
+  test('rotates a saved refresh grant through the native bridge', () async {
+    final vault = _MemoryGrantVault()..grant = _grant('old-refresh');
+    final channel = _Channel(_grantPayload());
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+      configuration: configuration,
+      vault: vault,
+    );
+
+    final authentication = await gateway.restoreAuthentication();
+
+    expect(authentication.isReady, isTrue);
+    expect(channel.calls, ['restoreSession']);
+    expect(channel.arguments.single, {
+      'client_id': clientId,
+      'refresh_token': 'old-refresh',
+    });
+    expect(vault.grant?.refreshToken, 'refresh-secret');
+  });
+
+  test(
+    'clears an invalid saved grant after native refresh rejection',
+    () async {
+      final vault = _MemoryGrantVault()..grant = _grant('expired-refresh');
+      final gateway = NativeDiscordSocialSdkGateway(
+        channel: _Channel.error(PlatformException(code: 'refresh_failed')),
+        targetPlatform: TargetPlatform.windows,
+        configuration: configuration,
+        vault: vault,
+      );
+
+      final authentication = await gateway.restoreAuthentication();
+
+      expect(
+        authentication.status,
+        DiscordSocialSdkAuthenticationStatus.signedOut,
+      );
+      expect(vault.grant, isNull);
+    },
+  );
+
+  test(
+    'persists a background token rotation delivered by native code',
+    () async {
+      final channel = _Channel(null);
+      final vault = _MemoryGrantVault();
+      final gateway = NativeDiscordSocialSdkGateway(
+        channel: channel,
+        targetPlatform: TargetPlatform.windows,
+        configuration: configuration,
+        vault: vault,
+      );
+      final readyEvent = expectLater(
+        gateway.authenticationChanges,
+        emits(
+          isA<DiscordSocialSdkAuthentication>().having(
+            (value) => value.status,
+            'status',
+            DiscordSocialSdkAuthenticationStatus.ready,
+          ),
+        ),
+      );
+
+      await channel.emit('authenticationGrantChanged', _grantPayload());
+      await readyEvent;
+
+      expect(vault.grant?.accessToken, 'access-secret');
+      expect(vault.grant?.toString(), 'DiscordSocialSdkGrant(<redacted>)');
+
+      final expiredEvent = expectLater(
+        gateway.authenticationChanges,
+        emits(
+          isA<DiscordSocialSdkAuthentication>().having(
+            (value) => value.status,
+            'status',
+            DiscordSocialSdkAuthenticationStatus.signedOut,
+          ),
+        ),
+      );
+      await channel.emit('authenticationExpired');
+      await expiredEvent;
+      expect(vault.grant, isNull);
+    },
+  );
 }
+
+Map<String, Object> _grantPayload() => {
+  'access_token': 'access-secret',
+  'refresh_token': 'refresh-secret',
+  'expires_in': 3600,
+  'scopes': 'identify relationships.read',
+};
+
+DiscordSocialSdkGrant _grant(String refreshToken) => DiscordSocialSdkGrant(
+  accessToken: 'old-access',
+  refreshToken: refreshToken,
+  expiresAt: DateTime.utc(2026, 2, 22),
+  scopes: const ['identify'],
+);
 
 final class _Channel implements DiscordSocialSdkPlatformChannel {
   _Channel(this._response) : _error = null;
@@ -142,6 +289,7 @@ final class _Channel implements DiscordSocialSdkPlatformChannel {
   final Object? _error;
   final List<String> calls = [];
   final List<Object?> arguments = [];
+  DiscordSocialSdkNativeHandler? handler;
 
   @override
   Future<Object?> invoke(String method, [Object? arguments]) async {
@@ -149,5 +297,31 @@ final class _Channel implements DiscordSocialSdkPlatformChannel {
     this.arguments.add(arguments);
     if (_error case final error?) throw error;
     return _response;
+  }
+
+  @override
+  void setNativeHandler(DiscordSocialSdkNativeHandler? handler) {
+    this.handler = handler;
+  }
+
+  Future<Object?> emit(String method, [Object? arguments]) {
+    final current = handler;
+    if (current == null) throw StateError('No native handler registered.');
+    return current(method, arguments);
+  }
+}
+
+final class _MemoryGrantVault implements DiscordSocialSdkGrantVault {
+  DiscordSocialSdkGrant? grant;
+
+  @override
+  Future<void> clear() async => grant = null;
+
+  @override
+  Future<DiscordSocialSdkGrant?> read() async => grant;
+
+  @override
+  Future<void> write(DiscordSocialSdkGrant grant) async {
+    this.grant = grant;
   }
 }

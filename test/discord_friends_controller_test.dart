@@ -11,7 +11,10 @@ void main() {
     final controller = DiscordFriendsController(gateway);
     addTearDown(controller.dispose);
 
-    controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
     await controller.initialize();
 
     expect(controller.state, DiscordFriendsLoadState.ready);
@@ -27,7 +30,10 @@ void main() {
     final controller = DiscordFriendsController(gateway);
     addTearDown(controller.dispose);
 
-    controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: false,
+    );
     await controller.initialize();
 
     expect(controller.state, DiscordFriendsLoadState.authorizationRequired);
@@ -37,11 +43,15 @@ void main() {
     final gateway = _FriendsGateway([_friend('1', 'Ada')]);
     final controller = DiscordFriendsController(gateway);
     addTearDown(controller.dispose);
-    controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
     await controller.initialize();
 
-    controller.reconcileAvailability(
+    controller.reconcileSession(
       DiscordSocialSdkAvailability.sdkNotBundled,
+      authenticated: false,
     );
 
     expect(controller.state, DiscordFriendsLoadState.unavailable);
@@ -54,7 +64,10 @@ void main() {
     final gateway = _FriendsGateway([request])..mutationCompleter = completer;
     final controller = DiscordFriendsController(gateway);
     addTearDown(controller.dispose);
-    controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
     await controller.initialize();
 
     final operation = controller.updateRelationship(
@@ -84,7 +97,10 @@ void main() {
       final gateway = _FriendsGateway([friend])..mutationError = 'rate_limited';
       final controller = DiscordFriendsController(gateway);
       addTearDown(controller.dispose);
-      controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+      controller.reconcileSession(
+        DiscordSocialSdkAvailability.ready,
+        authenticated: true,
+      );
       await controller.initialize();
 
       final succeeded = await controller.updateRelationship(
@@ -104,7 +120,10 @@ void main() {
     final gateway = _FriendsGateway([friend]);
     final controller = DiscordFriendsController(gateway);
     addTearDown(controller.dispose);
-    controller.reconcileAvailability(DiscordSocialSdkAvailability.ready);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
     await controller.initialize();
 
     expect(
@@ -146,8 +165,15 @@ final class _FriendsGateway implements DiscordSocialSdkGateway {
   String? mutationError;
 
   @override
+  Future<DiscordSocialSdkAuthentication> authorize() async =>
+      DiscordSocialSdkAuthentication.ready;
+
+  @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
       DiscordSocialSdkAvailability.ready;
+
+  @override
+  Future<void> disconnect() async {}
 
   @override
   Future<List<DiscordRelationship>> fetchRelationships() async {
@@ -155,6 +181,10 @@ final class _FriendsGateway implements DiscordSocialSdkGateway {
     if (_errorCode case final code?) throw DiscordSocialSdkException(code);
     return _relationships;
   }
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      DiscordSocialSdkAuthentication.ready;
 
   @override
   Future<void> updateRelationship({

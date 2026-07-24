@@ -68,7 +68,8 @@ void main() {
   ) async {
     final harness = await _harnessFor(
       DiscordSocialSdkAvailability.ready,
-      relationshipError: 'not_authenticated',
+      authentication: DiscordSocialSdkAuthentication.signedOut,
+      relationships: [_relationship(id: 'friend-1', name: 'Ada')],
     );
     addTearDown(harness.dispose);
 
@@ -79,6 +80,19 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Native account authorization required'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('discord-friends-authorize')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('discord-friends-authorize')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('discord-friend-friend-1')),
+      findsOneWidget,
+    );
+    expect(harness.gateway.authorizationCalls, 1);
   });
 
   testWidgets('keeps long native friend identity bounded on compact width', (
@@ -197,16 +211,27 @@ void main() {
 
 Future<_ControllerHarness> _harnessFor(
   DiscordSocialSdkAvailability availability, {
+  DiscordSocialSdkAuthentication authentication =
+      DiscordSocialSdkAuthentication.ready,
   List<DiscordRelationship> relationships = const [],
   String? relationshipError,
   String? mutationError,
 }) async {
-  final gateway = _SocialGateway(availability, relationships, relationshipError)
-    ..mutationError = mutationError;
+  final gateway = _SocialGateway(
+    availability,
+    authentication,
+    relationships,
+    relationshipError,
+  )..mutationError = mutationError;
   final social = DiscordSocialSdkController(gateway);
   final friends = DiscordFriendsController(gateway);
+  social.addListener(() {
+    friends.reconcileSession(
+      social.availability,
+      authenticated: social.isAuthenticated,
+    );
+  });
   await social.initialize();
-  friends.reconcileAvailability(social.availability);
   await friends.initialize();
   return _ControllerHarness(social, friends, gateway);
 }
@@ -242,18 +267,34 @@ Future<void> _pumpAccountHome(
 }
 
 final class _SocialGateway implements DiscordSocialSdkGateway {
-  _SocialGateway(this.availability, this.relationships, this.relationshipError);
+  _SocialGateway(
+    this.availability,
+    this.authentication,
+    this.relationships,
+    this.relationshipError,
+  );
 
   final DiscordSocialSdkAvailability availability;
+  final DiscordSocialSdkAuthentication authentication;
   final List<DiscordRelationship> relationships;
   final String? relationshipError;
   final List<({String userId, DiscordRelationshipAction action})> mutations =
       [];
   String? mutationError;
+  int authorizationCalls = 0;
+
+  @override
+  Future<DiscordSocialSdkAuthentication> authorize() async {
+    authorizationCalls++;
+    return DiscordSocialSdkAuthentication.ready;
+  }
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
       availability;
+
+  @override
+  Future<void> disconnect() async {}
 
   @override
   Future<List<DiscordRelationship>> fetchRelationships() async {
@@ -262,6 +303,10 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
     }
     return relationships;
   }
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      authentication;
 
   @override
   Future<void> updateRelationship({

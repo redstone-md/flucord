@@ -284,6 +284,13 @@ browser runtime or dependency on Discord's private user API.
     friends, and blocking users. Keep per-user pending and failure state in the
     Friends controller, require confirmation for destructive actions, and keep
     unsupported native builds explicit instead of applying local-only changes.
+54. Completed: authenticate the Windows Social SDK client through its native
+    public-client PKCE flow, rotate refresh grants in a dedicated operating-
+    system credential vault, pump SDK callbacks on the runner UI thread, and
+    connect Friends only after the SDK reaches `Ready`. The authenticated
+    bridge exposes live relationships and mutations without sharing OAuth or
+    Bot credentials. Package-linked compilation and live-account validation
+    still require the separately approved SDK download.
 
 ## Protocol safety
 

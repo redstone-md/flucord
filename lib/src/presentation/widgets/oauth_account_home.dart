@@ -91,8 +91,8 @@ class OAuthAccountHomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final socialSdk = DiscordSocialSdkScope.of(context);
-    final socialReady =
-        socialSdk.state == DiscordSocialSdkControllerState.ready;
+    final socialAvailable = socialSdk.availability?.isReady ?? false;
+    final socialReady = socialSdk.isAuthenticated;
     return Column(
       key: const ValueKey('oauth-account-home-view'),
       children: [
@@ -121,14 +121,14 @@ class OAuthAccountHomeView extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                socialReady ? 'Social SDK' : 'OAuth account',
+                socialAvailable ? 'Social SDK' : 'OAuth account',
                 style: TextStyle(color: context.surfaces.muted, fontSize: 11),
               ),
             ],
           ),
         ),
         Expanded(
-          child: socialReady
+          child: socialAvailable
               ? const DiscordFriendDirectory()
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),

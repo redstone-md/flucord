@@ -25,6 +25,7 @@ final class DiscordFriendsController extends ChangeNotifier {
   final Map<String, String> _mutationErrors = {};
   Future<void>? _inFlight;
   bool _sdkReady = false;
+  bool _authenticated = false;
   bool _initialized = false;
   bool _disposed = false;
   int _generation = 0;
@@ -34,10 +35,14 @@ final class DiscordFriendsController extends ChangeNotifier {
   bool isMutating(String userId) => _mutatingUserIds.contains(userId);
   String? mutationErrorFor(String userId) => _mutationErrors[userId];
 
-  void reconcileAvailability(DiscordSocialSdkAvailability? availability) {
+  void reconcileSession(
+    DiscordSocialSdkAvailability? availability, {
+    required bool authenticated,
+  }) {
     final sdkReady = availability?.isReady ?? false;
-    if (_sdkReady == sdkReady) return;
+    if (_sdkReady == sdkReady && _authenticated == authenticated) return;
     _sdkReady = sdkReady;
+    _authenticated = sdkReady && authenticated;
     _initialized = false;
     _generation++;
     _inFlight = null;
@@ -49,20 +54,27 @@ final class DiscordFriendsController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
       return;
     }
+    if (!_authenticated) {
+      _relationships = const [];
+      _state = DiscordFriendsLoadState.authorizationRequired;
+      if (!_disposed) notifyListeners();
+      return;
+    }
     _state = DiscordFriendsLoadState.idle;
     if (!_disposed) notifyListeners();
     unawaited(initialize());
   }
 
   Future<void> initialize() {
-    if (_initialized || !_sdkReady || _disposed) {
+    if (_initialized || !_sdkReady || !_authenticated || _disposed) {
       return _inFlight ?? Future<void>.value();
     }
     _initialized = true;
     return _startLoad();
   }
 
-  Future<void> retry() => _sdkReady ? _startLoad() : Future<void>.value();
+  Future<void> retry() =>
+      _sdkReady && _authenticated ? _startLoad() : Future<void>.value();
 
   Future<bool> updateRelationship(
     DiscordRelationship relationship,
@@ -135,7 +147,7 @@ final class DiscordFriendsController extends ChangeNotifier {
   }
 
   bool _accepts(int generation) =>
-      !_disposed && _sdkReady && generation == _generation;
+      !_disposed && _sdkReady && _authenticated && generation == _generation;
 
   void _applyConfirmedMutation(
     String userId,

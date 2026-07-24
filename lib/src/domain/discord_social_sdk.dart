@@ -7,6 +7,76 @@ enum DiscordSocialSdkAvailabilityStatus {
   failure,
 }
 
+enum DiscordSocialSdkAuthenticationStatus { ready, signedOut, unconfigured }
+
+final class DiscordSocialSdkAuthentication {
+  const DiscordSocialSdkAuthentication._(this.status);
+
+  static const ready = DiscordSocialSdkAuthentication._(
+    DiscordSocialSdkAuthenticationStatus.ready,
+  );
+  static const signedOut = DiscordSocialSdkAuthentication._(
+    DiscordSocialSdkAuthenticationStatus.signedOut,
+  );
+  static const unconfigured = DiscordSocialSdkAuthentication._(
+    DiscordSocialSdkAuthenticationStatus.unconfigured,
+  );
+
+  final DiscordSocialSdkAuthenticationStatus status;
+
+  bool get isReady => status == DiscordSocialSdkAuthenticationStatus.ready;
+}
+
+final class DiscordSocialSdkGrant {
+  factory DiscordSocialSdkGrant({
+    required String accessToken,
+    required String refreshToken,
+    required DateTime expiresAt,
+    required Iterable<String> scopes,
+  }) {
+    final normalizedAccessToken = accessToken.trim();
+    final normalizedRefreshToken = refreshToken.trim();
+    if (normalizedAccessToken.isEmpty || normalizedRefreshToken.isEmpty) {
+      throw ArgumentError('Social SDK tokens must not be empty.');
+    }
+    return DiscordSocialSdkGrant._(
+      accessToken: normalizedAccessToken,
+      refreshToken: normalizedRefreshToken,
+      expiresAt: expiresAt.toUtc(),
+      scopes: Set.unmodifiable(
+        scopes.map((scope) => scope.trim()).where((scope) => scope.isNotEmpty),
+      ),
+    );
+  }
+
+  const DiscordSocialSdkGrant._({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.expiresAt,
+    required this.scopes,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final DateTime expiresAt;
+  final Set<String> scopes;
+
+  @override
+  String toString() => 'DiscordSocialSdkGrant(<redacted>)';
+}
+
+abstract interface class DiscordSocialSdkGrantVault {
+  Future<DiscordSocialSdkGrant?> read();
+
+  Future<void> write(DiscordSocialSdkGrant grant);
+
+  Future<void> clear();
+}
+
+abstract interface class DiscordSocialSdkAuthenticationEvents {
+  Stream<DiscordSocialSdkAuthentication> get authenticationChanges;
+}
+
 final class DiscordSocialSdkAvailability {
   const DiscordSocialSdkAvailability._({
     required this.status,
@@ -44,6 +114,12 @@ final class DiscordSocialSdkAvailability {
 
 abstract interface class DiscordSocialSdkGateway {
   Future<DiscordSocialSdkAvailability> checkAvailability();
+
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication();
+
+  Future<DiscordSocialSdkAuthentication> authorize();
+
+  Future<void> disconnect();
 
   Future<List<DiscordRelationship>> fetchRelationships();
 

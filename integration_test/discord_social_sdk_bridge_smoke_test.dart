@@ -10,7 +10,7 @@ void main() {
   testWidgets('reports an unbundled SDK through the Windows runner', (
     tester,
   ) async {
-    const gateway = NativeDiscordSocialSdkGateway();
+    final gateway = NativeDiscordSocialSdkGateway();
 
     final availability = await gateway.checkAvailability();
 

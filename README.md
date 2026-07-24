@@ -239,9 +239,8 @@ exact CMake cache paths instead of relying on guessed package filenames:
   install beside `flucord.exe`.
 
 The include directory and import library must be supplied together and are
-validated before compilation. A linked capability is only a package handshake;
-native SDK authentication and `Client::GetRelationships()` synchronization are
-still required before Flucord can render real friends.
+validated before compilation. They can be provided as CMake cache values or
+same-named environment variables.
 
 The Dart side already owns an immutable Social SDK relationship contract for
 friends, incoming/outgoing requests, provisional users, spam-request metadata,
@@ -249,15 +248,42 @@ and online/idle/do-not-disturb/offline presence. A typed
 `getRelationships` platform method maps those values into a native Friends
 directory with separate pending, online, offline, loading, empty,
 authorization-required, and retry states. The default Windows runner rejects
-that method with `sdk_not_bundled`; a package-linked runner currently returns
-`not_authenticated`. Neither path invents data or falls back to Bot API.
+that method with `sdk_not_bundled`. A package-linked runner performs the native
+public-client PKCE flow, exchanges and rotates the SDK grant, waits for
+`Client::Status::Ready`, and then maps live `Client::GetRelationships()` data.
+Neither path invents data or falls back to Bot API.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and
 failure state per user, and update the visible directory only after the native
-operation succeeds. Remove and block require an explicit confirmation. Until
-the native Social SDK session is authenticated, the runner rejects mutations
-with the same honest transport error and never applies local-only changes.
+operation succeeds. Remove and block require an explicit confirmation. The SDK
+callback queue is pumped every 10 ms on the Windows UI thread, and expiring
+tokens are refreshed natively. Rotated access and refresh grants are returned
+only to a dedicated operating-system credential-vault record; they are not
+shared with normal OAuth, Bot transport, SQLite, or logs.
+
+### Enable native Social SDK friends on Windows
+
+1. Obtain the approved Discord Social SDK Windows package for the application
+   and enable **Public Client** in its Developer Portal OAuth2 settings.
+2. Set the exact package paths for the current PowerShell session:
+
+   ```powershell
+   $env:FLUCORD_DISCORD_SOCIAL_SDK_INCLUDE_DIR='C:\sdk\discord-social-sdk\include'
+   $env:FLUCORD_DISCORD_SOCIAL_SDK_LIBRARY='C:\sdk\discord-social-sdk\lib\discord_partner_sdk.lib'
+   $env:FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME='C:\sdk\discord-social-sdk\bin\discord_partner_sdk.dll'
+   ```
+
+3. Run with the same public application ID used by the approved package:
+
+   ```powershell
+   flutter run -d windows `
+     --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
+   ```
+
+4. Open Friends and select **Connect Discord**. Flucord uses the SDK's native
+   authorization prompt, restores the rotating grant on later starts, and does
+   not ask for a personal account token.
 
 ## Run
 

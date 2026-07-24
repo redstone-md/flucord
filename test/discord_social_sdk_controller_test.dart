@@ -59,13 +59,100 @@ void main() {
     expect(controller.state, DiscordSocialSdkControllerState.ready);
     expect(gateway.calls, 2);
   });
+
+  test(
+    'keeps a bundled SDK signed out until native authorization succeeds',
+    () async {
+      final gateway = _SocialGateway(
+        () async => DiscordSocialSdkAvailability.ready,
+        restored: DiscordSocialSdkAuthentication.signedOut,
+      );
+      final controller = DiscordSocialSdkController(gateway);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      expect(controller.state, DiscordSocialSdkControllerState.signedOut);
+
+      await controller.authorize();
+      expect(controller.state, DiscordSocialSdkControllerState.ready);
+      expect(gateway.authorizationCalls, 1);
+    },
+  );
+
+  test(
+    'surfaces a missing application id separately from SDK absence',
+    () async {
+      final gateway = _SocialGateway(
+        () async => DiscordSocialSdkAvailability.ready,
+        restored: DiscordSocialSdkAuthentication.unconfigured,
+      );
+      final controller = DiscordSocialSdkController(gateway);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(controller.state, DiscordSocialSdkControllerState.unconfigured);
+      expect(controller.availability?.isReady, isTrue);
+    },
+  );
+
+  test('disconnects an authenticated native session', () async {
+    final gateway = _SocialGateway(
+      () async => DiscordSocialSdkAvailability.ready,
+    );
+    final controller = DiscordSocialSdkController(gateway);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    await controller.disconnect();
+
+    expect(controller.state, DiscordSocialSdkControllerState.signedOut);
+    expect(gateway.disconnectCalls, 1);
+  });
+
+  test('leaves ready state when the native refresh grant expires', () async {
+    final gateway = _SocialGateway(
+      () async => DiscordSocialSdkAvailability.ready,
+    );
+    final controller = DiscordSocialSdkController(gateway);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    gateway.emitAuthentication(DiscordSocialSdkAuthentication.signedOut);
+
+    expect(controller.state, DiscordSocialSdkControllerState.signedOut);
+    expect(controller.isAuthenticated, isFalse);
+  });
 }
 
-final class _SocialGateway implements DiscordSocialSdkGateway {
-  _SocialGateway(this._check);
+final class _SocialGateway
+    implements DiscordSocialSdkGateway, DiscordSocialSdkAuthenticationEvents {
+  _SocialGateway(
+    this._check, {
+    this.restored = DiscordSocialSdkAuthentication.ready,
+  });
 
   final Future<DiscordSocialSdkAvailability> Function() _check;
+  final DiscordSocialSdkAuthentication restored;
   int calls = 0;
+  int authorizationCalls = 0;
+  int disconnectCalls = 0;
+  final StreamController<DiscordSocialSdkAuthentication> _authChanges =
+      StreamController.broadcast(sync: true);
+
+  @override
+  Stream<DiscordSocialSdkAuthentication> get authenticationChanges =>
+      _authChanges.stream;
+
+  void emitAuthentication(DiscordSocialSdkAuthentication authentication) {
+    _authChanges.add(authentication);
+  }
+
+  @override
+  Future<DiscordSocialSdkAuthentication> authorize() async {
+    authorizationCalls++;
+    return DiscordSocialSdkAuthentication.ready;
+  }
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() {
@@ -74,7 +161,14 @@ final class _SocialGateway implements DiscordSocialSdkGateway {
   }
 
   @override
+  Future<void> disconnect() async => disconnectCalls++;
+
+  @override
   Future<List<DiscordRelationship>> fetchRelationships() async => const [];
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      restored;
 
   @override
   Future<void> updateRelationship({

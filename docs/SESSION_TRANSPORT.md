@@ -91,6 +91,11 @@ to a user's channel history. Flucord also does not infer chat access from
 - `relationships.read` belongs to the separately distributed native Discord
   Social SDK and requires its terms plus application approval. It is not a
   public REST relationship endpoint and is never emulated with private routes.
+- Social SDK grants have their own versioned operating-system vault record.
+  The Windows bridge owns one persistent `discordpp::Client`, performs the SDK
+  PKCE/refresh flow, waits for `Client::Status::Ready`, and pumps callbacks on
+  the runner UI thread before exposing relationships or mutations. Its grants
+  never enter the Bot credential codec or the ordinary OAuth grant vault.
 
 ## Desktop protocol delivery
 

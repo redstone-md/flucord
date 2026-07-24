@@ -201,11 +201,22 @@ void main() {
 
 final class _SocialGateway implements DiscordSocialSdkGateway {
   @override
+  Future<DiscordSocialSdkAuthentication> authorize() async =>
+      DiscordSocialSdkAuthentication.signedOut;
+
+  @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
       DiscordSocialSdkAvailability.sdkNotBundled;
 
   @override
+  Future<void> disconnect() async {}
+
+  @override
   Future<List<DiscordRelationship>> fetchRelationships() async => const [];
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      DiscordSocialSdkAuthentication.signedOut;
 
   @override
   Future<void> updateRelationship({

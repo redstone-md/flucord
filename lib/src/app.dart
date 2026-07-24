@@ -138,7 +138,7 @@ class _FlucordAppState extends State<FlucordApp> {
         );
     _discordOAuthController = DiscordOAuthController(oauthGateway);
     final socialSdkGateway =
-        widget.discordSocialSdkGateway ?? const NativeDiscordSocialSdkGateway();
+        widget.discordSocialSdkGateway ?? NativeDiscordSocialSdkGateway();
     _discordSocialSdkController = DiscordSocialSdkController(socialSdkGateway);
     _discordFriendsController = DiscordFriendsController(socialSdkGateway);
     _oauthGuildMembershipController = OAuthGuildMembershipController(
@@ -203,8 +203,9 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   void _syncSocialSdkAvailability() {
-    _discordFriendsController.reconcileAvailability(
+    _discordFriendsController.reconcileSession(
       _discordSocialSdkController.availability,
+      authenticated: _discordSocialSdkController.isAuthenticated,
     );
   }
 

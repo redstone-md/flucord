@@ -227,8 +227,15 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 
 final class _ReadySocialGateway implements DiscordSocialSdkGateway {
   @override
+  Future<DiscordSocialSdkAuthentication> authorize() async =>
+      DiscordSocialSdkAuthentication.ready;
+
+  @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async =>
       DiscordSocialSdkAvailability.ready;
+
+  @override
+  Future<void> disconnect() async {}
 
   @override
   Future<List<DiscordRelationship>> fetchRelationships() async => [
@@ -241,6 +248,10 @@ final class _ReadySocialGateway implements DiscordSocialSdkGateway {
       kind: DiscordRelationshipKind.friend,
     ),
   ];
+
+  @override
+  Future<DiscordSocialSdkAuthentication> restoreAuthentication() async =>
+      DiscordSocialSdkAuthentication.ready;
 
   @override
   Future<void> updateRelationship({

@@ -5,6 +5,13 @@
 #include "discord_social_sdk_bridge.h"
 #include "flutter/generated_plugin_registrant.h"
 
+namespace {
+
+constexpr UINT_PTR kDiscordSocialSdkTimerId = 0xF1C0;
+constexpr UINT kDiscordSocialSdkPumpIntervalMs = 10;
+
+}  // namespace
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -28,6 +35,10 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   discord_social_sdk_bridge_ = std::make_unique<DiscordSocialSdkBridge>(
       flutter_controller_->engine()->messenger());
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+  SetTimer(GetHandle(), kDiscordSocialSdkTimerId,
+           kDiscordSocialSdkPumpIntervalMs, nullptr);
+#endif
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -43,6 +54,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+  KillTimer(GetHandle(), kDiscordSocialSdkTimerId);
+#endif
   discord_social_sdk_bridge_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -66,6 +80,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+    case WM_TIMER:
+      if (wparam == kDiscordSocialSdkTimerId &&
+          discord_social_sdk_bridge_) {
+        discord_social_sdk_bridge_->PumpCallbacks();
+        return 0;
+      }
+      break;
+#endif
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

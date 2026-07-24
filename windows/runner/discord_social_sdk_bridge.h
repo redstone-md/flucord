@@ -18,8 +18,13 @@ class DiscordSocialSdkBridge {
   DiscordSocialSdkBridge(const DiscordSocialSdkBridge&) = delete;
   DiscordSocialSdkBridge& operator=(const DiscordSocialSdkBridge&) = delete;
 
+  void PumpCallbacks();
+
  private:
+  class Impl;
+
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
+  std::unique_ptr<Impl> impl_;
 };
 
 #endif  // RUNNER_DISCORD_SOCIAL_SDK_BRIDGE_H_

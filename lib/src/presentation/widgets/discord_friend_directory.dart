@@ -5,6 +5,7 @@ import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friend_actions.dart';
 import 'discord_friends_scope.dart';
+import 'discord_social_sdk_scope.dart';
 import 'remote_identity_image.dart';
 
 class DiscordFriendDirectory extends StatelessWidget {
@@ -13,6 +14,7 @@ class DiscordFriendDirectory extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = DiscordFriendsScope.of(context);
+    final socialController = DiscordSocialSdkScope.of(context);
     return switch (controller.state) {
       DiscordFriendsLoadState.idle ||
       DiscordFriendsLoadState.loading => const _FriendsState(
@@ -21,12 +23,17 @@ class DiscordFriendDirectory extends StatelessWidget {
         title: 'Loading friends',
         detail: 'Synchronizing native Discord relationships.',
       ),
-      DiscordFriendsLoadState.authorizationRequired => const _FriendsState(
-        key: ValueKey('discord-friends-auth-required'),
+      DiscordFriendsLoadState.authorizationRequired => _FriendsState(
+        key: const ValueKey('discord-friends-auth-required'),
         icon: Icons.key_outlined,
         title: 'Native account authorization required',
         detail:
-            'The Social SDK package is linked, but its separate Discord session has not been authorized yet.',
+            'Connect your Discord account through the native Social SDK to synchronize friends.',
+        action: FilledButton(
+          key: const ValueKey('discord-friends-authorize'),
+          onPressed: socialController.authorize,
+          child: const Text('Connect Discord'),
+        ),
       ),
       DiscordFriendsLoadState.unavailable => const _FriendsState(
         key: ValueKey('discord-friends-unavailable'),
