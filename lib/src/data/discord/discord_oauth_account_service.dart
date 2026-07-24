@@ -7,7 +7,7 @@ import 'package:cryptography/cryptography.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_session.dart';
 import '../../domain/external_link_launcher.dart';
-import 'discord_cdn.dart';
+import 'discord_oauth_account_mapper.dart';
 import 'discord_oauth_identity_client.dart';
 import 'discord_oauth_token_client.dart';
 
@@ -79,6 +79,7 @@ final class NativeDiscordOAuthAccountService
     DiscordOAuthIdentityFactory? identityFactory,
     DiscordOAuthEntropySource? entropySource,
     DiscordClock? clock,
+    DiscordOAuthAccountMapper accountMapper = const DiscordOAuthAccountMapper(),
   }) => NativeDiscordOAuthAccountService._(
     configuration,
     launcher,
@@ -88,6 +89,7 @@ final class NativeDiscordOAuthAccountService
         ((session) => DiscordOAuthIdentityClient(session: session)),
     entropySource ?? _secureBytes,
     clock ?? DateTime.now,
+    accountMapper,
   );
 
   NativeDiscordOAuthAccountService._(
@@ -98,6 +100,7 @@ final class NativeDiscordOAuthAccountService
     this._identityFactory,
     this._entropySource,
     this._clock,
+    this._accountMapper,
   );
 
   final DiscordOAuthConfiguration? _configuration;
@@ -107,6 +110,7 @@ final class NativeDiscordOAuthAccountService
   final DiscordOAuthIdentityFactory _identityFactory;
   final DiscordOAuthEntropySource _entropySource;
   final DiscordClock _clock;
+  final DiscordOAuthAccountMapper _accountMapper;
 
   _PendingAuthorization? _pending;
   bool _disposed = false;
@@ -251,28 +255,7 @@ final class NativeDiscordOAuthAccountService
       final guilds = grant.scopes.contains('guilds')
           ? await client.getCurrentUserGuilds()
           : const <Map<String, Object?>>[];
-      final id = user['id'];
-      final username = user['username'];
-      if (id is! String || username is! String) {
-        throw const DiscordOAuthException(
-          'Discord returned an invalid account identity.',
-        );
-      }
-      final globalName = user['global_name'];
-      final avatar = user['avatar'];
-      return DiscordOAuthAccount(
-        id: id,
-        username: username,
-        displayName: globalName is String && globalName.isNotEmpty
-            ? globalName
-            : username,
-        guildCount: guilds.length,
-        avatarUrl: DiscordCdn.userAvatar(
-          id,
-          avatar is String ? avatar : null,
-          size: 64,
-        ),
-      );
+      return _accountMapper.map(user: user, guilds: guilds);
     } finally {
       client.close();
     }

@@ -34,7 +34,11 @@ void main() {
       DiscordHttpResponse(
         statusCode: 200,
         headers: {},
-        body: '[{"id":"guild-1"},{"id":"guild-2"}]',
+        body:
+            '[{"id":"guild-1","name":"The Forge","owner":true,'
+            '"permissions":"8","approximate_member_count":42,'
+            '"approximate_presence_count":7},{"id":"guild-2",'
+            '"name":"Night Shift","permissions":"0"}]',
       ),
     ]);
     final launcher = _RecordingLauncher();
@@ -66,6 +70,9 @@ void main() {
 
     expect(account.displayName, 'Jack');
     expect(account.guildCount, 2);
+    expect(account.guilds.first.name, 'The Forge');
+    expect(account.guilds.first.isOwner, isTrue);
+    expect(account.guilds.first.approximateMemberCount, 42);
     expect(account.avatarUrl, contains('/avatars/123456789012345678/'));
     expect(vault.grant?.refreshToken, 'refresh-1');
     final form = Uri.splitQueryString(

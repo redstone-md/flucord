@@ -23,7 +23,7 @@ DiscordOAuthUserSession
      <- public-client code exchange / refresh rotation
      <- operating-system OAuth grant vault
   -> DiscordOAuthIdentityClient (Bearer authorization)
-  -> /users/@me + /users/@me/guilds only
+  -> /users/@me + paginated /users/@me/guilds?with_counts=true only
 ```
 
 REST and Gateway classes remain explicitly bot-specific. They are allowed to
@@ -73,9 +73,10 @@ to a user's channel history. Flucord also does not infer chat access from
   `state` for every attempt. The token exchange sends `client_id`, never embeds
   a client secret, and accepts the callback only on the exact registered
   `flucord://oauth/discord/callback` route.
-- Widgets and application controllers see only `DiscordOAuthAccount` profile
-  metadata. Access tokens, refresh tokens, authorization codes, and the PKCE
-  verifier remain inside data-layer services and the credential vault.
+- Widgets and application controllers see only immutable `DiscordOAuthAccount`
+  profile and `DiscordOAuthGuild` directory metadata. Access tokens, refresh
+  tokens, authorization codes, and the PKCE verifier remain inside data-layer
+  services and the credential vault.
 
 ## Desktop protocol delivery
 

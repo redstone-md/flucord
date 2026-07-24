@@ -59,20 +59,87 @@ final class DiscordOAuthGrant {
       'DiscordOAuthGrant(scopes: $scopes, expiresAt: $expiresAt, tokens: <redacted>)';
 }
 
+final class DiscordOAuthGuild {
+  factory DiscordOAuthGuild({
+    required String id,
+    required String name,
+    String? iconUrl,
+    String? bannerUrl,
+    bool isOwner = false,
+    String permissions = '0',
+    Iterable<String> features = const [],
+    int? approximateMemberCount,
+    int? approximatePresenceCount,
+  }) => DiscordOAuthGuild._(
+    id: id,
+    name: name,
+    iconUrl: iconUrl,
+    bannerUrl: bannerUrl,
+    isOwner: isOwner,
+    permissions: permissions,
+    features: Set.unmodifiable(features),
+    approximateMemberCount: approximateMemberCount,
+    approximatePresenceCount: approximatePresenceCount,
+  );
+
+  const DiscordOAuthGuild._({
+    required this.id,
+    required this.name,
+    required this.iconUrl,
+    required this.bannerUrl,
+    required this.isOwner,
+    required this.permissions,
+    required this.features,
+    required this.approximateMemberCount,
+    required this.approximatePresenceCount,
+  });
+
+  final String id;
+  final String name;
+  final String? iconUrl;
+  final String? bannerUrl;
+  final bool isOwner;
+  final String permissions;
+  final Set<String> features;
+  final int? approximateMemberCount;
+  final int? approximatePresenceCount;
+
+  bool get isAdministrator {
+    final value = BigInt.tryParse(permissions);
+    return value != null && (value & BigInt.from(8)) != BigInt.zero;
+  }
+}
+
 final class DiscordOAuthAccount {
-  const DiscordOAuthAccount({
+  factory DiscordOAuthAccount({
+    required String id,
+    required String username,
+    required String displayName,
+    String? avatarUrl,
+    Iterable<DiscordOAuthGuild> guilds = const [],
+  }) => DiscordOAuthAccount._(
+    id: id,
+    username: username,
+    displayName: displayName,
+    avatarUrl: avatarUrl,
+    guilds: List.unmodifiable(guilds),
+  );
+
+  const DiscordOAuthAccount._({
     required this.id,
     required this.username,
     required this.displayName,
-    required this.guildCount,
-    this.avatarUrl,
+    required this.avatarUrl,
+    required this.guilds,
   });
 
   final String id;
   final String username;
   final String displayName;
-  final int guildCount;
   final String? avatarUrl;
+  final List<DiscordOAuthGuild> guilds;
+
+  int get guildCount => guilds.length;
 }
 
 abstract interface class DiscordOAuthGrantVault {

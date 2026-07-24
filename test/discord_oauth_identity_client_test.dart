@@ -59,6 +59,7 @@ void main() {
       expect(transport.requests[0].uri.path, '/api/v10/users/@me');
       expect(transport.requests[1].uri.path, '/api/v10/users/@me/guilds');
       expect(transport.requests[1].uri.queryParameters['limit'], '200');
+      expect(transport.requests[1].uri.queryParameters['with_counts'], 'true');
     });
 
     test('rejects a route when its OAuth scope is absent', () async {

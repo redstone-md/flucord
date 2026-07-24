@@ -241,6 +241,12 @@ browser runtime or dependency on Discord's private user API.
     behind `FlucordApp.demo()`. The shell, account panel, and connection dialog
     now distinguish disconnected, demo, and Discord transport state without
     implying that linked OAuth identity grants message access.
+46. Completed: preserve the documented normal-user OAuth guild directory as
+    immutable domain data, request approximate counts through the paginated
+    public endpoint, map server icons/banners and owner/admin context, and
+    render the result as a bounded native list in Connections. Every row keeps
+    the no-message-access boundary visible instead of conflating OAuth identity
+    with the Bot chat transport.
 
 ## Protocol safety
 

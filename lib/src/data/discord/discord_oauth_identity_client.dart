@@ -45,7 +45,7 @@ final class DiscordOAuthIdentityClient {
     final guilds = <Map<String, Object?>>[];
     String? after;
     do {
-      final query = <String, String>{'limit': '200'};
+      final query = <String, String>{'limit': '200', 'with_counts': 'true'};
       if (after != null) query['after'] = after;
       final page = await _rest.getList('/users/@me/guilds', query: query);
       guilds.addAll(page);

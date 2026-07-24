@@ -195,9 +195,10 @@ OAuth2 public-client flow. Authorization opens the operating system browser;
 the application itself remains native and contains no WebView or browser
 runtime. PKCE S256 and a random `state` protect the callback, and the rotating
 refresh grant is stored in the operating-system credential vault. The linked
-profile and basic server directory remain separate from the Bot chat session
-because ordinary OAuth scopes do not grant channel-message or user Gateway
-access.
+profile and paginated server directory retain documented icon, banner,
+ownership, permission, feature, and approximate member/presence metadata. They
+remain separate from the Bot chat session because ordinary OAuth scopes do not
+grant channel-message or user Gateway access.
 
 ## Run
 
@@ -256,7 +257,9 @@ the PulseAudio utilities and FFmpeg available to the desktop session.
    `--dart-define`.
 
 4. Open Connections and select **Link account**. Flucord requests only
-   `identify` and `guilds`, then shows the linked identity and server count.
+   `identify` and `guilds`, then shows the linked identity and its native,
+   scrollable authorized-server directory with owner/admin and approximate
+   member/presence context.
 
 This link does not turn OAuth into a full-chat transport. Message history,
 normal user Direct Messages, read state, and a user Gateway session remain

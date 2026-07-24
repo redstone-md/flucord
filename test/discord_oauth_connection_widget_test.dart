@@ -29,12 +29,23 @@ void main() {
 
     expect(find.text('Jack · 2 servers'), findsOneWidget);
     expect(find.text('Demo workspace active'), findsOneWidget);
+    expect(find.text('AUTHORIZED SERVERS · 2'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('discord-oauth-guild-guild-1')),
+      findsOneWidget,
+    );
+    expect(find.text('Owner · 42 members · 7 online'), findsOneWidget);
+    expect(find.text('Administrator · 12 members · 3 online'), findsOneWidget);
     expect(gateway.authorizeCalls, 1);
 
     await tester.tap(find.byKey(const ValueKey('unlink-discord-account')));
     await tester.pumpAndSettle();
 
     expect(find.text('No Discord account linked.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('discord-oauth-guild-directory')),
+      findsNothing,
+    );
     expect(gateway.clearCalls, 1);
     expect(tester.takeException(), isNull);
   });
@@ -46,7 +57,9 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      FlucordApp.demo(discordOAuthAccountGateway: _OAuthGateway()),
+      FlucordApp.demo(
+        discordOAuthAccountGateway: _OAuthGateway(extraGuildCount: 6),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
@@ -55,6 +68,52 @@ void main() {
 
     expect(find.byKey(const ValueKey('link-discord-account')), findsOneWidget);
     expect(find.byKey(const ValueKey('discord-bot-token')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('link-discord-account')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('discord-oauth-guild-directory')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('discord-oauth-guild-guild-8')),
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('discord-oauth-guild-directory')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(
+      find.byKey(const ValueKey('discord-oauth-guild-guild-8')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders the authorized guild directory empty state', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      FlucordApp.demo(
+        discordOAuthAccountGateway: _OAuthGateway(emptyGuilds: true),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-connections')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('link-discord-account')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AUTHORIZED SERVERS · 0'), findsOneWidget);
+    expect(
+      find.text('No servers were returned by the guilds scope.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -81,6 +140,10 @@ void main() {
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {
+  _OAuthGateway({this.extraGuildCount = 0, this.emptyGuilds = false});
+
+  final int extraGuildCount;
+  final bool emptyGuilds;
   int authorizeCalls = 0;
   int clearCalls = 0;
   Uri? handledUri;
@@ -91,11 +154,34 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
   @override
   Future<DiscordOAuthAccount> authorize() async {
     authorizeCalls++;
-    return const DiscordOAuthAccount(
+    return DiscordOAuthAccount(
       id: '123456789012345678',
       username: 'jack',
       displayName: 'Jack',
-      guildCount: 2,
+      guilds: emptyGuilds
+          ? const []
+          : [
+              DiscordOAuthGuild(
+                id: 'guild-1',
+                name: 'The Forge',
+                isOwner: true,
+                permissions: '8',
+                approximateMemberCount: 42,
+                approximatePresenceCount: 7,
+              ),
+              DiscordOAuthGuild(
+                id: 'guild-2',
+                name: 'Night Shift',
+                permissions: '8',
+                approximateMemberCount: 12,
+                approximatePresenceCount: 3,
+              ),
+              for (var index = 0; index < extraGuildCount; index++)
+                DiscordOAuthGuild(
+                  id: 'guild-${index + 3}',
+                  name: 'Server ${index + 3}',
+                ),
+            ],
     );
   }
 

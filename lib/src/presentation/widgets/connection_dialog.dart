@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_oauth_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'oauth_connection_section.dart';
 
 class ConnectionDialog extends StatefulWidget {
   const ConnectionDialog({
@@ -78,7 +79,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                       children: [
                         _CurrentConnection(controller: widget.controller),
                         Divider(height: 1, color: context.surfaces.border),
-                        _OAuthConnectionSection(
+                        OAuthConnectionSection(
                           controller: widget.oauthController,
                           onLink: _linkAccount,
                           onUnlink: _unlinkAccount,
@@ -242,115 +243,6 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _OAuthConnectionSection extends StatelessWidget {
-  const _OAuthConnectionSection({
-    required this.controller,
-    required this.onLink,
-    required this.onUnlink,
-  });
-
-  final DiscordOAuthController controller;
-  final Future<void> Function() onLink;
-  final Future<void> Function() onUnlink;
-
-  @override
-  Widget build(BuildContext context) {
-    final account = controller.account;
-    final linked = controller.state == DiscordOAuthLinkState.linked;
-    final statusColor = linked
-        ? FlucordColors.success
-        : controller.state == DiscordOAuthLinkState.failure
-        ? FlucordColors.danger
-        : context.surfaces.muted;
-    final status = switch (controller.state) {
-      DiscordOAuthLinkState.unavailable =>
-        'Account linking is unavailable in this build.',
-      DiscordOAuthLinkState.restoring => 'Restoring saved authorization…',
-      DiscordOAuthLinkState.authorizing =>
-        'Waiting for Discord in your system browser…',
-      DiscordOAuthLinkState.linked =>
-        '${account?.displayName ?? 'Discord account'} · '
-            '${account?.guildCount ?? 0} servers',
-      DiscordOAuthLinkState.failure =>
-        controller.errorMessage ?? 'Account linking failed.',
-      DiscordOAuthLinkState.idle => 'No Discord account linked.',
-    };
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Discord account',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'OAuth links your profile and server directory. Discord does not grant third-party access to channel messages.',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: 11,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: context.surfaces.inset,
-              border: Border.all(color: context.surfaces.border),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  linked ? Icons.verified_user_outlined : Icons.person_outline,
-                  size: 20,
-                  color: statusColor,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    status,
-                    key: const ValueKey('discord-oauth-status'),
-                    style: TextStyle(
-                      color: controller.state == DiscordOAuthLinkState.failure
-                          ? FlucordColors.danger
-                          : null,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                if (linked)
-                  TextButton(
-                    key: const ValueKey('unlink-discord-account'),
-                    onPressed: controller.isBusy ? null : onUnlink,
-                    child: const Text('Unlink'),
-                  )
-                else
-                  FilledButton.icon(
-                    key: const ValueKey('link-discord-account'),
-                    onPressed: !controller.isConfigured || controller.isBusy
-                        ? null
-                        : onLink,
-                    icon: controller.isBusy
-                        ? const SizedBox.square(
-                            dimension: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.open_in_new, size: 16),
-                    label: const Text('Link account'),
-                  ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

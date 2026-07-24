@@ -8,6 +8,9 @@ final class DiscordCdn {
   static String? guildIcon(String guildId, String? hash, {int size = 128}) =>
       _asset(['icons', guildId], hash, size: size);
 
+  static String? guildBanner(String guildId, String? hash, {int size = 512}) =>
+      _asset(['banners', guildId], hash, size: size);
+
   static String? userAvatar(String userId, String? hash, {int size = 128}) =>
       hash == null || hash.isEmpty
       ? defaultUserAvatar(userId)
