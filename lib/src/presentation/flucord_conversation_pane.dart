@@ -49,6 +49,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onCreateThread,
     required this.onTogglePin,
     required this.onEndPoll,
+    required this.onForward,
     required this.onTyping,
     required this.voiceController,
   });
@@ -100,6 +101,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<bool> Function(ChatMessage) onEndPoll;
+  final ForwardMessageCallback onForward;
   final VoidCallback onTyping;
   final VoiceController voiceController;
 
@@ -159,6 +161,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onCreateThread: widget.onCreateThread,
         onTogglePin: widget.onTogglePin,
         onEndPoll: widget.onEndPoll,
+        onForward: widget.onForward,
         canLoadOlder: widget.canLoadOlder,
         isLoadingOlder: widget.isLoadingOlder,
         olderLoadError: widget.olderLoadError,

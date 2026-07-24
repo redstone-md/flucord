@@ -151,6 +151,7 @@ Widget _host(
           onCreateThread: (_, _, _) async => true,
           onTogglePin: (_) async {},
           onEndPoll: (_) async => true,
+          onForward: (_, _) async => true,
           canLoadOlder: true,
           isLoadingOlder: isLoadingOlder,
           olderLoadError: olderLoadError,

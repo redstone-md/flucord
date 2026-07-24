@@ -21,6 +21,7 @@ import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
+import 'widgets/message_forward_dialog.dart';
 import 'widgets/message_list.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
@@ -331,6 +332,18 @@ class FlucordShell extends StatelessWidget {
                                     },
                                 onTogglePin: chatController.togglePin,
                                 onEndPoll: chatController.endPoll,
+                                onForward: (message, targetChannelId) async {
+                                  final forwarded = await chatController
+                                      .forwardMessage(message, targetChannelId);
+                                  if (!forwarded) return false;
+                                  workspaceController.selectChannel(
+                                    targetChannelId,
+                                  );
+                                  unawaited(
+                                    chatController.openChannel(targetChannelId),
+                                  );
+                                  return true;
+                                },
                                 onTyping: () =>
                                     chatController.startTyping(channel.id),
                                 voiceController: voiceController,

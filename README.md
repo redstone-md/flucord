@@ -5,7 +5,8 @@ Linux. The Windows release is verified locally; macOS and Linux runners are
 configured but still require release verification on their native hosts. It
 provides server and ordered channel navigation with collapsible categories,
 searchable message history, replies, attachments, reactions, message editing
-and deletion, native message polls, active-thread discovery and creation,
+and deletion, native message forwarding, native message polls,
+active-thread discovery and creation,
 archived-thread browsing,
 native forum and media-channel feeds, member roles and presence, local unread
 markers, paginated pinned messages, Windows notifications,
@@ -80,6 +81,17 @@ Discord's 1-hour, 24-hour, 3-day, and 1-week auto-archive durations, and keeps
 loading or permission failures in place. The returned channel is persisted,
 shown under Active threads, and selected immediately through the existing
 history boundary.
+
+Supported default, reply, slash-command, and context-command messages can be
+forwarded through Discord's documented message-reference payload. The native
+destination dialog searches writable-looking text channels, bot Direct
+Messages, and threads while excluding voice, forum, media, and locked archived
+destinations. Successful forwards select the destination immediately. Their
+immutable message snapshots render inline with the original content,
+attachments, embeds, stickers, source channel/server path, and an explicit
+fallback for interactive components that cannot be replayed from snapshot
+data. Discord does not include an author object in a forwarded snapshot, so
+Flucord does not invent one.
 
 The header Threads control keeps active and archived branches in a native
 right-side panel. Public archives load through the documented
@@ -256,6 +268,11 @@ point writes and deletes so unrelated server events remain available offline.
 SQLite v17 retains each message's documented type plus referenced message and
 channel IDs. Partial Gateway updates preserve the cached values when Discord
 omits them, keeping system-row actions available after live edits and restarts.
+
+SQLite v18 retains forward-reference type and guild identity plus immutable
+message snapshots, including content, timestamps, flags, attachments, embeds,
+stickers, mentions, and opaque component payloads. The v17 migration preserves
+existing references and supplies safe empty snapshot defaults.
 
 The desktop workspace uses a Discord-like neutral surface hierarchy for the
 guild rail, channel list, conversation, and controls. Blurple is reserved for

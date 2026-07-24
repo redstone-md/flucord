@@ -8,10 +8,12 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
 import 'emoji_picker.dart';
+import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
+import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
 import 'message_reaction_strip.dart';
 import 'message_sticker_view.dart';
@@ -33,6 +35,7 @@ class MessageItem extends StatefulWidget {
     required this.onCreateThread,
     required this.onTogglePin,
     required this.onEndPoll,
+    required this.onForward,
     required this.linkLauncher,
     required this.onSelectChannel,
     super.key,
@@ -52,6 +55,7 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<bool> Function(ChatMessage) onEndPoll;
+  final ForwardMessageCallback onForward;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
 
@@ -178,6 +182,20 @@ class _MessageItemState extends State<MessageItem> {
             workspace: widget.workspace,
             linkLauncher: widget.linkLauncher,
             onSelectChannel: widget.onSelectChannel,
+          ),
+        for (var index = 0; index < message.snapshots.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+              top: message.body.isEmpty && index == 0 ? 0 : 7,
+            ),
+            child: ForwardedMessageView(
+              key: ValueKey('message-${message.id}-snapshot-$index'),
+              snapshot: message.snapshots[index],
+              reference: message.reference ?? const MessageReference(),
+              workspace: widget.workspace,
+              linkLauncher: widget.linkLauncher,
+              onSelectChannel: widget.onSelectChannel,
+            ),
           ),
         if (message.isEdited && !_editing)
           Text(
@@ -329,6 +347,13 @@ class _MessageItemState extends State<MessageItem> {
             tooltip: 'Create thread',
             onPressed: _showCreateThreadDialog,
           ),
+        if (widget.message.canForward)
+          _ActionButton(
+            buttonKey: ValueKey('forward-message-${widget.message.id}'),
+            icon: Icons.forward_outlined,
+            tooltip: 'Forward',
+            onPressed: _showForwardDialog,
+          ),
         if (widget.isCurrentUser)
           _ActionButton(
             icon: Icons.edit_outlined,
@@ -397,6 +422,17 @@ class _MessageItemState extends State<MessageItem> {
         context,
         onCreate: (name, duration) =>
             widget.onCreateThread(widget.message, name, duration),
+      ),
+    );
+  }
+
+  void _showForwardDialog() {
+    unawaited(
+      MessageForwardDialog.show(
+        context,
+        message: widget.message,
+        workspace: widget.workspace,
+        onForward: widget.onForward,
       ),
     );
   }

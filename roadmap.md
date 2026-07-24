@@ -170,6 +170,12 @@ browser runtime or dependency on Discord's private user API.
 31. Completed: retain documented normal and burst reaction metadata, page
     reacting users through Get Reactions with type and snowflake cursors, and
     expose a compact native reaction ledger with retry-safe pagination.
+32. Completed: retain documented forwarded-message references and immutable
+    snapshots in SQLite v18, preserve them across partial Gateway updates,
+    render their native content without inventing an absent author, and forward
+    supported messages through the documented Create Message reference into a
+    searchable text/DM/thread destination with loading, failure, and direct
+    navigation states.
 
 ## Protocol safety
 
