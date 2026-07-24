@@ -331,6 +331,11 @@ browser runtime or dependency on Discord's private user API.
     identity before exposing friends, Direct Messages, or presence. Reject and
     clear only mismatched native grants so recovery reauthorizes the missing
     social step without discarding the verified OAuth profile.
+62. Completed: carry the documented Social SDK-generated Discord avatar URL
+    into relationship identities and open a responsive anchored friend profile
+    with live presence, unique username, provisional-account context, copyable
+    snowflake, Escape/outside dismissal, and direct navigation into the native
+    DM surface. Reuse one identity-profile shell for friends and guild members.
 
 ## Protocol safety
 

@@ -1,17 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friend_actions.dart';
+import 'discord_friend_profile_popover.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_friends_scope.dart';
+import 'discord_relationship_avatar.dart';
 import 'discord_social_sdk_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
 import 'discord_social_dm_scope.dart';
-import 'remote_identity_image.dart';
 
 class DiscordFriendDirectory extends StatelessWidget {
   const DiscordFriendDirectory({super.key});
@@ -72,7 +74,7 @@ class DiscordFriendDirectory extends StatelessWidget {
   }
 }
 
-class _ReadyFriendDirectory extends StatelessWidget {
+class _ReadyFriendDirectory extends StatefulWidget {
   const _ReadyFriendDirectory({
     required this.controller,
     required this.relationships,
@@ -84,8 +86,38 @@ class _ReadyFriendDirectory extends StatelessWidget {
   final ValueChanged<DiscordRelationshipUser> onMessage;
 
   @override
+  State<_ReadyFriendDirectory> createState() => _ReadyFriendDirectoryState();
+}
+
+class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
+  final OverlayPortalController _overlayController = OverlayPortalController();
+  final Map<String, LayerLink> _relationshipLinks = {};
+  DiscordRelationship? _selectedRelationship;
+  LayerLink? _selectedLink;
+  bool _openUp = false;
+  double _offsetX = 52;
+
+  @override
+  void didUpdateWidget(covariant _ReadyFriendDirectory oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selectedId = _selectedRelationship?.user.id;
+    if (selectedId != null) {
+      final matches = widget.relationships.where(
+        (item) => item.user.id == selectedId,
+      );
+      if (matches.isEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _dismiss();
+        });
+      } else {
+        _selectedRelationship = matches.first;
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = _items(relationships);
+    final items = _items(widget.relationships);
     if (items.isEmpty) {
       return const _FriendsState(
         key: ValueKey('discord-friends-empty'),
@@ -94,31 +126,117 @@ class _ReadyFriendDirectory extends StatelessWidget {
         detail: 'Discord returned no friend or pending-request relationships.',
       );
     }
-    return ListView.builder(
-      key: const ValueKey('discord-friend-directory'),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-      itemCount: items.length,
-      itemBuilder: (context, index) => switch (items[index]) {
-        final _FriendSection section => Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
-          child: Text(
-            '${section.label.toUpperCase()} — ${section.count}',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.25,
+    _relationshipLinks.removeWhere(
+      (id, _) => !widget.relationships.any((item) => item.user.id == id),
+    );
+    return OverlayPortal(
+      controller: _overlayController,
+      overlayChildBuilder: _buildOverlay,
+      child: ListView.builder(
+        key: const ValueKey('discord-friend-directory'),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        itemCount: items.length,
+        itemBuilder: (context, index) => switch (items[index]) {
+          final _FriendSection section => Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+            child: Text(
+              '${section.label.toUpperCase()} — ${section.count}',
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.25,
+              ),
+            ),
+          ),
+          final DiscordRelationship relationship => _rowFor(relationship),
+          _ => const SizedBox.shrink(),
+        },
+      ),
+    );
+  }
+
+  Widget _rowFor(DiscordRelationship relationship) {
+    final userId = relationship.user.id;
+    final link = _relationshipLinks.putIfAbsent(userId, LayerLink.new);
+    return _FriendRow(
+      controller: widget.controller,
+      relationship: relationship,
+      link: link,
+      selected: userId == _selectedRelationship?.user.id,
+      onProfile: (context) => _showProfile(context, relationship, link),
+      onMessage: () => widget.onMessage(relationship.user),
+    );
+  }
+
+  Widget _buildOverlay(BuildContext context) {
+    final relationship = _selectedRelationship;
+    final link = _selectedLink;
+    if (relationship == null || link == null) return const SizedBox.shrink();
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _dismiss,
+          ),
+        ),
+        CompositedTransformFollower(
+          link: link,
+          showWhenUnlinked: false,
+          targetAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
+          followerAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
+          offset: Offset(_offsetX, 0),
+          child: Focus(
+            autofocus: true,
+            onKeyEvent: (_, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.escape) {
+                _dismiss();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: DiscordFriendProfilePopover(
+              relationship: relationship,
+              onMessage: () {
+                _dismiss();
+                widget.onMessage(relationship.user);
+              },
             ),
           ),
         ),
-        final DiscordRelationship relationship => _FriendRow(
-          controller: controller,
-          relationship: relationship,
-          onMessage: () => onMessage(relationship.user),
-        ),
-        _ => const SizedBox.shrink(),
-      },
+      ],
     );
+  }
+
+  void _showProfile(
+    BuildContext context,
+    DiscordRelationship relationship,
+    LayerLink link,
+  ) {
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final centerY = origin.dy + (box?.size.height ?? 0) / 2;
+    final viewport = MediaQuery.sizeOf(context);
+    final maxProfileLeft = viewport.width <= 316 ? 8.0 : viewport.width - 308;
+    final profileLeft = (origin.dx + 52).clamp(8.0, maxProfileLeft);
+    setState(() {
+      _selectedRelationship = relationship;
+      _selectedLink = link;
+      _openUp = centerY > viewport.height / 2;
+      _offsetX = profileLeft - origin.dx;
+    });
+    _overlayController.show();
+  }
+
+  void _dismiss() {
+    _overlayController.hide();
+    if (!mounted) return;
+    setState(() {
+      _selectedRelationship = null;
+      _selectedLink = null;
+    });
   }
 
   static List<Object> _items(List<DiscordRelationship> relationships) {
@@ -162,113 +280,84 @@ class _FriendRow extends StatelessWidget {
   const _FriendRow({
     required this.controller,
     required this.relationship,
+    required this.link,
+    required this.selected,
+    required this.onProfile,
     required this.onMessage,
   });
 
   final DiscordFriendsController controller;
   final DiscordRelationship relationship;
+  final LayerLink link;
+  final bool selected;
+  final ValueChanged<BuildContext> onProfile;
   final VoidCallback onMessage;
 
   @override
   Widget build(BuildContext context) {
     final user = relationship.user;
     final mutationFailed = controller.mutationErrorFor(user.id) != null;
-    return Semantics(
-      label: '${user.displayName}, ${_relationshipDetail(relationship)}',
-      child: Container(
+    return CompositedTransformTarget(
+      link: link,
+      child: Material(
         key: ValueKey('discord-friend-${user.id}'),
-        height: 58,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: context.surfaces.border)),
-        ),
-        child: Row(
-          children: [
-            _FriendAvatar(user: user),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+        color: selected ? context.surfaces.raised : Colors.transparent,
+        child: Semantics(
+          button: true,
+          label: '${user.displayName}, ${_relationshipDetail(relationship)}',
+          child: InkWell(
+            onTap: () => onProfile(context),
+            child: Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: context.surfaces.border)),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    user.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  DiscordRelationshipAvatar(user: user),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          mutationFailed
+                              ? 'Relationship action failed · Try again'
+                              : _relationshipDetail(relationship),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: mutationFailed
+                                ? FlucordColors.danger
+                                : context.surfaces.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    mutationFailed
-                        ? 'Relationship action failed · Try again'
-                        : _relationshipDetail(relationship),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: mutationFailed
-                          ? FlucordColors.danger
-                          : context.surfaces.muted,
-                      fontSize: 11,
-                    ),
+                  DiscordFriendActions(
+                    controller: controller,
+                    relationship: relationship,
+                    onMessage: onMessage,
                   ),
                 ],
               ),
             ),
-            DiscordFriendActions(
-              controller: controller,
-              relationship: relationship,
-              onMessage: onMessage,
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _FriendAvatar extends StatelessWidget {
-  const _FriendAvatar({required this.user});
-
-  final DiscordRelationshipUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 36,
-      height: 36,
-      child: Stack(
-        children: [
-          ClipOval(
-            child: RemoteIdentityImage(
-              url: user.avatarUrl,
-              fallback: ColoredBox(
-                color: context.surfaces.raised,
-                child: Center(
-                  child: Text(
-                    user.displayName.characters.first.toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: 11,
-              height: 11,
-              decoration: BoxDecoration(
-                color: _presenceColor(context, user.status),
-                shape: BoxShape.circle,
-                border: Border.all(color: context.surfaces.canvas, width: 2),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -355,12 +444,3 @@ String _relationshipDetail(DiscordRelationship relationship) {
       } +
       suffix;
 }
-
-Color _presenceColor(BuildContext context, DiscordPresenceStatus status) =>
-    switch (status) {
-      DiscordPresenceStatus.online => FlucordColors.success,
-      DiscordPresenceStatus.idle => FlucordColors.warning,
-      DiscordPresenceStatus.doNotDisturb => FlucordColors.danger,
-      DiscordPresenceStatus.offline ||
-      DiscordPresenceStatus.unknown => context.surfaces.muted,
-    };

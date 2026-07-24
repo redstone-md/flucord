@@ -136,6 +136,9 @@ class DiscordSocialSdkRelationshipBridge::Impl {
           flutter::EncodableValue(user->DisplayName());
       item[flutter::EncodableValue("username")] =
           flutter::EncodableValue(user->Username());
+      item[flutter::EncodableValue("avatar_url")] = flutter::EncodableValue(
+          user->AvatarUrl(discordpp::UserHandle::AvatarType::Gif,
+                          discordpp::UserHandle::AvatarType::Webp));
       item[flutter::EncodableValue("status")] =
           flutter::EncodableValue(PresenceName(user->Status()));
       item[flutter::EncodableValue("relationship_type")] =

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/discord_friends_controller.dart';
 import 'package:flucord/src/application/discord_social_dm_controller.dart';
@@ -123,6 +124,74 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens an anchored friend profile and routes its DM action', (
+    tester,
+  ) async {
+    String? copiedId;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copiedId =
+              (call.arguments as Map<Object?, Object?>)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [
+        _relationship(
+          id: 'friend-1',
+          name: 'Ada',
+          username: 'ada.dev',
+          status: DiscordPresenceStatus.online,
+        ),
+      ],
+    );
+    addTearDown(harness.dispose);
+    await _pumpAccountHome(tester, harness, size: const Size(420, 500));
+
+    await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('discord-friend-profile-popover')),
+      findsOneWidget,
+    );
+    expect(find.text('@ada.dev'), findsOneWidget);
+    expect(find.text('Friend'), findsOneWidget);
+    expect(find.text('friend-1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('discord-friend-profile-popover')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('copy-friend-id')));
+    await tester.pump();
+    expect(copiedId, 'friend-1');
+
+    await tester.tap(find.byKey(const ValueKey('message-friend-profile')));
+    await tester.pump();
+    expect(harness.dmNavigation.selectedUserId, 'friend-1');
+    expect(
+      find.byKey(const ValueKey('discord-friend-profile-popover')),
+      findsNothing,
+    );
   });
 
   testWidgets('accepts an incoming request from its native row actions', (
@@ -364,9 +433,15 @@ final class _ControllerHarness {
 DiscordRelationship _relationship({
   required String id,
   required String name,
+  String? username,
   DiscordRelationshipKind kind = DiscordRelationshipKind.friend,
   DiscordPresenceStatus status = DiscordPresenceStatus.offline,
 }) => DiscordRelationship(
-  user: DiscordRelationshipUser(id: id, displayName: name, status: status),
+  user: DiscordRelationshipUser(
+    id: id,
+    displayName: name,
+    username: username,
+    status: status,
+  ),
   kind: kind,
 );

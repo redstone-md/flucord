@@ -21,6 +21,10 @@ void main() {
     expect(relationship.user.id, '123456789');
     expect(relationship.user.displayName, 'Ada');
     expect(relationship.user.username, 'ada.dev');
+    expect(
+      relationship.user.avatarUrl,
+      'https://cdn.discordapp.com/avatar.png',
+    );
     expect(relationship.user.status, DiscordPresenceStatus.doNotDisturb);
     expect(relationship.user.isProvisional, isTrue);
     expect(relationship.kind, DiscordRelationshipKind.incomingRequest);

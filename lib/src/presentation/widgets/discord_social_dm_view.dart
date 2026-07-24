@@ -36,20 +36,31 @@ class _DiscordSocialDmViewState extends State<DiscordSocialDmView> {
     _lifecycleListener = AppLifecycleListener(
       onStateChange: _handleLifecycleState,
     );
-    unawaited(widget.controller.loadMessages(widget.user.id));
-    unawaited(widget.controller.setShowingChat(_foreground));
+    _scheduleViewSynchronization(loadMessages: true);
   }
 
   @override
   void didUpdateWidget(DiscordSocialDmView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      unawaited(oldWidget.controller.setShowingChat(false));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(oldWidget.controller.setShowingChat(false));
+      });
+    }
+    if (oldWidget.controller != widget.controller ||
+        oldWidget.user.id != widget.user.id) {
+      _scheduleViewSynchronization(loadMessages: true);
+    }
+  }
+
+  void _scheduleViewSynchronization({required bool loadMessages}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (loadMessages) {
+        unawaited(widget.controller.loadMessages(widget.user.id));
+      }
       unawaited(widget.controller.setShowingChat(_foreground));
-    }
-    if (oldWidget.user.id != widget.user.id) {
-      unawaited(widget.controller.loadMessages(widget.user.id));
-    }
+    });
   }
 
   void _handleLifecycleState(AppLifecycleState state) {
