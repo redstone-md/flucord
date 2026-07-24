@@ -35,6 +35,8 @@ final class DiscordOAuthIdentityClient {
   final DiscordOAuthUserSession _session;
   final DiscordRestClient _rest;
 
+  static final RegExp _snowflakePattern = RegExp(r'^\d+$');
+
   Future<Map<String, Object?>> getCurrentUser() async {
     _require(DiscordSessionCapability.currentIdentity);
     return _rest.getObject('/users/@me');
@@ -52,6 +54,15 @@ final class DiscordOAuthIdentityClient {
       after = page.length == 200 ? page.last['id'] as String? : null;
     } while (after != null);
     return guilds;
+  }
+
+  Future<Map<String, Object?>> getCurrentUserGuildMember(String guildId) async {
+    _require(DiscordSessionCapability.currentGuildMembership);
+    final normalizedGuildId = guildId.trim();
+    if (!_snowflakePattern.hasMatch(normalizedGuildId)) {
+      throw ArgumentError.value(guildId, 'guildId', 'Must be a snowflake');
+    }
+    return _rest.getObject('/users/@me/guilds/$normalizedGuildId/member');
   }
 
   void _require(DiscordSessionCapability capability) {

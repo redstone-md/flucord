@@ -207,6 +207,13 @@ identity footer, and owner/admin/member context remain available, while the
 channel and message surfaces stay explicitly locked because OAuth does not
 provide those resources.
 
+New authorizations also request the documented `guilds.members.read` scope.
+On wide layouts, selecting an authorized server loads the current user's server
+profile through `/users/@me/guilds/{guild.id}/member` and shows the guild
+nickname/avatar, role count, join/boost state, screening, and timeout metadata.
+Membership responses are cached per server and never unlock chat resources.
+Older saved grants may need to be unlinked and linked again to add this scope.
+
 ## Run
 
 ```powershell

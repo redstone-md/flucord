@@ -8,6 +8,7 @@ import '../../domain/discord_oauth.dart';
 import '../../domain/discord_session.dart';
 import '../../domain/external_link_launcher.dart';
 import 'discord_oauth_account_mapper.dart';
+import 'discord_oauth_guild_membership_mapper.dart';
 import 'discord_oauth_identity_client.dart';
 import 'discord_oauth_token_client.dart';
 
@@ -19,7 +20,11 @@ final class DiscordOAuthConfiguration {
   factory DiscordOAuthConfiguration({
     required String clientId,
     required Uri redirectUri,
-    Iterable<String> scopes = const {'identify', 'guilds'},
+    Iterable<String> scopes = const {
+      'identify',
+      'guilds',
+      'guilds.members.read',
+    },
   }) {
     final normalizedClientId = clientId.trim();
     final normalizedScopes = Set.unmodifiable(
@@ -80,6 +85,8 @@ final class NativeDiscordOAuthAccountService
     DiscordOAuthEntropySource? entropySource,
     DiscordClock? clock,
     DiscordOAuthAccountMapper accountMapper = const DiscordOAuthAccountMapper(),
+    DiscordOAuthGuildMembershipMapper membershipMapper =
+        const DiscordOAuthGuildMembershipMapper(),
   }) => NativeDiscordOAuthAccountService._(
     configuration,
     launcher,
@@ -90,6 +97,7 @@ final class NativeDiscordOAuthAccountService
     entropySource ?? _secureBytes,
     clock ?? DateTime.now,
     accountMapper,
+    membershipMapper,
   );
 
   NativeDiscordOAuthAccountService._(
@@ -101,6 +109,7 @@ final class NativeDiscordOAuthAccountService
     this._entropySource,
     this._clock,
     this._accountMapper,
+    this._membershipMapper,
   );
 
   final DiscordOAuthConfiguration? _configuration;
@@ -111,6 +120,7 @@ final class NativeDiscordOAuthAccountService
   final DiscordOAuthEntropySource _entropySource;
   final DiscordClock _clock;
   final DiscordOAuthAccountMapper _accountMapper;
+  final DiscordOAuthGuildMembershipMapper _membershipMapper;
 
   _PendingAuthorization? _pending;
   bool _disposed = false;
@@ -122,12 +132,38 @@ final class NativeDiscordOAuthAccountService
   Future<DiscordOAuthAccount?> restore() async {
     final configuration = _configuration;
     if (configuration == null) return null;
-    var grant = await _vault.read();
+    final grant = await _readGrant(configuration);
     if (grant == null) return null;
-    if (grant.expiresWithin(const Duration(minutes: 1), _clock())) {
-      grant = await _refresh(configuration, grant);
-    }
     return _loadAccount(grant);
+  }
+
+  @override
+  Future<DiscordOAuthGuildMembership> fetchCurrentGuildMembership(
+    String guildId,
+  ) async {
+    _ensureActive();
+    final configuration = _configuration;
+    if (configuration == null) {
+      throw const DiscordOAuthException(
+        'Discord account linking is unavailable in this build.',
+      );
+    }
+    final grant = await _readGrant(configuration);
+    if (grant == null) {
+      throw const DiscordOAuthException('No Discord account is linked.');
+    }
+    if (!grant.scopes.contains('guilds.members.read')) {
+      throw const DiscordOAuthException(
+        'Relink Discord to authorize server membership details.',
+      );
+    }
+    final client = _identityFactory(grant.session);
+    try {
+      final payload = await client.getCurrentUserGuildMember(guildId);
+      return _membershipMapper.map(guildId: guildId, payload: payload);
+    } finally {
+      client.close();
+    }
   }
 
   @override
@@ -246,6 +282,17 @@ final class NativeDiscordOAuthAccountService
     }
     await _vault.write(refreshed);
     return refreshed;
+  }
+
+  Future<DiscordOAuthGrant?> _readGrant(
+    DiscordOAuthConfiguration configuration,
+  ) async {
+    var grant = await _vault.read();
+    if (grant != null &&
+        grant.expiresWithin(const Duration(minutes: 1), _clock())) {
+      grant = await _refresh(configuration, grant);
+    }
+    return grant;
   }
 
   Future<DiscordOAuthAccount> _loadAccount(DiscordOAuthGrant grant) async {

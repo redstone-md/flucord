@@ -110,6 +110,63 @@ final class DiscordOAuthGuild {
   }
 }
 
+final class DiscordOAuthGuildMembership {
+  factory DiscordOAuthGuildMembership({
+    required String guildId,
+    String? nickname,
+    String? avatarUrl,
+    Iterable<String> roleIds = const [],
+    DateTime? joinedAt,
+    DateTime? premiumSince,
+    bool pending = false,
+    DateTime? communicationDisabledUntil,
+  }) {
+    final normalizedGuildId = guildId.trim();
+    if (normalizedGuildId.isEmpty) {
+      throw ArgumentError.value(guildId, 'guildId', 'Cannot be empty');
+    }
+    final normalizedNickname = nickname?.trim();
+    return DiscordOAuthGuildMembership._(
+      guildId: normalizedGuildId,
+      nickname: normalizedNickname == null || normalizedNickname.isEmpty
+          ? null
+          : normalizedNickname,
+      avatarUrl: avatarUrl,
+      roleIds: List.unmodifiable(
+        roleIds
+            .map((roleId) => roleId.trim())
+            .where((roleId) => roleId.isNotEmpty),
+      ),
+      joinedAt: joinedAt?.toUtc(),
+      premiumSince: premiumSince?.toUtc(),
+      pending: pending,
+      communicationDisabledUntil: communicationDisabledUntil?.toUtc(),
+    );
+  }
+
+  const DiscordOAuthGuildMembership._({
+    required this.guildId,
+    required this.nickname,
+    required this.avatarUrl,
+    required this.roleIds,
+    required this.joinedAt,
+    required this.premiumSince,
+    required this.pending,
+    required this.communicationDisabledUntil,
+  });
+
+  final String guildId;
+  final String? nickname;
+  final String? avatarUrl;
+  final List<String> roleIds;
+  final DateTime? joinedAt;
+  final DateTime? premiumSince;
+  final bool pending;
+  final DateTime? communicationDisabledUntil;
+
+  int get roleCount => roleIds.length;
+}
+
 final class DiscordOAuthAccount {
   factory DiscordOAuthAccount({
     required String id,
@@ -156,6 +213,10 @@ abstract interface class DiscordOAuthAccountGateway {
   Future<DiscordOAuthAccount?> restore();
 
   Future<DiscordOAuthAccount> authorize();
+
+  Future<DiscordOAuthGuildMembership> fetchCurrentGuildMembership(
+    String guildId,
+  );
 
   Future<bool> handleRedirect(Uri uri);
 

@@ -8,6 +8,7 @@ import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/oauth_guild_directory_controller.dart';
+import '../application/oauth_guild_membership_controller.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
@@ -47,6 +48,7 @@ class FlucordShell extends StatelessWidget {
     required this.connectionController,
     required this.discordOAuthController,
     required this.oauthGuildDirectoryController,
+    required this.oauthGuildMembershipController,
     required this.workspaceController,
     required this.voiceController,
     required this.voiceMessageRecorder,
@@ -59,6 +61,7 @@ class FlucordShell extends StatelessWidget {
   final ConnectionController connectionController;
   final DiscordOAuthController discordOAuthController;
   final OAuthGuildDirectoryController oauthGuildDirectoryController;
+  final OAuthGuildMembershipController oauthGuildMembershipController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -99,6 +102,7 @@ class FlucordShell extends StatelessWidget {
             listenable: oauthGuildDirectoryController,
             builder: (context, _) => OAuthGuildWorkspace(
               account: account,
+              membershipController: oauthGuildMembershipController,
               selectedGuildId: oauthGuildDirectoryController.selectedGuildId,
               onSelectGuild: (guildId) =>
                   oauthGuildDirectoryController.selectGuild(account, guildId),

@@ -189,6 +189,11 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
   Future<void> clear() async => clearCalls++;
 
   @override
+  Future<DiscordOAuthGuildMembership> fetchCurrentGuildMembership(
+    String guildId,
+  ) => throw StateError('Guild membership is not part of this test.');
+
+  @override
   void dispose() {}
 
   @override

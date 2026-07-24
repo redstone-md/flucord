@@ -39,18 +39,29 @@ void main() {
           headers: {},
           body: '[{"id":"guild-1","name":"The Forge"}]',
         ),
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '{"user":{"id":"user-1"},"roles":[]}',
+        ),
       ]);
       final client = DiscordOAuthIdentityClient(
-        session: _session(scopes: const {'identify', 'guilds'}),
+        session: _session(
+          scopes: const {'identify', 'guilds', 'guilds.members.read'},
+        ),
         transport: transport,
       );
 
       final user = await client.getCurrentUser();
       final guilds = await client.getCurrentUserGuilds();
+      final membership = await client.getCurrentUserGuildMember(
+        '123456789012345678',
+      );
 
       expect(user['id'], 'user-1');
       expect(guilds.single['id'], 'guild-1');
-      expect(transport.requests, hasLength(2));
+      expect(membership['roles'], isEmpty);
+      expect(transport.requests, hasLength(3));
       for (final request in transport.requests) {
         expect(request.headers['authorization'], 'Bearer oauth-secret');
         expect(request.headers, isNot(contains('x-super-properties')));
@@ -60,6 +71,10 @@ void main() {
       expect(transport.requests[1].uri.path, '/api/v10/users/@me/guilds');
       expect(transport.requests[1].uri.queryParameters['limit'], '200');
       expect(transport.requests[1].uri.queryParameters['with_counts'], 'true');
+      expect(
+        transport.requests[2].uri.path,
+        '/api/v10/users/@me/guilds/123456789012345678/member',
+      );
     });
 
     test('rejects a route when its OAuth scope is absent', () async {

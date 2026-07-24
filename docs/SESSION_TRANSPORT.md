@@ -80,6 +80,10 @@ to a user's channel history. Flucord also does not infer chat access from
 - `OAuthGuildDirectoryController` owns only the selected authorized guild ID.
   It projects the immutable OAuth directory into the disconnected native shell
   and never manufactures channels, messages, read state, or Gateway presence.
+- `OAuthGuildMembershipController` owns asynchronous, per-guild server state
+  for the documented `guilds.members.read` endpoint. It caches current-user
+  membership independently from selection, rejects stale responses after an
+  account change, and retains no access or refresh tokens.
 
 ## Desktop protocol delivery
 

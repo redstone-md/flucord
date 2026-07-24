@@ -32,7 +32,7 @@ class OAuthConnectionSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'OAuth links your profile and server directory. Discord does not grant third-party access to channel messages.',
+            'OAuth links your profile, server directory, and current-user server membership. Discord does not grant third-party access to channel messages.',
             style: TextStyle(
               color: context.surfaces.muted,
               fontSize: 11,

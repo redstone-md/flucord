@@ -6,6 +6,7 @@ import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/discord_oauth_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
+import 'application/oauth_guild_membership_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
 import 'data/disconnected_chat_repository.dart';
@@ -96,6 +97,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ConnectionController _connectionController;
   late final DiscordOAuthController _discordOAuthController;
   late final OAuthGuildDirectoryController _oauthGuildDirectoryController;
+  late final OAuthGuildMembershipController _oauthGuildMembershipController;
   late final WorkspaceController _workspaceController;
   late final VoiceController _voiceController;
   late final AttachmentDownloadService _attachmentDownloadService;
@@ -115,13 +117,16 @@ class _FlucordAppState extends State<FlucordApp> {
     );
     _externalLinkLauncher =
         widget.externalLinkLauncher ?? const NativeExternalLinkLauncher();
-    _discordOAuthController = DiscordOAuthController(
-      widget.discordOAuthAccountGateway ??
-          NativeDiscordOAuthAccountService(
-            configuration: DiscordOAuthConfiguration.fromEnvironment(),
-            launcher: _externalLinkLauncher,
-            vault: const SecureDiscordOAuthGrantVault(),
-          ),
+    final oauthGateway =
+        widget.discordOAuthAccountGateway ??
+        NativeDiscordOAuthAccountService(
+          configuration: DiscordOAuthConfiguration.fromEnvironment(),
+          launcher: _externalLinkLauncher,
+          vault: const SecureDiscordOAuthGrantVault(),
+        );
+    _discordOAuthController = DiscordOAuthController(oauthGateway);
+    _oauthGuildMembershipController = OAuthGuildMembershipController(
+      oauthGateway,
     );
     _oauthGuildDirectoryController = OAuthGuildDirectoryController();
     _workspaceController = WorkspaceController();
@@ -134,6 +139,7 @@ class _FlucordAppState extends State<FlucordApp> {
       playbackService: widget.voicePlaybackService,
     );
     _chatController.addListener(_syncVoiceSignaling);
+    _discordOAuthController.addListener(_syncOAuthMembershipAccount);
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
@@ -151,8 +157,10 @@ class _FlucordAppState extends State<FlucordApp> {
   void dispose() {
     unawaited(widget.desktopIntegration?.dispose());
     _chatController.removeListener(_syncVoiceSignaling);
+    _discordOAuthController.removeListener(_syncOAuthMembershipAccount);
     _chatController.dispose();
     _connectionController.dispose();
+    _oauthGuildMembershipController.dispose();
     _discordOAuthController.dispose();
     _oauthGuildDirectoryController.dispose();
     _workspaceController.dispose();
@@ -165,6 +173,12 @@ class _FlucordAppState extends State<FlucordApp> {
     if (_chatController.state == ChatLoadState.ready) {
       unawaited(_voiceController.refreshSignalingService());
     }
+  }
+
+  void _syncOAuthMembershipAccount() {
+    _oauthGuildMembershipController.reconcileAccount(
+      _discordOAuthController.account?.id,
+    );
   }
 
   @override
@@ -182,6 +196,7 @@ class _FlucordAppState extends State<FlucordApp> {
           connectionController: _connectionController,
           discordOAuthController: _discordOAuthController,
           oauthGuildDirectoryController: _oauthGuildDirectoryController,
+          oauthGuildMembershipController: _oauthGuildMembershipController,
           workspaceController: _workspaceController,
           voiceController: _voiceController,
           voiceMessageRecorder: widget.voiceMessageRecorder,

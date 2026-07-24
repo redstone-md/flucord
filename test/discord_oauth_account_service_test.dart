@@ -20,7 +20,7 @@ void main() {
         body:
             '{"token_type":"Bearer","access_token":"access-1",'
             '"refresh_token":"refresh-1","expires_in":3600,'
-            '"scope":"identify guilds"}',
+            '"scope":"identify guilds guilds.members.read"}',
       ),
     ]);
     final identityTransport = _RecordingTransport(const [
@@ -56,7 +56,10 @@ void main() {
     expect(authorizeUri.host, 'discord.com');
     expect(authorizeUri.path, '/oauth2/authorize');
     expect(authorizeUri.queryParameters['response_type'], 'code');
-    expect(authorizeUri.queryParameters['scope'], 'identify guilds');
+    expect(
+      authorizeUri.queryParameters['scope'],
+      'identify guilds guilds.members.read',
+    );
     expect(authorizeUri.queryParameters['code_challenge_method'], 'S256');
     final state = authorizeUri.queryParameters['state']!;
 
@@ -129,7 +132,7 @@ void main() {
       ..grant = DiscordOAuthGrant(
         accessToken: 'expired-access',
         refreshToken: 'refresh-1',
-        scopes: const {'identify', 'guilds'},
+        scopes: const {'identify', 'guilds', 'guilds.members.read'},
         expiresAt: now,
       );
     final tokenTransport = _RecordingTransport(const [
@@ -139,7 +142,7 @@ void main() {
         body:
             '{"token_type":"Bearer","access_token":"access-2",'
             '"refresh_token":"refresh-2","expires_in":3600,'
-            '"scope":"identify guilds"}',
+            '"scope":"identify guilds guilds.members.read"}',
       ),
     ]);
     final identityTransport = _RecordingTransport(const [
@@ -170,6 +173,92 @@ void main() {
     expect(form['grant_type'], 'refresh_token');
     expect(form['refresh_token'], 'refresh-1');
   });
+
+  test('loads documented current-user guild membership on demand', () async {
+    final vault = _MemoryGrantVault()
+      ..grant = DiscordOAuthGrant(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        scopes: const {'identify', 'guilds', 'guilds.members.read'},
+        expiresAt: DateTime.utc(2100),
+      );
+    final identityTransport = _RecordingTransport(const [
+      DiscordHttpResponse(
+        statusCode: 200,
+        headers: {},
+        body:
+            '{"user":{"id":"123456789012345678"},'
+            '"nick":"Fly","avatar":"member-hash",'
+            '"roles":["role-1","role-2"],'
+            '"joined_at":"2024-01-02T03:04:05Z",'
+            '"premium_since":"2025-02-03T04:05:06Z",'
+            '"pending":true,'
+            '"communication_disabled_until":"2026-03-04T05:06:07Z"}',
+      ),
+    ]);
+    final service = _service(
+      launcher: _RecordingLauncher(),
+      vault: vault,
+      tokenTransport: _RecordingTransport(const []),
+      identityTransport: identityTransport,
+    );
+    addTearDown(service.dispose);
+
+    final membership = await service.fetchCurrentGuildMembership(
+      '987654321098765432',
+    );
+
+    expect(membership.nickname, 'Fly');
+    expect(membership.roleIds, const ['role-1', 'role-2']);
+    expect(membership.joinedAt, DateTime.utc(2024, 1, 2, 3, 4, 5));
+    expect(membership.premiumSince, isNotNull);
+    expect(membership.pending, isTrue);
+    expect(membership.communicationDisabledUntil, isNotNull);
+    expect(
+      membership.avatarUrl,
+      contains('/guilds/987654321098765432/users/123456789012345678/'),
+    );
+    final request = identityTransport.requests.single;
+    expect(request.method, 'GET');
+    expect(
+      request.uri.path,
+      '/api/v10/users/@me/guilds/987654321098765432/member',
+    );
+    expect(request.headers['authorization'], 'Bearer access-1');
+  });
+
+  test(
+    'requires relinking a saved grant that lacks membership scope',
+    () async {
+      final vault = _MemoryGrantVault()
+        ..grant = DiscordOAuthGrant(
+          accessToken: 'access-1',
+          refreshToken: 'refresh-1',
+          scopes: const {'identify', 'guilds'},
+          expiresAt: DateTime.utc(2100),
+        );
+      final identityTransport = _RecordingTransport(const []);
+      final service = _service(
+        launcher: _RecordingLauncher(),
+        vault: vault,
+        tokenTransport: _RecordingTransport(const []),
+        identityTransport: identityTransport,
+      );
+      addTearDown(service.dispose);
+
+      await expectLater(
+        service.fetchCurrentGuildMembership('987654321098765432'),
+        throwsA(
+          isA<DiscordOAuthException>().having(
+            (error) => error.message,
+            'message',
+            contains('Relink Discord'),
+          ),
+        ),
+      );
+      expect(identityTransport.requests, isEmpty);
+    },
+  );
 
   test('ignores unrelated protocol URLs', () async {
     final service = _service(
@@ -248,8 +337,15 @@ final class _MemoryGrantVault implements DiscordOAuthGrantVault {
 }
 
 final class _RecordedRequest {
-  const _RecordedRequest({required this.headers, required this.body});
+  const _RecordedRequest({
+    required this.method,
+    required this.uri,
+    required this.headers,
+    required this.body,
+  });
 
+  final String method;
+  final Uri uri;
   final Map<String, String> headers;
   final List<int> body;
 }
@@ -270,6 +366,8 @@ final class _RecordingTransport implements DiscordHttpTransport {
   }) async {
     requests.add(
       _RecordedRequest(
+        method: method,
+        uri: uri,
         headers: Map.unmodifiable(headers),
         body: List.unmodifiable(body ?? const []),
       ),

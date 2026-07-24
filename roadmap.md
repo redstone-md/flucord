@@ -252,6 +252,11 @@ browser runtime or dependency on Discord's private user API.
     client-state controller owns server selection; the Discord-like rail,
     sidebar, identity footer, and content header use real OAuth guild metadata,
     while locked channel/message surfaces keep unsupported data visibly absent.
+48. Completed: request the documented `guilds.members.read` OAuth scope, load the
+    current user's membership for the selected authorized server through the
+    public Bearer endpoint, and project nickname, guild avatar, roles, join and
+    boost metadata into the native workspace. Keep this asynchronous server
+    state isolated from the guild-selection controller and cache it per guild.
 
 ## Protocol safety
 

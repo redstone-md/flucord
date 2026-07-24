@@ -26,12 +26,21 @@ void main() {
   test('OAuth scopes do not invent chat or Gateway capabilities', () {
     final session = DiscordOAuthUserSession(
       accessToken: 'secret-oauth-token',
-      scopes: const ['identify', 'guilds', 'dm_channels.read'],
+      scopes: const [
+        'identify',
+        'guilds',
+        'guilds.members.read',
+        'dm_channels.read',
+      ],
       expiresAt: DateTime.utc(2026, 8),
     );
 
     expect(session.supports(DiscordSessionCapability.currentIdentity), isTrue);
     expect(session.supports(DiscordSessionCapability.guildDirectory), isTrue);
+    expect(
+      session.supports(DiscordSessionCapability.currentGuildMembership),
+      isTrue,
+    );
     expect(
       session.supports(DiscordSessionCapability.directChannelDirectory),
       isTrue,

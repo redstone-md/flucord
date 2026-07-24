@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import 'oauth_guild_membership_panel.dart';
 import 'oauth_guild_rail.dart';
 import 'remote_identity_image.dart';
 
 class OAuthGuildWorkspace extends StatelessWidget {
   const OAuthGuildWorkspace({
     required this.account,
+    required this.membershipController,
     required this.selectedGuildId,
     required this.onSelectGuild,
     required this.onOpenConnections,
@@ -17,6 +20,7 @@ class OAuthGuildWorkspace extends StatelessWidget {
   });
 
   final DiscordOAuthAccount account;
+  final OAuthGuildMembershipController membershipController;
   final String? selectedGuildId;
   final ValueChanged<String> onSelectGuild;
   final VoidCallback onOpenConnections;
@@ -42,7 +46,11 @@ class OAuthGuildWorkspace extends StatelessWidget {
                 isDark: isDark,
               ),
               if (showSidebar)
-                _OAuthGuildSidebar(account: account, guild: guild),
+                _OAuthGuildSidebar(
+                  account: account,
+                  guild: guild,
+                  membershipController: membershipController,
+                ),
               Expanded(
                 child: _OAuthMessageBoundary(
                   guild: guild,
@@ -68,10 +76,15 @@ class OAuthGuildWorkspace extends StatelessWidget {
 }
 
 class _OAuthGuildSidebar extends StatelessWidget {
-  const _OAuthGuildSidebar({required this.account, required this.guild});
+  const _OAuthGuildSidebar({
+    required this.account,
+    required this.guild,
+    required this.membershipController,
+  });
 
   final DiscordOAuthAccount account;
   final DiscordOAuthGuild? guild;
+  final OAuthGuildMembershipController membershipController;
 
   @override
   Widget build(BuildContext context) {
@@ -102,45 +115,59 @@ class _OAuthGuildSidebar extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Padding(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 20, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              children: [
+                Text(
+                  'CHANNELS',
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 16,
+                      color: context.surfaces.muted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        guild == null
+                            ? 'No authorized servers'
+                            : 'Channel directory unavailable through OAuth',
+                        style: TextStyle(
+                          color: context.surfaces.muted,
+                          fontSize: 11,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (guild case final selectedGuild?) ...[
+                  const SizedBox(height: 24),
                   Text(
-                    'CHANNELS',
+                    'YOUR SERVER PROFILE',
                     style: TextStyle(
                       color: context.surfaces.muted,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.lock_outline,
-                        size: 16,
-                        color: context.surfaces.muted,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          guild == null
-                              ? 'No authorized servers'
-                              : 'Channel directory unavailable through OAuth',
-                          style: TextStyle(
-                            color: context.surfaces.muted,
-                            fontSize: 11,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 8),
+                  OAuthGuildMembershipPanel(
+                    controller: membershipController,
+                    account: account,
+                    guild: selectedGuild,
                   ),
                 ],
-              ),
+              ],
             ),
           ),
           _OAuthAccountFooter(account: account),

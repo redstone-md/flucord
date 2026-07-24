@@ -168,6 +168,15 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
   Future<void> clear() async => clearCalls++;
 
   @override
+  Future<DiscordOAuthGuildMembership> fetchCurrentGuildMembership(
+    String guildId,
+  ) async => DiscordOAuthGuildMembership(
+    guildId: guildId,
+    nickname: 'Jack',
+    joinedAt: DateTime.utc(2024, 1, 2),
+  );
+
+  @override
   void dispose() {}
 
   @override
