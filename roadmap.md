@@ -225,6 +225,10 @@ browser runtime or dependency on Discord's private user API.
     plus single-instance forwarded activation through a native GTK method
     channel and `x-scheme-handler/flucord` desktop entry. macOS/Linux release
     execution still requires verification on their native hosts.
+43. Completed: move message preview construction, active-channel suppression,
+    notification lifetime, and click routing into one native desktop controller;
+    enable it on Windows, macOS, and Linux; and keep focus-driven unread state
+    synchronized on every desktop host. Linux packaging requires `libnotify`.
 
 ## Protocol safety
 

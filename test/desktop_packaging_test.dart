@@ -64,9 +64,21 @@ void main() {
 
   test('selects a protocol integration for every desktop host', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final windows = File(
+      'lib/src/platform/windows_desktop_integration.dart',
+    ).readAsStringSync();
+    final macos = File(
+      'lib/src/platform/macos_desktop_integration.dart',
+    ).readAsStringSync();
+    final linux = File(
+      'lib/src/platform/linux_desktop_integration.dart',
+    ).readAsStringSync();
 
     expect(mainSource, contains('WindowsDesktopIntegration()'));
     expect(mainSource, contains('MacosDesktopIntegration()'));
     expect(mainSource, contains('LinuxDesktopIntegration('));
+    for (final integration in [windows, macos, linux]) {
+      expect(integration, contains('DesktopMessageNotificationController'));
+    }
   });
 }

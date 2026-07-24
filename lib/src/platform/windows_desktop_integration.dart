@@ -3,18 +3,15 @@ import 'dart:io';
 
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/foundation.dart';
-import 'package:local_notifier/local_notifier.dart';
 import 'package:protocol_handler/protocol_handler.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../application/channel_link.dart';
 import '../application/chat_controller.dart';
-import '../application/system_message_text.dart';
 import '../application/workspace_controller.dart';
-import '../domain/chat_models.dart';
-import '../domain/chat_repository.dart';
 import 'desktop_integration.dart';
+import 'desktop_message_notification_controller.dart';
 import 'desktop_protocol_router.dart';
 
 final class WindowsDesktopIntegration
@@ -25,10 +22,10 @@ final class WindowsDesktopIntegration
   );
 
   ChatController? _chatController;
-  StreamSubscription<MessageUpsertedEvent>? _messageSubscription;
   final DesktopProtocolRouter _protocolRouter = DesktopProtocolRouter();
+  final DesktopMessageNotificationController _messageNotifications =
+      DesktopMessageNotificationController(isFocused: windowManager.isFocused);
   bool _windowReady = false;
-  bool _notifierReady = false;
   bool _trayReady = false;
   bool _protocolReady = false;
   bool _updaterReady = false;
@@ -57,10 +54,11 @@ final class WindowsDesktopIntegration
       workspaceController: workspaceController,
       onProtocolUri: onProtocolUri,
     );
-    chatController.addListener(_handleChatChanged);
-    _messageSubscription = chatController.incomingMessages.listen(
-      (event) => unawaited(_showMessageNotification(event)),
+    _messageNotifications.attach(
+      chatController: chatController,
+      onActivateLink: _activateLink,
     );
+    chatController.addListener(_handleChatChanged);
     _handleChatChanged();
   }
 
@@ -76,15 +74,7 @@ final class WindowsDesktopIntegration
   }
 
   Future<void> _initializeNotifications() async {
-    try {
-      await localNotifier.setup(
-        appName: 'Flucord',
-        shortcutPolicy: ShortcutPolicy.requireCreate,
-      );
-      _notifierReady = true;
-    } catch (error) {
-      _debugFailure('notifications', error);
-    }
+    await _messageNotifications.initialize();
   }
 
   Future<void> _initializeProtocol() async {
@@ -161,73 +151,6 @@ final class WindowsDesktopIntegration
     unawaited(trayManager.setToolTip(tooltip));
   }
 
-  Future<void> _showMessageNotification(MessageUpsertedEvent event) async {
-    final chatController = _chatController;
-    final workspace = chatController?.workspace;
-    if (!_notifierReady || chatController == null || workspace == null) return;
-
-    if (_windowReady &&
-        chatController.activeChannelId == event.message.channelId &&
-        await windowManager.isFocused()) {
-      return;
-    }
-
-    final channel = _channelOrNull(workspace, event.message.channelId);
-    if (channel == null) return;
-    final space = _spaceOrNull(workspace, channel.spaceId);
-    final author = workspace.memberOrNull(event.message.authorId);
-    final link = ChannelLink(spaceId: channel.spaceId, channelId: channel.id);
-    final notification = LocalNotification(
-      identifier: 'flucord-${event.message.id}',
-      title: '${author?.displayName ?? 'New message'} - #${channel.name}',
-      subtitle: space?.name,
-      body: _notificationBody(event.message, author?.displayName),
-    );
-    notification.onClick = () => unawaited(_activateLink(link));
-    try {
-      await notification.show();
-    } catch (error) {
-      _debugFailure('notification delivery', error);
-    }
-  }
-
-  String _notificationBody(ChatMessage message, String? authorName) {
-    var body = message.isSystem
-        ? SystemMessageText.describe(message, authorName ?? 'Someone')
-        : message.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (body.isEmpty) {
-      final question = message.poll?.question.trim();
-      if (question != null && question.isNotEmpty) return question;
-      if (message.stickers.isNotEmpty) return message.stickers.first.name;
-      final count = message.attachments.length;
-      body = count == 1
-          ? 'Attachment: ${message.attachments.first.fileName}'
-          : count > 1
-          ? '$count attachments'
-          : message.embeds.isNotEmpty
-          ? 'Embedded content'
-          : 'New message';
-    }
-    return body.length <= 180 ? body : '${body.substring(0, 177)}...';
-  }
-
-  ConversationChannel? _channelOrNull(
-    ChatWorkspace workspace,
-    String channelId,
-  ) {
-    for (final channel in workspace.channels) {
-      if (channel.id == channelId) return channel;
-    }
-    return null;
-  }
-
-  CommunitySpace? _spaceOrNull(ChatWorkspace workspace, String spaceId) {
-    for (final space in workspace.spaces) {
-      if (space.id == spaceId) return space;
-    }
-    return null;
-  }
-
   Future<void> _activateLink(ChannelLink link) async {
     await _showWindow();
     _protocolRouter.receive(link.toUri().toString());
@@ -298,7 +221,7 @@ final class WindowsDesktopIntegration
     _disposed = true;
     _chatController?.removeListener(_handleChatChanged);
     _protocolRouter.detach();
-    await _messageSubscription?.cancel();
+    await _messageNotifications.dispose();
     if (_protocolReady) protocolHandler.removeListener(this);
     if (_trayReady) {
       trayManager.removeListener(this);

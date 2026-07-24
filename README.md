@@ -9,7 +9,7 @@ and deletion, native message forwarding, native message polls,
 active-thread discovery and creation,
 archived-thread browsing,
 native forum and media-channel feeds, member roles and presence, local unread
-markers, paginated pinned messages, Windows notifications,
+markers, paginated pinned messages, native desktop notifications,
 close-to-tray behavior, channel deep links,
 signed updates, native voice-device diagnostics, desktop capture preview,
 native voice-message recording and waveform playback,
@@ -92,7 +92,7 @@ member joins, pins, boosts, thread creation, Stage changes, subscriptions,
 Server Discovery changes, and incident reports without presenting them as
 ordinary authored chat. Pin rows jump to the referenced message and thread rows
 open the referenced native conversation. The same system-event descriptions
-feed Inbox previews and Windows notifications.
+feed Inbox previews and desktop notifications.
 
 Channel history loads through Discord's documented `before` cursor in pages
 of up to 100 messages. Reaching the top requests the next page while keeping
@@ -204,10 +204,12 @@ On the corresponding native host, use `flutter run -d macos` or
 a macOS release on Windows or a Linux release on macOS/Windows.
 
 Ubuntu/Debian Linux builds need Flutter's desktop toolchain plus
-`libgtk-3-dev` and `libsecret-1-dev`; the latter backs bot-token storage through
-the desktop keyring. A Secret Service provider such as GNOME Keyring or KWallet
-must be available at runtime. Native microphone capture through `record` also
-requires the PulseAudio utilities and FFmpeg available to the desktop session.
+`libgtk-3-dev`, `libnotify-dev`, and `libsecret-1-dev`; `libnotify` delivers
+native message notifications, while `libsecret` backs credential storage
+through the desktop keyring. A Secret Service provider such as GNOME Keyring
+or KWallet must be available at runtime. Native microphone capture through
+`record` also requires the PulseAudio utilities and FFmpeg available to the
+desktop session.
 
 ## Connect Discord
 
@@ -472,12 +474,12 @@ xdg-mime default dev.flucord.app.desktop x-scheme-handler/flucord
 update-desktop-database ~/.local/share/applications
 ```
 
-Incoming messages raise native Windows notifications while Flucord is not
-focused. Their native preview describes system events and falls back to poll,
-sticker, attachment, or embed content for messages without text. Clicking a
-notification restores the window and opens its channel.
-Closing the window hides it in the notification area; use `Quit Flucord` from
-the tray menu to stop the process.
+Incoming messages raise native Windows, macOS, and Linux notifications while
+their channel is not focused. One shared controller describes system events
+and falls back to poll, sticker, attachment, or embed content for messages
+without text. Clicking a notification restores the native window and opens its
+channel. Closing the Windows window hides it in the notification area; use
+`Quit Flucord` from the tray menu to stop that process.
 
 Automatic updates are disabled unless a release is built with an HTTPS
 WinSparkle appcast:
