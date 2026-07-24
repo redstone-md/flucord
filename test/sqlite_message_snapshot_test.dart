@@ -10,8 +10,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('SQLite v18 retains forward references and snapshots', () async {
-    expect(SqliteChatSchema.version, 18);
+  test('SQLite retains forward references and snapshots', () async {
+    expect(SqliteChatSchema.version, 19);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

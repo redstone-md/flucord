@@ -51,6 +51,9 @@ extension DiscordMessageMapper on DiscordMapper {
     final type = payload.containsKey('type')
         ? DiscordMessageType.fromDiscordValue(payload['type'] as int?)
         : fallback?.type ?? DiscordMessageType.defaultMessage;
+    final flags = payload.containsKey('flags')
+        ? payload['flags'] as int? ?? 0
+        : fallback?.flags ?? 0;
     return ChatMessage(
       id: payload['id'] as String? ?? fallback!.id,
       channelId: payload['channel_id'] as String? ?? fallback!.channelId,
@@ -79,6 +82,7 @@ extension DiscordMessageMapper on DiscordMapper {
       reference: reference,
       snapshots: snapshots,
       type: type,
+      flags: flags,
     );
   }
 }

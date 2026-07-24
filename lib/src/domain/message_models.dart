@@ -66,6 +66,26 @@ enum DiscordMessageType {
   };
 }
 
+enum DiscordMessageFlag {
+  crossposted(1 << 0),
+  crosspost(1 << 1),
+  suppressEmbeds(1 << 2),
+  sourceMessageDeleted(1 << 3),
+  urgent(1 << 4),
+  hasThread(1 << 5),
+  ephemeral(1 << 6),
+  loading(1 << 7),
+  failedToMentionSomeRolesInThread(1 << 8),
+  suppressNotifications(1 << 12),
+  voiceMessage(1 << 13),
+  hasSnapshot(1 << 14),
+  componentsV2(1 << 15);
+
+  const DiscordMessageFlag(this.bit);
+
+  final int bit;
+}
+
 final class MessageAttachment {
   const MessageAttachment({
     required this.id,
@@ -237,6 +257,7 @@ final class ChatMessage {
     this.reply,
     this.reference,
     this.type = DiscordMessageType.defaultMessage,
+    this.flags = 0,
     this.isEdited = false,
     this.isPinned = false,
     this.mentionsCurrentMember = false,
@@ -259,12 +280,17 @@ final class ChatMessage {
   final MessageReply? reply;
   final MessageReference? reference;
   final DiscordMessageType type;
+  final int flags;
   final List<MessageReaction> reactions;
   final bool isEdited;
   final bool isPinned;
   final bool mentionsCurrentMember;
 
   bool get isSystem => type.isSystem;
+  bool hasFlag(DiscordMessageFlag flag) => flags & flag.bit != 0;
+  bool get suppressesEmbeds => hasFlag(DiscordMessageFlag.suppressEmbeds);
+  bool get suppressesNotifications =>
+      hasFlag(DiscordMessageFlag.suppressNotifications);
   bool get isForwarded =>
       reference?.type == DiscordMessageReferenceType.forward &&
       snapshots.isNotEmpty;
@@ -285,6 +311,7 @@ final class ChatMessage {
     MessagePoll? poll,
     MessageReference? reference,
     DiscordMessageType? type,
+    int? flags,
     bool? isEdited,
     bool? isPinned,
     bool? mentionsCurrentMember,
@@ -302,6 +329,7 @@ final class ChatMessage {
     reply: reply,
     reference: reference ?? this.reference,
     type: type ?? this.type,
+    flags: flags ?? this.flags,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,
     isPinned: isPinned ?? this.isPinned,

@@ -10,7 +10,7 @@ void main() {
   setUpAll(sqfliteFfiInit);
 
   test('SQLite retains system type and message reference', () async {
-    expect(SqliteChatSchema.version, 18);
+    expect(SqliteChatSchema.version, 19);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

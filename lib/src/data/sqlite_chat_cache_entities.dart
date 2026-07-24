@@ -31,6 +31,7 @@ Map<String, Object?> _messageToRow(ChatMessage message) => {
       message.reference?.type.discordValue ??
       DiscordMessageReferenceType.defaultReference.discordValue,
   'snapshots_json': MessageSnapshotCodec.encode(message.snapshots),
+  'flags': message.flags,
   'sent_at': message.sentAt.toUtc().toIso8601String(),
   'is_edited': message.isEdited ? 1 : 0,
   'attachments_json': ChatModelJson.attachments(message.attachments),
@@ -68,6 +69,7 @@ ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
   snapshots: MessageSnapshotCodec.decode(
     row['snapshots_json'] as String? ?? '[]',
   ),
+  flags: row['flags'] as int? ?? 0,
   sentAt: DateTime.parse(row['sent_at']! as String).toLocal(),
   isEdited: row['is_edited'] == 1,
   attachments: ChatModelJson.attachmentsFrom(
