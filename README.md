@@ -180,8 +180,10 @@ uploads the documented duration, waveform, flag, and single audio attachment.
 The live waveform row supports cancel and stop-and-send; failed uploads retain
 only the recorder-owned temporary file for explicit retry or discard.
 
-The application can also connect to Discord through the documented Bot REST
-API v10 and Gateway. It does not accept or emulate personal account tokens.
+An explicitly enabled developer build can also connect through Discord's
+documented Bot REST API v10 and Gateway. This transport is disabled and absent
+from the normal-account UI by default; it does not accept or emulate personal
+account tokens and never represents the linked user identity.
 Documented bot Direct Messages can be opened by a recipient's numeric Discord
 user ID or directly from an anchored guild-member profile. They then use the
 same native history, composer, replies, Markdown, attachments, embeds, and
@@ -305,55 +307,30 @@ enabled. A Secret Service provider such as GNOME Keyring or KWallet must be
 available at runtime. Native microphone capture through `record` also requires
 the PulseAudio utilities and FFmpeg available to the desktop session.
 
-## Connect Discord
+## Connect a normal Discord account
 
-1. Create an application and bot in the Discord Developer Portal.
-2. Enable the Message Content, Server Members, and Presence intents for the
-   bot in the Developer Portal.
-3. Install the bot with View Channels, Read Message History, Send Messages,
-   Send Messages in Threads, Create Public Threads, Attach Files, Add Reactions,
-   and Pin Messages permissions. Manage Messages is required only when deleting
-   messages written by other members. Read Message History is also required by
-   Discord's public archived-thread route.
-4. Open Connections from the link icon in the Flucord server rail.
-5. Enter the bot token. When remembering it, Flucord stores a versioned session
-   credential through the operating-system vault rather than SQLite or logs.
-   Existing Windows `discord_bot_token` records migrate on the next connection.
+Enable **Public Client**, register this exact OAuth2 redirect URI, and run with
+the public application ID; no client secret is included in the desktop binary:
 
-## Link a Discord account
+```text
+flucord://oauth/discord/callback
+```
 
-1. In the Discord Developer Portal, enable **Public Client** for the
-   application.
-2. Register this exact OAuth2 redirect URI:
+```powershell
+flutter run -d windows `
+  --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
+```
 
-   ```text
-   flucord://oauth/discord/callback
-   ```
+Open Connections and select **Connect Discord**. OAuth supplies the documented
+identity and server directory; the separately approved native Social SDK owns
+friends and Direct Messages. See [session transport architecture](docs/SESSION_TRANSPORT.md)
+for exact scopes, package setup, boundaries, and developer Bot instructions.
 
-3. Build or run Flucord with the public application ID. No client secret is
-   included in the desktop binary:
+## Optional developer bot transport
 
-   ```powershell
-   flutter run -d windows `
-     --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
-   ```
-
-   Use `-d macos` or `-d linux` on the corresponding native host with the same
-   `--dart-define`.
-
-4. Open Connections and select **Link account**. Flucord requests only
-   `identify` and `guilds`, then shows the linked identity and its native,
-   scrollable authorized-server directory with owner/admin and approximate
-   member/presence context.
-
-This link does not turn OAuth into a full-chat transport. Message history,
-normal user Direct Messages, read state, and a user Gateway session remain
-outside Discord's documented third-party OAuth contract.
-
-Flucord uses documented bot authorization, an explicit user agent, Gateway
-intents, heartbeat/resume, and REST rate-limit retries. It deliberately does
-not send private Discord-client headers such as `X-Super-Properties` or use
-user-account token flows.
+Bot REST/Gateway is absent by default. An explicit developer build enables its
+separate collapsed panel with `--dart-define=FLUCORD_ENABLE_BOT_TRANSPORT=true`.
+It never accepts a personal account token or represents the linked user.
 
 The application layer does not accept an untyped token string. It owns a typed
 `DiscordAccountSession`, an explicit capability set, and a domain repository
@@ -476,50 +453,8 @@ the bottom of the channel list.
 
 ## Native Media
 
-Opening a voice channel initializes the native Windows WebRTC media layer. The
-voice surface supports microphone mute, input/output device selection,
-screen/window source selection, live desktop-capture preview, and deterministic
-track teardown. This path uses native WebRTC textures and devices, not a web
-view.
-
-Inline message video uses `media_kit` with the packaged Windows native video
-libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
-bot authorization, personal tokens, fingerprints, private client headers, or a
-web view. Player resources and stream subscriptions are released when their
-message leaves the widget tree.
-
-Voice-message audio uses the same packaged native media runtime without a video
-texture. Discord's sampled waveform is decoded locally into a compact seek
-surface, while the attachment duration keeps stable timeline geometry before
-media probing completes.
-
-For Discord repositories, Flucord also performs the documented main Gateway
-voice-state exchange, Voice Gateway v8 heartbeat and resume flow, UDP address
-discovery, AEAD mode negotiation, and DAVE MLS signaling through the bundled
-official `libdave.dll`. The voice surface reports joining, connection,
-discovery, DAVE negotiation, reconnect, failure, and encrypted transport-ready
-states. Mute changes use a voice-state update without rebuilding the voice
-session.
-
-Encrypted transport readiness now activates a native audio uplink. Flucord
-captures 48 kHz stereo PCM16 without a browser runtime, frames it into 20 ms
-packets, encodes Opus with the bundled native libopus, applies DAVE and RTP,
-then sends it through Discord's AES-256-GCM or XChaCha20-Poly1305 RTP-size UDP
-transport. Mute and disconnect finish the speaking burst before the microphone
-or voice session is torn down.
-
-The receive boundary maps speaking SSRCs to users, reorders RTP across sequence
-wrap, rejects duplicate/replayed packets, decrypts DAVE, and keeps independent
-Opus decoder state per remote user. Bounded loss uses native Opus PLC/FEC;
-long gaps reset only the affected user's decoder. Decoded PCM plays through
-per-user native SoLoud streams with a 60 ms playout buffer and live Windows
-output-device switching.
-
-The media path is implemented end to end, but real Discord interoperability
-still needs verification in an actual bot voice session before the project can
-claim production-ready calls. Discord's public bot voice contract documents
-Opus audio transport but no outbound screen-video payload, so screen capture is
-currently a local preview and is not sent to Discord.
+The browser-free video, voice-message, capture, Opus, RTP, DAVE, receive, and
+playout architecture is documented in [native media](docs/NATIVE_MEDIA.md).
 
 ## Verify
 
@@ -544,64 +479,9 @@ The release executable is written to
 
 ## Desktop Protocol Integration
 
-Flucord registers links in this form and forwards them to the existing app
-instance:
-
-```text
-flucord://channels/{serverId}/{channelId}
-```
-
-The same registered protocol receives the state-validated OAuth callback at
-`flucord://oauth/discord/callback`; channel navigation and authorization are
-parsed as separate routes.
-
-Windows dynamically registers the scheme and forwards a second invocation to
-the existing native window. macOS declares `flucord` in `CFBundleURLTypes` and
-uses the native plugin event path. Linux uses a unique GTK application and a
-native method channel to forward later invocations to the first process.
-
-Linux packages must install `linux/dev.flucord.app.desktop` where the desktop
-environment can index it and make the handler authoritative. For a conventional
-system package whose `flucord` executable is on `PATH`:
-
-```bash
-install -Dm644 linux/dev.flucord.app.desktop \
-  ~/.local/share/applications/dev.flucord.app.desktop
-xdg-mime default dev.flucord.app.desktop x-scheme-handler/flucord
-update-desktop-database ~/.local/share/applications
-```
-
-Incoming messages raise native Windows, macOS, and Linux notifications while
-their channel is not focused. One shared controller describes system events
-and falls back to poll, sticker, attachment, or embed content for messages
-without text. Clicking a notification restores the native window and opens its
-channel. Closing the Windows window hides it in the notification area; use
-`Quit Flucord` from the tray menu to stop that process.
-
-The same native tray lifecycle now runs on macOS and Linux. Its Open item and
-tooltip/menu label reflect the local unread-channel count, and Quit performs a
-deterministic tray teardown before closing the window. Closing a desktop window
-hides it only after its tray was created successfully; if tray initialization
-fails, the normal close path remains available instead of trapping a headless
-process. Linux deployments must provide the AppIndicator package and, on
-GNOME, its shell extension so the icon is actually visible.
-
-Automatic updates are disabled unless a release is built with an HTTPS
-WinSparkle appcast:
-
-```powershell
-flutter build windows --release `
-  --dart-define=FLUCORD_UPDATE_FEED_URL=https://updates.example.com/appcast.xml
-```
-
-The checked-in `dsa_pub.pem` verifies Windows update signatures. The matching
-`dsa_priv.pem` is intentionally ignored by Git and must be backed up as a
-release secret. Sign every installer before adding its signature to the
-appcast:
-
-```powershell
-dart run auto_updater:sign_update .\dist\flucord-setup.exe
-```
+Protocol activation, single-instance forwarding, Linux registration, native
+notifications, tray behavior, and signed updates are documented in
+[desktop integration](docs/DESKTOP_INTEGRATION.md).
 
 ## Structure
 
