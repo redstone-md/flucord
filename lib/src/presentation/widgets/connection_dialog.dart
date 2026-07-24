@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_oauth_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'developer_bot_transport_section.dart';
 import 'oauth_connection_section.dart';
 
-class ConnectionDialog extends StatefulWidget {
+class ConnectionDialog extends StatelessWidget {
   const ConnectionDialog({
     required this.controller,
     required this.oauthController,
@@ -14,43 +15,6 @@ class ConnectionDialog extends StatefulWidget {
 
   final ConnectionController controller;
   final DiscordOAuthController oauthController;
-
-  @override
-  State<ConnectionDialog> createState() => _ConnectionDialogState();
-}
-
-class _ConnectionDialogState extends State<ConnectionDialog> {
-  final TextEditingController _tokenController = TextEditingController();
-  bool _remember = true;
-  bool _obscureToken = true;
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connectToken() async {
-    final connected = await widget.controller.connectWithBotToken(
-      token: _tokenController.text,
-      remember: _remember,
-    );
-    if (connected && mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _connectSaved() async {
-    final connected = await widget.controller.connectSavedCredential();
-    if (connected && mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _disconnect() async {
-    await widget.controller.disconnect();
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _linkAccount() => widget.oauthController.authorize();
-
-  Future<void> _unlinkAccount() => widget.oauthController.unlink();
 
   @override
   Widget build(BuildContext context) {
@@ -64,9 +28,9 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 520, maxHeight: maxHeight),
         child: ListenableBuilder(
-          listenable: widget.controller,
+          listenable: controller,
           builder: (context, _) => ListenableBuilder(
-            listenable: widget.oauthController,
+            listenable: oauthController,
             builder: (context, _) => Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -77,164 +41,18 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _CurrentConnection(controller: widget.controller),
-                        Divider(height: 1, color: context.surfaces.border),
                         OAuthConnectionSection(
-                          controller: widget.oauthController,
-                          onLink: _linkAccount,
-                          onUnlink: _unlinkAccount,
+                          controller: oauthController,
+                          onLink: oauthController.authorize,
+                          onUnlink: oauthController.unlink,
                         ),
-                        Divider(height: 1, color: context.surfaces.border),
-                        Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Text(
-                                'Bot transport (optional)',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'This opens channels as an application bot, not as your linked Discord identity. Personal account tokens are not accepted.',
-                                style: TextStyle(
-                                  color: context.surfaces.muted,
-                                  fontSize: 11,
-                                  height: 1.35,
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextField(
-                                key: const ValueKey('discord-bot-token'),
-                                controller: _tokenController,
-                                obscureText: _obscureToken,
-                                enabled: !widget.controller.isBusy,
-                                onSubmitted: (_) => _connectToken(),
-                                decoration: InputDecoration(
-                                  labelText: 'Bot token',
-                                  suffixIcon: IconButton(
-                                    onPressed: () => setState(
-                                      () => _obscureToken = !_obscureToken,
-                                    ),
-                                    icon: Icon(
-                                      _obscureToken
-                                          ? Icons.visibility_outlined
-                                          : Icons.visibility_off_outlined,
-                                    ),
-                                    tooltip: _obscureToken
-                                        ? 'Show token'
-                                        : 'Hide token',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              CheckboxListTile(
-                                value: _remember,
-                                onChanged: widget.controller.isBusy
-                                    ? null
-                                    : (value) => setState(
-                                        () => _remember = value ?? false,
-                                      ),
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                title: const Text(
-                                  'Remember in the system credential vault',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              ),
-                              if (widget.controller.errorMessage
-                                  case final error?) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      size: 16,
-                                      color: FlucordColors.danger,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        error,
-                                        style: const TextStyle(
-                                          color: FlucordColors.danger,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  if (widget.controller.hasSavedCredential) ...[
-                                    TextButton.icon(
-                                      onPressed: widget.controller.isBusy
-                                          ? null
-                                          : _connectSaved,
-                                      icon: const Icon(Icons.key, size: 16),
-                                      label: const Text('Use saved token'),
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  const Spacer(),
-                                  if (widget.controller.mode !=
-                                      SessionMode.disconnected) ...[
-                                    OutlinedButton(
-                                      onPressed: widget.controller.isBusy
-                                          ? null
-                                          : _disconnect,
-                                      child: const Text('Disconnect'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  FilledButton.icon(
-                                    key: const ValueKey('connect-discord'),
-                                    onPressed: widget.controller.isBusy
-                                        ? null
-                                        : _connectToken,
-                                    icon: widget.controller.isBusy
-                                        ? const SizedBox.square(
-                                            dimension: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.link, size: 16),
-                                    label: Text(
-                                      widget.controller.isBusy
-                                          ? 'Connecting'
-                                          : 'Connect',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (widget.controller.hasSavedCredential) ...[
-                                const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton(
-                                    onPressed: widget.controller.isBusy
-                                        ? null
-                                        : widget
-                                              .controller
-                                              .forgetSavedCredential,
-                                    child: const Text(
-                                      'Forget saved credential',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                        if (controller.botTransportEnabled) ...[
+                          Divider(height: 1, color: context.surfaces.border),
+                          DeveloperBotTransportSection(
+                            controller: controller,
+                            onSessionChanged: () => Navigator.of(context).pop(),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -274,44 +92,6 @@ class _DialogHeader extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _CurrentConnection extends StatelessWidget {
-  const _CurrentConnection({required this.controller});
-
-  final ConnectionController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (controller.mode) {
-      SessionMode.disconnected => (
-        'No chat transport connected',
-        context.surfaces.muted,
-      ),
-      SessionMode.demo => (
-        'Demo workspace active',
-        Theme.of(context).colorScheme.primary,
-      ),
-      SessionMode.discord => (
-        '${controller.activeSession?.displayName ?? 'Discord'} connected',
-        FlucordColors.success,
-      ),
-    };
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
-        ],
       ),
     );
   }

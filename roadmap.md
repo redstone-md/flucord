@@ -317,6 +317,11 @@ browser runtime or dependency on Discord's private user API.
     Direct user voice calling remains outside the public contract because the
     documented call API requires a lobby/channel ID that user-DM summaries do
     not expose.
+59. Completed: make the normal desktop build a user-account-only surface by
+    disabling Bot session restoration and connection at the application
+    boundary. Retain the documented Bot adapter only behind the explicit
+    `FLUCORD_ENABLE_BOT_TRANSPORT=true` developer flag and a collapsed,
+    separately labelled settings section.
 
 ## Protocol safety
 

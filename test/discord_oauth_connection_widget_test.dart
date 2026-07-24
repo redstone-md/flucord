@@ -28,7 +28,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Jack · 2 servers'), findsOneWidget);
-    expect(find.text('Demo workspace active'), findsOneWidget);
+    expect(find.byKey(const ValueKey('developer-bot-transport')), findsNothing);
     expect(find.text('AUTHORIZED SERVERS · 2'), findsOneWidget);
     expect(find.text('CONNECTED ACCOUNTS · 2'), findsOneWidget);
     expect(find.text('jack.fm'), findsOneWidget);
@@ -56,7 +56,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps both connection lanes scrollable on a compact desktop', (
+  testWidgets('keeps the normal account directory scrollable when compact', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(720, 500));
@@ -73,7 +73,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('link-discord-account')), findsOneWidget);
-    expect(find.byKey(const ValueKey('discord-bot-token')), findsOneWidget);
+    expect(find.byKey(const ValueKey('discord-bot-token')), findsNothing);
+    expect(find.byKey(const ValueKey('developer-bot-transport')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('link-discord-account')));
     await tester.pumpAndSettle();
     expect(
@@ -104,6 +105,37 @@ void main() {
       find.byKey(const ValueKey('discord-oauth-guild-guild-8')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reveals bot credentials only in an explicit developer build', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      FlucordApp.demo(
+        discordOAuthAccountGateway: _OAuthGateway(),
+        enableBotTransport: true,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open-connections')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('developer-bot-transport')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('discord-bot-token')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('developer-bot-transport')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('discord-bot-token')), findsOneWidget);
+    expect(find.text('Application bot token'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

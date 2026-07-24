@@ -18,6 +18,7 @@ void main() {
         chat,
         vault,
         _StaticRepositoryFactory(MockChatRepository(latency: Duration.zero)),
+        botTransportEnabled: true,
       );
       addTearDown(chat.dispose);
       await chat.load();
@@ -51,6 +52,7 @@ void main() {
       chat,
       _MemoryCredentialVault(),
       _RejectingRepositoryFactory(),
+      botTransportEnabled: true,
     );
     addTearDown(chat.dispose);
     await chat.load();
@@ -74,6 +76,7 @@ void main() {
       chat,
       _MemoryCredentialVault(),
       factory,
+      botTransportEnabled: true,
     );
     addTearDown(chat.dispose);
 
@@ -90,6 +93,7 @@ void main() {
       chat,
       _FailingCredentialVault(),
       _StaticRepositoryFactory(MockChatRepository(latency: Duration.zero)),
+      botTransportEnabled: true,
     );
     addTearDown(chat.dispose);
     await chat.load();
@@ -113,7 +117,12 @@ void main() {
     final factory = _StaticRepositoryFactory(
       MockChatRepository(latency: Duration.zero),
     );
-    final controller = ConnectionController(chat, vault, factory);
+    final controller = ConnectionController(
+      chat,
+      vault,
+      factory,
+      botTransportEnabled: true,
+    );
     addTearDown(chat.dispose);
 
     await controller.initialize();
@@ -154,6 +163,7 @@ void main() {
       chat,
       vault,
       _RejectingRepositoryFactory(),
+      botTransportEnabled: true,
     );
     addTearDown(chat.dispose);
 
@@ -219,10 +229,59 @@ void main() {
       'This authorized Discord session does not expose full chat and Gateway access.',
     );
   });
+
+  test(
+    'keeps saved bot credentials dormant in a normal client build',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryCredentialVault()
+        ..session = DiscordBotSession('saved-token');
+      final factory = _CountingRepositoryFactory();
+      final controller = ConnectionController(chat, vault, factory);
+      addTearDown(chat.dispose);
+
+      await controller.initialize();
+
+      expect(controller.mode, SessionMode.disconnected);
+      expect(controller.hasSavedCredential, isFalse);
+      expect(vault.readCalls, 0);
+      expect(vault.token, 'saved-token');
+      expect(factory.calls, 0);
+
+      expect(await controller.connectSavedCredential(), isFalse);
+      expect(vault.readCalls, 0);
+      expect(factory.calls, 0);
+    },
+  );
+
+  test('rejects bot sessions at the normal client boundary', () async {
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    final factory = _CountingRepositoryFactory();
+    final controller = ConnectionController(
+      chat,
+      _MemoryCredentialVault(),
+      factory,
+    );
+    addTearDown(chat.dispose);
+
+    expect(
+      await controller.connectSession(
+        session: DiscordBotSession('bot-token'),
+        remember: false,
+      ),
+      isFalse,
+    );
+    expect(
+      controller.errorMessage,
+      'Developer bot transport is disabled in this build.',
+    );
+    expect(factory.calls, 0);
+  });
 }
 
 final class _MemoryCredentialVault implements CredentialVault {
   DiscordAccountSession? session;
+  int readCalls = 0;
   int writeCalls = 0;
 
   String? get token => session?.transportCredential;
@@ -231,7 +290,10 @@ final class _MemoryCredentialVault implements CredentialVault {
   Future<void> clearDiscordSession() async => session = null;
 
   @override
-  Future<DiscordAccountSession?> readDiscordSession() async => session;
+  Future<DiscordAccountSession?> readDiscordSession() async {
+    readCalls++;
+    return session;
+  }
 
   @override
   Future<void> writeDiscordSession(DiscordAccountSession session) async {

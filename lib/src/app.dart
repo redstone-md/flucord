@@ -63,6 +63,9 @@ class FlucordApp extends StatefulWidget {
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
+    this.enableBotTransport = const bool.fromEnvironment(
+      'FLUCORD_ENABLE_BOT_TRANSPORT',
+    ),
     super.key,
   });
 
@@ -77,6 +80,7 @@ class FlucordApp extends StatefulWidget {
     DiscordOAuthAccountGateway? discordOAuthAccountGateway,
     DiscordSocialSdkGateway? discordSocialSdkGateway,
     DiscordSocialDmGateway? discordSocialDmGateway,
+    bool enableBotTransport = false,
     Key? key,
   }) => FlucordApp(
     initialRepository: MockChatRepository(),
@@ -92,6 +96,7 @@ class FlucordApp extends StatefulWidget {
     discordOAuthAccountGateway: discordOAuthAccountGateway,
     discordSocialSdkGateway: discordSocialSdkGateway,
     discordSocialDmGateway: discordSocialDmGateway,
+    enableBotTransport: enableBotTransport,
     key: key,
   );
 
@@ -110,6 +115,7 @@ class FlucordApp extends StatefulWidget {
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
+  final bool enableBotTransport;
 
   @override
   State<FlucordApp> createState() => _FlucordAppState();
@@ -143,6 +149,7 @@ class _FlucordAppState extends State<FlucordApp> {
       widget.credentialVault ?? const SecureCredentialVault(),
       widget.chatRepositoryFactory ?? const DiscordBotRepositoryFactory(),
       initialMode: widget.initialSessionMode,
+      botTransportEnabled: widget.enableBotTransport,
     );
     _externalLinkLauncher =
         widget.externalLinkLauncher ?? const NativeExternalLinkLauncher();

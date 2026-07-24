@@ -33,7 +33,7 @@ class OAuthConnectionSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'OAuth links your profile, connected accounts, server directory, and current-user server membership. Discord does not grant third-party access to friends or messages.',
+            'Connect your normal Discord identity through OAuth. The native Social SDK separately provides approved friends and Direct Messages; OAuth alone does not expose channel history or a user Gateway session.',
             style: TextStyle(
               color: context.surfaces.muted,
               fontSize: 11,
@@ -137,7 +137,7 @@ class _OAuthIdentityTile extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Link account'),
+              label: const Text('Connect Discord'),
             ),
         ],
       ),

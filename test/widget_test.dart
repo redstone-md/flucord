@@ -43,8 +43,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-connections')));
     await tester.pumpAndSettle();
     expect(find.text('Connections'), findsOneWidget);
-    expect(find.byKey(const ValueKey('discord-bot-token')), findsOneWidget);
-    expect(find.textContaining('Personal account tokens'), findsOneWidget);
+    expect(find.text('Connect Discord'), findsOneWidget);
+    expect(find.byKey(const ValueKey('discord-bot-token')), findsNothing);
+    expect(find.byKey(const ValueKey('developer-bot-transport')), findsNothing);
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 

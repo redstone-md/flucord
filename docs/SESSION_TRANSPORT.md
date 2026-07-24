@@ -31,6 +31,40 @@ extract the bot credential only after `DiscordBotRepositoryFactory` has checked
 the session kind. UI, workspace controllers, and repository consumers see only
 the session kind and capability set.
 
+Production builds disable this bot transport at the application boundary. They
+do not read or restore a saved Bot session and do not construct bot credential
+controls. `FLUCORD_ENABLE_BOT_TRANSPORT=true` is an explicit developer-build
+opt-in; even then, the transport remains visually and structurally separate
+from the normal OAuth and Social SDK account path.
+
+## Account setup
+
+For a normal account, enable **Public Client** for the Discord application and
+register `flucord://oauth/discord/callback`. Run with the public application ID:
+
+```powershell
+flutter run -d windows `
+  --dart-define=FLUCORD_DISCORD_CLIENT_ID=123456789012345678
+```
+
+Connections → **Connect Discord** requests `identify`, `guilds`,
+`guilds.members.read`, and `connections`. The separately distributed Social
+SDK package uses the same public application ID and its own grant vault for
+approved relationship and Direct Message access.
+
+For the optional developer transport, create a Discord application bot, enable
+the Message Content, Server Members, and Presence intents, and install it with
+the permissions required by the test server. Then opt in explicitly:
+
+```powershell
+flutter run -d windows `
+  --dart-define=FLUCORD_ENABLE_BOT_TRANSPORT=true
+```
+
+Expand **Developer bot transport** in Connections. Remembered credentials stay
+in the operating-system vault; legacy `discord_bot_token` records migrate only
+when this developer path is enabled and used.
+
 `DiscordRestClient` owns the shared HTTP, JSON, retry, and rate-limit behavior.
 Its sealed authorization value writes either the documented `Bot` or `Bearer`
 scheme and redacts the credential from string output. The Bot chat facade can

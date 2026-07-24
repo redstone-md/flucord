@@ -17,11 +17,13 @@ final class ConnectionController extends ChangeNotifier {
     this._credentialVault,
     this._repositoryFactory, {
     SessionMode initialMode = SessionMode.disconnected,
+    this.botTransportEnabled = false,
   }) : _mode = initialMode;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
+  final bool botTransportEnabled;
 
   SessionMode _mode;
   ConnectionActionState _state = ConnectionActionState.idle;
@@ -41,6 +43,16 @@ final class ConnectionController extends ChangeNotifier {
   Future<void> initialize({bool restoreSavedSession = true}) async {
     if (!restoreSavedSession) {
       await _chatController.load();
+      notifyListeners();
+      return;
+    }
+    if (!botTransportEnabled) {
+      await _ensureDisconnectedWorkspace();
+      _mode = SessionMode.disconnected;
+      _state = ConnectionActionState.idle;
+      _hasSavedCredential = false;
+      _activeSession = null;
+      _errorMessage = null;
       notifyListeners();
       return;
     }
@@ -72,6 +84,7 @@ final class ConnectionController extends ChangeNotifier {
     required String token,
     required bool remember,
   }) async {
+    if (!botTransportEnabled) return _rejectDisabledBotTransport();
     final normalized = token.trim();
     if (normalized.isEmpty) {
       _state = ConnectionActionState.failure;
@@ -88,9 +101,22 @@ final class ConnectionController extends ChangeNotifier {
   Future<bool> connectSession({
     required DiscordAccountSession session,
     required bool remember,
-  }) => _connect(session, remember: remember);
+  }) {
+    if (session is DiscordBotSession && !botTransportEnabled) {
+      return _rejectDisabledBotTransport();
+    }
+    return _connect(session, remember: remember);
+  }
+
+  Future<bool> _rejectDisabledBotTransport() async {
+    _state = ConnectionActionState.failure;
+    _errorMessage = 'Developer bot transport is disabled in this build.';
+    notifyListeners();
+    return false;
+  }
 
   Future<bool> connectSavedCredential() async {
+    if (!botTransportEnabled) return _rejectDisabledBotTransport();
     try {
       final session = await _credentialVault.readDiscordSession();
       if (session == null) {
