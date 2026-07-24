@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
+import '../application/composer_autocomplete_catalog.dart';
 import '../application/connection_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/quick_switcher_catalog.dart';

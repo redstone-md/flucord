@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../application/composer_autocomplete_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_theme.dart';
@@ -11,8 +12,10 @@ import 'create_poll_dialog.dart';
 import 'emoji_picker.dart';
 import 'native_voice_message_player.dart';
 import 'pending_attachment_strip.dart';
+import 'remote_identity_image.dart';
 import 'sticker_picker.dart';
 
+part 'message_composer_autocomplete.dart';
 part 'message_composer_voice.dart';
 
 typedef SendMessageCallback =
@@ -38,6 +41,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
+    this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
     this.attachmentPicker = const NativePendingAttachmentPicker(),
     this.voiceMessageRecorder,
     this.onSendVoiceMessage,
@@ -59,6 +63,7 @@ class MessageComposer extends StatefulWidget {
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
+  final ComposerAutocompleteCatalog autocompleteCatalog;
   final PendingAttachmentPicker attachmentPicker;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback? onSendVoiceMessage;
@@ -68,7 +73,7 @@ class MessageComposer extends StatefulWidget {
 }
 
 class _MessageComposerState extends State<MessageComposer>
-    with _VoiceMessageComposerStateMixin {
+    with _ComposerAutocompleteStateMixin, _VoiceMessageComposerStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
@@ -80,8 +85,15 @@ class _MessageComposerState extends State<MessageComposer>
   bool get _hasRegularMessageContent => _canSend;
 
   @override
+  TextEditingController get _autocompleteTextController => _controller;
+
+  @override
+  FocusNode get _autocompleteFocusNode => _focusNode;
+
+  @override
   void initState() {
     super.initState();
+    _initializeComposerAutocomplete();
     _listenToVoiceProgress();
   }
 
@@ -95,6 +107,7 @@ class _MessageComposerState extends State<MessageComposer>
       _hasContent = false;
       _suppressNotifications = false;
       _discardVoiceState(oldWidget.voiceMessageRecorder);
+      _resetComposerAutocomplete();
     }
     if (oldWidget.voiceMessageRecorder != widget.voiceMessageRecorder) {
       if (!channelChanged) {
@@ -103,6 +116,12 @@ class _MessageComposerState extends State<MessageComposer>
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
     }
+    if (oldWidget.autocompleteCatalog != widget.autocompleteCatalog &&
+        !channelChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshComposerAutocomplete();
+      });
+    }
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
       _focusNode.requestFocus();
     }
@@ -110,6 +129,7 @@ class _MessageComposerState extends State<MessageComposer>
 
   @override
   void dispose() {
+    _disposeComposerAutocomplete();
     _voiceGeneration++;
     unawaited(_voiceProgressSubscription?.cancel());
     final recorder = widget.voiceMessageRecorder;
@@ -220,12 +240,12 @@ class _MessageComposerState extends State<MessageComposer>
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): _send,
               },
-              child: Focus(
-                autofocus: true,
+              child: _buildComposerAutocompletePortal(
                 child: TextField(
                   key: const ValueKey('message-composer'),
                   controller: _controller,
                   focusNode: _focusNode,
+                  autofocus: true,
                   minLines: 1,
                   maxLines: 4,
                   onChanged: (value) {

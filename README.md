@@ -16,7 +16,8 @@ native voice-message recording and waveform playback,
 documented Discord CDN guild/member identity, anchored member profile
 popovers, a global native Quick Switcher, a cross-server Inbox, and theme
 switching without a browser runtime. The composer includes a searchable native
-Unicode and guild-emoji picker. Local unread bursts open at a Discord-like NEW
+Unicode and guild-emoji picker plus caret-aware member, role, and channel
+autocomplete. Local unread bursts open at a Discord-like NEW
 boundary in the message timeline. Discord rich
 embeds retain their documented structured fields across live updates and
 offline cache restores. Video attachments and embed video metadata play
@@ -35,6 +36,13 @@ inserts the result at the current caret or selection. Guild emoji load through
 `GET /guilds/{guild.id}/emojis`; `GUILD_EMOJIS_UPDATE` atomically replaces the
 affected server catalog. Animated custom emoji use Discord's documented
 `<a:name:id>` syntax and CDN route without private client headers.
+
+Typing `@` or `#` opens a native menu anchored above the composer and projected
+from the currently loaded workspace. It ranks guild members, roles, channels,
+and threads without another network request; Direct Messages expose only their
+participants. Mouse, Up/Down, Enter, Tab, and Escape preserve text-field focus,
+and selection inserts Discord's documented `<@id>`, `<@&id>`, or `<#id>` syntax
+at the active caret range.
 
 The same guild-aware catalog powers the message reaction action. Its anchored
 picker sends Unicode glyphs or Discord's documented `name:id` custom reaction

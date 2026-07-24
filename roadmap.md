@@ -189,6 +189,11 @@ browser runtime or dependency on Discord's private user API.
     the documented base64 waveform, and upload the exact voice-message multipart
     contract. The composer owns record, cancel, stop-and-send, retained retry,
     channel-change cleanup, and compact-width states without browser surfaces.
+35. Completed: project cached guild members, roles, channels, threads, and DM
+    participants into a native caret-aware composer autocomplete. Rank matching
+    names and metadata, insert documented mention syntax at the active range,
+    and support mouse plus Up/Down, Enter, Tab, and Escape without stealing
+    text-field focus or overflowing compact desktop layouts.
 
 ## Protocol safety
 

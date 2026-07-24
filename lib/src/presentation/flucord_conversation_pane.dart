@@ -212,6 +212,10 @@ class _ConversationPaneState extends State<_ConversationPane> {
             channelId: widget.channel.id,
             channelName: widget.channel.name,
             spaceName: widget.workspace.spaceById(widget.channel.spaceId).name,
+            autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
+              widget.workspace,
+              widget.channel,
+            ),
             customEmojis: widget.workspace.emojisFor(widget.channel.spaceId),
             guildStickers: widget.workspace.stickersFor(widget.channel.spaceId),
             isSending: widget.isSending,
