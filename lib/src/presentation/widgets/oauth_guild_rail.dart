@@ -7,7 +7,9 @@ import 'remote_identity_image.dart';
 class OAuthGuildRail extends StatelessWidget {
   const OAuthGuildRail({
     required this.account,
+    required this.accountHomeSelected,
     required this.selectedGuildId,
+    required this.onOpenAccountHome,
     required this.onSelectGuild,
     required this.onOpenConnections,
     required this.onToggleTheme,
@@ -16,7 +18,9 @@ class OAuthGuildRail extends StatelessWidget {
   });
 
   final DiscordOAuthAccount account;
+  final bool accountHomeSelected;
   final String? selectedGuildId;
+  final VoidCallback onOpenAccountHome;
   final ValueChanged<String> onSelectGuild;
   final VoidCallback onOpenConnections;
   final VoidCallback onToggleTheme;
@@ -34,20 +38,10 @@ class OAuthGuildRail extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 12),
-          Tooltip(
-            message: account.displayName,
-            child: ClipOval(
-              child: SizedBox.square(
-                dimension: 44,
-                child: RemoteIdentityImage(
-                  url: account.avatarUrl,
-                  fallback: ColoredBox(
-                    color: context.surfaces.raised,
-                    child: const Icon(Icons.person_outline, size: 21),
-                  ),
-                ),
-              ),
-            ),
+          _OAuthAccountHomeButton(
+            account: account,
+            selected: accountHomeSelected,
+            onPressed: onOpenAccountHome,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -81,6 +75,75 @@ class OAuthGuildRail extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
+      ),
+    );
+  }
+}
+
+class _OAuthAccountHomeButton extends StatelessWidget {
+  const _OAuthAccountHomeButton({
+    required this.account,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final DiscordOAuthAccount account;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(selected ? 14 : 22);
+    return Semantics(
+      label: '${account.displayName}, account home',
+      button: true,
+      selected: selected,
+      child: SizedBox(
+        height: 46,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (selected)
+              Positioned(
+                left: 0,
+                child: SizedBox(
+                  key: const ValueKey('oauth-account-home-indicator'),
+                  width: 3,
+                  height: 28,
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            Tooltip(
+              message: 'Direct Messages / ${account.displayName}',
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: radius,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: const ValueKey('oauth-account-home'),
+                  onTap: onPressed,
+                  borderRadius: radius,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: context.surfaces.raised,
+                      borderRadius: radius,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: RemoteIdentityImage(
+                      url: account.avatarUrl,
+                      fallback: const Icon(Icons.person_outline, size: 21),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

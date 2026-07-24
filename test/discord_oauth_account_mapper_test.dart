@@ -27,6 +27,19 @@ void main() {
         },
         {'id': '', 'name': 'Malformed'},
       ],
+      connections: const [
+        {
+          'id': 'spotify-1',
+          'name': 'jack.fm',
+          'type': 'spotify',
+          'verified': true,
+          'friend_sync': true,
+          'show_activity': true,
+          'two_way_link': true,
+          'visibility': 1,
+        },
+        {'id': '', 'name': 'Malformed', 'type': 'steam'},
+      ],
     );
 
     expect(account.displayName, 'Jack');
@@ -40,11 +53,25 @@ void main() {
     expect(guild.features, containsAll(const ['COMMUNITY', 'BANNER']));
     expect(guild.approximateMemberCount, 3268);
     expect(guild.approximatePresenceCount, 784);
+    final connection = account.connections.single;
+    expect(connection.name, 'jack.fm');
+    expect(connection.type, 'spotify');
+    expect(connection.verified, isTrue);
+    expect(connection.friendSync, isTrue);
+    expect(connection.showActivity, isTrue);
+    expect(connection.twoWayLink, isTrue);
+    expect(connection.isPublic, isTrue);
     expect(
       () => account.guilds.add(DiscordOAuthGuild(id: 'guild-2', name: 'Other')),
       throwsUnsupportedError,
     );
     expect(() => guild.features.add('MUTATED'), throwsUnsupportedError);
+    expect(
+      () => account.connections.add(
+        DiscordOAuthConnection(id: 'x', name: 'x', type: 'github'),
+      ),
+      throwsUnsupportedError,
+    );
   });
 
   test('rejects an invalid account identity', () {

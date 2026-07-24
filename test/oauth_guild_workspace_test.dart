@@ -20,6 +20,15 @@ void main() {
         DiscordOAuthGuild(id: 'guild-1', name: 'The Forge'),
         DiscordOAuthGuild(id: 'guild-2', name: 'Night Shift'),
       ],
+      connections: [
+        DiscordOAuthConnection(
+          id: 'spotify-1',
+          name: 'jack.fm',
+          type: 'spotify',
+          verified: true,
+          visibility: 1,
+        ),
+      ],
     );
     final controller = OAuthGuildDirectoryController()..reconcile(account);
     final membershipController = OAuthGuildMembershipController(_OAuthGateway())
@@ -33,8 +42,10 @@ void main() {
           listenable: controller,
           builder: (context, _) => OAuthGuildWorkspace(
             account: account,
+            accountHomeSelected: controller.accountHomeSelected,
             membershipController: membershipController,
             selectedGuildId: controller.selectedGuildId,
+            onOpenAccountHome: controller.selectAccountHome,
             onSelectGuild: (guildId) =>
                 controller.selectGuild(account, guildId),
             onOpenConnections: () {},
@@ -75,6 +86,15 @@ void main() {
         DiscordOAuthGuild(id: 'guild-1', name: 'The Forge'),
         DiscordOAuthGuild(id: 'guild-2', name: 'Night Shift'),
       ],
+      connections: [
+        DiscordOAuthConnection(
+          id: 'spotify-1',
+          name: 'jack.fm',
+          type: 'spotify',
+          verified: true,
+          visibility: 1,
+        ),
+      ],
     );
     final directoryController = OAuthGuildDirectoryController()
       ..reconcile(account);
@@ -90,8 +110,10 @@ void main() {
           listenable: directoryController,
           builder: (context, _) => OAuthGuildWorkspace(
             account: account,
+            accountHomeSelected: directoryController.accountHomeSelected,
             membershipController: membershipController,
             selectedGuildId: directoryController.selectedGuildId,
+            onOpenAccountHome: directoryController.selectAccountHome,
             onSelectGuild: (guildId) =>
                 directoryController.selectGuild(account, guildId),
             onOpenConnections: () {},
@@ -106,6 +128,19 @@ void main() {
     expect(find.text('Profile guild-1'), findsOneWidget);
     expect(find.text('2 roles'), findsOneWidget);
     expect(gateway.guildIds, const ['guild-1']);
+
+    await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('oauth-account-home-view')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('oauth-account-home-indicator')),
+      findsOneWidget,
+    );
+    expect(find.text('jack.fm'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey('oauth-guild-guild-2')));
     await tester.pumpAndSettle();

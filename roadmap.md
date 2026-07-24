@@ -257,6 +257,10 @@ browser runtime or dependency on Discord's private user API.
     public Bearer endpoint, and project nickname, guild avatar, roles, join and
     boost metadata into the native workspace. Keep this asynchronous server
     state isolated from the guild-selection controller and cache it per guild.
+49. Completed: request the documented `connections` OAuth scope, retain the
+    current user's verified and visible third-party account directory as
+    immutable server state, and expose it through a Discord-like account-home
+    destination plus Connections settings without implying DM or friend access.
 
 ## Protocol safety
 

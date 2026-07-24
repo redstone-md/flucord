@@ -139,7 +139,7 @@ class _FlucordAppState extends State<FlucordApp> {
       playbackService: widget.voicePlaybackService,
     );
     _chatController.addListener(_syncVoiceSignaling);
-    _discordOAuthController.addListener(_syncOAuthMembershipAccount);
+    _discordOAuthController.addListener(_syncOAuthAccount);
     widget.desktopIntegration?.attach(
       chatController: _chatController,
       workspaceController: _workspaceController,
@@ -157,7 +157,7 @@ class _FlucordAppState extends State<FlucordApp> {
   void dispose() {
     unawaited(widget.desktopIntegration?.dispose());
     _chatController.removeListener(_syncVoiceSignaling);
-    _discordOAuthController.removeListener(_syncOAuthMembershipAccount);
+    _discordOAuthController.removeListener(_syncOAuthAccount);
     _chatController.dispose();
     _connectionController.dispose();
     _oauthGuildMembershipController.dispose();
@@ -175,10 +175,10 @@ class _FlucordAppState extends State<FlucordApp> {
     }
   }
 
-  void _syncOAuthMembershipAccount() {
-    _oauthGuildMembershipController.reconcileAccount(
-      _discordOAuthController.account?.id,
-    );
+  void _syncOAuthAccount() {
+    final account = _discordOAuthController.account;
+    _oauthGuildDirectoryController.reconcile(account);
+    _oauthGuildMembershipController.reconcileAccount(account?.id);
   }
 
   @override

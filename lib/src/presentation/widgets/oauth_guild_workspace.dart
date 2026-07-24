@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import 'oauth_account_footer.dart';
+import 'oauth_account_home.dart';
 import 'oauth_guild_membership_panel.dart';
 import 'oauth_guild_rail.dart';
-import 'remote_identity_image.dart';
 
 class OAuthGuildWorkspace extends StatelessWidget {
   const OAuthGuildWorkspace({
     required this.account,
+    required this.accountHomeSelected,
     required this.membershipController,
     required this.selectedGuildId,
     required this.onSelectGuild,
+    required this.onOpenAccountHome,
     required this.onOpenConnections,
     required this.onToggleTheme,
     required this.isDark,
@@ -20,16 +23,20 @@ class OAuthGuildWorkspace extends StatelessWidget {
   });
 
   final DiscordOAuthAccount account;
+  final bool accountHomeSelected;
   final OAuthGuildMembershipController membershipController;
   final String? selectedGuildId;
   final ValueChanged<String> onSelectGuild;
+  final VoidCallback onOpenAccountHome;
   final VoidCallback onOpenConnections;
   final VoidCallback onToggleTheme;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final guild = _selectedGuild(account.guilds, selectedGuildId);
+    final guild = accountHomeSelected
+        ? null
+        : _selectedGuild(account.guilds, selectedGuildId);
     return Scaffold(
       key: const ValueKey('oauth-guild-workspace'),
       body: LayoutBuilder(
@@ -39,23 +46,30 @@ class OAuthGuildWorkspace extends StatelessWidget {
             children: [
               OAuthGuildRail(
                 account: account,
+                accountHomeSelected: accountHomeSelected,
                 selectedGuildId: guild?.id,
+                onOpenAccountHome: onOpenAccountHome,
                 onSelectGuild: onSelectGuild,
                 onOpenConnections: onOpenConnections,
                 onToggleTheme: onToggleTheme,
                 isDark: isDark,
               ),
               if (showSidebar)
-                _OAuthGuildSidebar(
-                  account: account,
-                  guild: guild,
-                  membershipController: membershipController,
-                ),
+                if (accountHomeSelected)
+                  OAuthAccountSidebar(account: account)
+                else
+                  _OAuthGuildSidebar(
+                    account: account,
+                    guild: guild,
+                    membershipController: membershipController,
+                  ),
               Expanded(
-                child: _OAuthMessageBoundary(
-                  guild: guild,
-                  onOpenConnections: onOpenConnections,
-                ),
+                child: accountHomeSelected
+                    ? OAuthAccountHomeView(account: account)
+                    : _OAuthMessageBoundary(
+                        guild: guild,
+                        onOpenConnections: onOpenConnections,
+                      ),
               ),
             ],
           );
@@ -170,73 +184,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
               ],
             ),
           ),
-          _OAuthAccountFooter(account: account),
-        ],
-      ),
-    );
-  }
-}
-
-class _OAuthAccountFooter extends StatelessWidget {
-  const _OAuthAccountFooter({required this.account});
-
-  final DiscordOAuthAccount account;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: context.surfaces.inset,
-        border: Border(top: BorderSide(color: context.surfaces.border)),
-      ),
-      child: Row(
-        children: [
-          ClipOval(
-            child: SizedBox.square(
-              dimension: 32,
-              child: RemoteIdentityImage(
-                url: account.avatarUrl,
-                fallback: ColoredBox(
-                  color: context.surfaces.raised,
-                  child: const Icon(Icons.person_outline, size: 18),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  account.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '@${account.username}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          const Tooltip(
-            message: 'Linked Discord identity',
-            child: Icon(
-              Icons.verified_user_outlined,
-              size: 17,
-              color: FlucordColors.success,
-            ),
-          ),
+          OAuthAccountFooter(account: account),
         ],
       ),
     );

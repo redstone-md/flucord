@@ -65,6 +65,11 @@ final class DiscordOAuthIdentityClient {
     return _rest.getObject('/users/@me/guilds/$normalizedGuildId/member');
   }
 
+  Future<List<Map<String, Object?>>> getCurrentUserConnections() async {
+    _require(DiscordSessionCapability.connectionDirectory);
+    return _rest.getList('/users/@me/connections');
+  }
+
   void _require(DiscordSessionCapability capability) {
     if (_session.isExpired) {
       throw const DiscordOAuthSessionExpiredException();

@@ -27,7 +27,7 @@ void main() {
   });
 
   group('DiscordOAuthIdentityClient', () {
-    test('uses Bearer only for documented identity and guild routes', () async {
+    test('uses Bearer only for documented OAuth user routes', () async {
       final transport = _RecordingTransport(const [
         DiscordHttpResponse(
           statusCode: 200,
@@ -44,10 +44,20 @@ void main() {
           headers: {},
           body: '{"user":{"id":"user-1"},"roles":[]}',
         ),
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '[{"id":"spotify-1","name":"jack","type":"spotify"}]',
+        ),
       ]);
       final client = DiscordOAuthIdentityClient(
         session: _session(
-          scopes: const {'identify', 'guilds', 'guilds.members.read'},
+          scopes: const {
+            'identify',
+            'guilds',
+            'guilds.members.read',
+            'connections',
+          },
         ),
         transport: transport,
       );
@@ -57,11 +67,13 @@ void main() {
       final membership = await client.getCurrentUserGuildMember(
         '123456789012345678',
       );
+      final connections = await client.getCurrentUserConnections();
 
       expect(user['id'], 'user-1');
       expect(guilds.single['id'], 'guild-1');
       expect(membership['roles'], isEmpty);
-      expect(transport.requests, hasLength(3));
+      expect(connections.single['type'], 'spotify');
+      expect(transport.requests, hasLength(4));
       for (final request in transport.requests) {
         expect(request.headers['authorization'], 'Bearer oauth-secret');
         expect(request.headers, isNot(contains('x-super-properties')));
@@ -75,6 +87,7 @@ void main() {
         transport.requests[2].uri.path,
         '/api/v10/users/@me/guilds/123456789012345678/member',
       );
+      expect(transport.requests[3].uri.path, '/api/v10/users/@me/connections');
     });
 
     test('rejects a route when its OAuth scope is absent', () async {
@@ -91,6 +104,16 @@ void main() {
             (error) => error.capability,
             'capability',
             DiscordSessionCapability.guildDirectory,
+          ),
+        ),
+      );
+      await expectLater(
+        client.getCurrentUserConnections(),
+        throwsA(
+          isA<DiscordOAuthCapabilityException>().having(
+            (error) => error.capability,
+            'capability',
+            DiscordSessionCapability.connectionDirectory,
           ),
         ),
       );

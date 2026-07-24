@@ -195,10 +195,11 @@ OAuth2 public-client flow. Authorization opens the operating system browser;
 the application itself remains native and contains no WebView or browser
 runtime. PKCE S256 and a random `state` protect the callback, and the rotating
 refresh grant is stored in the operating-system credential vault. The linked
-profile and paginated server directory retain documented icon, banner,
-ownership, permission, feature, and approximate member/presence metadata. They
-remain separate from the Bot chat session because ordinary OAuth scopes do not
-grant channel-message or user Gateway access.
+profile, third-party connected-account directory, and paginated server
+directory retain documented identity, visibility, icon, banner, ownership,
+permission, feature, and approximate member/presence metadata. They remain
+separate from the Bot chat session because ordinary OAuth scopes do not grant
+friends, channel messages, or user Gateway access.
 
 When no chat transport is active, a restored linked identity now opens its
 authorized servers in the main native rail/sidebar workspace instead of hiding
@@ -212,7 +213,12 @@ On wide layouts, selecting an authorized server loads the current user's server
 profile through `/users/@me/guilds/{guild.id}/member` and shows the guild
 nickname/avatar, role count, join/boost state, screening, and timeout metadata.
 Membership responses are cached per server and never unlock chat resources.
-Older saved grants may need to be unlinked and linked again to add this scope.
+The same native rail exposes an account-home destination. It renders the
+documented `/users/@me/connections` result from the `connections` scope with
+service, username, verification, visibility, and activity status while keeping
+Friends and Direct Messages visibly locked. Connected accounts also appear in
+the Connections settings surface. Older saved grants may need to be unlinked
+and linked again to add the new scopes.
 
 ## Run
 

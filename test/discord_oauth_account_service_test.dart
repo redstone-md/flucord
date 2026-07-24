@@ -20,7 +20,7 @@ void main() {
         body:
             '{"token_type":"Bearer","access_token":"access-1",'
             '"refresh_token":"refresh-1","expires_in":3600,'
-            '"scope":"identify guilds guilds.members.read"}',
+            '"scope":"identify guilds guilds.members.read connections"}',
       ),
     ]);
     final identityTransport = _RecordingTransport(const [
@@ -40,6 +40,14 @@ void main() {
             '"approximate_presence_count":7},{"id":"guild-2",'
             '"name":"Night Shift","permissions":"0"}]',
       ),
+      DiscordHttpResponse(
+        statusCode: 200,
+        headers: {},
+        body:
+            '[{"id":"spotify-1","name":"jack.fm","type":"spotify",'
+            '"verified":true,"friend_sync":false,"show_activity":true,'
+            '"two_way_link":true,"visibility":1}]',
+      ),
     ]);
     final launcher = _RecordingLauncher();
     final vault = _MemoryGrantVault();
@@ -58,7 +66,7 @@ void main() {
     expect(authorizeUri.queryParameters['response_type'], 'code');
     expect(
       authorizeUri.queryParameters['scope'],
-      'identify guilds guilds.members.read',
+      'identify guilds guilds.members.read connections',
     );
     expect(authorizeUri.queryParameters['code_challenge_method'], 'S256');
     final state = authorizeUri.queryParameters['state']!;
@@ -76,6 +84,8 @@ void main() {
     expect(account.guilds.first.name, 'The Forge');
     expect(account.guilds.first.isOwner, isTrue);
     expect(account.guilds.first.approximateMemberCount, 42);
+    expect(account.connections.single.name, 'jack.fm');
+    expect(account.connections.single.verified, isTrue);
     expect(account.avatarUrl, contains('/avatars/123456789012345678/'));
     expect(vault.grant?.refreshToken, 'refresh-1');
     final form = Uri.splitQueryString(
@@ -132,7 +142,12 @@ void main() {
       ..grant = DiscordOAuthGrant(
         accessToken: 'expired-access',
         refreshToken: 'refresh-1',
-        scopes: const {'identify', 'guilds', 'guilds.members.read'},
+        scopes: const {
+          'identify',
+          'guilds',
+          'guilds.members.read',
+          'connections',
+        },
         expiresAt: now,
       );
     final tokenTransport = _RecordingTransport(const [
@@ -142,7 +157,7 @@ void main() {
         body:
             '{"token_type":"Bearer","access_token":"access-2",'
             '"refresh_token":"refresh-2","expires_in":3600,'
-            '"scope":"identify guilds guilds.members.read"}',
+            '"scope":"identify guilds guilds.members.read connections"}',
       ),
     ]);
     final identityTransport = _RecordingTransport(const [
@@ -151,6 +166,7 @@ void main() {
         headers: {},
         body: '{"id":"123456789012345678","username":"jack"}',
       ),
+      DiscordHttpResponse(statusCode: 200, headers: {}, body: '[]'),
       DiscordHttpResponse(statusCode: 200, headers: {}, body: '[]'),
     ]);
     final service = _service(

@@ -83,6 +83,13 @@ void main() {
         find.byKey(const ValueKey('oauth-guild-indicator-guild-2')),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(const ValueKey('oauth-account-home')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('oauth-account-home-view')),
+        findsOneWidget,
+      );
+      expect(find.text('jack.fm'), findsWidgets);
     },
   );
 
@@ -199,5 +206,14 @@ DiscordOAuthAccount _oauthAccount() => DiscordOAuthAccount(
       approximatePresenceCount: 7,
     ),
     DiscordOAuthGuild(id: 'guild-2', name: 'Night Shift', permissions: '8'),
+  ],
+  connections: [
+    DiscordOAuthConnection(
+      id: 'spotify-1',
+      name: 'jack.fm',
+      type: 'spotify',
+      verified: true,
+      visibility: 1,
+    ),
   ],
 );

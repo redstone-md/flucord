@@ -4,6 +4,7 @@ enum DiscordSessionCapability {
   currentIdentity,
   guildDirectory,
   currentGuildMembership,
+  connectionDirectory,
   directChannelDirectory,
   channelMessages,
   realtimeGateway,
@@ -110,6 +111,8 @@ final class DiscordOAuthUserSession extends DiscordAccountSession {
     if (scopes.contains('guilds')) DiscordSessionCapability.guildDirectory,
     if (scopes.contains('guilds.members.read'))
       DiscordSessionCapability.currentGuildMembership,
+    if (scopes.contains('connections'))
+      DiscordSessionCapability.connectionDirectory,
     if (scopes.contains('dm_channels.read'))
       DiscordSessionCapability.directChannelDirectory,
     if (scopes.contains('voice')) DiscordSessionCapability.voiceConnection,

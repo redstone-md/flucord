@@ -30,6 +30,12 @@ void main() {
     expect(find.text('Jack · 2 servers'), findsOneWidget);
     expect(find.text('Demo workspace active'), findsOneWidget);
     expect(find.text('AUTHORIZED SERVERS · 2'), findsOneWidget);
+    expect(find.text('CONNECTED ACCOUNTS · 2'), findsOneWidget);
+    expect(find.text('jack.fm'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('discord-oauth-connection-spotify-spotify-1')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('discord-oauth-guild-guild-1')),
       findsOneWidget,
@@ -73,6 +79,16 @@ void main() {
     expect(
       find.byKey(const ValueKey('discord-oauth-guild-directory')),
       findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('discord-oauth-guild-directory')),
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byType(SingleChildScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('discord-oauth-guild-guild-8')),
@@ -182,6 +198,21 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
                   name: 'Server ${index + 3}',
                 ),
             ],
+      connections: [
+        DiscordOAuthConnection(
+          id: 'spotify-1',
+          name: 'jack.fm',
+          type: 'spotify',
+          verified: true,
+          showActivity: true,
+          visibility: 1,
+        ),
+        DiscordOAuthConnection(
+          id: 'github-1',
+          name: 'redstone-md',
+          type: 'github',
+        ),
+      ],
     );
   }
 

@@ -7,6 +7,7 @@ final class DiscordOAuthAccountMapper {
   DiscordOAuthAccount map({
     required Map<String, Object?> user,
     required List<Map<String, Object?>> guilds,
+    List<Map<String, Object?>> connections = const [],
   }) {
     final id = user['id'];
     final username = user['username'];
@@ -29,6 +30,35 @@ final class DiscordOAuthAccountMapper {
         size: 64,
       ),
       guilds: guilds.map(_mapGuild).whereType<DiscordOAuthGuild>(),
+      connections: connections
+          .map(_mapConnection)
+          .whereType<DiscordOAuthConnection>(),
+    );
+  }
+
+  DiscordOAuthConnection? _mapConnection(Map<String, Object?> payload) {
+    final id = payload['id'];
+    final name = payload['name'];
+    final type = payload['type'];
+    final visibility = payload['visibility'];
+    if (id is! String ||
+        id.isEmpty ||
+        name is! String ||
+        name.isEmpty ||
+        type is! String ||
+        type.isEmpty) {
+      return null;
+    }
+    return DiscordOAuthConnection(
+      id: id,
+      name: name,
+      type: type,
+      revoked: payload['revoked'] == true,
+      verified: payload['verified'] == true,
+      friendSync: payload['friend_sync'] == true,
+      showActivity: payload['show_activity'] == true,
+      twoWayLink: payload['two_way_link'] == true,
+      visibility: visibility is int ? visibility : 0,
     );
   }
 

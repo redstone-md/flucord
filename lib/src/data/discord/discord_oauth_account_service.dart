@@ -24,6 +24,7 @@ final class DiscordOAuthConfiguration {
       'identify',
       'guilds',
       'guilds.members.read',
+      'connections',
     },
   }) {
     final normalizedClientId = clientId.trim();
@@ -302,7 +303,14 @@ final class NativeDiscordOAuthAccountService
       final guilds = grant.scopes.contains('guilds')
           ? await client.getCurrentUserGuilds()
           : const <Map<String, Object?>>[];
-      return _accountMapper.map(user: user, guilds: guilds);
+      final connections = grant.scopes.contains('connections')
+          ? await client.getCurrentUserConnections()
+          : const <Map<String, Object?>>[];
+      return _accountMapper.map(
+        user: user,
+        guilds: guilds,
+        connections: connections,
+      );
     } finally {
       client.close();
     }

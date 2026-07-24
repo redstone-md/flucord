@@ -167,6 +167,64 @@ final class DiscordOAuthGuildMembership {
   int get roleCount => roleIds.length;
 }
 
+final class DiscordOAuthConnection {
+  factory DiscordOAuthConnection({
+    required String id,
+    required String name,
+    required String type,
+    bool revoked = false,
+    bool verified = false,
+    bool friendSync = false,
+    bool showActivity = false,
+    bool twoWayLink = false,
+    int visibility = 0,
+  }) {
+    final normalizedId = id.trim();
+    final normalizedName = name.trim();
+    final normalizedType = type.trim().toLowerCase();
+    if (normalizedId.isEmpty ||
+        normalizedName.isEmpty ||
+        normalizedType.isEmpty) {
+      throw ArgumentError('Connection id, name, and type cannot be empty');
+    }
+    return DiscordOAuthConnection._(
+      id: normalizedId,
+      name: normalizedName,
+      type: normalizedType,
+      revoked: revoked,
+      verified: verified,
+      friendSync: friendSync,
+      showActivity: showActivity,
+      twoWayLink: twoWayLink,
+      visibility: visibility,
+    );
+  }
+
+  const DiscordOAuthConnection._({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.revoked,
+    required this.verified,
+    required this.friendSync,
+    required this.showActivity,
+    required this.twoWayLink,
+    required this.visibility,
+  });
+
+  final String id;
+  final String name;
+  final String type;
+  final bool revoked;
+  final bool verified;
+  final bool friendSync;
+  final bool showActivity;
+  final bool twoWayLink;
+  final int visibility;
+
+  bool get isPublic => visibility == 1;
+}
+
 final class DiscordOAuthAccount {
   factory DiscordOAuthAccount({
     required String id,
@@ -174,12 +232,14 @@ final class DiscordOAuthAccount {
     required String displayName,
     String? avatarUrl,
     Iterable<DiscordOAuthGuild> guilds = const [],
+    Iterable<DiscordOAuthConnection> connections = const [],
   }) => DiscordOAuthAccount._(
     id: id,
     username: username,
     displayName: displayName,
     avatarUrl: avatarUrl,
     guilds: List.unmodifiable(guilds),
+    connections: List.unmodifiable(connections),
   );
 
   const DiscordOAuthAccount._({
@@ -188,6 +248,7 @@ final class DiscordOAuthAccount {
     required this.displayName,
     required this.avatarUrl,
     required this.guilds,
+    required this.connections,
   });
 
   final String id;
@@ -195,8 +256,10 @@ final class DiscordOAuthAccount {
   final String displayName;
   final String? avatarUrl;
   final List<DiscordOAuthGuild> guilds;
+  final List<DiscordOAuthConnection> connections;
 
   int get guildCount => guilds.length;
+  int get connectionCount => connections.length;
 }
 
 abstract interface class DiscordOAuthGrantVault {

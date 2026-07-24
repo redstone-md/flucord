@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_oauth_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
 
 class OAuthConnectionSection extends StatelessWidget {
@@ -32,7 +33,7 @@ class OAuthConnectionSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'OAuth links your profile, server directory, and current-user server membership. Discord does not grant third-party access to channel messages.',
+            'OAuth links your profile, connected accounts, server directory, and current-user server membership. Discord does not grant third-party access to friends or messages.',
             style: TextStyle(
               color: context.surfaces.muted,
               fontSize: 11,
@@ -48,6 +49,8 @@ class OAuthConnectionSection extends StatelessWidget {
             onUnlink: onUnlink,
           ),
           if (linked && account != null) ...[
+            const SizedBox(height: 16),
+            OAuthConnectedAccountDirectory(connections: account.connections),
             const SizedBox(height: 16),
             _OAuthGuildDirectory(guilds: account.guilds),
           ],

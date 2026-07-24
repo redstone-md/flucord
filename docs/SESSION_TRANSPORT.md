@@ -74,12 +74,13 @@ to a user's channel history. Flucord also does not infer chat access from
   a client secret, and accepts the callback only on the exact registered
   `flucord://oauth/discord/callback` route.
 - Widgets and application controllers see only immutable `DiscordOAuthAccount`
-  profile and `DiscordOAuthGuild` directory metadata. Access tokens, refresh
-  tokens, authorization codes, and the PKCE verifier remain inside data-layer
-  services and the credential vault.
-- `OAuthGuildDirectoryController` owns only the selected authorized guild ID.
-  It projects the immutable OAuth directory into the disconnected native shell
-  and never manufactures channels, messages, read state, or Gateway presence.
+  profile, `DiscordOAuthConnection`, and `DiscordOAuthGuild` directory metadata.
+  Access tokens, refresh tokens, authorization codes, and the PKCE verifier
+  remain inside data-layer services and the credential vault.
+- `OAuthGuildDirectoryController` owns only the account-home versus authorized
+  guild navigation destination. It projects immutable OAuth directories into
+  the disconnected native shell and never manufactures friends, channels,
+  messages, read state, or Gateway presence.
 - `OAuthGuildMembershipController` owns asynchronous, per-guild server state
   for the documented `guilds.members.read` endpoint. It caches current-user
   membership independently from selection, rejects stale responses after an

@@ -30,6 +30,7 @@ void main() {
         'identify',
         'guilds',
         'guilds.members.read',
+        'connections',
         'dm_channels.read',
       ],
       expiresAt: DateTime.utc(2026, 8),
@@ -39,6 +40,10 @@ void main() {
     expect(session.supports(DiscordSessionCapability.guildDirectory), isTrue);
     expect(
       session.supports(DiscordSessionCapability.currentGuildMembership),
+      isTrue,
+    );
+    expect(
+      session.supports(DiscordSessionCapability.connectionDirectory),
       isTrue,
     );
     expect(

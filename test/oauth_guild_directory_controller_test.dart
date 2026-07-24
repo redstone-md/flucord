@@ -21,11 +21,31 @@ void main() {
     expect(controller.selectedGuildId, 'guild-2');
     expect(notifications, 1);
 
+    controller.selectAccountHome();
+    expect(controller.accountHomeSelected, isTrue);
+    expect(controller.selectedGuildId, isNull);
+    expect(notifications, 2);
+
+    controller.selectGuild(account, 'guild-2');
+    expect(controller.accountHomeSelected, isFalse);
+    expect(controller.selectedGuildId, 'guild-2');
+    expect(notifications, 3);
+
     controller.reconcile(_account(['guild-2', 'guild-3']));
     expect(controller.selectedGuildId, 'guild-2');
     controller.reconcile(_account(['guild-3']));
     expect(controller.selectedGuildId, 'guild-3');
     controller.reconcile(null);
+    expect(controller.selectedGuildId, isNull);
+    expect(controller.accountHomeSelected, isFalse);
+  });
+
+  test('uses account home when the authorized guild directory is empty', () {
+    final controller = OAuthGuildDirectoryController();
+
+    controller.reconcile(_account(const []));
+
+    expect(controller.accountHomeSelected, isTrue);
     expect(controller.selectedGuildId, isNull);
   });
 }

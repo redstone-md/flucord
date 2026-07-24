@@ -102,8 +102,12 @@ class FlucordShell extends StatelessWidget {
             listenable: oauthGuildDirectoryController,
             builder: (context, _) => OAuthGuildWorkspace(
               account: account,
+              accountHomeSelected:
+                  oauthGuildDirectoryController.accountHomeSelected,
               membershipController: oauthGuildMembershipController,
               selectedGuildId: oauthGuildDirectoryController.selectedGuildId,
+              onOpenAccountHome:
+                  oauthGuildDirectoryController.selectAccountHome,
               onSelectGuild: (guildId) =>
                   oauthGuildDirectoryController.selectGuild(account, guildId),
               onOpenConnections: () => _openConnections(context),
