@@ -30,6 +30,13 @@ Channel mentions navigate inside Flucord. Web links open through the native OS
 launcher only for `http` and `https` schemes; Markdown never introduces an
 embedded browser surface.
 
+Every remote file, image, video, and audio attachment exposes the same compact
+native Save As control. Downloads stream through Dart IO with live determinate
+or indeterminate progress and explicit cancellation. Flucord writes a sibling
+`.part` file first, preserves an existing destination until the response is
+complete, and performs the final replacement only after byte-count validation;
+failures remain retryable on the attachment without leaving partial files.
+
 The composer emoji control opens an anchored native picker, searches common
 Unicode shortcodes and the selected server's documented custom emoji, and
 inserts the result at the current caret or selection. Guild emoji load through

@@ -1,47 +1,228 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/attachment_download.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'native_inline_video_player.dart';
 import 'native_voice_message_player.dart';
 
-class MessageAttachmentView extends StatelessWidget {
+enum _AttachmentTransferState { idle, downloading, saved, failed }
+
+class MessageAttachmentView extends StatefulWidget {
   const MessageAttachmentView({
     required this.attachment,
+    this.downloadService,
     this.inlineVideoBuilder = buildNativeInlineVideo,
     this.inlineVoiceBuilder = buildNativeVoiceMessage,
     super.key,
   });
 
   final MessageAttachment attachment;
+  final AttachmentDownloadService? downloadService;
   final InlineVideoBuilder inlineVideoBuilder;
   final InlineVoiceBuilder inlineVoiceBuilder;
 
   @override
-  Widget build(BuildContext context) {
-    if (attachment.isImage && attachment.url.isNotEmpty) {
-      return _ImageAttachment(attachment: attachment);
+  State<MessageAttachmentView> createState() => _MessageAttachmentViewState();
+}
+
+class _MessageAttachmentViewState extends State<MessageAttachmentView> {
+  _AttachmentTransferState _transferState = _AttachmentTransferState.idle;
+  AttachmentDownloadCancellation? _cancellation;
+  AttachmentDownloadProgress? _progress;
+  int _generation = 0;
+
+  MessageAttachment get _attachment => widget.attachment;
+  bool get _canDownload {
+    final uri = Uri.tryParse(_attachment.url);
+    return widget.downloadService != null &&
+        uri != null &&
+        uri.host.isNotEmpty &&
+        (uri.scheme == 'https' || uri.scheme == 'http');
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageAttachmentView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attachment.id != widget.attachment.id ||
+        oldWidget.attachment.url != widget.attachment.url) {
+      _cancelTransfer(updateUi: false);
+      _transferState = _AttachmentTransferState.idle;
+      _progress = null;
     }
-    if (attachment.isVideo && attachment.url.isNotEmpty) {
-      final ratio = attachment.width != null && attachment.height != null
-          ? attachment.width! / attachment.height!
+  }
+
+  @override
+  void dispose() {
+    _cancelTransfer(updateUi: false);
+    super.dispose();
+  }
+
+  Future<void> _saveAttachment() async {
+    final service = widget.downloadService;
+    if (service == null ||
+        _transferState == _AttachmentTransferState.downloading) {
+      return;
+    }
+    final cancellation = AttachmentDownloadCancellation();
+    final generation = ++_generation;
+    _cancellation = cancellation;
+    setState(() {
+      _transferState = _AttachmentTransferState.downloading;
+      _progress = null;
+    });
+    try {
+      final result = await service.save(
+        _attachment,
+        cancellation: cancellation,
+        onProgress: (progress) {
+          if (!mounted || generation != _generation) return;
+          setState(() => _progress = progress);
+        },
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _transferState = result == null
+            ? _AttachmentTransferState.idle
+            : _AttachmentTransferState.saved;
+        _progress = null;
+        _cancellation = null;
+      });
+      if (result != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved ${_attachment.fileName}')),
+        );
+      }
+    } on Object {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _transferState = _AttachmentTransferState.failed;
+        _progress = null;
+        _cancellation = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save ${_attachment.fileName}.')),
+      );
+    }
+  }
+
+  void _cancelTransfer({bool updateUi = true}) {
+    _generation++;
+    _cancellation?.cancel();
+    _cancellation = null;
+    _progress = null;
+    if (updateUi && mounted) {
+      setState(() => _transferState = _AttachmentTransferState.idle);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    late final Widget content;
+    if (_attachment.isImage && _attachment.url.isNotEmpty) {
+      content = _ImageAttachment(attachment: _attachment);
+    } else if (_attachment.isVideo && _attachment.url.isNotEmpty) {
+      final ratio = _attachment.width != null && _attachment.height != null
+          ? _attachment.width! / _attachment.height!
           : 16 / 9;
-      return inlineVideoBuilder(
-        key: ValueKey('attachment-video-${attachment.id}'),
-        url: attachment.url,
+      content = widget.inlineVideoBuilder(
+        key: ValueKey('attachment-video-${_attachment.id}'),
+        url: _attachment.url,
         aspectRatio: ratio,
       );
-    }
-    if (attachment.isAudio && attachment.url.isNotEmpty) {
-      return inlineVoiceBuilder(
-        key: ValueKey('attachment-audio-${attachment.id}'),
-        url: attachment.url,
-        duration: attachment.duration,
-        waveform: attachment.waveform,
+    } else if (_attachment.isAudio && _attachment.url.isNotEmpty) {
+      content = widget.inlineVoiceBuilder(
+        key: ValueKey('attachment-audio-${_attachment.id}'),
+        url: _attachment.url,
+        duration: _attachment.duration,
+        waveform: _attachment.waveform,
+      );
+      if (!_canDownload) return content;
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 370),
+        child: Row(
+          children: [
+            Expanded(child: content),
+            const SizedBox(width: 4),
+            _transferButton(overlaid: false),
+          ],
+        ),
+      );
+    } else {
+      return _FileAttachment(
+        attachment: _attachment,
+        trailing: _canDownload ? _transferButton(overlaid: false) : null,
       );
     }
-    return _FileAttachment(attachment: attachment);
+    if (!_canDownload) return content;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        content,
+        Positioned(top: 6, right: 6, child: _transferButton(overlaid: true)),
+      ],
+    );
   }
+
+  Widget _transferButton({required bool overlaid}) => Container(
+    width: 30,
+    height: 30,
+    decoration: overlaid
+        ? BoxDecoration(
+            color: context.surfaces.surface.withValues(alpha: 0.94),
+            border: Border.all(color: context.surfaces.border),
+            borderRadius: BorderRadius.circular(4),
+          )
+        : null,
+    child: IconButton(
+      key: ValueKey('$_transferActionName-attachment-${_attachment.id}'),
+      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+      padding: EdgeInsets.zero,
+      onPressed: _transferState == _AttachmentTransferState.downloading
+          ? _cancelTransfer
+          : _saveAttachment,
+      tooltip: _transferTooltip,
+      icon: _transferIcon,
+    ),
+  );
+
+  String get _transferActionName => switch (_transferState) {
+    _AttachmentTransferState.idle => 'download',
+    _AttachmentTransferState.downloading => 'cancel-download',
+    _AttachmentTransferState.saved => 'save-again',
+    _AttachmentTransferState.failed => 'retry-download',
+  };
+
+  String get _transferTooltip => switch (_transferState) {
+    _AttachmentTransferState.idle => 'Save attachment',
+    _AttachmentTransferState.downloading => 'Cancel download',
+    _AttachmentTransferState.saved => 'Saved · save again',
+    _AttachmentTransferState.failed => 'Download failed · retry',
+  };
+
+  Widget get _transferIcon => switch (_transferState) {
+    _AttachmentTransferState.idle => const Icon(
+      Icons.download_outlined,
+      size: 17,
+    ),
+    _AttachmentTransferState.downloading => SizedBox.square(
+      dimension: 15,
+      child: CircularProgressIndicator(
+        value: _progress?.fraction,
+        strokeWidth: 2,
+      ),
+    ),
+    _AttachmentTransferState.saved => const Icon(
+      Icons.check_rounded,
+      size: 17,
+      color: FlucordColors.success,
+    ),
+    _AttachmentTransferState.failed => Icon(
+      Icons.refresh_rounded,
+      size: 17,
+      color: Theme.of(context).colorScheme.error,
+    ),
+  };
 }
 
 class _ImageAttachment extends StatelessWidget {
@@ -72,9 +253,10 @@ class _ImageAttachment extends StatelessWidget {
 }
 
 class _FileAttachment extends StatelessWidget {
-  const _FileAttachment({required this.attachment});
+  const _FileAttachment({required this.attachment, this.trailing});
 
   final MessageAttachment attachment;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +303,10 @@ class _FileAttachment extends StatelessWidget {
                 ],
               ),
             ),
+            if (trailing case final action?) ...[
+              const SizedBox(width: 8),
+              action,
+            ],
           ],
         ),
       ),

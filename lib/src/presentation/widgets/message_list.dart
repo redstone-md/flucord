@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'anchored_scroll_controller.dart';
@@ -35,6 +36,7 @@ class MessageList extends StatefulWidget {
     required this.onLoadOlder,
     required this.externalLinkLauncher,
     required this.onSelectChannel,
+    this.attachmentDownloadService,
     super.key,
   });
 
@@ -59,6 +61,7 @@ class MessageList extends StatefulWidget {
   final VoidCallback onLoadOlder;
   final ExternalLinkLauncher externalLinkLauncher;
   final ValueChanged<String> onSelectChannel;
+  final AttachmentDownloadService? attachmentDownloadService;
 
   @override
   State<MessageList> createState() => _MessageListState();
@@ -402,6 +405,8 @@ class _MessageListState extends State<MessageList> {
                           onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                           linkLauncher: widget.externalLinkLauncher,
                           onSelectChannel: widget.onSelectChannel,
+                          attachmentDownloadService:
+                              widget.attachmentDownloadService,
                         ),
                     ],
                   ),

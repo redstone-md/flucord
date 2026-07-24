@@ -194,6 +194,11 @@ browser runtime or dependency on Discord's private user API.
     names and metadata, insert documented mention syntax at the active range,
     and support mouse plus Up/Down, Enter, Tab, and Escape without stealing
     text-field focus or overflowing compact desktop layouts.
+36. Completed: save remote file, image, video, and audio attachments through a
+    native desktop destination dialog with streamed progress, cancellation,
+    retry, server-filename sanitization, sibling partial-file cleanup, and
+    replacement that preserves an existing destination until the response is
+    complete and its byte count has been validated.
 
 ## Protocol safety
 

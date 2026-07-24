@@ -4,6 +4,7 @@ class _ConversationPane extends StatefulWidget {
   const _ConversationPane({
     required this.workspace,
     required this.externalLinkLauncher,
+    required this.attachmentDownloadService,
     required this.channel,
     required this.channels,
     required this.query,
@@ -59,6 +60,7 @@ class _ConversationPane extends StatefulWidget {
 
   final ChatWorkspace workspace;
   final ExternalLinkLauncher externalLinkLauncher;
+  final AttachmentDownloadService attachmentDownloadService;
   final ConversationChannel channel;
   final List<ConversationChannel> channels;
   final String query;
@@ -155,6 +157,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
       ChannelKind.text => MessageList(
         workspace: widget.workspace,
         externalLinkLauncher: widget.externalLinkLauncher,
+        attachmentDownloadService: widget.attachmentDownloadService,
         channel: widget.channel,
         query: widget.query,
         targetMessageId: widget.targetMessageId,

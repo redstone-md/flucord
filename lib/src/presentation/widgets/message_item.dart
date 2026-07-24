@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
@@ -39,6 +40,7 @@ class MessageItem extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
+    this.attachmentDownloadService,
     super.key,
   });
 
@@ -60,6 +62,7 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
+  final AttachmentDownloadService? attachmentDownloadService;
 
   @override
   State<MessageItem> createState() => _MessageItemState();
@@ -207,7 +210,10 @@ class _MessageItemState extends State<MessageItem> {
         for (final attachment in message.attachments)
           Padding(
             padding: const EdgeInsets.only(top: 7),
-            child: MessageAttachmentView(attachment: attachment),
+            child: MessageAttachmentView(
+              attachment: attachment,
+              downloadService: widget.attachmentDownloadService,
+            ),
           ),
         if (!message.suppressesEmbeds)
           for (var index = 0; index < message.embeds.length; index++)

@@ -10,6 +10,7 @@ import '../application/quick_switcher_catalog.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
+import '../domain/attachment_download.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/voice_message_recorder.dart';
 import 'widgets/channel_sidebar.dart';
@@ -44,6 +45,7 @@ class FlucordShell extends StatelessWidget {
     required this.workspaceController,
     required this.voiceController,
     required this.voiceMessageRecorder,
+    required this.attachmentDownloadService,
     required this.externalLinkLauncher,
     super.key,
   });
@@ -53,6 +55,7 @@ class FlucordShell extends StatelessWidget {
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final VoiceMessageRecorder? voiceMessageRecorder;
+  final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;
 
   @override
@@ -174,6 +177,8 @@ class FlucordShell extends StatelessWidget {
                             : _ConversationPane(
                                 workspace: workspace,
                                 externalLinkLauncher: externalLinkLauncher,
+                                attachmentDownloadService:
+                                    attachmentDownloadService,
                                 channel: channel,
                                 channels: channels,
                                 query: workspaceController.query,

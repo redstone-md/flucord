@@ -6,7 +6,9 @@ import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/workspace_controller.dart';
 import 'application/voice_controller.dart';
+import 'data/native_attachment_download_service.dart';
 import 'data/native_external_link_launcher.dart';
+import 'domain/attachment_download.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
@@ -26,6 +28,7 @@ class FlucordApp extends StatefulWidget {
     this.voiceOpusCodecFactory,
     this.voicePlaybackService,
     this.voiceMessageRecorder,
+    this.attachmentDownloadService,
     this.externalLinkLauncher,
     super.key,
   });
@@ -35,6 +38,7 @@ class FlucordApp extends StatefulWidget {
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;
   final VoiceAudioPlaybackService? voicePlaybackService;
   final VoiceMessageRecorder? voiceMessageRecorder;
+  final AttachmentDownloadService? attachmentDownloadService;
   final ExternalLinkLauncher? externalLinkLauncher;
 
   @override
@@ -46,6 +50,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ConnectionController _connectionController;
   late final WorkspaceController _workspaceController;
   late final VoiceController _voiceController;
+  late final AttachmentDownloadService _attachmentDownloadService;
 
   @override
   void initState() {
@@ -57,6 +62,8 @@ class _FlucordAppState extends State<FlucordApp> {
       const DiscordRepositoryFactory(),
     );
     _workspaceController = WorkspaceController();
+    _attachmentDownloadService =
+        widget.attachmentDownloadService ?? NativeAttachmentDownloadService();
     _voiceController = VoiceController(
       widget.voiceMediaService ?? const NoopVoiceMediaService(),
       signalingServiceProvider: () => _chatController.voiceSignalingService,
@@ -106,6 +113,7 @@ class _FlucordAppState extends State<FlucordApp> {
           workspaceController: _workspaceController,
           voiceController: _voiceController,
           voiceMessageRecorder: widget.voiceMessageRecorder,
+          attachmentDownloadService: _attachmentDownloadService,
           externalLinkLauncher:
               widget.externalLinkLauncher ?? const NativeExternalLinkLauncher(),
         ),
