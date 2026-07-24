@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
 import 'chat_model_json.dart';
+import 'message_snapshot_codec.dart';
 import 'sqlite_chat_schema.dart';
 import 'sqlite_guild_emoji_store.dart';
 import 'sqlite_guild_scheduled_event_store.dart';

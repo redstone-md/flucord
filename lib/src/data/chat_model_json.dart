@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../domain/chat_models.dart';
 import '../domain/message_embed.dart';
+import 'message_attachment_codec.dart';
 import 'message_embed_codec.dart';
 import 'message_poll_codec.dart';
 import 'message_sticker_codec.dart';
@@ -9,34 +10,11 @@ import 'message_sticker_codec.dart';
 final class ChatModelJson {
   const ChatModelJson._();
 
-  static String attachments(List<MessageAttachment> values) => jsonEncode([
-    for (final value in values)
-      {
-        'id': value.id,
-        'filename': value.fileName,
-        'url': value.url,
-        'size': value.size,
-        'content_type': value.contentType,
-        'width': value.width,
-        'height': value.height,
-      },
-  ]);
+  static String attachments(List<MessageAttachment> values) =>
+      MessageAttachmentCodec.encode(values);
 
   static List<MessageAttachment> attachmentsFrom(String source) =>
-      (jsonDecode(source) as List)
-          .whereType<Map>()
-          .map(
-            (raw) => MessageAttachment(
-              id: raw['id'] as String,
-              fileName: raw['filename'] as String,
-              url: raw['url'] as String,
-              size: raw['size'] as int,
-              contentType: raw['content_type'] as String?,
-              width: raw['width'] as int?,
-              height: raw['height'] as int?,
-            ),
-          )
-          .toList(growable: false);
+      MessageAttachmentCodec.decode(source);
 
   static String embeds(List<MessageEmbed> values) =>
       MessageEmbedCodec.encode(values);

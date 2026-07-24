@@ -9,8 +9,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('SQLite v17 retains system type and message reference', () async {
-    expect(SqliteChatSchema.version, 17);
+  test('SQLite retains system type and message reference', () async {
+    expect(SqliteChatSchema.version, 18);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

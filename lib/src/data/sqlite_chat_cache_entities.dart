@@ -26,6 +26,11 @@ Map<String, Object?> _messageToRow(ChatMessage message) => {
   'message_type': message.type.discordValue,
   'reference_message_id': message.reference?.messageId,
   'reference_channel_id': message.reference?.channelId,
+  'reference_guild_id': message.reference?.guildId,
+  'reference_type':
+      message.reference?.type.discordValue ??
+      DiscordMessageReferenceType.defaultReference.discordValue,
+  'snapshots_json': MessageSnapshotCodec.encode(message.snapshots),
   'sent_at': message.sentAt.toUtc().toIso8601String(),
   'is_edited': message.isEdited ? 1 : 0,
   'attachments_json': ChatModelJson.attachments(message.attachments),
@@ -45,12 +50,24 @@ ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
   body: row['body']! as String,
   type: DiscordMessageType.fromDiscordValue(row['message_type'] as int?),
   reference:
-      row['reference_message_id'] == null && row['reference_channel_id'] == null
+      row['reference_message_id'] == null &&
+          row['reference_channel_id'] == null &&
+          row['reference_guild_id'] == null &&
+          (row['reference_type'] == null ||
+              row['reference_type'] ==
+                  DiscordMessageReferenceType.defaultReference.discordValue)
       ? null
       : MessageReference(
           messageId: row['reference_message_id'] as String?,
           channelId: row['reference_channel_id'] as String?,
+          guildId: row['reference_guild_id'] as String?,
+          type: DiscordMessageReferenceType.fromDiscordValue(
+            row['reference_type'] as int?,
+          ),
         ),
+  snapshots: MessageSnapshotCodec.decode(
+    row['snapshots_json'] as String? ?? '[]',
+  ),
   sentAt: DateTime.parse(row['sent_at']! as String).toLocal(),
   isEdited: row['is_edited'] == 1,
   attachments: ChatModelJson.attachmentsFrom(

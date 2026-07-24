@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import '../../domain/chat_models.dart';
+import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
 import 'discord_color.dart';
@@ -6,6 +9,7 @@ import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
 part 'discord_message_mapper.dart';
+part 'discord_message_snapshot_mapper.dart';
 part 'discord_sticker_mapper.dart';
 part 'discord_scheduled_event_mapper.dart';
 
@@ -189,15 +193,7 @@ final class DiscordMapper {
   }
 
   MessageAttachment _attachment(Map<String, Object?> payload) =>
-      MessageAttachment(
-        id: payload['id'] as String? ?? '',
-        fileName: payload['filename'] as String? ?? 'attachment',
-        url: payload['url'] as String? ?? '',
-        size: payload['size'] as int? ?? 0,
-        contentType: payload['content_type'] as String?,
-        width: payload['width'] as int?,
-        height: payload['height'] as int?,
-      );
+      MessageAttachmentCodec.fromMap(payload);
 
   MessageReaction _reaction(Map<String, Object?> payload) {
     final emoji =

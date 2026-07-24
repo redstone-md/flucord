@@ -39,8 +39,15 @@ extension DiscordMessageMapper on DiscordMapper {
         ? MessageReference(
             messageId: rawReference['message_id'] as String?,
             channelId: rawReference['channel_id'] as String?,
+            guildId: rawReference['guild_id'] as String?,
+            type: DiscordMessageReferenceType.fromDiscordValue(
+              rawReference['type'] as int?,
+            ),
           )
         : fallback?.reference;
+    final snapshots = payload.containsKey('message_snapshots')
+        ? _mapMessageSnapshots(payload['message_snapshots'])
+        : fallback?.snapshots ?? const <MessageSnapshot>[];
     final type = payload.containsKey('type')
         ? DiscordMessageType.fromDiscordValue(payload['type'] as int?)
         : fallback?.type ?? DiscordMessageType.defaultMessage;
@@ -70,6 +77,7 @@ extension DiscordMessageMapper on DiscordMapper {
       poll: poll,
       reply: reply,
       reference: reference,
+      snapshots: snapshots,
       type: type,
     );
   }

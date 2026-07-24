@@ -106,11 +106,74 @@ final class MessageReply {
   final String body;
 }
 
+enum DiscordMessageReferenceType {
+  defaultReference(0),
+  forward(1),
+  unknown(-1);
+
+  const DiscordMessageReferenceType(this.discordValue);
+
+  final int discordValue;
+
+  static DiscordMessageReferenceType fromDiscordValue(int? value) {
+    for (final type in values) {
+      if (type.discordValue == value) return type;
+    }
+    return unknown;
+  }
+}
+
 final class MessageReference {
-  const MessageReference({this.messageId, this.channelId});
+  const MessageReference({
+    this.messageId,
+    this.channelId,
+    this.guildId,
+    this.type = DiscordMessageReferenceType.defaultReference,
+  });
 
   final String? messageId;
   final String? channelId;
+  final String? guildId;
+  final DiscordMessageReferenceType type;
+}
+
+final class MessageComponentSnapshot {
+  const MessageComponentSnapshot(this.payloadJson);
+
+  final String payloadJson;
+}
+
+final class MessageSnapshot {
+  MessageSnapshot({
+    required this.type,
+    required this.body,
+    required this.sentAt,
+    List<MessageAttachment> attachments = const [],
+    List<MessageEmbed> embeds = const [],
+    List<MessageSticker> stickers = const [],
+    Set<String> mentionedUserIds = const {},
+    Set<String> mentionedRoleIds = const {},
+    List<MessageComponentSnapshot> components = const [],
+    this.editedAt,
+    this.flags = 0,
+  }) : attachments = List.unmodifiable(attachments),
+       embeds = List.unmodifiable(embeds),
+       stickers = List.unmodifiable(stickers),
+       mentionedUserIds = Set.unmodifiable(mentionedUserIds),
+       mentionedRoleIds = Set.unmodifiable(mentionedRoleIds),
+       components = List.unmodifiable(components);
+
+  final DiscordMessageType type;
+  final String body;
+  final DateTime sentAt;
+  final DateTime? editedAt;
+  final int flags;
+  final List<MessageAttachment> attachments;
+  final List<MessageEmbed> embeds;
+  final List<MessageSticker> stickers;
+  final Set<String> mentionedUserIds;
+  final Set<String> mentionedRoleIds;
+  final List<MessageComponentSnapshot> components;
 }
 
 final class MessageReaction {
@@ -169,6 +232,7 @@ final class ChatMessage {
     List<MessageEmbed> embeds = const [],
     List<MessageReaction> reactions = const [],
     List<MessageSticker> stickers = const [],
+    List<MessageSnapshot> snapshots = const [],
     this.poll,
     this.reply,
     this.reference,
@@ -179,7 +243,8 @@ final class ChatMessage {
   }) : attachments = List.unmodifiable(attachments),
        embeds = List.unmodifiable(embeds),
        reactions = List.unmodifiable(reactions),
-       stickers = List.unmodifiable(stickers);
+       stickers = List.unmodifiable(stickers),
+       snapshots = List.unmodifiable(snapshots);
 
   final String id;
   final String channelId;
@@ -189,6 +254,7 @@ final class ChatMessage {
   final List<MessageAttachment> attachments;
   final List<MessageEmbed> embeds;
   final List<MessageSticker> stickers;
+  final List<MessageSnapshot> snapshots;
   final MessagePoll? poll;
   final MessageReply? reply;
   final MessageReference? reference;
@@ -199,6 +265,15 @@ final class ChatMessage {
   final bool mentionsCurrentMember;
 
   bool get isSystem => type.isSystem;
+  bool get isForwarded =>
+      reference?.type == DiscordMessageReferenceType.forward &&
+      snapshots.isNotEmpty;
+  bool get canForward =>
+      poll == null &&
+      (type == DiscordMessageType.defaultMessage ||
+          type == DiscordMessageType.reply ||
+          type == DiscordMessageType.chatInputCommand ||
+          type == DiscordMessageType.contextMenuCommand);
 
   ChatMessage copyWith({
     String? body,
@@ -206,6 +281,7 @@ final class ChatMessage {
     List<MessageEmbed>? embeds,
     List<MessageReaction>? reactions,
     List<MessageSticker>? stickers,
+    List<MessageSnapshot>? snapshots,
     MessagePoll? poll,
     MessageReference? reference,
     DiscordMessageType? type,
@@ -221,6 +297,7 @@ final class ChatMessage {
     attachments: attachments ?? this.attachments,
     embeds: embeds ?? this.embeds,
     stickers: stickers ?? this.stickers,
+    snapshots: snapshots ?? this.snapshots,
     poll: poll ?? this.poll,
     reply: reply,
     reference: reference ?? this.reference,
