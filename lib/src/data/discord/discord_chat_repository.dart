@@ -159,7 +159,7 @@ final class DiscordChatRepository
       _directMessages.seed(workspace.channels);
       _voiceSignaling.setCurrentUserId(workspace.currentMemberId);
       await _cache.writeWorkspace(workspace);
-      final gatewayUrl = await _api.getGatewayUrl();
+      final gatewayUrl = await _api.getBotGatewayUrl();
       unawaited(_gateway.connect(gatewayUrl));
       return workspace;
     } catch (error) {

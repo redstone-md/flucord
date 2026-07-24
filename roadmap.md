@@ -211,6 +211,10 @@ browser runtime or dependency on Discord's private user API.
     repository factory, an explicit Bot adapter, and a versioned secure-vault
     codec that migrates the legacy bot-token key. Documented OAuth scopes remain
     capability-limited and cannot be mistaken for full chat/Gateway access.
+40. Completed: separate Discord REST authorization into redacted Bot and OAuth2
+    Bearer values behind one retry/rate-limit executor. Keep the full chat and
+    `/gateway/bot` facade Bot-only, and add a scope- and expiry-gated OAuth
+    identity tracer for documented `/users/@me` and `/users/@me/guilds` access.
 
 ## Protocol safety
 

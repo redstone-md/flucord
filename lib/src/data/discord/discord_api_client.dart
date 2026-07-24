@@ -1,110 +1,36 @@
-import 'dart:convert';
-import 'dart:io';
-
 import '../../domain/chat_models.dart';
 import '../../domain/reaction_repository.dart';
 import '../../domain/voice_message_recorder.dart';
 import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
+import 'discord_rest_client.dart';
+
+export 'discord_rest_client.dart';
 
 part 'discord_api_client_scheduled_events.dart';
 part 'discord_api_client_reactions.dart';
 part 'discord_api_client_forwards.dart';
 part 'discord_api_client_messages.dart';
 
-final class DiscordHttpResponse {
-  const DiscordHttpResponse({
-    required this.statusCode,
-    required this.headers,
-    required this.body,
-  });
-
-  final int statusCode;
-  final Map<String, String> headers;
-  final String body;
-}
-
-abstract interface class DiscordHttpTransport {
-  Future<DiscordHttpResponse> send({
-    required String method,
-    required Uri uri,
-    required Map<String, String> headers,
-    List<int>? body,
-  });
-
-  void close();
-}
-
-final class IoDiscordHttpTransport implements DiscordHttpTransport {
-  IoDiscordHttpTransport({HttpClient? client})
-    : _client = client ?? HttpClient();
-
-  final HttpClient _client;
-
-  @override
-  Future<DiscordHttpResponse> send({
-    required String method,
-    required Uri uri,
-    required Map<String, String> headers,
-    List<int>? body,
-  }) async {
-    final request = await _client.openUrl(method, uri);
-    headers.forEach(request.headers.set);
-    if (body != null) {
-      request.add(body);
-    }
-    final response = await request.close();
-    final responseHeaders = <String, String>{};
-    response.headers.forEach((name, values) {
-      responseHeaders[name.toLowerCase()] = values.join(',');
-    });
-    return DiscordHttpResponse(
-      statusCode: response.statusCode,
-      headers: responseHeaders,
-      body: await utf8.decoder.bind(response).join(),
-    );
-  }
-
-  @override
-  void close() => _client.close(force: true);
-}
-
-final class DiscordApiException implements Exception {
-  const DiscordApiException({required this.statusCode, required this.message});
-
-  final int statusCode;
-  final String message;
-
-  bool get isUnauthorized => statusCode == HttpStatus.unauthorized;
-  bool get isForbidden => statusCode == HttpStatus.forbidden;
-
-  @override
-  String toString() => 'Discord API $statusCode: $message';
-}
-
-typedef DelayFunction = Future<void> Function(Duration duration);
-
+/// Bot-only Discord REST facade for chat, guild, message, and Gateway routes.
 final class DiscordApiClient {
-  DiscordApiClient({
+  factory DiscordApiClient({
     required String botToken,
     DiscordHttpTransport? transport,
     DelayFunction? delay,
     Uri? baseUri,
-  }) : _botToken = botToken.trim(),
-       _transport = transport ?? IoDiscordHttpTransport(),
-       _delay = delay ?? Future<void>.delayed,
-       _baseUri = baseUri ?? Uri.parse('https://discord.com/api/v10') {
-    if (_botToken.isEmpty) {
-      throw ArgumentError.value(botToken, 'botToken', 'Token cannot be empty');
-    }
-  }
+  }) => DiscordApiClient._(
+    DiscordRestClient(
+      authorization: DiscordBotAuthorization(botToken),
+      transport: transport,
+      delay: delay,
+      baseUri: baseUri,
+    ),
+  );
 
-  final String _botToken;
-  final DiscordHttpTransport _transport;
-  final DelayFunction _delay;
-  final Uri _baseUri;
+  const DiscordApiClient._(this._rest);
 
-  static const _userAgent = 'Flucord/0.1.0 (native Flutter client)';
+  final DiscordRestClient _rest;
 
   Future<Map<String, Object?>> getCurrentUser() => _getObject('/users/@me');
 
@@ -325,7 +251,7 @@ final class DiscordApiClient {
     return response.cast<String, Object?>();
   }
 
-  Future<String> getGatewayUrl() async {
+  Future<String> getBotGatewayUrl() async {
     final payload = await _getObject('/gateway/bot');
     final url = payload['url'];
     if (url is! String || url.isEmpty) {
@@ -337,24 +263,13 @@ final class DiscordApiClient {
     return url;
   }
 
-  Future<Map<String, Object?>> _getObject(String path) =>
-      _requestObject('GET', path);
+  Future<Map<String, Object?>> _getObject(String path) => _rest.getObject(path);
 
   Future<List<Map<String, Object?>>> _getList(
     String path, {
     Map<String, String>? query,
   }) async {
-    final payload = await _request('GET', path, query: query);
-    if (payload is! List) {
-      throw const DiscordApiException(
-        statusCode: 502,
-        message: 'Expected a JSON array',
-      );
-    }
-    return payload
-        .whereType<Map>()
-        .map((item) => item.cast<String, Object?>())
-        .toList(growable: false);
+    return _rest.getList(path, query: query);
   }
 
   Future<Map<String, Object?>> _requestObject(
@@ -363,18 +278,11 @@ final class DiscordApiClient {
     Map<String, String>? query,
     Map<String, Object?>? body,
   }) async {
-    final payload = await _request(method, path, query: query, body: body);
-    if (payload is! Map) {
-      throw const DiscordApiException(
-        statusCode: 502,
-        message: 'Expected a JSON object',
-      );
-    }
-    return payload.cast<String, Object?>();
+    return _rest.requestObject(method, path, query: query, body: body);
   }
 
   Future<void> _requestEmpty(String method, String path) async {
-    await _request(method, path);
+    await _rest.requestEmpty(method, path);
   }
 
   Future<Object?> _request(
@@ -384,54 +292,14 @@ final class DiscordApiClient {
     Map<String, Object?>? body,
     List<int>? rawBody,
     String contentType = 'application/json',
-  }) async {
-    final uri = Uri.parse(
-      '${_baseUri.toString()}$path',
-    ).replace(queryParameters: query);
-    for (var attempt = 0; attempt < 3; attempt++) {
-      final response = await _transport.send(
-        method: method,
-        uri: uri,
-        headers: {
-          HttpHeaders.authorizationHeader: 'Bot $_botToken',
-          HttpHeaders.acceptHeader: 'application/json',
-          HttpHeaders.contentTypeHeader: contentType,
-          HttpHeaders.userAgentHeader: _userAgent,
-        },
-        body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
-      );
-      final payload = response.body.isEmpty ? null : jsonDecode(response.body);
-      if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
-        await _delay(_retryAfter(payload, response.headers));
-        continue;
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw DiscordApiException(
-          statusCode: response.statusCode,
-          message: _errorMessage(payload),
-        );
-      }
-      return payload;
-    }
-    throw const DiscordApiException(
-      statusCode: 429,
-      message: 'Rate limit retry budget exhausted',
-    );
-  }
+  }) => _rest.request(
+    method,
+    path,
+    query: query,
+    body: body,
+    rawBody: rawBody,
+    contentType: contentType,
+  );
 
-  static Duration _retryAfter(Object? payload, Map<String, String> headers) {
-    num? seconds;
-    if (payload is Map) seconds = payload['retry_after'] as num?;
-    seconds ??= num.tryParse(headers['retry-after'] ?? '');
-    return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());
-  }
-
-  static String _errorMessage(Object? payload) {
-    if (payload is Map && payload['message'] is String) {
-      return payload['message']! as String;
-    }
-    return 'Request failed';
-  }
-
-  void close() => _transport.close();
+  void close() => _rest.close();
 }

@@ -14,13 +14,24 @@ ConnectionController
   -> DiscordAccountSession + capabilities
   -> ChatRepositoryFactory (domain contract)
   -> DiscordBotRepositoryFactory (current concrete adapter)
-  -> DiscordApiClient + DiscordGatewayClient
+  -> DiscordApiClient (Bot-only) + DiscordGatewayClient (Bot-only)
+
+DiscordOAuthUserSession
+  -> DiscordOAuthIdentityClient
+  -> DiscordRestClient (Bearer authorization)
+  -> /users/@me + /users/@me/guilds only
 ```
 
 REST and Gateway classes remain explicitly bot-specific. They are allowed to
 extract the bot credential only after `DiscordBotRepositoryFactory` has checked
 the session kind. UI, workspace controllers, and repository consumers see only
 the session kind and capability set.
+
+`DiscordRestClient` owns the shared HTTP, JSON, retry, and rate-limit behavior.
+Its sealed authorization value writes either the documented `Bot` or `Bearer`
+scheme and redacts the credential from string output. The Bot chat facade can
+only construct Bot authorization; a Bearer value cannot be injected into its
+message, channel, or `/gateway/bot` methods.
 
 ## Capability matrix
 
@@ -49,9 +60,10 @@ to a user's channel history. Flucord also does not infer chat access from
   operating-system credential vault.
 - The legacy `discord_bot_token` key remains readable and is deleted after the
   next successful versioned write.
-- OAuth access tokens are not persisted by the Bot credential codec. A future
-  OAuth adapter must own authorization-code exchange, expiry, refresh-token
-  rotation, and revocation as one separate subsystem.
+- OAuth access tokens are not persisted by the Bot credential codec. The OAuth
+  identity adapter rejects expired sessions and missing scopes before network
+  access. A future authorization-code subsystem must still own login, expiry
+  scheduling, refresh-token rotation, revocation, and secure persistence.
 
 ## Adapter requirements
 

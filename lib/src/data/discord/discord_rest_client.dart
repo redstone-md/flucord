@@ -1,0 +1,227 @@
+import 'dart:convert';
+import 'dart:io';
+
+final class DiscordHttpResponse {
+  const DiscordHttpResponse({
+    required this.statusCode,
+    required this.headers,
+    required this.body,
+  });
+
+  final int statusCode;
+  final Map<String, String> headers;
+  final String body;
+}
+
+abstract interface class DiscordHttpTransport {
+  Future<DiscordHttpResponse> send({
+    required String method,
+    required Uri uri,
+    required Map<String, String> headers,
+    List<int>? body,
+  });
+
+  void close();
+}
+
+final class IoDiscordHttpTransport implements DiscordHttpTransport {
+  IoDiscordHttpTransport({HttpClient? client})
+    : _client = client ?? HttpClient();
+
+  final HttpClient _client;
+
+  @override
+  Future<DiscordHttpResponse> send({
+    required String method,
+    required Uri uri,
+    required Map<String, String> headers,
+    List<int>? body,
+  }) async {
+    final request = await _client.openUrl(method, uri);
+    headers.forEach(request.headers.set);
+    if (body != null) request.add(body);
+    final response = await request.close();
+    final responseHeaders = <String, String>{};
+    response.headers.forEach((name, values) {
+      responseHeaders[name.toLowerCase()] = values.join(',');
+    });
+    return DiscordHttpResponse(
+      statusCode: response.statusCode,
+      headers: responseHeaders,
+      body: await utf8.decoder.bind(response).join(),
+    );
+  }
+
+  @override
+  void close() => _client.close(force: true);
+}
+
+final class DiscordApiException implements Exception {
+  const DiscordApiException({required this.statusCode, required this.message});
+
+  final int statusCode;
+  final String message;
+
+  bool get isUnauthorized => statusCode == HttpStatus.unauthorized;
+  bool get isForbidden => statusCode == HttpStatus.forbidden;
+
+  @override
+  String toString() => 'Discord API $statusCode: $message';
+}
+
+sealed class DiscordRestAuthorization {
+  DiscordRestAuthorization._(String credential, String argumentName)
+    : _credential = credential.trim() {
+    if (_credential.isEmpty) {
+      throw ArgumentError.value(
+        credential,
+        argumentName,
+        'Credential cannot be empty',
+      );
+    }
+  }
+
+  final String _credential;
+
+  String get _scheme;
+  String get _headerValue => '$_scheme $_credential';
+
+  @override
+  String toString() => '$runtimeType(<redacted>)';
+}
+
+final class DiscordBotAuthorization extends DiscordRestAuthorization {
+  DiscordBotAuthorization(String token) : super._(token, 'token');
+
+  @override
+  String get _scheme => 'Bot';
+}
+
+final class DiscordBearerAuthorization extends DiscordRestAuthorization {
+  DiscordBearerAuthorization(String accessToken)
+    : super._(accessToken, 'accessToken');
+
+  @override
+  String get _scheme => 'Bearer';
+}
+
+typedef DelayFunction = Future<void> Function(Duration duration);
+
+final class DiscordRestClient {
+  DiscordRestClient({
+    required this._authorization,
+    DiscordHttpTransport? transport,
+    DelayFunction? delay,
+    Uri? baseUri,
+  }) : _transport = transport ?? IoDiscordHttpTransport(),
+       _delay = delay ?? Future<void>.delayed,
+       _baseUri = baseUri ?? Uri.parse('https://discord.com/api/v10');
+
+  static const _userAgent = 'Flucord/0.1.0 (native Flutter client)';
+
+  final DiscordRestAuthorization _authorization;
+  final DiscordHttpTransport _transport;
+  final DelayFunction _delay;
+  final Uri _baseUri;
+
+  Future<Map<String, Object?>> getObject(String path) =>
+      requestObject('GET', path);
+
+  Future<List<Map<String, Object?>>> getList(
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final payload = await request('GET', path, query: query);
+    if (payload is! List) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a JSON array',
+      );
+    }
+    return payload
+        .whereType<Map>()
+        .map((item) => item.cast<String, Object?>())
+        .toList(growable: false);
+  }
+
+  Future<Map<String, Object?>> requestObject(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Map<String, Object?>? body,
+  }) async {
+    final payload = await request(method, path, query: query, body: body);
+    if (payload is! Map) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a JSON object',
+      );
+    }
+    return payload.cast<String, Object?>();
+  }
+
+  Future<void> requestEmpty(String method, String path) async {
+    await request(method, path);
+  }
+
+  Future<Object?> request(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Map<String, Object?>? body,
+    List<int>? rawBody,
+    String contentType = 'application/json',
+  }) async {
+    final uri = Uri.parse(
+      '${_baseUri.toString()}$path',
+    ).replace(queryParameters: query);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final response = await _transport.send(
+        method: method,
+        uri: uri,
+        headers: {
+          HttpHeaders.authorizationHeader: _authorization._headerValue,
+          HttpHeaders.acceptHeader: 'application/json',
+          HttpHeaders.contentTypeHeader: contentType,
+          HttpHeaders.userAgentHeader: _userAgent,
+        },
+        body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
+      );
+      final payload = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
+        await _delay(_retryAfter(payload, response.headers));
+        continue;
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw DiscordApiException(
+          statusCode: response.statusCode,
+          message: _errorMessage(payload),
+        );
+      }
+      return payload;
+    }
+    throw const DiscordApiException(
+      statusCode: 429,
+      message: 'Rate limit retry budget exhausted',
+    );
+  }
+
+  static Duration _retryAfter(Object? payload, Map<String, String> headers) {
+    num? seconds;
+    if (payload is Map) seconds = payload['retry_after'] as num?;
+    seconds ??= num.tryParse(headers['retry-after'] ?? '');
+    return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());
+  }
+
+  static String _errorMessage(Object? payload) {
+    if (payload is Map && payload['message'] is String) {
+      return payload['message']! as String;
+    }
+    return 'Request failed';
+  }
+
+  void close() => _transport.close();
+
+  @override
+  String toString() => 'DiscordRestClient($_authorization)';
+}
