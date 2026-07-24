@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../domain/chat_models.dart';
+import '../../domain/reaction_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_poll_codec.dart';
 
 part 'discord_api_client_scheduled_events.dart';
+part 'discord_api_client_reactions.dart';
 
 final class DiscordHttpResponse {
   const DiscordHttpResponse({

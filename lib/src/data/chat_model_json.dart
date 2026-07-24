@@ -79,8 +79,12 @@ final class ChatModelJson {
         'name': value.emojiName,
         'id': value.emojiId,
         'count': value.count,
+        'normal_count': value.normalCount,
+        'burst_count': value.burstCount,
         'animated': value.animated,
         'me': value.reactedByCurrentUser,
+        'me_burst': value.burstByCurrentUser,
+        'burst_colors': value.burstColorValues,
       },
   ]);
 
@@ -92,8 +96,14 @@ final class ChatModelJson {
               emojiName: raw['name'] as String,
               emojiId: raw['id'] as String?,
               count: raw['count'] as int,
+              normalCount: raw['normal_count'] as int?,
+              burstCount: raw['burst_count'] as int? ?? 0,
               animated: raw['animated'] as bool,
               reactedByCurrentUser: raw['me'] as bool,
+              burstByCurrentUser: raw['me_burst'] as bool? ?? false,
+              burstColorValues: (raw['burst_colors'] as List? ?? const [])
+                  .whereType<int>()
+                  .toList(),
             ),
           )
           .toList(growable: false);

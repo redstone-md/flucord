@@ -1,6 +1,7 @@
 import '../../domain/chat_models.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
+import 'discord_color.dart';
 import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
@@ -202,12 +203,25 @@ final class DiscordMapper {
     final emoji =
         (payload['emoji'] as Map?)?.cast<String, Object?>() ??
         const <String, Object?>{};
+    final counts =
+        (payload['count_details'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
+    final count = payload['count'] as int? ?? 0;
+    final burstCount = counts['burst'] as int? ?? 0;
     return MessageReaction(
       emojiName: emoji['name'] as String? ?? '?',
       emojiId: emoji['id'] as String?,
       animated: emoji['animated'] as bool? ?? false,
-      count: payload['count'] as int? ?? 0,
+      count: count,
+      normalCount: counts['normal'] as int? ?? count - burstCount,
+      burstCount: burstCount,
       reactedByCurrentUser: payload['me'] as bool? ?? false,
+      burstByCurrentUser: payload['me_burst'] as bool? ?? false,
+      burstColorValues: (payload['burst_colors'] as List? ?? const [])
+          .whereType<String>()
+          .map(DiscordColor.parseHex)
+          .whereType<int>()
+          .toList(growable: false),
     );
   }
 

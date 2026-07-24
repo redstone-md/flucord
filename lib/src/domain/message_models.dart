@@ -120,24 +120,42 @@ final class MessageReaction {
     this.emojiId,
     this.animated = false,
     this.reactedByCurrentUser = false,
-  });
+    int? normalCount,
+    this.burstCount = 0,
+    this.burstByCurrentUser = false,
+    this.burstColorValues = const [],
+  }) : normalCount = normalCount ?? count;
 
   final String emojiName;
   final String? emojiId;
   final int count;
   final bool animated;
+  final int normalCount;
+  final int burstCount;
   final bool reactedByCurrentUser;
+  final bool burstByCurrentUser;
+  final List<int> burstColorValues;
 
   String get key => emojiId == null ? emojiName : '$emojiName:$emojiId';
 
-  MessageReaction copyWith({int? count, bool? reactedByCurrentUser}) =>
-      MessageReaction(
-        emojiName: emojiName,
-        emojiId: emojiId,
-        count: count ?? this.count,
-        animated: animated,
-        reactedByCurrentUser: reactedByCurrentUser ?? this.reactedByCurrentUser,
-      );
+  MessageReaction copyWith({
+    int? count,
+    int? normalCount,
+    int? burstCount,
+    bool? reactedByCurrentUser,
+    bool? burstByCurrentUser,
+    List<int>? burstColorValues,
+  }) => MessageReaction(
+    emojiName: emojiName,
+    emojiId: emojiId,
+    count: count ?? this.count,
+    animated: animated,
+    normalCount: normalCount ?? this.normalCount,
+    burstCount: burstCount ?? this.burstCount,
+    reactedByCurrentUser: reactedByCurrentUser ?? this.reactedByCurrentUser,
+    burstByCurrentUser: burstByCurrentUser ?? this.burstByCurrentUser,
+    burstColorValues: burstColorValues ?? this.burstColorValues,
+  );
 }
 
 final class ChatMessage {

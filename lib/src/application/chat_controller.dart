@@ -6,6 +6,7 @@ import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
@@ -16,6 +17,7 @@ part 'chat_controller_events.dart';
 part 'chat_controller_threads.dart';
 part 'chat_controller_forums.dart';
 part 'chat_controller_polls.dart';
+part 'chat_controller_reactions.dart';
 part 'chat_controller_stickers.dart';
 part 'chat_controller_scheduled_events.dart';
 
