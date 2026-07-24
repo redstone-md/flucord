@@ -154,12 +154,18 @@ void main() {
           name: 'Ada',
           username: 'ada.dev',
           status: DiscordPresenceStatus.online,
+          activity: DiscordRelationshipActivity(
+            name: 'Night Circuit',
+            details: 'Ranked match',
+            state: 'Party of 3',
+          ),
         ),
       ],
     );
     addTearDown(harness.dispose);
     await _pumpAccountHome(tester, harness, size: const Size(420, 500));
 
+    expect(find.text('Playing Night Circuit'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('discord-friend-friend-1')));
     await tester.pump();
 
@@ -169,6 +175,11 @@ void main() {
     );
     expect(find.text('@ada.dev'), findsOneWidget);
     expect(find.text('Friend'), findsOneWidget);
+    expect(find.text('PLAYING'), findsOneWidget);
+    expect(
+      find.text('Night Circuit\nRanked match\nParty of 3'),
+      findsOneWidget,
+    );
     expect(find.text('friend-1'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -185,7 +196,8 @@ void main() {
     await tester.pump();
     expect(copiedId, 'friend-1');
 
-    await tester.tap(find.byKey(const ValueKey('message-friend-profile')));
+    final messageButton = find.byKey(const ValueKey('message-friend-profile'));
+    await tester.tap(messageButton);
     await tester.pump();
     expect(harness.dmNavigation.selectedUserId, 'friend-1');
     expect(
@@ -436,12 +448,14 @@ DiscordRelationship _relationship({
   String? username,
   DiscordRelationshipKind kind = DiscordRelationshipKind.friend,
   DiscordPresenceStatus status = DiscordPresenceStatus.offline,
+  DiscordRelationshipActivity? activity,
 }) => DiscordRelationship(
   user: DiscordRelationshipUser(
     id: id,
     displayName: name,
     username: username,
     status: status,
+    activity: activity,
   ),
   kind: kind,
 );

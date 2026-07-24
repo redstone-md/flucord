@@ -90,12 +90,15 @@ class _ReadyFriendDirectory extends StatefulWidget {
 }
 
 class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
+  static const double _detailedProfileLift = 64;
+
   final OverlayPortalController _overlayController = OverlayPortalController();
   final Map<String, LayerLink> _relationshipLinks = {};
   DiscordRelationship? _selectedRelationship;
   LayerLink? _selectedLink;
   bool _openUp = false;
   double _offsetX = 52;
+  double _offsetY = 0;
 
   @override
   void didUpdateWidget(covariant _ReadyFriendDirectory oldWidget) {
@@ -187,22 +190,25 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
           targetAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
           followerAnchor: _openUp ? Alignment.bottomLeft : Alignment.topLeft,
           offset: Offset(_offsetX, 0),
-          child: Focus(
-            autofocus: true,
-            onKeyEvent: (_, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.escape) {
-                _dismiss();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: DiscordFriendProfilePopover(
-              relationship: relationship,
-              onMessage: () {
-                _dismiss();
-                widget.onMessage(relationship.user);
+          child: Transform.translate(
+            offset: Offset(0, _offsetY),
+            child: Focus(
+              autofocus: true,
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  _dismiss();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
               },
+              child: DiscordFriendProfilePopover(
+                relationship: relationship,
+                onMessage: () {
+                  _dismiss();
+                  widget.onMessage(relationship.user);
+                },
+              ),
             ),
           ),
         ),
@@ -221,11 +227,15 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     final viewport = MediaQuery.sizeOf(context);
     final maxProfileLeft = viewport.width <= 316 ? 8.0 : viewport.width - 308;
     final profileLeft = (origin.dx + 52).clamp(8.0, maxProfileLeft);
+    final openUp = centerY > viewport.height / 2;
+    final hasExtraDetails =
+        relationship.user.activity != null || relationship.user.isProvisional;
     setState(() {
       _selectedRelationship = relationship;
       _selectedLink = link;
-      _openUp = centerY > viewport.height / 2;
+      _openUp = openUp;
       _offsetX = profileLeft - origin.dx;
+      _offsetY = !openUp && hasExtraDetails ? -_detailedProfileLift : 0;
     });
     _overlayController.show();
   }
@@ -434,13 +444,21 @@ String _relationshipDetail(DiscordRelationship relationship) {
               : 'Incoming friend request',
         DiscordRelationshipKind.outgoingRequest => 'Outgoing friend request',
         _ => switch (user.status) {
-          DiscordPresenceStatus.online => 'Online',
-          DiscordPresenceStatus.idle => 'Idle',
-          DiscordPresenceStatus.doNotDisturb => 'Do Not Disturb',
+          DiscordPresenceStatus.online => _availableDetail(user, 'Online'),
+          DiscordPresenceStatus.idle => _availableDetail(user, 'Idle'),
+          DiscordPresenceStatus.doNotDisturb => _availableDetail(
+            user,
+            'Do Not Disturb',
+          ),
           DiscordPresenceStatus.offline => 'Offline',
           DiscordPresenceStatus.unknown =>
             user.username ?? 'Status unavailable',
         },
       } +
       suffix;
+}
+
+String _availableDetail(DiscordRelationshipUser user, String fallback) {
+  final activity = user.activity;
+  return activity == null ? fallback : 'Playing ${activity.name}';
 }

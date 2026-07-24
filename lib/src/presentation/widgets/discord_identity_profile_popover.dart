@@ -8,11 +8,13 @@ final class DiscordIdentityProfileDetail {
     required this.label,
     required this.value,
     this.indicatorColor,
+    this.maxLines = 1,
   });
 
   final String label;
   final String value;
   final Color? indicatorColor;
+  final int maxLines;
 }
 
 class DiscordIdentityProfilePopover extends StatelessWidget {
@@ -58,102 +60,112 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         side: BorderSide(color: context.surfaces.border),
       ),
-      child: SizedBox(
-        width: (MediaQuery.sizeOf(context).width - 16).clamp(0.0, 300.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: (MediaQuery.sizeOf(context).height * 0.8).clamp(
+            0.0,
+            MediaQuery.sizeOf(context).height - 16,
+          ),
+        ),
+        child: SingleChildScrollView(
+          child: SizedBox(
+            width: (MediaQuery.sizeOf(context).width - 16).clamp(0.0, 300.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(height: 68, color: bannerColor),
-                Positioned(
-                  left: 16,
-                  top: 38,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: context.surfaces.raised,
-                        width: 5,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(height: 68, color: bannerColor),
+                    Positioned(
+                      left: 16,
+                      top: 38,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.surfaces.raised,
+                            width: 5,
+                          ),
+                        ),
+                        child: SizedBox.square(dimension: 64, child: avatar),
                       ),
                     ),
-                    child: SizedBox.square(dimension: 64, child: avatar),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (secondaryLabel case final label?) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                      const SizedBox(height: 3),
+                      Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: context.surfaces.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      for (final detail in details) ...[
+                        const SizedBox(height: 14),
+                        _ProfileLabel(label: detail.label),
+                        const SizedBox(height: 6),
+                        _ProfileDetailChip(detail: detail),
+                      ],
+                      const SizedBox(height: 14),
+                      const _ProfileLabel(label: 'USER ID'),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              userId,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.surfaces.muted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          _CopyIdentityButton(
+                            userId: userId,
+                            buttonKey: copyButtonKey,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        key: messageButtonKey,
+                        onPressed: canMessage ? onMessage : null,
+                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                        label: const Text('Message'),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    displayName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (secondaryLabel case final label?) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
-                  const SizedBox(height: 3),
-                  Text(
-                    statusLabel,
-                    style: TextStyle(
-                      color: context.surfaces.muted,
-                      fontSize: 12,
-                    ),
-                  ),
-                  for (final detail in details) ...[
-                    const SizedBox(height: 14),
-                    _ProfileLabel(label: detail.label),
-                    const SizedBox(height: 6),
-                    _ProfileDetailChip(detail: detail),
-                  ],
-                  const SizedBox(height: 14),
-                  const _ProfileLabel(label: 'USER ID'),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          userId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.surfaces.muted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      _CopyIdentityButton(
-                        userId: userId,
-                        buttonKey: copyButtonKey,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  FilledButton.icon(
-                    key: messageButtonKey,
-                    onPressed: canMessage ? onMessage : null,
-                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                    label: const Text('Message'),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     ),
@@ -188,6 +200,7 @@ class _ProfileDetailChip extends StatelessWidget {
           Flexible(
             child: Text(
               detail.value,
+              maxLines: detail.maxLines,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11),
             ),

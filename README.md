@@ -246,7 +246,8 @@ same-named environment variables.
 
 The Dart side already owns an immutable Social SDK relationship contract for
 friends, incoming/outgoing requests, provisional users, spam-request metadata,
-and online/idle/do-not-disturb/offline presence. A typed
+online/idle/do-not-disturb/offline presence, and the current application's
+documented Rich Presence name/details/state. A typed
 `getRelationships` platform method maps those values into a native Friends
 directory with separate pending, online, offline, loading, empty,
 authorization-required, and retry states. The default Windows runner rejects
@@ -254,6 +255,10 @@ that method with `sdk_not_bundled`. A package-linked runner performs the native
 public-client PKCE flow, exchanges and rotates the SDK grant, waits for
 `Client::Status::Ready`, and then maps live `Client::GetRelationships()` data.
 Neither path invents data or falls back to Bot API.
+Discord's `UserHandle::GameActivity()` intentionally exposes only the activity
+associated with this Discord application. Flucord renders that snapshot in
+friend rows and profiles and does not imply that arbitrary activities from the
+official Discord client are available through the SDK.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and

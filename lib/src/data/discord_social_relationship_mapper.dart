@@ -28,6 +28,7 @@ abstract final class DiscordSocialRelationshipMapper {
         avatarUrl: _text(payload['avatar_url']),
         status: _presence(payload['status']),
         isProvisional: payload['is_provisional'] == true,
+        activity: _activity(payload['activity']),
       ),
       kind: _relationshipKind(payload['relationship_type']),
       isSpamRequest: payload['is_spam_request'] == true,
@@ -55,6 +56,22 @@ abstract final class DiscordSocialRelationshipMapper {
       'offline' => DiscordPresenceStatus.offline,
       _ => DiscordPresenceStatus.unknown,
     };
+  }
+
+  static DiscordRelationshipActivity? _activity(Object? value) {
+    if (value == null) return null;
+    if (value is! Map<Object?, Object?>) {
+      throw const FormatException('Relationship activity must be a map.');
+    }
+    final name = _text(value['name']);
+    if (name == null) {
+      throw const FormatException('Relationship activity name is missing.');
+    }
+    return DiscordRelationshipActivity(
+      name: name,
+      details: _text(value['details']),
+      state: _text(value['state']),
+    );
   }
 
   static String _enumKey(Object? value) => (value is String ? value : '')

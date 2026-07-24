@@ -14,6 +14,11 @@ void main() {
         'relationship_type': 'pending_incoming',
         'is_provisional': true,
         'is_spam_request': true,
+        'activity': {
+          'name': 'Night Circuit',
+          'details': 'Ranked match',
+          'state': 'Party of 3',
+        },
       },
     ]);
 
@@ -27,6 +32,9 @@ void main() {
     );
     expect(relationship.user.status, DiscordPresenceStatus.doNotDisturb);
     expect(relationship.user.isProvisional, isTrue);
+    expect(relationship.user.activity?.name, 'Night Circuit');
+    expect(relationship.user.activity?.details, 'Ranked match');
+    expect(relationship.user.activity?.state, 'Party of 3');
     expect(relationship.kind, DiscordRelationshipKind.incomingRequest);
     expect(relationship.isSpamRequest, isTrue);
   });
@@ -56,6 +64,15 @@ void main() {
     expect(
       () => DiscordSocialRelationshipMapper.decode([
         {'display_name': 'Missing id'},
+      ]),
+      throwsFormatException,
+    );
+    expect(
+      () => DiscordSocialRelationshipMapper.decode([
+        {
+          'id': 'user-3',
+          'activity': {'details': 'Missing name'},
+        },
       ]),
       throwsFormatException,
     );

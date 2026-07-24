@@ -17,6 +17,41 @@ enum DiscordRelationshipAction {
   blockUser,
 }
 
+final class DiscordRelationshipActivity {
+  factory DiscordRelationshipActivity({
+    required String name,
+    String? details,
+    String? state,
+  }) {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Must not be empty.');
+    }
+    return DiscordRelationshipActivity._(
+      name: normalizedName,
+      details: _optionalText(details),
+      state: _optionalText(state),
+    );
+  }
+
+  const DiscordRelationshipActivity._({
+    required this.name,
+    required this.details,
+    required this.state,
+  });
+
+  final String name;
+  final String? details;
+  final String? state;
+
+  List<String> get description => List.unmodifiable([?details, ?state]);
+
+  static String? _optionalText(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+}
+
 final class DiscordRelationshipUser {
   factory DiscordRelationshipUser({
     required String id,
@@ -25,6 +60,7 @@ final class DiscordRelationshipUser {
     String? avatarUrl,
     DiscordPresenceStatus status = DiscordPresenceStatus.unknown,
     bool isProvisional = false,
+    DiscordRelationshipActivity? activity,
   }) {
     final normalizedId = id.trim();
     if (normalizedId.isEmpty) {
@@ -41,6 +77,7 @@ final class DiscordRelationshipUser {
       avatarUrl: _remoteUrl(avatarUrl),
       status: status,
       isProvisional: isProvisional,
+      activity: activity,
     );
   }
 
@@ -51,6 +88,7 @@ final class DiscordRelationshipUser {
     required this.avatarUrl,
     required this.status,
     required this.isProvisional,
+    required this.activity,
   });
 
   final String id;
@@ -59,6 +97,7 @@ final class DiscordRelationshipUser {
   final String? avatarUrl;
   final DiscordPresenceStatus status;
   final bool isProvisional;
+  final DiscordRelationshipActivity? activity;
 
   static String? _optionalText(String? value) {
     final normalized = value?.trim();

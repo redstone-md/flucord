@@ -336,6 +336,12 @@ browser runtime or dependency on Discord's private user API.
     with live presence, unique username, provisional-account context, copyable
     snowflake, Escape/outside dismissal, and direct navigation into the native
     DM surface. Reuse one identity-profile shell for friends and guild members.
+63. Completed: retain the documented Social SDK `UserHandle::GameActivity()`
+    snapshot with its application name, details, and party state; update it
+    through the existing native user callback; and surface it in friend rows
+    plus profiles. Keep the SDK's exact boundary visible: it exposes only Rich
+    Presence associated with Flucord's Discord application, not every activity
+    visible in the official client.
 
 ## Protocol safety
 

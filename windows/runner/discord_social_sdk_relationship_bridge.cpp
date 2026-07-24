@@ -69,6 +69,28 @@ std::optional<discordpp::StatusType> OnlineStatus(const std::string& value) {
   }
   return std::nullopt;
 }
+
+void AddOptionalString(flutter::EncodableMap* payload,
+                       const std::string& key,
+                       const std::optional<std::string>& value) {
+  if (value && !value->empty()) {
+    (*payload)[flutter::EncodableValue(key)] = flutter::EncodableValue(*value);
+  }
+}
+
+std::optional<flutter::EncodableMap> GameActivity(
+    const discordpp::UserHandle& user) {
+  const auto activity = user.GameActivity();
+  if (!activity || activity->Name().empty()) {
+    return std::nullopt;
+  }
+  flutter::EncodableMap payload;
+  payload[flutter::EncodableValue("name")] =
+      flutter::EncodableValue(activity->Name());
+  AddOptionalString(&payload, "details", activity->Details());
+  AddOptionalString(&payload, "state", activity->State());
+  return payload;
+}
 #endif
 
 }  // namespace
@@ -146,6 +168,10 @@ class DiscordSocialSdkRelationshipBridge::Impl {
               RelationshipName(relationship.DiscordRelationshipType()));
       item[flutter::EncodableValue("is_provisional")] =
           flutter::EncodableValue(user->IsProvisional());
+      if (const auto activity = GameActivity(*user)) {
+        item[flutter::EncodableValue("activity")] =
+            flutter::EncodableValue(*activity);
+      }
       payload.emplace_back(item);
     }
     result->Success(flutter::EncodableValue(payload));

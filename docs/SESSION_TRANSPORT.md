@@ -138,10 +138,12 @@ to a user's channel history. Flucord also does not infer chat access from
   public REST relationship endpoint and is never emulated with private routes.
 - Relationship snapshots use the SDK-owned `UserHandle` identity, including
   its generated GIF/WebP CDN avatar URL, display name, unique username,
-  presence, provisional-account flag, and snowflake. The native Friends surface
-  presents that data in an anchored profile without querying a private user
-  endpoint and routes its Message action through the existing Social SDK DM
-  controller.
+  presence, provisional-account flag, snowflake, and the optional Rich Presence
+  returned by `UserHandle::GameActivity()`. That activity is limited by the SDK
+  to the current Discord application; it is not a directory of every activity
+  shown by the official client. The native Friends surface presents that data
+  in an anchored profile without querying a private user endpoint and routes
+  its Message action through the existing Social SDK DM controller.
 - Social SDK grants have their own versioned operating-system vault record.
   The Windows bridge owns one persistent `discordpp::Client`, performs the SDK
   PKCE/refresh flow, waits for `Client::Status::Ready`, and pumps callbacks on

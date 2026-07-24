@@ -18,6 +18,7 @@ class DiscordFriendProfilePopover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = relationship.user;
+    final activity = user.activity;
     return DiscordIdentityProfilePopover(
       key: const ValueKey('discord-friend-profile-popover'),
       semanticsLabel: '${user.displayName} Discord profile',
@@ -41,6 +42,12 @@ class DiscordFriendProfilePopover extends StatelessWidget {
           const DiscordIdentityProfileDetail(
             label: 'ACCOUNT',
             value: 'Provisional Discord account',
+          ),
+        if (activity != null)
+          DiscordIdentityProfileDetail(
+            label: 'PLAYING',
+            value: [activity.name, ...activity.description].join('\n'),
+            maxLines: 3,
           ),
       ],
       canMessage: relationship.kind == DiscordRelationshipKind.friend,
