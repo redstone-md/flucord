@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 16;
+  static const version = 17;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -84,6 +84,9 @@ abstract final class SqliteChatSchema {
         channel_id TEXT NOT NULL,
         author_id TEXT NOT NULL,
         body TEXT NOT NULL,
+        message_type INTEGER NOT NULL,
+        reference_message_id TEXT,
+        reference_channel_id TEXT,
         sent_at TEXT NOT NULL,
         is_edited INTEGER NOT NULL,
         attachments_json TEXT NOT NULL,
@@ -257,6 +260,17 @@ abstract final class SqliteChatSchema {
     }
     if (oldVersion < 16) {
       await _createGuildScheduledEvents(database);
+    }
+    if (oldVersion < 17) {
+      await database.execute(
+        'ALTER TABLE messages ADD message_type INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute(
+        'ALTER TABLE messages ADD reference_message_id TEXT',
+      );
+      await database.execute(
+        'ALTER TABLE messages ADD reference_channel_id TEXT',
+      );
     }
   }
 

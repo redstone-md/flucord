@@ -4,6 +4,7 @@ import 'discord_cdn.dart';
 import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
+part 'discord_message_mapper.dart';
 part 'discord_sticker_mapper.dart';
 part 'discord_scheduled_event_mapper.dart';
 
@@ -183,67 +184,6 @@ final class DiscordMapper {
       channelId: channelId,
       messages: messages,
       members: members.values.toList(),
-    );
-  }
-
-  ChatMessage message(
-    Map<String, Object?> payload, {
-    ChatMessage? fallback,
-    String? currentMemberId,
-  }) {
-    final rawContent = payload.containsKey('content')
-        ? payload['content'] as String? ?? ''
-        : fallback?.body ?? '';
-    final attachments = payload.containsKey('attachments')
-        ? (payload['attachments'] as List? ?? const [])
-              .whereType<Map>()
-              .map((item) => _attachment(item.cast<String, Object?>()))
-              .toList()
-        : fallback?.attachments ?? const <MessageAttachment>[];
-    final reactions = payload.containsKey('reactions')
-        ? (payload['reactions'] as List? ?? const [])
-              .whereType<Map>()
-              .map((item) => _reaction(item.cast<String, Object?>()))
-              .toList()
-        : fallback?.reactions ?? const <MessageReaction>[];
-    final embeds = payload.containsKey('embeds')
-        ? MessageEmbedCodec.listFrom(payload['embeds'])
-        : fallback?.embeds ?? const [];
-    final poll = payload.containsKey('poll')
-        ? _mapPoll(payload['poll'])
-        : fallback?.poll;
-    final stickers = payload.containsKey('sticker_items')
-        ? _mapStickerItems(payload['sticker_items'])
-        : fallback?.stickers ?? const [];
-    final referenced = payload['referenced_message'];
-    final reply = referenced is Map
-        ? _reply(referenced.cast<String, Object?>())
-        : fallback?.reply;
-    return ChatMessage(
-      id: payload['id'] as String? ?? fallback!.id,
-      channelId: payload['channel_id'] as String? ?? fallback!.channelId,
-      authorId: payload['author'] is Map
-          ? (payload['author']! as Map)['id']! as String
-          : fallback!.authorId,
-      body: rawContent,
-      sentAt: payload['timestamp'] is String
-          ? DateTime.parse(payload['timestamp']! as String).toLocal()
-          : fallback!.sentAt,
-      isEdited: payload.containsKey('edited_timestamp')
-          ? payload['edited_timestamp'] != null
-          : fallback?.isEdited ?? false,
-      isPinned: payload.containsKey('pinned')
-          ? payload['pinned'] == true
-          : fallback?.isPinned ?? false,
-      mentionsCurrentMember: payload.containsKey('mentions')
-          ? DiscordMentionMatcher.containsUser(payload, currentMemberId)
-          : fallback?.mentionsCurrentMember ?? false,
-      attachments: attachments,
-      embeds: embeds,
-      reactions: reactions,
-      stickers: stickers,
-      poll: poll,
-      reply: reply,
     );
   }
 

@@ -447,42 +447,6 @@ final class SqliteChatCache
     ),
   );
 
-  static Map<String, Object?> _messageToRow(ChatMessage message) => {
-    'id': message.id,
-    'channel_id': message.channelId,
-    'author_id': message.authorId,
-    'body': message.body,
-    'sent_at': message.sentAt.toUtc().toIso8601String(),
-    'is_edited': message.isEdited ? 1 : 0,
-    'attachments_json': ChatModelJson.attachments(message.attachments),
-    'reply_json': ChatModelJson.reply(message.reply),
-    'reactions_json': ChatModelJson.reactions(message.reactions),
-    'is_pinned': message.isPinned ? 1 : 0,
-    'embeds_json': ChatModelJson.embeds(message.embeds),
-    'mentions_current_member': message.mentionsCurrentMember ? 1 : 0,
-    'poll_json': ChatModelJson.poll(message.poll),
-    'stickers_json': ChatModelJson.stickers(message.stickers),
-  };
-
-  static ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
-    id: row['id']! as String,
-    channelId: row['channel_id']! as String,
-    authorId: row['author_id']! as String,
-    body: row['body']! as String,
-    sentAt: DateTime.parse(row['sent_at']! as String).toLocal(),
-    isEdited: row['is_edited'] == 1,
-    attachments: ChatModelJson.attachmentsFrom(
-      row['attachments_json']! as String,
-    ),
-    reply: ChatModelJson.replyFrom(row['reply_json'] as String?),
-    reactions: ChatModelJson.reactionsFrom(row['reactions_json']! as String),
-    isPinned: row['is_pinned'] == 1,
-    embeds: ChatModelJson.embedsFrom(row['embeds_json']! as String),
-    mentionsCurrentMember: row['mentions_current_member'] == 1,
-    poll: ChatModelJson.pollFrom(row['poll_json'] as String?),
-    stickers: ChatModelJson.stickersFrom(row['stickers_json']! as String),
-  );
-
   @override
   Future<void> close() => _database.close();
 }

@@ -1,5 +1,71 @@
 part of 'chat_models.dart';
 
+enum DiscordMessageType {
+  defaultMessage(0),
+  recipientAdd(1),
+  recipientRemove(2),
+  call(3),
+  channelNameChange(4),
+  channelIconChange(5),
+  channelPinnedMessage(6),
+  userJoin(7),
+  guildBoost(8),
+  guildBoostTier1(9),
+  guildBoostTier2(10),
+  guildBoostTier3(11),
+  channelFollowAdd(12),
+  guildDiscoveryDisqualified(14),
+  guildDiscoveryRequalified(15),
+  guildDiscoveryGracePeriodInitialWarning(16),
+  guildDiscoveryGracePeriodFinalWarning(17),
+  threadCreated(18),
+  reply(19),
+  chatInputCommand(20),
+  threadStarterMessage(21),
+  guildInviteReminder(22),
+  contextMenuCommand(23),
+  autoModerationAction(24),
+  roleSubscriptionPurchase(25),
+  interactionPremiumUpsell(26),
+  stageStart(27),
+  stageEnd(28),
+  stageSpeaker(29),
+  stageTopic(31),
+  guildApplicationPremiumSubscription(32),
+  guildIncidentAlertModeEnabled(36),
+  guildIncidentAlertModeDisabled(37),
+  guildIncidentReportRaid(38),
+  guildIncidentReportFalseAlarm(39),
+  purchaseNotification(44),
+  pollResult(46),
+  unknown(-1);
+
+  const DiscordMessageType(this.discordValue);
+
+  final int discordValue;
+
+  static DiscordMessageType fromDiscordValue(int? value) {
+    for (final type in values) {
+      if (type.discordValue == value) return type;
+    }
+    return unknown;
+  }
+
+  bool get isSystem => switch (this) {
+    defaultMessage ||
+    reply ||
+    chatInputCommand ||
+    threadStarterMessage ||
+    contextMenuCommand ||
+    autoModerationAction ||
+    interactionPremiumUpsell ||
+    purchaseNotification ||
+    pollResult ||
+    unknown => false,
+    _ => true,
+  };
+}
+
 final class MessageAttachment {
   const MessageAttachment({
     required this.id,
@@ -38,6 +104,13 @@ final class MessageReply {
   final String messageId;
   final String authorId;
   final String body;
+}
+
+final class MessageReference {
+  const MessageReference({this.messageId, this.channelId});
+
+  final String? messageId;
+  final String? channelId;
 }
 
 final class MessageReaction {
@@ -80,6 +153,8 @@ final class ChatMessage {
     List<MessageSticker> stickers = const [],
     this.poll,
     this.reply,
+    this.reference,
+    this.type = DiscordMessageType.defaultMessage,
     this.isEdited = false,
     this.isPinned = false,
     this.mentionsCurrentMember = false,
@@ -98,10 +173,14 @@ final class ChatMessage {
   final List<MessageSticker> stickers;
   final MessagePoll? poll;
   final MessageReply? reply;
+  final MessageReference? reference;
+  final DiscordMessageType type;
   final List<MessageReaction> reactions;
   final bool isEdited;
   final bool isPinned;
   final bool mentionsCurrentMember;
+
+  bool get isSystem => type.isSystem;
 
   ChatMessage copyWith({
     String? body,
@@ -110,6 +189,8 @@ final class ChatMessage {
     List<MessageReaction>? reactions,
     List<MessageSticker>? stickers,
     MessagePoll? poll,
+    MessageReference? reference,
+    DiscordMessageType? type,
     bool? isEdited,
     bool? isPinned,
     bool? mentionsCurrentMember,
@@ -124,6 +205,8 @@ final class ChatMessage {
     stickers: stickers ?? this.stickers,
     poll: poll ?? this.poll,
     reply: reply,
+    reference: reference ?? this.reference,
+    type: type ?? this.type,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,
     isPinned: isPinned ?? this.isPinned,
