@@ -1,5 +1,6 @@
 #include "discord_social_sdk_bridge.h"
 #include "discord_social_sdk_chat_bridge.h"
+#include "discord_social_sdk_relationship_bridge.h"
 #include "discord_social_sdk_wire.h"
 
 #include <flutter/standard_method_codec.h>
@@ -56,6 +57,9 @@ class DiscordSocialSdkBridge::Impl {
         [this]() { RefreshExpiringToken(); });
     chat_bridge_ =
         std::make_unique<DiscordSocialSdkChatBridge>(client_.get(), channel_);
+    relationship_bridge_ =
+        std::make_unique<DiscordSocialSdkRelationshipBridge>(client_.get(),
+                                                              channel_);
 #endif
   }
 
@@ -78,12 +82,8 @@ class DiscordSocialSdkBridge::Impl {
       Disconnect(std::move(result));
       return;
     }
-    if (call.method_name() == "getRelationships") {
-      GetRelationships(std::move(result));
-      return;
-    }
-    if (call.method_name() == "updateRelationship") {
-      UpdateRelationship(call, std::move(result));
+    if (relationship_bridge_->CanHandle(call.method_name())) {
+      relationship_bridge_->Handle(call, std::move(result));
       return;
     }
     if (chat_bridge_->CanHandle(call.method_name())) {
@@ -96,6 +96,7 @@ class DiscordSocialSdkBridge::Impl {
         call.method_name() == "disconnect" ||
         call.method_name() == "getRelationships" ||
         call.method_name() == "updateRelationship" ||
+        call.method_name() == "setOnlineStatus" ||
         call.method_name() == "getDmConversations" ||
         call.method_name() == "getDmMessages" ||
         call.method_name() == "sendDmMessage" ||
@@ -317,111 +318,9 @@ class DiscordSocialSdkBridge::Impl {
     result->Success();
   }
 
-  void GetRelationships(std::unique_ptr<MethodResult> result) {
-    if (client_->GetStatus() != discordpp::Client::Status::Ready) {
-      result->Error("not_authenticated",
-                    "Relationships require a ready Social SDK session.");
-      return;
-    }
-    flutter::EncodableList payload;
-    for (const auto& relationship : client_->GetRelationships()) {
-      const auto user = relationship.User();
-      if (!user) {
-        continue;
-      }
-      flutter::EncodableMap item;
-      item[flutter::EncodableValue("id")] =
-          flutter::EncodableValue(std::to_string(relationship.Id()));
-      item[flutter::EncodableValue("display_name")] =
-          flutter::EncodableValue(user->DisplayName());
-      item[flutter::EncodableValue("username")] =
-          flutter::EncodableValue(user->Username());
-      item[flutter::EncodableValue("status")] =
-          flutter::EncodableValue(PresenceName(user->Status()));
-      item[flutter::EncodableValue("relationship_type")] =
-          flutter::EncodableValue(
-              RelationshipName(relationship.DiscordRelationshipType()));
-      item[flutter::EncodableValue("is_provisional")] =
-          flutter::EncodableValue(user->IsProvisional());
-      payload.emplace_back(item);
-    }
-    result->Success(flutter::EncodableValue(payload));
-  }
-
-  void UpdateRelationship(const flutter::MethodCall<>& call,
-                          std::unique_ptr<MethodResult> result) {
-    if (client_->GetStatus() != discordpp::Client::Status::Ready) {
-      result->Error("not_authenticated",
-                    "Relationship mutations require a ready SDK session.");
-      return;
-    }
-    const auto user_id = SnowflakeArgument(call, "user_id");
-    const auto action = StringArgument(call, "action");
-    if (!user_id || !action) {
-      InvalidArguments(std::move(result));
-      return;
-    }
-    auto pending = std::shared_ptr<MethodResult>(std::move(result));
-    auto callback = [pending](const discordpp::ClientResult& sdk_result) {
-      if (sdk_result.Successful()) {
-        pending->Success();
-      } else {
-        pending->Error("relationship_update_failed",
-                       "Discord rejected the relationship update.");
-      }
-    };
-    if (*action == "accept_request") {
-      client_->AcceptDiscordFriendRequest(*user_id, callback);
-    } else if (*action == "reject_request") {
-      client_->RejectDiscordFriendRequest(*user_id, callback);
-    } else if (*action == "cancel_request") {
-      client_->CancelDiscordFriendRequest(*user_id, callback);
-    } else if (*action == "remove_friend") {
-      client_->RemoveDiscordAndGameFriend(*user_id, callback);
-    } else if (*action == "block_user") {
-      client_->BlockUser(*user_id, callback);
-    } else {
-      pending->Error("unsupported_action",
-                     "The relationship action is not supported.");
-    }
-  }
-
-  static std::string PresenceName(discordpp::StatusType status) {
-    switch (status) {
-      case discordpp::StatusType::Online:
-      case discordpp::StatusType::Streaming:
-        return "online";
-      case discordpp::StatusType::Idle:
-        return "idle";
-      case discordpp::StatusType::Dnd:
-        return "dnd";
-      case discordpp::StatusType::Offline:
-      case discordpp::StatusType::Invisible:
-        return "offline";
-      default:
-        return "unknown";
-    }
-  }
-
-  static std::string RelationshipName(discordpp::RelationshipType type) {
-    switch (type) {
-      case discordpp::RelationshipType::Friend:
-        return "friend";
-      case discordpp::RelationshipType::Blocked:
-        return "blocked";
-      case discordpp::RelationshipType::PendingIncoming:
-        return "pending_incoming";
-      case discordpp::RelationshipType::PendingOutgoing:
-        return "pending_outgoing";
-      case discordpp::RelationshipType::Implicit:
-        return "implicit";
-      default:
-        return "unknown";
-    }
-  }
-
   std::unique_ptr<discordpp::Client> client_;
   std::unique_ptr<DiscordSocialSdkChatBridge> chat_bridge_;
+  std::unique_ptr<DiscordSocialSdkRelationshipBridge> relationship_bridge_;
   std::shared_ptr<MethodResult> pending_auth_result_;
   Grant grant_;
   uint64_t application_id_ = 0;

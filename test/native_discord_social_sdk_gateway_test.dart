@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_social_dm.dart';
+import 'package:flucord/src/domain/discord_social_presence.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
@@ -135,6 +136,31 @@ void main() {
       });
     },
   );
+
+  test('maps online status and live user updates to typed contracts', () async {
+    final channel = _Channel(null);
+    final gateway = NativeDiscordSocialSdkGateway(
+      channel: channel,
+      targetPlatform: TargetPlatform.windows,
+    );
+    final updateExpectation = expectLater(
+      gateway.relationshipUpdates,
+      emits(
+        isA<DiscordSocialRelationshipUpdate>().having(
+          (event) => event.userId,
+          'userId',
+          '123456789012345678',
+        ),
+      ),
+    );
+
+    await gateway.setOnlineStatus(DiscordOnlineStatus.doNotDisturb);
+    await channel.emit('socialUserUpdated', {'user_id': '123456789012345678'});
+    await updateExpectation;
+
+    expect(channel.calls, ['setOnlineStatus']);
+    expect(channel.arguments.single, {'status': 'dnd'});
+  });
 
   test('maps native DM summaries through the official chat method', () async {
     final channel = _Channel([

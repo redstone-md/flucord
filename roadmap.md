@@ -306,6 +306,11 @@ browser runtime or dependency on Discord's private user API.
     plus inline-edit controls. `SetShowingChat` now follows native DM visibility
     and Flutter desktop lifecycle, so the Discord desktop app suppresses
     duplicate notifications only while Flucord actively presents chat.
+57. Completed: synchronize friend identity and presence changes through the
+    documented Social SDK user-update callback, and expose the official online,
+    idle, do-not-disturb, and invisible status mutation from the native account
+    footer. Keep this live user path independent from Bot Gateway presence and
+    preserve the unbundled Windows runner contract.
 
 ## Protocol safety
 

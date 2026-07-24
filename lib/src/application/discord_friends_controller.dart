@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../domain/discord_relationship.dart';
+import '../domain/discord_social_presence.dart';
 import '../domain/discord_social_sdk.dart';
 
 enum DiscordFriendsLoadState {
@@ -15,7 +16,19 @@ enum DiscordFriendsLoadState {
 }
 
 final class DiscordFriendsController extends ChangeNotifier {
-  DiscordFriendsController(this._gateway);
+  DiscordFriendsController(
+    this._gateway, {
+    DiscordSocialRelationshipEvents? events,
+  }) {
+    final eventSource =
+        events ??
+        (_gateway is DiscordSocialRelationshipEvents
+            ? _gateway as DiscordSocialRelationshipEvents
+            : null);
+    _relationshipSubscription = eventSource?.relationshipUpdates.listen(
+      _handleRelationshipUpdate,
+    );
+  }
 
   final DiscordSocialSdkGateway _gateway;
 
@@ -23,7 +36,12 @@ final class DiscordFriendsController extends ChangeNotifier {
   List<DiscordRelationship> _relationships = const [];
   final Set<String> _mutatingUserIds = {};
   final Map<String, String> _mutationErrors = {};
+  StreamSubscription<DiscordSocialRelationshipUpdate>?
+  _relationshipSubscription;
   Future<void>? _inFlight;
+  Future<void>? _liveRefresh;
+  String? _liveSyncError;
+  bool _liveRefreshQueued = false;
   bool _sdkReady = false;
   bool _authenticated = false;
   bool _initialized = false;
@@ -34,6 +52,7 @@ final class DiscordFriendsController extends ChangeNotifier {
   List<DiscordRelationship> get relationships => _relationships;
   bool isMutating(String userId) => _mutatingUserIds.contains(userId);
   String? mutationErrorFor(String userId) => _mutationErrors[userId];
+  String? get liveSyncError => _liveSyncError;
 
   void reconcileSession(
     DiscordSocialSdkAvailability? availability, {
@@ -48,6 +67,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _inFlight = null;
     _mutatingUserIds.clear();
     _mutationErrors.clear();
+    _liveSyncError = null;
+    _liveRefreshQueued = false;
     if (!sdkReady) {
       _relationships = const [];
       _state = DiscordFriendsLoadState.unavailable;
@@ -124,10 +145,9 @@ final class DiscordFriendsController extends ChangeNotifier {
     try {
       final relationships = await _gateway.fetchRelationships();
       if (!_accepts(generation)) return;
-      _relationships = List.unmodifiable(
-        <DiscordRelationship>[...relationships]..sort(_compareRelationships),
-      );
+      _relationships = _sorted(relationships);
       _mutationErrors.clear();
+      _liveSyncError = null;
       _state = DiscordFriendsLoadState.ready;
     } on DiscordSocialSdkException catch (error) {
       if (!_accepts(generation)) return;
@@ -144,6 +164,39 @@ final class DiscordFriendsController extends ChangeNotifier {
       _state = DiscordFriendsLoadState.failure;
     }
     notifyListeners();
+  }
+
+  void _handleRelationshipUpdate(DiscordSocialRelationshipUpdate update) {
+    if (_disposed ||
+        !_sdkReady ||
+        !_authenticated ||
+        _state != DiscordFriendsLoadState.ready) {
+      return;
+    }
+    _liveRefreshQueued = true;
+    _liveRefresh ??= _drainLiveRefresh().whenComplete(() {
+      _liveRefresh = null;
+    });
+  }
+
+  Future<void> _drainLiveRefresh() async {
+    while (_liveRefreshQueued && !_disposed) {
+      _liveRefreshQueued = false;
+      final generation = _generation;
+      try {
+        final relationships = await _gateway.fetchRelationships();
+        if (!_accepts(generation)) return;
+        _relationships = _sorted(relationships);
+        _liveSyncError = null;
+      } on DiscordSocialSdkException catch (error) {
+        if (!_accepts(generation)) return;
+        _liveSyncError = error.code;
+      } on Object {
+        if (!_accepts(generation)) return;
+        _liveSyncError = 'relationship_sync_failure';
+      }
+      notifyListeners();
+    }
   }
 
   bool _accepts(int generation) =>
@@ -173,6 +226,12 @@ final class DiscordFriendsController extends ChangeNotifier {
     right.user.displayName.toLowerCase(),
   );
 
+  static List<DiscordRelationship> _sorted(
+    Iterable<DiscordRelationship> relationships,
+  ) => List.unmodifiable(
+    <DiscordRelationship>[...relationships]..sort(_compareRelationships),
+  );
+
   @override
   void dispose() {
     _disposed = true;
@@ -180,6 +239,8 @@ final class DiscordFriendsController extends ChangeNotifier {
     _relationships = const [];
     _mutatingUserIds.clear();
     _mutationErrors.clear();
+    _liveRefreshQueued = false;
+    unawaited(_relationshipSubscription?.cancel());
     super.dispose();
   }
 }

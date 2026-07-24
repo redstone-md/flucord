@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/discord_friends_controller.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_social_presence.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 
 void main() {
@@ -135,13 +136,46 @@ void main() {
     );
     expect(gateway.mutations, isEmpty);
   });
+
+  test('refreshes friend presence after a native user update', () async {
+    final gateway = _FriendsGateway([
+      _friend('1', 'Ada', status: DiscordPresenceStatus.offline),
+    ]);
+    final controller = DiscordFriendsController(gateway);
+    addTearDown(controller.dispose);
+    controller.reconcileSession(
+      DiscordSocialSdkAvailability.ready,
+      authenticated: true,
+    );
+    await controller.initialize();
+
+    gateway.relationships = [
+      _friend('1', 'Ada', status: DiscordPresenceStatus.online),
+    ];
+    gateway.emitUserUpdated('1');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      controller.relationships.single.user.status,
+      DiscordPresenceStatus.online,
+    );
+    expect(gateway.relationshipCalls, 2);
+    expect(controller.liveSyncError, isNull);
+  });
 }
 
-DiscordRelationship _friend(String id, String displayName) =>
-    DiscordRelationship(
-      user: DiscordRelationshipUser(id: id, displayName: displayName),
-      kind: DiscordRelationshipKind.friend,
-    );
+DiscordRelationship _friend(
+  String id,
+  String displayName, {
+  DiscordPresenceStatus status = DiscordPresenceStatus.unknown,
+}) => DiscordRelationship(
+  user: DiscordRelationshipUser(
+    id: id,
+    displayName: displayName,
+    status: status,
+  ),
+  kind: DiscordRelationshipKind.friend,
+);
 
 DiscordRelationship _request(String id, String displayName) =>
     DiscordRelationship(
@@ -149,20 +183,31 @@ DiscordRelationship _request(String id, String displayName) =>
       kind: DiscordRelationshipKind.incomingRequest,
     );
 
-final class _FriendsGateway implements DiscordSocialSdkGateway {
-  _FriendsGateway(this._relationships) : _errorCode = null;
+final class _FriendsGateway
+    implements DiscordSocialSdkGateway, DiscordSocialRelationshipEvents {
+  _FriendsGateway(this.relationships) : _errorCode = null;
 
   _FriendsGateway.error(String code)
-    : _relationships = const [],
+    : relationships = const [],
       _errorCode = code;
 
-  final List<DiscordRelationship> _relationships;
+  List<DiscordRelationship> relationships;
   final String? _errorCode;
+  final StreamController<DiscordSocialRelationshipUpdate> _updates =
+      StreamController.broadcast(sync: true);
   int relationshipCalls = 0;
   final List<({String userId, DiscordRelationshipAction action})> mutations =
       [];
   Completer<void>? mutationCompleter;
   String? mutationError;
+
+  @override
+  Stream<DiscordSocialRelationshipUpdate> get relationshipUpdates =>
+      _updates.stream;
+
+  void emitUserUpdated(String userId) {
+    _updates.add(DiscordSocialRelationshipUpdate(userId: userId));
+  }
 
   @override
   Future<DiscordSocialSdkAuthentication> authorize() async =>
@@ -179,7 +224,7 @@ final class _FriendsGateway implements DiscordSocialSdkGateway {
   Future<List<DiscordRelationship>> fetchRelationships() async {
     relationshipCalls++;
     if (_errorCode case final code?) throw DiscordSocialSdkException(code);
-    return _relationships;
+    return relationships;
   }
 
   @override

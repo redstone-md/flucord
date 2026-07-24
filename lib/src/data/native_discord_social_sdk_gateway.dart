@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../domain/discord_relationship.dart';
 import '../domain/discord_social_dm.dart';
+import '../domain/discord_social_presence.dart';
 import '../domain/discord_social_sdk.dart';
 import 'discord_social_dm_mapper.dart';
 import 'discord_social_relationship_mapper.dart';
@@ -65,6 +66,8 @@ final class NativeDiscordSocialSdkGateway
     implements
         DiscordSocialSdkGateway,
         DiscordSocialSdkAuthenticationEvents,
+        DiscordSocialRelationshipEvents,
+        DiscordSocialPresenceGateway,
         DiscordSocialDmGateway,
         DiscordSocialDmEvents {
   NativeDiscordSocialSdkGateway({
@@ -88,6 +91,8 @@ final class NativeDiscordSocialSdkGateway
       StreamController.broadcast(sync: true);
   final StreamController<DiscordSocialDmEvent> _dmEvents =
       StreamController.broadcast(sync: true);
+  final StreamController<DiscordSocialRelationshipUpdate> _relationshipUpdates =
+      StreamController.broadcast(sync: true);
 
   @override
   Stream<DiscordSocialSdkAuthentication> get authenticationChanges =>
@@ -95,6 +100,10 @@ final class NativeDiscordSocialSdkGateway
 
   @override
   Stream<DiscordSocialDmEvent> get socialDmEvents => _dmEvents.stream;
+
+  @override
+  Stream<DiscordSocialRelationshipUpdate> get relationshipUpdates =>
+      _relationshipUpdates.stream;
 
   @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async {
@@ -284,6 +293,15 @@ final class NativeDiscordSocialSdkGateway
     );
   }
 
+  @override
+  Future<void> setOnlineStatus(DiscordOnlineStatus status) async {
+    _requireSupportedPlatform();
+    await _invoke(
+      'setOnlineStatus',
+      arguments: {'status': _onlineStatusName(status)},
+    );
+  }
+
   Future<Object?> _handleNativeCall(String method, Object? arguments) async {
     if (method == 'authenticationGrantChanged') {
       await _persistGrant(arguments);
@@ -300,6 +318,18 @@ final class NativeDiscordSocialSdkGateway
         _dmEvents.add(DiscordSocialDmMapper.event(method, arguments));
       } on FormatException {
         throw const DiscordSocialSdkException('invalid_dm_event');
+      }
+      return null;
+    }
+    if (method == 'socialUserUpdated') {
+      try {
+        _relationshipUpdates.add(
+          DiscordSocialRelationshipUpdate(
+            userId: _requiredIdentifier(arguments, 'user_id'),
+          ),
+        );
+      } on ArgumentError {
+        throw const DiscordSocialSdkException('invalid_relationship_event');
       }
       return null;
     }
@@ -404,6 +434,29 @@ final class NativeDiscordSocialSdkGateway
         DiscordRelationshipAction.removeFriend => 'remove_friend',
         DiscordRelationshipAction.blockUser => 'block_user',
       };
+
+  static String _onlineStatusName(DiscordOnlineStatus status) =>
+      switch (status) {
+        DiscordOnlineStatus.online => 'online',
+        DiscordOnlineStatus.idle => 'idle',
+        DiscordOnlineStatus.doNotDisturb => 'dnd',
+        DiscordOnlineStatus.invisible => 'invisible',
+      };
+
+  static String _requiredIdentifier(Object? payload, String key) {
+    if (payload is! Map<Object?, Object?>) {
+      throw ArgumentError.value(payload, 'payload', 'Must be a map.');
+    }
+    final value = switch (payload[key]) {
+      final String value => value.trim(),
+      final int value => value.toString(),
+      _ => '',
+    };
+    if (value.isEmpty) {
+      throw ArgumentError.value(payload[key], key, 'Must not be empty.');
+    }
+    return value;
+  }
 
   static const _invalidGrantCodes = {
     'not_authenticated',
