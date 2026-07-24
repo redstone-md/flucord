@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_social_activity.dart';
 import 'package:flucord/src/domain/discord_social_presence.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
 import 'package:integration_test/integration_test.dart';
@@ -128,6 +129,38 @@ void main() {
     );
     await expectLater(
       gateway.setOnlineStatus(DiscordOnlineStatus.idle),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.sendActivityInvite('123456789'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.acceptActivityInvite(
+        DiscordSocialActivityInvite(
+          applicationId: '100',
+          parentApplicationId: '0',
+          channelId: '300',
+          messageId: '400',
+          senderId: '500',
+          partyId: 'party',
+          sessionId: 'session',
+          type: DiscordSocialActivityInviteType.join,
+          isValid: true,
+        ),
+      ),
       throwsA(
         isA<DiscordSocialSdkException>().having(
           (error) => error.code,

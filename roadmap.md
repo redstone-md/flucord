@@ -342,6 +342,13 @@ browser runtime or dependency on Discord's private user API.
     plus profiles. Keep the SDK's exact boundary visible: it exposes only Rich
     Presence associated with Flucord's Discord application, not every activity
     visible in the official client.
+64. Completed: implement the documented Social SDK activity-invite lifecycle
+    between Flucord sessions: create an ephemeral lobby, publish its join secret
+    through Rich Presence, invite a friend, receive create/update callbacks,
+    accept the exact invite object, and join the returned lobby secret. Surface
+    incoming and joined state in Friends without presenting an activity lobby
+    as an ordinary Discord DM call. Audio attachment to this lobby remains a
+    later increment, and package-linked validation still needs the approved SDK.
 
 ## Protocol safety
 

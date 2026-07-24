@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_social_activity_scope.dart';
 
 class DiscordFriendActions extends StatelessWidget {
   const DiscordFriendActions({
@@ -19,6 +20,7 @@ class DiscordFriendActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userId = relationship.user.id;
+    final activityController = DiscordSocialActivityScope.maybeOf(context);
     if (controller.isMutating(userId)) {
       return const SizedBox.square(
         key: ValueKey('discord-friend-action-pending'),
@@ -29,6 +31,39 @@ class DiscordFriendActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (relationship.kind == DiscordRelationshipKind.friend &&
+            activityController != null &&
+            activityController.canUseActivities)
+          if (activityController.isInviting(userId))
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 7),
+              child: SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            _ActionButton(
+              key: ValueKey('discord-friend-activity-invite-$userId'),
+              tooltip: 'Invite to Flucord activity lobby',
+              icon: Icons.sports_esports_outlined,
+              onPressed: () async {
+                final succeeded = await activityController.sendInvite(
+                  relationship,
+                );
+                if (!context.mounted) return;
+                final messenger = ScaffoldMessenger.maybeOf(context);
+                messenger?.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      succeeded
+                          ? 'Activity invite sent to ${relationship.user.displayName}'
+                          : 'Discord could not send the activity invite',
+                    ),
+                  ),
+                );
+              },
+            ),
         if (relationship.kind == DiscordRelationshipKind.friend &&
             onMessage != null)
           _ActionButton(

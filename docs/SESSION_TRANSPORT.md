@@ -144,6 +144,16 @@ to a user's channel history. Flucord also does not infer chat access from
   shown by the official client. The native Friends surface presents that data
   in an anchored profile without querying a private user endpoint and routes
   its Message action through the existing Social SDK DM controller.
+- Activity invites use only the documented Social SDK flow:
+  `CreateOrJoinLobby` publishes an ephemeral join secret through
+  `UpdateRichPresence`, `SendActivityInvite` targets a friend, native
+  create/update callbacks retain the exact invite object, and
+  `AcceptActivityInvite` returns the secret used for the recipient's lobby
+  join. Activity-lobby state is isolated from normal DM state and is never
+  labelled as a direct call; audio is not yet attached to that lobby.
+  Lobby secrets are generated with operating-system cryptographic randomness,
+  cross only the private platform channel, remain outside controllers and
+  persistence, and are wiped from the native bridge when the SDK session ends.
 - Social SDK grants have their own versioned operating-system vault record.
   The Windows bridge owns one persistent `discordpp::Client`, performs the SDK
   PKCE/refresh flow, waits for `Client::Status::Ready`, and pumps callbacks on

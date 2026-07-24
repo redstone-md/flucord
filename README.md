@@ -259,6 +259,12 @@ Discord's `UserHandle::GameActivity()` intentionally exposes only the activity
 associated with this Discord application. Flucord renders that snapshot in
 friend rows and profiles and does not imply that arbitrary activities from the
 official Discord client are available through the SDK.
+Friends can also exchange documented Flucord activity invites. The native
+bridge creates an ephemeral SDK lobby, publishes its join secret through Rich
+Presence, sends the invite, retains incoming invite callbacks, and joins the
+secret returned by `AcceptActivityInvite`. This is labelled as an activity
+lobby throughout the UI; it is not represented as a normal DM voice call, and
+the current increment does not attach audio to the joined lobby.
 The same typed channel now accepts relationship mutations for incoming-request
 accept/reject, outgoing-request cancellation, Discord/game friend removal, and
 blocking. Actions are gated by the current relationship type, track pending and

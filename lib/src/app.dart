@@ -7,6 +7,7 @@ import 'application/connection_controller.dart';
 import 'application/discord_account_connection_controller.dart';
 import 'application/discord_friends_controller.dart';
 import 'application/discord_oauth_controller.dart';
+import 'application/discord_social_activity_controller.dart';
 import 'application/discord_social_dm_controller.dart';
 import 'application/discord_social_dm_navigation_controller.dart';
 import 'application/discord_social_presence_controller.dart';
@@ -26,6 +27,7 @@ import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
 import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
+import 'domain/discord_social_activity.dart';
 import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
 import 'domain/discord_social_sdk.dart';
@@ -43,6 +45,7 @@ import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
 import 'presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'presentation/widgets/discord_social_dm_scope.dart';
+import 'presentation/widgets/discord_social_activity_scope.dart';
 import 'presentation/widgets/discord_social_presence_scope.dart';
 import 'presentation/widgets/discord_social_sdk_scope.dart';
 import 'platform/desktop_integration.dart';
@@ -130,6 +133,7 @@ class _FlucordAppState extends State<FlucordApp> {
   _discordAccountConnectionController;
   late final DiscordFriendsController _discordFriendsController;
   late final DiscordOAuthController _discordOAuthController;
+  late final DiscordSocialActivityController _discordSocialActivityController;
   late final DiscordSocialDmController _discordSocialDmController;
   late final DiscordSocialDmNavigationController
   _discordSocialDmNavigationController;
@@ -173,6 +177,11 @@ class _FlucordAppState extends State<FlucordApp> {
       _discordSocialSdkController,
     );
     _discordFriendsController = DiscordFriendsController(socialSdkGateway);
+    _discordSocialActivityController = DiscordSocialActivityController(
+      socialSdkGateway is DiscordSocialActivityGateway
+          ? socialSdkGateway as DiscordSocialActivityGateway
+          : null,
+    );
     _discordSocialPresenceController = DiscordSocialPresenceController(
       socialSdkGateway is DiscordSocialPresenceGateway
           ? socialSdkGateway as DiscordSocialPresenceGateway
@@ -234,6 +243,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _discordOAuthController.dispose();
     _discordSocialSdkController.dispose();
     _discordFriendsController.dispose();
+    _discordSocialActivityController.dispose();
     _discordSocialPresenceController.dispose();
     _discordSocialDmController.dispose();
     _discordSocialDmNavigationController.dispose();
@@ -269,6 +279,10 @@ class _FlucordAppState extends State<FlucordApp> {
       _discordSocialSdkController.availability,
       authenticated: _discordAccountConnectionController.socialAccessAllowed,
     );
+    _discordSocialActivityController.reconcileSession(
+      _discordSocialSdkController.availability,
+      authenticated: _discordAccountConnectionController.socialAccessAllowed,
+    );
   }
 
   @override
@@ -285,27 +299,30 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _discordAccountConnectionController,
           child: DiscordSocialSdkScope(
             controller: _discordSocialSdkController,
-            child: DiscordSocialPresenceScope(
-              controller: _discordSocialPresenceController,
-              child: DiscordSocialDmNavigationScope(
-                controller: _discordSocialDmNavigationController,
-                child: DiscordSocialDmScope(
-                  controller: _discordSocialDmController,
-                  child: DiscordFriendsScope(
-                    controller: _discordFriendsController,
-                    child: FlucordShell(
-                      chatController: _chatController,
-                      connectionController: _connectionController,
-                      discordOAuthController: _discordOAuthController,
-                      oauthGuildDirectoryController:
-                          _oauthGuildDirectoryController,
-                      oauthGuildMembershipController:
-                          _oauthGuildMembershipController,
-                      workspaceController: _workspaceController,
-                      voiceController: _voiceController,
-                      voiceMessageRecorder: widget.voiceMessageRecorder,
-                      attachmentDownloadService: _attachmentDownloadService,
-                      externalLinkLauncher: _externalLinkLauncher,
+            child: DiscordSocialActivityScope(
+              controller: _discordSocialActivityController,
+              child: DiscordSocialPresenceScope(
+                controller: _discordSocialPresenceController,
+                child: DiscordSocialDmNavigationScope(
+                  controller: _discordSocialDmNavigationController,
+                  child: DiscordSocialDmScope(
+                    controller: _discordSocialDmController,
+                    child: DiscordFriendsScope(
+                      controller: _discordFriendsController,
+                      child: FlucordShell(
+                        chatController: _chatController,
+                        connectionController: _connectionController,
+                        discordOAuthController: _discordOAuthController,
+                        oauthGuildDirectoryController:
+                            _oauthGuildDirectoryController,
+                        oauthGuildMembershipController:
+                            _oauthGuildMembershipController,
+                        workspaceController: _workspaceController,
+                        voiceController: _voiceController,
+                        voiceMessageRecorder: widget.voiceMessageRecorder,
+                        attachmentDownloadService: _attachmentDownloadService,
+                        externalLinkLauncher: _externalLinkLauncher,
+                      ),
                     ),
                   ),
                 ),

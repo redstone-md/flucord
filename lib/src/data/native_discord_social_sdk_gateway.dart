@@ -6,12 +6,16 @@ import 'package:flutter/services.dart';
 export 'discord_social_sdk_platform_channel.dart';
 
 import '../domain/discord_relationship.dart';
+import '../domain/discord_social_activity.dart';
 import '../domain/discord_social_dm.dart';
 import '../domain/discord_social_presence.dart';
 import '../domain/discord_social_sdk.dart';
+import 'discord_social_activity_mapper.dart';
 import 'discord_social_dm_mapper.dart';
+import 'discord_social_lobby_secret.dart';
 import 'discord_social_relationship_mapper.dart';
 import 'discord_social_sdk_platform_channel.dart';
+import 'discord_social_sdk_response_codec.dart';
 import 'secure_discord_social_sdk_vault.dart';
 
 final class NativeDiscordSocialSdkGateway
@@ -22,6 +26,8 @@ final class NativeDiscordSocialSdkGateway
         DiscordSocialFriendRequestGateway,
         DiscordSocialRelationshipEvents,
         DiscordSocialPresenceGateway,
+        DiscordSocialActivityGateway,
+        DiscordSocialActivityEvents,
         DiscordSocialDmGateway,
         DiscordSocialDmEvents {
   NativeDiscordSocialSdkGateway({
@@ -30,6 +36,7 @@ final class NativeDiscordSocialSdkGateway
     DiscordSocialSdkConfiguration? configuration,
     this._vault = const SecureDiscordSocialSdkGrantVault(),
     this._clock = DateTime.now,
+    this._activitySecretFactory = DiscordSocialLobbySecret.generate,
   }) : _channel = channel ?? FlutterDiscordSocialSdkPlatformChannel(),
        _configuration =
            configuration ?? DiscordSocialSdkConfiguration.fromEnvironment() {
@@ -41,11 +48,14 @@ final class NativeDiscordSocialSdkGateway
   final DiscordSocialSdkConfiguration? _configuration;
   final DiscordSocialSdkGrantVault _vault;
   final DiscordSocialSdkClock _clock;
+  final DiscordSocialActivitySecretFactory _activitySecretFactory;
   final StreamController<DiscordSocialSdkAuthentication> _authChanges =
       StreamController.broadcast(sync: true);
   final StreamController<DiscordSocialDmEvent> _dmEvents =
       StreamController.broadcast(sync: true);
   final StreamController<DiscordSocialRelationshipUpdate> _relationshipUpdates =
+      StreamController.broadcast(sync: true);
+  final StreamController<DiscordSocialActivityInviteEvent> _activityInvites =
       StreamController.broadcast(sync: true);
 
   @override
@@ -60,18 +70,22 @@ final class NativeDiscordSocialSdkGateway
       _relationshipUpdates.stream;
 
   @override
+  Stream<DiscordSocialActivityInviteEvent> get activityInviteEvents =>
+      _activityInvites.stream;
+
+  @override
   Future<DiscordSocialSdkAvailability> checkAvailability() async {
     if (!_isSupportedPlatform) {
       return DiscordSocialSdkAvailability.unsupportedPlatform;
     }
     try {
       final response = await _channel.invoke('getAvailability');
-      return _decodeAvailability(response);
+      return DiscordSocialSdkResponseCodec.availability(response);
     } on MissingPluginException {
       return DiscordSocialSdkAvailability.unsupportedPlatform;
     } on PlatformException catch (error) {
       return DiscordSocialSdkAvailability.failure(
-        'platform_${_safeCode(error.code)}',
+        'platform_${DiscordSocialSdkResponseCodec.safeCode(error.code)}',
       );
     } on Object {
       return DiscordSocialSdkAvailability.failure('channel_failure');
@@ -251,7 +265,9 @@ final class NativeDiscordSocialSdkGateway
     } on MissingPluginException {
       throw const DiscordSocialSdkException('unsupported_platform');
     } on PlatformException catch (error) {
-      throw DiscordSocialSdkException(_safeCode(error.code));
+      throw DiscordSocialSdkException(
+        DiscordSocialSdkResponseCodec.safeCode(error.code),
+      );
     } on FormatException {
       throw const DiscordSocialSdkException('invalid_response');
     } on DiscordSocialSdkException {
@@ -288,6 +304,41 @@ final class NativeDiscordSocialSdkGateway
     );
   }
 
+  @override
+  Future<DiscordSocialActivitySession> sendActivityInvite(String userId) async {
+    _requireSupportedPlatform();
+    try {
+      return DiscordSocialActivityMapper.session(
+        await _invoke(
+          'sendActivityInvite',
+          arguments: {
+            'user_id': userId.trim(),
+            'lobby_secret': _activitySecretFactory(),
+          },
+        ),
+      );
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_activity_response');
+    }
+  }
+
+  @override
+  Future<DiscordSocialActivitySession> acceptActivityInvite(
+    DiscordSocialActivityInvite invite,
+  ) async {
+    _requireSupportedPlatform();
+    try {
+      return DiscordSocialActivityMapper.session(
+        await _invoke(
+          'acceptActivityInvite',
+          arguments: DiscordSocialActivityMapper.encode(invite),
+        ),
+      );
+    } on FormatException {
+      throw const DiscordSocialSdkException('invalid_activity_response');
+    }
+  }
+
   Future<Object?> _handleNativeCall(String method, Object? arguments) async {
     if (method == 'authenticationGrantChanged') {
       await _persistGrant(arguments);
@@ -311,7 +362,10 @@ final class NativeDiscordSocialSdkGateway
       try {
         _relationshipUpdates.add(
           DiscordSocialRelationshipUpdate(
-            userId: _requiredIdentifier(arguments, 'user_id'),
+            userId: DiscordSocialSdkResponseCodec.requiredIdentifier(
+              arguments,
+              'user_id',
+            ),
           ),
         );
       } on ArgumentError {
@@ -319,11 +373,19 @@ final class NativeDiscordSocialSdkGateway
       }
       return null;
     }
+    if (method == 'socialActivityInviteChanged') {
+      try {
+        _activityInvites.add(DiscordSocialActivityMapper.event(arguments));
+      } on Object {
+        throw const DiscordSocialSdkException('invalid_activity_event');
+      }
+      return null;
+    }
     throw MissingPluginException('Unknown Social SDK event: $method');
   }
 
   Future<void> _persistGrant(Object? response) async {
-    final grant = _decodeGrant(response);
+    final grant = DiscordSocialSdkResponseCodec.grant(response, _clock);
     await _vault.write(grant);
   }
 
@@ -345,7 +407,9 @@ final class NativeDiscordSocialSdkGateway
     } on MissingPluginException {
       throw const DiscordSocialSdkException('unsupported_platform');
     } on PlatformException catch (error) {
-      throw DiscordSocialSdkException(_safeCode(error.code));
+      throw DiscordSocialSdkException(
+        DiscordSocialSdkResponseCodec.safeCode(error.code),
+      );
     } on DiscordSocialSdkException {
       rethrow;
     } on Object {
@@ -362,61 +426,6 @@ final class NativeDiscordSocialSdkGateway
   bool get _isSupportedPlatform =>
       !kIsWeb &&
       (_targetPlatform ?? defaultTargetPlatform) == TargetPlatform.windows;
-
-  static DiscordSocialSdkAvailability _decodeAvailability(Object? response) {
-    if (response is! Map<Object?, Object?>) {
-      return DiscordSocialSdkAvailability.failure('invalid_response');
-    }
-    return switch (response['status']) {
-      'ready' => DiscordSocialSdkAvailability.ready,
-      'sdk_not_bundled' => DiscordSocialSdkAvailability.sdkNotBundled,
-      'unsupported_platform' =>
-        DiscordSocialSdkAvailability.unsupportedPlatform,
-      final String value => DiscordSocialSdkAvailability.failure(
-        'unknown_status_${_safeCode(value)}',
-      ),
-      _ => DiscordSocialSdkAvailability.failure('missing_status'),
-    };
-  }
-
-  DiscordSocialSdkGrant _decodeGrant(Object? response) {
-    if (response is! Map<Object?, Object?>) {
-      throw const DiscordSocialSdkException('invalid_auth_response');
-    }
-    final accessToken = response['access_token'];
-    final refreshToken = response['refresh_token'];
-    final expiresIn = response['expires_in'];
-    final scopes = switch (response['scopes']) {
-      final String value => value.split(RegExp(r'\s+')),
-      final List<Object?> values => values.whereType<String>(),
-      _ => const <String>[],
-    };
-    if (accessToken is! String ||
-        refreshToken is! String ||
-        expiresIn is! int ||
-        expiresIn <= 0) {
-      throw const DiscordSocialSdkException('invalid_auth_response');
-    }
-    try {
-      return DiscordSocialSdkGrant(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        expiresAt: _clock().toUtc().add(Duration(seconds: expiresIn)),
-        scopes: scopes,
-      );
-    } on ArgumentError {
-      throw const DiscordSocialSdkException('invalid_auth_response');
-    }
-  }
-
-  static String _safeCode(String value) {
-    final normalized = value
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp('[^a-z0-9_]+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
-    return normalized.isEmpty ? 'unknown' : normalized;
-  }
 
   static void _validateMessageContent(String content) {
     if (content.trim().isEmpty || content.length > 2000) {
@@ -440,21 +449,6 @@ final class NativeDiscordSocialSdkGateway
         DiscordOnlineStatus.doNotDisturb => 'dnd',
         DiscordOnlineStatus.invisible => 'invisible',
       };
-
-  static String _requiredIdentifier(Object? payload, String key) {
-    if (payload is! Map<Object?, Object?>) {
-      throw ArgumentError.value(payload, 'payload', 'Must be a map.');
-    }
-    final value = switch (payload[key]) {
-      final String value => value.trim(),
-      final int value => value.toString(),
-      _ => '',
-    };
-    if (value.isEmpty) {
-      throw ArgumentError.value(payload[key], key, 'Must not be empty.');
-    }
-    return value;
-  }
 
   static const _invalidGrantCodes = {
     'not_authenticated',

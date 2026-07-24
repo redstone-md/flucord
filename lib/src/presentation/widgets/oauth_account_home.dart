@@ -8,6 +8,7 @@ import '../../domain/discord_oauth.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_add_friend_dialog.dart';
+import 'discord_activity_invite_strip.dart';
 import 'discord_friend_directory.dart';
 import 'discord_friends_scope.dart';
 import 'discord_social_dm_navigation_scope.dart';
@@ -209,7 +210,12 @@ class OAuthAccountHomeView extends StatelessWidget {
         ),
         Expanded(
           child: socialAvailable
-              ? const DiscordFriendDirectory()
+              ? const Column(
+                  children: [
+                    DiscordActivityInviteStrip(),
+                    Expanded(child: DiscordFriendDirectory()),
+                  ],
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Center(

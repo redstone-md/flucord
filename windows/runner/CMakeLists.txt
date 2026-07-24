@@ -7,6 +7,7 @@ project(runner LANGUAGES CXX)
 #
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
+  "discord_social_sdk_activity_bridge.cpp"
   "discord_social_sdk_bridge.cpp"
   "discord_social_sdk_chat_bridge.cpp"
   "discord_social_sdk_relationship_bridge.cpp"
