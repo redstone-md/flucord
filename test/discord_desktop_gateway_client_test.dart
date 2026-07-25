@@ -35,6 +35,49 @@ void main() {
     expect(data['token'], 'account-session');
     expect(data['properties'], containsPair('os', 'Windows'));
   });
+
+  test('builds a typed workspace snapshot from READY', () async {
+    final socket = _MemoryDesktopWebSocket();
+    final gateway = DiscordDesktopGatewayClient(
+      authorization: 'account-session',
+      properties: const {'os': 'Windows'},
+      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+    );
+    addTearDown(gateway.close);
+
+    final snapshotFuture = gateway.connectAndReadWorkspace(
+      'wss://gateway.discord.gg',
+    );
+    await Future<void>.delayed(Duration.zero);
+    socket.receive(
+      jsonEncode(const {
+        'op': 0,
+        's': 1,
+        't': 'READY',
+        'd': {
+          'session_id': 'session',
+          'resume_gateway_url': 'wss://gateway-resume.discord.gg',
+          'user': {'id': 'me', 'username': 'member'},
+          'guilds': [
+            {'id': 'guild', 'name': 'Guild'},
+          ],
+          'private_channels': [
+            {'id': 'dm', 'type': 1},
+          ],
+        },
+      }),
+    );
+
+    final snapshot = await snapshotFuture;
+
+    expect(snapshot.currentUser['id'], 'me');
+    expect(snapshot.guilds.single['id'], 'guild');
+    expect(snapshot.directChannels.single['id'], 'dm');
+    expect(
+      () => snapshot.guilds.single['name'] = 'changed',
+      throwsUnsupportedError,
+    );
+  });
 }
 
 Future<void> _waitFor(bool Function() condition) async {

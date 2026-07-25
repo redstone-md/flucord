@@ -5,6 +5,7 @@ import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../domain/discord_session.dart';
 import '../../theme/flucord_theme.dart';
+import 'discord_hcaptcha_panel.dart';
 
 final class DiscordDesktopLoginSection extends StatelessWidget {
   const DiscordDesktopLoginSection({
@@ -62,22 +63,39 @@ final class _DisconnectedContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final qrUri = controller.qrUri;
+    final captcha = controller.captchaChallenge;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (qrUri != null) ...[
+        if (captcha != null) ...[
+          DiscordHcaptchaPanel(
+            key: ValueKey(captcha.rqToken ?? captcha.rqData ?? captcha.siteKey),
+            challenge: captcha,
+            onSolved: controller.submitCaptcha,
+          ),
+          const SizedBox(height: 14),
+        ] else if (qrUri != null) ...[
           Center(
             child: Container(
               width: 228,
               height: 228,
-              padding: const EdgeInsets.all(12),
               color: Colors.white,
               child: QrImageView(
                 data: qrUri.toString(),
                 version: QrVersions.auto,
+                size: 228,
+                padding: const EdgeInsets.all(16),
                 backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(color: Colors.black),
-                dataModuleStyle: const QrDataModuleStyle(color: Colors.black),
+                gapless: true,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: Colors.black,
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: Colors.black,
+                ),
+                semanticsLabel: 'Discord sign-in QR code',
               ),
             ),
           ),

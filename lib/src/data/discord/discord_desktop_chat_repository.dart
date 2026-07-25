@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
@@ -41,22 +42,33 @@ final class DiscordDesktopChatRepository implements ChatRepository {
   Future<ChatWorkspace> loadWorkspace() async {
     _emitStatus(RepositoryConnectionStatus.connecting);
     try {
-      final snapshot = await _gateway.connectAndReadWorkspace(
-        await _api.getGatewayUrl(),
+      final gatewayUrl = await _bootstrapStage(
+        'gateway-discovery',
+        _api.getGatewayUrl,
       );
-      final cached = await _cache.readWorkspace();
-      final workspace = _mapper
-          .workspace(
-            currentUser: snapshot.currentUser,
-            guilds: snapshot.guilds,
-            channelsByGuild: snapshot.channelsByGuild,
-            directChannels: snapshot.directChannels,
-            includeDirectMessagesSpace: true,
-            currentUserRole: 'Discord user',
-          )
-          .restoreChannelActivityFrom(cached);
+      final snapshot = await _bootstrapStage(
+        'gateway-session',
+        () => _gateway.connectAndReadWorkspace(gatewayUrl),
+      );
+      final cached = await _bootstrapStage('cache-read', _cache.readWorkspace);
+      final workspace = await _bootstrapStage(
+        'workspace-mapping',
+        () async => _mapper
+            .workspace(
+              currentUser: snapshot.currentUser,
+              guilds: snapshot.guilds,
+              channelsByGuild: snapshot.channelsByGuild,
+              directChannels: snapshot.directChannels,
+              includeDirectMessagesSpace: true,
+              currentUserRole: 'Discord user',
+            )
+            .restoreChannelActivityFrom(cached),
+      );
       _currentMemberId = workspace.currentMemberId;
-      await _cache.writeWorkspace(workspace);
+      await _bootstrapStage(
+        'cache-write',
+        () => _cache.writeWorkspace(workspace),
+      );
       return workspace;
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
@@ -69,6 +81,29 @@ final class DiscordDesktopChatRepository implements ChatRepository {
       rethrow;
     }
   }
+
+  Future<T> _bootstrapStage<T>(
+    String stage,
+    Future<T> Function() operation,
+  ) async {
+    try {
+      return await operation();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Discord desktop bootstrap failed at $stage: '
+        '${_diagnosticFor(error)}',
+        name: 'flucord.discord.desktop',
+        level: 1000,
+        stackTrace: stackTrace,
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  static String _diagnosticFor(Object error) => switch (error) {
+    DiscordApiException() => 'HTTP ${error.statusCode}: ${error.message}',
+    _ => '${error.runtimeType}: $error',
+  };
 
   @override
   Future<ChannelHistoryPage> loadChannelHistory(

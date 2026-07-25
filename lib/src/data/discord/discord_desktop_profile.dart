@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 final class DiscordDesktopProtocolProfile {
   const DiscordDesktopProtocolProfile({
@@ -149,5 +151,89 @@ final class DiscordDesktopRequestHeaders {
       throw ArgumentError.value(value, name, 'Value cannot be empty');
     }
     return normalized;
+  }
+}
+
+final class DiscordDesktopClientContext {
+  DiscordDesktopClientContext._({
+    required this.profile,
+    required this.superProperties,
+    required this.locale,
+    required this.timezone,
+  });
+
+  factory DiscordDesktopClientContext.create({
+    DiscordDesktopProtocolProfile profile =
+        DiscordDesktopProtocolProfile.installedStable20260725,
+  }) {
+    final locale = Platform.localeName.replaceAll('_', '-');
+    final normalizedLocale = locale.isEmpty ? 'en-US' : locale;
+    final userAgent = Platform.isWindows
+        ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+              'AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9249 '
+              'Chrome/138.0.7204.251 Electron/37.6.0 Safari/537.36'
+        : 'Flucord/0.1.0 (${Platform.operatingSystem})';
+    return DiscordDesktopClientContext._(
+      profile: profile,
+      locale: normalizedLocale,
+      timezone: Platform.environment['TZ'] ?? 'Europe/Budapest',
+      superProperties: DiscordDesktopSuperProperties(
+        os: Platform.isWindows ? 'Windows' : Platform.operatingSystem,
+        systemLocale: normalizedLocale,
+        browserUserAgent: userAgent,
+        browserVersion: '37.6.0',
+        osVersion: Platform.operatingSystemVersion,
+        releaseChannel: 'stable',
+        clientBuildNumber: profile.clientBuildNumber,
+        nativeBuildNumber: 9249,
+        clientLaunchId: _launchId(),
+        clientAppState: 'focused',
+      ),
+    );
+  }
+
+  final DiscordDesktopProtocolProfile profile;
+  final DiscordDesktopSuperProperties superProperties;
+  final String locale;
+  final String timezone;
+
+  Map<String, String> unauthenticatedHeaders({String? fingerprint}) => {
+    HttpHeaders.acceptHeader: 'application/json',
+    HttpHeaders.userAgentHeader: superProperties.browserUserAgent,
+    HttpHeaders.acceptLanguageHeader: '$locale,en;q=0.9',
+    'X-Super-Properties': superProperties.toBase64(),
+    'X-Discord-Locale': locale,
+    'X-Discord-Timezone': timezone,
+    if (fingerprint != null && fingerprint.isNotEmpty)
+      'X-Fingerprint': fingerprint,
+  };
+
+  Map<String, String> authenticatedHeaders(
+    String authorization, {
+    String? fingerprint,
+  }) => Map.unmodifiable({
+    HttpHeaders.acceptHeader: 'application/json',
+    HttpHeaders.userAgentHeader: superProperties.browserUserAgent,
+    ...DiscordDesktopRequestHeaders(
+      authorization: authorization,
+      superProperties: superProperties,
+      locale: locale,
+      fingerprint: fingerprint,
+      acceptLanguage: '$locale,en;q=0.9',
+      timezone: timezone,
+    ).build(),
+  });
+
+  static String _launchId() {
+    final random = Random.secure();
+    final bytes = List.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20)}';
   }
 }

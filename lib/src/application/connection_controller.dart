@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 import '../data/disconnected_chat_repository.dart';
@@ -141,7 +143,13 @@ final class ConnectionController extends ChangeNotifier {
     try {
       final repository = await _repositoryFactory.create(session);
       await _chatController.useRepository(repository);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'Discord connection bootstrap failed: ${_diagnosticFor(error)}',
+        name: 'flucord.connection',
+        level: 1000,
+        stackTrace: stackTrace,
+      );
       await _ensureDisconnectedWorkspace();
       _mode = SessionMode.disconnected;
       _activeSession = null;
@@ -218,4 +226,10 @@ final class ConnectionController extends ChangeNotifier {
     }
     return 'Discord is unreachable. No chat transport is connected.';
   }
+
+  static String _diagnosticFor(Object error) => switch (error) {
+    DiscordApiException() =>
+      'DiscordApiException(status=${error.statusCode}, message=${error.message})',
+    _ => '${error.runtimeType}: $error',
+  };
 }

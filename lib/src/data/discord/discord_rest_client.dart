@@ -57,10 +57,15 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
 }
 
 final class DiscordApiException implements Exception {
-  const DiscordApiException({required this.statusCode, required this.message});
+  const DiscordApiException({
+    required this.statusCode,
+    required this.message,
+    this.responsePayload,
+  });
 
   final int statusCode;
   final String message;
+  final Map<String, Object?>? responsePayload;
 
   bool get isUnauthorized => statusCode == HttpStatus.unauthorized;
   bool get isForbidden => statusCode == HttpStatus.forbidden;
@@ -153,6 +158,9 @@ final class DiscordHttpExecutor {
         throw DiscordApiException(
           statusCode: response.statusCode,
           message: _errorMessage(payload),
+          responsePayload: payload is Map
+              ? Map.unmodifiable(payload.cast<String, Object?>())
+              : null,
         );
       }
       return payload;
@@ -176,8 +184,45 @@ final class DiscordHttpExecutor {
         final value = payload[key];
         if (value is String && value.isNotEmpty) return value;
       }
+      final details = <String>[];
+      _collectErrorDetails(payload, '', details);
+      if (details.isNotEmpty) return details.take(3).join('; ');
     }
     return 'Request failed';
+  }
+
+  static void _collectErrorDetails(
+    Object? value,
+    String path,
+    List<String> details,
+  ) {
+    if (details.length >= 3) return;
+    if (value is Map) {
+      for (final entry in value.entries) {
+        final key = entry.key.toString();
+        if (const {'message', 'error_description', 'error'}.contains(key)) {
+          continue;
+        }
+        final childPath = path.isEmpty ? key : '$path.$key';
+        _collectErrorDetails(entry.value, childPath, details);
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        _collectErrorDetails(item, path, details);
+      }
+      return;
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final looksLikeSecret =
+          normalized.length > 32 &&
+          RegExp(r'^[A-Za-z0-9+/=_-]+$').hasMatch(normalized);
+      details.add('$path: ${looksLikeSecret ? '<redacted>' : normalized}');
+      return;
+    }
+    if (value is num || value is bool) details.add('$path: $value');
   }
 
   void close() => _transport.close();

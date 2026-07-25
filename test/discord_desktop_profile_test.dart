@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,5 +68,17 @@ void main() {
       throwsUnsupportedError,
     );
     expect(headers.toString(), isNot(contains('secret-value')));
+  });
+
+  test('authenticated context retains common desktop HTTP headers', () {
+    final headers = DiscordDesktopClientContext.create().authenticatedHeaders(
+      'secret-value',
+    );
+
+    expect(headers, containsPair(HttpHeaders.acceptHeader, 'application/json'));
+    expect(headers[HttpHeaders.userAgentHeader], isNotEmpty);
+    expect(headers, containsPair('Authorization', 'secret-value'));
+    expect(headers['X-Super-Properties'], isNotEmpty);
+    expect(() => headers['Authorization'] = 'changed', throwsUnsupportedError);
   });
 }

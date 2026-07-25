@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
+import 'package:flucord/src/data/discord/discord_remote_auth_api.dart';
 import 'package:flucord/src/data/discord/discord_remote_auth_gateway.dart';
+import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 
 void main() {
@@ -42,6 +44,40 @@ void main() {
       Uri.parse('https://discord.com/ra/gateway-fingerprint'),
     );
   });
+
+  test('retains the pending ticket and retries it after hCaptcha', () async {
+    final socket = _MemoryRemoteAuthSocket();
+    final transport = _CaptchaRemoteAuthTransport();
+    final api = DiscordRemoteAuthApiClient(
+      transport: transport,
+      baseUri: Uri.parse('https://discord.test/api/v9'),
+    );
+    final gateway = DiscordRemoteAuthGatewayClient(
+      api: api,
+      connectSocket: (_) async => socket,
+    );
+    addTearDown(gateway.close);
+    await gateway.start();
+
+    final firstChallenge = gateway.events
+        .firstWhere((event) => event is DiscordRemoteAuthCaptchaRequired)
+        .then((event) => event as DiscordRemoteAuthCaptchaRequired);
+    socket.receive(
+      jsonEncode(const {'op': 'pending_login', 'ticket': 'remote-ticket'}),
+    );
+    expect((await firstChallenge).challenge.rqToken, 'request-token-1');
+
+    final secondChallenge = gateway.events
+        .firstWhere((event) => event is DiscordRemoteAuthCaptchaRequired)
+        .then((event) => event as DiscordRemoteAuthCaptchaRequired);
+    await gateway.submitCaptcha('captcha-solution');
+    expect((await secondChallenge).challenge.rqToken, 'request-token-2');
+
+    final retry = transport.requests.last;
+    expect(jsonDecode(utf8.decode(retry.body!)), {'ticket': 'remote-ticket'});
+    expect(retry.headers['X-Captcha-Key'], 'captcha-solution');
+    expect(retry.headers['X-Captcha-Rqtoken'], 'request-token-1');
+  });
 }
 
 Future<void> _waitFor(bool Function() condition) async {
@@ -75,4 +111,48 @@ final class _MemoryRemoteAuthSocket implements DiscordDesktopWebSocket {
     _open = false;
     if (!_messages.isClosed) await _messages.close();
   }
+}
+
+final class _CaptchaRemoteAuthTransport implements DiscordHttpTransport {
+  final List<_RemoteAuthRequest> requests = [];
+  var _challengeNumber = 0;
+
+  @override
+  Future<DiscordHttpResponse> send({
+    required String method,
+    required Uri uri,
+    required Map<String, String> headers,
+    List<int>? body,
+  }) async {
+    requests.add(_RemoteAuthRequest(Map.of(headers), body));
+    if (uri.path.endsWith('/experiments')) {
+      return const DiscordHttpResponse(
+        statusCode: 200,
+        headers: {},
+        body: '{"fingerprint":"api-fingerprint"}',
+      );
+    }
+    _challengeNumber++;
+    return DiscordHttpResponse(
+      statusCode: 400,
+      headers: const {},
+      body: jsonEncode({
+        'captcha_key': ['captcha-required'],
+        'captcha_sitekey': 'site-key',
+        'captcha_service': 'hcaptcha',
+        'captcha_rqdata': 'request-data-$_challengeNumber',
+        'captcha_rqtoken': 'request-token-$_challengeNumber',
+      }),
+    );
+  }
+
+  @override
+  void close() {}
+}
+
+final class _RemoteAuthRequest {
+  const _RemoteAuthRequest(this.headers, this.body);
+
+  final Map<String, String> headers;
+  final List<int>? body;
 }

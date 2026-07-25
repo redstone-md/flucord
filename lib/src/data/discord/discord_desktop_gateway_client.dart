@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'discord_desktop_gateway_protocol.dart';
@@ -14,17 +15,17 @@ final class DiscordDesktopWorkspaceSnapshot {
     required Iterable<Map<String, Object?>> guilds,
     required Iterable<Map<String, Object?>> directChannels,
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
-  }) : currentUser = Map.unmodifiable({...currentUser}),
-       guilds = List.unmodifiable(
-         guilds.map((guild) => Map.unmodifiable({...guild})),
+  }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
+       guilds = List<Map<String, Object?>>.unmodifiable(
+         guilds.map(Map<String, Object?>.unmodifiable),
        ),
-       directChannels = List.unmodifiable(
-         directChannels.map((channel) => Map.unmodifiable({...channel})),
+       directChannels = List<Map<String, Object?>>.unmodifiable(
+         directChannels.map(Map<String, Object?>.unmodifiable),
        ),
-       channelsByGuild = Map.unmodifiable({
+       channelsByGuild = Map<String, List<Map<String, Object?>>>.unmodifiable({
          for (final entry in channelsByGuild.entries)
-           entry.key: List.unmodifiable(
-             entry.value.map((channel) => Map.unmodifiable({...channel})),
+           entry.key: List<Map<String, Object?>>.unmodifiable(
+             entry.value.map(Map<String, Object?>.unmodifiable),
            ),
        });
 
@@ -66,6 +67,8 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   List<Map<String, Object?>> _bootstrapDirectChannels = const [];
   Uri? _gatewayUri;
   bool _closing = false;
+  Object? _lastBootstrapError;
+  int? _lastBootstrapCloseCode;
 
   @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
@@ -85,15 +88,23 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     _bootstrapChannels.clear();
     _bootstrapUser = null;
     _bootstrapDirectChannels = const [];
+    _lastBootstrapError = null;
+    _lastBootstrapCloseCode = null;
     await connect(gatewayUrl);
     return _bootstrapCompleter!.future.timeout(
       const Duration(seconds: 15),
       onTimeout: () {
         final snapshot = _snapshot();
         if (snapshot == null) {
-          throw const DiscordApiException(
+          final detail = _lastBootstrapError == null
+              ? (_lastBootstrapCloseCode == null
+                    ? ''
+                    : ' (last close code: $_lastBootstrapCloseCode)')
+              : ' (last transport error: '
+                    '${_diagnosticFor(_lastBootstrapError!)})';
+          throw DiscordApiException(
             statusCode: 504,
-            message: 'Discord Gateway bootstrap timed out',
+            message: 'Discord Gateway bootstrap timed out$detail',
           );
         }
         return snapshot;
@@ -118,20 +129,38 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       _socket!.messages.listen(
         _accept,
         onDone: _onDone,
-        onError: (_) => _scheduleReconnect(),
+        onError: _onSocketError,
         cancelOnError: true,
       );
-    } on Object {
+    } on Object catch (error, stackTrace) {
+      _lastBootstrapError = error;
+      _logBootstrapFailure('websocket-upgrade', error, stackTrace);
       _scheduleReconnect();
     }
   }
 
   void _accept(Object? raw) {
-    if (raw is! String) return;
+    if (raw is! String) {
+      if (_bootstrapCompleter?.isCompleted == false) {
+        developer.log(
+          'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
+          name: 'flucord.discord.gateway',
+          level: 900,
+        );
+      }
+      return;
+    }
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
       final payload = decoded.cast<String, Object?>();
+      if (_bootstrapCompleter?.isCompleted == false) {
+        developer.log(
+          'Discord Gateway bootstrap frame: op=${payload['op']}, '
+          'event=${payload['t'] ?? '-'}',
+          name: 'flucord.discord.gateway',
+        );
+      }
       final actions = _protocol.accept(payload);
       for (final action in actions) {
         _apply(action);
@@ -139,9 +168,13 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       if (payload['op'] == DiscordDesktopGatewayOpcode.hello) {
         _send(_protocol.canResume ? _protocol.resume() : _protocol.identify());
       }
-    } on FormatException {
+    } on FormatException catch (error, stackTrace) {
+      _lastBootstrapError = error;
+      _logBootstrapFailure('frame-json', error, stackTrace);
       return;
-    } on TypeError {
+    } on TypeError catch (error, stackTrace) {
+      _lastBootstrapError = error;
+      _logBootstrapFailure('frame-shape', error, stackTrace);
       return;
     }
   }
@@ -190,7 +223,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   void _captureGuild(Map<String, Object?> guild) {
     final id = guild['id'];
     if (id is! String) return;
-    _bootstrapGuilds[id] = Map.unmodifiable({...guild});
+    _bootstrapGuilds[id] = Map<String, Object?>.unmodifiable(guild);
     final channels = [
       ..._objects(guild['channels']),
       ..._objects(guild['threads']),
@@ -273,12 +306,50 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
 
   void _onDone() {
     final code = _socket?.closeCode;
+    _lastBootstrapCloseCode = code;
+    if (_bootstrapCompleter?.isCompleted == false) {
+      developer.log(
+        'Discord Gateway closed during bootstrap (code=${code ?? 'unknown'}).',
+        name: 'flucord.discord.gateway',
+        level: 900,
+      );
+    }
     if (code == 4004) {
       _emitStatus(DiscordGatewayStatus.offline);
+      final completer = _bootstrapCompleter;
+      if (completer?.isCompleted == false) {
+        completer!.completeError(
+          const DiscordApiException(
+            statusCode: 401,
+            message: 'Discord Gateway rejected the authorization credential',
+          ),
+        );
+      }
       return;
     }
     _scheduleReconnect();
   }
+
+  void _onSocketError(Object error, StackTrace stackTrace) {
+    _lastBootstrapError = error;
+    _logBootstrapFailure('websocket-stream', error, stackTrace);
+    _scheduleReconnect();
+  }
+
+  void _logBootstrapFailure(String stage, Object error, StackTrace stackTrace) {
+    if (_bootstrapCompleter?.isCompleted != false) return;
+    developer.log(
+      'Discord Gateway bootstrap failed at $stage: ${_diagnosticFor(error)}',
+      name: 'flucord.discord.gateway',
+      level: 1000,
+      stackTrace: stackTrace,
+    );
+  }
+
+  static String _diagnosticFor(Object error) => switch (error) {
+    DiscordApiException() => 'HTTP ${error.statusCode}: ${error.message}',
+    _ => '${error.runtimeType}: $error',
+  };
 
   void _scheduleReconnect({bool immediate = false}) {
     if (_closing || _reconnectTimer?.isActive == true) return;

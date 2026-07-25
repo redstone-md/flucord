@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import '../../domain/discord_remote_auth.dart';
 import '../../domain/discord_session.dart';
 import 'discord_remote_auth_api.dart';
 import 'discord_remote_auth_crypto.dart';
 import 'discord_desktop_websocket.dart';
+import 'discord_rest_client.dart';
 
 typedef RemoteAuthSocketConnector =
     Future<DiscordDesktopWebSocket> Function(Uri uri);
@@ -46,6 +48,9 @@ final class DiscordRemoteAuthGatewayClient implements DiscordRemoteAuthGateway {
   bool _started = false;
   bool _closed = false;
   bool _terminalEventSent = false;
+  bool _captchaSubmitting = false;
+  String? _pendingTicket;
+  DiscordRemoteAuthCaptchaChallenge? _captchaChallenge;
 
   @override
   Stream<DiscordRemoteAuthEvent> get events => _events.stream;
@@ -133,18 +138,109 @@ final class DiscordRemoteAuthGatewayClient implements DiscordRemoteAuthGateway {
     );
   }
 
-  Future<void> _finishLogin(String ticket) async {
+  Future<void> _finishLogin(
+    String ticket, {
+    String? captchaKey,
+    String? captchaRqtoken,
+    String? captchaSessionId,
+  }) async {
     if (_terminalEventSent || _closed) return;
+    late final String encryptedToken;
     try {
-      final encryptedToken = await _api.exchangeTicket(ticket);
+      encryptedToken = await _api.exchangeTicket(
+        ticket,
+        captchaKey: captchaKey,
+        captchaRqtoken: captchaRqtoken,
+        captchaSessionId: captchaSessionId,
+      );
+    } on DiscordApiException catch (error, stackTrace) {
+      _logFailure(
+        captchaKey == null ? 'ticket exchange' : 'CAPTCHA ticket exchange',
+        error,
+        stackTrace,
+      );
+      final challenge = _api.captchaChallengeFrom(error);
+      if (challenge != null) {
+        _pendingTicket = ticket;
+        _captchaChallenge = challenge;
+        _emit(DiscordRemoteAuthCaptchaRequired(challenge));
+        return;
+      }
+      _fail(_ticketExchangeFailure(error));
+      return;
+    } on Object catch (error, stackTrace) {
+      _logFailure(
+        captchaKey == null
+            ? 'ticket exchange transport'
+            : 'CAPTCHA ticket exchange transport',
+        error,
+        stackTrace,
+      );
+      _fail(
+        captchaKey == null
+            ? 'The QR login request could not reach Discord.'
+            : 'The CAPTCHA response could not reach Discord.',
+      );
+      return;
+    }
+    await _completeEncryptedToken(encryptedToken);
+  }
+
+  @override
+  Future<void> submitCaptcha(String response) async {
+    final solution = response.trim();
+    if (solution.isEmpty) throw ArgumentError.value(response, 'response');
+    final ticket = _pendingTicket;
+    final challenge = _captchaChallenge;
+    if (_closed || _terminalEventSent || ticket == null || challenge == null) {
+      throw StateError('No CAPTCHA challenge is pending');
+    }
+    if (_captchaSubmitting) return;
+    _captchaSubmitting = true;
+    try {
+      _pendingTicket = null;
+      _captchaChallenge = null;
+      await _finishLogin(
+        ticket,
+        captchaKey: solution,
+        captchaRqtoken: challenge.rqToken,
+        captchaSessionId: challenge.sessionId,
+      );
+    } finally {
+      _captchaSubmitting = false;
+    }
+  }
+
+  Future<void> _completeEncryptedToken(String encryptedToken) async {
+    try {
       final token = _crypto!.decryptText(encryptedToken).trim();
       if (token.isEmpty) throw const FormatException('Empty token');
       _terminalEventSent = true;
       _emit(DiscordRemoteAuthCompleted(DiscordDesktopUserSession(token)));
       await _closeTransport();
-    } on Object {
-      _fail('Discord did not complete the QR login.');
+    } on Object catch (error, stackTrace) {
+      _logFailure('token decryption', error, stackTrace);
+      _fail('Discord returned an unreadable QR login response.');
     }
+  }
+
+  static void _logFailure(String stage, Object error, StackTrace stackTrace) {
+    developer.log(
+      'Remote auth $stage failed.',
+      name: 'flucord.remote_auth',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  static String _ticketExchangeFailure(DiscordApiException error) {
+    final detail = error.message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final bounded = detail.length <= 120
+        ? detail
+        : '${detail.substring(0, 117)}...';
+    return bounded.isEmpty || bounded == 'Request failed'
+        ? 'Discord rejected the QR login (HTTP ${error.statusCode}).'
+        : 'Discord rejected the QR login (HTTP ${error.statusCode}: $bounded).';
   }
 
   void _startHeartbeat(Object? rawInterval) {

@@ -10,6 +10,7 @@ enum DiscordDesktopLoginState {
   starting,
   qrReady,
   scanned,
+  captchaRequired,
   connecting,
   connected,
   failure,
@@ -30,15 +31,18 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
   Uri? _qrUri;
   String? _pendingDisplayName;
   String? _errorMessage;
+  DiscordRemoteAuthCaptchaChallenge? _captchaChallenge;
 
   DiscordDesktopLoginState get state => _state;
   Uri? get qrUri => _qrUri;
   String? get pendingDisplayName => _pendingDisplayName;
   String? get errorMessage => _errorMessage;
+  DiscordRemoteAuthCaptchaChallenge? get captchaChallenge => _captchaChallenge;
   bool get isBusy => switch (_state) {
     DiscordDesktopLoginState.starting ||
     DiscordDesktopLoginState.qrReady ||
     DiscordDesktopLoginState.scanned ||
+    DiscordDesktopLoginState.captchaRequired ||
     DiscordDesktopLoginState.connecting => true,
     _ => false,
   };
@@ -49,6 +53,7 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
     _qrUri = null;
     _pendingDisplayName = null;
     _errorMessage = null;
+    _captchaChallenge = null;
     notifyListeners();
     final gateway = _gatewayFactory.create();
     _gateway = gateway;
@@ -67,14 +72,27 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
         _state = DiscordDesktopLoginState.scanned;
         notifyListeners();
       case DiscordRemoteAuthCompleted():
+        _captchaChallenge = null;
         _state = DiscordDesktopLoginState.connecting;
         notifyListeners();
         unawaited(_connect(event));
+      case DiscordRemoteAuthCaptchaRequired():
+        _captchaChallenge = event.challenge;
+        _state = DiscordDesktopLoginState.captchaRequired;
+        notifyListeners();
       case DiscordRemoteAuthFailed():
         _state = DiscordDesktopLoginState.failure;
         _errorMessage = event.message;
         notifyListeners();
     }
+  }
+
+  Future<void> submitCaptcha(String response) async {
+    final gateway = _gateway;
+    if (gateway == null || _state != DiscordDesktopLoginState.captchaRequired) {
+      return;
+    }
+    await gateway.submitCaptcha(response);
   }
 
   Future<void> _connect(DiscordRemoteAuthCompleted event) async {
@@ -96,6 +114,7 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
     _qrUri = null;
     _pendingDisplayName = null;
     _errorMessage = null;
+    _captchaChallenge = null;
     notifyListeners();
   }
 
@@ -105,6 +124,7 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
     _qrUri = null;
     _pendingDisplayName = null;
     _errorMessage = null;
+    _captchaChallenge = null;
     notifyListeners();
   }
 

@@ -27,6 +27,36 @@ final class DiscordRemoteAuthUserPending extends DiscordRemoteAuthEvent {
       : '$username#$discriminator';
 }
 
+final class DiscordRemoteAuthCaptchaChallenge {
+  const DiscordRemoteAuthCaptchaChallenge({
+    required this.siteKey,
+    required this.service,
+    required this.userAgent,
+    this.rqData,
+    this.rqToken,
+    this.sessionId,
+    this.serveInvisible = false,
+  });
+
+  final String siteKey;
+  final String service;
+  final String userAgent;
+  final String? rqData;
+  final String? rqToken;
+  final String? sessionId;
+  final bool serveInvisible;
+
+  @override
+  String toString() =>
+      'DiscordRemoteAuthCaptchaChallenge(service: $service, <data redacted>)';
+}
+
+final class DiscordRemoteAuthCaptchaRequired extends DiscordRemoteAuthEvent {
+  const DiscordRemoteAuthCaptchaRequired(this.challenge);
+
+  final DiscordRemoteAuthCaptchaChallenge challenge;
+}
+
 final class DiscordRemoteAuthCompleted extends DiscordRemoteAuthEvent {
   const DiscordRemoteAuthCompleted(this.session);
 
@@ -43,6 +73,8 @@ abstract interface class DiscordRemoteAuthGateway {
   Stream<DiscordRemoteAuthEvent> get events;
 
   Future<void> start();
+
+  Future<void> submitCaptcha(String response);
 
   Future<void> close();
 }
