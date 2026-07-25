@@ -96,6 +96,33 @@ void main() {
     expect(soughtTo, const Duration(seconds: 90));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('fullscreen controls expose an explicit exit command', (
+    tester,
+  ) async {
+    var exits = 0;
+    await tester.pumpWidget(
+      _TestApp(
+        child: SizedBox(
+          width: 420,
+          child: InlineVideoControls(
+            state: const InlineVideoViewState(),
+            onTogglePlayback: () {},
+            onToggleMute: () {},
+            onSeek: (_) {},
+            onFullscreen: () => exits++,
+            isFullscreen: true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Exit fullscreen'));
+
+    expect(exits, 1);
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _TestApp extends StatelessWidget {

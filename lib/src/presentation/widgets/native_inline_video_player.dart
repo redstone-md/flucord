@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -69,14 +71,19 @@ class NativeInlineVideoPlayer extends StatefulWidget {
 }
 
 class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
-  final GlobalKey<VideoState> _videoKey = GlobalKey<VideoState>();
   final List<StreamSubscription<Object?>> _subscriptions = [];
+  final ValueNotifier<InlineVideoViewState> _viewStateNotifier = ValueNotifier(
+    const InlineVideoViewState(),
+  );
   Player? _player;
   VideoController? _videoController;
   InlineVideoViewState _viewState = const InlineVideoViewState();
   String? _error;
   double _audibleVolume = 100;
   int _generation = 0;
+  NavigatorState? _fullscreenNavigator;
+  Route<void>? _fullscreenRoute;
+  bool _fullscreenOpen = false;
 
   @override
   void initState() {
@@ -93,7 +100,14 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
   @override
   void dispose() {
     _generation++;
+    final route = _fullscreenRoute;
+    if (route?.isActive == true) _fullscreenNavigator?.removeRoute(route!);
+    _fullscreenRoute = null;
+    _fullscreenNavigator = null;
     _release();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewStateNotifier.dispose();
+    });
     super.dispose();
   }
 
@@ -103,7 +117,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
     if (!mounted || generation != _generation) return;
     setState(() {
       _error = null;
-      _viewState = const InlineVideoViewState();
+      _replaceViewState(const InlineVideoViewState());
     });
     try {
       final player = Player();
@@ -120,7 +134,9 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
       await player.open(Media(widget.url), play: false);
       if (!mounted || generation != _generation) return;
       setState(() {
-        _viewState = _viewState.copyWith(isBuffering: player.state.buffering);
+        _replaceViewState(
+          _viewState.copyWith(isBuffering: player.state.buffering),
+        );
       });
     } catch (error) {
       _setError(error, generation);
@@ -162,15 +178,22 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
     InlineVideoViewState Function(InlineVideoViewState state) update,
   ) {
     if (!mounted || generation != _generation) return;
-    setState(() => _viewState = update(_viewState));
+    setState(() => _replaceViewState(update(_viewState)));
   }
 
   void _setError(Object error, int generation) {
     if (!mounted || generation != _generation) return;
     setState(() {
       _error = error.toString();
-      _viewState = _viewState.copyWith(isPlaying: false, isBuffering: false);
+      _replaceViewState(
+        _viewState.copyWith(isPlaying: false, isBuffering: false),
+      );
     });
+  }
+
+  void _replaceViewState(InlineVideoViewState state) {
+    _viewState = state;
+    _viewStateNotifier.value = state;
   }
 
   Future<void> _release() async {
@@ -197,6 +220,31 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
     await player.setVolume(_viewState.isMuted ? _audibleVolume : 0);
   }
 
+  Future<void> _openFullscreen() async {
+    final controller = _videoController;
+    if (_fullscreenOpen || controller == null || !mounted) return;
+    final navigator = Navigator.of(context);
+    late final Route<void> route;
+    route = PageRouteBuilder<void>(
+      opaque: true,
+      pageBuilder: (_, _, _) => _FullscreenVideoPage(
+        controller: controller,
+        stateListenable: _viewStateNotifier,
+        onTogglePlayback: _togglePlayback,
+        onToggleMute: _toggleMute,
+        onSeek: (position) => _player?.seek(position),
+      ),
+    );
+    _fullscreenNavigator = navigator;
+    _fullscreenRoute = route;
+    setState(() => _fullscreenOpen = true);
+    await navigator.push(route);
+    if (!mounted || _fullscreenRoute != route) return;
+    _fullscreenRoute = null;
+    _fullscreenNavigator = null;
+    setState(() => _fullscreenOpen = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _videoController;
@@ -211,9 +259,8 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (controller != null)
+                if (controller != null && !_fullscreenOpen)
                   Video(
-                    key: _videoKey,
                     controller: controller,
                     controls: NoVideoControls,
                     fit: BoxFit.contain,
@@ -233,8 +280,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
                       onTogglePlayback: _togglePlayback,
                       onToggleMute: _toggleMute,
                       onSeek: (position) => _player?.seek(position),
-                      onFullscreen: () =>
-                          _videoKey.currentState?.toggleFullscreen(),
+                      onFullscreen: _openFullscreen,
                     ),
                   ),
                 ],
@@ -254,6 +300,7 @@ class InlineVideoControls extends StatelessWidget {
     required this.onToggleMute,
     required this.onSeek,
     required this.onFullscreen,
+    this.isFullscreen = false,
     super.key,
   });
 
@@ -262,6 +309,7 @@ class InlineVideoControls extends StatelessWidget {
   final VoidCallback onToggleMute;
   final ValueChanged<Duration> onSeek;
   final VoidCallback onFullscreen;
+  final bool isFullscreen;
 
   @override
   Widget build(BuildContext context) {
@@ -310,8 +358,8 @@ class InlineVideoControls extends StatelessWidget {
             style: const TextStyle(color: Colors.white, fontSize: 10),
           ),
           _controlButton(
-            icon: Icons.fullscreen,
-            tooltip: 'Fullscreen',
+            icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            tooltip: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
             onPressed: onFullscreen,
           ),
         ],
@@ -336,6 +384,84 @@ class InlineVideoControls extends StatelessWidget {
     final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
     return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  }
+}
+
+final class _FullscreenVideoPage extends StatelessWidget {
+  const _FullscreenVideoPage({
+    required this.controller,
+    required this.stateListenable,
+    required this.onTogglePlayback,
+    required this.onToggleMute,
+    required this.onSeek,
+  });
+
+  final VideoController controller;
+  final ValueListenable<InlineVideoViewState> stateListenable;
+  final VoidCallback onTogglePlayback;
+  final VoidCallback onToggleMute;
+  final ValueChanged<Duration> onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    void close() => Navigator.of(context).maybePop();
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): close},
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Video(
+                controller: controller,
+                controls: NoVideoControls,
+                fit: BoxFit.contain,
+                fill: Colors.black,
+              ),
+              ValueListenableBuilder<InlineVideoViewState>(
+                valueListenable: stateListenable,
+                builder: (context, state, _) => Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (state.isBuffering)
+                      const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SafeArea(
+                        top: false,
+                        child: InlineVideoControls(
+                          state: state,
+                          onTogglePlayback: onTogglePlayback,
+                          onToggleMute: onToggleMute,
+                          onSeek: onSeek,
+                          onFullscreen: close,
+                          isFullscreen: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: SafeArea(
+                  child: IconButton.filledTonal(
+                    onPressed: close,
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Exit fullscreen',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
