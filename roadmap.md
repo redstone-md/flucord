@@ -411,3 +411,17 @@ browser runtime or dependency on Discord's private user API.
 These non-goals applied to the first local tracer bullet. Private desktop
 protocol work now advances only through isolated, versioned adapters with
 explicit credential ownership and regression coverage.
+
+## Release 0.0.1
+
+1. Audit the complete reachable Git history, commit metadata, tracked assets,
+   and screenshot metadata for credentials and personal information.
+2. Keep the audit reproducible as a local PowerShell command and a mandatory
+   release-workflow gate.
+3. Build and package the complete Windows release directory from an exact,
+   checksum-verified Flutter toolchain.
+4. Generate detailed release notes from GitHub pull requests, contributors,
+   merge history, first-parent history, the complete commit range, and build
+   provenance.
+5. Publish the signed Git tag and checksum-addressed Windows archive through a
+   tag-triggered GitHub Actions release.
