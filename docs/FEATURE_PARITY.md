@@ -6,8 +6,8 @@ do not count as desktop-user chat parity.
 
 | Surface | Flucord status | Current boundary |
 | --- | --- | --- |
-| Native desktop shell | Ready | Flutter widgets; no Electron or WebView |
-| Account login | Ready, approval validation pending | Native QR remote-auth handshake and fingerprint live-validated; full mobile approval still pending |
+| Native desktop shell | Ready | Flutter widgets; no Electron or embedded Discord UI |
+| Account login | Ready | Native QR remote-auth plus an ephemeral system WebView2 for mandatory hCaptcha; phone approval and challenge completion live-validated |
 | Saved login | Ready | Versioned operating-system credential vault |
 | User profile | Ready | Hydrated from Gateway `READY` |
 | Server list | Ready | Hydrated from `READY`/`GUILD_CREATE` |
@@ -17,6 +17,7 @@ do not count as desktop-user chat parity.
 | Live new/edit/delete events | Ready | Desktop Gateway dispatches |
 | Send/edit/delete messages | Ready | Separate desktop-user REST adapter |
 | Attachments and replies | Ready | Native multipart upload and existing composer |
+| Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
 | Reactions and pins | Ready | Desktop-user message routes |
 | Threads | Partial | Create from message; initial Gateway thread hydration |
 | Member list and presence | Partial | Live dispatches only; no Bot member enumeration |

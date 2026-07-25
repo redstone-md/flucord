@@ -90,10 +90,20 @@ to remote-auth Gateway v2. The public key is sent as base64 SubjectPublicKeyInfo
 The client decrypts Discord challenges with RSA-OAEP/SHA-256, returns an
 unpadded base64url SHA-256 nonce proof, renders only the returned fingerprint as
 `https://discord.com/ra/{fingerprint}`, and exchanges `pending_login.ticket`
-through `POST /users/@me/remote-auth/login`. The returned encrypted account
-session is decrypted in memory and immediately handed to the typed session
-vault boundary. RSA private material, tickets, and decrypted credentials never
-enter widgets, SQLite, logs, or the QR payload.
+through `POST /users/@me/remote-auth/login`. Before that exchange, the client
+loads `/experiments` and retains Discord's fingerprint in the desktop request
+context. When Discord returns `captcha-required`, Flucord renders the supplied
+site key and `captcha_rqdata` in a short-lived system WebView2, then retries the
+same ticket with `X-Captcha-Key`, `X-Captcha-Rqtoken`, and the optional
+`X-Captcha-Session-Id` headers used by the installed renderer. The returned
+encrypted account session is decrypted in memory and immediately handed to the
+typed session vault boundary. RSA private material, tickets, CAPTCHA tokens,
+and decrypted credentials never enter SQLite, logs, or the QR payload.
+
+The WebView loads only `discord.com/login`, replaces the document with the
+hCaptcha surface, denies permission and popup requests, and clears its cookies
+and cache before disposal. Discord's application UI, REST, Gateway, and chat
+surfaces remain native Flutter and Dart code.
 
 On Windows, both remote auth and the main desktop Gateway use the operating
 system's WinHTTP WebSocket stack through Dart FFI. Discord's Cloudflare edge
@@ -106,7 +116,8 @@ Observed remote-auth operations:
 
 ```text
 hello -> init -> nonce_proof -> pending_remote_init
-      -> pending_ticket -> pending_login -> encrypted_token
+      -> pending_ticket -> pending_login -> captcha-required
+      -> captcha solution + same ticket -> encrypted_token
 ```
 
 The outgoing message queue strips local-only fields before POST, tracks a
@@ -194,6 +205,12 @@ hydration from `READY`, `READY_SUPPLEMENTAL`, and `GUILD_CREATE`. Channel
 history and message mutations use the observed client routes. The desktop path
 does not call `/gateway/bot`, send Bot intents, enumerate guild members through
 the Bot REST facade, read Discord storage, or adopt Discord's running socket.
+
+The full Windows tracer bullet was interactively validated on 2026-07-25:
+phone QR approval, mandatory hCaptcha, encrypted session exchange, main Gateway
+bootstrap, authenticated identity, guild/channel projection, channel history,
+and vault-backed restart restoration all completed without copying Discord
+storage or logging the session credential.
 
 The current socket uses JSON framing while retaining the observed v9 payload
 and state machine; ETF/zstd framing remains a compatibility/performance gap.

@@ -375,15 +375,18 @@ browser runtime or dependency on Discord's private user API.
     READY/READY_SUPPLEMENTAL state, and byte-bounded opcode 37 guild
     subscriptions. ETF/zstd framing, a vault-owned account session, live
     socket integration, cache hydration, and interoperability validation remain.
-69. In progress: establish an explicit native QR remote-auth session owned by
+69. Completed: establish an explicit native QR remote-auth session owned by
     Flucord, store the resulting desktop-user credential only in the operating
     system vault, and carry it through the versioned desktop REST and Gateway
     adapters. The vertical slice is complete only when the authenticated user,
     guild directory, guild channels, and channel history load through the
-    existing native workspace without Electron, a WebView, copied Discord
-    storage, or a Bot token. Windows WinHTTP upgrades, a live QR fingerprint,
-    and the main Gateway Hello are validated; mobile approval plus live
-    account/guild/channel hydration remain before completion.
+    existing native workspace without Electron, embedded Discord UI, copied
+    Discord storage, or a Bot token. Windows WinHTTP upgrades, a live QR
+    fingerprint, the main Gateway Hello, typed mandatory-hCaptcha handling, and
+    an ephemeral system WebView2 challenge surface are implemented. Live phone
+    approval, CAPTCHA completion, authenticated user/guild/channel/history
+    hydration, Unicode-safe identity projection, and vault-backed restart
+    restoration were verified on Windows against a test account.
 
 ## Protocol boundaries
 
@@ -395,6 +398,8 @@ browser runtime or dependency on Discord's private user API.
   snapshot. Matching them does not establish account-ban immunity.
 - Store supported session credentials with the operating system credential
   vault and keep transport secrets out of logs and SQLite.
+- Restrict WebView2 to the mandatory hCaptcha surface: no Discord application
+  UI, no credential storage, no permissions or popups, and immediate cleanup.
 - Keep rate-limit handling and Gateway reconnect behavior covered by tests.
 - Add OAuth2 only for scopes explicitly supported by Discord's public API.
 

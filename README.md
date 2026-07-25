@@ -3,7 +3,8 @@
 Flucord is an experimental native Discord desktop client built with Flutter.
 It replaces the Electron shell with Flutter widgets, native Windows networking,
 SQLite caching, platform integrations, and packaged media libraries. It does
-not embed Discord in a browser or WebView.
+not embed Discord's interface in a browser. QR login uses one short-lived
+system WebView2 surface only when Discord requires hCaptcha.
 
 > [!IMPORTANT]
 > Flucord is not affiliated with Discord. The desktop-user transport relies on
@@ -20,14 +21,15 @@ native-host release validation. The current desktop-user tracer bullet includes
 native QR remote auth, vault-backed session restoration, Gateway workspace
 hydration, channel history, and message operations.
 
-The QR and main Gateway WebSocket handshakes are live-validated. A complete
-mobile approval followed by live account, guild, channel, and history hydration
-is still the release gate for roadmap item 69.
+The QR and main Gateway WebSocket handshakes are live-validated, including the
+mandatory hCaptcha response contract. A completed CAPTCHA solve, desktop-user
+session restore, Gateway `READY`/`GUILD_CREATE`, guild/channel hydration, and
+live channel history are verified against a test account on Windows.
 
 | Area | Status |
 | --- | --- |
 | Flutter desktop shell | Ready |
-| Native QR login | Implemented; full approval validation pending |
+| Native QR login | Ready; QR approval and mandatory hCaptcha live-validated |
 | Saved account session | Ready; operating-system credential vault |
 | Servers, channels, DMs | Implemented through Gateway bootstrap |
 | Message history and mutations | Implemented through desktop REST |
@@ -57,8 +59,9 @@ or copied client data is involved.
   SQLite cache, downloads, media playback, and voice-device surfaces.
 - Separate transport adapters for desktop-user chat, OAuth, Bot development,
   and the optional Discord Social SDK.
-- No Electron, Chromium runtime, browser session extraction, copied cookies, or
-  imported Discord local storage.
+- No Electron, bundled Chromium runtime, browser session extraction, copied
+  cookies, or imported Discord local storage. The hCaptcha WebView2 is
+  ephemeral and cleared immediately after completion.
 
 ## Quick Start
 
@@ -68,6 +71,7 @@ or copied client data is involved.
 - Dart 3.12 or newer.
 - Visual Studio 2022 with the Desktop development with C++ workload.
 - Windows 10 or 11 for the currently verified build.
+- Microsoft Edge WebView2 Runtime for Discord's hCaptcha challenge.
 
 ### Run the client
 
@@ -142,9 +146,11 @@ $env:FLUCORD_LIVE_GATEWAY_TEST='1'
 flutter test test/discord_desktop_gateway_live_test.dart
 ```
 
-The current Windows checkout passes analysis, 493 automated tests, both live
-WebSocket checks, and a release build. The live tests validate transport and QR
-creation; they do not approve an account on the user's phone.
+The current Windows checkout passes analysis, more than 500 automated tests,
+both live WebSocket checks, completed QR/hCaptcha account login, native
+workspace hydration, and a release build. Automated live tests validate
+transport and QR creation; the completed phone approval and hCaptcha flow was
+validated interactively because those steps require a person.
 
 ## Documentation
 

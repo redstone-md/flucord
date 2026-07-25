@@ -21,7 +21,8 @@ ConnectionController
 
 DiscordDesktopUserSession
   <- native QR remote-auth Gateway v2 + RSA-OAEP/SHA-256
-     (Windows system WinHTTP WebSocket; no browser runtime)
+     (Windows system WinHTTP WebSocket)
+  <- ephemeral system WebView2 for mandatory hCaptcha only
   <- operating-system session vault
   -> Gateway v9 READY/GUILD_CREATE workspace hydration
      (Windows system WinHTTP WebSocket; no browser runtime)
@@ -121,7 +122,8 @@ to a user's channel history. Flucord also does not infer chat access from
 - Remembered Bot sessions are encoded as one versioned JSON record in the
   operating-system credential vault.
 - Remembered desktop-user sessions use the same versioned session codec and
-  operating-system vault. Remote-auth private keys and tickets are memory-only.
+  operating-system vault. Remote-auth private keys, tickets, and CAPTCHA
+  responses are memory-only.
 - The legacy `discord_bot_token` key remains readable and is deleted after the
   next successful versioned write.
 - OAuth access tokens are not persisted by the Bot credential codec. The OAuth
