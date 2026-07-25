@@ -104,6 +104,22 @@ Distribute the complete directory below, not only `flucord.exe`:
 build/windows/x64/runner/Release/
 ```
 
+### Published releases
+
+Windows x64 releases are published from semantic version tags such as
+`v0.0.1`. Each release contains the complete runtime directory as a ZIP and a
+`SHA256SUMS.txt` file. Verify the archive before extracting it:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.1.zip
+Get-Content .\SHA256SUMS.txt
+```
+
+Maintainers publish a release by updating the `pubspec.yaml` version, creating
+an annotated matching tag, and pushing it. GitHub Actions audits the complete
+repository history, analyzes and tests the project, builds Windows, generates
+detailed notes from GitHub and Git history, and publishes the assets.
+
 ## Architecture
 
 ```text
@@ -131,10 +147,16 @@ Key entry points:
 ## Verification
 
 ```powershell
+.\tool\audit_public_repository.ps1
 flutter analyze
 flutter test
 flutter build windows --release
 ```
+
+The privacy audit examines every reachable commit, its metadata and historical
+paths, tracked text, and image metadata. It blocks known credential formats,
+private keys, personal email addresses, public IP addresses, local user paths,
+and non-fixture Discord snowflakes without printing matched secret values.
 
 Live network checks are opt-in:
 
