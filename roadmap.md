@@ -368,11 +368,22 @@ browser runtime or dependency on Discord's private user API.
     expose independent mute/unmute progress, failure retry, and accessible
     state in the compact participant panel without suppressing speaking state.
     Keep local volume state memory-only and isolated from self mute/deafen.
+68. Completed: statically inventory the installed Discord desktop 1.0.9249
+    renderer protocol without reading account storage or message bodies. Add
+    isolated, deterministic Dart builders for the observed REST headers and
+    core chat operations plus Gateway v9 identify, resume, QoS heartbeat,
+    READY/READY_SUPPLEMENTAL state, and byte-bounded opcode 37 guild
+    subscriptions. ETF/zstd framing, a vault-owned account session, live
+    socket integration, cache hydration, and interoperability validation remain.
 
-## Protocol safety
+## Protocol boundaries
 
-- Use only documented Discord bot REST and Gateway contracts.
-- Never accept personal account tokens or impersonate official client headers.
+- Keep documented Bot, OAuth, and Social SDK transports independent from the
+  experimental desktop-protocol adapter.
+- Never extract account tokens, cookies, browser storage, or another running
+  process's socket. A future credential source must be explicit and vault-owned.
+- Treat installed-client headers and build numbers as a versioned runtime
+  snapshot. Matching them does not establish account-ban immunity.
 - Store supported session credentials with the operating system credential
   vault and keep transport secrets out of logs and SQLite.
 - Keep rate-limit handling and Gateway reconnect behavior covered by tests.
@@ -383,5 +394,6 @@ browser runtime or dependency on Discord's private user API.
 - Calling Discord's undocumented user endpoints.
 - Voice, video, screen sharing, or overlay support.
 
-These non-goals applied to the first local tracer bullet. Private user
-endpoints remain outside the product contract.
+These non-goals applied to the first local tracer bullet. Private desktop
+protocol work now advances only through isolated, versioned adapters with
+explicit credential ownership and regression coverage.
