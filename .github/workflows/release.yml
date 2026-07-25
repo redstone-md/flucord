@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-release:
+    name: Build and publish Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and project version
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -notmatch '^v(?<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$') {
+            throw "Release tag must use exact vMAJOR.MINOR.PATCH syntax: $tag"
+          }
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)(?:\+\d+)?\s*$'
+          if ($versionLine.Matches.Count -ne 1) {
+            throw 'pubspec.yaml must contain exactly one semantic version.'
+          }
+          $projectVersion = $versionLine.Matches[0].Groups[1].Value
+          if ($projectVersion -ne $Matches.version) {
+            throw "Tag $tag does not match pubspec version $projectVersion."
+          }
+          $tagType = git cat-file -t $tag
+          if ($tagType -notin @('tag', 'commit')) {
+            throw "Tag $tag does not resolve to a Git tag or commit."
+          }
+
+      - name: Install checksum-verified Flutter
+        run: |
+          $archiveUri = 'https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.7-stable.zip'
+          $expectedSha256 = '327b89c2ff612418c1d756efc9636d7811c50e4b50a916d07bc3bdc317ba25e5'
+          $archivePath = Join-Path $env:RUNNER_TEMP 'flutter_windows_3.44.7-stable.zip'
+          $sdkRoot = Join-Path $env:RUNNER_TEMP 'flutter-sdk'
+          Invoke-WebRequest -Uri $archiveUri -OutFile $archivePath
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Flutter archive checksum mismatch: $actualSha256"
+          }
+          New-Item -ItemType Directory -Path $sdkRoot -Force | Out-Null
+          Expand-Archive -LiteralPath $archivePath -DestinationPath $sdkRoot
+          (Join-Path $sdkRoot 'flutter\bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Resolve dependencies
+        run: |
+          flutter config --no-analytics
+          flutter --version
+          flutter pub get
+
+      - name: Audit public repository history
+        run: ./tool/audit_public_repository.ps1
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package release and checksums
+        id: package
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $releaseDirectory = Resolve-Path 'build/windows/x64/runner/Release'
+          $distributionDirectory = Join-Path $PWD 'build/distribution'
+          New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
+          $archiveName = "flucord-windows-x64-$tag.zip"
+          $archivePath = Join-Path $distributionDirectory $archiveName
+          Compress-Archive -Path (Join-Path $releaseDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          $checksumPath = Join-Path $distributionDirectory 'SHA256SUMS.txt'
+          [System.IO.File]::WriteAllText(
+            $checksumPath,
+            "$hash  $archiveName`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          "archive=$archivePath" >> $env:GITHUB_OUTPUT
+          "checksums=$checksumPath" >> $env:GITHUB_OUTPUT
+
+      - name: Generate detailed release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./.github/scripts/build-release-notes.ps1 `
+            -Tag '${{ github.ref_name }}' `
+            -OutputPath 'build/distribution/RELEASE_NOTES.md'
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ github.ref_name }}' `
+            '${{ steps.package.outputs.archive }}' `
+            '${{ steps.package.outputs.checksums }}' `
+            --verify-tag `
+            --latest `
+            --title "Flucord ${{ github.ref_name }}" `
+            --notes-file 'build/distribution/RELEASE_NOTES.md'
