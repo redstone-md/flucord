@@ -431,7 +431,9 @@ final class DiscordMapper {
         .take(2)
         .toList();
     if (words.isEmpty) return '?';
-    return words.map((word) => word[0].toUpperCase()).join();
+    return words
+        .map((word) => String.fromCharCode(word.runes.first).toUpperCase())
+        .join();
   }
 
   static int _colorFor(String id) {
