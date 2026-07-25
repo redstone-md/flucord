@@ -244,15 +244,33 @@ void main() {
 
       expect(controller.mode, SessionMode.disconnected);
       expect(controller.hasSavedCredential, isFalse);
-      expect(vault.readCalls, 0);
+      expect(vault.readCalls, 1);
       expect(vault.token, 'saved-token');
       expect(factory.calls, 0);
 
       expect(await controller.connectSavedCredential(), isFalse);
-      expect(vault.readCalls, 0);
+      expect(vault.readCalls, 2);
       expect(factory.calls, 0);
     },
   );
+
+  test('restores a desktop user session in a normal client build', () async {
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    final vault = _MemoryCredentialVault()
+      ..session = DiscordDesktopUserSession('desktop-authorization');
+    final factory = _StaticRepositoryFactory(
+      MockChatRepository(latency: Duration.zero),
+    );
+    final controller = ConnectionController(chat, vault, factory);
+    addTearDown(chat.dispose);
+
+    await controller.initialize();
+
+    expect(controller.mode, SessionMode.discord);
+    expect(controller.activeSession, isA<DiscordDesktopUserSession>());
+    expect(factory.receivedSession, isA<DiscordDesktopUserSession>());
+    expect(controller.hasSavedCredential, isTrue);
+  });
 
   test('rejects bot sessions at the normal client boundary', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));

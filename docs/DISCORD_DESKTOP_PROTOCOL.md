@@ -83,6 +83,32 @@ renderer updates heartbeat and application state before preparing requests.
 | Bulk ACK | `POST /read-states/ack-bulk` | `read_states[]` with channel, message, and read-state type |
 | Open DM/GDM | `POST /users/@me/channels` | `recipients[]` |
 
+## Native QR remote auth
+
+Flucord creates a fresh RSA-2048 key pair for every login attempt and connects
+to remote-auth Gateway v2. The public key is sent as base64 SubjectPublicKeyInfo.
+The client decrypts Discord challenges with RSA-OAEP/SHA-256, returns an
+unpadded base64url SHA-256 nonce proof, renders only the returned fingerprint as
+`https://discord.com/ra/{fingerprint}`, and exchanges `pending_login.ticket`
+through `POST /users/@me/remote-auth/login`. The returned encrypted account
+session is decrypted in memory and immediately handed to the typed session
+vault boundary. RSA private material, tickets, and decrypted credentials never
+enter widgets, SQLite, logs, or the QR payload.
+
+On Windows, both remote auth and the main desktop Gateway use the operating
+system's WinHTTP WebSocket stack through Dart FFI. Discord's Cloudflare edge
+rejects the otherwise equivalent `dart:io` TLS handshake before protocol
+negotiation. WinHTTP runs in a worker isolate so blocking receive calls never
+occupy Flutter's UI isolate; Dart still owns framing, cryptography, heartbeat,
+resume, and login state.
+
+Observed remote-auth operations:
+
+```text
+hello -> init -> nonce_proof -> pending_remote_init
+      -> pending_ticket -> pending_login -> encrypted_token
+```
+
 The outgoing message queue strips local-only fields before POST, tracks a
 nonce, retries rate limits, and reconciles the optimistic message against both
 the REST response and the Gateway `MESSAGE_CREATE` dispatch.
@@ -161,8 +187,15 @@ exceeds 15,360 bytes.
 
 ## Flucord boundary
 
-The Dart implementation currently provides deterministic protocol builders and
-state-machine tests only. It does not read Discord storage, adopt Discord's
-running socket, or provide an account credential source. ETF/zstd framing, a
-vault-owned account session, rate-limit execution, cache hydration, and live
-interoperability remain separate increments.
+The Dart implementation now owns QR remote auth, a versioned vault-backed
+desktop-user session, raw desktop REST authorization, rate-limit execution, a
+Gateway v9 client, opcode 37 subscriptions, and Gateway-first workspace
+hydration from `READY`, `READY_SUPPLEMENTAL`, and `GUILD_CREATE`. Channel
+history and message mutations use the observed client routes. The desktop path
+does not call `/gateway/bot`, send Bot intents, enumerate guild members through
+the Bot REST facade, read Discord storage, or adopt Discord's running socket.
+
+The current socket uses JSON framing while retaining the observed v9 payload
+and state machine; ETF/zstd framing remains a compatibility/performance gap.
+The installed-client snapshot is private and versioned. Header similarity does
+not establish protocol stability or account-ban immunity.

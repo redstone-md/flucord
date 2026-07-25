@@ -375,6 +375,15 @@ browser runtime or dependency on Discord's private user API.
     READY/READY_SUPPLEMENTAL state, and byte-bounded opcode 37 guild
     subscriptions. ETF/zstd framing, a vault-owned account session, live
     socket integration, cache hydration, and interoperability validation remain.
+69. In progress: establish an explicit native QR remote-auth session owned by
+    Flucord, store the resulting desktop-user credential only in the operating
+    system vault, and carry it through the versioned desktop REST and Gateway
+    adapters. The vertical slice is complete only when the authenticated user,
+    guild directory, guild channels, and channel history load through the
+    existing native workspace without Electron, a WebView, copied Discord
+    storage, or a Bot token. Windows WinHTTP upgrades, a live QR fingerprint,
+    and the main Gateway Hello are validated; mobile approval plus live
+    account/guild/channel hydration remain before completion.
 
 ## Protocol boundaries
 

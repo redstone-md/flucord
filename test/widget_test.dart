@@ -43,7 +43,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-connections')));
     await tester.pumpAndSettle();
     expect(find.text('Connections'), findsOneWidget);
-    expect(find.text('Connect Discord'), findsOneWidget);
+    expect(find.text('Sign in with QR code'), findsOneWidget);
+    expect(find.text('Connect Discord'), findsNothing);
     expect(find.byKey(const ValueKey('discord-bot-token')), findsNothing);
     expect(find.byKey(const ValueKey('developer-bot-transport')), findsNothing);
     await tester.tap(find.byTooltip('Close'));

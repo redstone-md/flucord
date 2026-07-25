@@ -13,8 +13,19 @@ generic repository factory.
 ConnectionController
   -> DiscordAccountSession + capabilities
   -> ChatRepositoryFactory (domain contract)
-  -> DiscordBotRepositoryFactory (current concrete adapter)
-  -> DiscordApiClient (Bot-only) + DiscordGatewayClient (Bot-only)
+  -> DiscordRepositoryFactory
+     -> DiscordDesktopChatRepository
+        -> DiscordDesktopApiClient + DiscordDesktopGatewayClient
+     -> DiscordBotRepositoryFactory (developer build only)
+        -> DiscordApiClient + DiscordGatewayClient
+
+DiscordDesktopUserSession
+  <- native QR remote-auth Gateway v2 + RSA-OAEP/SHA-256
+     (Windows system WinHTTP WebSocket; no browser runtime)
+  <- operating-system session vault
+  -> Gateway v9 READY/GUILD_CREATE workspace hydration
+     (Windows system WinHTTP WebSocket; no browser runtime)
+  -> raw desktop REST authorization for history and message operations
 
 DiscordOAuthUserSession
   <- NativeDiscordOAuthAccountService
@@ -26,14 +37,16 @@ DiscordOAuthUserSession
   -> /users/@me + paginated /users/@me/guilds?with_counts=true only
 ```
 
-REST and Gateway classes remain explicitly bot-specific. They are allowed to
+Bot REST and Gateway classes remain explicitly bot-specific. They are allowed to
 extract the bot credential only after `DiscordBotRepositoryFactory` has checked
-the session kind. UI, workspace controllers, and repository consumers see only
-the session kind and capability set.
+the session kind. The desktop-user adapter is independent and never calls
+`/gateway/bot`, sends Bot intents, or injects its credential into the Bot
+facade. UI, workspace controllers, and repository consumers see only the
+session kind and capability set.
 
-Production builds disable this bot transport at the application boundary. They
-do not read or restore a saved Bot session and do not construct bot credential
-controls. `FLUCORD_ENABLE_BOT_TRANSPORT=true` is an explicit developer-build
+Production builds restore desktop-user sessions while leaving saved Bot
+sessions dormant and omitting bot credential controls.
+`FLUCORD_ENABLE_BOT_TRANSPORT=true` is an explicit developer-build
 opt-in; even then, the transport remains visually and structurally separate
 from the normal OAuth and Social SDK account path.
 
@@ -84,14 +97,14 @@ message, channel, or `/gateway/bot` methods.
 
 ## Capability matrix
 
-| Capability | Bot application | OAuth2 user session |
-| --- | --- | --- |
-| Current identity | Yes | `identify` or `email` |
-| Guild directory | Yes | `guilds` |
-| DM channel directory | Bot-created/live/cache only | `dm_channels.read`, approved partners only |
-| Channel messages | Permission-dependent | Not granted by ordinary public OAuth scopes |
-| Real-time Gateway | Yes | Not exposed as a full user-client Gateway session |
-| Voice connection | Yes | `voice`, approved partners only |
+| Capability | Desktop user | Bot application | OAuth2 user session |
+| --- | --- | --- | --- |
+| Current identity | Gateway READY | Yes | `identify` or `email` |
+| Guild directory | Gateway READY/GUILD_CREATE | Yes | `guilds` |
+| DM channel directory | Gateway READY/live | Bot-created/live/cache | `dm_channels.read`, approved partners only |
+| Channel messages | Permission-dependent | Permission-dependent | Not granted by public OAuth scopes |
+| Real-time Gateway | Desktop v9 | Bot Gateway | Not a full user Gateway session |
+| Voice connection | Pending desktop transport validation | Yes | `voice`, approved partners only |
 
 The matrix describes protocol-level availability, not server permissions. A
 bot can still receive `403` for an operation its guild role does not permit.
@@ -107,6 +120,8 @@ to a user's channel history. Flucord also does not infer chat access from
   transport that consumes it.
 - Remembered Bot sessions are encoded as one versioned JSON record in the
   operating-system credential vault.
+- Remembered desktop-user sessions use the same versioned session codec and
+  operating-system vault. Remote-auth private keys and tickets are memory-only.
 - The legacy `discord_bot_token` key remains readable and is deleted after the
   next successful versioned write.
 - OAuth access tokens are not persisted by the Bot credential codec. The OAuth

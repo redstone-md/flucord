@@ -9,7 +9,8 @@ final class DiscordSessionCredentialCodec {
   const DiscordSessionCredentialCodec();
 
   String encode(DiscordAccountSession session) {
-    if (session is! DiscordBotSession) {
+    if (session is! DiscordBotSession &&
+        session is! DiscordDesktopUserSession) {
       throw UnsupportedError(
         'OAuth sessions require an authorization-code refresh store.',
       );
@@ -24,15 +25,16 @@ final class DiscordSessionCredentialCodec {
   DiscordAccountSession? decode(String encoded) {
     try {
       final payload = jsonDecode(encoded);
-      if (payload is! Map ||
-          payload['version'] != 1 ||
-          payload['kind'] != DiscordSessionKind.botApplication.name) {
+      if (payload is! Map || payload['version'] != 1) {
         return null;
       }
       final credential = payload['credential'];
-      return credential is String && credential.trim().isNotEmpty
-          ? DiscordBotSession(credential)
-          : null;
+      if (credential is! String || credential.trim().isEmpty) return null;
+      return switch (payload['kind']) {
+        'botApplication' => DiscordBotSession(credential),
+        'desktopUser' => DiscordDesktopUserSession(credential),
+        _ => null,
+      };
     } on FormatException {
       return null;
     } on TypeError {

@@ -55,6 +55,16 @@ void main() {
     expect(session.toString(), isNot(contains('secret-oauth-token')));
   });
 
+  test('desktop user sessions expose chat without logging credentials', () {
+    final session = DiscordDesktopUserSession(' secret-user-session ');
+
+    expect(session.kind, DiscordSessionKind.desktopUser);
+    expect(session.transportCredential, 'secret-user-session');
+    expect(session.supports(DiscordSessionCapability.channelMessages), isTrue);
+    expect(session.supports(DiscordSessionCapability.realtimeGateway), isTrue);
+    expect(session.toString(), isNot(contains('secret-user-session')));
+  });
+
   test('the concrete bot repository adapter rejects OAuth before IO', () async {
     final session = DiscordOAuthUserSession(
       accessToken: 'oauth-token',

@@ -45,6 +45,7 @@ final class DiscordMapper {
     Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
     List<Map<String, Object?>> directChannels = const [],
     bool includeDirectMessagesSpace = false,
+    String currentUserRole = 'Discord bot',
   }) {
     final spaces = <CommunitySpace>[];
     final channels = <ConversationChannel>[];
@@ -106,7 +107,7 @@ final class DiscordMapper {
     }
     final currentMember = member(
       currentUser,
-      role: 'Discord bot',
+      role: currentUserRole,
       presence: Presence.online,
       spaceIds: spaces.map((space) => space.id).toSet(),
     );

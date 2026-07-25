@@ -83,8 +83,7 @@ sealed class DiscordRestAuthorization {
 
   final String _credential;
 
-  String get _scheme;
-  String get _headerValue => '$_scheme $_credential';
+  String get _headerValue;
 
   @override
   String toString() => '$runtimeType(<redacted>)';
@@ -94,7 +93,7 @@ final class DiscordBotAuthorization extends DiscordRestAuthorization {
   DiscordBotAuthorization(String token) : super._(token, 'token');
 
   @override
-  String get _scheme => 'Bot';
+  String get _headerValue => 'Bot $_credential';
 }
 
 final class DiscordBearerAuthorization extends DiscordRestAuthorization {
@@ -102,7 +101,15 @@ final class DiscordBearerAuthorization extends DiscordRestAuthorization {
     : super._(accessToken, 'accessToken');
 
   @override
-  String get _scheme => 'Bearer';
+  String get _headerValue => 'Bearer $_credential';
+}
+
+final class DiscordDesktopAuthorization extends DiscordRestAuthorization {
+  DiscordDesktopAuthorization(String authorization)
+    : super._(authorization, 'authorization');
+
+  @override
+  String get _headerValue => _credential;
 }
 
 typedef DelayFunction = Future<void> Function(Duration duration);
@@ -179,10 +186,12 @@ final class DiscordHttpExecutor {
 final class DiscordRestClient {
   DiscordRestClient({
     required this._authorization,
+    Map<String, String> additionalHeaders = const {},
     DiscordHttpTransport? transport,
     DelayFunction? delay,
     Uri? baseUri,
-  }) : _executor = DiscordHttpExecutor(
+  }) : _additionalHeaders = Map.unmodifiable({...additionalHeaders}),
+       _executor = DiscordHttpExecutor(
          transport: transport,
          delay: delay,
          baseUri: baseUri,
@@ -191,6 +200,7 @@ final class DiscordRestClient {
   static const _userAgent = 'Flucord/0.1.0 (native Flutter client)';
 
   final DiscordRestAuthorization _authorization;
+  final Map<String, String> _additionalHeaders;
   final DiscordHttpExecutor _executor;
 
   Future<Map<String, Object?>> getObject(String path) =>
@@ -245,10 +255,11 @@ final class DiscordRestClient {
     path,
     query: query,
     headers: {
-      HttpHeaders.authorizationHeader: _authorization._headerValue,
       HttpHeaders.acceptHeader: 'application/json',
       HttpHeaders.contentTypeHeader: contentType,
       HttpHeaders.userAgentHeader: _userAgent,
+      ..._additionalHeaders,
+      HttpHeaders.authorizationHeader: _authorization._headerValue,
     },
     body: rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
   );

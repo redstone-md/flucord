@@ -13,6 +13,17 @@ void main() {
     expect(decoded?.transportCredential, 'bot-token');
   });
 
+  test('round-trips a versioned desktop user credential', () {
+    final encoded = codec.encode(
+      DiscordDesktopUserSession(' desktop-authorization '),
+    );
+    final decoded = codec.decode(encoded);
+
+    expect(decoded, isA<DiscordDesktopUserSession>());
+    expect(decoded?.transportCredential, 'desktop-authorization');
+    expect(encoded, contains('"kind":"desktopUser"'));
+  });
+
   test('rejects malformed and unknown credential payloads', () {
     expect(codec.decode('not-json'), isNull);
     expect(codec.decode('{"version":2,"kind":"botApplication"}'), isNull);

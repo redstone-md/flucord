@@ -46,19 +46,12 @@ final class ConnectionController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (!botTransportEnabled) {
-      await _ensureDisconnectedWorkspace();
-      _mode = SessionMode.disconnected;
-      _state = ConnectionActionState.idle;
-      _hasSavedCredential = false;
-      _activeSession = null;
-      _errorMessage = null;
-      notifyListeners();
-      return;
-    }
     DiscordAccountSession? session;
     try {
       session = await _credentialVault.readDiscordSession();
+      if (session is DiscordBotSession && !botTransportEnabled) {
+        session = null;
+      }
       _hasSavedCredential = session != null;
     } catch (_) {
       _hasSavedCredential = false;
@@ -116,7 +109,6 @@ final class ConnectionController extends ChangeNotifier {
   }
 
   Future<bool> connectSavedCredential() async {
-    if (!botTransportEnabled) return _rejectDisabledBotTransport();
     try {
       final session = await _credentialVault.readDiscordSession();
       if (session == null) {
@@ -125,6 +117,9 @@ final class ConnectionController extends ChangeNotifier {
         _errorMessage = 'Saved credential is no longer available.';
         notifyListeners();
         return false;
+      }
+      if (session is DiscordBotSession && !botTransportEnabled) {
+        return _rejectDisabledBotTransport();
       }
       return _connect(session, remember: true, persistCredential: false);
     } catch (_) {
@@ -187,6 +182,11 @@ final class ConnectionController extends ChangeNotifier {
     _state = ConnectionActionState.idle;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  Future<void> disconnectAndForget() async {
+    await disconnect();
+    await forgetSavedCredential();
   }
 
   Future<void> forgetSavedCredential() async {

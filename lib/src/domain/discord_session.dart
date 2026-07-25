@@ -1,4 +1,4 @@
-enum DiscordSessionKind { botApplication, oauthUser }
+enum DiscordSessionKind { botApplication, oauthUser, desktopUser }
 
 enum DiscordSessionCapability {
   currentIdentity,
@@ -64,6 +64,54 @@ final class DiscordBotSession extends DiscordAccountSession {
 
   @override
   String toString() => 'DiscordBotSession(<redacted>)';
+}
+
+final class DiscordDesktopUserSession extends DiscordAccountSession {
+  factory DiscordDesktopUserSession(String authorization) {
+    final normalized = authorization.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        authorization,
+        'authorization',
+        'Authorization cannot be empty',
+      );
+    }
+    return DiscordDesktopUserSession._(normalized);
+  }
+
+  const DiscordDesktopUserSession._(this._authorization);
+
+  static const _capabilities = <DiscordSessionCapability>{
+    DiscordSessionCapability.currentIdentity,
+    DiscordSessionCapability.guildDirectory,
+    DiscordSessionCapability.currentGuildMembership,
+    DiscordSessionCapability.connectionDirectory,
+    DiscordSessionCapability.directChannelDirectory,
+    DiscordSessionCapability.channelMessages,
+    DiscordSessionCapability.realtimeGateway,
+    DiscordSessionCapability.directMessages,
+    DiscordSessionCapability.voiceConnection,
+  };
+
+  final String _authorization;
+
+  @override
+  DiscordSessionKind get kind => DiscordSessionKind.desktopUser;
+
+  @override
+  Set<DiscordSessionCapability> get capabilities => _capabilities;
+
+  @override
+  String get displayName => 'Discord account';
+
+  @override
+  String get credentialLabel => 'account session';
+
+  @override
+  String get transportCredential => _authorization;
+
+  @override
+  String toString() => 'DiscordDesktopUserSession(<redacted>)';
 }
 
 final class DiscordOAuthUserSession extends DiscordAccountSession {

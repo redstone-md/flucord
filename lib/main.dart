@@ -14,6 +14,7 @@ import 'src/platform/macos_desktop_integration.dart';
 import 'src/platform/windows_desktop_integration.dart';
 
 Future<void> main(List<String> arguments) async {
+  const demoMode = bool.fromEnvironment('FLUCORD_DEMO_MODE');
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final DesktopIntegration? desktopIntegration = Platform.isWindows
@@ -25,13 +26,20 @@ Future<void> main(List<String> arguments) async {
       : null;
   await desktopIntegration?.initialize();
   final opusCodecFactory = await NativeOpusCodecFactory.initialize();
-  runApp(
-    FlucordApp(
-      desktopIntegration: desktopIntegration,
-      voiceMediaService: WebRtcVoiceMediaService(),
-      voiceOpusCodecFactory: opusCodecFactory,
-      voiceMessageRecorder: NativeVoiceMessageRecorder(opusCodecFactory),
-      voicePlaybackService: SoLoudVoicePlaybackService(),
-    ),
-  );
+  final app = demoMode
+      ? FlucordApp.demo(
+          desktopIntegration: desktopIntegration,
+          voiceMediaService: WebRtcVoiceMediaService(),
+          voiceOpusCodecFactory: opusCodecFactory,
+          voiceMessageRecorder: NativeVoiceMessageRecorder(opusCodecFactory),
+          voicePlaybackService: SoLoudVoicePlaybackService(),
+        )
+      : FlucordApp(
+          desktopIntegration: desktopIntegration,
+          voiceMediaService: WebRtcVoiceMediaService(),
+          voiceOpusCodecFactory: opusCodecFactory,
+          voiceMessageRecorder: NativeVoiceMessageRecorder(opusCodecFactory),
+          voicePlaybackService: SoLoudVoicePlaybackService(),
+        );
+  runApp(app);
 }

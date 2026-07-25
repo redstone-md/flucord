@@ -19,7 +19,7 @@ import '../domain/voice_message_recorder.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
-import 'widgets/discord_account_connection_scope.dart';
+import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/create_forum_post_dialog.dart';
 import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';

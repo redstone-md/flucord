@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/discord_account_connection_controller.dart';
+import 'application/discord_desktop_login_controller.dart';
 import 'application/discord_friends_controller.dart';
 import 'application/discord_oauth_controller.dart';
 import 'application/discord_social_activity_controller.dart';
@@ -22,11 +23,13 @@ import 'data/native_discord_social_sdk_gateway.dart';
 import 'data/native_external_link_launcher.dart';
 import 'data/unavailable_discord_social_dm_gateway.dart';
 import 'data/discord/discord_oauth_account_service.dart';
+import 'data/discord/discord_remote_auth_gateway.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
 import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
+import 'domain/discord_remote_auth.dart';
 import 'domain/discord_social_activity.dart';
 import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
@@ -42,6 +45,7 @@ import 'data/secure_credential_vault.dart';
 import 'data/secure_discord_oauth_vault.dart';
 import 'presentation/flucord_shell.dart';
 import 'presentation/widgets/discord_account_connection_scope.dart';
+import 'presentation/widgets/discord_desktop_login_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
 import 'presentation/widgets/discord_social_dm_navigation_scope.dart';
 import 'presentation/widgets/discord_social_dm_scope.dart';
@@ -68,6 +72,7 @@ class FlucordApp extends StatefulWidget {
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
+    this.discordRemoteAuthGatewayFactory,
     this.enableBotTransport = const bool.fromEnvironment(
       'FLUCORD_ENABLE_BOT_TRANSPORT',
     ),
@@ -85,6 +90,7 @@ class FlucordApp extends StatefulWidget {
     DiscordOAuthAccountGateway? discordOAuthAccountGateway,
     DiscordSocialSdkGateway? discordSocialSdkGateway,
     DiscordSocialDmGateway? discordSocialDmGateway,
+    DiscordRemoteAuthGatewayFactory? discordRemoteAuthGatewayFactory,
     bool enableBotTransport = false,
     Key? key,
   }) => FlucordApp(
@@ -101,6 +107,7 @@ class FlucordApp extends StatefulWidget {
     discordOAuthAccountGateway: discordOAuthAccountGateway,
     discordSocialSdkGateway: discordSocialSdkGateway,
     discordSocialDmGateway: discordSocialDmGateway,
+    discordRemoteAuthGatewayFactory: discordRemoteAuthGatewayFactory,
     enableBotTransport: enableBotTransport,
     key: key,
   );
@@ -120,6 +127,7 @@ class FlucordApp extends StatefulWidget {
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
+  final DiscordRemoteAuthGatewayFactory? discordRemoteAuthGatewayFactory;
   final bool enableBotTransport;
 
   @override
@@ -132,6 +140,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final DiscordAccountConnectionController
   _discordAccountConnectionController;
   late final DiscordFriendsController _discordFriendsController;
+  late final DiscordDesktopLoginController _discordDesktopLoginController;
   late final DiscordOAuthController _discordOAuthController;
   late final DiscordSocialActivityController _discordSocialActivityController;
   late final DiscordSocialDmController _discordSocialDmController;
@@ -155,9 +164,14 @@ class _FlucordAppState extends State<FlucordApp> {
     _connectionController = ConnectionController(
       _chatController,
       widget.credentialVault ?? const SecureCredentialVault(),
-      widget.chatRepositoryFactory ?? const DiscordBotRepositoryFactory(),
+      widget.chatRepositoryFactory ?? const DiscordRepositoryFactory(),
       initialMode: widget.initialSessionMode,
       botTransportEnabled: widget.enableBotTransport,
+    );
+    _discordDesktopLoginController = DiscordDesktopLoginController(
+      widget.discordRemoteAuthGatewayFactory ??
+          const IoDiscordRemoteAuthGatewayFactory(),
+      _connectionController,
     );
     _externalLinkLauncher =
         widget.externalLinkLauncher ?? const NativeExternalLinkLauncher();
@@ -238,6 +252,7 @@ class _FlucordAppState extends State<FlucordApp> {
     );
     _chatController.dispose();
     _connectionController.dispose();
+    _discordDesktopLoginController.dispose();
     _oauthGuildMembershipController.dispose();
     _discordAccountConnectionController.dispose();
     _discordOAuthController.dispose();
@@ -295,33 +310,36 @@ class _FlucordAppState extends State<FlucordApp> {
         theme: FlucordTheme.light,
         darkTheme: FlucordTheme.dark,
         themeMode: _workspaceController.themeMode,
-        home: DiscordAccountConnectionScope(
-          controller: _discordAccountConnectionController,
-          child: DiscordSocialSdkScope(
-            controller: _discordSocialSdkController,
-            child: DiscordSocialActivityScope(
-              controller: _discordSocialActivityController,
-              child: DiscordSocialPresenceScope(
-                controller: _discordSocialPresenceController,
-                child: DiscordSocialDmNavigationScope(
-                  controller: _discordSocialDmNavigationController,
-                  child: DiscordSocialDmScope(
-                    controller: _discordSocialDmController,
-                    child: DiscordFriendsScope(
-                      controller: _discordFriendsController,
-                      child: FlucordShell(
-                        chatController: _chatController,
-                        connectionController: _connectionController,
-                        discordOAuthController: _discordOAuthController,
-                        oauthGuildDirectoryController:
-                            _oauthGuildDirectoryController,
-                        oauthGuildMembershipController:
-                            _oauthGuildMembershipController,
-                        workspaceController: _workspaceController,
-                        voiceController: _voiceController,
-                        voiceMessageRecorder: widget.voiceMessageRecorder,
-                        attachmentDownloadService: _attachmentDownloadService,
-                        externalLinkLauncher: _externalLinkLauncher,
+        home: DiscordDesktopLoginScope(
+          controller: _discordDesktopLoginController,
+          child: DiscordAccountConnectionScope(
+            controller: _discordAccountConnectionController,
+            child: DiscordSocialSdkScope(
+              controller: _discordSocialSdkController,
+              child: DiscordSocialActivityScope(
+                controller: _discordSocialActivityController,
+                child: DiscordSocialPresenceScope(
+                  controller: _discordSocialPresenceController,
+                  child: DiscordSocialDmNavigationScope(
+                    controller: _discordSocialDmNavigationController,
+                    child: DiscordSocialDmScope(
+                      controller: _discordSocialDmController,
+                      child: DiscordFriendsScope(
+                        controller: _discordFriendsController,
+                        child: FlucordShell(
+                          chatController: _chatController,
+                          connectionController: _connectionController,
+                          discordOAuthController: _discordOAuthController,
+                          oauthGuildDirectoryController:
+                              _oauthGuildDirectoryController,
+                          oauthGuildMembershipController:
+                              _oauthGuildMembershipController,
+                          workspaceController: _workspaceController,
+                          voiceController: _voiceController,
+                          voiceMessageRecorder: widget.voiceMessageRecorder,
+                          attachmentDownloadService: _attachmentDownloadService,
+                          externalLinkLauncher: _externalLinkLauncher,
+                        ),
                       ),
                     ),
                   ),

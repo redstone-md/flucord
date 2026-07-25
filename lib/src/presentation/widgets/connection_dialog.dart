@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../application/connection_controller.dart';
-import '../../application/discord_account_connection_controller.dart';
+import '../../application/discord_desktop_login_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'developer_bot_transport_section.dart';
-import 'oauth_connection_section.dart';
+import 'discord_desktop_login_section.dart';
 
 class ConnectionDialog extends StatelessWidget {
   const ConnectionDialog({
     required this.controller,
-    required this.accountController,
+    required this.desktopLoginController,
     super.key,
   });
 
   final ConnectionController controller;
-  final DiscordAccountConnectionController accountController;
+  final DiscordDesktopLoginController desktopLoginController;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,7 @@ class ConnectionDialog extends StatelessWidget {
         child: ListenableBuilder(
           listenable: controller,
           builder: (context, _) => ListenableBuilder(
-            listenable: accountController,
+            listenable: desktopLoginController,
             builder: (context, _) => Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -41,7 +41,10 @@ class ConnectionDialog extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        OAuthConnectionSection(controller: accountController),
+                        DiscordDesktopLoginSection(
+                          controller: desktopLoginController,
+                          connectionController: controller,
+                        ),
                         if (controller.botTransportEnabled) ...[
                           Divider(height: 1, color: context.surfaces.border),
                           DeveloperBotTransportSection(

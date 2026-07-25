@@ -185,18 +185,16 @@ void main() {
     expect(socialGateway.disconnectCalls, 1);
   });
 
-  testWidgets('link and unlink transition the disconnected native shell', (
+  testWidgets('normal Connections exposes only desktop QR login', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1000, 760));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final gateway = _OAuthGateway(authorizedAccount: _oauthAccount());
 
     await tester.pumpWidget(
       FlucordApp(
         credentialVault: _EmptyCredentialVault(),
         chatRepositoryFactory: _UnusedRepositoryFactory(),
-        discordOAuthAccountGateway: gateway,
       ),
     );
     await tester.pump();
@@ -205,24 +203,10 @@ void main() {
       find.byKey(const ValueKey('open-disconnected-connections')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('link-discord-account')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Close'));
-    await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('oauth-guild-workspace')), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('open-oauth-workspace-connections')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('unlink-discord-account')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Close'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No chat transport connected'), findsOneWidget);
-    expect(find.byKey(const ValueKey('oauth-guild-workspace')), findsNothing);
-    expect(gateway.clearCalls, 1);
+    expect(find.text('Sign in with QR code'), findsOneWidget);
+    expect(find.byKey(const ValueKey('link-discord-account')), findsNothing);
+    expect(find.text('Connect Discord'), findsNothing);
   });
 }
 
@@ -245,10 +229,9 @@ final class _UnusedRepositoryFactory implements ChatRepositoryFactory {
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {
-  _OAuthGateway({this.restoredAccount, this.authorizedAccount});
+  _OAuthGateway({this.restoredAccount});
 
   final DiscordOAuthAccount? restoredAccount;
-  final DiscordOAuthAccount? authorizedAccount;
   int authorizeCalls = 0;
   int clearCalls = 0;
 
@@ -258,11 +241,7 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
   @override
   Future<DiscordOAuthAccount> authorize() {
     authorizeCalls++;
-    final account = authorizedAccount;
-    if (account == null) {
-      throw StateError('Authorization is not part of this test.');
-    }
-    return Future.value(account);
+    throw StateError('Authorization is not part of this test.');
   }
 
   @override
