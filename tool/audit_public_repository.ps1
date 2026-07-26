@@ -199,7 +199,7 @@ class RepositoryPrivacyAudit {
   hidden [void] InspectText([string] $text, [string] $location) {
     foreach ($rule in $this.ContentRules) {
       if ($rule.Pattern.IsMatch($text) -and
-          -not $this.IsAllowedPlaceholder($text, $rule.Category)) {
+          -not $this.IsAllowedPlaceholder($text, $rule.Category, $location)) {
         $this.AddFinding($rule.Category, $location)
       }
     }
@@ -243,7 +243,17 @@ class RepositoryPrivacyAudit {
       $bytes[0] -ge 224
   }
 
-  hidden [bool] IsAllowedPlaceholder([string] $text, [string] $category) {
+  hidden [bool] IsAllowedPlaceholder(
+    [string] $text,
+    [string] $category,
+    [string] $location
+  ) {
+    if ($category -eq 'local-user-path' -and
+        $location -match ':tool/audit_public_repository\.ps1:[0-9]+$' -and
+        ($text -match '^\s*\$userPath\s*=' -or
+         $text -match '\[\^/\\s\]\+\|/home/')) {
+      return $true
+    }
     if ($category -ne 'literal-credential') {
       return $false
     }
