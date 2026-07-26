@@ -1,10 +1,11 @@
 # Flucord
 
-Flucord is an experimental native Discord desktop client built with Flutter.
-It replaces the Electron shell with Flutter widgets, native Windows networking,
-SQLite caching, platform integrations, and packaged media libraries. It does
-not embed Discord's interface in a browser. QR login uses one short-lived
-system WebView2 surface only when Discord requires hCaptcha.
+Flucord is a [Redstone](https://redstone.md) project originally created by
+**Rxflex**. It is an experimental native Discord desktop client built with
+Flutter. It replaces the Electron shell with Flutter widgets, native Windows
+networking, SQLite caching, platform integrations, and packaged media
+libraries. It does not embed Discord's interface in a browser. QR login uses
+one short-lived system WebView2 surface only when Discord requires hCaptcha.
 
 > [!IMPORTANT]
 > Flucord is not affiliated with Discord. The desktop-user transport relies on
@@ -190,5 +191,22 @@ desktop-user, OAuth, Bot, Social SDK, and demo transports independent; add tests
 at the repository/controller boundary; and keep Dart/C++ source files below 500
 lines.
 
-This repository does not currently publish a project-level license. Review that
-before redistributing source or binaries.
+## License
+
+Flucord is source-available under the [Flucord Project License 1.0](LICENSE).
+The license permits personal and commercial use, modification, forks, and
+distribution of Flucord while requiring attribution, published corresponding
+source, and the same license for derivatives.
+
+The canonical project is maintained in the
+[redstone-md GitHub organization](https://github.com/redstone-md).
+
+The interface may be changed inside Flucord or a compliant fork, but it may not
+be extracted, ported, or reused in a separate product, UI library, template,
+theme, or design system. Every distribution must preserve the [NOTICE](NOTICE),
+credit original author **Rxflex**, preserve the Redstone project identity, and
+link to this canonical repository.
+
+Because of the project-integrity restriction, this is not an OSI-approved Open
+Source license. Separately identified third-party components retain their own
+licenses.
