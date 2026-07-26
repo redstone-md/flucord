@@ -62,6 +62,9 @@ final class DiscordGatewayProtocol {
     },
   };
 
+  /// Opcode 5 carries the literal `null`, not an empty object.
+  Map<String, Object?> voiceServerPing() => {'op': 5, 'd': null};
+
   Map<String, Object?> resume() => {
     'op': 6,
     'd': {'token': token, 'session_id': sessionId, 'seq': sequence},
@@ -94,6 +97,13 @@ abstract interface class DiscordVoiceStateGateway {
     bool selfMute = false,
     bool selfDeaf = false,
   });
+
+  /// Opcode 5 `VOICE_SERVER_PING`, whose payload is the literal `null`.
+  ///
+  /// Sent when a voice socket drops and intends to reconnect: the main gateway
+  /// is the only party that can re-issue a `VOICE_SERVER_UPDATE`, and it does
+  /// so only when asked.
+  void pingVoiceServer();
 }
 
 abstract interface class DiscordChatGateway
@@ -293,6 +303,9 @@ final class DiscordGatewayClient implements DiscordChatGateway {
     _desiredVoiceStates[guildId] = payload;
     _send(payload);
   }
+
+  @override
+  void pingVoiceServer() => _send(_protocol.voiceServerPing());
 
   void _flushVoiceStates() {
     for (final payload in _desiredVoiceStates.values) {

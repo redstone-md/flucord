@@ -166,6 +166,75 @@ void main() {
     expect(states.single.userId, 'member-1');
     expect(states.single.channelId, isNull);
   });
+
+  test('replays the occupants a channel already had on join', () async {
+    final gateway = _FakeMainGateway();
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+    )..setCurrentUserId('bot-1');
+    final events = <VoiceSignalingEvent>[];
+    final subscription = service.voiceEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(service.close);
+
+    // GUILD_CREATE lands at bootstrap, long before anyone presses join, and is
+    // the only announcement of who is already sitting in the channel.
+    gateway.dispatch('GUILD_CREATE', {
+      'id': 'guild-1',
+      'voice_states': [
+        {'user_id': 'member-1', 'channel_id': 'voice-1', 'self_mute': true},
+        {'user_id': 'member-2', 'channel_id': 'voice-2'},
+      ],
+    });
+    await _flushEvents();
+    expect(events.whereType<VoiceParticipantStateEvent>(), isEmpty);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    await _flushEvents();
+
+    final states = events.whereType<VoiceParticipantStateEvent>().toList();
+    expect(states.map((state) => state.userId), ['member-1']);
+    expect(states.single.selfMuted, isTrue);
+  });
+
+  test('pings the voice server when a voice socket reconnects', () async {
+    final gateway = _FakeMainGateway();
+    final clients = <_FakeVoiceClient>[];
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+      voiceClientFactory: (credentials, daveService) {
+        final client = _FakeVoiceClient(credentials);
+        clients.add(client);
+        return client;
+      },
+    )..setCurrentUserId('bot-1');
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'bot-1',
+      'session_id': 'session-1',
+    });
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': 'guild-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    await _flushEvents();
+
+    clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
+    await _flushEvents();
+    expect(gateway.voiceServerPings, 1);
+
+    // A ready transport is not a reason to poke the gateway.
+    clients.single.emitStatus(VoiceConnectionStatus.ready);
+    await _flushEvents();
+    expect(gateway.voiceServerPings, 1);
+  });
 }
 
 Future<void> _flushEvents() async {
@@ -191,6 +260,7 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
   final StreamController<DiscordGatewayEvent> _events =
       StreamController.broadcast();
   final List<_VoiceUpdate> updates = [];
+  int voiceServerPings = 0;
 
   @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
@@ -215,6 +285,9 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
       ),
     );
   }
+
+  @override
+  void pingVoiceServer() => voiceServerPings++;
 }
 
 final class _FakeVoiceClient implements DiscordVoiceClient {
@@ -228,6 +301,9 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
 
   @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
+
+  void emitStatus(VoiceConnectionStatus status) =>
+      _events.add(VoiceSignalingStatusEvent(status));
 
   @override
   Future<void> connect() async {

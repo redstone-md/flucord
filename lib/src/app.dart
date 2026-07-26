@@ -13,6 +13,7 @@ import 'application/discord_social_dm_controller.dart';
 import 'application/discord_social_dm_navigation_controller.dart';
 import 'application/discord_social_presence_controller.dart';
 import 'application/discord_social_sdk_controller.dart';
+import 'application/guild_member_list_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
 import 'application/oauth_guild_membership_controller.dart';
 import 'application/workspace_controller.dart';
@@ -151,6 +152,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final OAuthGuildDirectoryController _oauthGuildDirectoryController;
   late final OAuthGuildMembershipController _oauthGuildMembershipController;
   late final WorkspaceController _workspaceController;
+  late final GuildMemberListController _memberListController;
   late final VoiceController _voiceController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -215,6 +217,11 @@ class _FlucordAppState extends State<FlucordApp> {
     );
     _oauthGuildDirectoryController = OAuthGuildDirectoryController();
     _workspaceController = WorkspaceController();
+    // Resolved lazily: the transport is swapped when the session changes, and
+    // only the desktop-user one serves member lists.
+    _memberListController = GuildMemberListController(
+      () => _chatController.memberListRepository,
+    );
     _attachmentDownloadService =
         widget.attachmentDownloadService ?? NativeAttachmentDownloadService();
     _voiceController = VoiceController(
@@ -263,6 +270,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _discordSocialDmController.dispose();
     _discordSocialDmNavigationController.dispose();
     _oauthGuildDirectoryController.dispose();
+    _memberListController.dispose();
     _workspaceController.dispose();
     _voiceController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
@@ -335,6 +343,7 @@ class _FlucordAppState extends State<FlucordApp> {
                           oauthGuildMembershipController:
                               _oauthGuildMembershipController,
                           workspaceController: _workspaceController,
+                          memberListController: _memberListController,
                           voiceController: _voiceController,
                           voiceMessageRecorder: widget.voiceMessageRecorder,
                           attachmentDownloadService: _attachmentDownloadService,

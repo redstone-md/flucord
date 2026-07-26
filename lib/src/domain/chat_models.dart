@@ -348,6 +348,22 @@ final class ChatWorkspace {
   ChatWorkspace upsertMember(Member member) =>
       copyWith(members: _mergeMemberInto(members, member));
 
+  /// Folds a batch of members in with one pass over the member table.
+  ///
+  /// A member-list page carries up to a hundred members at once; upserting
+  /// them one at a time would rebuild the whole table per member and turn a
+  /// single roster page into quadratic work.
+  ChatWorkspace upsertMembers(Iterable<Member> incoming) {
+    if (incoming.isEmpty) return this;
+    final merged = <String, Member>{
+      for (final member in members) member.id: member,
+    };
+    for (final member in incoming) {
+      merged[member.id] = _mergeMember(merged[member.id], member);
+    }
+    return copyWith(members: merged.values.toList(growable: false));
+  }
+
   ChatWorkspace upsertSpace(CommunitySpace space) => copyWith(
     spaces: [...spaces.where((existing) => existing.id != space.id), space],
   );

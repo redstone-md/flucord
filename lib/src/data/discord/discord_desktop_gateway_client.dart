@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../zstd/zstd_codec.dart';
 import 'discord_desktop_bootstrap.dart';
 import 'discord_desktop_gateway_protocol.dart';
 import 'discord_desktop_profile.dart';
@@ -135,6 +136,16 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       for (final payload in payloads) {
         _acceptPayload(payload);
       }
+    } on ZstdException catch (error, stackTrace) {
+      // A decompression failure is not recoverable in place. The stream is one
+      // continuous context, so once it desynchronises every later frame is
+      // garbage decoded against poisoned history — and logging and returning
+      // would leave the socket looking healthy while delivering nothing.
+      // Reconnecting is the only correct response; _open resets the decoder.
+      _lastBootstrapError = error;
+      _logBootstrapFailure('transport-compression', error, stackTrace);
+      _scheduleReconnect(immediate: true);
+      return;
     } on FormatException catch (error, stackTrace) {
       _lastBootstrapError = error;
       _logBootstrapFailure(
@@ -354,6 +365,15 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     );
   }
 
+  /// Emits opcode 4 with the six fields the desktop renderer always sends.
+  ///
+  /// `self_video` and `flags` are not optional on this transport: the renderer
+  /// builds them unconditionally, so a body missing them is a tell that the
+  /// session is not the client it claims to be. `flags` is legitimately `0` —
+  /// it only carries clips and Go Live bits, neither of which Flucord has.
+  /// `preferred_region`/`preferred_regions` stay absent rather than null; the
+  /// renderer omits the keys entirely until a latency test has ranked regions,
+  /// and Flucord has never run one.
   @override
   void updateVoiceState({
     required String guildId,
@@ -361,26 +381,43 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     bool selfMute = false,
     bool selfDeaf = false,
   }) {
-    final payload = <String, Object?>{
-      'op': 4,
-      'd': {
-        'guild_id': guildId,
-        'channel_id': channelId,
-        'self_mute': selfMute,
-        'self_deaf': selfDeaf,
-      },
+    final body = <String, Object?>{
+      'guild_id': guildId,
+      'channel_id': channelId,
+      'self_mute': selfMute,
+      'self_deaf': selfDeaf,
+      'self_video': false,
+      'flags': 0,
     };
     if (channelId == null) {
       _desiredVoiceStates.remove(guildId);
     } else {
-      _desiredVoiceStates[guildId] = payload;
+      _desiredVoiceStates[guildId] = body;
     }
-    _send(DiscordDesktopGatewayFrame(4, payload['d']));
+    _send(
+      DiscordDesktopGatewayFrame(
+        DiscordDesktopGatewayOpcode.voiceStateUpdate,
+        body,
+      ),
+    );
   }
 
+  @override
+  void pingVoiceServer() => _send(
+    const DiscordDesktopGatewayFrame(
+      DiscordDesktopGatewayOpcode.voiceServerPing,
+      null,
+    ),
+  );
+
   void _flushVoiceStates() {
-    for (final payload in _desiredVoiceStates.values) {
-      _send(DiscordDesktopGatewayFrame(4, payload['d']));
+    for (final body in _desiredVoiceStates.values) {
+      _send(
+        DiscordDesktopGatewayFrame(
+          DiscordDesktopGatewayOpcode.voiceStateUpdate,
+          body,
+        ),
+      );
     }
   }
 

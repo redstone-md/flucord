@@ -1,5 +1,6 @@
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/voice_connection.dart';
 
 final class DisconnectedChatRepository implements ChatRepository {
   const DisconnectedChatRepository();
@@ -14,6 +15,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   Stream<ChatRepositoryEvent> get events => const Stream.empty();
+
+  @override
+  VoiceSignalingService? get voiceSignaling => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;

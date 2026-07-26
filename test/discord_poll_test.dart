@@ -264,5 +264,8 @@ final class _FakeGateway implements DiscordChatGateway {
   }) {}
 
   @override
+  void pingVoiceServer() {}
+
+  @override
   Future<void> close() => _events.close();
 }

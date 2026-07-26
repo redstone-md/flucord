@@ -5,6 +5,7 @@ import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/voice_connection.dart';
 
 void main() {
   test('merges older pages, removes overlap, and marks exhaustion', () async {
@@ -163,6 +164,9 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   Stream<ChatRepositoryEvent> get events => const Stream.empty();
+
+  @override
+  VoiceSignalingService? get voiceSignaling => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;

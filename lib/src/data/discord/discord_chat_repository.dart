@@ -59,8 +59,7 @@ final class DiscordChatRepository
         MessageFlagRepository,
         ScheduledEventRepository,
         StickerRepository,
-        VoiceMessageRepository,
-        VoiceSignalingService {
+        VoiceMessageRepository {
   DiscordChatRepository(
     this._api,
     this._gateway,
@@ -458,25 +457,11 @@ final class DiscordChatRepository
     }
   }
 
+  /// Handed out whole rather than re-exported member by member: the service is
+  /// also the media transport the audio pipeline binds to, and forwarding only
+  /// the signalling half hid that second face behind the repository.
   @override
-  Stream<VoiceSignalingEvent> get voiceEvents => _voiceSignaling.voiceEvents;
-
-  @override
-  Future<void> joinVoiceChannel({
-    required String guildId,
-    required String channelId,
-    bool selfMute = false,
-    bool selfDeaf = false,
-  }) => _voiceSignaling.joinVoiceChannel(
-    guildId: guildId,
-    channelId: channelId,
-    selfMute: selfMute,
-    selfDeaf: selfDeaf,
-  );
-
-  @override
-  Future<void> leaveVoiceChannel(String guildId) =>
-      _voiceSignaling.leaveVoiceChannel(guildId);
+  VoiceSignalingService? get voiceSignaling => _voiceSignaling;
 
   @override
   Future<void> close() async {

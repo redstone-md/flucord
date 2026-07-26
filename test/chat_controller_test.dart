@@ -5,6 +5,7 @@ import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/voice_connection.dart';
 
 void main() {
   group('ChatController', () {
@@ -351,6 +352,40 @@ void main() {
       expect(controller.workspace!.categories, isNot(contains(category)));
     });
 
+    test('folds a roster page of members in with one pass', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final existing = controller.workspace!.members.first;
+      final before = controller.workspace!.members.length;
+
+      repository.emit(const MembersUpsertedEvent([]));
+      repository.emit(
+        MembersUpsertedEvent([
+          existing.copyWith(role: 'Roster role', presence: Presence.online),
+          const Member(
+            id: '234567890123456789',
+            displayName: 'Roster arrival',
+            initials: 'RA',
+            role: 'Member',
+            presence: Presence.idle,
+            colorValue: 0xff59636a,
+            spaceIds: {'forge'},
+          ),
+        ]),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final members = controller.workspace!.members;
+      expect(members, hasLength(before + 1));
+      expect(controller.workspace!.memberById(existing.id).role, 'Roster role');
+      expect(
+        controller.workspace!.memberById('234567890123456789').presence,
+        Presence.idle,
+      );
+    });
+
     test('replaces one guild emoji catalog from a live event', () async {
       final repository = _EventRepository();
       final controller = ChatController(repository);
@@ -383,6 +418,9 @@ final class _EventRepository implements ChatRepository {
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
+
+  @override
+  VoiceSignalingService? get voiceSignaling => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();

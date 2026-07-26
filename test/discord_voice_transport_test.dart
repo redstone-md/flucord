@@ -36,6 +36,11 @@ void main() {
       );
     });
 
+    test('sends opcode 5 with a literal null payload', () {
+      final protocol = DiscordGatewayProtocol(token: 'token', intents: 1);
+      expect(protocol.voiceServerPing(), {'op': 5, 'd': null});
+    });
+
     test('assembles credentials in either dispatch order', () {
       for (final stateFirst in [true, false]) {
         final assembler = DiscordVoiceSessionAssembler();

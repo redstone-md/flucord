@@ -34,6 +34,8 @@ extension _ChatControllerEvents on ChatController {
           _workspace = _workspace?.removeCategory(event.categoryId);
         case MemberUpsertedEvent():
           _workspace = _workspace?.upsertMember(event.member);
+        case MembersUpsertedEvent():
+          _workspace = _workspace?.upsertMembers(event.members);
         case MemberRemovedEvent():
           _workspace = _workspace?.removeMemberFromSpace(
             event.memberId,

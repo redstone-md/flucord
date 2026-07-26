@@ -1,4 +1,5 @@
 import 'chat_models.dart';
+import 'voice_connection.dart';
 
 enum RepositoryConnectionStatus { offline, connecting, connected, reconnecting }
 
@@ -24,6 +25,17 @@ final class MemberUpsertedEvent extends ChatRepositoryEvent {
   const MemberUpsertedEvent(this.member);
 
   final Member member;
+}
+
+/// Members that arrived together, such as one member-list page.
+///
+/// Kept distinct from [MemberUpsertedEvent] because a roster page carries up to
+/// a hundred members and applying them one event at a time would rebuild the
+/// workspace's member table once per member.
+final class MembersUpsertedEvent extends ChatRepositoryEvent {
+  const MembersUpsertedEvent(this.members);
+
+  final List<Member> members;
 }
 
 final class MemberRemovedEvent extends ChatRepositoryEvent {
@@ -131,6 +143,17 @@ final class RepositoryStatusChangedEvent extends ChatRepositoryEvent {
 
 abstract interface class ChatRepository {
   Stream<ChatRepositoryEvent> get events;
+
+  /// The voice plane this transport can carry, or `null` when it carries none.
+  ///
+  /// Voice is a property of the transport, not of the account: joining a
+  /// channel is a frame on the same gateway socket that already delivers
+  /// messages, so only a repository holding that socket can offer it. Stating
+  /// that on the contract — rather than letting callers test what class the
+  /// repository happens to be — keeps the answer honest when a transport gains
+  /// or loses voice, and stops a controller from silently deciding that an
+  /// implementation it does not recognise has none.
+  VoiceSignalingService? get voiceSignaling;
 
   Future<ChatWorkspace> loadWorkspace();
 

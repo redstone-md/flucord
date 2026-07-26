@@ -10,6 +10,7 @@ import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/voice_connection.dart';
 import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
 import 'mock_chat_seed.dart';
@@ -62,6 +63,10 @@ final class MockChatRepository
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
+
+  /// The demo workspace has no socket behind it, so there is nothing to join.
+  @override
+  VoiceSignalingService? get voiceSignaling => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {

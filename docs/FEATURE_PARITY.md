@@ -21,10 +21,11 @@ do not count as desktop-user chat parity.
 | Reactions and pins | Ready | Desktop-user message routes |
 | Threads | Partial | Create from message; initial Gateway thread hydration |
 | Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
-| Member list and presence | Partial | Lazy member-list transport, `member_list_id` derivation and row state machine are implemented; the sidebar still groups a flat list locally |
+| Member list and presence | Ready for guild rosters | Server-authoritative lazy member list with scroll-driven subscriptions; presence beyond what a roster item carries is still open |
 | Search | Local only | Loaded/cached workspace; Discord server search absent |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
-| Voice/video/screen share | Not ready for desktop-user chat | Existing Bot/activity-lobby paths are separate |
+| Server voice channels | Ready | Desktop-user session joins over its own gateway; live interoperability still unverified |
+| DM calls, video, screen share | Not ready | Opcodes 13 and 18-22 unimplemented; video needs a native encoder |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
 | ETF Gateway framing | Ready | Binary `encoding=etf` frames, live-validated against the Gateway |
 | zstd-stream Gateway compression | Off by default | Decoder is in place and live-validated, but stays disabled until proven against a full authenticated `READY` |

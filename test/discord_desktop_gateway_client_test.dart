@@ -317,6 +317,52 @@ void main() {
     });
   });
 
+  test(
+    'replays the voice state after a reconnect and pings on demand',
+    () async {
+      final socket = _MemoryDesktopWebSocket();
+      final gateway = DiscordDesktopGatewayClient(
+        authorization: 'account-session',
+        properties: const {'os': 'Windows'},
+        profile: _uncompressed,
+        socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      );
+      addTearDown(gateway.close);
+
+      await gateway.connect('wss://gateway.discord.gg');
+      gateway.updateVoiceState(guildId: 'guild', channelId: 'voice');
+      socket.sent.clear();
+
+      // A second READY stands in for a reconnect: the server forgets the voice
+      // state, so the desired channel has to be re-sent to stay in the room.
+      socket.receiveTerm(const {
+        'op': 0,
+        's': 2,
+        't': 'READY',
+        'd': {
+          'session_id': 'session-2',
+          'user': {'id': 'me'},
+          'guilds': <Object?>[],
+          'private_channels': <Object?>[],
+        },
+      });
+      await _waitFor(() => socket.terms.any((frame) => frame['op'] == 4));
+
+      expect(socket.terms.firstWhere((frame) => frame['op'] == 4)['d'], {
+        'guild_id': 'guild',
+        'channel_id': 'voice',
+        'self_mute': false,
+        'self_deaf': false,
+        'self_video': false,
+        'flags': 0,
+      });
+
+      gateway.pingVoiceServer();
+      await _waitFor(() => socket.terms.any((frame) => frame['op'] == 5));
+      expect(socket.terms.lastWhere((frame) => frame['op'] == 5)['d'], isNull);
+    },
+  );
+
   test('keeps working when the profile selects the JSON encoding', () async {
     final socket = _MemoryDesktopWebSocket();
     final gateway = DiscordDesktopGatewayClient(

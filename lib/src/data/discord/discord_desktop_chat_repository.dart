@@ -4,22 +4,35 @@ import 'dart:developer' as developer;
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/guild_member_list.dart';
+import '../../domain/guild_member_list_repository.dart';
+import '../../domain/voice_connection.dart';
+import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_desktop_gateway_client.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
+import 'discord_member_list_handler.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_rest_client.dart';
+import 'discord_voice_signaling_service.dart';
 
-final class DiscordDesktopChatRepository implements ChatRepository {
+final class DiscordDesktopChatRepository
+    implements ChatRepository, GuildMemberListRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
     this._cache, {
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? nonceFactory,
+    VoiceDaveService? daveService,
   }) : _mapper = mapper ?? DiscordMapper(),
-       _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory() {
+       _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
+       _voiceSignaling = DiscordVoiceSignalingService(
+         mainGateway: _gateway,
+         nativeDaveService: daveService,
+       ) {
+    _memberLists = DiscordMemberListHandler(_mapper);
     _gatewaySubscription = _gateway.events.listen(_acceptGatewayEvent);
   }
 
@@ -30,13 +43,56 @@ final class DiscordDesktopChatRepository implements ChatRepository {
   final ChatCache _cache;
   final DiscordMapper _mapper;
   final DiscordMessageNonceFactory _nonceFactory;
+  final DiscordVoiceSignalingService _voiceSignaling;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
+  late final DiscordMemberListHandler _memberLists;
   String? _currentMemberId;
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
+
+  /// The desktop-user session carries voice on the very socket it already uses
+  /// for messages, so the service is offered unconditionally. Whether a join
+  /// can actually complete is the service's own call — it refuses before the
+  /// gateway is ready or without DAVE — and it reports that as a failure event
+  /// the voice surface can show, which a null here could not.
+  @override
+  VoiceSignalingService? get voiceSignaling => _voiceSignaling;
+
+  @override
+  Stream<GuildMemberList> get memberListUpdates => _memberLists.updates;
+
+  @override
+  String memberListIdFor({
+    required String guildId,
+    required String channelId,
+  }) => _memberLists.memberListIdFor(guildId: guildId, channelId: channelId);
+
+  @override
+  GuildMemberList? memberListFor({
+    required String guildId,
+    required String listId,
+  }) => _memberLists.listFor(guildId: guildId, listId: listId);
+
+  @override
+  void subscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+    required List<List<int>> ranges,
+  }) => _gateway.subscribeMemberRanges(
+    guildId: guildId,
+    channelId: channelId,
+    ranges: ranges,
+  );
+
+  @override
+  void unsubscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+  }) =>
+      _gateway.unsubscribeMemberRanges(guildId: guildId, channelId: channelId);
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {
@@ -64,7 +120,7 @@ final class DiscordDesktopChatRepository implements ChatRepository {
             )
             .restoreChannelActivityFrom(cached),
       );
-      _currentMemberId = workspace.currentMemberId;
+      _adoptCurrentMember(workspace.currentMemberId);
       await _bootstrapStage(
         'cache-write',
         () => _cache.writeWorkspace(workspace),
@@ -74,12 +130,20 @@ final class DiscordDesktopChatRepository implements ChatRepository {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
       final cached = await _cache.readWorkspace();
       if (cached != null) {
-        _currentMemberId = cached.currentMemberId;
+        _adoptCurrentMember(cached.currentMemberId);
         _emitStatus(RepositoryConnectionStatus.offline);
         return cached;
       }
       rethrow;
     }
+  }
+
+  /// Voice signalling cannot tell our own `VOICE_STATE_UPDATE` from anybody
+  /// else's until it knows who we are, and that answer only exists once a
+  /// workspace — live or cached — has been resolved.
+  void _adoptCurrentMember(String memberId) {
+    _currentMemberId = memberId;
+    _voiceSignaling.setCurrentUserId(memberId);
   }
 
   Future<T> _bootstrapStage<T>(
@@ -316,6 +380,11 @@ final class DiscordDesktopChatRepository implements ChatRepository {
             RepositoryConnectionStatus.reconnecting,
         });
       case DiscordGatewayDispatch():
+        // The member-list handler needs READY and GUILD_CREATE for the channel
+        // shape a list id is derived from, so it sees every dispatch rather
+        // than only the roster event.
+        final members = _memberLists.accept(event.name, event.data);
+        if (members.isNotEmpty) _events.add(MembersUpsertedEvent(members));
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {
@@ -394,6 +463,8 @@ final class DiscordDesktopChatRepository implements ChatRepository {
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _voiceSignaling.close();
+    await _memberLists.close();
     await _gateway.close();
     _api.close();
     await _cache.close();

@@ -5,6 +5,8 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const dispatch = 0;
   static const heartbeat = 1;
   static const identify = 2;
+  static const voiceStateUpdate = 4;
+  static const voiceServerPing = 5;
   static const resume = 6;
   static const reconnect = 7;
   static const invalidSession = 9;

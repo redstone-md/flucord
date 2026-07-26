@@ -49,8 +49,16 @@ final class DiscordRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
       ),
       cache,
+      daveService: _resolveDaveService(),
     );
   }
+
+  /// Voice media on Discord is end-to-end encrypted, so a session without DAVE
+  /// has no voice at all rather than unencrypted voice. The native library is
+  /// Windows-only today; elsewhere the join fails loudly instead of silently
+  /// downgrading.
+  VoiceDaveService? _resolveDaveService() =>
+      daveService ?? (Platform.isWindows ? NativeDaveService.open() : null);
 }
 
 final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {

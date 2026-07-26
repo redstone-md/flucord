@@ -6,6 +6,7 @@ import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
+import '../application/guild_member_list_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/oauth_guild_directory_controller.dart';
 import '../application/oauth_guild_membership_controller.dart';
@@ -56,6 +57,7 @@ class FlucordShell extends StatelessWidget {
     required this.voiceMessageRecorder,
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
+    this.memberListController,
     super.key,
   });
 
@@ -69,6 +71,10 @@ class FlucordShell extends StatelessWidget {
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;
+
+  /// Owns the member panel's roster subscription. Absent in hosts that never
+  /// show the panel, such as the widget tests for a single pane.
+  final GuildMemberListController? memberListController;
 
   @override
   Widget build(BuildContext context) {
@@ -472,6 +478,9 @@ class FlucordShell extends StatelessWidget {
                         MemberSidebar(
                           members: workspace.members,
                           spaceId: spaceId,
+                          channelId: channel?.id,
+                          memberList: memberListController,
+                          roles: workspace.roles,
                           currentMemberId: workspace.currentMemberId,
                           onMessage: (member) => unawaited(
                             _openDirectConversation(context, member.id),

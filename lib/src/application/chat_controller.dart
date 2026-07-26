@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
+import '../domain/guild_member_list_repository.dart';
 import '../domain/message_forward_repository.dart';
 import '../domain/message_flag_repository.dart';
 import '../domain/poll_repository.dart';
@@ -73,10 +74,18 @@ final class ChatController extends ChangeNotifier {
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
   String? get activeChannelId => _activeChannelId;
   Stream<MessageUpsertedEvent> get incomingMessages => _incomingMessages.stream;
-  VoiceSignalingService? get voiceSignalingService {
+  VoiceSignalingService? get voiceSignalingService =>
+      _repository.voiceSignaling;
+
+  /// The lazy member-list surface, when the active transport offers one.
+  ///
+  /// Only the desktop-user transport can serve rosters; every other transport
+  /// reports `null` so the member panel falls back to what the workspace
+  /// already knows rather than waiting for rows that will never arrive.
+  GuildMemberListRepository? get memberListRepository {
     final repository = _repository;
-    return repository is VoiceSignalingService
-        ? repository as VoiceSignalingService
+    return repository is GuildMemberListRepository
+        ? repository as GuildMemberListRepository
         : null;
   }
 

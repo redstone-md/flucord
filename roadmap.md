@@ -464,6 +464,28 @@ browser runtime or dependency on Discord's private user API.
     been proven against a full authenticated session; the decoder, its corpus,
     and the live check all remain.
 
+77. Completed: server voice channels work on the desktop-user session. Voice is
+    now part of the `ChatRepository` contract instead of something callers
+    discover by testing an implementation's class, and the desktop repository
+    carries it on the socket that already delivers messages. Opcode 4 gained the
+    two fields it was missing, opcode 5 `VOICE_SERVER_PING` answers a
+    will-reconnect disconnect once per transition rather than on every repeat,
+    and a voice-state roster seats the people already in a room when you walk
+    into it. A `GUILD_CREATE` snapshot and a replayed `READY` now report who is
+    no longer there, because a snapshot is the only notice of a departure that
+    happened while the socket was down.
+78. Completed: the member panel renders the server's real roster. Lazy
+    subscriptions follow the panel's scroll position, `GUILD_MEMBER_LIST_UPDATE`
+    feeds the row store, and group headers, counts and unloaded placeholders
+    come from the server rather than from grouping a cached list locally. A
+    server-supplied row index is now bounded before it is used to size the row
+    space.
+79. Completed: `lib/src/data/zstd` reaches full guard coverage through frames
+    hand-built to trip each check, validated against the reference decoder.
+    A decompression failure now reconnects instead of being logged and skipped:
+    the stream is one continuous context, so once it desynchronises every later
+    frame decodes against poisoned history while the socket still looks healthy.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

@@ -7,6 +7,7 @@ import '../../domain/voice_dave.dart';
 import 'discord_gateway_client.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_session_assembler.dart';
+import 'discord_voice_state_roster.dart';
 
 typedef DiscordVoiceClientFactory =
     DiscordVoiceClient Function(
@@ -31,11 +32,13 @@ final class DiscordVoiceSignalingService
   final DiscordVoiceClientFactory _clientFactory;
   final DiscordVoiceSessionAssembler _assembler =
       DiscordVoiceSessionAssembler();
+  final DiscordVoiceStateRoster _roster = DiscordVoiceStateRoster();
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
       StreamController.broadcast();
   final Map<String, String> _desiredChannels = {};
+  final Set<String> _pingedGuilds = <String>{};
   final Map<String, int> _generations = {};
   final Map<String, DiscordVoiceClient> _clients = {};
   final Map<String, StreamSubscription<VoiceSignalingEvent>>
@@ -98,6 +101,15 @@ final class DiscordVoiceSignalingService
     _generations[guildId] = (_generations[guildId] ?? 0) + 1;
     _assembler.clear(guildId);
     _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.joining));
+    // The people already sitting in the channel were announced at bootstrap and
+    // will not be announced again, so the roster is replayed here or the room
+    // renders empty until somebody else moves.
+    for (final state in _roster.participantsIn(
+      guildId: guildId,
+      channelId: channelId,
+    )) {
+      _emit(state);
+    }
     _gateway.updateVoiceState(
       guildId: guildId,
       channelId: channelId,
@@ -118,12 +130,24 @@ final class DiscordVoiceSignalingService
   }
 
   void _onGatewayEvent(DiscordGatewayEvent event) {
-    if (event is! DiscordGatewayDispatch || _currentUserId == null) return;
-    _emitParticipantState(event);
+    if (event is! DiscordGatewayDispatch) return;
+    // Every guild is tracked, not just the one being joined: which channel the
+    // user will pick is unknown while the bulk snapshots are arriving. The
+    // roster is also fed before the current user is known, because the
+    // `GUILD_CREATE` burst that carries the occupants arrives *during*
+    // bootstrap, minutes before the workspace resolves and names us.
+    for (final state in _roster.accept(
+      eventName: event.name,
+      data: event.data,
+    )) {
+      if (_desiredChannels.containsKey(state.guildId)) _emit(state);
+    }
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
     final credentials = _assembler.accept(
       eventName: event.name,
       data: event.data,
-      currentUserId: _currentUserId!,
+      currentUserId: currentUserId,
     );
     if (credentials == null ||
         _desiredChannels[credentials.guildId] != credentials.channelId) {
@@ -133,31 +157,31 @@ final class DiscordVoiceSignalingService
     unawaited(_startVoiceClient(credentials, generation));
   }
 
-  void _emitParticipantState(DiscordGatewayDispatch event) {
-    if (event.name != 'VOICE_STATE_UPDATE') return;
-    final data = event.data;
-    final guildId = data['guild_id'];
-    final userId = data['user_id'];
-    if (guildId is! String ||
-        userId is! String ||
-        !_desiredChannels.containsKey(guildId)) {
-      return;
+  /// Pokes the main gateway when a voice socket drops but intends to come back.
+  ///
+  /// R08: the desktop client answers a will-reconnect disconnect with opcode 5
+  /// `VOICE_SERVER_PING`, which is how the server learns to re-issue a
+  /// `VOICE_SERVER_UPDATE` for a session it still believes is live. Without it
+  /// the reconnecting voice client redials an endpoint whose token may already
+  /// have been rotated.
+  /// A failing voice socket can report `reconnecting` repeatedly, so the ping
+  /// fires on the transition into that state and not on every repeat. Left
+  /// unguarded it turns one broken voice connection into a flood on the main
+  /// gateway, which is the socket carrying every message.
+  void _onClientEvent(String guildId, VoiceSignalingEvent event) {
+    if (event is VoiceSignalingStatusEvent) {
+      final wasReconnecting = _pingedGuilds.contains(guildId);
+      final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;
+      if (isReconnecting && !wasReconnecting) {
+        if (_desiredChannels.containsKey(guildId)) {
+          _pingedGuilds.add(guildId);
+          _gateway.pingVoiceServer();
+        }
+      } else if (!isReconnecting) {
+        _pingedGuilds.remove(guildId);
+      }
     }
-    final channelId = data['channel_id'];
-    if (channelId != null && channelId is! String) return;
-    _emit(
-      VoiceParticipantStateEvent(
-        userId: userId,
-        guildId: guildId,
-        channelId: channelId as String?,
-        selfMuted: data['self_mute'] == true,
-        selfDeafened: data['self_deaf'] == true,
-        serverMuted: data['mute'] == true,
-        serverDeafened: data['deaf'] == true,
-        isStreaming: data['self_stream'] == true,
-        isVideoEnabled: data['self_video'] == true,
-      ),
-    );
+    _emit(event);
   }
 
   Future<void> _startVoiceClient(
@@ -174,7 +198,9 @@ final class DiscordVoiceSignalingService
     }
     final client = _clientFactory(credentials, daveService);
     _clients[credentials.guildId] = client;
-    _clientSubscriptions[credentials.guildId] = client.events.listen(_emit);
+    _clientSubscriptions[credentials.guildId] = client.events.listen(
+      (event) => _onClientEvent(credentials.guildId, event),
+    );
     if (client case final VoiceAudioTransport audioTransport) {
       _audioSubscriptions[credentials.guildId] = audioTransport.remoteAudio
           .listen(_emitRemoteAudio, onError: _remoteAudio.addError);
@@ -230,6 +256,7 @@ final class DiscordVoiceSignalingService
       await _closeClient(guildId);
     }
     _assembler.clearAll();
+    _roster.clearAll();
     await _remoteAudio.close();
     await _events.close();
   }

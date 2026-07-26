@@ -118,6 +118,23 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   final bool serverDeafened;
   final bool isStreaming;
   final bool isVideoEnabled;
+
+  /// The same person, reported as having left.
+  ///
+  /// A departure is a voice state with no channel. Snapshot sources report who
+  /// is present and never who left, so the absence has to be turned into an
+  /// explicit event or the grid keeps showing them.
+  VoiceParticipantStateEvent asDeparture() => VoiceParticipantStateEvent(
+    userId: userId,
+    guildId: guildId,
+    channelId: null,
+    selfMuted: selfMuted,
+    selfDeafened: selfDeafened,
+    serverMuted: serverMuted,
+    serverDeafened: serverDeafened,
+    isStreaming: false,
+    isVideoEnabled: false,
+  );
 }
 
 final class VoiceParticipant {

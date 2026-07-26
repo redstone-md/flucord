@@ -1,17 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../application/guild_member_list_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/guild_member_list.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'member_profile_popover.dart';
+import 'member_roster_view.dart';
 
+/// The right-hand member panel.
+///
+/// The roster it renders is server-authoritative: Discord decides the groups,
+/// their order and their counts, and only sends the rows a client has
+/// subscribed to. Local grouping is kept only as the pre-roster fallback,
+/// because the cached member table is all a transport without lazy member
+/// lists — or a channel whose first page has not landed — can offer.
 class MemberSidebar extends StatefulWidget {
   const MemberSidebar({
     required this.members,
     required this.spaceId,
     required this.currentMemberId,
     required this.onMessage,
+    this.channelId,
+    this.memberList,
+    this.roles = const <CommunityRole>[],
     super.key,
   });
 
@@ -19,6 +32,12 @@ class MemberSidebar extends StatefulWidget {
   final String spaceId;
   final String currentMemberId;
   final ValueChanged<Member> onMessage;
+
+  /// Channel whose roster is shown. Member lists are subscribed per channel
+  /// because visibility, not membership, decides who appears.
+  final String? channelId;
+  final GuildMemberListController? memberList;
+  final List<CommunityRole> roles;
 
   @override
   State<MemberSidebar> createState() => _MemberSidebarState();
@@ -32,8 +51,24 @@ class _MemberSidebarState extends State<MemberSidebar> {
   bool _openUp = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.memberList?.addListener(_onRosterChanged);
+    _watchChannel();
+  }
+
+  @override
   void didUpdateWidget(covariant MemberSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.memberList != widget.memberList) {
+      oldWidget.memberList?.removeListener(_onRosterChanged);
+      widget.memberList?.addListener(_onRosterChanged);
+    }
+    if (oldWidget.spaceId != widget.spaceId ||
+        oldWidget.channelId != widget.channelId ||
+        oldWidget.memberList != widget.memberList) {
+      _watchChannel();
+    }
     final selectedId = _selectedMember?.id;
     if (oldWidget.spaceId != widget.spaceId ||
         (selectedId != null &&
@@ -49,6 +84,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
   }
 
   @override
+  void dispose() {
+    widget.memberList
+      ?..removeListener(_onRosterChanged)
+      ..clear();
+    super.dispose();
+  }
+
+  void _watchChannel() => widget.memberList?.viewChannel(
+    guildId: widget.spaceId,
+    channelId: widget.channelId,
+  );
+
+  void _onRosterChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final visibleMembers = widget.members
         .where(
@@ -57,6 +109,53 @@ class _MemberSidebarState extends State<MemberSidebar> {
               member.spaceIds.contains(widget.spaceId),
         )
         .toList(growable: false);
+    _memberLinks.removeWhere(
+      (id, _) => !widget.members.any((member) => member.id == id),
+    );
+    final roster = widget.memberList?.list;
+    return OverlayPortal(
+      controller: _overlayController,
+      overlayChildBuilder: _buildOverlay,
+      child: Container(
+        width: 224,
+        decoration: BoxDecoration(
+          color: context.surfaces.surface,
+          border: Border(left: BorderSide(color: context.surfaces.border)),
+        ),
+        child: roster != null && roster.isLoaded
+            ? _buildRoster(roster)
+            : _buildCachedMembers(visibleMembers),
+      ),
+    );
+  }
+
+  Widget _buildRoster(GuildMemberList roster) {
+    final membersById = <String, Member>{
+      for (final member in widget.members) member.id: member,
+    };
+    return MemberRosterView(
+      list: roster,
+      memberOf: (userId) => membersById[userId],
+      roleNames: {
+        for (final role in widget.roles)
+          if (role.spaceId == widget.spaceId) role.id: role.name,
+      },
+      memberRowBuilder: _rowFor,
+      onViewportChanged:
+          ({
+            required double scrollOffset,
+            required double viewportHeight,
+            required double rowHeight,
+          }) => widget.memberList?.updateViewport(
+            scrollOffset: scrollOffset,
+            viewportHeight: viewportHeight,
+            rowHeight: rowHeight,
+          ),
+    );
+  }
+
+  /// Grouping the cached member table locally, used until a roster arrives.
+  Widget _buildCachedMembers(List<Member> visibleMembers) {
     final online = visibleMembers
         .where((member) => member.presence != Presence.offline)
         .toList(growable: false);
@@ -69,33 +168,19 @@ class _MemberSidebarState extends State<MemberSidebar> {
           .putIfAbsent(member.roleFor(widget.spaceId), () => [])
           .add(member);
     }
-    _memberLinks.removeWhere(
-      (id, _) => !visibleMembers.any((member) => member.id == id),
-    );
-    return OverlayPortal(
-      controller: _overlayController,
-      overlayChildBuilder: _buildOverlay,
-      child: Container(
-        width: 224,
-        decoration: BoxDecoration(
-          color: context.surfaces.surface,
-          border: Border(left: BorderSide(color: context.surfaces.border)),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
-          children: [
-            for (final entry in roleGroups.entries) ...[
-              _MemberGroupLabel(label: entry.key, count: entry.value.length),
-              for (final member in entry.value) _rowFor(member),
-              const SizedBox(height: 14),
-            ],
-            if (offline.isNotEmpty) ...[
-              _MemberGroupLabel(label: 'Offline', count: offline.length),
-              for (final member in offline) _rowFor(member),
-            ],
-          ],
-        ),
-      ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
+      children: [
+        for (final entry in roleGroups.entries) ...[
+          MemberGroupLabel(label: entry.key, count: entry.value.length),
+          for (final member in entry.value) _rowFor(member),
+          const SizedBox(height: 14),
+        ],
+        if (offline.isNotEmpty) ...[
+          MemberGroupLabel(label: 'Offline', count: offline.length),
+          for (final member in offline) _rowFor(member),
+        ],
+      ],
     );
   }
 
@@ -177,28 +262,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
   }
 }
 
-class _MemberGroupLabel extends StatelessWidget {
-  const _MemberGroupLabel({required this.label, required this.count});
-
-  final String label;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 0, 6, 7),
-      child: Text(
-        '$label - $count',
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
 class _MemberRow extends StatelessWidget {
   const _MemberRow({
     required this.member,
@@ -245,6 +308,7 @@ class _MemberRow extends StatelessWidget {
                         children: [
                           Text(
                             member.displayName,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
@@ -254,6 +318,7 @@ class _MemberRow extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             role,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: context.surfaces.muted,
