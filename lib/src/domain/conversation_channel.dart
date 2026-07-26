@@ -50,8 +50,17 @@ final class ConversationChannel {
   final String? firstUnreadMessageId;
 
   bool get isDirectMessage => recipientId != null;
+
+  /// A voice channel carries an ordinary message timeline on the same channel
+  /// id as the room, so every message-shaped feature has to treat it like a
+  /// text channel. Forum and media channels look similar but are threads-only
+  /// containers: their messages live in posts, never on the parent id, so they
+  /// deliberately stay out.
+  bool get hasMessageTimeline =>
+      kind == ChannelKind.text || kind == ChannelKind.voice;
+
   bool get canAcceptMessageForward =>
-      kind == ChannelKind.text && !(isThread && isArchived && isLocked);
+      hasMessageTimeline && !(isThread && isArchived && isLocked);
 
   ConversationChannel markUnread({
     required String messageId,

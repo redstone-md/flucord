@@ -1,7 +1,12 @@
 # Native media
 
-Opening a voice channel initializes the native Windows WebRTC media layer. The
-voice surface supports microphone mute, input/output device selection,
+A voice channel offers two surfaces on one channel id, chosen from a switch in
+the channel header: the voice room and the ordinary message timeline that
+Discord hangs off the same channel. Only the room initializes the native Windows
+WebRTC media layer, so a channel opened from a mention, a jump-to-message, or the
+inbox lands on the chat and never reaches for a device.
+
+The room surface supports microphone mute, input/output device selection,
 screen/window source selection, live desktop-capture preview, and deterministic
 track teardown. This path uses native WebRTC textures and devices, not a WebView.
 

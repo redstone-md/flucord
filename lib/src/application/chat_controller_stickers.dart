@@ -13,7 +13,7 @@ extension ChatControllerStickers on ChatController {
     final ids = stickerIds.toSet().toList(growable: false);
     if (workspace == null ||
         repository == null ||
-        channel?.kind != ChannelKind.text ||
+        channel?.hasMessageTimeline != true ||
         ids.isEmpty ||
         ids.length > 3 ||
         ids.any(

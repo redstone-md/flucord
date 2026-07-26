@@ -66,4 +66,30 @@ void main() {
       isFalse,
     );
   });
+
+  test('accepts the timeline a voice channel carries', () async {
+    final controller = ChatController(
+      MockChatRepository(latency: Duration.zero),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    final poll = PendingPoll(
+      question: 'Keep the bench open?',
+      answers: const ['Yes', 'No'],
+      durationHours: 24,
+    );
+
+    expect(
+      await controller.createPoll(channelId: 'forge-voice', poll: poll),
+      isTrue,
+    );
+    expect(
+      await controller.createPoll(channelId: 'forge-forum', poll: poll),
+      isFalse,
+    );
+    expect(
+      controller.workspace!.messagesFor('forge-voice').last.poll?.question,
+      'Keep the bench open?',
+    );
+  });
 }

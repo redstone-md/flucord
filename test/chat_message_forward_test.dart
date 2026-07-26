@@ -23,7 +23,7 @@ void main() {
     expect(forwarded.snapshots.single.body, source.body);
   });
 
-  test('rejects destinations that cannot accept text messages', () async {
+  test('forwards into the timeline a voice channel carries', () async {
     final controller = ChatController(
       MockChatRepository(latency: Duration.zero),
     );
@@ -38,9 +38,31 @@ void main() {
 
     final sent = await controller.forwardMessage(source, voice.id);
 
+    expect(sent, isTrue);
+    expect(
+      controller.workspace!.messagesFor(voice.id).last.snapshots.single.body,
+      source.body,
+    );
+  });
+
+  test('rejects destinations that cannot accept text messages', () async {
+    final controller = ChatController(
+      MockChatRepository(latency: Duration.zero),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+    final source = controller.workspace!.messages.firstWhere(
+      (message) => message.id == 'm4',
+    );
+    final forum = controller.workspace!.channels.firstWhere(
+      (channel) => channel.kind == ChannelKind.forum,
+    );
+
+    final sent = await controller.forwardMessage(source, forum.id);
+
     expect(sent, isFalse);
     expect(
-      controller.workspace!.messagesFor(voice.id).where((message) {
+      controller.workspace!.messagesFor(forum.id).where((message) {
         return message.reference?.type == DiscordMessageReferenceType.forward;
       }),
       isEmpty,

@@ -10,6 +10,7 @@ import '../application/inbox_catalog.dart';
 import '../application/oauth_guild_directory_controller.dart';
 import '../application/oauth_guild_membership_controller.dart';
 import '../application/quick_switcher_catalog.dart';
+import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/chat_models.dart';
@@ -154,11 +155,17 @@ class FlucordShell extends StatelessWidget {
                       channel?.kind == ChannelKind.text &&
                       channel?.isDirectMessage == false &&
                       threadParentId != null;
+                  final voiceSurface = channel == null
+                      ? VoiceChannelSurface.room
+                      : workspaceController.voiceSurfaceOf(channel.id);
+                  final showsMessages =
+                      channel != null &&
+                      _showsMessageTimeline(channel, voiceSurface);
                   final showThreads =
                       workspaceController.showThreads && allowThreadPanel;
                   final showPins =
                       workspaceController.showPins &&
-                      channel?.kind == ChannelKind.text &&
+                      showsMessages &&
                       !showThreads;
                   final showMembers =
                       membersFit &&
@@ -203,10 +210,7 @@ class FlucordShell extends StatelessWidget {
                               .scheduledEventsError(space.id),
                           onOpenEvents: () =>
                               _openScheduledEvents(context, space),
-                          onSelectChannel: (id) {
-                            workspaceController.selectChannel(id);
-                            chatController.openChannel(id);
-                          },
+                          onSelectChannel: _selectChannel,
                           sessionMode: connectionController.mode,
                           connectionStatus: chatController.connectionStatus,
                         ),
@@ -226,6 +230,13 @@ class FlucordShell extends StatelessWidget {
                                 targetMessageId:
                                     workspaceController.targetMessageId,
                                 compact: !showChannels,
+                                voiceSurface: voiceSurface,
+                                onSelectVoiceSurface: (surface) =>
+                                    workspaceController.selectVoiceSurface(
+                                      channel.id,
+                                      surface,
+                                    ),
+                                onPickChannel: _selectChannel,
                                 allowMemberPanel:
                                     membersFit && !space.isDirectMessages,
                                 allowThreadPanel: allowThreadPanel,
@@ -269,10 +280,10 @@ class FlucordShell extends StatelessWidget {
                                   channel.id,
                                   refresh: true,
                                 ),
-                                onSelectChannel: (id) {
-                                  workspaceController.selectChannel(id);
-                                  chatController.openChannel(id);
-                                },
+                                onSelectChannel: (id) => _selectChannel(
+                                  id,
+                                  voiceSurface: VoiceChannelSurface.chat,
+                                ),
                                 onQueryChanged: workspaceController.setQuery,
                                 onToggleMembers:
                                     workspaceController.toggleMembers,
@@ -330,12 +341,7 @@ class FlucordShell extends StatelessWidget {
                                             appliedTagIds: tagIds,
                                           );
                                       if (thread == null) return false;
-                                      workspaceController.selectChannel(
-                                        thread.id,
-                                      );
-                                      unawaited(
-                                        chatController.openChannel(thread.id),
-                                      );
+                                      _selectChannel(thread.id);
                                       return true;
                                     },
                                 onOpenInbox: () => _openInbox(context),
@@ -379,12 +385,7 @@ class FlucordShell extends StatelessWidget {
                                                 duration,
                                           );
                                       if (thread == null) return false;
-                                      workspaceController.selectChannel(
-                                        thread.id,
-                                      );
-                                      unawaited(
-                                        chatController.openChannel(thread.id),
-                                      );
+                                      _selectChannel(thread.id);
                                       return true;
                                     },
                                 onTogglePin: chatController.togglePin,
@@ -393,11 +394,9 @@ class FlucordShell extends StatelessWidget {
                                   final forwarded = await chatController
                                       .forwardMessage(message, targetChannelId);
                                   if (!forwarded) return false;
-                                  workspaceController.selectChannel(
+                                  _selectChannel(
                                     targetChannelId,
-                                  );
-                                  unawaited(
-                                    chatController.openChannel(targetChannelId),
+                                    voiceSurface: VoiceChannelSurface.chat,
                                   );
                                   return true;
                                 },
@@ -414,14 +413,14 @@ class FlucordShell extends StatelessWidget {
                                     ),
                               ),
                       ),
-                      if (showPins && channel != null)
+                      if (showPins)
                         PinnedMessagesPanel(
                           workspace: workspace,
                           linkLauncher: externalLinkLauncher,
-                          onSelectChannel: (id) {
-                            workspaceController.selectChannel(id);
-                            chatController.openChannel(id);
-                          },
+                          onSelectChannel: (id) => _selectChannel(
+                            id,
+                            voiceSurface: VoiceChannelSurface.chat,
+                          ),
                           channelId: channel.id,
                           history: chatController.pinnedMessages(channel.id),
                           isLoading: chatController.isLoadingPins(channel.id),
@@ -467,10 +466,7 @@ class FlucordShell extends StatelessWidget {
                           onLoadMore: () => unawaited(
                             chatController.loadArchivedThreads(threadParentId),
                           ),
-                          onSelectThread: (id) {
-                            workspaceController.selectChannel(id);
-                            unawaited(chatController.openChannel(id));
-                          },
+                          onSelectThread: _selectChannel,
                         ),
                       if (showMembers)
                         MemberSidebar(

@@ -437,6 +437,25 @@ browser runtime or dependency on Discord's private user API.
     malformed input to surface as `ZstdException`. Validated live against the
     production Gateway end to end.
 
+74. Completed: expand `READY.users` so Direct Messages have real people in
+    them. Discord sends `private_channels[].recipient_ids` as bare ids to be
+    resolved against a flat `READY.users` table; Flucord never built that table,
+    so compressed DM channels arrived with no recipients and were dropped
+    outright, leaving the sidebar empty. The table is now built per READY and
+    cleared after `READY_SUPPLEMENTAL`, whose `lazy_private_channels` are
+    ingested instead of discarded, and the DM list is ordered newest-first by
+    the effective last-message snowflake. Hydration is fed independently of the
+    bootstrap completer, because gating it there silently dropped every
+    supplemental that arrived after the first snapshot. A replayed READY now
+    also clears guild state, since the replay is authoritative.
+75. Completed: open the text chat that lives inside a voice channel. A voice
+    channel exposes both the voice room and its ordinary timeline through one
+    keyboard-reachable switch, reusing the existing message list and composer,
+    and the app-wide filters that treated voice channels as chat-less were
+    revisited one by one. Threads and pins stay absent there, matching the
+    permission set Discord grants a voice channel's chat, and the composer drops
+    the hash because `#name` does not resolve to a voice channel.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

@@ -1,5 +1,16 @@
 part of 'flucord_shell.dart';
 
+/// A voice channel only behaves like a text channel while its chat surface is
+/// the one on screen: the room has no timeline to search, pin, or type into.
+/// Forum and media channels never qualify — their messages live in posts.
+bool _showsMessageTimeline(
+  ConversationChannel channel,
+  VoiceChannelSurface voiceSurface,
+) =>
+    channel.hasMessageTimeline &&
+    (channel.kind != ChannelKind.voice ||
+        voiceSurface == VoiceChannelSurface.chat);
+
 class _ConversationPane extends StatefulWidget {
   const _ConversationPane({
     required this.workspace,
@@ -10,6 +21,9 @@ class _ConversationPane extends StatefulWidget {
     required this.query,
     required this.targetMessageId,
     required this.compact,
+    required this.voiceSurface,
+    required this.onSelectVoiceSurface,
+    required this.onPickChannel,
     required this.allowMemberPanel,
     required this.allowThreadPanel,
     required this.showMembers,
@@ -66,6 +80,13 @@ class _ConversationPane extends StatefulWidget {
   final String query;
   final String? targetMessageId;
   final bool compact;
+  final VoiceChannelSurface voiceSurface;
+  final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
+
+  /// The compact channel picker stands in for the channel sidebar, so it keeps
+  /// a voice channel's own surface. [onSelectChannel] is the message-shaped
+  /// route — mentions, forum posts — and lands on the timeline instead.
+  final ValueChanged<String> onPickChannel;
   final bool allowMemberPanel;
   final bool allowThreadPanel;
   final bool showMembers;
@@ -128,8 +149,16 @@ class _ConversationPaneState extends State<_ConversationPane> {
 
   @override
   Widget build(BuildContext context) {
+    final showsMessages = _showsMessageTimeline(
+      widget.channel,
+      widget.voiceSurface,
+    );
+    final locked =
+        widget.channel.isThread &&
+        widget.channel.isArchived &&
+        widget.channel.isLocked;
     final conversation = switch (widget.channel.kind) {
-      ChannelKind.voice => VoiceRoomView(
+      ChannelKind.voice when !showsMessages => VoiceRoomView(
         guildId: widget.channel.spaceId,
         channelId: widget.channel.id,
         channelName: widget.channel.name,
@@ -150,34 +179,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         onLoadPostPreview: widget.onLoadForumPostPreview,
         onCreatePost: widget.onCreateForumPost,
       ),
-      ChannelKind.text when widget.isLoading => const ChannelLoadingView(),
-      ChannelKind.text when widget.loadError != null => ChannelFailureView(
-        onRetry: widget.onRetry,
-      ),
-      ChannelKind.text => MessageList(
-        workspace: widget.workspace,
-        externalLinkLauncher: widget.externalLinkLauncher,
-        attachmentDownloadService: widget.attachmentDownloadService,
-        channel: widget.channel,
-        query: widget.query,
-        targetMessageId: widget.targetMessageId,
-        onReply: (message) => setState(() => _replyTo = message),
-        onEdit: widget.onEdit,
-        onDelete: widget.onDelete,
-        onToggleReaction: widget.onToggleReaction,
-        onLoadReactionUsers: widget.onLoadReactionUsers,
-        onAddReaction: widget.onAddReaction,
-        onCreateThread: widget.onCreateThread,
-        onTogglePin: widget.onTogglePin,
-        onEndPoll: widget.onEndPoll,
-        onForward: widget.onForward,
-        onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
-        canLoadOlder: widget.canLoadOlder,
-        isLoadingOlder: widget.isLoadingOlder,
-        olderLoadError: widget.olderLoadError,
-        onLoadOlder: widget.onLoadOlder,
-        onSelectChannel: widget.onSelectChannel,
-      ),
+      ChannelKind.text || ChannelKind.voice => _buildTimeline(),
     };
     return Column(
       children: [
@@ -186,13 +188,16 @@ class _ConversationPaneState extends State<_ConversationPane> {
           channels: widget.channels,
           query: widget.query,
           showCompactPicker: widget.compact,
+          showsMessages: showsMessages,
+          voiceSurface: widget.voiceSurface,
           allowMemberPanel: widget.allowMemberPanel,
           allowThreadPanel: widget.allowThreadPanel,
           showMembers: widget.showMembers,
           showPins: widget.showPins,
           showThreads: widget.showThreads,
           inboxSummary: widget.inboxSummary,
-          onSelectChannel: widget.onSelectChannel,
+          onSelectChannel: widget.onPickChannel,
+          onSelectVoiceSurface: widget.onSelectVoiceSurface,
           onQueryChanged: widget.onQueryChanged,
           onToggleMembers: widget.onToggleMembers,
           onTogglePins: widget.onTogglePins,
@@ -200,20 +205,15 @@ class _ConversationPaneState extends State<_ConversationPane> {
           onOpenInbox: widget.onOpenInbox,
         ),
         Expanded(child: conversation),
-        if (widget.channel.kind == ChannelKind.text &&
-            !(widget.channel.isThread &&
-                widget.channel.isArchived &&
-                widget.channel.isLocked))
+        if (showsMessages && !locked)
           TypingIndicator(members: widget.typingMembers),
-        if (widget.channel.kind == ChannelKind.text &&
-            widget.channel.isThread &&
-            widget.channel.isArchived &&
-            widget.channel.isLocked)
+        if (showsMessages && locked)
           const LockedThreadComposerNotice()
-        else if (widget.channel.kind == ChannelKind.text)
+        else if (showsMessages)
           MessageComposer(
             channelId: widget.channel.id,
             channelName: widget.channel.name,
+            channelIsVoice: widget.channel.kind == ChannelKind.voice,
             spaceName: widget.workspace.spaceById(widget.channel.spaceId).name,
             autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
               widget.workspace,
@@ -250,6 +250,40 @@ class _ConversationPaneState extends State<_ConversationPane> {
                 },
           ),
       ],
+    );
+  }
+
+  /// One builder for every channel that owns a message timeline, so a voice
+  /// channel's chat is literally the same widget tree as a text channel's
+  /// rather than a second copy that can drift.
+  Widget _buildTimeline() {
+    if (widget.isLoading) return const ChannelLoadingView();
+    if (widget.loadError != null) {
+      return ChannelFailureView(onRetry: widget.onRetry);
+    }
+    return MessageList(
+      workspace: widget.workspace,
+      externalLinkLauncher: widget.externalLinkLauncher,
+      attachmentDownloadService: widget.attachmentDownloadService,
+      channel: widget.channel,
+      query: widget.query,
+      targetMessageId: widget.targetMessageId,
+      onReply: (message) => setState(() => _replyTo = message),
+      onEdit: widget.onEdit,
+      onDelete: widget.onDelete,
+      onToggleReaction: widget.onToggleReaction,
+      onLoadReactionUsers: widget.onLoadReactionUsers,
+      onAddReaction: widget.onAddReaction,
+      onCreateThread: widget.onCreateThread,
+      onTogglePin: widget.onTogglePin,
+      onEndPoll: widget.onEndPoll,
+      onForward: widget.onForward,
+      onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
+      canLoadOlder: widget.canLoadOlder,
+      isLoadingOlder: widget.isLoadingOlder,
+      olderLoadError: widget.olderLoadError,
+      onLoadOlder: widget.onLoadOlder,
+      onSelectChannel: widget.onSelectChannel,
     );
   }
 }

@@ -290,6 +290,7 @@ class _DestinationRow extends StatelessWidget {
   IconData get _icon => switch (destination.kind) {
     MessageForwardDestinationKind.directMessage => Icons.alternate_email,
     MessageForwardDestinationKind.textChannel => Icons.tag,
+    MessageForwardDestinationKind.voiceChannel => Icons.volume_up_outlined,
     MessageForwardDestinationKind.thread => Icons.forum_outlined,
   };
 }

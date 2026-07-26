@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../application/inbox_catalog.dart';
+import '../../application/voice_channel_surface.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'inbox_dialog.dart';
+import 'voice_surface_switch.dart';
 
 class ChatHeader extends StatelessWidget {
   const ChatHeader({
@@ -11,6 +13,8 @@ class ChatHeader extends StatelessWidget {
     required this.channels,
     required this.query,
     required this.showCompactPicker,
+    required this.showsMessages,
+    required this.voiceSurface,
     required this.allowMemberPanel,
     required this.allowThreadPanel,
     required this.showMembers,
@@ -18,6 +22,7 @@ class ChatHeader extends StatelessWidget {
     required this.showThreads,
     required this.inboxSummary,
     required this.onSelectChannel,
+    required this.onSelectVoiceSurface,
     required this.onQueryChanged,
     required this.onToggleMembers,
     required this.onTogglePins,
@@ -30,6 +35,12 @@ class ChatHeader extends StatelessWidget {
   final List<ConversationChannel> channels;
   final String query;
   final bool showCompactPicker;
+
+  /// Whether the pane below is currently showing a message timeline. Search and
+  /// pins belong to that timeline, so a voice channel earns them only while its
+  /// chat surface is the one on screen.
+  final bool showsMessages;
+  final VoiceChannelSurface voiceSurface;
   final bool allowMemberPanel;
   final bool allowThreadPanel;
   final bool showMembers;
@@ -37,6 +48,7 @@ class ChatHeader extends StatelessWidget {
   final bool showThreads;
   final InboxSummary inboxSummary;
   final ValueChanged<String> onSelectChannel;
+  final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
@@ -103,7 +115,15 @@ class ChatHeader extends StatelessWidget {
                 ),
               ] else
                 const Spacer(),
-              if (channel.kind == ChannelKind.text && showSearch)
+              if (channel.kind == ChannelKind.voice) ...[
+                const SizedBox(width: 8),
+                VoiceSurfaceSwitch(
+                  surface: voiceSurface,
+                  showLabels: showTopic,
+                  onChanged: onSelectVoiceSurface,
+                ),
+              ],
+              if (showsMessages && showSearch)
                 SizedBox(
                   width: 190,
                   child: _SearchField(query: query, onChanged: onQueryChanged),
@@ -113,19 +133,21 @@ class ChatHeader extends StatelessWidget {
                 summary: inboxSummary,
                 onPressed: onOpenInbox,
               ),
-              if (channel.kind == ChannelKind.text) ...[
-                if (allowThreadPanel) ...[
-                  const SizedBox(width: 4),
-                  IconButton(
-                    key: const ValueKey('toggle-threads'),
-                    onPressed: onToggleThreads,
-                    icon: Icon(
-                      showThreads ? Icons.forum : Icons.forum_outlined,
-                      size: 19,
-                    ),
-                    tooltip: showThreads ? 'Close threads' : 'Threads',
+              if (allowThreadPanel) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-threads'),
+                  onPressed: onToggleThreads,
+                  icon: Icon(
+                    showThreads ? Icons.forum : Icons.forum_outlined,
+                    size: 19,
                   ),
-                ],
+                  tooltip: showThreads ? 'Close threads' : 'Threads',
+                ),
+              ],
+              // Pinning is absent from the voice text-chat permission set, so
+              // the panel and its toggle stay out of a voice channel's chat.
+              if (showsMessages && channel.kind != ChannelKind.voice) ...[
                 const SizedBox(width: 4),
                 IconButton(
                   key: const ValueKey('toggle-pins'),

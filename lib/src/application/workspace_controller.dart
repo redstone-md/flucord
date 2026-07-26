@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/chat_models.dart';
 import 'channel_link.dart';
+import 'voice_channel_surface.dart';
 
 final class WorkspaceController extends ChangeNotifier {
   String? _selectedSpaceId;
@@ -13,6 +14,7 @@ final class WorkspaceController extends ChangeNotifier {
   bool _showPins = false;
   bool _showThreads = false;
   final Set<String> _collapsedCategoryIds = {};
+  final VoiceChannelSurfaces _voiceSurfaces = VoiceChannelSurfaces();
 
   String? get selectedSpaceId => _selectedSpaceId;
   String? get selectedChannelId => _selectedChannelId;
@@ -25,9 +27,13 @@ final class WorkspaceController extends ChangeNotifier {
   Set<String> get collapsedCategoryIds =>
       Set.unmodifiable(_collapsedCategoryIds);
 
+  VoiceChannelSurface voiceSurfaceOf(String channelId) =>
+      _voiceSurfaces.of(channelId);
+
   void reconcile(ChatWorkspace workspace) {
     final categoryIds = workspace.categories.map((category) => category.id);
     _collapsedCategoryIds.retainAll(categoryIds);
+    _voiceSurfaces.retainAll(workspace.channels.map((channel) => channel.id));
     if (_selectedSpaceId == null ||
         !workspace.spaces.any((space) => space.id == _selectedSpaceId)) {
       _selectedSpaceId = workspace.spaces.first.id;
@@ -43,12 +49,19 @@ final class WorkspaceController extends ChangeNotifier {
       _targetMessageId = null;
       _selectedChannelId = availableChannels
           .firstWhere(
-            (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
+            _isDefaultLandingChannel,
             orElse: () => availableChannels.first,
           )
           .id;
     }
   }
+
+  /// Voice channels are skipped when a landing channel has to be guessed: the
+  /// room is the surface a voice channel opens on, and opening it unasked would
+  /// reach for the microphone. A voice channel is still reachable by every
+  /// deliberate route.
+  static bool _isDefaultLandingChannel(ConversationChannel channel) =>
+      channel.kind != ChannelKind.voice && !channel.isThread;
 
   void selectSpace(ChatWorkspace workspace, String spaceId) {
     if (_selectedSpaceId == spaceId) return;
@@ -61,33 +74,50 @@ final class WorkspaceController extends ChangeNotifier {
       return;
     }
     _selectedChannelId = channels
-        .firstWhere(
-          (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
-          orElse: () => channels.first,
-        )
+        .firstWhere(_isDefaultLandingChannel, orElse: () => channels.first)
         .id;
     _targetMessageId = null;
     _query = '';
     notifyListeners();
   }
 
-  void selectChannel(String channelId) {
-    if (_selectedChannelId == channelId && _targetMessageId == null) return;
+  /// [surface] is how a caller says which side of a voice channel it meant.
+  /// Leaving it null keeps whatever the channel last showed, which is what the
+  /// channel sidebar and its compact stand-in want; message-shaped navigation
+  /// passes [VoiceChannelSurface.chat] so a link never drops the user into a
+  /// live room.
+  void selectChannel(String channelId, {VoiceChannelSurface? surface}) {
+    final surfaceChanged =
+        surface != null && _voiceSurfaces.select(channelId, surface);
+    if (_selectedChannelId == channelId && _targetMessageId == null) {
+      if (surfaceChanged) notifyListeners();
+      return;
+    }
     _selectedChannelId = channelId;
     _targetMessageId = null;
     _query = '';
     notifyListeners();
   }
 
+  void selectVoiceSurface(String channelId, VoiceChannelSurface surface) {
+    if (_voiceSurfaces.select(channelId, surface)) notifyListeners();
+  }
+
+  /// Jumping to a message is the most message-shaped route there is, so a voice
+  /// channel opens on its timeline rather than on the room the anchor is not in.
   void selectMessage(String channelId, String messageId) {
     final changed =
         _selectedChannelId != channelId ||
         _targetMessageId != messageId ||
         _query.isNotEmpty;
+    final surfaceChanged = _voiceSurfaces.select(
+      channelId,
+      VoiceChannelSurface.chat,
+    );
     _selectedChannelId = channelId;
     _targetMessageId = messageId;
     _query = '';
-    if (changed) notifyListeners();
+    if (changed || surfaceChanged) notifyListeners();
   }
 
   bool openChannelLink(ChatWorkspace workspace, ChannelLink link) {
@@ -104,11 +134,17 @@ final class WorkspaceController extends ChangeNotifier {
         _selectedSpaceId != link.spaceId ||
         _selectedChannelId != link.channelId ||
         _query.isNotEmpty;
+    // A channel link points at a conversation, so a voice channel opened this
+    // way shows its chat instead of pulling the user into the live room.
+    final surfaceChanged = _voiceSurfaces.select(
+      link.channelId,
+      VoiceChannelSurface.chat,
+    );
     _selectedSpaceId = link.spaceId;
     _selectedChannelId = link.channelId;
     _targetMessageId = null;
     _query = '';
-    if (changed) notifyListeners();
+    if (changed || surfaceChanged) notifyListeners();
     return true;
   }
 

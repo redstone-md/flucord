@@ -40,4 +40,36 @@ void main() {
     );
     expect(controller.workspace!.messages.last.stickers, hasLength(1));
   });
+
+  test('accepts the timeline a voice channel carries', () async {
+    final controller = ChatController(
+      MockChatRepository(latency: Duration.zero),
+    );
+    addTearDown(controller.dispose);
+    await controller.load();
+
+    expect(
+      await controller.sendStickers(
+        channelId: 'forge-voice',
+        stickerIds: const ['forge-signal'],
+      ),
+      isTrue,
+    );
+    expect(
+      await controller.sendStickers(
+        channelId: 'forge-forum',
+        stickerIds: const ['forge-signal'],
+      ),
+      isFalse,
+    );
+    expect(
+      controller.workspace!
+          .messagesFor('forge-voice')
+          .last
+          .stickers
+          .single
+          .name,
+      'Native signal',
+    );
+  });
 }

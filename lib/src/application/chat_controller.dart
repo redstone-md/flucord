@@ -163,6 +163,8 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
     final workspace = _workspace;
     if (_state == ChatLoadState.ready && workspace != null) {
+      // A voice channel does carry messages, but it is never the channel the
+      // app lands on unasked, so warming its history here would be wasted work.
       final textChannels = workspace.channels.where(
         (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
       );

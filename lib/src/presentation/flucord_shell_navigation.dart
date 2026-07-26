@@ -29,6 +29,7 @@ extension _FlucordShellNavigation on FlucordShell {
       spaceId: target.spaceId,
       channelId: target.channelId,
       messageId: target.messageId,
+      voiceSurface: VoiceChannelSurface.chat,
     );
   }
 
@@ -55,16 +56,25 @@ extension _FlucordShellNavigation on FlucordShell {
     _openDestination(spaceId: space.id, channelId: channelId);
   }
 
+  /// Like the channel sidebar, the quick switcher is a "go to this channel"
+  /// gesture, so it hands a voice channel back on whichever surface that
+  /// channel was last left on rather than forcing one.
   void _openQuickSwitcherDestination(QuickSwitcherDestination destination) =>
       _openDestination(
         spaceId: destination.spaceId,
         channelId: destination.channelId,
       );
 
+  void _selectChannel(String channelId, {VoiceChannelSurface? voiceSurface}) {
+    workspaceController.selectChannel(channelId, surface: voiceSurface);
+    unawaited(chatController.openChannel(channelId));
+  }
+
   void _openDestination({
     required String spaceId,
     String? channelId,
     String? messageId,
+    VoiceChannelSurface? voiceSurface,
   }) {
     final workspace = chatController.workspace;
     if (workspace == null) return;
@@ -73,7 +83,7 @@ extension _FlucordShellNavigation on FlucordShell {
     if (channelId != null && messageId != null) {
       workspaceController.selectMessage(channelId, messageId);
     } else if (channelId != null) {
-      workspaceController.selectChannel(channelId);
+      workspaceController.selectChannel(channelId, surface: voiceSurface);
     }
     final selectedChannelId = workspaceController.selectedChannelId;
     if (selectedChannelId != null) {

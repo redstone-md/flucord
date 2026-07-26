@@ -430,7 +430,11 @@ class _MessageItemState extends State<MessageItem> {
 
   bool get _canCreateThread {
     final channel = widget.workspace.channelById(widget.message.channelId);
+    // A voice channel's text chat has no threads: Discord's permission set for
+    // it omits the thread bits entirely, so offering the action would only
+    // produce a server rejection.
     return !channel.isThread &&
+        channel.kind != ChannelKind.voice &&
         !widget.workspace.spaceById(channel.spaceId).isDirectMessages;
   }
 

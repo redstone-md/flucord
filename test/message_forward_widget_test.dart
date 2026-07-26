@@ -11,19 +11,32 @@ import 'package:flucord/src/presentation/widgets/message_forward_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
-  test('catalog keeps writable text targets and unlocked archived threads', () {
-    final ids = MessageForwardDestinationCatalog.fromWorkspace(
-      _workspace,
-    ).destinations.map((destination) => destination.channelId);
+  test(
+    'catalog keeps every writable timeline and unlocked archived threads',
+    () {
+      final destinations = MessageForwardDestinationCatalog.fromWorkspace(
+        _workspace,
+      ).destinations;
+      final ids = destinations.map((destination) => destination.channelId);
 
-    expect(
-      ids,
-      containsAll(['source-channel', 'target-channel', 'open-thread']),
-    );
-    expect(ids, isNot(contains('voice')));
-    expect(ids, isNot(contains('forum')));
-    expect(ids, isNot(contains('locked-thread')));
-  });
+      expect(
+        ids,
+        containsAll([
+          'source-channel',
+          'target-channel',
+          'voice',
+          'open-thread',
+        ]),
+      );
+      expect(ids, isNot(contains('forum')));
+      expect(ids, isNot(contains('locked-thread')));
+      final voice = destinations.firstWhere(
+        (destination) => destination.channelId == 'voice',
+      );
+      expect(voice.kind, MessageForwardDestinationKind.voiceChannel);
+      expect(voice.title, 'Voice');
+    },
+  );
 
   testWidgets('renders the complete forwarded snapshot on compact width', (
     tester,
@@ -86,7 +99,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-forward-dialog')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('message-forward-voice')), findsNothing);
+    expect(find.byKey(const ValueKey('message-forward-voice')), findsOneWidget);
     expect(find.byKey(const ValueKey('message-forward-forum')), findsNothing);
     expect(
       find.byKey(const ValueKey('message-forward-locked-thread')),

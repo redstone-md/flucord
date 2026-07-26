@@ -13,7 +13,7 @@ extension ChatControllerPolls on ChatController {
     final normalized = poll.normalized();
     if (workspace == null ||
         repository == null ||
-        channel?.kind != ChannelKind.text ||
+        channel?.hasMessageTimeline != true ||
         !normalized.isValid ||
         _isSending) {
       return false;

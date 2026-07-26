@@ -1,6 +1,11 @@
 import '../domain/chat_models.dart';
 
-enum MessageForwardDestinationKind { directMessage, textChannel, thread }
+enum MessageForwardDestinationKind {
+  directMessage,
+  textChannel,
+  voiceChannel,
+  thread,
+}
 
 final class MessageForwardDestination {
   const MessageForwardDestination({
@@ -61,10 +66,15 @@ final class MessageForwardDestinationCatalog {
         ? MessageForwardDestinationKind.directMessage
         : channel.isThread
         ? MessageForwardDestinationKind.thread
+        : channel.kind == ChannelKind.voice
+        ? MessageForwardDestinationKind.voiceChannel
         : MessageForwardDestinationKind.textChannel;
     final title = switch (kind) {
       MessageForwardDestinationKind.directMessage =>
         '@${_recipientName(workspace, channel)}',
+      // A voice channel is not addressed with a hash in Discord, so the plain
+      // name is what makes it recognisable in the picker.
+      MessageForwardDestinationKind.voiceChannel => channel.name,
       MessageForwardDestinationKind.textChannel ||
       MessageForwardDestinationKind.thread => '#${channel.name}',
     };

@@ -32,6 +32,7 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelId,
     required this.channelName,
+    this.channelIsVoice = false,
     required this.spaceName,
     required this.customEmojis,
     required this.guildStickers,
@@ -52,6 +53,10 @@ class MessageComposer extends StatefulWidget {
 
   final String channelId;
   final String channelName;
+
+  /// A voice channel's chat is not addressed with a hash, because the
+  /// channel is not a text channel and `#name` would not resolve to it.
+  final bool channelIsVoice;
   final String spaceName;
   final List<GuildEmoji> customEmojis;
   final List<GuildSticker> guildStickers;
@@ -256,7 +261,9 @@ class _MessageComposerState extends State<MessageComposer>
                     }
                   },
                   decoration: InputDecoration(
-                    hintText: 'Message #${widget.channelName}',
+                    hintText: widget.channelIsVoice
+                        ? 'Message ${widget.channelName}'
+                        : 'Message #${widget.channelName}',
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
                     prefixIcon: IconButton(
                       key: const ValueKey('add-attachment'),

@@ -86,7 +86,7 @@ final class InboxCatalog {
         workspace.channels
             .where(
               (channel) =>
-                  channel.kind == ChannelKind.text &&
+                  channel.hasMessageTimeline &&
                   (channel.unread || channel.mentionCount > 0),
             )
             .map((channel) {

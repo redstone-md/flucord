@@ -60,7 +60,9 @@ final class _MentionBuilder extends MarkdownElementBuilder {
     final channel = _kind == _MentionKind.channel
         ? _workspace.channelOrNull(id)
         : null;
-    final enabled = channel != null && channel.kind != ChannelKind.voice;
+    // Every channel the workspace knows is reachable, voice included: a voice
+    // mention opens that channel's chat, the way it does in Discord.
+    final enabled = channel != null;
     return Semantics(
       button: enabled,
       label: label,

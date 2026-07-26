@@ -6,16 +6,18 @@ void main() {
   test('projects unread channels and exact mention messages', () {
     final catalog = InboxCatalog.fromWorkspace(_workspace());
 
-    expect(catalog.summary.unreadChannelCount, 2);
+    expect(catalog.summary.unreadChannelCount, 3);
     expect(catalog.summary.mentionCount, 2);
     expect(catalog.summary.hasActivity, isTrue);
     expect(catalog.unread.map((entry) => entry.target.channelId), [
       'design',
       'general',
+      'voice',
     ]);
     expect(catalog.unread.first.path, 'The Forge / #design');
     expect(catalog.unread.first.mentionCount, 2);
-    expect(catalog.unread.last.firstUnreadMessageId, 'message-1');
+    expect(catalog.unread[1].firstUnreadMessageId, 'message-1');
+    expect(catalog.unread.last.path, 'The Forge / voice');
 
     final mention = catalog.mentions.single;
     expect(mention.target.channelId, 'design');

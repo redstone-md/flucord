@@ -12,7 +12,7 @@ do not count as desktop-user chat parity.
 | User profile | Ready | Hydrated from Gateway `READY` |
 | Server list | Ready | Hydrated from `READY`/`GUILD_CREATE` |
 | Server channels | Ready | Hydrated from `GUILD_CREATE` |
-| Direct Message list | Ready | Hydrated from `READY` and live dispatches |
+| Direct Message list | Ready | `READY.users` expansion gives recipients names and avatars; ordered by last activity |
 | Channel history | Ready | Desktop REST v9, 100-message cursor pages, SQLite cache |
 | Live new/edit/delete events | Ready | Desktop Gateway dispatches |
 | Send/edit/delete messages | Ready | Separate desktop-user REST adapter |
@@ -20,6 +20,7 @@ do not count as desktop-user chat parity.
 | Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
 | Reactions and pins | Ready | Desktop-user message routes |
 | Threads | Partial | Create from message; initial Gateway thread hydration |
+| Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
 | Member list and presence | Partial | Lazy member-list transport, `member_list_id` derivation and row state machine are implemented; the sidebar still groups a flat list locally |
 | Search | Local only | Loaded/cached workspace; Discord server search absent |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |

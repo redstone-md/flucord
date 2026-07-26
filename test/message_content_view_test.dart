@@ -52,6 +52,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('routes a voice channel mention like any other channel', (
+    tester,
+  ) async {
+    String? selectedChannel;
+    await tester.pumpWidget(
+      _host('<#301>', onSelectChannel: (id) => selectedChannel = id),
+    );
+    await tester.pump();
+
+    expect(find.text('#workbench'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('discord-channel-301')));
+
+    expect(selectedChannel, '301');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opens HTTPS links and reports launcher failures', (
     tester,
   ) async {
@@ -159,6 +175,13 @@ final _workspace = ChatWorkspace(
       name: 'general',
       topic: 'Core work',
       kind: ChannelKind.text,
+    ),
+    ConversationChannel(
+      id: '301',
+      spaceId: '10',
+      name: 'workbench',
+      topic: 'Open voice room',
+      kind: ChannelKind.voice,
     ),
   ],
   roles: const [
