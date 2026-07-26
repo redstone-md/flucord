@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'discord_desktop_bootstrap.dart';
 import 'discord_desktop_gateway_protocol.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_desktop_websocket.dart';
@@ -11,31 +12,7 @@ import 'discord_gateway_transport_codec.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
 
-final class DiscordDesktopWorkspaceSnapshot {
-  DiscordDesktopWorkspaceSnapshot({
-    required Map<String, Object?> currentUser,
-    required Iterable<Map<String, Object?>> guilds,
-    required Iterable<Map<String, Object?>> directChannels,
-    required Map<String, List<Map<String, Object?>>> channelsByGuild,
-  }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
-       guilds = List<Map<String, Object?>>.unmodifiable(
-         guilds.map(Map<String, Object?>.unmodifiable),
-       ),
-       directChannels = List<Map<String, Object?>>.unmodifiable(
-         directChannels.map(Map<String, Object?>.unmodifiable),
-       ),
-       channelsByGuild = Map<String, List<Map<String, Object?>>>.unmodifiable({
-         for (final entry in channelsByGuild.entries)
-           entry.key: List<Map<String, Object?>>.unmodifiable(
-             entry.value.map(Map<String, Object?>.unmodifiable),
-           ),
-       });
-
-  final Map<String, Object?> currentUser;
-  final List<Map<String, Object?>> guilds;
-  final List<Map<String, Object?>> directChannels;
-  final Map<String, List<Map<String, Object?>>> channelsByGuild;
-}
+export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
 
 final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   DiscordDesktopGatewayClient({
@@ -62,8 +39,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       StreamController.broadcast();
   final Random _random = Random();
   final Map<String, Map<String, Object?>> _desiredVoiceStates = {};
-  final Map<String, Map<String, Object?>> _bootstrapGuilds = {};
-  final Map<String, List<Map<String, Object?>>> _bootstrapChannels = {};
+  final DiscordDesktopBootstrap _bootstrap = DiscordDesktopBootstrap();
 
   DiscordDesktopWebSocket? _socket;
   Timer? _heartbeatTimer;
@@ -71,8 +47,6 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   Timer? _reconnectTimer;
   Timer? _bootstrapTimer;
   Completer<DiscordDesktopWorkspaceSnapshot>? _bootstrapCompleter;
-  Map<String, Object?>? _bootstrapUser;
-  List<Map<String, Object?>> _bootstrapDirectChannels = const [];
   Uri? _gatewayUri;
   bool _closing = false;
   Object? _lastBootstrapError;
@@ -92,17 +66,14 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     String gatewayUrl,
   ) async {
     _bootstrapCompleter = Completer<DiscordDesktopWorkspaceSnapshot>();
-    _bootstrapGuilds.clear();
-    _bootstrapChannels.clear();
-    _bootstrapUser = null;
-    _bootstrapDirectChannels = const [];
+    _bootstrap.reset();
     _lastBootstrapError = null;
     _lastBootstrapCloseCode = null;
     await connect(gatewayUrl);
     return _bootstrapCompleter!.future.timeout(
       const Duration(seconds: 15),
       onTimeout: () {
-        final snapshot = _snapshot();
+        final snapshot = _bootstrap.snapshot();
         if (snapshot == null) {
           final detail = _lastBootstrapError == null
               ? (_lastBootstrapCloseCode == null
@@ -214,61 +185,39 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   }
 
   void _captureBootstrap(DiscordDesktopGatewayDispatch dispatch) {
-    if (_bootstrapCompleter?.isCompleted != false) return;
-    if (dispatch.name == 'READY') {
-      final user = dispatch.data['user'];
-      if (user is Map) _bootstrapUser = user.cast<String, Object?>();
-      _bootstrapDirectChannels = _objects(dispatch.data['private_channels']);
-      for (final guild in _objects(dispatch.data['guilds'])) {
-        _captureGuild(guild);
-      }
-      _scheduleBootstrapCompletion(const Duration(seconds: 2));
-    } else if (dispatch.name == 'GUILD_CREATE') {
-      _captureGuild(dispatch.data);
-      _scheduleBootstrapCompletion(const Duration(milliseconds: 350));
-    } else if (dispatch.name == 'READY_SUPPLEMENTAL') {
-      _scheduleBootstrapCompletion(const Duration(milliseconds: 350));
-    }
-  }
-
-  void _captureGuild(Map<String, Object?> guild) {
-    final id = guild['id'];
-    if (id is! String) return;
-    _bootstrapGuilds[id] = Map<String, Object?>.unmodifiable(guild);
-    final channels = [
-      ..._objects(guild['channels']),
-      ..._objects(guild['threads']),
-    ];
-    if (channels.isNotEmpty) _bootstrapChannels[id] = channels;
+    // Hydration is fed unconditionally. The bootstrap completer only decides
+    // when the first snapshot is handed back; gating ingestion on it lost every
+    // READY_SUPPLEMENTAL that arrived after the snapshot timer had already
+    // fired, which dropped `lazy_private_channels` and left the READY user
+    // table alive for the rest of the session.
+    final delay = switch (dispatch.name) {
+      'READY' => () {
+        _bootstrap.acceptReady(dispatch.data);
+        return const Duration(seconds: 2);
+      }(),
+      'GUILD_CREATE' => () {
+        _bootstrap.acceptGuild(dispatch.data);
+        return const Duration(milliseconds: 350);
+      }(),
+      'READY_SUPPLEMENTAL' => () {
+        _bootstrap.acceptSupplemental(dispatch.data);
+        return const Duration(milliseconds: 350);
+      }(),
+      _ => null,
+    };
+    if (delay == null || _bootstrapCompleter?.isCompleted != false) return;
+    _scheduleBootstrapCompletion(delay);
   }
 
   void _scheduleBootstrapCompletion(Duration delay) {
     _bootstrapTimer?.cancel();
     _bootstrapTimer = Timer(delay, () {
-      final snapshot = _snapshot();
+      final snapshot = _bootstrap.snapshot();
       if (snapshot != null && _bootstrapCompleter?.isCompleted == false) {
         _bootstrapCompleter!.complete(snapshot);
       }
     });
   }
-
-  DiscordDesktopWorkspaceSnapshot? _snapshot() {
-    final user = _bootstrapUser;
-    if (user == null) return null;
-    return DiscordDesktopWorkspaceSnapshot(
-      currentUser: user,
-      guilds: _bootstrapGuilds.values,
-      directChannels: _bootstrapDirectChannels,
-      channelsByGuild: _bootstrapChannels,
-    );
-  }
-
-  static List<Map<String, Object?>> _objects(Object? value) => value is List
-      ? value
-            .whereType<Map>()
-            .map((item) => item.cast<String, Object?>())
-            .toList(growable: false)
-      : const [];
 
   /// Subscribes a channel's member-list row ranges.
   ///

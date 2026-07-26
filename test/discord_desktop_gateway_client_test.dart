@@ -7,7 +7,9 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
 import 'package:flucord/src/data/discord/discord_etf_codec.dart';
+import 'package:flucord/src/data/discord/discord_mapper.dart';
 import 'package:flucord/src/data/discord/discord_member_list_ranges.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 
 void main() {
   test('dials the observed encoding without unsupported compression', () async {
@@ -100,6 +102,97 @@ void main() {
       throwsUnsupportedError,
     );
   });
+
+  test(
+    'expands READY.users into DM recipients the sidebar can render',
+    () async {
+      final socket = _MemoryDesktopWebSocket();
+      final gateway = DiscordDesktopGatewayClient(
+        authorization: 'account-session',
+        properties: const {'os': 'Windows'},
+        profile: _uncompressed,
+        socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      );
+      addTearDown(gateway.close);
+
+      final snapshotFuture = gateway.connectAndReadWorkspace(
+        'wss://gateway.discord.gg',
+      );
+      await Future<void>.delayed(Duration.zero);
+      socket.receiveTerm(const {
+        'op': 0,
+        's': 1,
+        't': 'READY',
+        'd': {
+          'session_id': 'session',
+          'user': {'id': 'me', 'username': 'member'},
+          'users': [
+            {
+              'id': '123456789012345678',
+              'username': 'jack',
+              'global_name': 'Jack',
+              'avatar': 'avatar-hash',
+            },
+            {'id': '234567890123456789', 'username': 'jill', 'avatar': null},
+          ],
+          'guilds': <Object?>[],
+          'private_channels': [
+            {
+              'id': '222222222222222222',
+              'type': 1,
+              'recipient_ids': ['234567890123456789'],
+            },
+            {
+              'id': '111111111111111111',
+              'type': 1,
+              'recipient_ids': ['123456789012345678'],
+              'last_message_id': '987654321098765432',
+            },
+          ],
+        },
+      });
+      socket.receiveTerm(const {
+        'op': 0,
+        's': 2,
+        't': 'READY_SUPPLEMENTAL',
+        'd': {
+          'lazy_private_channels': [
+            {
+              'id': '333333333333333333',
+              'type': 1,
+              'recipient_ids': ['234567890123456789'],
+              'last_message_id': '234567890123456789',
+            },
+          ],
+        },
+      });
+
+      final snapshot = await snapshotFuture;
+      expect(snapshot.directChannels.map((channel) => channel['id']), [
+        '111111111111111111',
+        '333333333333333333',
+        '222222222222222222',
+      ]);
+
+      final workspace = DiscordMapper().workspace(
+        currentUser: snapshot.currentUser,
+        guilds: snapshot.guilds,
+        channelsByGuild: snapshot.channelsByGuild,
+        directChannels: snapshot.directChannels,
+        includeDirectMessagesSpace: true,
+      );
+      expect(
+        workspace
+            .channelsFor(CommunitySpace.directMessagesId)
+            .map((channel) => channel.name),
+        ['Jack', 'jill', 'jill'],
+      );
+      expect(
+        workspace.memberById('123456789012345678').avatarUrl,
+        contains('/avatars/123456789012345678/'),
+      );
+    },
+  );
 
   test('subscribes member-list ranges through opcode 37', () async {
     final socket = _MemoryDesktopWebSocket();

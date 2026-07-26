@@ -208,6 +208,26 @@ Opcode `6` resume data is `token`, `session_id`, and `seq`.
 The official client accepts server opcode `1` as an immediate heartbeat
 request and resets its periodic interval after responding.
 
+## Private channel directory
+
+`READY` carries DM and group-DM channels in `private_channels` and never
+repeats a user object: a channel may arrive with `recipient_ids` in place of
+`recipients`. Every id resolves against the flat top-level `users` array, and
+the compressed field is dropped once expanded. That table also backs the
+`user_id` references in `merged_members` and `merged_presences`, so it lives
+from `READY` until `READY_SUPPLEMENTAL` has been applied and is dropped
+immediately afterwards.
+
+`READY_SUPPLEMENTAL.lazy_private_channels` is a late top-up with the same
+shape. It is not merged incrementally: the directory is rebuilt from the
+remembered `READY` list and the lazy entries are applied over that.
+
+The DM list is ordered by an effective last-message snowflake, never by
+recipients. The key is the read-state cursor, else the channel's
+`last_message_id`, else the channel id itself, raised to the message-request
+timestamp when that is the newer of the two; the list runs descending by that
+snowflake's timestamp.
+
 ## Guild subscriptions
 
 The current renderer no longer sends each update through opcode `14`. It
