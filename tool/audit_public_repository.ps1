@@ -81,6 +81,7 @@ class RepositoryPrivacyAudit {
     $this.AssertRepository()
     $commits = @($this.InvokeGit(@('rev-list', '--all')))
     $this.ScanCommitMetadata($commits)
+    $this.ScanTagMetadata()
     $this.ScanHistoricalPaths()
     $this.ScanHistoricalContent($commits)
     $this.ScanImageMetadata()
@@ -131,6 +132,24 @@ class RepositoryPrivacyAudit {
       ))) -join "`n"
       $location = "commit $($commit.Substring(0, 12)) metadata"
 
+      foreach ($email in $this.EmailPattern.Matches($metadata)) {
+        if (-not $this.IsAllowedEmail($email.Value)) {
+          $this.AddFinding('personal-email', $location)
+        }
+      }
+      $this.InspectText($metadata, $location)
+    }
+  }
+
+  hidden [void] ScanTagMetadata() {
+    $tags = $this.InvokeGit(@('tag', '--list'))
+    foreach ($tag in $tags) {
+      $metadata = @($this.InvokeGit(@(
+        'for-each-ref',
+        '--format=%(taggername)%09%(taggeremail)%09%(contents)',
+        "refs/tags/$tag"
+      ))) -join "`n"
+      $location = "tag $tag metadata"
       foreach ($email in $this.EmailPattern.Matches($metadata)) {
         if (-not $this.IsAllowedEmail($email.Value)) {
           $this.AddFinding('personal-email', $location)
