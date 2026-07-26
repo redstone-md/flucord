@@ -8,6 +8,7 @@ import 'discord_desktop_profile.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
 import 'discord_gateway_framing.dart';
+import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
 
 final class DiscordDesktopWorkspaceSnapshot {
@@ -53,6 +54,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   final DiscordDesktopGatewayProtocol _protocol;
   final DiscordGatewayFraming _framing;
   final DiscordDesktopWebSocketConnector _socketConnector;
+  final DiscordGuildSubscriptions _subscriptions = DiscordGuildSubscriptions();
   final StreamController<DiscordGatewayEvent> _events =
       StreamController.broadcast();
   final Random _random = Random();
@@ -258,23 +260,44 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
             .toList(growable: false)
       : const [];
 
+  /// Subscribes a channel's member-list row ranges.
+  ///
+  /// Discord answers with `GUILD_MEMBER_LIST_UPDATE` for the channel's
+  /// visibility class. Ranges must be page-aligned and always include the head
+  /// page; [DiscordMemberListRanges] produces a conforming set.
+  void subscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+    required List<List<int>> ranges,
+  }) {
+    if (!_subscriptions.setChannelRanges(guildId, channelId, ranges)) return;
+    _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+  }
+
+  /// Drops a channel's member-list subscription.
+  void unsubscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+  }) {
+    if (!_subscriptions.removeChannel(guildId, channelId)) return;
+    _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+  }
+
   void _subscribeReadyGuilds(Map<String, Object?> ready) {
     final guilds = ready['guilds'];
     if (guilds is! List) return;
-    final subscriptions = <String, Map<String, Object?>>{};
     for (final guild in guilds.whereType<Map>()) {
       final id = guild['id'];
-      if (id is! String) continue;
-      subscriptions[id] = const {
-        'typing': true,
-        'threads': true,
-        'activities': true,
-        'member_updates': false,
-        'members': <Object?>[],
-        'channels': <String, Object?>{},
-        'thread_member_lists': <Object?>[],
-      };
+      if (id is String) _subscriptions.setFlags(id);
     }
+    // A reconnect replays the whole subscription state, because the server
+    // keeps none of it across sessions and a resumed socket would otherwise
+    // stop delivering member-list and typing events for open channels.
+    _sendSubscriptions(_subscriptions.snapshotAll());
+  }
+
+  void _sendSubscriptions(Map<String, Map<String, Object?>> subscriptions) {
+    if (subscriptions.isEmpty) return;
     for (final frame in _protocol.guildSubscriptionFrames(subscriptions)) {
       _send(frame);
     }
@@ -410,6 +433,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     _initialHeartbeatTimer?.cancel();
     await _socket?.close();
     _desiredVoiceStates.clear();
+    _subscriptions.clear();
     _emitStatus(DiscordGatewayStatus.offline);
     await _events.close();
   }

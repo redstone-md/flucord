@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 12 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 83.78% lines | `flutter test --coverage`, 542 passing, 5 skipped |
+| Automated test coverage | 84.09% lines | `flutter test --coverage`, 578 passing, 5 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -191,16 +191,35 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_DIRECTORY_ENTRY_*`, and 6 more.
 - **Purpose**: server list, member list, roles, onboarding, discovery.
 - **UI surface**: server rail, member panel, server settings.
-- **Contract**: `READY`/`GUILD_CREATE`, opcode 14 member-list ranges,
-  `GET /guilds/{id}/members`.
+- **Contract**: `READY`/`GUILD_CREATE`; member-list ranges through the bulk
+  opcode 37 `channels` map; `GET /guilds/{id}/members`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: guild directory, channel projection, role identity, guild
-  icons, per-guild unread aggregation.
-- **Tests**: `discord_mapper_test.dart`, `discord_guild_member_loader_test.dart`.
-- **Live evidence**: guild and channel hydration on Windows `2026-07-25`.
-- **Blocked by**: `GUILD_MEMBER_LIST_UPDATE` range subscriptions are the next
-  dependency-first slice; without them the member panel stays partial.
+  icons, per-guild unread aggregation. Lazy member lists now have their full
+  transport and state layer: `member_list_id` derivation (server-supplied
+  value, the `everyone` visibility class, or MurmurHash3 x86-32 over the sorted
+  `VIEW_CHANNEL` overwrite tokens), page-aligned range computation with the
+  head page and half-viewport overscan, a five-channel per-guild subscription
+  cache whose eviction is the unsubscribe, opcode 37 emission with
+  reconnect replay, and the `SYNC`/`INVALIDATE`/`INSERT`/`UPDATE`/`DELETE`
+  state machine over Discord's flat header-and-member row space.
+- **Tests**: `discord_mapper_test.dart`, `discord_guild_member_loader_test.dart`,
+  `discord_member_list_test.dart`, `discord_desktop_gateway_client_test.dart`.
+  The seven new member-list files are at 100% line coverage, and the hash is
+  checked against twelve `mmh3` reference values.
+- **Live evidence**: guild and channel hydration on Windows `2026-07-25`. None
+  yet for `GUILD_MEMBER_LIST_UPDATE` itself.
+- **Blocked by**: the controller and member-panel cut. The roster is parsed and
+  cached but not yet projected into the sidebar, so the panel still groups a
+  flat member list locally. `GET /guilds/{id}/members` enumeration and
+  `GUILD_MEMBERS_CHUNK` remain unimplemented.
+
+> Correction, `2026-07-26`: an earlier revision of this row named opcode 14 as
+> the member-list contract. Static analysis of `web.b8b5ddfa0f88ae29.js` finds
+> `GUILD_SUBSCRIPTIONS=14` in the opcode enum with **no call site** in any of
+> the 4,614 chunks; every range subscription travels in opcode 37. Opcode 14 is
+> a legacy enum entry in this build and its payload shape is not recoverable.
 
 ## FBC-CHANNEL — Channels, threads, forums
 
@@ -460,11 +479,19 @@ are excluded from the denominator and are never reported as implemented.
 
 ---
 
-## Next dependency-first slice
+## Next dependency-first slices
 
-`FBC-GUILD` member lists: opcode 14 `GUILD_MEMBER_LIST_UPDATE` range
-subscriptions on top of the ETF transport, unblocking FBC-PRESENCE and the
-member panel. It depends only on FBC-GATEWAY, which this increment advanced.
+1. **FBC-GUILD member panel.** The lazy member-list transport and row state
+   machine have landed; what remains is the controller and sidebar cut that
+   drives range subscriptions from the panel's scroll position and renders the
+   server-authoritative groups. This also unblocks FBC-PRESENCE, because a
+   member-list item is where the desktop transport first sees presence.
+2. **FBC-GATEWAY zstd-stream.** A pure-Dart RFC 8878 decoder. The reference
+   corpus is already built (`tool/generate_zstd_vectors.py`, 22 vectors from
+   libzstd 1.5.7 plus a streaming and rejection set), so the implementation has
+   an objective oracle before a line of it is written.
+3. **FBC-READSTATE server acknowledgement.** Unread state currently never
+   leaves the machine.
 
 ## Legal boundary
 

@@ -20,7 +20,7 @@ do not count as desktop-user chat parity.
 | Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
 | Reactions and pins | Ready | Desktop-user message routes |
 | Threads | Partial | Create from message; initial Gateway thread hydration |
-| Member list and presence | Partial | Live dispatches only; no Bot member enumeration |
+| Member list and presence | Partial | Lazy member-list transport, `member_list_id` derivation and row state machine are implemented; the sidebar still groups a flat list locally |
 | Search | Local only | Loaded/cached workspace; Discord server search absent |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Voice/video/screen share | Not ready for desktop-user chat | Existing Bot/activity-lobby paths are separate |

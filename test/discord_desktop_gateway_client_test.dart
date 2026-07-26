@@ -7,6 +7,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
 import 'package:flucord/src/data/discord/discord_etf_codec.dart';
+import 'package:flucord/src/data/discord/discord_member_list_ranges.dart';
 
 void main() {
   test('dials the observed encoding without unsupported compression', () async {
@@ -95,6 +96,127 @@ void main() {
       () => snapshot.guilds.single['name'] = 'changed',
       throwsUnsupportedError,
     );
+  });
+
+  test('subscribes member-list ranges through opcode 37', () async {
+    final socket = _MemoryDesktopWebSocket();
+    final gateway = DiscordDesktopGatewayClient(
+      authorization: 'account-session',
+      properties: const {'os': 'Windows'},
+      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+    );
+    addTearDown(gateway.close);
+
+    await gateway.connect('wss://gateway.discord.gg');
+    socket.receiveTerm(const {
+      'op': 0,
+      's': 1,
+      't': 'READY',
+      'd': {
+        'session_id': 'session',
+        'user': {'id': 'me'},
+        'guilds': [
+          {'id': 'guild'},
+        ],
+        'private_channels': <Object?>[],
+      },
+    });
+    await _waitFor(() => socket.terms.any((frame) => frame['op'] == 37));
+    final readySubscriptions = socket.terms.length;
+
+    gateway.subscribeMemberRanges(
+      guildId: 'guild',
+      channelId: 'channel',
+      ranges: DiscordMemberListRanges.initial,
+    );
+    // An identical resubscribe must not reach the socket.
+    gateway.subscribeMemberRanges(
+      guildId: 'guild',
+      channelId: 'channel',
+      ranges: DiscordMemberListRanges.initial,
+    );
+
+    final frames = socket.terms
+        .where((frame) => frame['op'] == 37)
+        .toList(growable: false);
+    expect(socket.terms.length, readySubscriptions + 1);
+
+    final subscriptions = frames.last['d']! as Map<String, Object?>;
+    final guild =
+        (subscriptions['subscriptions']! as Map<String, Object?>)['guild']!
+            as Map<String, Object?>;
+    expect(guild['typing'], isTrue);
+    expect(guild['threads'], isTrue);
+    expect(guild['member_updates'], isFalse);
+    expect(guild['channels'], {
+      'channel': [
+        [0, 99],
+      ],
+    });
+
+    gateway.unsubscribeMemberRanges(guildId: 'guild', channelId: 'channel');
+    final last =
+        (socket.terms.last['d']! as Map<String, Object?>)['subscriptions']!
+            as Map<String, Object?>;
+    expect((last['guild']! as Map<String, Object?>)['channels'], isEmpty);
+  });
+
+  test('replays subscriptions after a reconnect', () async {
+    final socket = _MemoryDesktopWebSocket();
+    final gateway = DiscordDesktopGatewayClient(
+      authorization: 'account-session',
+      properties: const {'os': 'Windows'},
+      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+    );
+    addTearDown(gateway.close);
+
+    await gateway.connect('wss://gateway.discord.gg');
+    socket.receiveTerm(const {
+      'op': 0,
+      's': 1,
+      't': 'READY',
+      'd': {
+        'session_id': 'session',
+        'user': {'id': 'me'},
+        'guilds': [
+          {'id': 'guild'},
+        ],
+        'private_channels': <Object?>[],
+      },
+    });
+    await _waitFor(() => socket.terms.any((frame) => frame['op'] == 37));
+    gateway.subscribeMemberRanges(
+      guildId: 'guild',
+      channelId: 'channel',
+      ranges: DiscordMemberListRanges.initial,
+    );
+    socket.sent.clear();
+
+    // A second READY stands in for a reconnect: the server keeps no
+    // subscription state, so every open channel has to be re-sent.
+    socket.receiveTerm(const {
+      'op': 0,
+      's': 2,
+      't': 'READY',
+      'd': {
+        'session_id': 'session-2',
+        'user': {'id': 'me'},
+        'guilds': [
+          {'id': 'guild'},
+        ],
+        'private_channels': <Object?>[],
+      },
+    });
+    await _waitFor(() => socket.terms.any((frame) => frame['op'] == 37));
+
+    final replayed =
+        (socket.terms.last['d']! as Map<String, Object?>)['subscriptions']!
+            as Map<String, Object?>;
+    expect((replayed['guild']! as Map<String, Object?>)['channels'], {
+      'channel': [
+        [0, 99],
+      ],
+    });
   });
 
   test('keeps working when the profile selects the JSON encoding', () async {

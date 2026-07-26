@@ -407,6 +407,21 @@ browser runtime or dependency on Discord's private user API.
     events, classifies every one against `docs/DISCORD_BUNDLE_COVERAGE.md`, and
     fails when a Discord update introduces an unclassified capability.
 
+72. In progress: lazy guild member lists. Static analysis of the installed
+    renderer shows the current client never sends the legacy opcode 14; every
+    member-list range travels in the bulk opcode 37 `channels` map. The
+    transport and state layer is complete: `member_list_id` derivation through
+    a server-supplied value, the `everyone` visibility class, or MurmurHash3
+    x86-32 over the sorted `VIEW_CHANNEL` overwrite tokens; page-aligned range
+    computation with the mandatory head page and half-viewport overscan; a
+    five-channel per-guild subscription cache whose eviction is the
+    unsubscribe; opcode 37 emission with unchanged-range suppression and
+    reconnect replay; and the `SYNC`/`INVALIDATE`/`INSERT`/`UPDATE`/`DELETE`
+    state machine over Discord's flat header-and-member row space. All seven
+    new files hold 100% line coverage and the hash is pinned to twelve `mmh3`
+    reference values. The controller and member-panel cut, plus live evidence
+    for `GUILD_MEMBER_LIST_UPDATE`, remain.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the
