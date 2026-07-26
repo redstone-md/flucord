@@ -1,0 +1,388 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
+import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
+import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/voice_dave.dart';
+
+void main() {
+  test('a session with no call plane refuses to join a call', () async {
+    final gateway = _FakeCallGateway();
+    // No callGateway: this is the shape a bot transport has.
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+    )..setCurrentUserId('me');
+    final events = <VoiceSignalingEvent>[];
+    final subscription = service.voiceEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(service.close);
+    addTearDown(gateway.close);
+
+    await service.joinCall(channelId: 'dm-1');
+    await _flushEvents();
+
+    expect(gateway.callStates, isEmpty);
+    expect(
+      (events.single as VoiceSignalingStatusEvent).status,
+      VoiceConnectionStatus.failure,
+    );
+  });
+
+  test('guild voice and a DM call are independent sessions', () async {
+    final gateway = _FakeCallGateway();
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+      callGateway: gateway,
+      voiceClientFactory: (credentials, dave) => _InertVoiceClient(),
+    )..setCurrentUserId('me');
+    addTearDown(service.close);
+    addTearDown(gateway.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    await service.joinCall(channelId: 'dm-1');
+    await _flushEvents();
+
+    // Leaving the call must not disturb the guild session, and the two never
+    // collide on a key even though both are snowflakes.
+    await service.leaveCall('dm-1');
+    expect(gateway.callStates.last, ('dm-1', false));
+    expect(gateway.updates.last.channelId, 'voice-1');
+
+    await service.leaveVoiceChannel('guild-1');
+    expect(gateway.updates.last.channelId, isNull);
+  });
+
+  test('media frames follow the session that was joined last', () async {
+    final gateway = _FakeCallGateway();
+    final clients = <_InertVoiceClient>[];
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+      callGateway: gateway,
+      voiceClientFactory: (credentials, dave) {
+        final client = _InertVoiceClient();
+        clients.add(client);
+        return client;
+      },
+    )..setCurrentUserId('me');
+    addTearDown(service.close);
+    addTearDown(gateway.close);
+
+    // Nothing is connected, so there is no transport to hand a frame to.
+    expect(() => service.sendOpusFrame(Uint8List(1)), throwsStateError);
+    await service.finishSpeaking();
+
+    await service.joinCall(channelId: 'dm-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'user_id': 'me',
+      'channel_id': 'dm-1',
+      'session_id': 'voice-session',
+    });
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': null,
+      'channel_id': 'dm-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    await _flushEvents();
+
+    expect(clients, hasLength(1));
+    service.sendOpusFrame(Uint8List.fromList([1, 2]));
+    await service.finishSpeaking();
+    expect(clients.single.frames, hasLength(1));
+    expect(clients.single.finished, isTrue);
+  });
+
+  group('session assembler', () {
+    test('keys a private call on its channel', () {
+      final assembler = DiscordVoiceSessionAssembler();
+
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {
+            'guild_id': null,
+            'channel_id': 'dm-1',
+            'token': 'voice-token',
+            'endpoint': 'voice.example.test',
+          },
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+
+      final credentials = assembler.accept(
+        eventName: 'VOICE_STATE_UPDATE',
+        data: const {
+          'user_id': 'me',
+          'channel_id': 'dm-1',
+          'session_id': 'voice-session',
+        },
+        currentUserId: 'me',
+      );
+
+      expect(credentials!.guildId, isNull);
+      expect(credentials.channelId, 'dm-1');
+      expect(credentials.serverId, 'dm-1');
+      expect(credentials.sessionKey, const VoiceSessionKey.privateCall('dm-1'));
+    });
+
+    test('a call disconnect drops the half-built call session', () {
+      final assembler = DiscordVoiceSessionAssembler()
+        ..accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {
+            'user_id': 'me',
+            'channel_id': 'dm-1',
+            'session_id': 'voice-session',
+          },
+          currentUserId: 'me',
+        );
+
+      // A private-call disconnect names neither guild nor channel.
+      assembler.accept(
+        eventName: 'VOICE_STATE_UPDATE',
+        data: const {'user_id': 'me', 'channel_id': null},
+        currentUserId: 'me',
+      );
+
+      // The stale session id must not be paired with the next call's token.
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {
+            'channel_id': 'dm-1',
+            'token': 'voice-token',
+            'endpoint': 'voice.example.test',
+          },
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+    });
+
+    test('a guild disconnect drops only that guild', () {
+      final assembler = DiscordVoiceSessionAssembler()
+        ..accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {
+            'user_id': 'me',
+            'guild_id': 'guild-1',
+            'channel_id': 'voice-1',
+            'session_id': 'voice-session',
+          },
+          currentUserId: 'me',
+        )
+        ..accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {
+            'user_id': 'me',
+            'guild_id': 'guild-1',
+            'channel_id': null,
+          },
+          currentUserId: 'me',
+        );
+
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {
+            'guild_id': 'guild-1',
+            'token': 'voice-token',
+            'endpoint': 'voice.example.test',
+          },
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+    });
+
+    test('a server update with no credentials drops the session', () {
+      final assembler = DiscordVoiceSessionAssembler()
+        ..accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {
+            'user_id': 'me',
+            'channel_id': 'dm-1',
+            'session_id': 'voice-session',
+          },
+          currentUserId: 'me',
+        )
+        ..accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {'channel_id': 'dm-1', 'endpoint': ''},
+          currentUserId: 'me',
+        );
+
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {
+            'channel_id': 'dm-1',
+            'token': 'voice-token',
+            'endpoint': 'voice.example.test',
+          },
+          currentUserId: 'me',
+        ),
+        isNull,
+        reason: 'the session id went with the dropped record',
+      );
+    });
+
+    test('ignores frames it cannot attribute', () {
+      final assembler = DiscordVoiceSessionAssembler();
+
+      expect(
+        assembler.accept(
+          eventName: 'MESSAGE_CREATE',
+          data: const {'id': 'm-1'},
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {'user_id': 'somebody-else', 'channel_id': 'dm-1'},
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+      // Neither a guild nor a channel: no session this could belong to.
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_SERVER_UPDATE',
+          data: const {'token': 'voice-token', 'endpoint': 'voice.test'},
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+      assembler.clearAll();
+    });
+  });
+
+  group('session key', () {
+    test('a guild key and a call key never collide', () {
+      const guild = VoiceSessionKey.guild('same-id');
+      const call = VoiceSessionKey.privateCall('same-id');
+
+      expect(guild.isPrivateCall, isFalse);
+      expect(call.isPrivateCall, isTrue);
+      expect(guild, isNot(call));
+      expect({guild, call}, hasLength(2));
+      expect(guild, const VoiceSessionKey.guild('same-id'));
+      expect(guild.hashCode, const VoiceSessionKey.guild('same-id').hashCode);
+      expect('$call', contains('privateCall'));
+      expect('$guild', contains('guild'));
+    });
+  });
+}
+
+Future<void> _flushEvents() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
+
+final class _GuildUpdate {
+  const _GuildUpdate(this.guildId, this.channelId);
+
+  final String guildId;
+  final String? channelId;
+}
+
+final class _FakeCallGateway
+    implements DiscordVoiceStateGateway, DiscordCallGateway {
+  final StreamController<DiscordGatewayEvent> _events =
+      StreamController.broadcast();
+  final List<_GuildUpdate> updates = [];
+  final List<(String, bool)> callStates = [];
+  final List<String> watched = [];
+
+  @override
+  Stream<DiscordGatewayEvent> get events => _events.stream;
+
+  void dispatch(String name, Map<String, Object?> data) =>
+      _events.add(DiscordGatewayDispatch(name: name, data: data));
+
+  Future<void> close() => _events.close();
+
+  @override
+  void connectToCall(String channelId) => watched.add(channelId);
+
+  @override
+  void updateCallVoiceState({
+    required String channelId,
+    required bool connected,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) => callStates.add((channelId, connected));
+
+  @override
+  void updateVoiceState({
+    required String guildId,
+    required String? channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) => updates.add(_GuildUpdate(guildId, channelId));
+
+  @override
+  void pingVoiceServer() {}
+}
+
+final class _InertVoiceClient
+    implements DiscordVoiceClient, VoiceAudioTransport {
+  final StreamController<VoiceSignalingEvent> _events =
+      StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
+      StreamController.broadcast();
+  final List<Uint8List> frames = [];
+  bool finished = false;
+
+  @override
+  Stream<VoiceSignalingEvent> get events => _events.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _remoteAudio.stream;
+
+  @override
+  void sendOpusFrame(Uint8List opusFrame) => frames.add(opusFrame);
+
+  @override
+  Future<void> finishSpeaking() async => finished = true;
+
+  @override
+  Future<void> connect() async {}
+
+  @override
+  Future<void> close() async {
+    await _events.close();
+    await _remoteAudio.close();
+  }
+}
+
+final class _CapabilityOnlyDaveService implements VoiceDaveService {
+  @override
+  int get maxProtocolVersion => 1;
+
+  @override
+  VoiceDaveEncryptor createEncryptor() =>
+      throw UnsupportedError('Media encryption is outside this test');
+
+  @override
+  VoiceDaveDecryptor createDecryptor() =>
+      throw UnsupportedError('Media decryption is outside this test');
+
+  @override
+  VoiceDaveSession createSession({
+    required int protocolVersion,
+    required String channelId,
+    required String selfUserId,
+  }) => throw UnsupportedError('Not used by the signalling boundary');
+}
