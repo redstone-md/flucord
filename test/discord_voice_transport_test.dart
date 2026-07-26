@@ -227,14 +227,27 @@ void main() {
       expect(speaking.isSpeaking, isTrue);
       expect(client.userIdForSsrc(77), 'remote-1');
 
+      // Opcode 12 is the peer's media layout. It must map their audio SSRC and
+      // must not be mistaken for a departure.
       socket.addJson({
         'op': 12,
         'seq': 14,
+        'd': {'user_id': 'remote-2', 'audio_ssrc': 91, 'video_ssrc': 92},
+      });
+      await _flushEvents();
+
+      expect(client.userIdForSsrc(91), 'remote-2');
+      expect(events.whereType<VoiceUserDisconnectedEvent>(), isEmpty);
+
+      socket.addJson({
+        'op': 13,
+        'seq': 15,
         'd': {'user_id': 'remote-1'},
       });
       await _flushEvents();
 
       expect(client.userIdForSsrc(77), isNull);
+      expect(client.userIdForSsrc(91), 'remote-2');
       expect(events.whereType<VoiceUserDisconnectedEvent>(), hasLength(1));
 
       client.sendDaveMessage(opcode: 26, payload: [3, 2, 1]);

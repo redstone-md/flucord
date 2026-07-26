@@ -177,6 +177,8 @@ final class DiscordVoiceGatewayClient
         _canResume = true;
         _emitStatus(VoiceConnectionStatus.ready);
       case 12:
+        if (data is Map) _handleClientVideo(data.cast<String, Object?>());
+      case 13:
         if (data is Map) _handleClientDisconnect(data.cast<String, Object?>());
     }
   }
@@ -237,6 +239,19 @@ final class DiscordVoiceGatewayClient
         ),
       );
     }
+  }
+
+  /// Opcode 12 announces a peer's media layout, not their departure.
+  ///
+  /// It arrives when someone joins or changes their video state and carries the
+  /// SSRCs they will send on. Taking `audio_ssrc` from here means a peer is
+  /// resolvable before they ever speak, where opcode 5 only reveals them at
+  /// their first speaking flag.
+  void _handleClientVideo(Map<String, Object?> data) {
+    final userId = data['user_id'];
+    final audioSsrc = data['audio_ssrc'];
+    if (userId is! String || audioSsrc is! int || audioSsrc == 0) return;
+    _userIdsBySsrc[audioSsrc] = userId;
   }
 
   void _handleClientDisconnect(Map<String, Object?> data) {
