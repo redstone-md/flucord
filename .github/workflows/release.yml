@@ -85,10 +85,29 @@ jobs:
           $tag = '${{ github.ref_name }}'
           $releaseDirectory = Resolve-Path 'build/windows/x64/runner/Release'
           $distributionDirectory = Join-Path $PWD 'build/distribution'
+          $packageDirectory = Join-Path $distributionDirectory "flucord-windows-x64-$tag"
           New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
+          New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+          Copy-Item -Path (Join-Path $releaseDirectory '*') -Destination $packageDirectory -Recurse -Force
+          Copy-Item -LiteralPath 'LICENSE', 'NOTICE' -Destination $packageDirectory -Force
+
+          $requiredFiles = @(
+            'flucord.exe',
+            'flutter_windows.dll',
+            'data/flutter_assets/AssetManifest.bin',
+            'LICENSE',
+            'NOTICE'
+          )
+          foreach ($requiredFile in $requiredFiles) {
+            $requiredPath = Join-Path $packageDirectory $requiredFile
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+              throw "Release package is missing required file: $requiredFile"
+            }
+          }
+
           $archiveName = "flucord-windows-x64-$tag.zip"
           $archivePath = Join-Path $distributionDirectory $archiveName
-          Compress-Archive -Path (Join-Path $releaseDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+          Compress-Archive -Path (Join-Path $packageDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
           $checksumPath = Join-Path $distributionDirectory 'SHA256SUMS.txt'
           [System.IO.File]::WriteAllText(
@@ -111,10 +130,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' `
-            '${{ steps.package.outputs.archive }}' `
-            '${{ steps.package.outputs.checksums }}' `
-            --verify-tag `
-            --latest `
-            --title "Flucord ${{ github.ref_name }}" `
-            --notes-file 'build/distribution/RELEASE_NOTES.md'
+          $tag = '${{ github.ref_name }}'
+          $archive = '${{ steps.package.outputs.archive }}'
+          $checksums = '${{ steps.package.outputs.checksums }}'
+          $notes = 'build/distribution/RELEASE_NOTES.md'
+          gh release view $tag --json id *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            gh release edit $tag `
+              --verify-tag `
+              --latest `
+              --title "Flucord $tag" `
+              --notes-file $notes
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update release $tag."
+            }
+            gh release upload $tag $archive $checksums --clobber
+          } else {
+            gh release create $tag $archive $checksums `
+              --verify-tag `
+              --latest `
+              --title "Flucord $tag" `
+              --notes-file $notes
+          }
