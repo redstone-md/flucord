@@ -388,6 +388,25 @@ browser runtime or dependency on Discord's private user API.
     hydration, Unicode-safe identity projection, and vault-backed restart
     restoration were verified on Windows against a test account.
 
+70. Completed: replace JSON Gateway framing with the installed client's binary
+    External Term Format encoding. A dependency-free Dart codec implements the
+    erlpack subset the renderer's parser configuration describes, including the
+    atom table, byte-array `STRING_EXT`, UTF-8 binaries, big integers, bit
+    binaries, and explicit rejection of improper lists, payload compression,
+    unsupported tags, truncation, trailing bytes, and unbounded nesting. The
+    WinHTTP and `dart:io` sockets now carry binary frames in both directions,
+    the encoding sits behind one framing contract that keeps JSON selectable,
+    and opcode 37 batching counts encoded ETF bytes. The codec, decoder,
+    encoder, and framing files hold 100% line coverage, and Discord's live
+    Gateway acknowledged an ETF heartbeat Flucord encoded. `compress=zstd-stream`
+    is deliberately omitted until a streaming Zstandard decoder exists.
+71. Completed: add `tool/inventory_discord_bundles.ps1`, a reproducible static
+    inventory of the installed desktop client, its 17 native modules, and the
+    complete 4,614-chunk renderer corpus resolved through the webpack chunk map.
+    It extracts endpoint constants, REST path segments, and Gateway dispatch
+    events, classifies every one against `docs/DISCORD_BUNDLE_COVERAGE.md`, and
+    fails when a Discord update introduces an unclassified capability.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

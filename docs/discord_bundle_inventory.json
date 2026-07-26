@@ -1,0 +1,759 @@
+﻿{
+    "schema":  1,
+    "installedClient":  {
+                            "version":  "1.0.9249",
+                            "artifacts":  [
+                                              {
+                                                  "path":  "Discord.exe",
+                                                  "bytes":  195518392,
+                                                  "sha256":  "ac4d59cc3b45774bce8f2457eb858051a65e6f7ffe2b23dadb4e0c2fc01c9324"
+                                              }
+                                          ],
+                            "modules":  [
+                                            {
+                                                "name":  "discord_cloudsync-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_cloudsync/discord_cloudsync.node",
+                                                                      "bytes":  4415928,
+                                                                      "sha256":  "6dba069f71c4c7f26f1551dcf1f922f7c6b4feb7610beccf017b1281660926e9"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_desktop_core-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_desktop_core/core.asar",
+                                                                      "bytes":  1678741,
+                                                                      "sha256":  "870db2282a600b9203a0537d689e42021bc641b62494d36939aacff64b1325bf"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_desktop_overlay-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_desktop_overlay/discord_desktop_overlay.node",
+                                                                      "bytes":  682936,
+                                                                      "sha256":  "9efe16a1e2f80300bc33142e728b18c42514eb7de80a20d44ceb8e87dad8fa44"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_dispatch-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_dispatch/discord_dispatch.node",
+                                                                      "bytes":  10063800,
+                                                                      "sha256":  "d4dbdebf5dfdaa9baf4ccb3dccb0045a1d33403071685c791dee024b2d3253c0"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_erlpack-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_erlpack/discord_erlpack.node",
+                                                                      "bytes":  567736,
+                                                                      "sha256":  "d9e83b5a52324dff15994502f985603be05adb817e8d4c1a97a36f382985b8fb"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_game_utils-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_game_utils/discord_game_utils.node",
+                                                                      "bytes":  1028024,
+                                                                      "sha256":  "7645e2394ad758a9b86fcd89c6ee4b8e2b3a4ec7ec01eb01a34d46af26af8c9c"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_hook-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_hook/7dee28cab490a6/discord_overlay_sdk_x64.dll",
+                                                                      "bytes":  1110456,
+                                                                      "sha256":  "ab8c3f8209d13df6ac98bb89714c4767a53f13cd34450d6c1ed9f3aaf07fb396"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_hook/7dee28cab490a6/discord_overlay_sdk_x86.dll",
+                                                                      "bytes":  949176,
+                                                                      "sha256":  "72bf204f8f79a794ff678c0dc0b07da3858b55e53890346d102e1e290bd022f4"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_hook/7dee28cab490a6/DiscordHook.dll",
+                                                                      "bytes":  1129912,
+                                                                      "sha256":  "6da9974127874292e7e202ab09ea500dcb8dcbfc238f04649e23e142812f30e0"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_hook/7dee28cab490a6/DiscordHook64.dll",
+                                                                      "bytes":  1297336,
+                                                                      "sha256":  "88d537702f5fc1b29ca216a02276c3a86fc10371ab8eada6b5aad7e3090cdd2d"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_hook/discord_hook.node",
+                                                                      "bytes":  943032,
+                                                                      "sha256":  "4c599c82427160e8c63f5cb5136cc5c65243a693ecdadf7ddf83061a3ee7e912"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_krisp-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_krisp/discord_krisp.node",
+                                                                      "bytes":  15071160,
+                                                                      "sha256":  "6b0f900465bd494be4b121fbfb20a513464631f046e4a90783e27646ac54c304"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_media-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_media/discord_media.node",
+                                                                      "bytes":  740280,
+                                                                      "sha256":  "01ba727d4689f14d9f2097a6db1078f2ddece0e4ffa07e2fa562a31d3868f323"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_modules-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_modules/7dee28cab490a6/2/discord_game_sdk_x64.dll",
+                                                                      "bytes":  3783512,
+                                                                      "sha256":  "f1296e896c7943ac644610ecbec607ead011ca9193d967a997766741ecd66ceb"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_modules/7dee28cab490a6/2/discord_game_sdk_x86.dll",
+                                                                      "bytes":  3076952,
+                                                                      "sha256":  "26d7bf0aa9aae5a5826b3412cbbf05553be417e24888c7911bab35b607836a6a"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_modules/7dee28cab490a6/discord_aegis_x64.dll",
+                                                                      "bytes":  490424,
+                                                                      "sha256":  "a663f7a89114d226a76e482cfa26d36a882442b1ec6af40411d47532ecbc7be6"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_modules/7dee28cab490a6/discord_aegis_x86.dll",
+                                                                      "bytes":  372664,
+                                                                      "sha256":  "ded324f105d81b343f5242130730be6c1e4c3c675d7bd5c275887da583e4469f"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_modules/discord_modules.node",
+                                                                      "bytes":  517048,
+                                                                      "sha256":  "8eed7ee6870130a816ab484449a885f624b471db0c655ccda371de718059d005"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_notifications-1",
+                                                "artifacts":  [
+
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_overlay2-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_overlay2/discord_overlay2.node",
+                                                                      "bytes":  935352,
+                                                                      "sha256":  "967ac4a0e7d705c45f5f383e76ca8d55c809c615cd0cdb9803417d1a52f1bdd1"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_rpc-1",
+                                                "artifacts":  [
+
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_spellcheck-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_spellcheck/node_modules/cld/build/Release/cld.node",
+                                                                      "bytes":  2017720,
+                                                                      "sha256":  "f064076e3b3802c1e2c0ad524f9f9dc12e01dc2e0a1c3d0c236d82f94371c06f"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_utils-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_utils/discord_utils.node",
+                                                                      "bytes":  2121144,
+                                                                      "sha256":  "005266b1e081bbe29e72301fbfa8d2b2ee0d156891ccd531df5b26c00d46f419"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_utils/node_modules/windows-notification-state/build/Release/notificationstate.node",
+                                                                      "bytes":  141240,
+                                                                      "sha256":  "86f4555887255522ba88d804751575a3b31b55e2701b70111fc51b9efa5e0c51"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_voice-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_voice/discord_voice.node",
+                                                                      "bytes":  14821304,
+                                                                      "sha256":  "8a77b89b94e0689bbdec65606bbab56fd315c8a7a19e8dd867727c5d15c566ec"
+                                                                  },
+                                                                  {
+                                                                      "path":  "discord_voice/mediapipe.dll",
+                                                                      "bytes":  8675256,
+                                                                      "sha256":  "199d56631358e8207ef22f6b856b1fa9c923e5304ac1618e0cf0a75f8edab7d5"
+                                                                  }
+                                                              ]
+                                            },
+                                            {
+                                                "name":  "discord_zstd-1",
+                                                "artifacts":  [
+                                                                  {
+                                                                      "path":  "discord_zstd/discord_zstd.node",
+                                                                      "bytes":  746936,
+                                                                      "sha256":  "6b268c9f895a686c2073b43ee1d354844ca1cff43a2082d00a6e764a6f02c836"
+                                                                  }
+                                                              ]
+                                            }
+                                        ]
+                        },
+    "renderer":  {
+                     "entryChunk":  "web.b8b5ddfa0f88ae29.js",
+                     "chunkCount":  4614,
+                     "totalBytes":  157588028,
+                     "corpusDigest":  "69c571844f48834f9c90a187f055b7958f452771445a0dbb8d9a7b72f5afd168"
+                 },
+    "symbols":  {
+                    "endpointConstants":  949,
+                    "endpointSegments":  165,
+                    "gatewayDispatchEvents":  175
+                },
+    "classification":  {
+                           "FBC-GATEWAY":  {
+                                               "segments":  [
+
+                                                            ],
+                                               "endpointCount":  0,
+                                               "events":  [
+                                                              "DELETED_ENTITY_IDS",
+                                                              "READY_SUPPLEMENTAL",
+                                                              "RESUMED",
+                                                              "SESSIONS_REPLACE",
+                                                              "STATE_UPDATE"
+                                                          ]
+                                           },
+                           "FBC-ACCOUNT":  {
+                                               "segments":  [
+                                                                "activate",
+                                                                "age-verification",
+                                                                "auth",
+                                                                "authorize-ip",
+                                                                "captcha",
+                                                                "download-qr-code",
+                                                                "handoff",
+                                                                "login",
+                                                                "mfa",
+                                                                "mweb-handoff",
+                                                                "phone-verifications",
+                                                                "register",
+                                                                "reject-ip",
+                                                                "reject-mfa",
+                                                                "reset",
+                                                                "sso",
+                                                                "sso-token",
+                                                                "verify",
+                                                                "verify-hub-email",
+                                                                "verify-request",
+                                                                "wasntme"
+                                                            ],
+                                               "endpointCount":  53,
+                                               "events":  [
+                                                              "AUTH_SESSION_CHANGE",
+                                                              "AUTHENTICATOR_CREATE",
+                                                              "AUTHENTICATOR_DELETE",
+                                                              "AUTHENTICATOR_UPDATE"
+                                                          ]
+                                           },
+                           "FBC-PROFILE":  {
+                                               "segments":  [
+                                                                "badge-icons",
+                                                                "settings",
+                                                                "unique-username",
+                                                                "users"
+                                                            ],
+                                               "endpointCount":  213,
+                                               "events":  [
+                                                              "USER_BADGE_STATE_UPDATE",
+                                                              "USER_NOTE_UPDATE",
+                                                              "USER_SETTINGS_PROTO_UPDATE",
+                                                              "USER_UPDATE"
+                                                          ]
+                                           },
+                           "FBC-PRESENCE":  {
+                                                "segments":  [
+
+                                                             ],
+                                                "endpointCount":  0,
+                                                "events":  [
+                                                               "PRESENCE_UPDATE",
+                                                               "PRESENCES_REPLACE",
+                                                               "TYPING_START"
+                                                           ]
+                                            },
+                           "FBC-RELATIONSHIPS":  {
+                                                     "segments":  [
+                                                                      "friend-finder",
+                                                                      "friend-suggestions",
+                                                                      "message-requests"
+                                                                  ],
+                                                     "endpointCount":  4,
+                                                     "events":  [
+                                                                    "CHANNEL_RECIPIENT_ADD",
+                                                                    "CHANNEL_RECIPIENT_REMOVE",
+                                                                    "FRIEND_SUGGESTION_CREATE",
+                                                                    "FRIEND_SUGGESTION_DELETE",
+                                                                    "GAME_RELATIONSHIP_ADD",
+                                                                    "GAME_RELATIONSHIP_REMOVE",
+                                                                    "MESSAGE_REQUEST_NOTIFICATION_SENT",
+                                                                    "RELATIONSHIP_ADD",
+                                                                    "RELATIONSHIP_REMOVE",
+                                                                    "RELATIONSHIP_UPDATE"
+                                                                ]
+                                                 },
+                           "FBC-GUILD":  {
+                                             "segments":  [
+                                                              "community",
+                                                              "discoverable-guilds",
+                                                              "discovery",
+                                                              "generated-pools",
+                                                              "gravity-content",
+                                                              "gravity-custom-guild-score",
+                                                              "gravity-recommended-guilds",
+                                                              "gravity-topic-guilds",
+                                                              "guild-discovery",
+                                                              "guilds",
+                                                              "hub-waitlist",
+                                                              "join-requests",
+                                                              "member-verification",
+                                                              "member-verification-for-hub",
+                                                              "roles",
+                                                              "template",
+                                                              "templates",
+                                                              "widget-configs"
+                                                          ],
+                                             "endpointCount":  194,
+                                             "events":  [
+                                                            "GUILD_DELETE",
+                                                            "GUILD_DIRECTORY_ENTRY_CREATE",
+                                                            "GUILD_DIRECTORY_ENTRY_DELETE",
+                                                            "GUILD_DIRECTORY_ENTRY_UPDATE",
+                                                            "GUILD_JOIN_REQUEST_CREATE",
+                                                            "GUILD_JOIN_REQUEST_DELETE",
+                                                            "GUILD_JOIN_REQUEST_UPDATE",
+                                                            "GUILD_MEMBER_ADD",
+                                                            "GUILD_MEMBER_LIST_UPDATE",
+                                                            "GUILD_MEMBER_REMOVE",
+                                                            "GUILD_MEMBER_UPDATE",
+                                                            "GUILD_MEMBERS_CHUNK",
+                                                            "GUILD_UPDATE"
+                                                        ]
+                                         },
+                           "FBC-CHANNEL":  {
+                                               "segments":  [
+                                                                "channels",
+                                                                "gravity-custom-channel-scores",
+                                                                "threads"
+                                                            ],
+                                               "endpointCount":  86,
+                                               "events":  [
+                                                              "CHANNEL_INFO",
+                                                              "CHANNEL_MEMBER_COUNT_UPDATE",
+                                                              "THREAD_MEMBER_LIST_UPDATE",
+                                                              "THREAD_MEMBER_UPDATE",
+                                                              "THREAD_MEMBERS_UPDATE"
+                                                          ]
+                                           },
+                           "FBC-MESSAGE":  {
+                                               "segments":  [
+                                                                "attachments",
+                                                                "messages",
+                                                                "messages-log",
+                                                                "unfurler"
+                                                            ],
+                                               "endpointCount":  8,
+                                               "events":  [
+                                                              "LAST_MESSAGES",
+                                                              "MESSAGE_POLL_VOTE_ADD",
+                                                              "MESSAGE_POLL_VOTE_ADD_MANY",
+                                                              "MESSAGE_POLL_VOTE_REMOVE",
+                                                              "MESSAGE_REACTION_ADD",
+                                                              "MESSAGE_REACTION_ADD_MANY",
+                                                              "MESSAGE_REACTION_REMOVE",
+                                                              "MESSAGE_REACTION_REMOVE_ALL",
+                                                              "MESSAGE_REACTION_REMOVE_EMOJI",
+                                                              "SAVED_MESSAGE_CREATE",
+                                                              "SAVED_MESSAGE_DELETE"
+                                                          ]
+                                           },
+                           "FBC-READSTATE":  {
+                                                 "segments":  [
+                                                                  "disable-email-notifications",
+                                                                  "disable-server-highlight-notifications",
+                                                                  "icymi",
+                                                                  "read-states"
+                                                              ],
+                                                 "endpointCount":  4,
+                                                 "events":  [
+                                                                "DM_SETTINGS_UPSELL_SHOW",
+                                                                "FORUM_UNREADS",
+                                                                "GENERIC_PUSH_NOTIFICATION_SENT",
+                                                                "GUILD_FEATURE_ACK",
+                                                                "NOTIFICATION_CENTER_ITEM_COMPLETED",
+                                                                "NOTIFICATION_CENTER_ITEM_CREATE",
+                                                                "NOTIFICATION_CENTER_ITEM_DELETE",
+                                                                "NOTIFICATION_CENTER_ITEMS_ACK",
+                                                                "NOTIFICATION_SETTINGS_UPDATE",
+                                                                "REACTION_NOTIFICATION_SENT",
+                                                                "RECENT_MENTION_DELETE",
+                                                                "USER_GUILD_SETTINGS_UPDATE",
+                                                                "USER_NON_CHANNEL_ACK"
+                                                            ]
+                                             },
+                           "FBC-EXPRESSION":  {
+                                                  "segments":  [
+                                                                   "emojis",
+                                                                   "gifs",
+                                                                   "giphy",
+                                                                   "klipy",
+                                                                   "soundboard-default-sounds",
+                                                                   "soundboard-sounds",
+                                                                   "sticker-packs",
+                                                                   "stickers",
+                                                                   "tenor"
+                                                               ],
+                                                  "endpointCount":  21,
+                                                  "events":  [
+                                                                 "GUILD_EMOJIS_UPDATE",
+                                                                 "GUILD_SOUNDBOARD_SOUND_CREATE",
+                                                                 "GUILD_SOUNDBOARD_SOUND_DELETE",
+                                                                 "GUILD_SOUNDBOARD_SOUND_UPDATE",
+                                                                 "GUILD_SOUNDBOARD_SOUNDS_UPDATE",
+                                                                 "GUILD_STICKERS_UPDATE",
+                                                                 "SOUNDBOARD_SOUNDS"
+                                                             ]
+                                              },
+                           "FBC-VOICE":  {
+                                             "segments":  [
+                                                              "clips",
+                                                              "conference-mode",
+                                                              "networking",
+                                                              "streams",
+                                                              "voice",
+                                                              "voice-hangouts"
+                                                          ],
+                                             "endpointCount":  15,
+                                             "events":  [
+                                                            "CALL_CREATE",
+                                                            "CALL_DELETE",
+                                                            "CALL_UPDATE",
+                                                            "CLIPS_REMOTE_TRIGGER",
+                                                            "GUILD_RING_START",
+                                                            "GUILD_RING_STOP",
+                                                            "GUILD_ROOM_CONNECT",
+                                                            "GUILD_ROOM_DISCONNECT",
+                                                            "GUILD_ROOM_UPDATE",
+                                                            "STREAM_CREATE",
+                                                            "STREAM_DELETE",
+                                                            "STREAM_SERVER_UPDATE",
+                                                            "STREAM_UPDATE",
+                                                            "VOICE_CHANNEL_EFFECT_SEND",
+                                                            "VOICE_CHANNEL_START_TIME_UPDATE",
+                                                            "VOICE_CHANNEL_STATUS_UPDATE",
+                                                            "VOICE_SERVER_UPDATE",
+                                                            "VOICE_STATE_UPDATE",
+                                                            "VOICE_STATE_UPDATE_BATCH"
+                                                        ]
+                                         },
+                           "FBC-STAGE":  {
+                                             "segments":  [
+                                                              "guild-stages",
+                                                              "stage-instances"
+                                                          ],
+                                             "endpointCount":  4,
+                                             "events":  [
+                                                            "STAGE_INSTANCE_CREATE",
+                                                            "STAGE_INSTANCE_DELETE",
+                                                            "STAGE_INSTANCE_UPDATE"
+                                                        ]
+                                         },
+                           "FBC-EVENTS":  {
+                                              "segments":  [
+                                                               "events",
+                                                               "guild-events"
+                                                           ],
+                                              "endpointCount":  3,
+                                              "events":  [
+                                                             "GUILD_SCHEDULED_EVENT_CREATE",
+                                                             "GUILD_SCHEDULED_EVENT_DELETE",
+                                                             "GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE",
+                                                             "GUILD_SCHEDULED_EVENT_EXCEPTION_DELETE",
+                                                             "GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE",
+                                                             "GUILD_SCHEDULED_EVENT_EXCEPTIONS_DELETE",
+                                                             "GUILD_SCHEDULED_EVENT_UPDATE",
+                                                             "GUILD_SCHEDULED_EVENT_USER_ADD",
+                                                             "GUILD_SCHEDULED_EVENT_USER_REMOVE"
+                                                         ]
+                                          },
+                           "FBC-APPLICATION":  {
+                                                   "segments":  [
+                                                                    "activities",
+                                                                    "activity",
+                                                                    "application-directory",
+                                                                    "application-directory-static",
+                                                                    "applications",
+                                                                    "applications-with-assets",
+                                                                    "apps",
+                                                                    "branches",
+                                                                    "build",
+                                                                    "developers",
+                                                                    "interactions",
+                                                                    "partners",
+                                                                    "platform-application",
+                                                                    "teams",
+                                                                    "unverified-applications"
+                                                                ],
+                                                   "endpointCount":  70,
+                                                   "events":  [
+                                                                  "ACTIVITY_START",
+                                                                  "ACTIVITY_USER_ACTION",
+                                                                  "APPLICATION_COMMAND_AUTOCOMPLETE_RESPONSE",
+                                                                  "APPLICATION_COMMAND_PERMISSIONS_UPDATE",
+                                                                  "GUILD_APPLICATION_COMMAND_INDEX_UPDATE",
+                                                                  "INTERACTION_CREATE",
+                                                                  "INTERACTION_FAILURE",
+                                                                  "INTERACTION_IFRAME_MODAL_CREATE",
+                                                                  "INTERACTION_MODAL_CREATE",
+                                                                  "INTERACTION_SUCCESS",
+                                                                  "USER_APPLICATION_IDENTITY_REMOVE",
+                                                                  "USER_APPLICATION_IDENTITY_UPDATE",
+                                                                  "USER_APPLICATION_REMOVE",
+                                                                  "USER_APPLICATION_UPDATE"
+                                                              ]
+                                               },
+                           "FBC-OAUTH":  {
+                                             "segments":  [
+                                                              "connect",
+                                                              "connections",
+                                                              "integrations",
+                                                              "invite",
+                                                              "invites",
+                                                              "oauth2",
+                                                              "webhooks"
+                                                          ],
+                                             "endpointCount":  36,
+                                             "events":  [
+                                                            "GUILD_INTEGRATIONS_UPDATE",
+                                                            "INTEGRATION_CREATE",
+                                                            "INTEGRATION_DELETE",
+                                                            "OAUTH2_TOKEN_CREATE",
+                                                            "OAUTH2_TOKEN_DELETE",
+                                                            "OAUTH2_TOKEN_REVOKE",
+                                                            "USER_CONNECTIONS_CALLBACK",
+                                                            "USER_CONNECTIONS_LINK_CALLBACK",
+                                                            "USER_CONNECTIONS_UPDATE",
+                                                            "WEBHOOKS_UPDATE"
+                                                        ]
+                                         },
+                           "FBC-COMMERCE":  {
+                                                "segments":  [
+                                                                 "authorize-payment",
+                                                                 "billing",
+                                                                 "bogo-promotions",
+                                                                 "collectibles-categories",
+                                                                 "collectibles-products",
+                                                                 "collectibles-shop-tab-layouts",
+                                                                 "entitlements",
+                                                                 "gifts",
+                                                                 "google-play",
+                                                                 "layouts",
+                                                                 "outbound-promotions",
+                                                                 "premium-marketing",
+                                                                 "promotions",
+                                                                 "quest-home",
+                                                                 "quest-preview",
+                                                                 "quests",
+                                                                 "redeem",
+                                                                 "referrals",
+                                                                 "shop",
+                                                                 "store",
+                                                                 "storefront",
+                                                                 "subscription-plans",
+                                                                 "user-offer-ids",
+                                                                 "user-offers",
+                                                                 "vibegrations",
+                                                                 "virtual-currency",
+                                                                 "wishlist",
+                                                                 "wishlists"
+                                                             ],
+                                                "endpointCount":  124,
+                                                "events":  [
+                                                               "BILLING_POPUP_BRIDGE_CALLBACK",
+                                                               "BILLING_REFERRAL_TRIAL_OFFER_UPDATE",
+                                                               "CREATOR_MONETIZATION_RESTRICTIONS_UPDATE",
+                                                               "ENTITLEMENT_CREATE",
+                                                               "ENTITLEMENT_DELETE",
+                                                               "ENTITLEMENT_UPDATE",
+                                                               "GIFT_CODE_CREATE",
+                                                               "GIFT_CODE_UPDATE",
+                                                               "GUILD_APPLIED_BOOSTS_UPDATE",
+                                                               "GUILD_POWERUP_ENTITLEMENTS_CREATE",
+                                                               "GUILD_POWERUP_ENTITLEMENTS_DELETE",
+                                                               "PAYMENT_UPDATE",
+                                                               "PREMIUM_MARKETING_PREVIEW",
+                                                               "QUEST_PREVIEW_UPDATE",
+                                                               "QUESTS_USER_COMPLETION_UPDATE",
+                                                               "QUESTS_USER_STATUS_UPDATE",
+                                                               "SOCIAL_LAYER_SKU_PURCHASE_ELIGIBILITY_RESPONSE",
+                                                               "USER_PAYMENT_BROWSER_CHECKOUT_DONE",
+                                                               "USER_PAYMENT_CLIENT_ADD",
+                                                               "USER_PAYMENT_SOURCES_UPDATE",
+                                                               "USER_PREMIUM_GUILD_SUBSCRIPTION_SLOT_CREATE",
+                                                               "USER_PREMIUM_GUILD_SUBSCRIPTION_SLOT_UPDATE",
+                                                               "USER_SUBSCRIPTIONS_UPDATE",
+                                                               "VIRTUAL_CURRENCY_BALANCE_UPDATE",
+                                                               "WALLET_BALANCE_UPDATE",
+                                                               "WISHLIST_ITEM_PURCHASED"
+                                                           ]
+                                            },
+                           "FBC-MODERATION":  {
+                                                  "segments":  [
+                                                                   "account-standing",
+                                                                   "family-center",
+                                                                   "mod-report",
+                                                                   "report",
+                                                                   "reporting",
+                                                                   "report-review",
+                                                                   "reports",
+                                                                   "safety-flows",
+                                                                   "safety-hub"
+                                                               ],
+                                                  "endpointCount":  39,
+                                                  "events":  [
+                                                                 "AUTO_MODERATION_MENTION_RAID_DETECTION",
+                                                                 "GUILD_BAN_ADD",
+                                                                 "GUILD_BAN_REMOVE",
+                                                                 "GUILD_BULK_BAN_UPDATE",
+                                                                 "GUILD_PRUNE_UPDATE",
+                                                                 "USER_REQUIRED_ACTION_UPDATE"
+                                                             ]
+                                              },
+                           "FBC-GAMES":  {
+                                             "segments":  [
+                                                              "consoles",
+                                                              "game-invite",
+                                                              "games",
+                                                              "haven",
+                                                              "library",
+                                                              "partner-sdk",
+                                                              "roblox-applications-supplemental-data"
+                                                          ],
+                                             "endpointCount":  33,
+                                             "events":  [
+                                                            "CONSOLE_COMMAND_UPDATE",
+                                                            "GAME_SERVER_CREATE",
+                                                            "GAME_SERVER_DELETE",
+                                                            "GAME_SERVER_UPDATE",
+                                                            "GUILD_OFFICIAL_GAME_APPLICATIONS_UPDATE",
+                                                            "HAVEN_CONNECT",
+                                                            "HAVEN_DISCONNECT",
+                                                            "HAVEN_UPDATE",
+                                                            "LIBRARY_APPLICATION_UPDATE"
+                                                        ]
+                                         },
+                           "FBC-AI":  {
+                                          "segments":  [
+                                                           "ai"
+                                                       ],
+                                          "endpointCount":  5,
+                                          "events":  [
+                                                         "CONVERSATION_SUMMARY_UPDATE"
+                                                     ]
+                                      },
+                           "FBC-PLATFORM":  {
+                                                "segments":  [
+                                                                 "",
+                                                                 "\u003cdynamic\u003e",
+                                                                 "apex",
+                                                                 "app",
+                                                                 "changelogs",
+                                                                 "content-inventory",
+                                                                 "debug",
+                                                                 "debug-logs",
+                                                                 "domain-migration",
+                                                                 "experiments",
+                                                                 "feature",
+                                                                 "holidays",
+                                                                 "initiate-prompts",
+                                                                 "metrics",
+                                                                 "open-app-from-email",
+                                                                 "popout",
+                                                                 "private",
+                                                                 "quest-home?tab=preview_tool\u0026quest_id=${e}",
+                                                                 "science",
+                                                                 "shop?tab=${e}",
+                                                                 "snowsgiving",
+                                                                 "tutorial"
+                                                             ],
+                                                "endpointCount":  37,
+                                                "events":  [
+                                                               "CONTENT_INVENTORY_INBOX_STALE",
+                                                               "EXPERIMENT_SESSION_OVERRIDE_CREATE",
+                                                               "EXPERIMENT_SESSION_OVERRIDE_DELETE"
+                                                           ]
+                                            },
+                           "FBC-NATIVE":  {
+                                              "segments":  [
+
+                                                           ],
+                                              "endpointCount":  0,
+                                              "events":  [
+
+                                                         ],
+                                              "nativeModules":  [
+                                                                    "discord_cloudsync-1",
+                                                                    "discord_desktop_core-1",
+                                                                    "discord_desktop_overlay-1",
+                                                                    "discord_dispatch-1",
+                                                                    "discord_erlpack-1",
+                                                                    "discord_game_utils-1",
+                                                                    "discord_hook-1",
+                                                                    "discord_krisp-1",
+                                                                    "discord_media-1",
+                                                                    "discord_modules-1",
+                                                                    "discord_notifications-1",
+                                                                    "discord_overlay2-1",
+                                                                    "discord_rpc-1",
+                                                                    "discord_spellcheck-1",
+                                                                    "discord_utils-1",
+                                                                    "discord_voice-1",
+                                                                    "discord_zstd-1"
+                                                                ]
+                                          }
+                       },
+    "unclassified":  {
+                         "segments":  [
+
+                                      ],
+                         "gatewayDispatchEvents":  [
+
+                                                   ]
+                     },
+    "discoveryCoveragePercent":  100
+}
