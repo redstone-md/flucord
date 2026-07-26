@@ -71,6 +71,13 @@ abstract final class DiscordEtfCodec {
   /// trailing bytes after the term.
   static Object? decode(Uint8List bytes) => DiscordEtfDecoder.decode(bytes);
 
+  /// Decodes every versioned term packed back to back in [bytes].
+  ///
+  /// A compressed Gateway frame can expand to more than one payload, so the
+  /// transport reads a batch rather than assuming one term per frame.
+  static List<Object?> decodeAll(Uint8List bytes) =>
+      DiscordEtfDecoder.decodeAll(bytes);
+
   /// Encodes one versioned term from Dart's JSON-compatible value graph.
   static Uint8List encode(Object? value) => DiscordEtfEncoder.encode(value);
 }

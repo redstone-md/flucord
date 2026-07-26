@@ -8,15 +8,22 @@ import 'package:flucord/src/data/zstd/zstd_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('the installed profile negotiates the compression it can decode', () {
+  test('the installed profile connects without transport compression', () {
     const profile = DiscordDesktopProtocolProfile.installedStable20260725;
 
-    expect(profile.negotiatedCompression, 'zstd-stream');
+    // The decoder is in place and covered, but zstd-stream stays off until it
+    // has been proven against a real authenticated session. It shipped enabled
+    // in 0.0.2 and broke workspace loading, because a compressed frame can
+    // carry several payloads and the reader only accepted one.
+    expect(profile.negotiatedCompression, isNull);
     expect(
       profile.connectionUri().toString(),
+      'wss://gateway.discord.gg?encoding=etf&v=9',
+    );
+    expect(
+      profile.gatewayUri().toString(),
       'wss://gateway.discord.gg?encoding=etf&v=9&compress=zstd-stream',
     );
-    expect(profile.connectionUri().toString(), profile.gatewayUri().toString());
   });
 
   test('resolves an uncompressed codec', () {
@@ -28,9 +35,9 @@ void main() {
     expect(codec.isBinary, isTrue);
     expect(codec.compression, isNull);
     expect(codec.toString(), contains('uncompressed'));
-    expect(codec.decode(DiscordEtfCodec.encode(const {'op': 11})), const {
-      'op': 11,
-    });
+    expect(codec.decode(DiscordEtfCodec.encode(const {'op': 11})), [
+      const {'op': 11},
+    ]);
   });
 
   test('rejects a compression it cannot decode', () {
@@ -60,7 +67,7 @@ void main() {
       payloads.map(DiscordEtfCodec.encode).toList(growable: false),
     );
 
-    final decoded = chunks.map(codec.decode).toList(growable: false);
+    final decoded = chunks.expand(codec.decode).toList(growable: false);
 
     expect(decoded, payloads);
     expect(codec.isBinary, isTrue);
@@ -76,9 +83,11 @@ void main() {
       DiscordEtfCodec.encode(const {'op': 11}),
     ]).single;
 
-    expect(codec.decode(Uint8List.sublistView(chunk, 0, 4)), isNull);
-    expect(codec.decode(Uint8List.sublistView(chunk, 4)), const {'op': 11});
-    expect(codec.decode('not a binary frame'), isNull);
+    expect(codec.decode(Uint8List.sublistView(chunk, 0, 4)), isEmpty);
+    expect(codec.decode(Uint8List.sublistView(chunk, 4)), [
+      const {'op': 11},
+    ]);
+    expect(codec.decode('not a binary frame'), isEmpty);
   });
 
   test('reset discards stream history between connections', () {
@@ -93,7 +102,35 @@ void main() {
     codec.decode(Uint8List.sublistView(chunk, 0, 4));
     codec.reset();
 
-    expect(codec.decode(chunk), const {'op': 11});
+    expect(codec.decode(chunk), [
+      const {'op': 11},
+    ]);
+  });
+
+  test('one compressed frame may carry several payloads', () {
+    // Regression: the decoder used to demand exactly one term per frame and
+    // threw "trailing bytes" on a batch, discarding the whole frame. When that
+    // frame held READY, the workspace never loaded and the client reported
+    // Discord as unreachable.
+    final codec = DiscordGatewayTransportCodec.forProfile(
+      encoding: 'etf',
+      compression: 'zstd-stream',
+    );
+    const batch = [
+      {
+        'op': 10,
+        'd': <String, Object?>{'heartbeat_interval': 41250},
+      },
+      {'op': 0, 's': 1, 't': 'READY', 'd': <String, Object?>{}},
+      {'op': 0, 's': 2, 't': 'READY_SUPPLEMENTAL', 'd': <String, Object?>{}},
+    ];
+    final packed = BytesBuilder(copy: false);
+    for (final payload in batch) {
+      packed.add(DiscordEtfCodec.encode(payload));
+    }
+    final frame = _compressPerMessage([packed.takeBytes()]).single;
+
+    expect(codec.decode(frame), batch);
   });
 
   test('outgoing frames stay uncompressed', () {

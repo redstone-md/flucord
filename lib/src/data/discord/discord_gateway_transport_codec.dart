@@ -48,25 +48,28 @@ final class DiscordGatewayTransportCodec {
   /// Encodes an outgoing payload. Outgoing frames are never compressed.
   Object encode(Map<String, Object?> payload) => framing.encode(payload);
 
-  /// Decodes one socket frame, or `null` when it carries no complete payload.
+  /// Decodes one socket frame into every payload it carries.
   ///
-  /// With compression on, a frame is a slice of one continuous stream. Discord
-  /// flushes after every dispatch, so a slice normally yields exactly one
-  /// payload, but nothing in the format promises that — an incomplete slice
-  /// legitimately produces nothing at all.
-  Map<String, Object?>? decode(Object? frame) {
+  /// Without compression a frame is exactly one payload. With
+  /// `compress=zstd-stream` a frame is a slice of one continuous stream, and
+  /// the server is free to flush several payloads into the same slice or none
+  /// at all, so the result is a batch and may legitimately be empty.
+  List<Map<String, Object?>> decode(Object? frame) {
     final decompressor = _stream;
-    if (decompressor == null) return framing.decode(frame);
+    if (decompressor == null) {
+      final payload = framing.decode(frame);
+      return payload == null ? const [] : [payload];
+    }
 
     final bytes = switch (frame) {
       Uint8List() => frame,
       final List<int> raw => Uint8List.fromList(raw),
       _ => null,
     };
-    if (bytes == null) return null;
+    if (bytes == null) return const [];
     final expanded = decompressor.feed(bytes);
-    if (expanded.isEmpty) return null;
-    return framing.decode(expanded);
+    if (expanded.isEmpty) return const [];
+    return framing.decodeBatch(expanded);
   }
 
   /// Discards stream state so a reconnect starts clean.

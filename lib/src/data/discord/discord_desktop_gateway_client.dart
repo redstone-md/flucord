@@ -121,8 +121,8 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
 
   void _accept(Object? raw) {
     try {
-      final payload = _codec.decode(raw);
-      if (payload == null) {
+      final payloads = _codec.decode(raw);
+      if (payloads.isEmpty) {
         if (_bootstrapCompleter?.isCompleted == false) {
           developer.log(
             'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
@@ -132,19 +132,8 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
         }
         return;
       }
-      if (_bootstrapCompleter?.isCompleted == false) {
-        developer.log(
-          'Discord Gateway bootstrap frame: op=${payload['op']}, '
-          'event=${payload['t'] ?? '-'}',
-          name: 'flucord.discord.gateway',
-        );
-      }
-      final actions = _protocol.accept(payload);
-      for (final action in actions) {
-        _apply(action);
-      }
-      if (payload['op'] == DiscordDesktopGatewayOpcode.hello) {
-        _send(_protocol.canResume ? _protocol.resume() : _protocol.identify());
+      for (final payload in payloads) {
+        _acceptPayload(payload);
       }
     } on FormatException catch (error, stackTrace) {
       _lastBootstrapError = error;
@@ -158,6 +147,22 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       _lastBootstrapError = error;
       _logBootstrapFailure('frame-shape', error, stackTrace);
       return;
+    }
+  }
+
+  void _acceptPayload(Map<String, Object?> payload) {
+    if (_bootstrapCompleter?.isCompleted == false) {
+      developer.log(
+        'Discord Gateway bootstrap frame: op=${payload['op']}, '
+        'event=${payload['t'] ?? '-'}',
+        name: 'flucord.discord.gateway',
+      );
+    }
+    for (final action in _protocol.accept(payload)) {
+      _apply(action);
+    }
+    if (payload['op'] == DiscordDesktopGatewayOpcode.hello) {
+      _send(_protocol.canResume ? _protocol.resume() : _protocol.identify());
     }
   }
 

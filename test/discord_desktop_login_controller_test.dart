@@ -34,7 +34,10 @@ void main() {
     expect(controller.qrUri, Uri.parse('https://discord.com/ra/fingerprint'));
 
     gateway.add(
-      const DiscordRemoteAuthUserPending(username: 'demo-user', discriminator: '0'),
+      const DiscordRemoteAuthUserPending(
+        username: 'demo-user',
+        discriminator: '0',
+      ),
     );
     await _settle();
     expect(controller.pendingDisplayName, 'demo-user');

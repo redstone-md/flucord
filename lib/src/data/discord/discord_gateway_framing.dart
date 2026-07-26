@@ -31,6 +31,12 @@ abstract interface class DiscordGatewayFraming {
   /// Throws [FormatException] when the frame is structurally invalid.
   Map<String, Object?>? decode(Object? frame);
 
+  /// Decodes every payload packed into one already-decompressed buffer.
+  ///
+  /// Transport compression can put several payloads in one frame, so the
+  /// batch has to be read out rather than rejected as trailing bytes.
+  List<Map<String, Object?>> decodeBatch(Uint8List bytes);
+
   /// Resolves the framing for an `encoding` query value.
   static DiscordGatewayFraming forEncoding(String encoding) =>
       switch (encoding) {
@@ -66,6 +72,12 @@ final class DiscordGatewayJsonFraming implements DiscordGatewayFraming {
     final decoded = jsonDecode(frame);
     return decoded is Map ? decoded.cast<String, Object?>() : null;
   }
+
+  @override
+  List<Map<String, Object?>> decodeBatch(Uint8List bytes) {
+    final payload = decode(utf8.decode(bytes));
+    return payload == null ? const [] : [payload];
+  }
 }
 
 /// Binary framing used by the installed desktop client.
@@ -96,4 +108,10 @@ final class DiscordGatewayEtfFraming implements DiscordGatewayFraming {
     final decoded = DiscordEtfCodec.decode(bytes);
     return decoded is Map<String, Object?> ? decoded : null;
   }
+
+  @override
+  List<Map<String, Object?>> decodeBatch(Uint8List bytes) =>
+      DiscordEtfCodec.decodeAll(
+        bytes,
+      ).whereType<Map<String, Object?>>().toList(growable: false);
 }

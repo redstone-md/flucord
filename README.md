@@ -38,7 +38,7 @@ live channel history are verified against a test account on Windows.
 | Threads, members, presence | Partial |
 | Voice, video, screen share for user chat | Not ready |
 | ETF Gateway framing | Ready; binary `encoding=etf` frames, live-validated |
-| zstd-stream Gateway compression | Ready; pure-Dart decoder, live-validated |
+| zstd-stream Gateway compression | Off by default; decoder present, not yet proven on a full session |
 
 See [the full feature parity table](docs/FEATURE_PARITY.md) for exact
 boundaries and [the bundle capability ledger](docs/DISCORD_BUNDLE_COVERAGE.md)
@@ -111,11 +111,11 @@ build/windows/x64/runner/Release/
 ### Published releases
 
 Windows x64 releases are published from semantic version tags such as
-`v0.0.2`. Each release contains the complete runtime directory as a ZIP and a
+`v0.0.3`. Each release contains the complete runtime directory as a ZIP and a
 `SHA256SUMS.txt` file. Verify the archive before extracting it:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.2.zip
+Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.3.zip
 Get-Content .\SHA256SUMS.txt
 ```
 

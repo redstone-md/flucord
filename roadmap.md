@@ -456,6 +456,14 @@ browser runtime or dependency on Discord's private user API.
     permission set Discord grants a voice channel's chat, and the composer drops
     the hash because `#name` does not resolve to a voice channel.
 
+76. Fixed: a compressed Gateway frame can expand to several payloads, and the
+    reader accepted only one, rejecting the rest as trailing bytes and dropping
+    the whole frame. When that frame carried `READY` the workspace never loaded
+    and the client reported Discord as unreachable. The transport now decodes a
+    batch per frame. `compress=zstd-stream` is disabled by default until it has
+    been proven against a full authenticated session; the decoder, its corpus,
+    and the live check all remain.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

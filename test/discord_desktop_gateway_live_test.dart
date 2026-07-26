@@ -83,7 +83,14 @@ void main() {
   }, skip: skip);
 
   test('decodes a live zstd-stream Gateway session end to end', () async {
-    const profile = DiscordDesktopProtocolProfile.installedStable20260725;
+    // The shipped profile connects uncompressed, so this check opts into
+    // zstd-stream explicitly. It proves the decoder against the real Gateway
+    // but not against a full authenticated READY, which is what has to pass
+    // before compression is turned back on by default.
+    const profile = DiscordDesktopProtocolProfile(
+      clientBuildNumber: 582977,
+      negotiatedCompression: 'zstd-stream',
+    );
     final uri = profile.connectionUri();
     expect(uri.queryParameters['compress'], 'zstd-stream');
 
@@ -96,10 +103,9 @@ void main() {
     addTearDown(socket.close);
 
     final frames = <Map<String, Object?>>[];
-    final subscription = socket.messages.listen((raw) {
-      final payload = codec.decode(raw);
-      if (payload != null) frames.add(payload);
-    });
+    final subscription = socket.messages.listen(
+      (raw) => frames.addAll(codec.decode(raw)),
+    );
     addTearDown(subscription.cancel);
 
     // Wait for HELLO, then answer with an ETF heartbeat. Discord acknowledges

@@ -18,7 +18,6 @@ final class DiscordDesktopProtocolProfile {
 
   static const installedStable20260725 = DiscordDesktopProtocolProfile(
     clientBuildNumber: 582977,
-    negotiatedCompression: 'zstd-stream',
   );
 
   final int clientBuildNumber;
