@@ -111,11 +111,11 @@ build/windows/x64/runner/Release/
 ### Published releases
 
 Windows x64 releases are published from semantic version tags such as
-`v0.0.1`. Each release contains the complete runtime directory as a ZIP and a
+`v0.0.2`. Each release contains the complete runtime directory as a ZIP and a
 `SHA256SUMS.txt` file. Verify the archive before extracting it:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.1.zip
+Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.2.zip
 Get-Content .\SHA256SUMS.txt
 ```
 
