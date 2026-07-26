@@ -64,6 +64,7 @@ final class DiscordMemberListStore {
           rows[index] = null;
         }
       case DiscordMemberListInsert(:final index, :final item):
+        if (index >= maxRows) return;
         if (index > rows.length) {
           _write(rows, index, item.row);
         } else {
@@ -76,11 +77,21 @@ final class DiscordMemberListStore {
     }
   }
 
+  /// Rows a single list may hold.
+  ///
+  /// Every index in an op comes from the server, and the row space is grown to
+  /// reach it. Discord's own client subscribes at most a handful of hundred-row
+  /// pages, so a list this long cannot arise from real use — but an index field
+  /// is attacker-influenced input, and without a ceiling one op could ask for
+  /// an arbitrary allocation.
+  static const maxRows = 200000;
+
   static void _write(
     List<GuildMemberListRow?> rows,
     int index,
     GuildMemberListRow row,
   ) {
+    if (index >= maxRows) return;
     while (rows.length <= index) {
       rows.add(null);
     }
@@ -94,7 +105,7 @@ final class DiscordMemberListStore {
   ) {
     if (groups.isEmpty) return;
     final last = groups.last;
-    final total = last.index + last.count + 1;
+    final total = (last.index + last.count + 1).clamp(0, maxRows);
     if (rows.length > total) {
       rows.removeRange(total, rows.length);
       return;

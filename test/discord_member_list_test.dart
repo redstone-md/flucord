@@ -811,4 +811,34 @@ void main() {
       expect(list.hereMentionSize, 3);
     });
   });
+  _allocationGuard();
+}
+
+void _allocationGuard() {
+  test('a hostile row index cannot force an unbounded allocation', () {
+    // index is server-supplied, so it is attacker-influenced input. Growing the
+    // row space to reach it is correct for real pages and catastrophic here.
+    final update = DiscordMemberListUpdate.fromDispatch({
+      'guild_id': 'guild',
+      'id': 'everyone',
+      'ops': [
+        {
+          'op': 'UPDATE',
+          'index': 2000000000,
+          'item': {
+            'member': {
+              'user': {'id': 'a'},
+            },
+          },
+        },
+      ],
+      'groups': const <Object?>[],
+      'member_count': 0,
+      'online_count': 0,
+    })!;
+
+    final list = DiscordMemberListStore().apply(update);
+
+    expect(list.rows.length, lessThanOrEqualTo(DiscordMemberListStore.maxRows));
+  });
 }
