@@ -486,6 +486,32 @@ browser runtime or dependency on Discord's private user API.
     the stream is one continuous context, so once it desynchronises every later
     frame decodes against poisoned history while the socket still looks healthy.
 
+80. Completed: calls in Direct Messages and group DMs. `VoiceSignalingService`
+    was keyed by guild throughout, which a call has none of, so the key became a
+    value that is either a guild or a private channel rather than a string a
+    channel id could quietly impersonate. Opcode 13 `CALL_CONNECT`, the
+    `CALL_CREATE`/`UPDATE`/`DELETE` dispatches and the three
+    `/channels/{id}/call` routes drive an incoming-call surface, ringing, and a
+    call that reuses the existing voice room. An outgoing ring now survives the
+    `CALL_CREATE` that answers our own join: that frame reports nobody ringing
+    because the server has not processed the ring yet, and treating it as
+    "answered" meant the caller never saw Ringing and hanging up retracted
+    nothing.
+81. Completed: a user settings surface over `/users/@me/settings-proto`, with a
+    hand-written reader and writer for the protobuf wire types those messages
+    use — no dependency added, every length bounded before it is trusted. A
+    partial `USER_SETTINGS_PROTO_UPDATE` arriving before the full blob is now
+    ignored rather than installed as the root, which had made the repository
+    look loaded while holding a fraction of the settings and skipped the fetch
+    that would have filled in the rest.
+82. Completed: permission computation. Flucord showed every channel and enabled
+    every action because it never computed permissions; now channel visibility,
+    composer enablement and the offered message actions all follow the
+    `@everyone` role, the member's roles and the channel overwrites, with
+    `ADMINISTRATOR` short-circuiting. A permission field is unsigned on the
+    wire, so a negative value is refused: two's complement would have set every
+    bit and failed open into full administrator rights.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

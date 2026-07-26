@@ -6,6 +6,7 @@ import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_content_view.dart';
 import 'native_inline_video_player.dart';
+import 'user_settings_scope.dart';
 
 class MessageEmbedView extends StatelessWidget {
   const MessageEmbedView({
@@ -28,6 +29,7 @@ class MessageEmbedView extends StatelessWidget {
     final accent = embed.colorValue == null
         ? context.surfaces.border
         : Color(0xff000000 | (embed.colorValue! & 0x00ffffff));
+    final showsMedia = UserSettingsScope.displayOf(context).rendersEmbedMedia;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 520),
       child: Container(
@@ -61,18 +63,20 @@ class MessageEmbedView extends StatelessWidget {
                     linkLauncher: linkLauncher,
                     onSelectChannel: onSelectChannel,
                   ),
-                  if (embed.video case final video?) ...[
-                    const SizedBox(height: 10),
-                    inlineVideoBuilder(
-                      key: ValueKey(
-                        'embed-video-${video.proxyUrl ?? video.url}',
+                  if (showsMedia) ...[
+                    if (embed.video case final video?) ...[
+                      const SizedBox(height: 10),
+                      inlineVideoBuilder(
+                        key: ValueKey(
+                          'embed-video-${video.proxyUrl ?? video.url}',
+                        ),
+                        url: video.proxyUrl ?? video.url,
+                        aspectRatio: video.aspectRatio,
                       ),
-                      url: video.proxyUrl ?? video.url,
-                      aspectRatio: video.aspectRatio,
-                    ),
-                  ] else if (embed.image case final image?) ...[
-                    const SizedBox(height: 10),
-                    _EmbedMediaView(media: image),
+                    ] else if (embed.image case final image?) ...[
+                      const SizedBox(height: 10),
+                      _EmbedMediaView(media: image),
+                    ],
                   ],
                   if (embed.footer != null || embed.timestamp != null) ...[
                     const SizedBox(height: 10),
@@ -106,7 +110,11 @@ class _EmbedTop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbnail = embed.thumbnail;
+    // A thumbnail is embed media too, so it answers to the same setting as
+    // the large image below it rather than surviving as a smaller version.
+    final thumbnail = UserSettingsScope.displayOf(context).rendersEmbedMedia
+        ? embed.thumbnail
+        : null;
     return LayoutBuilder(
       builder: (context, constraints) {
         if (thumbnail != null && constraints.maxWidth < 320) {

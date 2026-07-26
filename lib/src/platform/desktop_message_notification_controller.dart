@@ -150,6 +150,11 @@ final class DesktopMessageNotificationController {
       return;
     }
 
+    // Quiet mode is account state that another device can turn on mid-session,
+    // so it is read per message rather than captured when this controller was
+    // attached.
+    if (chatController.suppressesMessageNotifications) return;
+
     if (chatController.activeChannelId == event.message.channelId &&
         await _isFocusedSafely()) {
       return;

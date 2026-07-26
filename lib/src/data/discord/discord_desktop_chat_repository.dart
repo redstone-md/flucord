@@ -6,16 +6,22 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/guild_member_list_repository.dart';
+import '../../domain/user_settings_repository.dart';
+import '../../domain/voice_call.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
+import 'discord_user_settings_repository.dart';
 import 'discord_desktop_gateway_client.dart';
+import 'discord_direct_call_service.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
 import 'discord_member_list_handler.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_rest_client.dart';
 import 'discord_voice_signaling_service.dart';
+
+part 'discord_desktop_chat_events.dart';
 
 final class DiscordDesktopChatRepository
     implements ChatRepository, GuildMemberListRepository {
@@ -28,11 +34,19 @@ final class DiscordDesktopChatRepository
     VoiceDaveService? daveService,
   }) : _mapper = mapper ?? DiscordMapper(),
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
+       _userSettings = DiscordUserSettingsRepository(_api),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
+         callGateway: _gateway,
        ) {
     _memberLists = DiscordMemberListHandler(_mapper);
+    _directCalls = DiscordDirectCallService(
+      api: _api,
+      gateway: _gateway,
+      signaling: _voiceSignaling,
+      events: _gateway.events,
+    );
     _gatewaySubscription = _gateway.events.listen(_acceptGatewayEvent);
   }
 
@@ -43,11 +57,13 @@ final class DiscordDesktopChatRepository
   final ChatCache _cache;
   final DiscordMapper _mapper;
   final DiscordMessageNonceFactory _nonceFactory;
+  final DiscordUserSettingsRepository _userSettings;
   final DiscordVoiceSignalingService _voiceSignaling;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   late final DiscordMemberListHandler _memberLists;
+  late final DiscordDirectCallService _directCalls;
   String? _currentMemberId;
 
   @override
@@ -60,6 +76,17 @@ final class DiscordDesktopChatRepository
   /// the voice surface can show, which a null here could not.
   @override
   VoiceSignalingService? get voiceSignaling => _voiceSignaling;
+
+  /// The desktop-user session is the only transport holding the account's
+  /// settings blob: `READY` delivers it on this very socket.
+  @override
+  UserSettingsRepository? get userSettings => _userSettings;
+
+  /// The desktop-user session owns both halves a call needs — the gateway
+  /// socket for opcode 13 and the user's REST credentials for the ring routes —
+  /// so it is the one transport that can offer this.
+  @override
+  DirectCallService? get directCalls => _directCalls;
 
   @override
   Stream<GuildMemberList> get memberListUpdates => _memberLists.updates;
@@ -114,6 +141,8 @@ final class DiscordDesktopChatRepository
               currentUser: snapshot.currentUser,
               guilds: snapshot.guilds,
               channelsByGuild: snapshot.channelsByGuild,
+              rolesByGuild: snapshot.rolesByGuild,
+              membersByGuild: snapshot.membersByGuild,
               directChannels: snapshot.directChannels,
               includeDirectMessagesSpace: true,
               currentUserRole: 'Discord user',
@@ -144,6 +173,7 @@ final class DiscordDesktopChatRepository
   void _adoptCurrentMember(String memberId) {
     _currentMemberId = memberId;
     _voiceSignaling.setCurrentUserId(memberId);
+    _directCalls.setCurrentUserId(memberId);
   }
 
   Future<T> _bootstrapStage<T>(
@@ -367,102 +397,14 @@ final class DiscordDesktopChatRepository
   Future<void> saveChannelActivity(ConversationChannel channel) =>
       _cache.writeChannelActivity(channel);
 
-  void _acceptGatewayEvent(DiscordGatewayEvent event) {
-    switch (event) {
-      case DiscordGatewayStatusEvent():
-        _emitStatus(switch (event.status) {
-          DiscordGatewayStatus.offline => RepositoryConnectionStatus.offline,
-          DiscordGatewayStatus.connecting =>
-            RepositoryConnectionStatus.connecting,
-          DiscordGatewayStatus.connected =>
-            RepositoryConnectionStatus.connected,
-          DiscordGatewayStatus.reconnecting =>
-            RepositoryConnectionStatus.reconnecting,
-        });
-      case DiscordGatewayDispatch():
-        // The member-list handler needs READY and GUILD_CREATE for the channel
-        // shape a list id is derived from, so it sees every dispatch rather
-        // than only the roster event.
-        final members = _memberLists.accept(event.name, event.data);
-        if (members.isNotEmpty) _events.add(MembersUpsertedEvent(members));
-        if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
-          unawaited(_acceptMessage(event));
-        } else if (event.name == 'MESSAGE_DELETE') {
-          unawaited(_acceptDelete(event.data));
-        } else if (event.name == 'TYPING_START') {
-          _acceptTyping(event.data);
-        }
-    }
-  }
-
-  Future<void> _acceptMessage(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'];
-    if (messageId is! String) return;
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = await _storeMessage(event.data, fallback: fallback);
-    final rawAuthor = event.data['author'];
-    final member = rawAuthor is Map
-        ? _mapper.member(
-            rawAuthor.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
-    if (member != null) await _cache.writeMember(member);
-    _events.add(
-      MessageUpsertedEvent(
-        message: message,
-        member: member,
-        isNew: event.name == 'MESSAGE_CREATE',
-        mentionsCurrentMember: message.mentionsCurrentMember,
-      ),
-    );
-  }
-
-  Future<ChatMessage> _storeMessage(
-    Map<String, Object?> payload, {
-    ChatMessage? fallback,
-  }) async {
-    final message = _mapper.message(
-      payload,
-      fallback: fallback,
-      currentMemberId: _currentMemberId,
-    );
-    await _cache.writeMessage(message);
-    return message;
-  }
-
-  Future<void> _acceptDelete(Map<String, Object?> data) async {
-    final messageId = data['id'];
-    final channelId = data['channel_id'];
-    if (messageId is! String || channelId is! String) return;
-    await _cache.deleteMessage(messageId);
-    _events.add(
-      MessageDeletedEvent(messageId: messageId, channelId: channelId),
-    );
-  }
-
-  void _acceptTyping(Map<String, Object?> data) {
-    final channelId = data['channel_id'];
-    final memberId = data['user_id'];
-    if (channelId is String && memberId is String) {
-      _events.add(TypingStartedEvent(channelId: channelId, memberId: memberId));
-    }
-  }
-
-  void _emitStatus(RepositoryConnectionStatus status) {
-    if (!_events.isClosed) _events.add(RepositoryStatusChangedEvent(status));
-  }
-
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    // Pending settings edits are written before the socket goes away; a
+    // coalesced save that never left would be lost with no way to notice.
+    await _userSettings.flush();
+    await _userSettings.close();
+    await _directCalls.close();
     await _voiceSignaling.close();
     await _memberLists.close();
     await _gateway.close();

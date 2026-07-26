@@ -3,17 +3,28 @@ part of 'flucord_shell.dart';
 /// A voice channel only behaves like a text channel while its chat surface is
 /// the one on screen: the room has no timeline to search, pin, or type into.
 /// Forum and media channels never qualify — their messages live in posts.
+///
+/// A DM in a call earns the same two surfaces for the same reason. The call is
+/// a room hanging off a channel that also has a timeline, which is exactly the
+/// shape a voice channel has, so it reuses the switch rather than inventing a
+/// second way to say "show me the room".
 bool _showsMessageTimeline(
   ConversationChannel channel,
-  VoiceChannelSurface voiceSurface,
-) =>
+  VoiceChannelSurface voiceSurface, {
+  bool inCall = false,
+}) =>
     channel.hasMessageTimeline &&
-    (channel.kind != ChannelKind.voice ||
+    ((channel.kind != ChannelKind.voice && !inCall) ||
         voiceSurface == VoiceChannelSurface.chat);
+
+/// Whether [channel] shows the room-or-chat switch at all.
+bool _hasVoiceSurfaces(ConversationChannel channel, {required bool inCall}) =>
+    channel.kind == ChannelKind.voice || inCall;
 
 class _ConversationPane extends StatefulWidget {
   const _ConversationPane({
     required this.workspace,
+    required this.capabilities,
     required this.externalLinkLauncher,
     required this.attachmentDownloadService,
     required this.channel,
@@ -70,9 +81,13 @@ class _ConversationPane extends StatefulWidget {
     required this.voiceController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
+    this.directCallController,
   });
 
   final ChatWorkspace workspace;
+
+  /// What the account may do in [channel], resolved from its permissions.
+  final ChannelCapabilities capabilities;
   final ExternalLinkLauncher externalLinkLauncher;
   final AttachmentDownloadService attachmentDownloadService;
   final ConversationChannel channel;
@@ -134,6 +149,10 @@ class _ConversationPane extends StatefulWidget {
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
+  /// Absent in hosts with no call plane — a demo workspace or a bot session —
+  /// which is also how the call affordances stay off rather than failing.
+  final DirectCallController? directCallController;
+
   @override
   State<_ConversationPane> createState() => _ConversationPaneState();
 }
@@ -142,45 +161,91 @@ class _ConversationPaneState extends State<_ConversationPane> {
   ChatMessage? _replyTo;
 
   @override
-  void didUpdateWidget(covariant _ConversationPane oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.channel.id != widget.channel.id) _replyTo = null;
+  void initState() {
+    super.initState();
+    _watchCall();
   }
 
   @override
+  void didUpdateWidget(covariant _ConversationPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id == widget.channel.id) return;
+    _replyTo = null;
+    _watchCall();
+  }
+
+  /// Subscribes the session to this channel's call (gateway opcode 13).
+  ///
+  /// Discord pushes `CALL_CREATE` only to subscribers, so a DM the client has
+  /// never opened silently swallows every call placed in it. Opening the
+  /// conversation is the moment the desktop client subscribes, and repeating it
+  /// is harmless — the gateway keeps one subscription per channel.
+  void _watchCall() {
+    if (!widget.channel.isDirectMessage) return;
+    widget.directCallController?.watchChannel(widget.channel.id);
+  }
+
+  /// The call state is read on every build, so the pane has to be rebuilt when
+  /// it moves — joining a call is what swaps the timeline for the room.
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.directCallController;
+    if (controller == null) return _buildPane(context, null);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => _buildPane(context, controller),
+    );
+  }
+
+  Widget _buildPane(
+    BuildContext context,
+    DirectCallController? callController,
+  ) {
+    final inCall = callController?.activeCallChannelId == widget.channel.id;
     final showsMessages = _showsMessageTimeline(
       widget.channel,
       widget.voiceSurface,
+      inCall: inCall,
     );
     final locked =
         widget.channel.isThread &&
         widget.channel.isArchived &&
         widget.channel.isLocked;
-    final conversation = switch (widget.channel.kind) {
-      ChannelKind.voice when !showsMessages => VoiceRoomView(
-        guildId: widget.channel.spaceId,
-        channelId: widget.channel.id,
-        channelName: widget.channel.name,
-        controller: widget.voiceController,
-        members: widget.workspace.members,
-        currentMemberId: widget.workspace.currentMemberId,
-      ),
-      ChannelKind.forum || ChannelKind.media => ForumChannelView(
-        workspace: widget.workspace,
-        channel: widget.channel,
-        archivedPosts: widget.forumArchivedPosts,
-        isLoading: widget.isLoadingForumPosts,
-        error: widget.forumPostsError,
-        canLoadMore: widget.canLoadMoreForumPosts,
-        onRefresh: widget.onRefreshForumPosts,
-        onLoadMore: widget.onLoadMoreForumPosts,
-        onOpenPost: widget.onSelectChannel,
-        onLoadPostPreview: widget.onLoadForumPostPreview,
-        onCreatePost: widget.onCreateForumPost,
-      ),
-      ChannelKind.text || ChannelKind.voice => _buildTimeline(),
-    };
+    final conversation = inCall && !showsMessages
+        ? VoiceRoomView(
+            // A call has no guild; the DM pseudo-space still supplies avatars.
+            guildId: null,
+            spaceId: widget.channel.spaceId,
+            channelId: widget.channel.id,
+            channelName: widget.channel.name,
+            controller: widget.voiceController,
+            members: widget.workspace.members,
+            currentMemberId: widget.workspace.currentMemberId,
+          )
+        : switch (widget.channel.kind) {
+            ChannelKind.voice when !showsMessages => VoiceRoomView(
+              guildId: widget.channel.spaceId,
+              channelId: widget.channel.id,
+              channelName: widget.channel.name,
+              controller: widget.voiceController,
+              members: widget.workspace.members,
+              currentMemberId: widget.workspace.currentMemberId,
+            ),
+            ChannelKind.forum || ChannelKind.media => ForumChannelView(
+              workspace: widget.workspace,
+              channel: widget.channel,
+              archivedPosts: widget.forumArchivedPosts,
+              isLoading: widget.isLoadingForumPosts,
+              error: widget.forumPostsError,
+              canLoadMore: widget.canLoadMoreForumPosts,
+              onRefresh: widget.onRefreshForumPosts,
+              onLoadMore: widget.onLoadMoreForumPosts,
+              onOpenPost: widget.onSelectChannel,
+              onLoadPostPreview: widget.onLoadForumPostPreview,
+              onCreatePost: widget.onCreateForumPost,
+            ),
+            ChannelKind.text || ChannelKind.voice => _buildTimeline(),
+          };
     return Column(
       children: [
         ChatHeader(
@@ -190,6 +255,10 @@ class _ConversationPaneState extends State<_ConversationPane> {
           showCompactPicker: widget.compact,
           showsMessages: showsMessages,
           voiceSurface: widget.voiceSurface,
+          showVoiceSurfaces: _hasVoiceSurfaces(widget.channel, inCall: inCall),
+          isInCall: inCall,
+          callLabel: _callLabel(callController, inCall),
+          onToggleCall: _callToggle(callController, inCall),
           allowMemberPanel: widget.allowMemberPanel,
           allowThreadPanel: widget.allowThreadPanel,
           showMembers: widget.showMembers,
@@ -209,8 +278,11 @@ class _ConversationPaneState extends State<_ConversationPane> {
           TypingIndicator(members: widget.typingMembers),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
+        else if (showsMessages && !widget.capabilities.sendMessages)
+          const ReadOnlyChannelNotice()
         else if (showsMessages)
           MessageComposer(
+            canAttachFiles: widget.capabilities.attachFiles,
             channelId: widget.channel.id,
             channelName: widget.channel.name,
             channelIsVoice: widget.channel.kind == ChannelKind.voice,
@@ -253,6 +325,33 @@ class _ConversationPaneState extends State<_ConversationPane> {
     );
   }
 
+  /// The header's call button, or null when this channel cannot be called.
+  ///
+  /// Only a private channel can: guild voice is joined from the sidebar, and a
+  /// transport with no call plane hands out no controller at all.
+  VoidCallback? _callToggle(DirectCallController? controller, bool inCall) {
+    if (controller == null || !controller.supportsCalls) return null;
+    if (!widget.channel.isDirectMessage && !inCall) return null;
+    if (controller.isBusy) return null;
+    if (inCall) return () => unawaited(controller.hangUp());
+    // A call that is already running is joined, not placed: the people in it
+    // are there, and ringing the ones who declined would only be noise.
+    final ongoing = controller.callFor(widget.channel.id);
+    return ongoing != null && !ongoing.unavailable
+        ? () => unawaited(controller.joinOngoingCall(widget.channel.id))
+        : () => unawaited(controller.placeCall(widget.channel.id));
+  }
+
+  /// What the header's call button should say.
+  String? _callLabel(DirectCallController? controller, bool inCall) {
+    if (controller == null) return null;
+    if (inCall) return 'Leave call';
+    if (controller.isRinging(widget.channel.id)) return 'Ringing…';
+    return controller.callFor(widget.channel.id) == null
+        ? 'Start call'
+        : 'Join call';
+  }
+
   /// One builder for every channel that owns a message timeline, so a voice
   /// channel's chat is literally the same widget tree as a text channel's
   /// rather than a second copy that can drift.
@@ -263,6 +362,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
     }
     return MessageList(
       workspace: widget.workspace,
+      capabilities: widget.capabilities,
       externalLinkLauncher: widget.externalLinkLauncher,
       attachmentDownloadService: widget.attachmentDownloadService,
       channel: widget.channel,

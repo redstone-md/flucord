@@ -9,8 +9,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('SQLite v19 retains raw Discord message flags', () async {
-    expect(SqliteChatSchema.version, 19);
+  test('SQLite v20 retains raw Discord message flags', () async {
+    expect(SqliteChatSchema.version, 20);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

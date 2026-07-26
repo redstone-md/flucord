@@ -1,4 +1,5 @@
 import '../../domain/voice_connection.dart';
+import 'discord_voice_state_reader.dart';
 
 /// Remembers who is sitting in which voice channel of a guild.
 ///
@@ -85,50 +86,31 @@ final class DiscordVoiceStateRoster {
   ) {
     final applied = <VoiceParticipantStateEvent>[];
     for (final state in states) {
-      final event = _read(state, fallbackGuildId);
-      if (event == null) continue;
+      final event = DiscordVoiceStateReader.read(
+        state,
+        fallbackGuildId: fallbackGuildId,
+      );
+      // A guildless state is a DM or group-DM call seat. It keys on a channel,
+      // not a guild, so it belongs to the call roster and is dropped here
+      // rather than filed under a guild that does not exist.
+      if (event == null || event.guildId == null) continue;
       // A null channel is a departure, not a seat: keeping the row would leave
       // a ghost in whichever channel the user was last seen in. A departure for
       // a guild we hold nothing for must also not create an empty bucket that
       // is never reclaimed.
+      final guildId = event.guildId!;
       if (event.channelId == null) {
-        final members = _byGuild[event.guildId];
+        final members = _byGuild[guildId];
         members?.remove(event.userId);
-        if (members != null && members.isEmpty) _byGuild.remove(event.guildId);
+        if (members != null && members.isEmpty) _byGuild.remove(guildId);
       } else {
-        _byGuild.putIfAbsent(event.guildId, () => {})[event.userId] = event;
+        _byGuild.putIfAbsent(guildId, () => {})[event.userId] = event;
       }
       applied.add(event);
     }
     return applied;
   }
 
-  static VoiceParticipantStateEvent? _read(
-    Map<String, Object?> state,
-    String? fallbackGuildId,
-  ) {
-    final userId = state['user_id'];
-    final guildId = state['guild_id'] ?? fallbackGuildId;
-    if (userId is! String || guildId is! String || guildId.isEmpty) return null;
-    final channelId = state['channel_id'];
-    if (channelId != null && channelId is! String) return null;
-    return VoiceParticipantStateEvent(
-      userId: userId,
-      guildId: guildId,
-      channelId: channelId as String?,
-      selfMuted: state['self_mute'] == true,
-      selfDeafened: state['self_deaf'] == true,
-      serverMuted: state['mute'] == true,
-      serverDeafened: state['deaf'] == true,
-      isStreaming: state['self_stream'] == true,
-      isVideoEnabled: state['self_video'] == true,
-    );
-  }
-
-  static List<Map<String, Object?>> _objects(Object? value) => value is List
-      ? value
-            .whereType<Map>()
-            .map((item) => item.cast<String, Object?>())
-            .toList(growable: false)
-      : const [];
+  static List<Map<String, Object?>> _objects(Object? value) =>
+      DiscordVoiceStateReader.objects(value);
 }

@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import '../../domain/chat_models.dart';
+import '../../domain/discord_permissions.dart';
+import '../../domain/guild_membership.dart';
+import '../../domain/permission_overwrite.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
 import 'discord_cdn.dart';
@@ -298,6 +301,20 @@ final class DiscordMapper {
       rolesBySpace: {guildId: roleName},
       avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
       avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
+      membershipsBySpace: {guildId: membership(payload)},
+    );
+  }
+
+  /// The permission-relevant half of a guild member payload.
+  GuildMembership membership(Map<String, Object?> payload) {
+    final timeout = payload['communication_disabled_until'] as String?;
+    return GuildMembership(
+      roleIds: (payload['roles'] as List? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      flags: payload['flags'] as int? ?? 0,
+      isPending: payload['pending'] as bool? ?? false,
+      timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
     );
   }
 
@@ -315,6 +332,10 @@ final class DiscordMapper {
       name: payload['name'] as String? ?? 'unknown-role',
       position: payload['position'] as int? ?? 0,
       colorValue: rawColor == 0 ? null : 0xff000000 | rawColor,
+      // Left null rather than zeroed when the field is absent: a role that
+      // grants nothing and a role we were told nothing about lead to opposite
+      // decisions once permissions are computed.
+      permissions: DiscordPermissions.tryParse(payload['permissions']),
     );
   }
 
@@ -338,6 +359,10 @@ final class DiscordMapper {
         ...previous.avatarUrlsBySpace,
         ...incoming.avatarUrlsBySpace,
       },
+      membershipsBySpace: {
+        ...previous.membershipsBySpace,
+        ...incoming.membershipsBySpace,
+      },
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
@@ -347,12 +372,21 @@ final class DiscordMapper {
   CommunitySpace _space(Map<String, Object?> payload) {
     final name = payload['name'] as String? ?? 'Unnamed server';
     final id = payload['id']! as String;
+    // The desktop session splits the guild record into a `properties` object
+    // while the REST guild list keeps everything flat, so permission-relevant
+    // fields are read from whichever of the two carried them.
+    final properties = payload['properties'];
+    final core = properties is Map
+        ? properties.cast<String, Object?>()
+        : payload;
     return CommunitySpace(
       id: id,
       name: name,
       monogram: _monogram(name),
       colorValue: _colorFor(id),
       iconUrl: DiscordCdn.guildIcon(id, payload['icon'] as String?),
+      ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
+      requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
     );
   }
 
@@ -419,6 +453,9 @@ final class DiscordMapper {
         2 => ForumLayout.galleryView,
         _ => null,
       },
+      permissionOverwrites: DiscordPermissionOverwrite.mapFromJson(
+        payload['permission_overwrites'],
+      ),
       unread: false,
     );
   }

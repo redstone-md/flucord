@@ -106,6 +106,33 @@ abstract interface class DiscordVoiceStateGateway {
   void pingVoiceServer();
 }
 
+/// The private-call plane of a main gateway socket.
+///
+/// Deliberately not part of [DiscordVoiceStateGateway]: a bot session speaks
+/// opcode 4 and can never place a DM call, so a transport advertises the two
+/// capabilities separately instead of implementing a call method that would
+/// have to throw.
+abstract interface class DiscordCallGateway {
+  /// Opcode 13 `CALL_CONNECT`, payload `{"channel_id": ...}`.
+  ///
+  /// Discord pushes `CALL_CREATE` only to channels the session has subscribed
+  /// to, so without this the client never learns a call exists.
+  void connectToCall(String channelId);
+
+  /// Opcode 4 in its guildless form: `guild_id` is null and the channel is a
+  /// DM or group DM.
+  ///
+  /// [connected] false leaves the call, which on the wire is the same frame
+  /// with `channel_id: null` — the channel is still needed to know which
+  /// desired state to forget.
+  void updateCallVoiceState({
+    required String channelId,
+    required bool connected,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  });
+}
+
 abstract interface class DiscordChatGateway
     implements DiscordVoiceStateGateway {
   Future<void> connect(String gatewayUrl);

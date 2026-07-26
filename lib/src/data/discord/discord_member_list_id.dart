@@ -1,36 +1,11 @@
+import '../../domain/discord_permissions.dart';
+import '../../domain/permission_overwrite.dart';
 import 'discord_murmur3.dart';
 
-/// One channel permission overwrite, as Discord serialises it.
-final class DiscordPermissionOverwrite {
-  const DiscordPermissionOverwrite({
-    required this.id,
-    required this.allow,
-    required this.deny,
-  });
-
-  final String id;
-  final BigInt allow;
-  final BigInt deny;
-
-  static DiscordPermissionOverwrite? fromJson(Map<String, Object?> json) {
-    final id = json['id'];
-    if (id is! String || id.isEmpty) return null;
-    return DiscordPermissionOverwrite(
-      id: id,
-      allow: _bits(json['allow']),
-      deny: _bits(json['deny']),
-    );
-  }
-
-  static BigInt _bits(Object? value) => switch (value) {
-    final int bits => BigInt.from(bits),
-    final String bits => BigInt.tryParse(bits) ?? BigInt.zero,
-    _ => BigInt.zero,
-  };
-
-  bool grants(BigInt mask) => (allow & mask) == mask;
-  bool denies(BigInt mask) => (deny & mask) == mask;
-}
+// The overwrite record the derivation reads is the same one permission
+// computation reads, so it is defined once, in the domain, and handed on from
+// here rather than kept as a second copy that could drift from it.
+export '../../domain/permission_overwrite.dart' show DiscordPermissionOverwrite;
 
 /// Derives the member-list identifier Discord uses to key a channel's roster.
 ///
@@ -45,7 +20,7 @@ abstract final class DiscordMemberListId {
   static const everyone = 'everyone';
 
   /// `VIEW_CHANNEL`, the only permission bit the derivation looks at.
-  static final viewChannel = BigInt.from(1) << 10;
+  static final viewChannel = DiscordPermissions.viewChannel;
 
   /// Resolves the identifier for [channel].
   ///

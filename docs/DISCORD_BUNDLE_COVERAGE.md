@@ -155,17 +155,27 @@ are excluded from the denominator and are never reported as implemented.
 - **Symbols**: `USER_UPDATE`, `USER_NOTE_UPDATE`, `USER_BADGE_STATE_UPDATE`,
   `USER_SETTINGS_PROTO_UPDATE`.
 - **Purpose**: identity, profile cards, client settings synchronization.
-- **UI surface**: account panel, member and friend profile popovers.
+- **UI surface**: account panel, member and friend profile popovers, user
+  settings dialog.
 - **Contract**: `GET /users/@me`, `GET /users/{id}/profile`,
-  `PATCH /users/@me/settings-proto/{n}`.
+  `GET`/`PATCH /users/@me/settings-proto/{n}`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: `READY` identity projection, guild member profile popover,
-  OAuth `identify` profile header.
-- **Tests**: `discord_oauth_account_mapper_test.dart`, `widget_test.dart`.
+  OAuth `identify` profile header, `PreloadedUserSettings` read/write over a
+  hand-written protobuf codec with `READY.user_settings_proto` and
+  `USER_SETTINGS_PROTO_UPDATE` applied as whole-group replacements. Appearance,
+  chat, notification, privacy, language and status groups are surfaced; each
+  row states whether Flucord applies it, only stores it, or cannot honour it.
+- **Tests**: `discord_oauth_account_mapper_test.dart`, `proto_wire_test.dart`,
+  `discord_user_settings_codec_test.dart`,
+  `discord_user_settings_repository_test.dart`,
+  `user_settings_controller_test.dart`, `user_settings_widget_test.dart`,
+  `user_settings_display_test.dart`, `widget_test.dart`.
 - **Live evidence**: authenticated identity hydrated on Windows `2026-07-25`.
-- **Blocked by**: no settings-proto reader/writer, so notification, privacy,
-  appearance, and keybind settings are absent.
+- **Blocked by**: `FrecencyUserSettings` (type 2) has no codec; offline-edit
+  replay with `required_data_version` is not implemented; keybinds are not in
+  `PreloadedUserSettings` at all and need a different capability.
 
 ## FBC-PRESENCE — Presence and typing
 

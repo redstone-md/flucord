@@ -10,6 +10,8 @@ import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/user_settings_repository.dart';
+import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
@@ -64,9 +66,18 @@ final class MockChatRepository
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
 
-  /// The demo workspace has no socket behind it, so there is nothing to join.
+  /// The demo workspace has no socket behind it, so there is nothing to join
+  /// and nobody to ring.
   @override
   VoiceSignalingService? get voiceSignaling => null;
+
+  /// There is no Discord account behind the demo data, so there is no settings
+  /// blob to read and nowhere for a change to be saved.
+  @override
+  UserSettingsRepository? get userSettings => null;
+
+  @override
+  DirectCallService? get directCalls => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {

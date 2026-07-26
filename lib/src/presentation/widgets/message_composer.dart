@@ -42,6 +42,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
+    this.canAttachFiles = true,
     this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
     this.attachmentPicker = const NativePendingAttachmentPicker(),
     this.voiceMessageRecorder,
@@ -64,6 +65,10 @@ class MessageComposer extends StatefulWidget {
   final SendMessageCallback onSend;
   final CreatePollCallback onCreatePoll;
   final SendStickersCallback onSendStickers;
+
+  /// `ATTACH_FILES`. Without it the upload control is not offered at all,
+  /// rather than offered and rejected once the file is already picked.
+  final bool canAttachFiles;
   final ChatMessage? replyTo;
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
@@ -265,12 +270,19 @@ class _MessageComposerState extends State<MessageComposer>
                         ? 'Message ${widget.channelName}'
                         : 'Message #${widget.channelName}',
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
-                    prefixIcon: IconButton(
-                      key: const ValueKey('add-attachment'),
-                      onPressed: widget.isSending ? null : _pickAttachments,
-                      icon: const Icon(Icons.add_circle_outline, size: 20),
-                      tooltip: 'Add attachment',
-                    ),
+                    prefixIcon: widget.canAttachFiles
+                        ? IconButton(
+                            key: const ValueKey('add-attachment'),
+                            onPressed: widget.isSending
+                                ? null
+                                : _pickAttachments,
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              size: 20,
+                            ),
+                            tooltip: 'Add attachment',
+                          )
+                        : null,
                     suffixIconConstraints: const BoxConstraints.tightFor(
                       width: 240,
                       height: 48,
@@ -419,6 +431,36 @@ class _MessageComposerState extends State<MessageComposer>
           onPressed: widget.onCancelReply,
           icon: const Icon(Icons.close, size: 16),
           tooltip: 'Cancel reply',
+        ),
+      ],
+    ),
+  );
+}
+
+/// Stands in for the composer in a channel the account may read but not post
+/// in, which is what `SEND_MESSAGES` withheld actually looks like: Discord
+/// removes the input rather than letting a message be typed and refused.
+class ReadOnlyChannelNotice extends StatelessWidget {
+  const ReadOnlyChannelNotice({super.key});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('read-only-channel-notice'),
+    constraints: const BoxConstraints(minHeight: 52),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    decoration: BoxDecoration(
+      color: context.surfaces.surface,
+      border: Border(top: BorderSide(color: context.surfaces.border)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.block_outlined, size: 17, color: context.surfaces.muted),
+        const SizedBox(width: 9),
+        const Expanded(
+          child: Text(
+            'You do not have permission to send messages here.',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
         ),
       ],
     ),

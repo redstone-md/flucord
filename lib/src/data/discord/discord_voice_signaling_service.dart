@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
+import 'discord_call_state_roster.dart';
 import 'discord_gateway_client.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_session_assembler.dart';
@@ -17,9 +18,14 @@ typedef DiscordVoiceClientFactory =
 
 final class DiscordVoiceSignalingService
     implements VoiceSignalingService, VoiceAudioTransport {
+  /// [callGateway] is the private-call plane and is optional on purpose: a bot
+  /// session speaks opcode 4 but can never place a DM call, so a transport that
+  /// cannot ring simply does not supply one and [joinCall] reports the refusal
+  /// instead of a method existing that would always throw.
   DiscordVoiceSignalingService({
     required DiscordVoiceStateGateway mainGateway,
     required VoiceDaveService? nativeDaveService,
+    this._callGateway,
     DiscordVoiceClientFactory? voiceClientFactory,
   }) : _gateway = mainGateway,
        _daveService = nativeDaveService,
@@ -28,26 +34,28 @@ final class DiscordVoiceSignalingService
   }
 
   final DiscordVoiceStateGateway _gateway;
+  final DiscordCallGateway? _callGateway;
   final VoiceDaveService? _daveService;
   final DiscordVoiceClientFactory _clientFactory;
   final DiscordVoiceSessionAssembler _assembler =
       DiscordVoiceSessionAssembler();
   final DiscordVoiceStateRoster _roster = DiscordVoiceStateRoster();
+  final DiscordCallStateRoster _callRoster = DiscordCallStateRoster();
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
       StreamController.broadcast();
-  final Map<String, String> _desiredChannels = {};
-  final Set<String> _pingedGuilds = <String>{};
-  final Map<String, int> _generations = {};
-  final Map<String, DiscordVoiceClient> _clients = {};
-  final Map<String, StreamSubscription<VoiceSignalingEvent>>
+  final Map<VoiceSessionKey, String> _desiredChannels = {};
+  final Set<VoiceSessionKey> _pingedSessions = <VoiceSessionKey>{};
+  final Map<VoiceSessionKey, int> _generations = {};
+  final Map<VoiceSessionKey, DiscordVoiceClient> _clients = {};
+  final Map<VoiceSessionKey, StreamSubscription<VoiceSignalingEvent>>
   _clientSubscriptions = {};
-  final Map<String, StreamSubscription<VoiceRemoteOpusFrame>>
+  final Map<VoiceSessionKey, StreamSubscription<VoiceRemoteOpusFrame>>
   _audioSubscriptions = {};
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   String? _currentUserId;
-  String? _activeGuildId;
+  VoiceSessionKey? _activeSession;
   bool _closed = false;
 
   @override
@@ -66,6 +74,51 @@ final class DiscordVoiceSignalingService
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+  }) => _join(
+    VoiceSessionKey.guild(guildId),
+    channelId: channelId,
+    selfMute: selfMute,
+    selfDeaf: selfDeaf,
+  );
+
+  @override
+  Future<void> leaveVoiceChannel(String guildId) =>
+      _leave(VoiceSessionKey.guild(guildId));
+
+  /// Joins a call in a DM or group DM.
+  ///
+  /// The media path is the one guild voice already uses; only the signalling
+  /// differs, so this shares every step below the session key.
+  Future<void> joinCall({
+    required String channelId,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) {
+    if (_callGateway == null) {
+      _emit(
+        VoiceSignalingStatusEvent(
+          VoiceConnectionStatus.failure,
+          error: StateError('This session cannot join private calls'),
+        ),
+      );
+      return Future<void>.value();
+    }
+    return _join(
+      VoiceSessionKey.privateCall(channelId),
+      channelId: channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+    );
+  }
+
+  Future<void> leaveCall(String channelId) =>
+      _leave(VoiceSessionKey.privateCall(channelId));
+
+  Future<void> _join(
+    VoiceSessionKey key, {
+    required String channelId,
+    required bool selfMute,
+    required bool selfDeaf,
   }) async {
     if (_closed) throw StateError('Voice signaling service is closed');
     final daveService = _daveService;
@@ -87,8 +140,42 @@ final class DiscordVoiceSignalingService
       );
       return;
     }
-    _activeGuildId = guildId;
-    if (_desiredChannels[guildId] == channelId) {
+    _activeSession = key;
+    if (_desiredChannels[key] == channelId) {
+      _sendVoiceState(key, channelId, selfMute: selfMute, selfDeaf: selfDeaf);
+      return;
+    }
+    _desiredChannels[key] = channelId;
+    _generations[key] = (_generations[key] ?? 0) + 1;
+    _assembler.clear(key);
+    _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.joining));
+    // The people already sitting in the channel were announced at bootstrap and
+    // will not be announced again, so the roster is replayed here or the room
+    // renders empty until somebody else moves.
+    for (final state in _seatedIn(key, channelId)) {
+      _emit(state);
+    }
+    _sendVoiceState(key, channelId, selfMute: selfMute, selfDeaf: selfDeaf);
+  }
+
+  Future<void> _leave(VoiceSessionKey key) async {
+    _desiredChannels.remove(key);
+    _generations[key] = (_generations[key] ?? 0) + 1;
+    _assembler.clear(key);
+    _sendVoiceState(key, null);
+    await _closeClient(key);
+    if (_activeSession == key) _activeSession = null;
+    _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected));
+  }
+
+  void _sendVoiceState(
+    VoiceSessionKey key,
+    String? channelId, {
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) {
+    final guildId = key.guildId;
+    if (guildId != null) {
       _gateway.updateVoiceState(
         guildId: guildId,
         channelId: channelId,
@@ -97,37 +184,20 @@ final class DiscordVoiceSignalingService
       );
       return;
     }
-    _desiredChannels[guildId] = channelId;
-    _generations[guildId] = (_generations[guildId] ?? 0) + 1;
-    _assembler.clear(guildId);
-    _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.joining));
-    // The people already sitting in the channel were announced at bootstrap and
-    // will not be announced again, so the roster is replayed here or the room
-    // renders empty until somebody else moves.
-    for (final state in _roster.participantsIn(
-      guildId: guildId,
-      channelId: channelId,
-    )) {
-      _emit(state);
-    }
-    _gateway.updateVoiceState(
-      guildId: guildId,
-      channelId: channelId,
+    _callGateway?.updateCallVoiceState(
+      channelId: key.callChannelId!,
+      connected: channelId != null,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
     );
   }
 
-  @override
-  Future<void> leaveVoiceChannel(String guildId) async {
-    _desiredChannels.remove(guildId);
-    _generations[guildId] = (_generations[guildId] ?? 0) + 1;
-    _assembler.clear(guildId);
-    _gateway.updateVoiceState(guildId: guildId, channelId: null);
-    await _closeClient(guildId);
-    if (_activeGuildId == guildId) _activeGuildId = null;
-    _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected));
-  }
+  List<VoiceParticipantStateEvent> _seatedIn(
+    VoiceSessionKey key,
+    String channelId,
+  ) => key.isPrivateCall
+      ? _callRoster.participantsIn(channelId)
+      : _roster.participantsIn(guildId: key.guildId!, channelId: channelId);
 
   void _onGatewayEvent(DiscordGatewayEvent event) {
     if (event is! DiscordGatewayDispatch) return;
@@ -140,7 +210,16 @@ final class DiscordVoiceSignalingService
       eventName: event.name,
       data: event.data,
     )) {
-      if (_desiredChannels.containsKey(state.guildId)) _emit(state);
+      if (_desiredChannels.containsKey(VoiceSessionKey.guild(state.guildId!))) {
+        _emit(state);
+      }
+    }
+    for (final change in _callRoster.accept(
+      eventName: event.name,
+      data: event.data,
+    )) {
+      final key = VoiceSessionKey.privateCall(change.channelId);
+      if (_desiredChannels.containsKey(key)) _emit(change.state);
     }
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
@@ -149,12 +228,10 @@ final class DiscordVoiceSignalingService
       data: event.data,
       currentUserId: currentUserId,
     );
-    if (credentials == null ||
-        _desiredChannels[credentials.guildId] != credentials.channelId) {
-      return;
-    }
-    final generation = _generations[credentials.guildId] ?? 0;
-    unawaited(_startVoiceClient(credentials, generation));
+    if (credentials == null) return;
+    final key = credentials.sessionKey;
+    if (_desiredChannels[key] != credentials.channelId) return;
+    unawaited(_startVoiceClient(credentials, _generations[key] ?? 0));
   }
 
   /// Pokes the main gateway when a voice socket drops but intends to come back.
@@ -168,17 +245,17 @@ final class DiscordVoiceSignalingService
   /// fires on the transition into that state and not on every repeat. Left
   /// unguarded it turns one broken voice connection into a flood on the main
   /// gateway, which is the socket carrying every message.
-  void _onClientEvent(String guildId, VoiceSignalingEvent event) {
+  void _onClientEvent(VoiceSessionKey key, VoiceSignalingEvent event) {
     if (event is VoiceSignalingStatusEvent) {
-      final wasReconnecting = _pingedGuilds.contains(guildId);
+      final wasReconnecting = _pingedSessions.contains(key);
       final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;
       if (isReconnecting && !wasReconnecting) {
-        if (_desiredChannels.containsKey(guildId)) {
-          _pingedGuilds.add(guildId);
+        if (_desiredChannels.containsKey(key)) {
+          _pingedSessions.add(key);
           _gateway.pingVoiceServer();
         }
       } else if (!isReconnecting) {
-        _pingedGuilds.remove(guildId);
+        _pingedSessions.remove(key);
       }
     }
     _emit(event);
@@ -190,20 +267,23 @@ final class DiscordVoiceSignalingService
   ) async {
     final daveService = _daveService;
     if (daveService == null) return;
-    await _closeClient(credentials.guildId);
+    final key = credentials.sessionKey;
+    await _closeClient(key);
     if (_closed ||
-        generation != _generations[credentials.guildId] ||
-        _desiredChannels[credentials.guildId] != credentials.channelId) {
+        generation != _generations[key] ||
+        _desiredChannels[key] != credentials.channelId) {
       return;
     }
     final client = _clientFactory(credentials, daveService);
-    _clients[credentials.guildId] = client;
-    _clientSubscriptions[credentials.guildId] = client.events.listen(
-      (event) => _onClientEvent(credentials.guildId, event),
+    _clients[key] = client;
+    _clientSubscriptions[key] = client.events.listen(
+      (event) => _onClientEvent(key, event),
     );
     if (client case final VoiceAudioTransport audioTransport) {
-      _audioSubscriptions[credentials.guildId] = audioTransport.remoteAudio
-          .listen(_emitRemoteAudio, onError: _remoteAudio.addError);
+      _audioSubscriptions[key] = audioTransport.remoteAudio.listen(
+        _emitRemoteAudio,
+        onError: _remoteAudio.addError,
+      );
     }
     _emit(VoiceCredentialsReadyEvent(credentials));
     try {
@@ -215,16 +295,16 @@ final class DiscordVoiceSignalingService
     }
   }
 
-  Future<void> _closeClient(String guildId) async {
-    await _audioSubscriptions.remove(guildId)?.cancel();
-    await _clientSubscriptions.remove(guildId)?.cancel();
-    await _clients.remove(guildId)?.close();
+  Future<void> _closeClient(VoiceSessionKey key) async {
+    await _audioSubscriptions.remove(key)?.cancel();
+    await _clientSubscriptions.remove(key)?.cancel();
+    await _clients.remove(key)?.close();
   }
 
   @override
   void sendOpusFrame(Uint8List opusFrame) {
-    final guildId = _activeGuildId;
-    final client = guildId == null ? null : _clients[guildId];
+    final session = _activeSession;
+    final client = session == null ? null : _clients[session];
     if (client is! VoiceAudioTransport) {
       throw StateError('Discord voice media transport is not ready');
     }
@@ -233,8 +313,8 @@ final class DiscordVoiceSignalingService
 
   @override
   Future<void> finishSpeaking() async {
-    final guildId = _activeGuildId;
-    final client = guildId == null ? null : _clients[guildId];
+    final session = _activeSession;
+    final client = session == null ? null : _clients[session];
     if (client is VoiceAudioTransport) {
       await (client as VoiceAudioTransport).finishSpeaking();
     }
@@ -252,11 +332,12 @@ final class DiscordVoiceSignalingService
     if (_closed) return;
     _closed = true;
     await _gatewaySubscription.cancel();
-    for (final guildId in _clients.keys.toList(growable: false)) {
-      await _closeClient(guildId);
+    for (final key in _clients.keys.toList(growable: false)) {
+      await _closeClient(key);
     }
     _assembler.clearAll();
     _roster.clearAll();
+    _callRoster.clearAll();
     await _remoteAudio.close();
     await _events.close();
   }

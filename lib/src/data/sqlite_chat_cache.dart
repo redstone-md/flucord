@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../domain/chat_cache.dart';
 import '../domain/chat_models.dart';
+import '../domain/discord_permissions.dart';
 import 'chat_model_json.dart';
 import 'message_snapshot_codec.dart';
 import 'sqlite_chat_schema.dart';
@@ -308,6 +309,8 @@ final class SqliteChatCache
     'color_value': space.colorValue,
     'icon_url': space.iconUrl,
     'kind': space.kind.index,
+    'owner_id': space.ownerId,
+    'requires_mfa': space.requiresMultiFactorAuth ? 1 : 0,
     'sort_index': index,
   };
 
@@ -319,6 +322,8 @@ final class SqliteChatCache
         colorValue: row['color_value']! as int,
         iconUrl: row['icon_url'] as String?,
         kind: SpaceKind.values[row['kind']! as int],
+        ownerId: row['owner_id'] as String?,
+        requiresMultiFactorAuth: row['requires_mfa'] == 1,
       );
 
   static Map<String, Object?> _roleToRow(CommunityRole role) => {
@@ -327,6 +332,7 @@ final class SqliteChatCache
     'name': role.name,
     'position': role.position,
     'color_value': role.colorValue,
+    'permissions': role.permissions?.toString(),
   };
 
   static Map<String, Object?> _categoryToRow(ChannelCategory category) => {
@@ -350,6 +356,7 @@ final class SqliteChatCache
     name: row['name']! as String,
     position: row['position']! as int,
     colorValue: row['color_value'] as int?,
+    permissions: DiscordPermissions.tryParse(row['permissions']),
   );
 
   static Map<String, Object?> _channelToRow(
@@ -377,6 +384,9 @@ final class SqliteChatCache
     'default_sort_order': channel.defaultSortOrder?.index,
     'default_forum_layout': channel.defaultForumLayout?.index,
     'recipient_id': channel.recipientId,
+    'permission_overwrites_json': ChatModelJson.permissionOverwrites(
+      channel.permissionOverwrites,
+    ),
     'sort_index': index,
   };
 
@@ -414,6 +424,9 @@ final class SqliteChatCache
             ? null
             : ForumLayout.values[row['default_forum_layout']! as int],
         recipientId: row['recipient_id'] as String?,
+        permissionOverwrites: ChatModelJson.permissionOverwritesFrom(
+          row['permission_overwrites_json'] as String?,
+        ),
       );
 
   static Map<String, Object?> _memberToRow(Member member) => {
@@ -429,6 +442,7 @@ final class SqliteChatCache
     'avatar_urls_by_space_json': ChatModelJson.stringMap(
       member.avatarUrlsBySpace,
     ),
+    'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
   };
 
   static Member _memberFromRow(Map<String, Object?> row) => Member(
@@ -445,6 +459,9 @@ final class SqliteChatCache
     avatarUrl: row['avatar_url'] as String?,
     avatarUrlsBySpace: ChatModelJson.stringMapFrom(
       row['avatar_urls_by_space_json']! as String,
+    ),
+    membershipsBySpace: ChatModelJson.membershipsFrom(
+      row['memberships_json'] as String?,
     ),
   );
 

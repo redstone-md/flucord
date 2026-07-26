@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
@@ -36,12 +37,16 @@ class MessageList extends StatefulWidget {
     required this.onLoadOlder,
     required this.externalLinkLauncher,
     required this.onSelectChannel,
+    this.capabilities = ChannelCapabilities.unrestricted,
     this.attachmentDownloadService,
     super.key,
   });
 
   final ChatWorkspace workspace;
   final ConversationChannel channel;
+
+  /// Which per-message actions this channel's permissions allow.
+  final ChannelCapabilities capabilities;
   final String query;
   final String? targetMessageId;
   final ValueChanged<ChatMessage> onReply;
@@ -388,6 +393,7 @@ class _MessageListState extends State<MessageList> {
                           message: message,
                           member: widget.workspace.memberById(message.authorId),
                           workspace: widget.workspace,
+                          capabilities: widget.capabilities,
                           grouped: grouped,
                           isCurrentUser:
                               message.authorId ==

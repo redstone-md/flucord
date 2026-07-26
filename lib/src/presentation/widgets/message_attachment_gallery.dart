@@ -10,11 +10,20 @@ class MessageAttachmentGallery extends StatefulWidget {
   const MessageAttachmentGallery({
     required this.attachments,
     this.downloadService,
+    this.rendersMedia = true,
     super.key,
   });
 
   final List<MessageAttachment> attachments;
   final AttachmentDownloadService? downloadService;
+
+  /// Whether image, video and audio attachments render inline.
+  ///
+  /// Turning inline media off must not hide the attachment: a file still
+  /// arrived and the user still needs its name, size and download control.
+  /// Suppressing the whole gallery would make ordinary file attachments
+  /// disappear from the conversation entirely.
+  final bool rendersMedia;
 
   @override
   State<MessageAttachmentGallery> createState() =>
@@ -73,6 +82,7 @@ class _MessageAttachmentGalleryState extends State<MessageAttachmentGallery> {
               attachment: attachment,
               downloadController: _controllers[attachment.id],
               imageGallery: imageGallery,
+              rendersMedia: widget.rendersMedia,
             ),
           ),
       ],

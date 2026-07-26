@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 19;
+  static const version = 20;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -18,6 +18,8 @@ abstract final class SqliteChatSchema {
         color_value INTEGER NOT NULL,
         icon_url TEXT,
         kind INTEGER NOT NULL,
+        owner_id TEXT,
+        requires_mfa INTEGER NOT NULL DEFAULT 0,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -52,6 +54,7 @@ abstract final class SqliteChatSchema {
         default_sort_order INTEGER,
         default_forum_layout INTEGER,
         recipient_id TEXT,
+        permission_overwrites_json TEXT,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -61,7 +64,8 @@ abstract final class SqliteChatSchema {
         space_id TEXT NOT NULL,
         name TEXT NOT NULL,
         position INTEGER NOT NULL,
-        color_value INTEGER
+        color_value INTEGER,
+        permissions TEXT
       )
     ''');
     await database.execute('''
@@ -75,7 +79,8 @@ abstract final class SqliteChatSchema {
         space_ids_json TEXT NOT NULL,
         roles_by_space_json TEXT NOT NULL,
         avatar_url TEXT,
-        avatar_urls_by_space_json TEXT NOT NULL
+        avatar_urls_by_space_json TEXT NOT NULL,
+        memberships_json TEXT
       )
     ''');
     await database.execute('''
@@ -292,6 +297,42 @@ abstract final class SqliteChatSchema {
         'ALTER TABLE messages ADD flags INTEGER NOT NULL DEFAULT 0',
       );
     }
+    if (oldVersion < 20) {
+      // Every new permission column is nullable on purpose. A row written
+      // before this version knows nothing about permissions, and null is how
+      // the reader tells that apart from a role that really grants nothing.
+      await _addColumn(database, 'spaces', 'owner_id TEXT');
+      await _addColumn(
+        database,
+        'spaces',
+        'requires_mfa INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'roles', 'permissions TEXT');
+      await _addColumn(database, 'channels', 'permission_overwrites_json TEXT');
+      await _addColumn(database, 'members', 'memberships_json TEXT');
+    }
+  }
+
+  /// Adds a column, skipping tables this database does not have.
+  ///
+  /// A step that spans several tables cannot assume all of them survived every
+  /// earlier version, and an upgrade that throws does not fail one query — it
+  /// makes the cache impossible to open again, for good. Skipping a table that
+  /// is not there costs nothing: a database without it has no rows to migrate.
+  static Future<void> _addColumn(
+    Database database,
+    String table,
+    String definition,
+  ) async {
+    final existing = await database.query(
+      'sqlite_master',
+      columns: ['name'],
+      where: 'type = ? AND name = ?',
+      whereArgs: ['table', table],
+      limit: 1,
+    );
+    if (existing.isEmpty) return;
+    await database.execute('ALTER TABLE $table ADD $definition');
   }
 
   static Future<void> _createGuildStickers(DatabaseExecutor database) async {

@@ -1,5 +1,7 @@
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/user_settings_repository.dart';
+import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 
 final class DisconnectedChatRepository implements ChatRepository {
@@ -18,6 +20,12 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   VoiceSignalingService? get voiceSignaling => null;
+
+  @override
+  UserSettingsRepository? get userSettings => null;
+
+  @override
+  DirectCallService? get directCalls => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;

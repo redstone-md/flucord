@@ -25,7 +25,10 @@ do not count as desktop-user chat parity.
 | Search | Local only | Loaded/cached workspace; Discord server search absent |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; live interoperability still unverified |
-| DM calls, video, screen share | Not ready | Opcodes 13 and 18-22 unimplemented; video needs a native encoder |
+| DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
+| Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
+| User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
+| Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
 | ETF Gateway framing | Ready | Binary `encoding=etf` frames, live-validated against the Gateway |
 | zstd-stream Gateway compression | Off by default | Decoder is in place and live-validated, but stays disabled until proven against a full authenticated `READY` |

@@ -17,6 +17,7 @@ class MessageAttachmentView extends StatefulWidget {
     this.downloadService,
     this.downloadController,
     this.imageGallery = const [],
+    this.rendersMedia = true,
     this.inlineVideoBuilder = buildNativeInlineVideo,
     this.inlineVoiceBuilder = buildNativeVoiceMessage,
     super.key,
@@ -26,6 +27,11 @@ class MessageAttachmentView extends StatefulWidget {
   final AttachmentDownloadService? downloadService;
   final AttachmentDownloadController? downloadController;
   final List<ImageAttachmentViewerEntry> imageGallery;
+
+  /// Whether this attachment renders as inline media. When false it still
+  /// renders — as the file row, with its name, size and download control —
+  /// because the attachment exists either way.
+  final bool rendersMedia;
   final InlineVideoBuilder inlineVideoBuilder;
   final InlineVoiceBuilder inlineVoiceBuilder;
 
@@ -80,7 +86,10 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
   @override
   Widget build(BuildContext context) {
     late final Widget content;
-    if (_attachment.isImage && _attachment.url.isNotEmpty) {
+    // With inline media off every attachment falls through to the file row.
+    // The attachment is still there; only its preview is suppressed.
+    final media = widget.rendersMedia;
+    if (media && _attachment.isImage && _attachment.url.isNotEmpty) {
       content = _ImageAttachment(
         attachment: _attachment,
         onOpen: () => unawaited(
@@ -91,7 +100,7 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
           ),
         ),
       );
-    } else if (_attachment.isVideo && _attachment.url.isNotEmpty) {
+    } else if (media && _attachment.isVideo && _attachment.url.isNotEmpty) {
       final ratio = _attachment.width != null && _attachment.height != null
           ? _attachment.width! / _attachment.height!
           : 16 / 9;
@@ -100,7 +109,7 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
         url: _attachment.url,
         aspectRatio: ratio,
       );
-    } else if (_attachment.isAudio && _attachment.url.isNotEmpty) {
+    } else if (media && _attachment.isAudio && _attachment.url.isNotEmpty) {
       content = widget.inlineVoiceBuilder(
         key: ValueKey('attachment-audio-${_attachment.id}'),
         url: _attachment.url,

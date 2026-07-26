@@ -1,64 +1,112 @@
 import '../../domain/voice_connection.dart';
 
+/// Pairs the two dispatches that together are a voice connection's credentials.
+///
+/// R08: the self `VOICE_STATE_UPDATE` carries the session id and the
+/// `VOICE_SERVER_UPDATE` carries the endpoint and token, in no guaranteed
+/// order. They are matched on the session key rather than on the guild, because
+/// a DM or group-DM call has no guild: its `VOICE_SERVER_UPDATE` arrives with
+/// `guild_id: null` and `channel_id` set, and the pairing key is R08's
+/// `guildId ?? channelId`.
 final class DiscordVoiceSessionAssembler {
-  final Map<String, _PendingVoiceSession> _pending = {};
+  final Map<VoiceSessionKey, _PendingVoiceSession> _pending = {};
 
   VoiceServerCredentials? accept({
     required String eventName,
     required Map<String, Object?> data,
     required String currentUserId,
-  }) {
-    final guildId = data['guild_id'] as String?;
-    if (guildId == null || guildId.isEmpty) return null;
-    final pending = _pending.putIfAbsent(
-      guildId,
-      () => _PendingVoiceSession(guildId),
-    );
+  }) => switch (eventName) {
+    'VOICE_STATE_UPDATE' => _acceptVoiceState(data, currentUserId),
+    'VOICE_SERVER_UPDATE' => _acceptServerUpdate(data),
+    _ => null,
+  };
 
-    switch (eventName) {
-      case 'VOICE_STATE_UPDATE':
-        if (data['user_id'] != currentUserId) return null;
-        final channelId = data['channel_id'] as String?;
-        final sessionId = data['session_id'] as String?;
-        if (channelId == null || sessionId == null || sessionId.isEmpty) {
-          _pending.remove(guildId);
-          return null;
-        }
-        pending
-          ..channelId = channelId
-          ..userId = currentUserId
-          ..sessionId = sessionId;
-      case 'VOICE_SERVER_UPDATE':
-        final token = data['token'] as String?;
-        final endpoint = data['endpoint'] as String?;
-        if (token == null ||
-            token.isEmpty ||
-            endpoint == null ||
-            endpoint.isEmpty) {
-          _pending.remove(guildId);
-          return null;
-        }
-        pending
-          ..token = token
-          ..endpoint = endpoint;
-      default:
-        return null;
+  void clear(VoiceSessionKey key) => _pending.remove(key);
+
+  void clearAll() => _pending.clear();
+
+  VoiceServerCredentials? _acceptVoiceState(
+    Map<String, Object?> data,
+    String currentUserId,
+  ) {
+    if (data['user_id'] != currentUserId) return null;
+    final guildId = _nonEmpty(data['guild_id']);
+    final channelId = _nonEmpty(data['channel_id']);
+    final sessionId = _nonEmpty(data['session_id']);
+    if (channelId == null || sessionId == null) {
+      _forgetDeparture(guildId);
+      return null;
     }
+    final key = guildId == null
+        ? VoiceSessionKey.privateCall(channelId)
+        : VoiceSessionKey.guild(guildId);
+    final pending = _pending.putIfAbsent(key, () => _PendingVoiceSession(key));
+    pending
+      ..channelId = channelId
+      ..userId = currentUserId
+      ..sessionId = sessionId;
+    return _complete(key, pending);
+  }
 
+  VoiceServerCredentials? _acceptServerUpdate(Map<String, Object?> data) {
+    final guildId = _nonEmpty(data['guild_id']);
+    final channelId = _nonEmpty(data['channel_id']);
+    // R08: guild voice names only the guild, a private call only the channel.
+    // A frame that names neither cannot be attributed to a session at all.
+    final key = guildId != null
+        ? VoiceSessionKey.guild(guildId)
+        : channelId != null
+        ? VoiceSessionKey.privateCall(channelId)
+        : null;
+    if (key == null) return null;
+    final token = _nonEmpty(data['token']);
+    final endpoint = _nonEmpty(data['endpoint']);
+    if (token == null || endpoint == null) {
+      _pending.remove(key);
+      return null;
+    }
+    final pending = _pending.putIfAbsent(key, () => _PendingVoiceSession(key));
+    pending
+      ..token = token
+      ..endpoint = endpoint;
+    // A private call's server update also names the channel, and it is the only
+    // frame that does when the self voice state has not landed yet.
+    pending.channelId ??= key.isPrivateCall ? key.callChannelId : channelId;
+    return _complete(key, pending);
+  }
+
+  VoiceServerCredentials? _complete(
+    VoiceSessionKey key,
+    _PendingVoiceSession pending,
+  ) {
     final credentials = pending.build();
-    if (credentials != null) _pending.remove(guildId);
+    if (credentials != null) _pending.remove(key);
     return credentials;
   }
 
-  void clear(String guildId) => _pending.remove(guildId);
+  /// A self voice state with no channel is a disconnect.
+  ///
+  /// Guild voice names the guild it left, so only that session is forgotten. A
+  /// private-call disconnect names neither guild nor channel, and since Discord
+  /// grants one voice connection at a time, forgetting every half-built call is
+  /// the honest reading — it is strictly safer than leaving a stale token
+  /// behind to be paired with the next call's session id.
+  void _forgetDeparture(String? guildId) {
+    if (guildId != null) {
+      _pending.remove(VoiceSessionKey.guild(guildId));
+      return;
+    }
+    _pending.removeWhere((key, _) => key.isPrivateCall);
+  }
 
-  void clearAll() => _pending.clear();
+  static String? _nonEmpty(Object? value) =>
+      value is String && value.isNotEmpty ? value : null;
 }
 
 final class _PendingVoiceSession {
-  _PendingVoiceSession(this.guildId);
+  _PendingVoiceSession(this.key);
 
-  final String guildId;
+  final VoiceSessionKey key;
   String? channelId;
   String? userId;
   String? sessionId;
@@ -66,6 +114,11 @@ final class _PendingVoiceSession {
   String? endpoint;
 
   VoiceServerCredentials? build() {
+    final channelId = this.channelId;
+    final userId = this.userId;
+    final sessionId = this.sessionId;
+    final token = this.token;
+    final endpoint = this.endpoint;
     if (channelId == null ||
         userId == null ||
         sessionId == null ||
@@ -74,12 +127,12 @@ final class _PendingVoiceSession {
       return null;
     }
     return VoiceServerCredentials(
-      guildId: guildId,
-      channelId: channelId!,
-      userId: userId!,
-      sessionId: sessionId!,
-      token: token!,
-      endpoint: endpoint!,
+      guildId: key.guildId,
+      channelId: channelId,
+      userId: userId,
+      sessionId: sessionId,
+      token: token,
+      endpoint: endpoint,
     );
   }
 }

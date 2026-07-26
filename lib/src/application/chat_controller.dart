@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/discord_permissions.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_member_list_repository.dart';
 import '../domain/message_forward_repository.dart';
@@ -13,12 +14,16 @@ import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/user_settings_repository.dart';
+import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
+import '../domain/workspace_permissions.dart';
 import 'channel_activity_persistence.dart';
 
 part 'chat_controller_events.dart';
+part 'chat_controller_typing.dart';
 part 'chat_controller_threads.dart';
 part 'chat_controller_forums.dart';
 part 'chat_controller_polls.dart';
@@ -28,6 +33,7 @@ part 'chat_controller_message_flags.dart';
 part 'chat_controller_stickers.dart';
 part 'chat_controller_voice_messages.dart';
 part 'chat_controller_scheduled_events.dart';
+part 'chat_controller_user_settings.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -77,6 +83,9 @@ final class ChatController extends ChangeNotifier {
   VoiceSignalingService? get voiceSignalingService =>
       _repository.voiceSignaling;
 
+  /// The private-call plane of the active transport, when it has one.
+  DirectCallService? get directCallService => _repository.directCalls;
+
   /// The lazy member-list surface, when the active transport offers one.
   ///
   /// Only the desktop-user transport can serve rosters; every other transport
@@ -118,16 +127,6 @@ final class ChatController extends ChangeNotifier {
       _pinnedMessages[channelId];
   bool isLoadingPins(String channelId) => _loadingPins.contains(channelId);
   Object? pinError(String channelId) => _pinErrors[channelId];
-
-  List<Member> typingMembersFor(String channelId) {
-    final workspace = _workspace;
-    if (workspace == null) return const [];
-    return (_typingMembers[channelId] ?? const <String>{})
-        .where((id) => id != workspace.currentMemberId)
-        .map(workspace.memberOrNull)
-        .whereType<Member>()
-        .toList(growable: false);
-  }
 
   Future<void> useRepository(ChatRepository repository) async {
     await _eventSubscription?.cancel();
@@ -174,8 +173,14 @@ final class ChatController extends ChangeNotifier {
     if (_state == ChatLoadState.ready && workspace != null) {
       // A voice channel does carry messages, but it is never the channel the
       // app lands on unasked, so warming its history here would be wasted work.
+      // The same visibility filter the shell lands by is applied here, or the
+      // two would disagree and the channel actually shown would never load.
+      final permissions = WorkspacePermissions(workspace);
       final textChannels = workspace.channels.where(
-        (channel) => channel.kind != ChannelKind.voice && !channel.isThread,
+        (channel) =>
+            channel.kind != ChannelKind.voice &&
+            !channel.isThread &&
+            permissions.can(DiscordPermissions.viewChannel, channel),
       );
       if (textChannels.isNotEmpty) {
         unawaited(openChannel(textChannels.first.id));
@@ -443,21 +448,6 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> startTyping(String channelId) async {
-    final now = DateTime.now();
-    final previous = _typingRequests[channelId];
-    if (previous != null &&
-        now.difference(previous) < const Duration(seconds: 8)) {
-      return;
-    }
-    _typingRequests[channelId] = now;
-    try {
-      await _repository.startTyping(channelId);
-    } catch (error) {
-      _error = error;
-    }
-  }
-
   void markAllChannelsRead() {
     final workspace = _workspace;
     if (workspace == null) return;
@@ -478,15 +468,6 @@ final class ChatController extends ChangeNotifier {
       _persistChannelActivity(channelId);
     }
     notifyListeners();
-  }
-
-  void _clearTyping() {
-    for (final timer in _typingTimers.values) {
-      timer.cancel();
-    }
-    _typingTimers.clear();
-    _typingMembers.clear();
-    _typingRequests.clear();
   }
 
   void _persistChannelActivity(String channelId) => unawaited(

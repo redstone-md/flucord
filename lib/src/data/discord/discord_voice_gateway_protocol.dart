@@ -74,10 +74,13 @@ final class DiscordVoiceGatewayProtocol {
   final int maxDaveProtocolVersion;
   int sequenceAck = -1;
 
+  /// `server_id` is the guild for guild voice and the channel for a DM or
+  /// group-DM call (R08) — the credentials know which, so the identify body
+  /// does not have to.
   Map<String, Object?> identify() => {
     'op': 0,
     'd': {
-      'server_id': credentials.guildId,
+      'server_id': credentials.serverId,
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,
@@ -88,7 +91,7 @@ final class DiscordVoiceGatewayProtocol {
   Map<String, Object?> resume() => {
     'op': 7,
     'd': {
-      'server_id': credentials.guildId,
+      'server_id': credentials.serverId,
       'session_id': credentials.sessionId,
       'token': credentials.token,
       'seq_ack': sequenceAck,

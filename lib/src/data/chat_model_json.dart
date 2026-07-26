@@ -1,7 +1,10 @@
 import 'dart:convert';
 
 import '../domain/chat_models.dart';
+import '../domain/discord_permissions.dart';
+import '../domain/guild_membership.dart';
 import '../domain/message_embed.dart';
+import '../domain/permission_overwrite.dart';
 import 'message_attachment_codec.dart';
 import 'message_embed_codec.dart';
 import 'message_poll_codec.dart';
@@ -123,4 +126,59 @@ final class ChatModelJson {
 
   static List<String> stringListFrom(String source) =>
       List.unmodifiable((jsonDecode(source) as List).whereType<String>());
+
+  /// Overwrites are cached in Discord's own wire shape so the same reader
+  /// serves the gateway payload and the cache row.
+  static String permissionOverwrites(
+    Map<String, DiscordPermissionOverwrite> values,
+  ) => jsonEncode([
+    for (final value in values.values)
+      {
+        'id': value.id,
+        'type': value.kind.discordValue,
+        'allow': DiscordPermissions.encode(value.allow),
+        'deny': DiscordPermissions.encode(value.deny),
+      },
+  ]);
+
+  static Map<String, DiscordPermissionOverwrite> permissionOverwritesFrom(
+    String? source,
+  ) => source == null
+      ? const {}
+      : DiscordPermissionOverwrite.mapFromJson(jsonDecode(source));
+
+  static String memberships(Map<String, GuildMembership> values) => jsonEncode({
+    for (final entry in values.entries)
+      entry.key: {
+        'roles': entry.value.roleIds,
+        'flags': entry.value.flags,
+        'pending': entry.value.isPending,
+        'timeout': entry.value.timeoutUntil?.toIso8601String(),
+      },
+  });
+
+  static Map<String, GuildMembership> membershipsFrom(String? source) {
+    if (source == null) return const {};
+    final decoded = jsonDecode(source);
+    if (decoded is! Map) return const {};
+    return {
+      for (final entry in decoded.entries)
+        if (entry.key is String && entry.value is Map)
+          entry.key as String: _membershipFrom(
+            (entry.value as Map).cast<String, Object?>(),
+          ),
+    };
+  }
+
+  static GuildMembership _membershipFrom(Map<String, Object?> raw) {
+    final timeout = raw['timeout'] as String?;
+    return GuildMembership(
+      roleIds: (raw['roles'] as List? ?? const []).whereType<String>().toList(
+        growable: false,
+      ),
+      flags: raw['flags'] as int? ?? 0,
+      isPending: raw['pending'] as bool? ?? false,
+      timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+    );
+  }
 }

@@ -1,6 +1,56 @@
 part of 'flucord_shell.dart';
 
 extension _FlucordShellNavigation on FlucordShell {
+  /// What stands in for the workspace when there are no spaces to show: the
+  /// OAuth account's guild directory when one is signed in, and otherwise the
+  /// prompt to connect a transport.
+  Widget _buildEmptyWorkspace(BuildContext context) {
+    if (connectionController.mode != SessionMode.disconnected) {
+      return EmptyWorkspaceView(
+        onOpenConnections: () => _openConnections(context),
+      );
+    }
+    final account = discordOAuthController.account;
+    if (account == null) {
+      return DisconnectedWorkspaceView(
+        onOpenConnections: () => _openConnections(context),
+      );
+    }
+    oauthGuildDirectoryController.reconcile(account);
+    return ListenableBuilder(
+      listenable: oauthGuildDirectoryController,
+      builder: (context, _) => OAuthGuildWorkspace(
+        account: account,
+        accountHomeSelected: oauthGuildDirectoryController.accountHomeSelected,
+        membershipController: oauthGuildMembershipController,
+        selectedGuildId: oauthGuildDirectoryController.selectedGuildId,
+        onOpenAccountHome: oauthGuildDirectoryController.selectAccountHome,
+        onSelectGuild: (guildId) =>
+            oauthGuildDirectoryController.selectGuild(account, guildId),
+        onOpenConnections: () => _openConnections(context),
+        onToggleTheme: workspaceController.toggleTheme,
+        isDark: workspaceController.themeMode == ThemeMode.dark,
+      ),
+    );
+  }
+
+  /// Floats the incoming-call card over [body].
+  ///
+  /// A ring is not addressed to the open channel, so the surface cannot live in
+  /// the conversation pane: it has to reach the user wherever they are. When no
+  /// call is ringing the overlay collapses to nothing and the stack is a single
+  /// child, so the workspace pays nothing for it.
+  Widget _withIncomingCall(ChatWorkspace workspace, Widget body) {
+    final controller = directCallController;
+    if (controller == null) return body;
+    return Stack(
+      children: [
+        body,
+        IncomingCallOverlay(controller: controller, workspace: workspace),
+      ],
+    );
+  }
+
   void _openConnections(BuildContext context) {
     final desktopLoginController = DiscordDesktopLoginScope.of(context);
     showDialog<void>(

@@ -7,6 +7,7 @@ import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
+import 'voice_capture_source_dialog.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
 
@@ -18,15 +19,26 @@ class VoiceRoomView extends StatefulWidget {
     required this.controller,
     required this.members,
     required this.currentMemberId,
+    this._spaceId,
     super.key,
   });
 
-  final String guildId;
+  /// Null for a call in a DM or group DM, which has no guild. The room is
+  /// otherwise identical — same grid, same devices, same toolbar — so the two
+  /// share this widget instead of a second copy that could drift.
+  final String? guildId;
   final String channelId;
   final String channelName;
   final VoiceController controller;
   final List<Member> members;
   final String currentMemberId;
+
+  /// Which space's per-guild avatars to render. Defaults to [guildId] because
+  /// for guild voice they are the same thing; a DM call has to supply the DM
+  /// pseudo-space itself.
+  final String? _spaceId;
+
+  String get spaceId => _spaceId ?? guildId ?? '';
 
   @override
   State<VoiceRoomView> createState() => _VoiceRoomViewState();
@@ -36,12 +48,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   @override
   void initState() {
     super.initState();
-    unawaited(
-      widget.controller.connect(
-        guildId: widget.guildId,
-        channelId: widget.channelId,
-      ),
-    );
+    unawaited(_connect());
   }
 
   @override
@@ -49,13 +56,18 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.guildId != widget.guildId ||
         oldWidget.channelId != widget.channelId) {
-      unawaited(
-        widget.controller.connect(
-          guildId: widget.guildId,
-          channelId: widget.channelId,
-        ),
-      );
+      unawaited(_connect());
     }
+  }
+
+  Future<void> _connect() {
+    final guildId = widget.guildId;
+    return guildId == null
+        ? widget.controller.connectToCall(channelId: widget.channelId)
+        : widget.controller.connect(
+            guildId: guildId,
+            channelId: widget.channelId,
+          );
   }
 
   @override
@@ -71,7 +83,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               controller: widget.controller,
               members: widget.members,
               currentMemberId: widget.currentMemberId,
-              spaceId: widget.guildId,
+              spaceId: widget.spaceId,
             ),
           );
           return Column(
@@ -413,85 +425,9 @@ class _VoiceToolbar extends StatelessWidget {
     if (!context.mounted) return;
     final source = await showDialog<VoiceCaptureSource>(
       context: context,
-      builder: (_) => _CaptureSourceDialog(sources: controller.captureSources),
+      builder: (_) =>
+          VoiceCaptureSourceDialog(sources: controller.captureSources),
     );
     if (source != null) await controller.shareScreen(source.id);
-  }
-}
-
-class _CaptureSourceDialog extends StatelessWidget {
-  const _CaptureSourceDialog({required this.sources});
-
-  final List<VoiceCaptureSource> sources;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Share a screen or window'),
-      content: SizedBox(
-        width: 680,
-        height: 430,
-        child: sources.isEmpty
-            ? const Center(child: Text('No capture sources available'))
-            : GridView.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 220,
-                  mainAxisExtent: 150,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: sources.length,
-                itemBuilder: (context, index) {
-                  final source = sources[index];
-                  return InkWell(
-                    key: ValueKey('capture-source-${source.id}'),
-                    borderRadius: BorderRadius.circular(6),
-                    onTap: () => Navigator.pop(context, source),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: context.surfaces.inset,
-                        border: Border.all(color: context.surfaces.border),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: source.thumbnail == null
-                                ? const Icon(Icons.desktop_windows_outlined)
-                                : ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(5),
-                                    ),
-                                    child: Image.memory(
-                                      source.thumbnail!,
-                                      fit: BoxFit.cover,
-                                      gaplessPlayback: true,
-                                    ),
-                                  ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              source.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-      ],
-    );
   }
 }

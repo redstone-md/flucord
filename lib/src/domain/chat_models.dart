@@ -1,5 +1,8 @@
+import 'guild_membership.dart';
 import 'message_embed.dart';
+import 'permission_overwrite.dart';
 
+part 'community_space.dart';
 part 'message_models.dart';
 part 'message_poll.dart';
 part 'message_sticker.dart';
@@ -13,54 +16,6 @@ part 'guild_scheduled_event.dart';
 enum ChannelKind { text, voice, forum, media }
 
 enum Presence { online, idle, offline }
-
-enum SpaceKind { guild, directMessages }
-
-final class CommunitySpace {
-  static const directMessagesId = '@me';
-
-  const CommunitySpace({
-    required this.id,
-    required this.name,
-    required this.monogram,
-    required this.colorValue,
-    this.iconUrl,
-    this.kind = SpaceKind.guild,
-  });
-
-  const CommunitySpace.directMessages()
-    : id = directMessagesId,
-      name = 'Direct Messages',
-      monogram = 'DM',
-      colorValue = 0xff456b5a,
-      iconUrl = null,
-      kind = SpaceKind.directMessages;
-
-  final String id;
-  final String name;
-  final String monogram;
-  final int colorValue;
-  final String? iconUrl;
-  final SpaceKind kind;
-
-  bool get isDirectMessages => kind == SpaceKind.directMessages;
-}
-
-final class CommunityRole {
-  const CommunityRole({
-    required this.id,
-    required this.spaceId,
-    required this.name,
-    required this.position,
-    this.colorValue,
-  });
-
-  final String id;
-  final String spaceId;
-  final String name;
-  final int position;
-  final int? colorValue;
-}
 
 final class DirectConversation {
   const DirectConversation({required this.channel, required this.recipient});
@@ -81,6 +36,7 @@ final class Member {
     this.rolesBySpace = const {},
     this.avatarUrl,
     this.avatarUrlsBySpace = const {},
+    this.membershipsBySpace = const {},
   });
 
   final String id;
@@ -94,9 +50,15 @@ final class Member {
   final String? avatarUrl;
   final Map<String, String> avatarUrlsBySpace;
 
+  /// Per-guild standing: the role ids, screening state, timeout and member
+  /// flags that permissions are computed from. Absent for a guild whose
+  /// member payload this client never received.
+  final Map<String, GuildMembership> membershipsBySpace;
+
   String roleFor(String spaceId) => rolesBySpace[spaceId] ?? role;
   String? avatarUrlFor(String? spaceId) =>
       spaceId == null ? avatarUrl : avatarUrlsBySpace[spaceId] ?? avatarUrl;
+  GuildMembership? membershipIn(String spaceId) => membershipsBySpace[spaceId];
 
   Member copyWith({
     String? displayName,
@@ -107,6 +69,7 @@ final class Member {
     Map<String, String>? rolesBySpace,
     String? avatarUrl,
     Map<String, String>? avatarUrlsBySpace,
+    Map<String, GuildMembership>? membershipsBySpace,
   }) => Member(
     id: id,
     displayName: displayName ?? this.displayName,
@@ -118,6 +81,7 @@ final class Member {
     rolesBySpace: rolesBySpace ?? this.rolesBySpace,
     avatarUrl: avatarUrl ?? this.avatarUrl,
     avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
+    membershipsBySpace: membershipsBySpace ?? this.membershipsBySpace,
   );
 }
 
@@ -485,6 +449,10 @@ final class ChatWorkspace {
       avatarUrlsBySpace: {
         ...previous.avatarUrlsBySpace,
         ...incoming.avatarUrlsBySpace,
+      },
+      membershipsBySpace: {
+        ...previous.membershipsBySpace,
+        ...incoming.membershipsBySpace,
       },
       presence: incoming.presence == Presence.offline
           ? previous.presence

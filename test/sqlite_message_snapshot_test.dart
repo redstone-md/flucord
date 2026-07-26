@@ -11,7 +11,7 @@ void main() {
   setUpAll(sqfliteFfiInit);
 
   test('SQLite retains forward references and snapshots', () async {
-    expect(SqliteChatSchema.version, 19);
+    expect(SqliteChatSchema.version, 20);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,

@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
-import 'emoji_picker.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
+import 'message_action_bar.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
@@ -18,7 +19,9 @@ import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
 import 'message_reaction_strip.dart';
 import 'message_sticker_view.dart';
+import 'message_timestamp.dart';
 import 'reaction_details_dialog.dart';
+import 'user_settings_scope.dart';
 
 class MessageItem extends StatefulWidget {
   const MessageItem({
@@ -27,6 +30,7 @@ class MessageItem extends StatefulWidget {
     required this.workspace,
     required this.grouped,
     required this.isCurrentUser,
+    this.capabilities = ChannelCapabilities.unrestricted,
     required this.onReply,
     required this.onEdit,
     required this.onDelete,
@@ -49,6 +53,10 @@ class MessageItem extends StatefulWidget {
   final ChatWorkspace workspace;
   final bool grouped;
   final bool isCurrentUser;
+
+  /// Which actions this channel's permissions allow. Unrestricted by default
+  /// so a host with no permission data keeps the toolbar it had.
+  final ChannelCapabilities capabilities;
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
   final Future<void> Function(ChatMessage) onDelete;
@@ -122,7 +130,7 @@ class _MessageItemState extends State<MessageItem> {
 
   @override
   Widget build(BuildContext context) {
-    final time = _formatTime(widget.message.sentAt);
+    final time = MessageTimestamp.of(context, widget.message.sentAt);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -174,6 +182,7 @@ class _MessageItemState extends State<MessageItem> {
 
   Widget _content(BuildContext context, String time) {
     final message = widget.message;
+    final display = UserSettingsScope.displayOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -210,9 +219,10 @@ class _MessageItemState extends State<MessageItem> {
         if (message.attachments.isNotEmpty)
           MessageAttachmentGallery(
             attachments: message.attachments,
+            rendersMedia: display.rendersAttachmentMedia,
             downloadService: widget.attachmentDownloadService,
           ),
-        if (!message.suppressesEmbeds)
+        if (!message.suppressesEmbeds && display.rendersEmbeds)
           for (var index = 0; index < message.embeds.length; index++)
             Padding(
               padding: const EdgeInsets.only(top: 7),
@@ -235,7 +245,7 @@ class _MessageItemState extends State<MessageItem> {
               onEnd: () => unawaited(widget.onEndPoll(message)),
             ),
           ),
-        if (message.reactions.isNotEmpty) ...[
+        if (message.reactions.isNotEmpty && display.rendersReactions) ...[
           const SizedBox(height: 6),
           MessageReactionStrip(
             message: message,
@@ -322,99 +332,29 @@ class _MessageItemState extends State<MessageItem> {
     ],
   );
 
-  Widget _actionBar(BuildContext context) => Container(
-    height: 30,
-    decoration: BoxDecoration(
-      color: context.surfaces.surface,
-      border: Border.all(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ActionButton(
-          icon: Icons.reply,
-          tooltip: 'Reply',
-          onPressed: () => widget.onReply(widget.message),
-        ),
-        _reactionPicker(),
-        if (widget.message.reactions.isNotEmpty)
-          _ActionButton(
-            buttonKey: ValueKey('view-reactions-${widget.message.id}'),
-            icon: Icons.people_alt_outlined,
-            tooltip: 'View reactions',
-            onPressed: () =>
-                _showReactionDetails(widget.message.reactions.first),
-          ),
-        if (_canCreateThread)
-          _ActionButton(
-            buttonKey: ValueKey('create-thread-${widget.message.id}'),
-            icon: Icons.forum_outlined,
-            tooltip: 'Create thread',
-            onPressed: _showCreateThreadDialog,
-          ),
-        if (widget.message.canForward)
-          _ActionButton(
-            buttonKey: ValueKey('forward-message-${widget.message.id}'),
-            icon: Icons.forward_outlined,
-            tooltip: 'Forward',
-            onPressed: _showForwardDialog,
-          ),
-        if (widget.message.embeds.isNotEmpty || widget.message.suppressesEmbeds)
-          _ActionButton(
-            buttonKey: ValueKey('suppress-embeds-${widget.message.id}'),
-            icon: widget.message.suppressesEmbeds
-                ? Icons.link_outlined
-                : Icons.link_off_outlined,
-            tooltip: widget.message.suppressesEmbeds
-                ? 'Show embeds'
-                : 'Suppress embeds',
-            onPressed: () =>
-                unawaited(widget.onToggleSuppressEmbeds(widget.message)),
-          ),
-        if (widget.isCurrentUser && widget.message.canEdit)
-          _ActionButton(
-            icon: Icons.edit_outlined,
-            tooltip: 'Edit',
-            onPressed: () {
-              setState(() => _editing = true);
-              _editFocus.requestFocus();
-            },
-          ),
-        _ActionButton(
-          icon: widget.message.isPinned
-              ? Icons.push_pin
-              : Icons.push_pin_outlined,
-          tooltip: widget.message.isPinned ? 'Unpin' : 'Pin',
-          onPressed: () => widget.onTogglePin(widget.message),
-        ),
-        _ActionButton(
-          icon: Icons.delete_outline,
-          tooltip: 'Delete',
-          destructive: true,
-          onPressed: _confirmDelete,
-        ),
-      ],
-    ),
+  Widget _actionBar(BuildContext context) => MessageActionBar(
+    message: widget.message,
+    workspace: widget.workspace,
+    capabilities: widget.capabilities,
+    isCurrentUser: widget.isCurrentUser,
+    onReply: () => widget.onReply(widget.message),
+    onAddReaction: (emoji) =>
+        unawaited(widget.onAddReaction(widget.message, emoji)),
+    onReactionPickerToggled: (isOpen) {
+      if (mounted) setState(() => _reactionPickerOpen = isOpen);
+    },
+    onShowReactionDetails: _showReactionDetails,
+    onCreateThread: _showCreateThreadDialog,
+    onForward: _showForwardDialog,
+    onToggleSuppressEmbeds: () =>
+        unawaited(widget.onToggleSuppressEmbeds(widget.message)),
+    onEdit: () {
+      setState(() => _editing = true);
+      _editFocus.requestFocus();
+    },
+    onTogglePin: () => widget.onTogglePin(widget.message),
+    onDelete: _confirmDelete,
   );
-
-  Widget _reactionPicker() {
-    final channel = widget.workspace.channelById(widget.message.channelId);
-    final space = widget.workspace.spaceById(channel.spaceId);
-    return EmojiPickerButton(
-      buttonKey: ValueKey('add-reaction-${widget.message.id}'),
-      spaceName: space.name,
-      customEmojis: widget.workspace.emojisFor(space.id),
-      purpose: EmojiPickerPurpose.reaction,
-      dimension: 30,
-      iconSize: 16,
-      onMenuStateChanged: (isOpen) {
-        if (mounted) setState(() => _reactionPickerOpen = isOpen);
-      },
-      onSelected: (emoji) =>
-          unawaited(widget.onAddReaction(widget.message, emoji)),
-    );
-  }
 
   void _showReactionDetails(MessageReaction reaction) {
     unawaited(
@@ -426,16 +366,6 @@ class _MessageItemState extends State<MessageItem> {
         onLoad: widget.onLoadReactionUsers,
       ),
     );
-  }
-
-  bool get _canCreateThread {
-    final channel = widget.workspace.channelById(widget.message.channelId);
-    // A voice channel's text chat has no threads: Discord's permission set for
-    // it omits the thread bits entirely, so offering the action would only
-    // produce a server rejection.
-    return !channel.isThread &&
-        channel.kind != ChannelKind.voice &&
-        !widget.workspace.spaceById(channel.spaceId).isDirectMessages;
   }
 
   void _showCreateThreadDialog() {
@@ -458,38 +388,4 @@ class _MessageItemState extends State<MessageItem> {
       ),
     );
   }
-
-  static String _formatTime(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:'
-      '${value.minute.toString().padLeft(2, '0')}';
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    this.buttonKey,
-    this.destructive = false,
-  });
-
-  final Key? buttonKey;
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    key: buttonKey,
-    onPressed: onPressed,
-    icon: Icon(
-      icon,
-      size: 16,
-      color: destructive ? Theme.of(context).colorScheme.error : null,
-    ),
-    tooltip: tooltip,
-    padding: EdgeInsets.zero,
-    constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-  );
 }

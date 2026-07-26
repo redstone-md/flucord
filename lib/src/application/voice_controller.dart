@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../domain/voice_audio.dart';
+import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
 import 'voice_audio_pipeline.dart';
@@ -10,16 +11,19 @@ import 'voice_audio_pipeline.dart';
 enum VoiceState { idle, loading, ready, failure }
 
 typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
+typedef DirectCallServiceProvider = DirectCallService? Function();
 
 final class VoiceController extends ChangeNotifier {
   factory VoiceController(
     VoiceMediaService mediaService, {
     VoiceSignalingServiceProvider? signalingServiceProvider,
+    DirectCallServiceProvider? callServiceProvider,
     VoiceOpusCodecFactory? audioCodecFactory,
     VoiceAudioPlaybackService? playbackService,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
+    callServiceProvider ?? _noCalls,
     audioCodecFactory,
     playbackService,
   );
@@ -27,6 +31,7 @@ final class VoiceController extends ChangeNotifier {
   VoiceController._(
     this._mediaService,
     this._signalingServiceProvider,
+    this._callServiceProvider,
     VoiceOpusCodecFactory? audioCodecFactory,
     this._playbackService,
   ) : _audioPipeline = audioCodecFactory == null
@@ -48,6 +53,7 @@ final class VoiceController extends ChangeNotifier {
 
   final VoiceMediaService _mediaService;
   final VoiceSignalingServiceProvider _signalingServiceProvider;
+  final DirectCallServiceProvider _callServiceProvider;
   final VoiceAudioPlaybackService? _playbackService;
   final VoiceAudioPipeline? _audioPipeline;
   StreamSubscription<void>? _screenEndedSubscription;
@@ -63,6 +69,7 @@ final class VoiceController extends ChangeNotifier {
   String? _selectedOutputId;
   String? _connectedGuildId;
   String? _connectedChannelId;
+  bool _isCallSession = false;
   VoiceTransportSession? _transportSession;
   final Map<String, VoiceParticipant> _participants = {};
   Object? _error;
@@ -90,6 +97,9 @@ final class VoiceController extends ChangeNotifier {
       List.unmodifiable(_participants.values);
   Object? get error => _error;
   bool get isConnected => _connectedChannelId != null;
+
+  /// Whether the connection is a DM or group-DM call rather than guild voice.
+  bool get isCallSession => _isCallSession;
   bool get hasDiscordSignaling => _signalingService != null;
   bool get isTransportReady => _transportSession != null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
@@ -133,43 +143,93 @@ final class VoiceController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> connect({
-    required String guildId,
+  Future<void> connect({required String guildId, required String channelId}) =>
+      _connectTo(guildId: guildId, channelId: channelId, isCall: false);
+
+  /// Joins a call in a DM or group DM.
+  ///
+  /// The media half is identical to guild voice — same microphone, same Opus
+  /// uplink, same participant grid — so only the session's identity differs: a
+  /// call has no guild and is addressed by its channel.
+  Future<void> connectToCall({required String channelId}) =>
+      _connectTo(guildId: null, channelId: channelId, isCall: true);
+
+  Future<void> _connectTo({
+    required String? guildId,
     required String channelId,
+    required bool isCall,
   }) async {
     await initialize();
     if (_state != VoiceState.ready ||
-        (_connectedGuildId == guildId && _connectedChannelId == channelId)) {
+        (_connectedGuildId == guildId &&
+            _connectedChannelId == channelId &&
+            _isCallSession == isCall)) {
       return;
     }
     await _run(() async {
       final signalingService = _signalingServiceProvider();
       await _bindSignaling(signalingService);
-      final previousGuildId = _connectedGuildId;
-      if (previousGuildId != null && previousGuildId != guildId) {
-        await _signalingService?.leaveVoiceChannel(previousGuildId);
-      }
+      // Walking between two channels of one guild is a move on the same
+      // connection, so only a different session is torn down first. A call is
+      // its own session, keyed by channel, and always is.
+      final movedSession =
+          _isCallSession != isCall ||
+          (isCall
+              ? _connectedChannelId != channelId
+              : _connectedGuildId != guildId);
+      if (movedSession) await _leaveActiveSession();
       if (_connectedChannelId == null) {
         await _mediaService.startMicrophone(_selectedInputId);
         await _mediaService.setMicrophoneEnabled(!_isMuted);
       }
       _connectedGuildId = guildId;
       _connectedChannelId = channelId;
+      _isCallSession = isCall;
       _participants.clear();
       _transportSession = null;
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
-      if (signalingService != null) {
-        _connectionStatus = VoiceConnectionStatus.joining;
-        await signalingService.joinVoiceChannel(
-          guildId: guildId,
-          channelId: channelId,
-          selfMute: _isMuted,
-        );
-      } else {
+      _connectionStatus = VoiceConnectionStatus.joining;
+      if (!await _sendJoin()) {
         _connectionStatus = VoiceConnectionStatus.disconnected;
       }
     });
+  }
+
+  /// Re-announces the current session, returning whether anything was sent.
+  ///
+  /// Both the join and every mute toggle go through here: R08's opcode 4 is a
+  /// whole-state frame, so "mute" is simply the same join with a different
+  /// flag, and a call sends it through the call plane instead of the guild one.
+  Future<bool> _sendJoin() async {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return false;
+    if (_isCallSession) {
+      final callService = _callServiceProvider();
+      if (callService == null) return false;
+      await callService.joinCall(channelId: channelId, selfMute: _isMuted);
+      return true;
+    }
+    final guildId = _connectedGuildId;
+    final signalingService = _signalingService;
+    if (guildId == null || signalingService == null) return false;
+    await signalingService.joinVoiceChannel(
+      guildId: guildId,
+      channelId: channelId,
+      selfMute: _isMuted,
+    );
+    return true;
+  }
+
+  Future<void> _leaveActiveSession() async {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return;
+    if (_isCallSession) {
+      await _callServiceProvider()?.leaveCall(channelId);
+      return;
+    }
+    final guildId = _connectedGuildId;
+    if (guildId != null) await _signalingService?.leaveVoiceChannel(guildId);
   }
 
   Future<void> refreshSignalingService() async {
@@ -177,15 +237,9 @@ final class VoiceController extends ChangeNotifier {
     if (identical(service, _signalingService)) return;
     await _run(() async {
       await _bindSignaling(service);
-      final guildId = _connectedGuildId;
-      final channelId = _connectedChannelId;
-      if (service == null || guildId == null || channelId == null) return;
+      if (service == null || _connectedChannelId == null) return;
       _connectionStatus = VoiceConnectionStatus.joining;
-      await service.joinVoiceChannel(
-        guildId: guildId,
-        channelId: channelId,
-        selfMute: _isMuted,
-      );
+      await _sendJoin();
     });
   }
 
@@ -219,15 +273,7 @@ final class VoiceController extends ChangeNotifier {
       _isMuted = !_isMuted;
       await _mediaService.setMicrophoneEnabled(!_isMuted);
       await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
-      final guildId = _connectedGuildId;
-      final channelId = _connectedChannelId;
-      if (guildId != null && channelId != null) {
-        await _signalingService?.joinVoiceChannel(
-          guildId: guildId,
-          channelId: channelId,
-          selfMute: _isMuted,
-        );
-      }
+      await _sendJoin();
     });
   }
 
@@ -255,14 +301,12 @@ final class VoiceController extends ChangeNotifier {
     await _run(() async {
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
-      final guildId = _connectedGuildId;
-      if (guildId != null) {
-        await _signalingService?.leaveVoiceChannel(guildId);
-      }
+      await _leaveActiveSession();
       await _mediaService.stopScreenShare();
       await _mediaService.stopMicrophone();
       _connectedGuildId = null;
       _connectedChannelId = null;
+      _isCallSession = false;
       _connectionStatus = VoiceConnectionStatus.disconnected;
       _transportSession = null;
       _participants.clear();
@@ -427,4 +471,6 @@ final class VoiceController extends ChangeNotifier {
   }
 
   static VoiceSignalingService? _noSignaling() => null;
+
+  static DirectCallService? _noCalls() => null;
 }

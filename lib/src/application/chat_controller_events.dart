@@ -74,17 +74,4 @@ extension _ChatControllerEvents on ChatController {
     );
     _persistChannelActivity(message.channelId);
   }
-
-  void _handleTyping(TypingStartedEvent event) {
-    if (event.memberId == _workspace?.currentMemberId) return;
-    final members = _typingMembers.putIfAbsent(event.channelId, () => {});
-    members.add(event.memberId);
-    final key = '${event.channelId}:${event.memberId}';
-    _typingTimers[key]?.cancel();
-    _typingTimers[key] = Timer(const Duration(seconds: 9), () {
-      _typingMembers[event.channelId]?.remove(event.memberId);
-      _typingTimers.remove(key);
-      if (!_disposed) _notify();
-    });
-  }
 }

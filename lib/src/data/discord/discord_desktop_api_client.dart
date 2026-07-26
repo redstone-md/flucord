@@ -1,8 +1,11 @@
 import '../../domain/chat_models.dart';
+import 'discord_call_api.dart';
 import 'discord_multipart_body.dart';
 import 'discord_rest_client.dart';
+import 'discord_user_settings_transport.dart';
 
-final class DiscordDesktopApiClient {
+final class DiscordDesktopApiClient
+    implements DiscordCallApi, DiscordUserSettingsTransport {
   DiscordDesktopApiClient({
     required String authorization,
     required Map<String, String> headers,
@@ -157,6 +160,83 @@ final class DiscordDesktopApiClient {
 
   Future<void> startTyping(String channelId) =>
       _rest.requestEmpty('POST', '/channels/$channelId/typing');
+
+  /// Pre-flight before ringing a channel (R08: `GET /channels/{id}/call`).
+  ///
+  /// The renderer reads exactly one field off the response, `ringable`, and
+  /// treats a failed request as "not ringable" rather than an error — a DM with
+  /// somebody who is not a friend answers with a rejection, and the desktop
+  /// client turns that into an "add as a friend" prompt.
+  @override
+  Future<bool> isChannelRingable(String channelId) async {
+    final payload = await _rest.requestObject(
+      'GET',
+      '/channels/$channelId/call',
+    );
+    return payload['ringable'] == true;
+  }
+
+  /// Rings [recipients], or everybody in the channel when it is null.
+  ///
+  /// R08 shows `recipients` sent explicitly as null for the ring-everybody
+  /// case, unlike `stop-ringing` where the key is dropped.
+  @override
+  Future<void> ringChannel(
+    String channelId, {
+    List<String>? recipients,
+    required String analyticsLocation,
+  }) => _rest.request(
+    'POST',
+    '/channels/$channelId/call/ring',
+    body: {'recipients': recipients, 'analytics_location': analyticsLocation},
+  );
+
+  /// Stops a ring. With no [recipients] this is the local user's decline, and
+  /// the key is omitted entirely rather than sent as null.
+  @override
+  Future<void> stopRingingChannel(
+    String channelId, {
+    List<String>? recipients,
+  }) => _rest.request(
+    'POST',
+    '/channels/$channelId/call/stop-ringing',
+    body: {'recipients': ?recipients},
+  );
+
+  /// Reads one settings blob. A missing `settings` string is an account that
+  /// has never stored anything for this type, not a transport failure.
+  @override
+  Future<String?> readSettingsProto(int type) async {
+    final payload = await _rest.getObject(
+      '/users/@me/settings-proto/${_settingsType(type)}',
+    );
+    final settings = payload['settings'];
+    return settings is String ? settings : null;
+  }
+
+  @override
+  Future<DiscordSettingsWriteResult> writeSettingsProto({
+    required int type,
+    required String settings,
+  }) async {
+    final payload = await _rest.requestObject(
+      'PATCH',
+      '/users/@me/settings-proto/${_settingsType(type)}',
+      body: {'settings': settings},
+    );
+    final merged = payload['settings'];
+    return DiscordSettingsWriteResult(
+      settings: merged is String ? merged : null,
+      outOfDate: payload['out_of_date'] == true,
+    );
+  }
+
+  static int _settingsType(int type) {
+    if (type < 1 || type > 3) {
+      throw ArgumentError.value(type, 'type', 'Unknown settings proto type');
+    }
+    return type;
+  }
 
   Future<String> getGatewayUrl() async {
     final payload = await _rest.getObject('/gateway');

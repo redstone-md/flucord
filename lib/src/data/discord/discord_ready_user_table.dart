@@ -64,6 +64,26 @@ final class DiscordReadyUserTable {
       ..['recipients'] = expandUserIds(ids);
   }
 
+  /// Rewrites a guild member's `user_id` into the full `user` object.
+  ///
+  /// Guild members arrive in `merged_members` compressed the same way DM
+  /// recipients are, so a member is unusable — it has no name, no avatar, not
+  /// even an id a roster row could key on — until this has run. A member whose
+  /// user the table never carried is returned unchanged and recorded, so the
+  /// caller can drop it rather than render a blank row.
+  Map<String, Object?> expandMember(Map<String, Object?> member) {
+    final id = member['user_id'];
+    if (id is! String) return member;
+    final entry = user(id);
+    if (entry == null) {
+      _unresolvedIds.add(id);
+      return member;
+    }
+    return Map<String, Object?>.of(member)
+      ..remove('user_id')
+      ..['user'] = entry;
+  }
+
   /// Drops the table, as Discord does once READY_SUPPLEMENTAL is applied.
   void clear() {
     _users.clear();

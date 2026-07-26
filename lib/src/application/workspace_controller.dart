@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/chat_models.dart';
+import '../domain/workspace_permissions.dart';
 import 'channel_link.dart';
 import 'voice_channel_surface.dart';
 
@@ -38,7 +39,7 @@ final class WorkspaceController extends ChangeNotifier {
         !workspace.spaces.any((space) => space.id == _selectedSpaceId)) {
       _selectedSpaceId = workspace.spaces.first.id;
     }
-    final availableChannels = workspace.channelsFor(_selectedSpaceId!);
+    final availableChannels = _visibleChannels(workspace, _selectedSpaceId!);
     if (availableChannels.isEmpty) {
       _selectedChannelId = null;
       _targetMessageId = null;
@@ -63,10 +64,19 @@ final class WorkspaceController extends ChangeNotifier {
   static bool _isDefaultLandingChannel(ConversationChannel channel) =>
       channel.kind != ChannelKind.voice && !channel.isThread;
 
+  /// Landing is only ever guessed among channels the account may actually
+  /// open: Discord's own default-channel pick is the first one with
+  /// `VIEW_CHANNEL`, and dropping into a hidden channel would show an empty
+  /// timeline no request can fill.
+  static List<ConversationChannel> _visibleChannels(
+    ChatWorkspace workspace,
+    String spaceId,
+  ) => WorkspacePermissions(workspace).visibleChannelsFor(spaceId);
+
   void selectSpace(ChatWorkspace workspace, String spaceId) {
     if (_selectedSpaceId == spaceId) return;
     _selectedSpaceId = spaceId;
-    final channels = workspace.channelsFor(spaceId);
+    final channels = _visibleChannels(workspace, spaceId);
     if (channels.isEmpty) {
       _selectedChannelId = null;
       _query = '';

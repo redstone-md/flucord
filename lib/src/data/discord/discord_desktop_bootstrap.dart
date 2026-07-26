@@ -9,6 +9,8 @@ final class DiscordDesktopWorkspaceSnapshot {
     required Iterable<Map<String, Object?>> guilds,
     required Iterable<Map<String, Object?>> directChannels,
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
+    Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
+    Map<String, List<Map<String, Object?>>> membersByGuild = const {},
   }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
        guilds = List<Map<String, Object?>>.unmodifiable(
          guilds.map(Map<String, Object?>.unmodifiable),
@@ -16,12 +18,9 @@ final class DiscordDesktopWorkspaceSnapshot {
        directChannels = List<Map<String, Object?>>.unmodifiable(
          directChannels.map(Map<String, Object?>.unmodifiable),
        ),
-       channelsByGuild = Map<String, List<Map<String, Object?>>>.unmodifiable({
-         for (final entry in channelsByGuild.entries)
-           entry.key: List<Map<String, Object?>>.unmodifiable(
-             entry.value.map(Map<String, Object?>.unmodifiable),
-           ),
-       });
+       channelsByGuild = _byGuild(channelsByGuild),
+       rolesByGuild = _byGuild(rolesByGuild),
+       membersByGuild = _byGuild(membersByGuild);
 
   final Map<String, Object?> currentUser;
   final List<Map<String, Object?>> guilds;
@@ -30,6 +29,25 @@ final class DiscordDesktopWorkspaceSnapshot {
   /// first: the DM sidebar renders them in this order.
   final List<Map<String, Object?>> directChannels;
   final Map<String, List<Map<String, Object?>>> channelsByGuild;
+
+  /// Guild roles, carrying the permission bits every channel decision starts
+  /// from. Dropping them left the client unable to tell a hidden channel from
+  /// a visible one.
+  final Map<String, List<Map<String, Object?>>> rolesByGuild;
+
+  /// Guild members READY carried, with their user objects resolved. On this
+  /// transport that is normally just the account's own membership per guild,
+  /// which is exactly what a permission check needs.
+  final Map<String, List<Map<String, Object?>>> membersByGuild;
+
+  static Map<String, List<Map<String, Object?>>> _byGuild(
+    Map<String, List<Map<String, Object?>>> source,
+  ) => Map<String, List<Map<String, Object?>>>.unmodifiable({
+    for (final entry in source.entries)
+      entry.key: List<Map<String, Object?>>.unmodifiable(
+        entry.value.map(Map<String, Object?>.unmodifiable),
+      ),
+  });
 }
 
 /// Assembles the first workspace view out of the gateway's opening dispatches.
@@ -48,6 +66,8 @@ final class DiscordDesktopBootstrap {
       DiscordPrivateChannelDirectory();
   final Map<String, Map<String, Object?>> _guilds = {};
   final Map<String, List<Map<String, Object?>>> _channelsByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _membersByGuild = {};
   Map<String, Object?>? _currentUser;
 
   void acceptReady(Map<String, Object?> ready) {
@@ -62,9 +82,21 @@ final class DiscordDesktopBootstrap {
     // list, so a guild the account left while disconnected must not survive.
     _guilds.clear();
     _channelsByGuild.clear();
+    _rolesByGuild.clear();
+    _membersByGuild.clear();
     _privateChannels.applyReady(_expand(_objects(ready['private_channels'])));
-    for (final guild in _objects(ready['guilds'])) {
-      acceptGuild(guild);
+    // `merged_members` is positional against `guilds` and counts every entry,
+    // including the unavailable ones, so the two are walked by index rather
+    // than zipped over the guilds that happen to have content.
+    final mergedMembers = ready['merged_members'];
+    final guilds = _objects(ready['guilds']);
+    for (var index = 0; index < guilds.length; index++) {
+      acceptGuild(
+        guilds[index],
+        members: mergedMembers is List && index < mergedMembers.length
+            ? _objects(mergedMembers[index]).map(users.expandMember)
+            : null,
+      );
     }
   }
 
@@ -77,7 +109,12 @@ final class DiscordDesktopBootstrap {
     users.clear();
   }
 
-  void acceptGuild(Map<String, Object?> guild) {
+  /// Records one guild. [members] is READY's positional `merged_members` entry
+  /// for it; a `GUILD_CREATE` instead carries its members inline.
+  void acceptGuild(
+    Map<String, Object?> guild, {
+    Iterable<Map<String, Object?>>? members,
+  }) {
     final id = guild['id'];
     if (id is! String) return;
     _guilds[id] = Map<String, Object?>.unmodifiable(guild);
@@ -86,6 +123,13 @@ final class DiscordDesktopBootstrap {
       ..._objects(guild['threads']),
     ];
     if (channels.isNotEmpty) _channelsByGuild[id] = channels;
+    final roles = _objects(guild['roles']);
+    if (roles.isNotEmpty) _rolesByGuild[id] = roles;
+    final resolved = [
+      ...?members,
+      ..._objects(guild['members']).map(users.expandMember),
+    ].where((member) => member['user'] is Map).toList(growable: false);
+    if (resolved.isNotEmpty) _membersByGuild[id] = resolved;
   }
 
   /// The snapshot so far, or null while the current user is still unknown.
@@ -97,6 +141,8 @@ final class DiscordDesktopBootstrap {
       guilds: _guilds.values,
       directChannels: _privateChannels.ordered,
       channelsByGuild: _channelsByGuild,
+      rolesByGuild: _rolesByGuild,
+      membersByGuild: _membersByGuild,
     );
   }
 
@@ -104,6 +150,8 @@ final class DiscordDesktopBootstrap {
     _currentUser = null;
     _guilds.clear();
     _channelsByGuild.clear();
+    _rolesByGuild.clear();
+    _membersByGuild.clear();
     _privateChannels.clear();
     users.clear();
   }

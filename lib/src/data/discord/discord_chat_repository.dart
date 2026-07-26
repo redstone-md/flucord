@@ -11,6 +11,8 @@ import '../../domain/reaction_repository.dart';
 import '../../domain/scheduled_event_repository.dart';
 import '../../domain/sticker_repository.dart';
 import '../../domain/thread_repository.dart';
+import '../../domain/user_settings_repository.dart';
+import '../../domain/voice_call.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import '../../domain/voice_message_recorder.dart';
@@ -462,6 +464,17 @@ final class DiscordChatRepository
   /// the signalling half hid that second face behind the repository.
   @override
   VoiceSignalingService? get voiceSignaling => _voiceSignaling;
+
+  /// A bot token has no user account behind it, and `/users/@me/settings-proto`
+  /// answers for a user. The capability is absent rather than empty.
+  @override
+  UserSettingsRepository? get userSettings => null;
+
+  /// A bot cannot be a party to a DM call: Discord grants the private-call
+  /// routes to user sessions only, so this transport truthfully has no call
+  /// plane rather than one that always fails.
+  @override
+  DirectCallService? get directCalls => null;
 
   @override
   Future<void> close() async {

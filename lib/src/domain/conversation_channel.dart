@@ -25,6 +25,7 @@ final class ConversationChannel {
     this.unread = false,
     this.mentionCount = 0,
     this.firstUnreadMessageId,
+    this.permissionOverwrites = const {},
   });
 
   final String id;
@@ -48,6 +49,12 @@ final class ConversationChannel {
   final bool unread;
   final int mentionCount;
   final String? firstUnreadMessageId;
+
+  /// The channel's permission overwrites, keyed by role or member id.
+  ///
+  /// A thread carries none that matter: Discord resolves a thread's
+  /// permissions from its parent and never reads the thread's own map.
+  final Map<String, DiscordPermissionOverwrite> permissionOverwrites;
 
   bool get isDirectMessage => recipientId != null;
 
@@ -117,6 +124,7 @@ final class ConversationChannel {
     defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
     defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
     recipientId: recipientId,
+    permissionOverwrites: permissionOverwrites,
     unread: unread ?? this.unread,
     mentionCount: mentionCount ?? this.mentionCount,
     firstUnreadMessageId: identical(firstUnreadMessageId, _keepUnreadBoundary)

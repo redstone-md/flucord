@@ -157,18 +157,23 @@ class ChannelSidebar extends StatelessWidget {
         const SizedBox(height: 10),
       ],
       for (final category in categories)
-        _CategorySection(
-          category: category,
-          collapsed: collapsedCategoryIds.contains(category.id),
-          onToggle: () => onToggleCategory(category.id),
-          children: [
-            for (final channel in _visibleCategoryChannels(
-              category,
-              regularChannels,
-            ))
-              _rowFor(channel),
-          ],
-        ),
+        // A category whose every channel was filtered out is dropped whole.
+        // Collapsing hides rows without emptying this list, so a collapsed
+        // category still keeps its header — only a category the account
+        // cannot see into loses one.
+        if (regularChannels.any((channel) => channel.parentId == category.id))
+          _CategorySection(
+            category: category,
+            collapsed: collapsedCategoryIds.contains(category.id),
+            onToggle: () => onToggleCategory(category.id),
+            children: [
+              for (final channel in _visibleCategoryChannels(
+                category,
+                regularChannels,
+              ))
+                _rowFor(channel),
+            ],
+          ),
       if (threads.isNotEmpty) ...[
         const SizedBox(height: 10),
         const _SectionLabel(label: 'Active threads'),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
@@ -5,6 +7,8 @@ import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'user_settings_dialog.dart';
+import 'user_settings_scope.dart';
 
 class ServerRail extends StatelessWidget {
   const ServerRail({
@@ -93,6 +97,19 @@ class ServerRail extends StatelessWidget {
             icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode),
             tooltip: isDark ? 'Use light theme' : 'Use dark theme',
           ),
+          // The settings controller is read from the scope rather than passed
+          // down: the gear belongs next to the other rail actions, and a host
+          // that installs no scope — the single-pane widget tests — has no
+          // account to show settings for anyway.
+          if (UserSettingsScope.maybeOf(context) case final settings?)
+            IconButton(
+              key: const ValueKey('open-user-settings'),
+              onPressed: () => unawaited(
+                UserSettingsDialog.show(context, controller: settings),
+              ),
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'User settings',
+            ),
           const SizedBox(height: 10),
         ],
       ),

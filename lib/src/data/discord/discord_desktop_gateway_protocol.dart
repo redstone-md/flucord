@@ -12,6 +12,7 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const invalidSession = 9;
   static const hello = 10;
   static const heartbeatAck = 11;
+  static const callConnect = 13;
   static const guildSubscriptionsBulk = 37;
   static const qosHeartbeat = 40;
 }

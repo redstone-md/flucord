@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/connection_controller.dart';
+import '../application/direct_call_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/guild_member_list_controller.dart';
 import '../application/inbox_catalog.dart';
@@ -14,10 +15,12 @@ import '../application/quick_switcher_catalog.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
+import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
 import '../domain/attachment_download.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/voice_message_recorder.dart';
+import '../domain/workspace_permissions.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
@@ -28,6 +31,7 @@ import 'widgets/direct_message_views.dart';
 import 'widgets/forum_channel_view.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/inbox_dialog.dart';
+import 'widgets/incoming_call_overlay.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_forward_dialog.dart';
@@ -44,6 +48,7 @@ import 'widgets/voice_room_view.dart';
 
 part 'flucord_shell_navigation.dart';
 part 'flucord_conversation_pane.dart';
+part 'flucord_shell_conversation.dart';
 
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
@@ -58,6 +63,7 @@ class FlucordShell extends StatelessWidget {
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
     this.memberListController,
+    this.directCallController,
     super.key,
   });
 
@@ -75,6 +81,10 @@ class FlucordShell extends StatelessWidget {
   /// Owns the member panel's roster subscription. Absent in hosts that never
   /// show the panel, such as the widget tests for a single pane.
   final GuildMemberListController? memberListController;
+
+  /// Owns calls in DMs and group DMs. Absent in hosts that cannot place one —
+  /// the demo workspace, and every widget test that only drives a single pane.
+  final DirectCallController? directCallController;
 
   @override
   Widget build(BuildContext context) {
@@ -101,37 +111,7 @@ class FlucordShell extends StatelessWidget {
   }
 
   Widget _buildWorkspace(BuildContext context, ChatWorkspace workspace) {
-    if (workspace.spaces.isEmpty) {
-      if (connectionController.mode == SessionMode.disconnected) {
-        final account = discordOAuthController.account;
-        if (account != null) {
-          oauthGuildDirectoryController.reconcile(account);
-          return ListenableBuilder(
-            listenable: oauthGuildDirectoryController,
-            builder: (context, _) => OAuthGuildWorkspace(
-              account: account,
-              accountHomeSelected:
-                  oauthGuildDirectoryController.accountHomeSelected,
-              membershipController: oauthGuildMembershipController,
-              selectedGuildId: oauthGuildDirectoryController.selectedGuildId,
-              onOpenAccountHome:
-                  oauthGuildDirectoryController.selectAccountHome,
-              onSelectGuild: (guildId) =>
-                  oauthGuildDirectoryController.selectGuild(account, guildId),
-              onOpenConnections: () => _openConnections(context),
-              onToggleTheme: workspaceController.toggleTheme,
-              isDark: workspaceController.themeMode == ThemeMode.dark,
-            ),
-          );
-        }
-        return DisconnectedWorkspaceView(
-          onOpenConnections: () => _openConnections(context),
-        );
-      }
-      return EmptyWorkspaceView(
-        onOpenConnections: () => _openConnections(context),
-      );
-    }
+    if (workspace.spaces.isEmpty) return _buildEmptyWorkspace(context);
     workspaceController.reconcile(workspace);
     return ListenableBuilder(
       listenable: connectionController,
@@ -142,353 +122,194 @@ class FlucordShell extends StatelessWidget {
             final spaceId = workspaceController.selectedSpaceId!;
             final channelId = workspaceController.selectedChannelId;
             final space = workspace.spaceById(spaceId);
-            final channels = workspace.channelsFor(spaceId);
+            // One resolver for the whole frame: the sidebar asks about every
+            // channel of the guild and the pane asks again about the open one,
+            // and they must not answer differently.
+            final permissions = WorkspacePermissions(workspace);
+            final channels = permissions.visibleChannelsFor(spaceId);
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
             final inboxSummary = InboxCatalog.fromWorkspace(workspace).summary;
             return Scaffold(
-              body: LayoutBuilder(
-                builder: (context, constraints) {
-                  final showChannels = constraints.maxWidth >= 760;
-                  final membersFit = constraints.maxWidth >= 1120;
-                  final threadParentId = channel == null
-                      ? null
-                      : channel.isThread
-                      ? channel.parentId
-                      : channel.id;
-                  final allowThreadPanel =
-                      channel?.kind == ChannelKind.text &&
-                      channel?.isDirectMessage == false &&
-                      threadParentId != null;
-                  final voiceSurface = channel == null
-                      ? VoiceChannelSurface.room
-                      : workspaceController.voiceSurfaceOf(channel.id);
-                  final showsMessages =
-                      channel != null &&
-                      _showsMessageTimeline(channel, voiceSurface);
-                  final showThreads =
-                      workspaceController.showThreads && allowThreadPanel;
-                  final showPins =
-                      workspaceController.showPins &&
-                      showsMessages &&
-                      !showThreads;
-                  final showMembers =
-                      membersFit &&
-                      !space.isDirectMessages &&
-                      workspaceController.showMembers &&
-                      !showPins &&
-                      !showThreads;
-                  return Row(
-                    children: [
-                      ServerRail(
-                        workspace: workspace,
-                        selectedSpaceId: spaceId,
-                        onSelectSpace: (id) {
-                          workspaceController.selectSpace(workspace, id);
-                          final selected =
-                              workspaceController.selectedChannelId;
-                          if (selected != null) {
-                            chatController.openChannel(selected);
-                          }
-                        },
-                        onToggleTheme: workspaceController.toggleTheme,
-                        onOpenConnections: () => _openConnections(context),
-                        sessionMode: connectionController.mode,
-                        isDark: workspaceController.themeMode == ThemeMode.dark,
-                      ),
-                      if (showChannels)
-                        ChannelSidebar(
-                          space: space,
-                          channels: channels,
-                          selectedChannelId: channelId,
+              body: _withIncomingCall(
+                workspace,
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final showChannels = constraints.maxWidth >= 760;
+                    final membersFit = constraints.maxWidth >= 1120;
+                    final threadParentId = channel == null
+                        ? null
+                        : channel.isThread
+                        ? channel.parentId
+                        : channel.id;
+                    final allowThreadPanel =
+                        channel?.kind == ChannelKind.text &&
+                        channel?.isDirectMessage == false &&
+                        threadParentId != null;
+                    final voiceSurface = channel == null
+                        ? VoiceChannelSurface.room
+                        : workspaceController.voiceSurfaceOf(channel.id);
+                    final showsMessages =
+                        channel != null &&
+                        _showsMessageTimeline(channel, voiceSurface);
+                    final showThreads =
+                        workspaceController.showThreads && allowThreadPanel;
+                    final showPins =
+                        workspaceController.showPins &&
+                        showsMessages &&
+                        !showThreads;
+                    final showMembers =
+                        membersFit &&
+                        !space.isDirectMessages &&
+                        workspaceController.showMembers &&
+                        !showPins &&
+                        !showThreads;
+                    return Row(
+                      children: [
+                        ServerRail(
                           workspace: workspace,
-                          collapsedCategoryIds:
-                              workspaceController.collapsedCategoryIds,
-                          onToggleCategory: workspaceController.toggleCategory,
-                          onNewDirectMessage: () => _openDirectMessage(context),
-                          scheduledEventCount: chatController
-                              .scheduledEventsFor(space.id)
-                              .length,
-                          isLoadingScheduledEvents: chatController
-                              .isLoadingScheduledEvents(space.id),
-                          scheduledEventsError: chatController
-                              .scheduledEventsError(space.id),
-                          onOpenEvents: () =>
-                              _openScheduledEvents(context, space),
-                          onSelectChannel: _selectChannel,
+                          selectedSpaceId: spaceId,
+                          onSelectSpace: (id) {
+                            workspaceController.selectSpace(workspace, id);
+                            final selected =
+                                workspaceController.selectedChannelId;
+                            if (selected != null) {
+                              chatController.openChannel(selected);
+                            }
+                          },
+                          onToggleTheme: workspaceController.toggleTheme,
+                          onOpenConnections: () => _openConnections(context),
                           sessionMode: connectionController.mode,
-                          connectionStatus: chatController.connectionStatus,
+                          isDark:
+                              workspaceController.themeMode == ThemeMode.dark,
                         ),
-                      Expanded(
-                        child: channel == null
-                            ? DirectMessagesEmptyView(
-                                onNewMessage: () => _openDirectMessage(context),
-                              )
-                            : _ConversationPane(
-                                workspace: workspace,
-                                externalLinkLauncher: externalLinkLauncher,
-                                attachmentDownloadService:
-                                    attachmentDownloadService,
-                                channel: channel,
-                                channels: channels,
-                                query: workspaceController.query,
-                                targetMessageId:
-                                    workspaceController.targetMessageId,
-                                compact: !showChannels,
-                                voiceSurface: voiceSurface,
-                                onSelectVoiceSurface: (surface) =>
-                                    workspaceController.selectVoiceSurface(
-                                      channel.id,
-                                      surface,
-                                    ),
-                                onPickChannel: _selectChannel,
-                                allowMemberPanel:
-                                    membersFit && !space.isDirectMessages,
-                                allowThreadPanel: allowThreadPanel,
-                                showMembers: showMembers,
-                                showPins: showPins,
-                                showThreads: showThreads,
-                                forumArchivedPosts:
-                                    channel.kind == ChannelKind.forum ||
-                                        channel.kind == ChannelKind.media
-                                    ? chatController.archivedThreadsFor(
-                                        channel.id,
-                                      )
-                                    : const [],
-                                isLoadingForumPosts: chatController
-                                    .isLoadingArchivedThreads(channel.id),
-                                forumPostsError: chatController
-                                    .archivedThreadsError(channel.id),
-                                canLoadMoreForumPosts: chatController
-                                    .canLoadMoreArchivedThreads(channel.id),
-                                inboxSummary: inboxSummary,
-                                typingMembers: chatController.typingMembersFor(
-                                  channel.id,
-                                ),
-                                isSending: chatController.isSending,
-                                isLoading: chatController.isChannelLoading(
-                                  channel.id,
-                                ),
-                                loadError: chatController.channelError(
-                                  channel.id,
-                                ),
-                                canLoadOlder: chatController
-                                    .canLoadOlderMessages(channel.id),
-                                isLoadingOlder: chatController
-                                    .isLoadingOlderMessages(channel.id),
-                                olderLoadError: chatController
-                                    .olderMessagesError(channel.id),
-                                onLoadOlder: () => unawaited(
-                                  chatController.loadOlderMessages(channel.id),
-                                ),
-                                onRetry: () => chatController.openChannel(
-                                  channel.id,
-                                  refresh: true,
-                                ),
-                                onSelectChannel: (id) => _selectChannel(
-                                  id,
-                                  voiceSurface: VoiceChannelSurface.chat,
-                                ),
-                                onQueryChanged: workspaceController.setQuery,
-                                onToggleMembers:
-                                    workspaceController.toggleMembers,
-                                onTogglePins: () {
-                                  workspaceController.togglePins();
-                                  if (workspaceController.showPins) {
-                                    unawaited(
-                                      chatController.loadPinnedMessages(
-                                        channel.id,
-                                      ),
-                                    );
-                                  }
-                                },
-                                onToggleThreads: () {
-                                  workspaceController.toggleThreads();
-                                  if (workspaceController.showThreads &&
-                                      threadParentId != null) {
-                                    unawaited(
-                                      chatController.loadArchivedThreads(
-                                        threadParentId,
-                                      ),
-                                    );
-                                  }
-                                },
-                                onRefreshForumPosts: () => unawaited(
-                                  chatController.loadArchivedThreads(
-                                    channel.id,
-                                    refresh: true,
+                        if (showChannels)
+                          ChannelSidebar(
+                            space: space,
+                            channels: channels,
+                            selectedChannelId: channelId,
+                            workspace: workspace,
+                            collapsedCategoryIds:
+                                workspaceController.collapsedCategoryIds,
+                            onToggleCategory:
+                                workspaceController.toggleCategory,
+                            onNewDirectMessage: () =>
+                                _openDirectMessage(context),
+                            scheduledEventCount: chatController
+                                .scheduledEventsFor(space.id)
+                                .length,
+                            isLoadingScheduledEvents: chatController
+                                .isLoadingScheduledEvents(space.id),
+                            scheduledEventsError: chatController
+                                .scheduledEventsError(space.id),
+                            onOpenEvents: () =>
+                                _openScheduledEvents(context, space),
+                            onSelectChannel: _selectChannel,
+                            sessionMode: connectionController.mode,
+                            connectionStatus: chatController.connectionStatus,
+                          ),
+                        Expanded(
+                          child: channel == null
+                              ? DirectMessagesEmptyView(
+                                  onNewMessage: () =>
+                                      _openDirectMessage(context),
+                                )
+                              : _conversationPane(
+                                  context: context,
+                                  workspace: workspace,
+                                  capabilities: permissions.capabilitiesIn(
+                                    channel,
                                   ),
+                                  channel: channel,
+                                  channels: channels,
+                                  space: space,
+                                  showChannels: showChannels,
+                                  membersFit: membersFit,
+                                  showMembers: showMembers,
+                                  showPins: showPins,
+                                  showThreads: showThreads,
+                                  threadParentId: threadParentId,
+                                  allowThreadPanel: allowThreadPanel,
+                                  voiceSurface: voiceSurface,
+                                  inboxSummary: inboxSummary,
                                 ),
-                                onLoadMoreForumPosts: () => unawaited(
-                                  chatController.loadArchivedThreads(
-                                    channel.id,
-                                  ),
-                                ),
-                                onLoadForumPostPreview: (postId) => unawaited(
-                                  chatController.loadForumPostPreview(postId),
-                                ),
-                                onCreateForumPost:
-                                    (
-                                      name,
-                                      content,
-                                      attachments,
-                                      duration,
-                                      tagIds,
-                                    ) async {
-                                      final thread = await chatController
-                                          .createForumPost(
-                                            channelId: channel.id,
-                                            name: name,
-                                            content: content,
-                                            autoArchiveDurationMinutes:
-                                                duration,
-                                            attachments: attachments,
-                                            appliedTagIds: tagIds,
-                                          );
-                                      if (thread == null) return false;
-                                      _selectChannel(thread.id);
-                                      return true;
-                                    },
-                                onOpenInbox: () => _openInbox(context),
-                                onSend:
-                                    (
-                                      body,
-                                      attachments,
-                                      replyToMessageId,
-                                      suppressNotifications,
-                                    ) => chatController.sendMessage(
-                                      channelId: channel.id,
-                                      body: body,
-                                      attachments: attachments,
-                                      replyToMessageId: replyToMessageId,
-                                      suppressNotifications:
-                                          suppressNotifications,
-                                    ),
-                                onCreatePoll: (poll) =>
-                                    chatController.createPoll(
-                                      channelId: channel.id,
-                                      poll: poll,
-                                    ),
-                                onSendStickers: (stickerIds) =>
-                                    chatController.sendStickers(
-                                      channelId: channel.id,
-                                      stickerIds: stickerIds,
-                                    ),
-                                onEdit: chatController.editMessage,
-                                onDelete: chatController.deleteMessage,
-                                onToggleReaction: chatController.toggleReaction,
-                                onLoadReactionUsers:
-                                    chatController.loadReactionUsers,
-                                onAddReaction: chatController.addReaction,
-                                onCreateThread:
-                                    (message, name, duration) async {
-                                      final thread = await chatController
-                                          .createThreadFromMessage(
-                                            message,
-                                            name: name,
-                                            autoArchiveDurationMinutes:
-                                                duration,
-                                          );
-                                      if (thread == null) return false;
-                                      _selectChannel(thread.id);
-                                      return true;
-                                    },
-                                onTogglePin: chatController.togglePin,
-                                onEndPoll: chatController.endPoll,
-                                onForward: (message, targetChannelId) async {
-                                  final forwarded = await chatController
-                                      .forwardMessage(message, targetChannelId);
-                                  if (!forwarded) return false;
-                                  _selectChannel(
-                                    targetChannelId,
-                                    voiceSurface: VoiceChannelSurface.chat,
-                                  );
-                                  return true;
-                                },
-                                onToggleSuppressEmbeds:
-                                    chatController.toggleSuppressEmbeds,
-                                onTyping: () =>
-                                    chatController.startTyping(channel.id),
-                                voiceController: voiceController,
-                                voiceMessageRecorder: voiceMessageRecorder,
-                                onSendVoiceMessage: (voiceMessage) =>
-                                    chatController.sendVoiceMessage(
-                                      channelId: channel.id,
-                                      voiceMessage: voiceMessage,
-                                    ),
+                        ),
+                        if (showPins)
+                          PinnedMessagesPanel(
+                            workspace: workspace,
+                            linkLauncher: externalLinkLauncher,
+                            onSelectChannel: (id) => _selectChannel(
+                              id,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                            channelId: channel.id,
+                            history: chatController.pinnedMessages(channel.id),
+                            isLoading: chatController.isLoadingPins(channel.id),
+                            error: chatController.pinError(channel.id),
+                            onClose: workspaceController.togglePins,
+                            onRefresh: () => unawaited(
+                              chatController.loadPinnedMessages(
+                                channel.id,
+                                refresh: true,
                               ),
-                      ),
-                      if (showPins)
-                        PinnedMessagesPanel(
-                          workspace: workspace,
-                          linkLauncher: externalLinkLauncher,
-                          onSelectChannel: (id) => _selectChannel(
-                            id,
-                            voiceSurface: VoiceChannelSurface.chat,
-                          ),
-                          channelId: channel.id,
-                          history: chatController.pinnedMessages(channel.id),
-                          isLoading: chatController.isLoadingPins(channel.id),
-                          error: chatController.pinError(channel.id),
-                          onClose: workspaceController.togglePins,
-                          onRefresh: () => unawaited(
-                            chatController.loadPinnedMessages(
-                              channel.id,
-                              refresh: true,
                             ),
+                            onUnpin: chatController.togglePin,
                           ),
-                          onUnpin: chatController.togglePin,
-                        ),
-                      if (showThreads)
-                        ThreadBrowserPanel(
-                          parentChannel: workspace.channelById(threadParentId),
-                          activeThreads: channels
-                              .where(
-                                (item) =>
-                                    item.isThread &&
-                                    !item.isArchived &&
-                                    item.parentId == threadParentId,
-                              )
-                              .toList(growable: false),
-                          archivedThreads: chatController.archivedThreadsFor(
-                            threadParentId,
-                          ),
-                          isLoading: chatController.isLoadingArchivedThreads(
-                            threadParentId,
-                          ),
-                          error: chatController.archivedThreadsError(
-                            threadParentId,
-                          ),
-                          canLoadMore: chatController
-                              .canLoadMoreArchivedThreads(threadParentId),
-                          onClose: workspaceController.toggleThreads,
-                          onRefresh: () => unawaited(
-                            chatController.loadArchivedThreads(
+                        if (showThreads)
+                          ThreadBrowserPanel(
+                            parentChannel: workspace.channelById(
                               threadParentId,
-                              refresh: true,
+                            ),
+                            activeThreads: channels
+                                .where(
+                                  (item) =>
+                                      item.isThread &&
+                                      !item.isArchived &&
+                                      item.parentId == threadParentId,
+                                )
+                                .toList(growable: false),
+                            archivedThreads: chatController.archivedThreadsFor(
+                              threadParentId,
+                            ),
+                            isLoading: chatController.isLoadingArchivedThreads(
+                              threadParentId,
+                            ),
+                            error: chatController.archivedThreadsError(
+                              threadParentId,
+                            ),
+                            canLoadMore: chatController
+                                .canLoadMoreArchivedThreads(threadParentId),
+                            onClose: workspaceController.toggleThreads,
+                            onRefresh: () => unawaited(
+                              chatController.loadArchivedThreads(
+                                threadParentId,
+                                refresh: true,
+                              ),
+                            ),
+                            onLoadMore: () => unawaited(
+                              chatController.loadArchivedThreads(
+                                threadParentId,
+                              ),
+                            ),
+                            onSelectThread: _selectChannel,
+                          ),
+                        if (showMembers)
+                          MemberSidebar(
+                            members: workspace.members,
+                            spaceId: spaceId,
+                            channelId: channel?.id,
+                            memberList: memberListController,
+                            roles: workspace.roles,
+                            currentMemberId: workspace.currentMemberId,
+                            onMessage: (member) => unawaited(
+                              _openDirectConversation(context, member.id),
                             ),
                           ),
-                          onLoadMore: () => unawaited(
-                            chatController.loadArchivedThreads(threadParentId),
-                          ),
-                          onSelectThread: _selectChannel,
-                        ),
-                      if (showMembers)
-                        MemberSidebar(
-                          members: workspace.members,
-                          spaceId: spaceId,
-                          channelId: channel?.id,
-                          memberList: memberListController,
-                          roles: workspace.roles,
-                          currentMemberId: workspace.currentMemberId,
-                          onMessage: (member) => unawaited(
-                            _openDirectConversation(context, member.id),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ).withQuickSwitcher(
               workspace: workspace,

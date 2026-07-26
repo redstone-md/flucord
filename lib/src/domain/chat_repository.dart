@@ -1,4 +1,6 @@
 import 'chat_models.dart';
+import 'user_settings_repository.dart';
+import 'voice_call.dart';
 import 'voice_connection.dart';
 
 enum RepositoryConnectionStatus { offline, connecting, connected, reconnecting }
@@ -154,6 +156,26 @@ abstract interface class ChatRepository {
   /// or loses voice, and stops a controller from silently deciding that an
   /// implementation it does not recognise has none.
   VoiceSignalingService? get voiceSignaling;
+
+  /// The account settings this transport can read and write, or `null`.
+  ///
+  /// The settings blob belongs to a logged-in Discord user, and only a
+  /// transport holding that user's session can fetch it or receive the
+  /// dispatch that revises it. Stating the answer here — instead of letting
+  /// the settings surface guess from the repository's runtime type — is what
+  /// lets a bot or demo transport say honestly that it has no settings, and
+  /// what will let a future transport gain them without editing every caller.
+  UserSettingsRepository? get userSettings;
+
+  /// The private-call plane this transport can carry, or `null` when it carries
+  /// none.
+  ///
+  /// Separate from [voiceSignaling] because the two are not the same
+  /// capability: a bot session holds guild voice and can never ring a DM, and
+  /// only a session that owns both the gateway socket and the user's REST
+  /// credentials can do calls at all. Stating it here keeps a caller from
+  /// inferring the answer from the repository's runtime type.
+  DirectCallService? get directCalls;
 
   Future<ChatWorkspace> loadWorkspace();
 

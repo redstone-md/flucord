@@ -28,6 +28,10 @@ class ChatHeader extends StatelessWidget {
     required this.onTogglePins,
     required this.onToggleThreads,
     required this.onOpenInbox,
+    this.showVoiceSurfaces = false,
+    this.isInCall = false,
+    this.callLabel,
+    this.onToggleCall,
     super.key,
   });
 
@@ -41,6 +45,22 @@ class ChatHeader extends StatelessWidget {
   /// chat surface is the one on screen.
   final bool showsMessages;
   final VoiceChannelSurface voiceSurface;
+
+  /// Whether this channel has a room-and-chat pair to switch between. True for
+  /// a voice channel always, and for a DM only while its call is up.
+  final bool showVoiceSurfaces;
+
+  /// Whether the local user is sitting in this channel's call, which turns the
+  /// call button into a hang-up.
+  final bool isInCall;
+
+  /// What the call button does right now — start, join, ring, or leave. It is
+  /// the button's only label, so it also has to read well to a screen reader.
+  final String? callLabel;
+
+  /// Null when the channel cannot be called — a guild channel, or a transport
+  /// with no call plane.
+  final VoidCallback? onToggleCall;
   final bool allowMemberPanel;
   final bool allowThreadPanel;
   final bool showMembers;
@@ -115,7 +135,17 @@ class ChatHeader extends StatelessWidget {
                 ),
               ] else
                 const Spacer(),
-              if (channel.kind == ChannelKind.voice) ...[
+              if (onToggleCall != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-call'),
+                  onPressed: onToggleCall,
+                  tooltip: callLabel ?? 'Start call',
+                  color: isInCall ? FlucordColors.danger : null,
+                  icon: Icon(isInCall ? Icons.call_end : Icons.call),
+                ),
+              ],
+              if (showVoiceSurfaces) ...[
                 const SizedBox(width: 8),
                 VoiceSurfaceSwitch(
                   surface: voiceSurface,

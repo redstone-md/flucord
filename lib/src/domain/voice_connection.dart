@@ -9,6 +9,49 @@ enum VoiceConnectionStatus {
   failure,
 }
 
+/// What one voice connection is filed under.
+///
+/// Discord allows a single voice connection per guild — walking from one voice
+/// channel to another inside the same guild reuses it rather than opening a
+/// second — so guild voice is keyed by the guild and the channel is merely
+/// where the connection currently points. A call in a DM or group DM has no
+/// guild at all: the channel *is* the connection's identity, which is why R08's
+/// RTC store keys those by `guildId ?? channelId`.
+///
+/// Modelling that as a value instead of a bare string is what keeps a channel
+/// id from silently standing in for a guild id. A DM call carries no guild, and
+/// inventing one to satisfy a map key would have made every guild-shaped
+/// lookup downstream — permissions, member lists, the roster — quietly wrong.
+final class VoiceSessionKey {
+  /// Guild voice, keyed by the guild that owns the channel.
+  const VoiceSessionKey.guild(this.guildId) : callChannelId = null;
+
+  /// A DM or group-DM call, keyed by the private channel it belongs to.
+  const VoiceSessionKey.privateCall(this.callChannelId) : guildId = null;
+
+  /// Null for a private call — those genuinely have no guild.
+  final String? guildId;
+
+  /// Null for guild voice, where the channel is not the connection's identity.
+  final String? callChannelId;
+
+  bool get isPrivateCall => guildId == null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceSessionKey &&
+      other.guildId == guildId &&
+      other.callChannelId == callChannelId;
+
+  @override
+  int get hashCode => Object.hash(guildId, callChannelId);
+
+  @override
+  String toString() => isPrivateCall
+      ? 'VoiceSessionKey.privateCall($callChannelId)'
+      : 'VoiceSessionKey.guild($guildId)';
+}
+
 final class VoiceServerCredentials {
   const VoiceServerCredentials({
     required this.guildId,
@@ -19,12 +62,21 @@ final class VoiceServerCredentials {
     required this.endpoint,
   });
 
-  final String guildId;
+  /// Absent for a DM or group-DM call.
+  final String? guildId;
   final String channelId;
   final String userId;
   final String sessionId;
   final String token;
   final String endpoint;
+
+  VoiceSessionKey get sessionKey => guildId == null
+      ? VoiceSessionKey.privateCall(channelId)
+      : VoiceSessionKey.guild(guildId!);
+
+  /// The voice gateway identifies against `server_id`, which is the guild for
+  /// guild voice and the channel for a private call (R08).
+  String get serverId => guildId ?? channelId;
 }
 
 final class VoiceTransportSession {
@@ -38,7 +90,8 @@ final class VoiceTransportSession {
     required this.daveProtocolVersion,
   });
 
-  final String guildId;
+  /// Absent for a DM or group-DM call.
+  final String? guildId;
   final int ssrc;
   final String address;
   final int port;
@@ -110,7 +163,9 @@ final class VoiceParticipantStateEvent extends VoiceSignalingEvent {
   });
 
   final String userId;
-  final String guildId;
+
+  /// Absent for a DM or group-DM call participant.
+  final String? guildId;
   final String? channelId;
   final bool selfMuted;
   final bool selfDeafened;

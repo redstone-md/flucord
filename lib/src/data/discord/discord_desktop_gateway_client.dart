@@ -7,6 +7,7 @@ import '../zstd/zstd_codec.dart';
 import 'discord_desktop_bootstrap.dart';
 import 'discord_desktop_gateway_protocol.dart';
 import 'discord_desktop_profile.dart';
+import 'discord_desktop_voice_frames.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
 import 'discord_gateway_transport_codec.dart';
@@ -15,7 +16,8 @@ import 'discord_rest_client.dart';
 
 export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
 
-final class DiscordDesktopGatewayClient implements DiscordChatGateway {
+final class DiscordDesktopGatewayClient
+    implements DiscordChatGateway, DiscordCallGateway {
   DiscordDesktopGatewayClient({
     required String authorization,
     required Map<String, Object?> properties,
@@ -39,7 +41,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   final StreamController<DiscordGatewayEvent> _events =
       StreamController.broadcast();
   final Random _random = Random();
-  final Map<String, Map<String, Object?>> _desiredVoiceStates = {};
+  final DiscordDesktopVoiceFrames _voiceFrames = DiscordDesktopVoiceFrames();
   final DiscordDesktopBootstrap _bootstrap = DiscordDesktopBootstrap();
 
   DiscordDesktopWebSocket? _socket;
@@ -190,7 +192,9 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
         if (action.name == 'READY') {
           _emitStatus(DiscordGatewayStatus.connected);
           _subscribeReadyGuilds(action.data);
-          _flushVoiceStates();
+          for (final frame in _voiceFrames.replay) {
+            _send(frame);
+          }
         }
         if (!_events.isClosed) {
           _events.add(
@@ -365,61 +369,51 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     );
   }
 
-  /// Emits opcode 4 with the six fields the desktop renderer always sends.
-  ///
-  /// `self_video` and `flags` are not optional on this transport: the renderer
-  /// builds them unconditionally, so a body missing them is a tell that the
-  /// session is not the client it claims to be. `flags` is legitimately `0` —
-  /// it only carries clips and Go Live bits, neither of which Flucord has.
-  /// `preferred_region`/`preferred_regions` stay absent rather than null; the
-  /// renderer omits the keys entirely until a latency test has ranked regions,
-  /// and Flucord has never run one.
   @override
   void updateVoiceState({
     required String guildId,
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
-  }) {
-    final body = <String, Object?>{
-      'guild_id': guildId,
-      'channel_id': channelId,
-      'self_mute': selfMute,
-      'self_deaf': selfDeaf,
-      'self_video': false,
-      'flags': 0,
-    };
-    if (channelId == null) {
-      _desiredVoiceStates.remove(guildId);
-    } else {
-      _desiredVoiceStates[guildId] = body;
-    }
-    _send(
-      DiscordDesktopGatewayFrame(
-        DiscordDesktopGatewayOpcode.voiceStateUpdate,
-        body,
-      ),
-    );
-  }
-
-  @override
-  void pingVoiceServer() => _send(
-    const DiscordDesktopGatewayFrame(
-      DiscordDesktopGatewayOpcode.voiceServerPing,
-      null,
+  }) => _send(
+    _voiceFrames.voiceState(
+      sessionKey: guildId,
+      guildId: guildId,
+      channelId: channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
     ),
   );
 
-  void _flushVoiceStates() {
-    for (final body in _desiredVoiceStates.values) {
-      _send(
-        DiscordDesktopGatewayFrame(
-          DiscordDesktopGatewayOpcode.voiceStateUpdate,
-          body,
-        ),
-      );
-    }
+  /// R08: a DM or group-DM call sends the same opcode 4 with `guild_id: null`.
+  ///
+  /// The channel is still required when leaving, because the frame that leaves
+  /// carries `channel_id: null` and would otherwise name no session at all —
+  /// the desired-state map would keep replaying a call the user has hung up.
+  @override
+  void updateCallVoiceState({
+    required String channelId,
+    required bool connected,
+    bool selfMute = false,
+    bool selfDeaf = false,
+  }) => _send(
+    _voiceFrames.voiceState(
+      sessionKey: channelId,
+      guildId: null,
+      channelId: connected ? channelId : null,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+    ),
+  );
+
+  @override
+  void connectToCall(String channelId) {
+    final frame = _voiceFrames.callConnect(channelId);
+    if (frame != null) _send(frame);
   }
+
+  @override
+  void pingVoiceServer() => _send(_voiceFrames.voiceServerPing);
 
   void _emitStatus(DiscordGatewayStatus status) {
     if (!_events.isClosed) _events.add(DiscordGatewayStatusEvent(status));
@@ -433,7 +427,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     await _socket?.close();
-    _desiredVoiceStates.clear();
+    _voiceFrames.clear();
     _subscriptions.clear();
     _emitStatus(DiscordGatewayStatus.offline);
     await _events.close();
