@@ -12,11 +12,16 @@ import 'package:ffi/ffi.dart';
 part 'discord_winhttp_websocket_bindings.dart';
 
 abstract interface class DiscordDesktopWebSocket {
+  /// Emits `String` for text frames and `Uint8List` for binary frames.
   Stream<Object?> get messages;
   bool get isOpen;
   int? get closeCode;
 
   void send(String data);
+
+  /// Writes one binary frame, as required by the `encoding=etf` Gateway.
+  void sendBinary(List<int> data);
+
   Future<void> close();
 }
 
@@ -73,6 +78,9 @@ final class _IoDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
   void send(String data) => _socket.add(data);
 
   @override
+  void sendBinary(List<int> data) => _socket.add(Uint8List.fromList(data));
+
+  @override
   Future<void> close() => _socket.close();
 }
 
@@ -127,15 +135,19 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
   int? get closeCode => _closeCode;
 
   @override
-  void send(String data) {
+  void send(String data) => _write(utf8.encode(data), _winHttpUtf8Message);
+
+  @override
+  void sendBinary(List<int> data) => _write(data, _winHttpBinaryMessage);
+
+  void _write(List<int> bytes, int bufferType) {
     if (!_open) throw StateError('Remote auth socket is closed');
-    final bytes = utf8.encode(data);
     final buffer = calloc<Uint8>(bytes.length);
     try {
       buffer.asTypedList(bytes.length).setAll(0, bytes);
       final error = _bindings.webSocketSend(
         Pointer<Void>.fromAddress(_handle),
-        _winHttpUtf8Message,
+        bufferType,
         buffer.cast(),
         bytes.length,
       );
@@ -177,7 +189,9 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
         return;
       case 'message':
         final value = raw['value'];
-        if (value is String && !_messages.isClosed) _messages.add(value);
+        if ((value is String || value is Uint8List) && !_messages.isClosed) {
+          _messages.add(value);
+        }
         return;
       case 'error':
         final message = raw['message'];
@@ -355,9 +369,10 @@ int? _receiveWinHttpMessages(
       if (bufferType.value == _winHttpCloseBuffer) {
         return _queryCloseCode(bindings, webSocket);
       }
-      if (bufferType.value != _winHttpUtf8Fragment &&
-          bufferType.value != _winHttpUtf8Message) {
-        throw StateError('WinHTTP received a non-text remote auth frame.');
+      if (bufferType.value > _winHttpUtf8Fragment) {
+        throw StateError(
+          'WinHTTP received an unknown frame type ${bufferType.value}.',
+        );
       }
       message.add(Uint8List.fromList(buffer.asTypedList(bytesRead.value)));
       if (bufferType.value == _winHttpUtf8Message) {
@@ -365,6 +380,8 @@ int? _receiveWinHttpMessages(
           'type': 'message',
           'value': utf8.decode(message.takeBytes()),
         });
+      } else if (bufferType.value == _winHttpBinaryMessage) {
+        events.send({'type': 'message', 'value': message.takeBytes()});
       }
     }
   } finally {
@@ -420,6 +437,7 @@ const _winHttpQueryNumber = 0x20000000;
 const _winHttpAddHeader = 0x20000000;
 const _winHttpReplaceHeader = 0x80000000;
 const _winHttpHeaderLengthAuto = 0xffffffff;
+const _winHttpBinaryMessage = 0;
 const _winHttpUtf8Message = 2;
 const _winHttpUtf8Fragment = 3;
 const _winHttpCloseBuffer = 4;

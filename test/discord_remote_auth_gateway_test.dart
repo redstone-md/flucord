@@ -107,6 +107,10 @@ final class _MemoryRemoteAuthSocket implements DiscordDesktopWebSocket {
   void send(String data) => sent.add(data);
 
   @override
+  void sendBinary(List<int> data) =>
+      throw UnsupportedError('Remote auth Gateway v2 is a text protocol');
+
+  @override
   Future<void> close() async {
     _open = false;
     if (!_messages.isClosed) await _messages.close();

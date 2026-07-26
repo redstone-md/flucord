@@ -1,6 +1,5 @@
-import 'dart:convert';
-
 import 'discord_desktop_profile.dart';
+import 'discord_gateway_framing.dart';
 
 abstract final class DiscordDesktopGatewayOpcode {
   static const dispatch = 0;
@@ -75,9 +74,11 @@ final class DiscordDesktopGatewayProtocol {
   }) : _token = _required(token, 'token'),
        properties = Map.unmodifiable({...properties}),
        presence = Map.unmodifiable({...presence}),
-       clientState = Map.unmodifiable({...clientState});
+       clientState = Map.unmodifiable({...clientState}),
+       _framing = DiscordGatewayFraming.forEncoding(profile.gatewayEncoding);
 
   final String _token;
+  final DiscordGatewayFraming _framing;
   final Map<String, Object?> properties;
   final DiscordDesktopProtocolProfile profile;
   final Map<String, Object?> presence;
@@ -180,9 +181,7 @@ final class DiscordDesktopGatewayProtocol {
     var batch = <String, Map<String, Object?>>{};
     var byteCount = 0;
     for (final entry in subscriptions.entries) {
-      final entryBytes = utf8
-          .encode(jsonEncode([entry.key, entry.value]))
-          .length;
+      final entryBytes = _framing.measure([entry.key, entry.value]);
       if (batch.isNotEmpty &&
           byteCount + entryBytes > profile.maxGuildSubscriptionBytes) {
         frames.add(_subscriptionFrame(batch));

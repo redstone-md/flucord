@@ -37,9 +37,12 @@ live channel history are verified against a test account on Windows.
 | Live message events | Implemented through desktop Gateway |
 | Threads, members, presence | Partial |
 | Voice, video, screen share for user chat | Not ready |
-| ETF/zstd Gateway framing | Not ready; JSON v9 currently used |
+| ETF Gateway framing | Ready; binary `encoding=etf` frames, live-validated |
+| zstd-stream Gateway compression | Not ready; `compress` omitted |
 
-See [the full feature parity table](docs/FEATURE_PARITY.md) for exact boundaries.
+See [the full feature parity table](docs/FEATURE_PARITY.md) for exact
+boundaries and [the bundle capability ledger](docs/DISCORD_BUNDLE_COVERAGE.md)
+for the machine-generated inventory of the installed client.
 
 ## Screenshots
 

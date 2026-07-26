@@ -10,6 +10,7 @@ final class DiscordDesktopProtocolProfile {
     this.gatewayCapabilities = 1734653,
     this.gatewayEncoding = 'etf',
     this.gatewayCompression = 'zstd-stream',
+    this.negotiatedCompression,
     this.maxGuildSubscriptionBytes = 15360,
     this.apiHost = 'discord.com',
     this.gatewayHost = 'gateway.discord.gg',
@@ -24,20 +25,38 @@ final class DiscordDesktopProtocolProfile {
   final int gatewayVersion;
   final int gatewayCapabilities;
   final String gatewayEncoding;
+
+  /// Transport compression the installed renderer negotiates.
   final String gatewayCompression;
+
+  /// Transport compression Flucord can actually decode.
+  ///
+  /// `null` connects without a `compress` parameter. Discord's Gateway serves
+  /// uncompressed frames in that case, so the observed encoding and state
+  /// machine stay intact while the zstd-stream decoder is still missing.
+  final String? negotiatedCompression;
+
   final int maxGuildSubscriptionBytes;
   final String apiHost;
   final String gatewayHost;
 
   Uri get apiBaseUri => Uri.https(apiHost, '/api/v$apiVersion');
 
-  Uri gatewayUri({Uri? resumeUri}) {
+  /// Endpoint the installed desktop client dials.
+  Uri gatewayUri({Uri? resumeUri}) =>
+      _gatewayUri(resumeUri, gatewayCompression);
+
+  /// Endpoint Flucord dials with the compression it can decode.
+  Uri connectionUri({Uri? resumeUri}) =>
+      _gatewayUri(resumeUri, negotiatedCompression);
+
+  Uri _gatewayUri(Uri? resumeUri, String? compression) {
     final base = resumeUri ?? Uri(scheme: 'wss', host: gatewayHost);
     return base.replace(
       queryParameters: {
         'encoding': gatewayEncoding,
         'v': '$gatewayVersion',
-        'compress': gatewayCompression,
+        'compress': ?compression,
       },
     );
   }

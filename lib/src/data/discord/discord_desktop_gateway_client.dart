@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'discord_desktop_gateway_protocol.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
+import 'discord_gateway_framing.dart';
 import 'discord_rest_client.dart';
 
 final class DiscordDesktopWorkspaceSnapshot {
@@ -45,10 +46,12 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
          token: authorization,
          properties: properties,
          profile: profile,
-       );
+       ),
+       _framing = DiscordGatewayFraming.forEncoding(profile.gatewayEncoding);
 
   final DiscordDesktopProtocolProfile profile;
   final DiscordDesktopGatewayProtocol _protocol;
+  final DiscordGatewayFraming _framing;
   final DiscordDesktopWebSocketConnector _socketConnector;
   final StreamController<DiscordGatewayEvent> _events =
       StreamController.broadcast();
@@ -121,9 +124,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     );
     final base = _protocol.resumeGatewayUri ?? _gatewayUri;
     if (base == null) return;
-    final uri = base.replace(
-      queryParameters: {'encoding': 'json', 'v': '${profile.gatewayVersion}'},
-    );
+    final uri = profile.connectionUri(resumeUri: base);
     try {
       _socket = await _socketConnector.connect(uri);
       _socket!.messages.listen(
@@ -140,20 +141,18 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   }
 
   void _accept(Object? raw) {
-    if (raw is! String) {
-      if (_bootstrapCompleter?.isCompleted == false) {
-        developer.log(
-          'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
-          name: 'flucord.discord.gateway',
-          level: 900,
-        );
-      }
-      return;
-    }
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
-      final payload = decoded.cast<String, Object?>();
+      final payload = _framing.decode(raw);
+      if (payload == null) {
+        if (_bootstrapCompleter?.isCompleted == false) {
+          developer.log(
+            'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
+            name: 'flucord.discord.gateway',
+            level: 900,
+          );
+        }
+        return;
+      }
       if (_bootstrapCompleter?.isCompleted == false) {
         developer.log(
           'Discord Gateway bootstrap frame: op=${payload['op']}, '
@@ -170,7 +169,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       }
     } on FormatException catch (error, stackTrace) {
       _lastBootstrapError = error;
-      _logBootstrapFailure('frame-json', error, stackTrace);
+      _logBootstrapFailure('frame-${_framing.encoding}', error, stackTrace);
       return;
     } on TypeError catch (error, stackTrace) {
       _lastBootstrapError = error;
@@ -299,8 +298,13 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   }
 
   void _send(DiscordDesktopGatewayFrame frame) {
-    if (_socket?.isOpen ?? false) {
-      _socket!.send(jsonEncode(frame.toJson()));
+    final socket = _socket;
+    if (socket == null || !socket.isOpen) return;
+    final encoded = _framing.encode(frame.toJson());
+    if (encoded is String) {
+      socket.send(encoded);
+    } else {
+      socket.sendBinary(encoded as Uint8List);
     }
   }
 

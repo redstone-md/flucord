@@ -25,7 +25,12 @@ do not count as desktop-user chat parity.
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Voice/video/screen share | Not ready for desktop-user chat | Existing Bot/activity-lobby paths are separate |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
-| ETF/zstd Gateway framing | Not ready | JSON framing with observed v9 identify/state machine |
+| ETF Gateway framing | Ready | Binary `encoding=etf` frames, live-validated against the Gateway |
+| zstd-stream Gateway compression | Not ready | `compress` omitted; Discord serves uncompressed ETF |
+
+See [the bundle capability ledger](DISCORD_BUNDLE_COVERAGE.md) for the complete
+machine-generated inventory, per-domain status, discovery coverage, and
+implementation coverage.
 
 The desktop protocol is private and can change without notice. Matching the
 installed client's build profile and headers does not guarantee protocol
