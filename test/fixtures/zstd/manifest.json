@@ -1,0 +1,178 @@
+[
+  {
+    "name": "empty",
+    "note": "zero-length content",
+    "rawBytes": 0,
+    "compressedBytes": 9,
+    "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hasRawFile": true
+  },
+  {
+    "name": "single-byte",
+    "note": "one raw literal",
+    "rawBytes": 1,
+    "compressedBytes": 10,
+    "rawSha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+    "hasRawFile": true
+  },
+  {
+    "name": "short-raw",
+    "note": "incompressible short input",
+    "rawBytes": 7,
+    "compressedBytes": 16,
+    "rawSha256": "93a6625f65a17d6c9c05b98e11dce7d1b07e23323159acaa48099babbd10d007",
+    "hasRawFile": true
+  },
+  {
+    "name": "rle-1k",
+    "note": "single repeated byte",
+    "rawBytes": 1024,
+    "compressedBytes": 19,
+    "rawSha256": "e8fb68ce4d4d002dba40c0a459d96807c96ded1c2fdefae3f56f8a0c06a4fecf",
+    "hasRawFile": true
+  },
+  {
+    "name": "rle-long",
+    "note": "two-byte cycle, long matches",
+    "rawBytes": 40000,
+    "compressedBytes": 20,
+    "rawSha256": "1d2942cca72863ea929de4efc22e181eb103aac1f9ea52fb5a34e3b2d441d26d",
+    "hasRawFile": false
+  },
+  {
+    "name": "repeat-token",
+    "note": "repeated token, repeat offsets",
+    "rawBytes": 49152,
+    "compressedBytes": 42,
+    "rawSha256": "8efe91306301362fd1b3926017a18c31eac6afa814471ddd8594ad0d2de6ccad",
+    "hasRawFile": false
+  },
+  {
+    "name": "random-24k",
+    "note": "incompressible, raw blocks",
+    "rawBytes": 24576,
+    "compressedBytes": 24586,
+    "rawSha256": "62b1587c35f7316d6e402022a50217bd601b190a5ca071a3103f9d3ccb3783a2",
+    "hasRawFile": false
+  },
+  {
+    "name": "random-24k-l19",
+    "note": "incompressible at level 19",
+    "rawBytes": 24576,
+    "compressedBytes": 24586,
+    "rawSha256": "62b1587c35f7316d6e402022a50217bd601b190a5ca071a3103f9d3ccb3783a2",
+    "hasRawFile": false
+  },
+  {
+    "name": "text-l1",
+    "note": "english text level 1",
+    "rawBytes": 49152,
+    "compressedBytes": 10484,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "text-l3",
+    "note": "english text level 3",
+    "rawBytes": 49152,
+    "compressedBytes": 9592,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "text-l9",
+    "note": "english text level 9",
+    "rawBytes": 49152,
+    "compressedBytes": 8744,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "text-l19",
+    "note": "english text level 19",
+    "rawBytes": 49152,
+    "compressedBytes": 7414,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "text-l22",
+    "note": "english text level 22",
+    "rawBytes": 49152,
+    "compressedBytes": 7414,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "json-l3",
+    "note": "json-like structure",
+    "rawBytes": 82481,
+    "compressedBytes": 4185,
+    "rawSha256": "a3b62f5abea482acdd138412be1b9bd0c7ea85cc7ddbd64638dc5290296984a5",
+    "hasRawFile": false
+  },
+  {
+    "name": "json-l19",
+    "note": "json-like at level 19",
+    "rawBytes": 82481,
+    "compressedBytes": 3224,
+    "rawSha256": "a3b62f5abea482acdd138412be1b9bd0c7ea85cc7ddbd64638dc5290296984a5",
+    "hasRawFile": false
+  },
+  {
+    "name": "checksum",
+    "note": "xxh64 content checksum",
+    "rawBytes": 8192,
+    "compressedBytes": 1772,
+    "rawSha256": "bb1888408ddc9273af64156f10c32612a5b182b5d0b17c651fe07eaaebab7d64",
+    "hasRawFile": false
+  },
+  {
+    "name": "no-content-size",
+    "note": "frame header without content size",
+    "rawBytes": 8192,
+    "compressedBytes": 1767,
+    "rawSha256": "bb1888408ddc9273af64156f10c32612a5b182b5d0b17c651fe07eaaebab7d64",
+    "hasRawFile": false
+  },
+  {
+    "name": "small-window",
+    "note": "window_log=10, wrapping window",
+    "rawBytes": 49152,
+    "compressedBytes": 11055,
+    "rawSha256": "9c1d58268ede9c61316ccc13fb7114ee59d95457c69b3b228428740f4d837d63",
+    "hasRawFile": false
+  },
+  {
+    "name": "multi-frame",
+    "note": "two frames back to back",
+    "rawBytes": 8192,
+    "compressedBytes": 1946,
+    "rawSha256": "bb1888408ddc9273af64156f10c32612a5b182b5d0b17c651fe07eaaebab7d64",
+    "hasRawFile": false
+  },
+  {
+    "name": "skippable-frame",
+    "note": "skippable frame then content",
+    "rawBytes": 4096,
+    "compressedBytes": 995,
+    "rawSha256": "4bbf9b5b9101d3c9b701c8b82fea2a205c0d11619f0af5020905bd6a48d90450",
+    "hasRawFile": true
+  },
+  {
+    "name": "stream-flushed",
+    "note": "one frame, flushed per message like compress=zstd-stream",
+    "rawBytes": 1294,
+    "compressedBytes": 362,
+    "rawSha256": "3309c813c6b00263ab5d68078afe1116020b556a07e28011975952404d070ec8",
+    "hasRawFile": true
+  },
+  {
+    "name": "text-multiblock",
+    "note": "multiple compressed blocks",
+    "rawBytes": 307200,
+    "compressedBytes": 56922,
+    "rawSha256": "a307cc1797f5fcd2f141df61e91b136324a2a8a0f818db11c4f8b1bdc2e7f5c7",
+    "hasRawFile": false
+  }
+]

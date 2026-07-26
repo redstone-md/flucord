@@ -16,6 +16,7 @@ void main() {
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
+      profile: _uncompressed,
       socketConnector: connector,
     );
     addTearDown(gateway.close);
@@ -37,6 +38,7 @@ void main() {
         'browser': 'Discord Client',
         'device': 'desktop',
       },
+      profile: _uncompressed,
       socketConnector: _MemoryDesktopWebSocketConnector(socket),
     );
     addTearDown(gateway.close);
@@ -62,6 +64,7 @@ void main() {
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
+      profile: _uncompressed,
       socketConnector: _MemoryDesktopWebSocketConnector(socket),
     );
     addTearDown(gateway.close);
@@ -103,6 +106,7 @@ void main() {
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
+      profile: _uncompressed,
       socketConnector: _MemoryDesktopWebSocketConnector(socket),
     );
     addTearDown(gateway.close);
@@ -166,6 +170,7 @@ void main() {
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
+      profile: _uncompressed,
       socketConnector: _MemoryDesktopWebSocketConnector(socket),
     );
     addTearDown(gateway.close);
@@ -242,6 +247,11 @@ void main() {
     expect(socket.sent.single, isA<String>());
   });
 }
+
+/// The installed profile negotiates zstd-stream; these tests drive the socket
+/// with plain ETF terms, so they pin the encoding without transport
+/// compression. The compressed path has its own test.
+const _uncompressed = DiscordDesktopProtocolProfile(clientBuildNumber: 582977);
 
 Future<void> _waitFor(bool Function() condition) async {
   for (var attempt = 0; attempt < 50 && !condition(); attempt++) {

@@ -422,6 +422,21 @@ browser runtime or dependency on Discord's private user API.
     reference values. The controller and member-panel cut, plus live evidence
     for `GUILD_MEMBER_LIST_UPDATE`, remain.
 
+73. Completed: negotiate `compress=zstd-stream` with a pure-Dart RFC 8878
+    Zstandard decompressor, so the Gateway transport now matches the installed
+    client exactly. Discord's `discord_zstd` native module cannot be
+    redistributed, so the decoder is written from the format specification:
+    frame and block framing, Huffman literals with FSE-coded weights, FSE
+    sequences, repeat offsets, an amortized match window, and XXH64 content
+    checksums. Transport compression and payload encoding sit behind one codec
+    that resets both on reconnect, because a decompressor carried across
+    sessions would resolve matches against stale history. Correctness is held by
+    a committed libzstd 1.5.7 corpus, hand-built frames for the RLE block type
+    libzstd never emits, a rejection corpus, 400 freshly generated random frames
+    decoded one-shot and in random chunks, and fuzzing that requires every
+    malformed input to surface as `ZstdException`. Validated live against the
+    production Gateway end to end.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

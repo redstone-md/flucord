@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 12 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 84.09% lines | `flutter test --coverage`, 578 passing, 5 skipped |
+| Automated test coverage | 84.13% lines | `flutter test --coverage`, 656 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -95,20 +95,37 @@ are excluded from the denominator and are never reported as implemented.
   opcodes 0/1/2/6/7/9/10/11, bulk subscriptions 37, QoS heartbeat 40.
 - **Dependencies**: none.
 - **Status**: **Partial**.
-- **Implemented**: External Term Format encode/decode, binary WebSocket frames
-  through the WinHTTP and `dart:io` connectors, identify/resume/QoS heartbeat,
-  `READY`/`READY_SUPPLEMENTAL`/`GUILD_CREATE` hydration, opcode 37 batching
+- **Implemented**: the transport now matches the installed client exactly.
+  External Term Format encode/decode; a pure-Dart RFC 8878 Zstandard
+  decompressor for `compress=zstd-stream`; both behind one transport codec that
+  resets them together on reconnect; binary WebSocket frames through the WinHTTP
+  and `dart:io` connectors; identify/resume/QoS heartbeat;
+  `READY`/`READY_SUPPLEMENTAL`/`GUILD_CREATE` hydration; opcode 37 batching
   measured in encoded ETF bytes.
 - **Tests**: `discord_etf_codec_test.dart`, `discord_gateway_framing_test.dart`,
+  `discord_gateway_transport_codec_test.dart`, `zstd_reference_test.dart`,
+  `zstd_stream_reference_test.dart`,
   `discord_desktop_gateway_client_test.dart`,
   `discord_desktop_gateway_protocol_test.dart`. The ETF codec, decoder,
-  encoder, and framing files are at 100% line coverage.
-- **Live evidence**: `discord_desktop_gateway_live_test.dart` decodes a real
-  ETF `HELLO` and receives a real opcode 11 acknowledgement for a heartbeat
-  Flucord encoded itself, on `2026-07-26`.
-- **Blocked by**: `compress=zstd-stream` requires a streaming Zstandard
-  decoder. Flucord omits the `compress` parameter until one exists; Discord
-  then serves uncompressed frames with the identical payload shape.
+  encoder, and framing files are at 100% line coverage. The Zstandard decoder is
+  checked against libzstd 1.5.7 through a committed corpus of 28 reference
+  frames plus 7 frames that must be rejected, and was additionally validated
+  against 400 freshly generated random frames decoded both one-shot and in
+  random chunks, and against ~10,000 fuzzed mutations that must all surface as
+  `ZstdException`.
+  Line coverage of `lib/src/data/zstd` stands at **85%**, below the 100%
+  this project requires of a new parser. The gap is guard clauses for
+  malformed input that neither the conformance corpus nor random fuzzing
+  reaches; closing it needs a frame hand-built per guard and is tracked as
+  the next task on this domain rather than reported as done.
+- **Live evidence**: `discord_desktop_gateway_live_test.dart` opens the real
+  Gateway with `encoding=etf&v=9&compress=zstd-stream`, decompresses the live
+  stream, decodes the `HELLO`, encodes an ETF heartbeat, and receives a real
+  opcode 11 acknowledgement, on `2026-07-26`.
+- **Blocked by**: dispatch coverage, not transport. `SESSIONS_REPLACE`,
+  `STATE_UPDATE`, and `DELETED_ENTITY_IDS` are unhandled, and identify still
+  sends an empty `client_state`, so Discord always answers with full-mode
+  guilds instead of the versioned partial updates the renderer negotiates.
 
 ## FBC-ACCOUNT — Authentication, sessions, verification
 
@@ -486,12 +503,13 @@ are excluded from the denominator and are never reported as implemented.
    drives range subscriptions from the panel's scroll position and renders the
    server-authoritative groups. This also unblocks FBC-PRESENCE, because a
    member-list item is where the desktop transport first sees presence.
-2. **FBC-GATEWAY zstd-stream.** A pure-Dart RFC 8878 decoder. The reference
-   corpus is already built (`tool/generate_zstd_vectors.py`, 22 vectors from
-   libzstd 1.5.7 plus a streaming and rejection set), so the implementation has
-   an objective oracle before a line of it is written.
-3. **FBC-READSTATE server acknowledgement.** Unread state currently never
-   leaves the machine.
+2. **FBC-READSTATE server acknowledgement.** Unread state currently never
+   leaves the machine, so it cannot survive a reinstall or agree with the
+   official client.
+3. **FBC-GATEWAY versioned `client_state`.** Echoing the cache versions Discord
+   sends would replace full-mode `READY` guilds with partial updates, which is
+   the difference between re-downloading every guild on each connect and
+   applying a delta.
 
 ## Legal boundary
 

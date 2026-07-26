@@ -26,7 +26,7 @@ do not count as desktop-user chat parity.
 | Voice/video/screen share | Not ready for desktop-user chat | Existing Bot/activity-lobby paths are separate |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
 | ETF Gateway framing | Ready | Binary `encoding=etf` frames, live-validated against the Gateway |
-| zstd-stream Gateway compression | Not ready | `compress` omitted; Discord serves uncompressed ETF |
+| zstd-stream Gateway compression | Ready | Pure-Dart RFC 8878 decoder, live-validated end to end |
 
 See [the bundle capability ledger](DISCORD_BUNDLE_COVERAGE.md) for the complete
 machine-generated inventory, per-domain status, discovery coverage, and

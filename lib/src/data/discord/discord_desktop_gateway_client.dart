@@ -7,7 +7,7 @@ import 'discord_desktop_gateway_protocol.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
-import 'discord_gateway_framing.dart';
+import 'discord_gateway_transport_codec.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
 
@@ -48,11 +48,14 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
          properties: properties,
          profile: profile,
        ),
-       _framing = DiscordGatewayFraming.forEncoding(profile.gatewayEncoding);
+       _codec = DiscordGatewayTransportCodec.forProfile(
+         encoding: profile.gatewayEncoding,
+         compression: profile.negotiatedCompression,
+       );
 
   final DiscordDesktopProtocolProfile profile;
   final DiscordDesktopGatewayProtocol _protocol;
-  final DiscordGatewayFraming _framing;
+  final DiscordGatewayTransportCodec _codec;
   final DiscordDesktopWebSocketConnector _socketConnector;
   final DiscordGuildSubscriptions _subscriptions = DiscordGuildSubscriptions();
   final StreamController<DiscordGatewayEvent> _events =
@@ -127,6 +130,9 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
     final base = _protocol.resumeGatewayUri ?? _gatewayUri;
     if (base == null) return;
     final uri = profile.connectionUri(resumeUri: base);
+    // Transport compression is per connection. Carrying a decompressor across a
+    // reconnect would resolve matches against the previous session's bytes.
+    _codec.reset();
     try {
       _socket = await _socketConnector.connect(uri);
       _socket!.messages.listen(
@@ -144,7 +150,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
 
   void _accept(Object? raw) {
     try {
-      final payload = _framing.decode(raw);
+      final payload = _codec.decode(raw);
       if (payload == null) {
         if (_bootstrapCompleter?.isCompleted == false) {
           developer.log(
@@ -171,7 +177,11 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
       }
     } on FormatException catch (error, stackTrace) {
       _lastBootstrapError = error;
-      _logBootstrapFailure('frame-${_framing.encoding}', error, stackTrace);
+      _logBootstrapFailure(
+        'frame-${_codec.framing.encoding}',
+        error,
+        stackTrace,
+      );
       return;
     } on TypeError catch (error, stackTrace) {
       _lastBootstrapError = error;
@@ -323,7 +333,7 @@ final class DiscordDesktopGatewayClient implements DiscordChatGateway {
   void _send(DiscordDesktopGatewayFrame frame) {
     final socket = _socket;
     if (socket == null || !socket.isOpen) return;
-    final encoded = _framing.encode(frame.toJson());
+    final encoded = _codec.encode(frame.toJson());
     if (encoded is String) {
       socket.send(encoded);
     } else {

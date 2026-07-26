@@ -147,10 +147,17 @@ Frames travel as binary WebSocket messages. The WinHTTP transport accepts
 opcode 37 batching budget is measured in encoded ETF bytes rather than JSON
 bytes, because Discord counts the encoded size.
 
-Flucord omits the `compress` query parameter. The installed client requests
-`zstd-stream`, but Flucord has no streaming Zstandard decoder yet, and Discord
-serves uncompressed frames with an identical payload shape when the parameter
-is absent. The JSON encoding remains selectable through the profile and stays
+Flucord now requests `compress=zstd-stream` as well, decoding it with its own
+pure-Dart RFC 8878 decompressor. Discord's `discord_zstd` native module cannot
+be redistributed, so the decoder was written from the format specification and
+checked against libzstd 1.5.7: a committed corpus of reference frames plus
+hand-built frames covering block types libzstd never emits for these inputs.
+
+Transport compression and payload encoding sit behind one transport codec, so
+they are always reset together. A decompressor that survived a reconnect would
+resolve matches against the previous session's bytes. Outgoing frames are never
+compressed; the Gateway does not ask a client to compress. The JSON encoding and
+the uncompressed transport both remain selectable through the profile and stay
 covered by tests.
 
 ## Gateway identify and resume
@@ -241,9 +248,8 @@ bootstrap, authenticated identity, guild/channel projection, channel history,
 and vault-backed restart restoration all completed without copying Discord
 storage or logging the session credential.
 
-The socket now uses the observed binary ETF framing. Transport compression
-remains the open gap: Flucord connects without `compress` until a streaming
-Zstandard decoder exists.
+The socket now matches the installed client's transport exactly:
+`encoding=etf`, `v=9`, and `compress=zstd-stream`.
 
 A machine-generated inventory of the installed client, its native modules, and
 the complete renderer chunk corpus lives in

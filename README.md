@@ -38,7 +38,7 @@ live channel history are verified against a test account on Windows.
 | Threads, members, presence | Partial |
 | Voice, video, screen share for user chat | Not ready |
 | ETF Gateway framing | Ready; binary `encoding=etf` frames, live-validated |
-| zstd-stream Gateway compression | Not ready; `compress` omitted |
+| zstd-stream Gateway compression | Ready; pure-Dart decoder, live-validated |
 
 See [the full feature parity table](docs/FEATURE_PARITY.md) for exact
 boundaries and [the bundle capability ledger](docs/DISCORD_BUNDLE_COVERAGE.md)

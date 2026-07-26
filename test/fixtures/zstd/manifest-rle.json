@@ -1,0 +1,50 @@
+[
+  {
+    "name": "rle-block-single",
+    "note": "one RLE block, body is a single byte",
+    "rawBytes": 900,
+    "compressedBytes": 11,
+    "rawSha256": "055a3605208cc1d3d12011d5eab0e38b431427c6fc2da8e752a59315591ab904",
+    "hasRawFile": true
+  },
+  {
+    "name": "rle-block-max",
+    "note": "RLE block at the 128 KiB block maximum",
+    "rawBytes": 131072,
+    "compressedBytes": 13,
+    "rawSha256": "02c9a68f567b8ec215d893cde67ae2da41ba3c9b838d0ba4d3d04ab3cdc58da6",
+    "hasRawFile": false
+  },
+  {
+    "name": "rle-block-mixed",
+    "note": "raw, RLE and raw blocks in one frame",
+    "rawBytes": 5024,
+    "compressedBytes": 41,
+    "rawSha256": "be6b9bc342d974f9abab6cf2508fde31387c43df99c8efd9795e4f83e358fe0b",
+    "hasRawFile": false
+  },
+  {
+    "name": "rle-block-storm",
+    "note": "600 RLE blocks against a 1 KiB window",
+    "rawBytes": 38400,
+    "compressedBytes": 2406,
+    "rawSha256": "7578b5edab7c506a544b22365c4bda909dfcf5b3dce249e1c6ec7f32097e6bbf",
+    "hasRawFile": false
+  },
+  {
+    "name": "rle-block-checksum",
+    "note": "RLE block followed by an xxh64 content checksum",
+    "rawBytes": 4096,
+    "compressedBytes": 15,
+    "rawSha256": "c663cfac30430ae0063ef566967a3309489f9a0b6f74b6feefd93f163a593bc4",
+    "hasRawFile": true
+  },
+  {
+    "name": "rle-block-window-storm",
+    "note": "4 MiB window refilled by RLE blocks then 3000 one-byte blocks",
+    "rawBytes": 4328376,
+    "compressedBytes": 12138,
+    "rawSha256": "9b52cf69b2aa9631b8f925edcb21be3bcbcf3606e5a498f5e51dfc271af811de",
+    "hasRawFile": false
+  }
+]
