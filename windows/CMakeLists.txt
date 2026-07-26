@@ -115,6 +115,13 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# MSVC 14.51 turns the legacy coroutine header used by webview_windows 0.4.0
+# into a hard error. Keep the compatibility define scoped to that plugin.
+if(TARGET webview_windows_plugin)
+  target_compile_definitions(webview_windows_plugin PRIVATE
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+endif()
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
