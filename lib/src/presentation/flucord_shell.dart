@@ -8,7 +8,11 @@ import '../application/connection_controller.dart';
 import '../application/direct_call_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/guild_member_list_controller.dart';
+import '../application/guild_settings_controller.dart';
 import '../application/inbox_catalog.dart';
+import '../application/message_search_controller.dart';
+import '../application/message_search_grammar.dart';
+import '../application/report_flow_controller.dart';
 import '../application/oauth_guild_directory_controller.dart';
 import '../application/oauth_guild_membership_controller.dart';
 import '../application/quick_switcher_catalog.dart';
@@ -17,8 +21,11 @@ import '../application/workspace_controller.dart';
 import '../application/voice_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
+import '../domain/discord_permissions.dart';
+import '../domain/message_search.dart';
 import '../domain/attachment_download.dart';
 import '../domain/external_link_launcher.dart';
+import '../domain/moderation_report.dart';
 import '../domain/voice_message_recorder.dart';
 import '../domain/workspace_permissions.dart';
 import 'widgets/channel_sidebar.dart';
@@ -30,12 +37,16 @@ import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/forum_channel_view.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
+import 'widgets/guild_settings_dialog.dart';
+import 'widgets/report_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_forward_dialog.dart';
 import 'widgets/message_list.dart';
+import 'widgets/message_search_panel.dart';
+import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
@@ -63,6 +74,7 @@ class FlucordShell extends StatelessWidget {
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
     this.memberListController,
+    this.messageSearchController,
     this.directCallController,
     super.key,
   });
@@ -81,6 +93,11 @@ class FlucordShell extends StatelessWidget {
   /// Owns the member panel's roster subscription. Absent in hosts that never
   /// show the panel, such as the widget tests for a single pane.
   final GuildMemberListController? memberListController;
+
+  /// Owns the server-side search and the page the results panel is showing.
+  /// Absent in hosts that never offer it, such as the widget tests for a
+  /// single pane.
+  final MessageSearchController? messageSearchController;
 
   /// Owns calls in DMs and group DMs. Absent in hosts that cannot place one —
   /// the demo workspace, and every widget test that only drives a single pane.
@@ -127,6 +144,15 @@ class FlucordShell extends StatelessWidget {
             // and they must not answer differently.
             final permissions = WorkspacePermissions(workspace);
             final channels = permissions.visibleChannelsFor(spaceId);
+            // Computed once per frame alongside the channel filter, from the
+            // same resolver: the settings door and the buttons inside it must
+            // not answer differently about the same account.
+            final administration = permissions.administrationOf(spaceId);
+            final canOpenSettings =
+                !space.isDirectMessages &&
+                administration.hasAnySurface &&
+                chatController.guildManagement != null;
+            final canReport = chatController.moderation != null;
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
@@ -153,22 +179,40 @@ class FlucordShell extends StatelessWidget {
                     final showsMessages =
                         channel != null &&
                         _showsMessageTimeline(channel, voiceSurface);
+                    final searchController = messageSearchController;
                     final showThreads =
                         workspaceController.showThreads && allowThreadPanel;
+                    final showSearchPanel =
+                        workspaceController.showSearch &&
+                        searchController != null &&
+                        !showThreads;
                     final showPins =
                         workspaceController.showPins &&
                         showsMessages &&
-                        !showThreads;
+                        !showThreads &&
+                        !showSearchPanel;
                     final showMembers =
                         membersFit &&
                         !space.isDirectMessages &&
                         workspaceController.showMembers &&
                         !showPins &&
-                        !showThreads;
+                        !showThreads &&
+                        !showSearchPanel;
+                    // Asking the server about a conversation the account may
+                    // not read the history of is a request Discord answers
+                    // with a rejection, so the affordance is withheld instead.
+                    final canSearch =
+                        channel != null &&
+                        (searchController?.isSupported ?? false) &&
+                        permissions.can(
+                          DiscordPermissions.readMessageHistory,
+                          channel,
+                        );
                     return Row(
                       children: [
                         ServerRail(
                           workspace: workspace,
+                          readState: chatController.readState,
                           selectedSpaceId: spaceId,
                           onSelectSpace: (id) {
                             workspaceController.selectSpace(workspace, id);
@@ -205,7 +249,23 @@ class FlucordShell extends StatelessWidget {
                                 .scheduledEventsError(space.id),
                             onOpenEvents: () =>
                                 _openScheduledEvents(context, space),
+                            onOpenServerSettings: canOpenSettings
+                                ? () => unawaited(
+                                    _openGuildSettings(
+                                      context,
+                                      space,
+                                      administration,
+                                    ),
+                                  )
+                                : null,
                             onSelectChannel: _selectChannel,
+                            readState: chatController.readState,
+                            onNotificationRequest: (request, target) =>
+                                _applyNotificationRequest(
+                                  request,
+                                  space: space,
+                                  channel: target,
+                                ),
                             sessionMode: connectionController.mode,
                             connectionStatus: chatController.connectionStatus,
                           ),
@@ -233,8 +293,31 @@ class FlucordShell extends StatelessWidget {
                                   allowThreadPanel: allowThreadPanel,
                                   voiceSurface: voiceSurface,
                                   inboxSummary: inboxSummary,
+                                  canSearch: canSearch,
                                 ),
                         ),
+                        if (showSearchPanel)
+                          MessageSearchPanel(
+                            controller: searchController,
+                            workspace: workspace,
+                            linkLauncher: externalLinkLauncher,
+                            onClose: () {
+                              workspaceController.closeSearch();
+                              searchController.clear();
+                            },
+                            onJump: (channelId, messageId) => _openDestination(
+                              spaceId:
+                                  workspace.channelOrNull(channelId)?.spaceId ??
+                                  spaceId,
+                              channelId: channelId,
+                              messageId: messageId,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                            onSelectChannel: (id) => _selectChannel(
+                              id,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                          ),
                         if (showPins)
                           PinnedMessagesPanel(
                             workspace: workspace,
@@ -305,6 +388,14 @@ class FlucordShell extends StatelessWidget {
                             onMessage: (member) => unawaited(
                               _openDirectConversation(context, member.id),
                             ),
+                            onReport: canReport
+                                ? (member) =>
+                                      unawaited(_reportMember(context, member))
+                                : null,
+                            onBlock: canReport
+                                ? (member) =>
+                                      unawaited(_blockMember(context, member))
+                                : null,
                           ),
                       ],
                     );

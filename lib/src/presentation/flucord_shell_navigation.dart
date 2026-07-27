@@ -51,6 +51,58 @@ extension _FlucordShellNavigation on FlucordShell {
     );
   }
 
+  /// Turns a sidebar notification menu choice into a controller call.
+  ///
+  /// A null [channel] means the menu was raised on the space itself. The two
+  /// scopes share every row, so the routing lives here rather than in six
+  /// callbacks threaded through the sidebar.
+  void _applyNotificationRequest(
+    NotificationMenuRequest request, {
+    required CommunitySpace space,
+    required ConversationChannel? channel,
+  }) {
+    switch (request) {
+      case MarkReadRequest():
+        if (channel == null) {
+          unawaited(chatController.markSpaceRead(space.id));
+        } else {
+          chatController.acknowledgeChannel(channel.id, immediate: true);
+        }
+      case MuteRequest():
+        unawaited(
+          channel == null
+              ? chatController.setSpaceMuted(
+                  space.id,
+                  muted: request.muted,
+                  windowSeconds: request.windowSeconds,
+                )
+              : chatController.setChannelMuted(
+                  channel,
+                  muted: request.muted,
+                  windowSeconds: request.windowSeconds,
+                ),
+        );
+      case NotificationLevelRequest():
+        unawaited(
+          channel == null
+              ? chatController.setSpaceNotificationLevel(
+                  space.id,
+                  request.level,
+                )
+              : chatController.setChannelNotificationLevel(
+                  channel,
+                  request.level,
+                ),
+        );
+      case SuppressEveryoneRequest():
+        unawaited(
+          chatController.setSpaceSuppressEveryone(space.id, request.value),
+        );
+      case MobilePushRequest():
+        unawaited(chatController.setSpaceMobilePush(space.id, request.value));
+    }
+  }
+
   void _openConnections(BuildContext context) {
     final desktopLoginController = DiscordDesktopLoginScope.of(context);
     showDialog<void>(
@@ -104,6 +156,92 @@ extension _FlucordShellNavigation on FlucordShell {
     );
     if (channelId == null || !context.mounted) return;
     _openDestination(spaceId: space.id, channelId: channelId);
+  }
+
+  /// Opens the server-settings window for [space].
+  ///
+  /// The controller is built per opening and disposed with the dialog: it holds
+  /// a whole guild's roles, bans and audit pages, and keeping one alive per
+  /// guild the user ever glanced at would pin all of it for the session.
+  Future<void> _openGuildSettings(
+    BuildContext context,
+    CommunitySpace space,
+    GuildAdminCapabilities capabilities,
+  ) async {
+    final repository = chatController.guildManagement;
+    final workspace = chatController.workspace;
+    if (repository == null || workspace == null) return;
+    final controller = GuildSettingsController(
+      repository,
+      capabilities,
+      guildId: space.id,
+    );
+    try {
+      await showGuildSettingsDialog(
+        context: context,
+        controller: controller,
+        space: space,
+        workspace: workspace,
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  /// Opens the in-app report flow for [member].
+  Future<void> _reportMember(BuildContext context, Member member) async {
+    final repository = chatController.moderation;
+    if (repository == null) return;
+    final spaceId = workspaceController.selectedSpaceId;
+    final controller = ReportFlowController(
+      repository,
+      target: UserReportTarget(
+        userId: member.id,
+        guildId: spaceId == CommunitySpace.directMessagesId ? null : spaceId,
+      ),
+    );
+    try {
+      await showReportDialog(context: context, controller: controller);
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  /// Blocks [member], after a confirmation. Blocking is not undoable from any
+  /// surface Flucord has yet, so it asks first.
+  Future<void> _blockMember(BuildContext context, Member member) async {
+    final repository = chatController.moderation;
+    if (repository == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('block-member-dialog'),
+        title: Text('Block ${member.displayName}?'),
+        content: const Text(
+          'You will stop seeing their messages and they cannot message you.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('block-member-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await repository.blockUser(member.id);
+    } on Object {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That member could not be blocked')),
+      );
+    }
   }
 
   /// Like the channel sidebar, the quick switcher is a "go to this channel"

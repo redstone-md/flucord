@@ -1,4 +1,9 @@
 import 'chat_models.dart';
+import 'guild_management_repository.dart';
+import 'message_search_repository.dart';
+import 'moderation_repository.dart';
+import 'presence_repository.dart';
+import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
 import 'voice_connection.dart';
@@ -51,7 +56,20 @@ final class PresenceChangedEvent extends ChatRepositoryEvent {
   const PresenceChangedEvent({required this.memberId, required this.presence});
 
   final String memberId;
-  final Presence presence;
+  final UserPresence presence;
+}
+
+/// Presences that arrived together, such as one `READY_SUPPLEMENTAL` or one
+/// member-list page.
+///
+/// Kept distinct from [PresenceChangedEvent] for the same reason a roster page
+/// is: a single supplemental payload carries a presence for every online
+/// friend and every subscribed guild member, and applying them one event at a
+/// time would rebuild the member table once per user.
+final class PresencesChangedEvent extends ChatRepositoryEvent {
+  const PresencesChangedEvent(this.presences);
+
+  final Map<String, UserPresence> presences;
 }
 
 final class TypingStartedEvent extends ChatRepositoryEvent {
@@ -125,6 +143,22 @@ final class GuildScheduledEventDeletedEvent extends ChatRepositoryEvent {
   final String eventId;
 }
 
+/// Discord moved a channel's newest-message pointer without sending the
+/// message itself.
+///
+/// `PASSIVE_UPDATE_V2` does exactly that for guilds the client is not
+/// subscribed to. Unread is a comparison against that pointer, so a client that
+/// ignored the event would show a guild as fully read until it opened it.
+final class ChannelLastMessageEvent extends ChatRepositoryEvent {
+  const ChannelLastMessageEvent({
+    required this.channelId,
+    required this.messageId,
+  });
+
+  final String channelId;
+  final String messageId;
+}
+
 final class ChannelDeletedEvent extends ChatRepositoryEvent {
   const ChannelDeletedEvent(this.channelId);
 
@@ -176,6 +210,52 @@ abstract interface class ChatRepository {
   /// credentials can do calls at all. Stating it here keeps a caller from
   /// inferring the answer from the repository's runtime type.
   DirectCallService? get directCalls;
+
+  /// The guild-administration plane this transport can carry, or `null`.
+  ///
+  /// Administering a guild needs a session Discord will let issue the admin
+  /// routes at all — a bot token reaches most of them, an OAuth grant reaches
+  /// almost none, and a demo transport reaches nothing. Answering here rather
+  /// than letting the settings window infer it from the repository's runtime
+  /// type is what lets it say honestly "not on this session" instead of opening
+  /// a window whose every button fails.
+  GuildManagementRepository? get guildManagement;
+
+  /// The reporting and blocking plane, or `null`.
+  ///
+  /// Separate from [guildManagement] because they are different authorities:
+  /// these are actions the signed-in account takes about itself, and a session
+  /// can hold them while being able to administer no guild at all.
+  ModerationRepository? get moderation;
+
+  /// The server-side search plane this transport can reach, or `null`.
+  ///
+  /// Searching asks Discord to walk a corpus this client never loaded, and the
+  /// routes that do it answer to a signed-in user's own session. A transport
+  /// without one — a demo workspace, a bot token — has no honest answer to
+  /// give, and saying so here keeps the search surface from offering a query
+  /// that could only ever fail.
+  MessageSearchRepository? get messageSearch;
+
+  /// The presence plane this transport can carry, or `null` when it carries
+  /// none.
+  ///
+  /// Broadcasting a status is a frame on the same gateway socket that already
+  /// delivers messages, and reading one requires the guild subscriptions that
+  /// only a user session makes. A transport that has neither says so here
+  /// instead of leaving the status picker to discover it by failing.
+  PresenceService? get presence;
+
+  /// The account's server-held read state, or `null` when this transport has
+  /// none.
+  ///
+  /// Unread lives on Discord's servers, keyed to a logged-in user: a bot token
+  /// has no read state at all and an OAuth grant cannot acknowledge one. Saying
+  /// so on the contract is what lets the shell keep its purely local unread
+  /// model for those transports while the desktop-user session defers to the
+  /// server, without any caller inspecting a runtime type to find out which it
+  /// is holding.
+  ReadStateRepository? get readState;
 
   Future<ChatWorkspace> loadWorkspace();
 

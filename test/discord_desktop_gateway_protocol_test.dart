@@ -29,6 +29,33 @@ void main() {
     expect(gateway.toString(), isNot(contains('secret-value')));
   });
 
+  test('identify asks the session caches for client_state each time', () {
+    final gateway = protocol();
+    var version = 4;
+    gateway.clientStateProvider = () => {
+      'guild_versions': const <String, Object?>{},
+      'read_state_version': version,
+    };
+
+    expect((gateway.identify().data! as Map<String, Object?>)['client_state'], {
+      'guild_versions': <String, Object?>{},
+      'read_state_version': 4,
+    });
+
+    version = 9;
+    expect((gateway.identify().data! as Map<String, Object?>)['client_state'], {
+      'guild_versions': <String, Object?>{},
+      'read_state_version': 9,
+    });
+
+    // A fast connect never vouches for a cache, whatever the provider says.
+    expect(
+      (gateway.identify(fastConnect: true).data!
+          as Map<String, Object?>)['client_state'],
+      {'guild_versions': <String, Object?>{}},
+    );
+  });
+
   test('fast connect identify uses the minimal observed payload', () {
     final data =
         protocol().identify(fastConnect: true).data! as Map<String, Object?>;

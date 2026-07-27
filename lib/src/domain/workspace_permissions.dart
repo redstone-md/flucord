@@ -4,6 +4,8 @@ import 'discord_permissions.dart';
 import 'guild_membership.dart';
 import 'guild_permissions.dart';
 
+part 'guild_admin_capabilities.dart';
+
 /// Answers permission questions about one workspace snapshot.
 ///
 /// [GuildPermissions] is the algorithm; this is the part that decides what to
@@ -48,6 +50,41 @@ final class WorkspacePermissions {
 
   ChannelCapabilities capabilitiesIn(ConversationChannel channel) =>
       ChannelCapabilities.fromPermissions(inChannel(channel));
+
+  /// Guild-wide permissions in [spaceId], or `null` when this client holds no
+  /// permission data for that guild.
+  ///
+  /// Note the asymmetry with [inChannel], which resolves the same gap to *full*
+  /// permissions so a sidebar built from a transport that never sent role bits
+  /// still lists its channels. Guild-wide answers gate destructive work —
+  /// deleting a role, banning a member, wiping a channel — and there the same
+  /// fallback would offer every one of those buttons to an account nobody has
+  /// confirmed may press them. A permission question that fails open is exactly
+  /// the shape of the bug that once turned a `-1` bitfield into administrator.
+  BigInt? inSpace(String spaceId) {
+    final guild = _guildFor(spaceId);
+    final membership = _membershipIn(spaceId);
+    if (guild == null || membership == null) return null;
+    return guild.of(
+      PermissionSubject(
+        userId: _memberId,
+        membership: membership,
+        isCurrentUser: _memberId == _workspace.currentMemberId,
+      ),
+      now: _now,
+    );
+  }
+
+  /// Whether the account holds [permission] guild-wide in [spaceId]. Unknown
+  /// permission data answers false, for the reason [inSpace] gives.
+  bool canInSpace(BigInt permission, String spaceId) {
+    final bits = inSpace(spaceId);
+    return bits != null && DiscordPermissions.hasAll(bits, permission);
+  }
+
+  /// What the account may administer in [spaceId].
+  GuildAdminCapabilities administrationOf(String spaceId) =>
+      GuildAdminCapabilities._(this, spaceId);
 
   /// The channels of [spaceId] the account may see, in the order given.
   ///

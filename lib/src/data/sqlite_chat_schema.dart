@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 20;
+  static const version = 21;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -42,6 +42,7 @@ abstract final class SqliteChatSchema {
         unread INTEGER NOT NULL,
         mention_count INTEGER NOT NULL,
         first_unread_message_id TEXT,
+        last_message_id TEXT,
         parent_id TEXT,
         is_thread INTEGER NOT NULL,
         is_archived INTEGER NOT NULL,
@@ -310,6 +311,12 @@ abstract final class SqliteChatSchema {
       await _addColumn(database, 'roles', 'permissions TEXT');
       await _addColumn(database, 'channels', 'permission_overwrites_json TEXT');
       await _addColumn(database, 'members', 'memberships_json TEXT');
+    }
+    if (oldVersion < 21) {
+      // Unread is a comparison against this pointer, so an offline launch that
+      // could not read it would report every channel read until the socket came
+      // back. Nullable: a row written before this version simply has no answer.
+      await _addColumn(database, 'channels', 'last_message_id TEXT');
     }
   }
 

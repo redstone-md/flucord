@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
-import '../../theme/flucord_theme.dart';
+import 'presence_indicator.dart';
 import 'remote_identity_image.dart';
 
 class MemberAvatar extends StatelessWidget {
@@ -21,59 +21,44 @@ class MemberAvatar extends StatelessWidget {
   final Color? presenceBorderColor;
 
   @override
-  Widget build(BuildContext context) {
-    final presenceColor = switch (member.presence) {
-      Presence.online => FlucordColors.success,
-      Presence.idle => FlucordColors.warning,
-      Presence.offline => FlucordColors.offline,
-    };
-    return SizedBox.square(
-      dimension: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: ClipOval(
-              child: RemoteIdentityImage(
-                url: member.avatarUrlFor(spaceId),
-                imageKey: ValueKey('member-avatar-image-${member.id}'),
-                fallback: DecoratedBox(
-                  decoration: BoxDecoration(color: Color(member.colorValue)),
-                  child: Center(
-                    child: Text(
-                      member.initials,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: size * 0.32,
-                        fontWeight: FontWeight.w600,
-                      ),
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: size,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: ClipOval(
+            child: RemoteIdentityImage(
+              url: member.avatarUrlFor(spaceId),
+              imageKey: ValueKey('member-avatar-image-${member.id}'),
+              fallback: DecoratedBox(
+                decoration: BoxDecoration(color: Color(member.colorValue)),
+                child: Center(
+                  child: Text(
+                    member.initials,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: size * 0.32,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          if (showPresence)
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
-                width: size * 0.29,
-                height: size * 0.29,
-                decoration: BoxDecoration(
-                  color: presenceColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        presenceBorderColor ??
-                        Theme.of(context).scaffoldBackgroundColor,
-                    width: 2,
-                  ),
-                ),
-              ),
+        ),
+        if (showPresence)
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: PresenceIndicator(
+              key: ValueKey('member-presence-${member.id}'),
+              presence: member.presenceOrCoarse,
+              size: size * 0.34,
+              borderColor: presenceBorderColor,
             ),
-        ],
-      ),
-    );
-  }
+          ),
+      ],
+    ),
+  );
 }

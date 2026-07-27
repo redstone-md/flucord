@@ -179,18 +179,34 @@ are excluded from the denominator and are never reported as implemented.
 
 ## FBC-PRESENCE — Presence and typing
 
-- **Symbols**: `PRESENCE_UPDATE`, `PRESENCES_REPLACE`, `TYPING_START`.
+- **Symbols**: `PRESENCE_UPDATE`, `PRESENCES_REPLACE`, `SESSIONS_REPLACE`,
+  `READY.sessions`, `READY_SUPPLEMENTAL.merged_presences`, `TYPING_START`,
+  opcode 3.
 - **Purpose**: online state, activities, typing indicators.
-- **UI surface**: member list, profile popovers, typing row.
-- **Contract**: Gateway dispatches; opcode 37 `activities` subscription.
-- **Dependencies**: FBC-GATEWAY, FBC-GUILD.
-- **Status**: **Partial**.
-- **Implemented**: live presence and typing dispatch handling with expiry and
-  throttling.
-- **Tests**: `discord_repository_events_test.dart`, `widget_test.dart`.
+- **UI surface**: member list, profile popovers, account panel, typing row.
+- **Contract**: Gateway dispatches; opcode 3 `{status, since, activities, afk}`;
+  opcode 37 `activities` subscription; `status` group of the settings proto.
+- **Dependencies**: FBC-GATEWAY, FBC-GUILD, FBC-SETTINGS.
+- **Status**: **Implemented**.
+- **Implemented**: the per-user × per-guild presence map with R07's cross-guild
+  collapse, offline pruning, activity comparator, duplicate-`PLAYING` filter and
+  hidden-activity dedupe; the full activity model with assets, party,
+  timestamps, emoji and buttons; `client_status` with the mobile indicator and
+  the synthesised streaming status; `SESSIONS_REPLACE` and `READY.sessions`;
+  `merged_presences` attributed per R03; outbound opcode 3 with the idle/AFK
+  machine, the dirty check and the five-per-twenty-second window; status and
+  custom-status writes through the settings proto.
+- **Tests**: `discord_presence_mapper_test.dart`,
+  `discord_presence_store_test.dart`, `discord_idle_tracker_test.dart`,
+  `discord_self_presence_test.dart`, `discord_presence_updater_test.dart`,
+  `discord_presence_service_test.dart`, `discord_presence_wire_test.dart`,
+  `discord_desktop_presence_test.dart`, `user_presence_model_test.dart`,
+  `presence_widget_test.dart`, `self_presence_controller_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: `PRESENCES_REPLACE` and lazy member-list presence require
-  FBC-GUILD member lists first.
+- **Not implemented**: the local activity producers R07 lists as separate
+  concerns — game detection, Spotify sync, Go-Live and the RPC `SET_ACTIVITY`
+  server — and the `BOT_HTTP_INTERACTIONS` status default, which needs user
+  flags the presence payload does not carry.
 
 ## FBC-RELATIONSHIPS — Friends, blocks, direct-message directory
 
@@ -298,12 +314,29 @@ are excluded from the denominator and are never reported as implemented.
   `POST /read-states/ack-bulk`.
 - **Dependencies**: FBC-GATEWAY, FBC-MESSAGE.
 - **Status**: **Partial**.
-- **Implemented**: local unread and mention state, first-unread anchors, Inbox,
-  mark-all-read, native desktop notifications.
-- **Tests**: `unread_state_test.dart`, `inbox_controller_test.dart`.
+- **Implemented**: server read state hydrated from `READY.read_state` (both
+  entry dialects) and kept in step with `MESSAGE_ACK`, `CHANNEL_PINS_ACK`,
+  `CHANNEL_PINS_UPDATE`, `GUILD_FEATURE_ACK`, `USER_NON_CHANNEL_ACK`,
+  `USER_GUILD_SETTINGS_UPDATE` and `PASSIVE_UPDATE_V2`; channel ACK with the
+  rolling token, day counter and flags on a 3 s debounce; mark-unread; the
+  100-entry bulk pump; the guild- and user-scoped non-channel ACK routes;
+  notification settings (guild and channel level, mute with its expiry,
+  suppress `@everyone`, mobile push) reflected in the sidebar and rail and
+  honoured by the desktop notification path; local unread and mention state,
+  first-unread anchors, Inbox, mark-all-read.
+- **Tests**: `read_state_model_test.dart`, `discord_read_state_codec_test.dart`,
+  `discord_read_state_store_test.dart`,
+  `discord_read_state_ack_queue_test.dart`,
+  `discord_read_state_repository_test.dart`,
+  `discord_desktop_rest_read_state_test.dart`,
+  `discord_desktop_read_state_test.dart`,
+  `chat_controller_read_state_test.dart`,
+  `channel_sidebar_notifications_test.dart`.
 - **Live evidence**: none for server-side acknowledgement.
-- **Blocked by**: server read state is never fetched or acknowledged, so unread
-  state does not survive a reinstall or sync with the official client.
+- **Blocked by**: the notification centre (`NOTIFICATION_CENTER_*`) and message
+  requests are still unmodelled, and the 30-day read-state garbage collector is
+  not run — `DELETE /channels/{id}/messages/ack` exists as a route builder with
+  no caller.
 
 ## FBC-EXPRESSION — Emoji, stickers, soundboard, GIF providers
 
@@ -511,15 +544,18 @@ are excluded from the denominator and are never reported as implemented.
 1. **FBC-GUILD member panel.** The lazy member-list transport and row state
    machine have landed; what remains is the controller and sidebar cut that
    drives range subscriptions from the panel's scroll position and renders the
-   server-authoritative groups. This also unblocks FBC-PRESENCE, because a
-   member-list item is where the desktop transport first sees presence.
-2. **FBC-READSTATE server acknowledgement.** Unread state currently never
-   leaves the machine, so it cannot survive a reinstall or agree with the
-   official client.
-3. **FBC-GATEWAY versioned `client_state`.** Echoing the cache versions Discord
-   sends would replace full-mode `READY` guilds with partial updates, which is
-   the difference between re-downloading every guild on each connect and
-   applying a delta.
+   server-authoritative groups.
+2. **FBC-READSTATE notification centre.** `NOTIFICATION_CENTER_*` and message
+   requests are the two read-state types still unmodelled; R04 lists the REST
+   bodies for the notification-centre acks as unestablished, so this one needs
+   a fresh corpus pass before it can be built.
+3. **FBC-GATEWAY versioned `client_state`.** `read_state_version` and
+   `user_guild_settings_version` are now echoed, because the read-state store
+   can apply a `partial: true` delta for both. `highest_last_message_id` and
+   `private_channels_version` are computed but deliberately not sent: guild and
+   private-channel hydration still replaces whatever `READY` carries, and R09
+   lists the server-side effect of `private_channels_version` as
+   unestablished.
 
 ## Legal boundary
 

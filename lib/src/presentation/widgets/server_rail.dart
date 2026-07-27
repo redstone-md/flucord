@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../domain/read_state.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
@@ -19,6 +20,7 @@ class ServerRail extends StatelessWidget {
     required this.onOpenConnections,
     required this.sessionMode,
     required this.isDark,
+    this.readState,
     super.key,
   });
 
@@ -30,6 +32,10 @@ class ServerRail extends StatelessWidget {
   final SessionMode sessionMode;
   final bool isDark;
 
+  /// The server's read state, when the transport has one. It decides which
+  /// channels count towards a pip and which spaces are muted.
+  final ReadStateSnapshot? readState;
+
   @override
   Widget build(BuildContext context) {
     final directSpaces = workspace.spaces.where(
@@ -39,7 +45,7 @@ class ServerRail extends StatelessWidget {
     final guildSpaces = workspace.spaces
         .where((space) => !space.isDirectMessages)
         .toList(growable: false);
-    final activityBySpaceId = workspace.activityBySpace();
+    final activityBySpaceId = workspace.activityBySpace(readState: readState);
     return Container(
       key: const ValueKey('server-rail'),
       width: 72,
@@ -276,7 +282,13 @@ class _RailButtonState extends State<_RailButton> {
                         borderRadius: radius,
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: widget.builder(context, active),
+                      // A muted space keeps its icon but loses its emphasis;
+                      // the mention badge below still shows through at full
+                      // strength, because a mention outranks a mute.
+                      child: Opacity(
+                        opacity: widget.activity.muted && !active ? 0.45 : 1,
+                        child: widget.builder(context, active),
+                      ),
                     ),
                   ),
                 ),
@@ -302,6 +314,7 @@ class _RailButtonState extends State<_RailButton> {
     if (activity.mentionCount > 1) {
       return '$name, ${activity.mentionCount} mentions';
     }
+    if (activity.muted) return '$name, muted';
     return activity.hasUnread ? '$name, unread' : name;
   }
 }

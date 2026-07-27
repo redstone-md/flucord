@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_desktop_bootstrap.dart';
 import 'package:flucord/src/data/discord/discord_private_channel_directory.dart';
 import 'package:flucord/src/data/discord/discord_private_channel_order.dart';
-import 'package:flucord/src/data/discord/discord_snowflake.dart';
+import 'package:flucord/src/domain/discord_snowflake.dart';
 
 void main() {
   group('ordering', () {
@@ -242,6 +242,38 @@ void main() {
         bootstrap.snapshot()!.directChannels.single['recipients'],
         isEmpty,
       );
+    });
+
+    test('orders the DM list on the READY read-state cursors', () {
+      final bootstrap = DiscordDesktopBootstrap()
+        ..acceptReady(const {
+          'user': {'id': 'me'},
+          'private_channels': [
+            {'id': '111111111111111111', 'type': 1},
+            {'id': '222222222222222222', 'type': 1},
+          ],
+          'read_state': {
+            'entries': [
+              // R09 keys the DM sort on the read state's cursor first, so this
+              // conversation outranks one with the higher channel id.
+              {
+                'id': '111111111111111111',
+                'last_message_id': '987654321098765432',
+              },
+              {'id': '222222222222222222', 'last_message_id': 0},
+              {
+                'id': '333333333333333333',
+                'read_state_type': 1,
+                'last_acked_id': '987654321098765432',
+              },
+            ],
+          },
+        });
+
+      expect(bootstrap.snapshot()!.directChannels.map((c) => c['id']), [
+        '111111111111111111',
+        '222222222222222222',
+      ]);
     });
 
     test('has no snapshot before READY and forgets everything on reset', () {

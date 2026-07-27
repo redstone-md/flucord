@@ -1,11 +1,18 @@
 import '../../domain/chat_models.dart';
 import 'discord_call_api.dart';
+import 'discord_desktop_rest_protocol.dart';
+import 'discord_guild_management_repository.dart';
+import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
+import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_settings_transport.dart';
 
 final class DiscordDesktopApiClient
-    implements DiscordCallApi, DiscordUserSettingsTransport {
+    implements
+        DiscordCallApi,
+        DiscordUserSettingsTransport,
+        DiscordReadStateTransport {
   DiscordDesktopApiClient({
     required String authorization,
     required Map<String, String> headers,
@@ -21,6 +28,16 @@ final class DiscordDesktopApiClient
        );
 
   final DiscordRestClient _rest;
+
+  /// The guild-administration routes, sharing this session's credentials.
+  ///
+  /// Built lazily and kept, so the settings window's sections all talk to one
+  /// object rather than each minting its own over the same socket.
+  late final DiscordGuildManagementRepository guildManagement =
+      DiscordGuildManagementRepository(_rest);
+
+  late final DiscordModerationRepository moderation =
+      DiscordModerationRepository(_rest);
 
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {
@@ -50,6 +67,17 @@ final class DiscordDesktopApiClient
         .where((message) => message.isNotEmpty)
         .toList(growable: false);
   }
+
+  /// Runs one classic message-search request against [path].
+  ///
+  /// Unlike every other route here the caller needs the raw answer rather than
+  /// the decoded body: a search whose corpus Discord has not finished indexing
+  /// comes back `202 Accepted` with a `Retry-After` header, and both the status
+  /// and that header are part of the flow.
+  Future<DiscordApiResponse> searchMessages(
+    String path,
+    Map<String, Object?> query,
+  ) => _rest.requestDetailed('GET', path, query: query);
 
   Future<Map<String, Object?>> createDirectMessageChannel(String recipientId) =>
       _rest.requestObject(
@@ -236,6 +264,25 @@ final class DiscordDesktopApiClient
       throw ArgumentError.value(type, 'type', 'Unknown settings proto type');
     }
     return type;
+  }
+
+  /// Sends a request the read-state protocol built.
+  ///
+  /// The read-state routes go through [DiscordDesktopRestRequest] rather than
+  /// being spelled out here, because two of them encode the read-state type
+  /// into the path in an order that is easy to invert; keeping the rendering in
+  /// the protocol description is what lets a test pin the exact path.
+  @override
+  Future<Map<String, Object?>?> sendReadStateRequest(
+    DiscordDesktopRestRequest request,
+  ) async {
+    final payload = await _rest.request(
+      request.method,
+      request.path,
+      query: request.query.isEmpty ? null : request.query,
+      body: request.body,
+    );
+    return payload is Map ? payload.cast<String, Object?>() : null;
   }
 
   Future<String> getGatewayUrl() async {

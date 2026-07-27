@@ -1,5 +1,10 @@
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
+import '../domain/guild_management_repository.dart';
+import '../domain/message_search_repository.dart';
+import '../domain/moderation_repository.dart';
+import '../domain/presence_repository.dart';
+import '../domain/read_state_repository.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
@@ -25,7 +30,23 @@ final class DisconnectedChatRepository implements ChatRepository {
   UserSettingsRepository? get userSettings => null;
 
   @override
+  ReadStateRepository? get readState => null;
+
+  @override
   DirectCallService? get directCalls => null;
+
+  /// Nothing is connected, so there is no corpus to search.
+  @override
+  MessageSearchRepository? get messageSearch => null;
+
+  @override
+  GuildManagementRepository? get guildManagement => null;
+
+  @override
+  ModerationRepository? get moderation => null;
+
+  @override
+  PresenceService? get presence => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;

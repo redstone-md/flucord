@@ -3,13 +3,18 @@ import 'dart:async';
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
+import '../domain/guild_management_repository.dart';
 import '../domain/message_forward_repository.dart';
+import '../domain/moderation_repository.dart';
 import '../domain/message_flag_repository.dart';
+import '../domain/message_search_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/presence_repository.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/read_state_repository.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
@@ -77,7 +82,26 @@ final class MockChatRepository
   UserSettingsRepository? get userSettings => null;
 
   @override
+  ReadStateRepository? get readState => null;
+
+  @override
   DirectCallService? get directCalls => null;
+
+  /// The demo workspace is the whole corpus and it is already loaded,
+  /// so there is no server to ask for the messages it does not hold.
+  @override
+  MessageSearchRepository? get messageSearch => null;
+
+  @override
+  GuildManagementRepository? get guildManagement => null;
+
+  @override
+  ModerationRepository? get moderation => null;
+
+  /// Nothing is signed in, so there is no account whose status could be
+  /// broadcast and no socket that could carry it.
+  @override
+  PresenceService? get presence => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {

@@ -253,6 +253,7 @@ final class StatusPreferences {
     this.status,
     this.customStatusText,
     this.customStatusEmojiName,
+    this.customStatusEmojiId,
     this.customStatusExpiresAtMs = 0,
     this.showCurrentGame,
     this.statusExpiresAtMs = 0,
@@ -261,6 +262,9 @@ final class StatusPreferences {
   final String? status;
   final String? customStatusText;
   final String? customStatusEmojiName;
+
+  /// The snowflake of a custom guild emoji, or null for a Unicode one.
+  final String? customStatusEmojiId;
   final int customStatusExpiresAtMs;
   final bool? showCurrentGame;
   final int statusExpiresAtMs;
@@ -272,6 +276,19 @@ final class StatusPreferences {
       (customStatusEmojiName?.isNotEmpty ?? false);
 }
 
+/// The one `PreloadedUserSettings.voice_and_video` leaf presence depends on.
+final class VoiceAndVideoPreferences {
+  const VoiceAndVideoPreferences({this.afkTimeoutSeconds});
+
+  final int? afkTimeoutSeconds;
+
+  /// R06 gives 60 as the proto default, and R07 multiplies it by one second.
+  ///
+  /// Zero is a real value that means "always AFK", so it is passed through
+  /// rather than folded into the default.
+  int get afkTimeout => afkTimeoutSeconds ?? 60;
+}
+
 /// The account-level settings Flucord models, as of the last blob it saw.
 final class UserSettings {
   const UserSettings({
@@ -281,6 +298,7 @@ final class UserSettings {
     this.privacy = const PrivacyPreferences(),
     this.localization = const LocalizationPreferences(),
     this.status = const StatusPreferences(),
+    this.voiceAndVideo = const VoiceAndVideoPreferences(),
     this.dataVersion = 0,
   });
 
@@ -290,6 +308,7 @@ final class UserSettings {
   final PrivacyPreferences privacy;
   final LocalizationPreferences localization;
   final StatusPreferences status;
+  final VoiceAndVideoPreferences voiceAndVideo;
 
   /// `Versions.data_version`, the server's counter for this blob.
   final int dataVersion;

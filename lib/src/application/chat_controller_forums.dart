@@ -76,12 +76,18 @@ extension ChatControllerForums on ChatController {
         attachments: List.unmodifiable(attachments),
         appliedTagIds: List.unmodifiable(appliedTagIds),
       );
+      // The post's own opening message is the newest thing in it, so the
+      // pointer unread is measured against is set before the thread is stored
+      // rather than being back-filled by the upsert below.
+      final thread = created.thread.withLatestMessage(
+        created.initialMessage.id,
+      );
       _workspace = workspace!
-          .upsertChannel(created.thread)
+          .upsertChannel(thread)
           .upsertMessage(created.initialMessage);
       _error = null;
       _notify();
-      return created.thread;
+      return thread;
     } catch (error) {
       _error = error;
       _notify();

@@ -73,6 +73,9 @@ extension DiscordMessageMapper on DiscordMapper {
       mentionsCurrentMember: payload.containsKey('mentions')
           ? DiscordMentionMatcher.containsUser(payload, currentMemberId)
           : fallback?.mentionsCurrentMember ?? false,
+      mentionsEveryone: payload.containsKey('mention_everyone')
+          ? payload['mention_everyone'] == true
+          : fallback?.mentionsEveryone ?? false,
       attachments: attachments,
       embeds: embeds,
       reactions: reactions,

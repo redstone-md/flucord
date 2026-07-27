@@ -511,6 +511,42 @@ browser runtime or dependency on Discord's private user API.
     `ADMINISTRATOR` short-circuiting. A permission field is unsigned on the
     wire, so a negative value is refused: two's complement would have set every
     bit and failed open into full administrator rights.
+83. Completed: server read state. Unread lived only on this machine, so it died
+    with a reinstall and never agreed with the official client. `READY` now
+    hydrates the read states and the per-guild notification settings, the five
+    ack dispatches and `USER_GUILD_SETTINGS_UPDATE` keep them current, reading a
+    channel acknowledges it to Discord on the same 3 s debounce the official
+    client uses, and the rail pips, the NEW divider and the Inbox all read the
+    server's answer. Notification settings — mute with its expiry, the
+    per-channel and per-guild level, suppress `@everyone` and mobile push — are
+    editable from the sidebar and gate the desktop notification path. Unread is
+    a snowflake comparison against the channel's last message, never a numeric
+    one: `int.parse` on a snowflake loses the low bits and would call a read
+    channel unread forever.
+
+83. Completed: server settings and moderation. Roles with the hierarchy rule,
+    channels with position batching, bans, invites, the audit log, reporting and
+    blocking, each section shown only when its own permission bit is held. A
+    permission the account does not itself hold can no longer be granted through
+    a role it controls, and an untouched Overview form no longer clears the
+    guild's AFK and system channels: null is a real value for those, so it could
+    not also mean "not edited".
+84. Completed: server-side message search. The old search filtered only what was
+    already loaded, which is an arbitrary slice of a channel. The typed query
+    model carries the documented parameter set, hit groups render with their
+    surrounding context, and a 202 is treated as "still indexing" rather than as
+    an empty result.
+85. Completed: presence and activities. Status, the client_status platform map,
+    rich-presence activities with their timings and assets, custom status with
+    an expiry, and the account's own status published on opcode 3. An expired
+    custom status now stops being broadcast: composition honoured the deadline
+    but nothing recomposed once it passed.
+86. Completed: server read state. Unread state was local only, so it never
+    survived a reinstall and never agreed with the official client. It now
+    hydrates from READY, acknowledges to the server, and carries notification
+    overrides. Sending a message reads its own channel, marking a guild read
+    only acks what is actually unread, and the rolling ack token resets on
+    reconnect rather than being replayed from a dead session.
 
 ## Protocol boundaries
 

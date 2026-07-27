@@ -30,13 +30,54 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // than only the roster event.
         final members = _memberLists.accept(event.name, event.data);
         if (members.isNotEmpty) _events.add(MembersUpsertedEvent(members));
+        _acceptPresence(event);
+        // Read state hangs off READY and five ack dispatches, so it too sees
+        // the whole stream rather than a hand-picked slice of it.
+        _readState.acceptGatewayDispatch(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {
           unawaited(_acceptDelete(event.data));
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
+        } else if (event.name == 'PASSIVE_UPDATE_V2') {
+          _acceptPassiveUpdate(event.data);
         }
+    }
+  }
+
+  /// Feeds one dispatch to the presence plane and publishes what it changed.
+  ///
+  /// Every dispatch is offered, not only `PRESENCE_UPDATE`: R07 lists seven
+  /// more events that carry presence — READY's sessions, the supplemental
+  /// merge, guild snapshots, member chunks and the lazy member list among them
+  /// — and on this transport those bulk paths deliver almost everything, with
+  /// the incremental event only covering what changes afterwards.
+  void _acceptPresence(DiscordGatewayDispatch event) {
+    final changed = _presence.accept(event.name, event.data);
+    if (event.name == 'READY') {
+      _presence.sessionEstablished();
+      _emitSelfPresence();
+    }
+    if (changed.isNotEmpty && !_events.isClosed) {
+      _events.add(PresencesChangedEvent(changed));
+    }
+  }
+
+  /// R04: `PASSIVE_UPDATE_V2` refreshes the last-message and last-pin pointers
+  /// of a guild the client holds no live subscription for. Only the pointers
+  /// travel — there is no message to store — so this is the one place unread
+  /// can change without a `MESSAGE_CREATE`.
+  void _acceptPassiveUpdate(Map<String, Object?> data) {
+    final channels = data['channels'];
+    if (channels is! List) return;
+    for (final entry in channels.whereType<Map>()) {
+      final channelId = entry['id'];
+      final messageId = entry['last_message_id'];
+      if (channelId is! String || messageId is! String) continue;
+      _events.add(
+        ChannelLastMessageEvent(channelId: channelId, messageId: messageId),
+      );
     }
   }
 

@@ -196,6 +196,14 @@ final class ProtoMessage {
 
   void setVarint(int number, int value) => setField(number, ProtoVarint(value));
 
+  /// Writes a `fixed64` scalar.
+  ///
+  /// Discord uses this width for the millisecond timestamps and snowflakes it
+  /// stores unwrapped, and those must go back on the wire as eight fixed bytes
+  /// — a varint of the same number decodes as a different field type.
+  void setFixed64(int number, int value) =>
+      setField(number, ProtoFixed64(value));
+
   void setBool(int number, bool value) => setVarint(number, value ? 1 : 0);
 
   void setString(int number, String value) =>

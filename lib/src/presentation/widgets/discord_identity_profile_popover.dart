@@ -31,6 +31,9 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
     this.canMessage = true,
     this.copyButtonKey,
     this.messageButtonKey,
+    this.safetyActions = const [],
+    this.extra,
+    this.extraLabel,
     super.key,
   });
 
@@ -46,6 +49,23 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
   final VoidCallback onMessage;
   final Key? copyButtonKey;
   final Key? messageButtonKey;
+
+  /// Report, block and the other things a person does about another person.
+  ///
+  /// Empty by default and supplied by the host, because whether they can be
+  /// offered at all depends on the transport: only a session that owns the
+  /// account's relationships can block, and only one that can reach
+  /// `/reporting` can report. A popover that always drew them would put two
+  /// buttons on screen that some sessions can never honour.
+  final List<Widget> safetyActions;
+
+  /// A caller-supplied block rendered under the detail chips.
+  ///
+  /// The rich-presence card is the only user of it today, and it lives here
+  /// rather than in [details] because a detail is a labelled chip of text
+  /// while this is a whole layout with artwork in it.
+  final Widget? extra;
+  final String? extraLabel;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -131,6 +151,14 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                         const SizedBox(height: 6),
                         _ProfileDetailChip(detail: detail),
                       ],
+                      if (extra case final block?) ...[
+                        const SizedBox(height: 14),
+                        if (extraLabel case final label?) ...[
+                          _ProfileLabel(label: label),
+                          const SizedBox(height: 6),
+                        ],
+                        block,
+                      ],
                       const SizedBox(height: 14),
                       const _ProfileLabel(label: 'USER ID'),
                       const SizedBox(height: 4),
@@ -160,6 +188,14 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                         icon: const Icon(Icons.chat_bubble_outline, size: 16),
                         label: const Text('Message'),
                       ),
+                      if (safetyActions.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: safetyActions,
+                        ),
+                      ],
                     ],
                   ),
                 ),

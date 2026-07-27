@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';
+import '../../domain/discord_snowflake.dart';
 import '../../domain/guild_membership.dart';
+import '../../domain/message_search.dart';
 import '../../domain/permission_overwrite.dart';
 import '../message_attachment_codec.dart';
 import '../message_embed_codec.dart';
@@ -12,9 +14,11 @@ import 'discord_mention_matcher.dart';
 
 part 'discord_poll_mapper.dart';
 part 'discord_message_mapper.dart';
+part 'discord_message_search_mapper.dart';
 part 'discord_message_snapshot_mapper.dart';
 part 'discord_sticker_mapper.dart';
 part 'discord_scheduled_event_mapper.dart';
+part 'discord_channel_mapper.dart';
 
 final class DiscordMappedDirectMessage {
   const DiscordMappedDirectMessage({
@@ -172,6 +176,7 @@ final class DiscordMapper {
         topic: 'Direct message with ${recipient.displayName}',
         kind: ChannelKind.text,
         recipientId: recipient.id,
+        lastMessageId: _lastMessageId(payload),
       ),
     );
   }
@@ -318,11 +323,12 @@ final class DiscordMapper {
     );
   }
 
-  Presence presence(String status) => switch (status) {
-    'online' => Presence.online,
-    'idle' || 'dnd' => Presence.idle,
-    _ => Presence.offline,
-  };
+  /// The coarse status a member row carries until a full presence arrives.
+  ///
+  /// It reads the wire value rather than folding `dnd` into `idle`: the two
+  /// paint different colours, and a roster page that arrived after a presence
+  /// frame would otherwise turn a red dot yellow until the next frame.
+  Presence presence(String status) => Presence.fromWire(status);
 
   CommunityRole role(Map<String, Object?> payload, String guildId) {
     final rawColor = payload['color'] as int? ?? 0;
@@ -387,76 +393,6 @@ final class DiscordMapper {
       iconUrl: DiscordCdn.guildIcon(id, payload['icon'] as String?),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
-    );
-  }
-
-  ConversationChannel? channel(Map<String, Object?> payload, String guildId) {
-    final type = payload['type'] as int?;
-    final rawThreadMetadata = payload['thread_metadata'];
-    final threadMetadata = rawThreadMetadata is Map
-        ? rawThreadMetadata.cast<String, Object?>()
-        : const <String, Object?>{};
-    final archiveTimestamp = threadMetadata['archive_timestamp'] as String?;
-    final availableTags = (payload['available_tags'] as List? ?? const [])
-        .whereType<Map>()
-        .map(
-          (raw) => ForumTag(
-            id: raw['id']! as String,
-            name: raw['name'] as String? ?? '',
-            moderated: raw['moderated'] == true,
-            emojiId: raw['emoji_id'] as String?,
-            emojiName: raw['emoji_name'] as String?,
-          ),
-        )
-        .toList(growable: false);
-    final appliedTagIds = (payload['applied_tags'] as List? ?? const [])
-        .whereType<String>()
-        .toList(growable: false);
-    final kind = switch (type) {
-      0 || 5 || 10 || 11 || 12 => ChannelKind.text,
-      2 || 13 => ChannelKind.voice,
-      15 => ChannelKind.forum,
-      16 => ChannelKind.media,
-      _ => null,
-    };
-    if (kind == null) return null;
-    return ConversationChannel(
-      id: payload['id']! as String,
-      spaceId: guildId,
-      name: payload['name'] as String? ?? 'unnamed',
-      topic:
-          payload['topic'] as String? ??
-          (kind == ChannelKind.voice ? 'Discord voice channel' : ''),
-      kind: kind,
-      position: payload['position'] as int? ?? 0,
-      parentId: payload['parent_id'] as String?,
-      isThread: type == 10 || type == 11 || type == 12,
-      isArchived: threadMetadata['archived'] as bool? ?? false,
-      isLocked: threadMetadata['locked'] as bool? ?? false,
-      archiveTimestamp: archiveTimestamp == null
-          ? null
-          : DateTime.tryParse(archiveTimestamp)?.toLocal(),
-      autoArchiveDurationMinutes:
-          threadMetadata['auto_archive_duration'] as int?,
-      availableTags: List.unmodifiable(availableTags),
-      appliedTagIds: List.unmodifiable(appliedTagIds),
-      defaultAutoArchiveDurationMinutes:
-          payload['default_auto_archive_duration'] as int?,
-      defaultSortOrder: switch (payload['default_sort_order']) {
-        0 => ForumSortOrder.latestActivity,
-        1 => ForumSortOrder.creationDate,
-        _ => null,
-      },
-      defaultForumLayout: switch (payload['default_forum_layout']) {
-        0 => ForumLayout.notSet,
-        1 => ForumLayout.listView,
-        2 => ForumLayout.galleryView,
-        _ => null,
-      },
-      permissionOverwrites: DiscordPermissionOverwrite.mapFromJson(
-        payload['permission_overwrites'],
-      ),
-      unread: false,
     );
   }
 

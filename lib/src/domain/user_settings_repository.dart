@@ -1,3 +1,4 @@
+import 'chat_models.dart';
 import 'user_settings.dart';
 
 /// The settings a caller wants changed, and nothing else.
@@ -25,7 +26,10 @@ final class UserSettingsPatch {
     this.detectPlatformAccounts,
     this.showLocalTime,
     this.hideLegacyUsername,
+    this.onlineStatus,
     this.customStatusText,
+    this.customStatusEmojiName,
+    this.customStatusExpiresAtMs,
     this.clearCustomStatus = false,
     this.showCurrentGame,
   });
@@ -50,7 +54,22 @@ final class UserSettingsPatch {
   final bool? showLocalTime;
   final bool? hideLegacyUsername;
 
+  /// The status the account should carry between clients.
+  ///
+  /// Only the four selectable statuses are meaningful here. `streaming` is a
+  /// render-time synthesis and `unknown` is what the server writes, so neither
+  /// is something a client may store.
+  final Presence? onlineStatus;
+
   final String? customStatusText;
+
+  /// The Unicode emoji beside the custom status, or the empty string to drop
+  /// the one already stored.
+  final String? customStatusEmojiName;
+
+  /// When the custom status should clear itself, in epoch milliseconds. Zero
+  /// is Discord's "never".
+  final int? customStatusExpiresAtMs;
 
   /// Removes the custom status message entirely, which is not the same as
   /// setting its text to the empty string: Discord keeps the emoji and the
@@ -81,7 +100,12 @@ final class UserSettingsPatch {
       hideLegacyUsername != null;
 
   bool get touchesStatus =>
-      customStatusText != null || clearCustomStatus || showCurrentGame != null;
+      onlineStatus != null ||
+      customStatusText != null ||
+      customStatusEmojiName != null ||
+      customStatusExpiresAtMs != null ||
+      clearCustomStatus ||
+      showCurrentGame != null;
 
   bool get isEmpty =>
       !touchesAppearance &&

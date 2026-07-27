@@ -15,10 +15,21 @@ import 'discord_private_channel_order.dart';
 final class DiscordPrivateChannelDirectory {
   final Map<String, Map<String, Object?>> _channels = {};
   List<Map<String, Object?>>? _initial;
+  Map<String, String> _readStateLastMessageIds = const {};
 
   /// Every known private channel, ordered as the DM list renders it.
-  List<Map<String, Object?>> get ordered =>
-      DiscordPrivateChannelOrder.sorted(_channels.values);
+  List<Map<String, Object?>> get ordered => DiscordPrivateChannelOrder.sorted(
+    _channels.values,
+    readStateLastMessageIds: _readStateLastMessageIds,
+  );
+
+  /// Hands the directory the read-state cursors READY carried.
+  ///
+  /// R09 orders the DM list on the read state's cursor in preference to the
+  /// channel record's `last_message_id`, so a conversation whose newest message
+  /// was deleted keeps the position the account last read it at.
+  void useReadStateCursors(Map<String, String> lastMessageIds) =>
+      _readStateLastMessageIds = Map.unmodifiable({...lastMessageIds});
 
   /// Replaces the directory with `READY.private_channels`.
   void applyReady(Iterable<Map<String, Object?>> channels) {
@@ -42,6 +53,7 @@ final class DiscordPrivateChannelDirectory {
   void clear() {
     _channels.clear();
     _initial = null;
+    _readStateLastMessageIds = const {};
   }
 
   void _insertAll(Iterable<Map<String, Object?>> channels) {

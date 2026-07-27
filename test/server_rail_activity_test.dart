@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -68,6 +69,51 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('space-guild-1')));
     expect(selectedSpace, 'guild-1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a muted space loses its pip but keeps its mentions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: ServerRail(
+            workspace: _workspace,
+            selectedSpaceId: CommunitySpace.directMessagesId,
+            onSelectSpace: (_) {},
+            onToggleTheme: () {},
+            onOpenConnections: () {},
+            sessionMode: SessionMode.discord,
+            isDark: true,
+            readState: ReadStateSnapshot(
+              settings: {
+                'guild-2': GuildNotificationSettings(
+                  spaceId: 'guild-2',
+                  muted: true,
+                ),
+                'guild-1': GuildNotificationSettings(
+                  spaceId: 'guild-1',
+                  muted: true,
+                ),
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // guild-2 is unread only, so muting removes its indicator entirely.
+    expect(find.byKey(const ValueKey('space-indicator-guild-2')), findsNothing);
+    // guild-1 is muted too, but a mention outranks a mute.
+    expect(_badgeText(tester, 'guild-1'), '3');
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('space-semantics-guild-2')))
+          .label,
+      'Archive, muted',
+    );
     expect(tester.takeException(), isNull);
   });
 }

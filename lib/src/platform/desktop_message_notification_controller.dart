@@ -162,6 +162,21 @@ final class DesktopMessageNotificationController {
 
     final channel = workspace.channelOrNull(event.message.channelId);
     if (channel == null) return;
+
+    // R04's notification settings are the account's own answer to "should this
+    // have interrupted me": a muted channel or guild, a channel set to mentions
+    // only, or `suppress_everyone` on a broadcast all stop here. They are read
+    // per message rather than captured on attach, because another device can
+    // change them mid-session exactly as it can change quiet mode.
+    if (!chatController.readState.allowsDesktopNotification(
+      channel,
+      mentionsCurrentMember:
+          event.mentionsCurrentMember || event.message.mentionsCurrentMember,
+      mentionsEveryone: event.message.mentionsEveryone,
+    )) {
+      return;
+    }
+
     final space = workspace.spaceById(channel.spaceId);
     final author =
         event.member ?? workspace.memberOrNull(event.message.authorId);

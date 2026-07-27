@@ -16,4 +16,14 @@ extension ChatControllerUserSettings on ChatController {
   /// between one message and the next.
   bool get suppressesMessageNotifications =>
       _repository.userSettings?.current?.notifications.isQuiet ?? false;
+
+  /// The guild-administration plane of the connected transport, or `null`.
+  ///
+  /// Read live for the same reason as the settings store: a session swap
+  /// replaces it, and a settings window built on a cached one would be issuing
+  /// writes with credentials nobody is signed in with any more.
+  GuildManagementRepository? get guildManagement => _repository.guildManagement;
+
+  /// The reporting and blocking plane of the connected transport, or `null`.
+  ModerationRepository? get moderation => _repository.moderation;
 }

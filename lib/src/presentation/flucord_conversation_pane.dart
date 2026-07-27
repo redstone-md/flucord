@@ -56,6 +56,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onRetry,
     required this.onSelectChannel,
     required this.onQueryChanged,
+    required this.onSubmitQuery,
     required this.onToggleMembers,
     required this.onTogglePins,
     required this.onToggleThreads,
@@ -123,6 +124,10 @@ class _ConversationPane extends StatefulWidget {
   final VoidCallback onRetry;
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<String> onQueryChanged;
+
+  /// Null when the session cannot search the server, which is how the header
+  /// stops offering a query that could only ever fail.
+  final ValueChanged<String>? onSubmitQuery;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
   final VoidCallback onToggleThreads;
@@ -268,6 +273,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
           onSelectChannel: widget.onPickChannel,
           onSelectVoiceSurface: widget.onSelectVoiceSurface,
           onQueryChanged: widget.onQueryChanged,
+          onSubmitQuery: widget.onSubmitQuery,
           onToggleMembers: widget.onToggleMembers,
           onTogglePins: widget.onTogglePins,
           onToggleThreads: widget.onToggleThreads,

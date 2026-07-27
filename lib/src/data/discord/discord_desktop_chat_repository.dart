@@ -4,24 +4,33 @@ import 'dart:developer' as developer;
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/guild_member_list_repository.dart';
+import '../../domain/message_search_repository.dart';
+import '../../domain/moderation_repository.dart';
+import '../../domain/presence_repository.dart';
+import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
+import 'discord_read_state_repository.dart';
 import 'discord_user_settings_repository.dart';
 import 'discord_desktop_gateway_client.dart';
 import 'discord_direct_call_service.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
 import 'discord_member_list_handler.dart';
+import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
+import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_voice_signaling_service.dart';
 
 part 'discord_desktop_chat_events.dart';
+part 'discord_desktop_chat_session.dart';
 
 final class DiscordDesktopChatRepository
     implements ChatRepository, GuildMemberListRepository {
@@ -35,12 +44,28 @@ final class DiscordDesktopChatRepository
   }) : _mapper = mapper ?? DiscordMapper(),
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
        _userSettings = DiscordUserSettingsRepository(_api),
+       _readState = DiscordReadStateRepository(_api),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
          callGateway: _gateway,
        ) {
     _memberLists = DiscordMemberListHandler(_mapper);
+    _messageSearch = DiscordMessageSearchService(
+      requester: _api.searchMessages,
+      mapper: _mapper,
+    );
+    _presence = DiscordPresenceService(
+      sendPresence: _gateway.updatePresence,
+      isSessionEstablished: () => _gateway.isSessionEstablished,
+      settings: _userSettings,
+    );
+    // The account's own row is composed locally, so it has to be republished
+    // whenever the composition changes: R07 is explicit that no server frame
+    // will ever supply it.
+    _selfPresenceSubscription = _presence.selfPresenceUpdates.listen(
+      (_) => _emitSelfPresence(),
+    );
     _directCalls = DiscordDirectCallService(
       api: _api,
       gateway: _gateway,
@@ -48,6 +73,10 @@ final class DiscordDesktopChatRepository
       events: _gateway.events,
     );
     _gatewaySubscription = _gateway.events.listen(_acceptGatewayEvent);
+    // R03: a re-IDENTIFY may echo the cache versions the last READY carried, so
+    // the socket asks the read-state store for them at the moment it needs
+    // them rather than being handed a snapshot that is stale by then.
+    _gateway.useClientStateProvider(_readState.identifyClientState);
   }
 
   static const _pageSize = 100;
@@ -58,12 +87,16 @@ final class DiscordDesktopChatRepository
   final DiscordMapper _mapper;
   final DiscordMessageNonceFactory _nonceFactory;
   final DiscordUserSettingsRepository _userSettings;
+  final DiscordReadStateRepository _readState;
   final DiscordVoiceSignalingService _voiceSignaling;
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   late final DiscordMemberListHandler _memberLists;
+  late final DiscordMessageSearchService _messageSearch;
+  late final DiscordPresenceService _presence;
   late final DiscordDirectCallService _directCalls;
+  late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
 
   @override
@@ -82,11 +115,37 @@ final class DiscordDesktopChatRepository
   @override
   UserSettingsRepository? get userSettings => _userSettings;
 
+  /// Read state is account state on the user's own session: `READY` carries
+  /// it, this socket receives every later revision of it, and these
+  /// credentials are the only ones allowed to acknowledge one.
+  @override
+  ReadStateRepository? get readState => _readState;
+
   /// The desktop-user session owns both halves a call needs — the gateway
   /// socket for opcode 13 and the user's REST credentials for the ring routes —
   /// so it is the one transport that can offer this.
   @override
   DirectCallService? get directCalls => _directCalls;
+
+  /// The desktop-user session is the transport Discord's own settings window
+  /// runs on, and the only one here holding a member whose permissions the
+  /// surface can be gated by.
+  @override
+  GuildManagementRepository? get guildManagement => _api.guildManagement;
+
+  @override
+  ModerationRepository? get moderation => _api.moderation;
+
+  /// The account's own session is what Discord's search routes answer to, so
+  /// this is the one transport that can offer them.
+  @override
+  MessageSearchRepository? get messageSearch => _messageSearch;
+
+  /// The desktop-user session is the only transport that can broadcast a
+  /// status: opcode 3 rides its socket and the custom status lives in the
+  /// settings blob it alone can read.
+  @override
+  PresenceService? get presence => _presence;
 
   @override
   Stream<GuildMemberList> get memberListUpdates => _memberLists.updates;
@@ -150,6 +209,7 @@ final class DiscordDesktopChatRepository
             .restoreChannelActivityFrom(cached),
       );
       _adoptCurrentMember(workspace.currentMemberId);
+      _adoptPrivateChannels(workspace);
       await _bootstrapStage(
         'cache-write',
         () => _cache.writeWorkspace(workspace),
@@ -160,44 +220,13 @@ final class DiscordDesktopChatRepository
       final cached = await _cache.readWorkspace();
       if (cached != null) {
         _adoptCurrentMember(cached.currentMemberId);
+        _adoptPrivateChannels(cached);
         _emitStatus(RepositoryConnectionStatus.offline);
         return cached;
       }
       rethrow;
     }
   }
-
-  /// Voice signalling cannot tell our own `VOICE_STATE_UPDATE` from anybody
-  /// else's until it knows who we are, and that answer only exists once a
-  /// workspace — live or cached — has been resolved.
-  void _adoptCurrentMember(String memberId) {
-    _currentMemberId = memberId;
-    _voiceSignaling.setCurrentUserId(memberId);
-    _directCalls.setCurrentUserId(memberId);
-  }
-
-  Future<T> _bootstrapStage<T>(
-    String stage,
-    Future<T> Function() operation,
-  ) async {
-    try {
-      return await operation();
-    } catch (error, stackTrace) {
-      developer.log(
-        'Discord desktop bootstrap failed at $stage: '
-        '${_diagnosticFor(error)}',
-        name: 'flucord.discord.desktop',
-        level: 1000,
-        stackTrace: stackTrace,
-      );
-      Error.throwWithStackTrace(error, stackTrace);
-    }
-  }
-
-  static String _diagnosticFor(Object error) => switch (error) {
-    DiscordApiException() => 'HTTP ${error.statusCode}: ${error.message}',
-    _ => '${error.runtimeType}: $error',
-  };
 
   @override
   Future<ChannelHistoryPage> loadChannelHistory(
@@ -400,10 +429,17 @@ final class DiscordDesktopChatRepository
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _selfPresenceSubscription.cancel();
+    await _presence.close();
     // Pending settings edits are written before the socket goes away; a
     // coalesced save that never left would be lost with no way to notice.
     await _userSettings.flush();
     await _userSettings.close();
+    _messageSearch.close();
+    // An acknowledgement still on its debounce is a channel the account has
+    // read; losing it would show the unread pip again on the next launch.
+    await _readState.flush();
+    await _readState.close();
     await _directCalls.close();
     await _voiceSignaling.close();
     await _memberLists.close();

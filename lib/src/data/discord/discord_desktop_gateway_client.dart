@@ -58,6 +58,23 @@ final class DiscordDesktopGatewayClient
   @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
+  /// Whether the socket has a session the server will accept frames for.
+  ///
+  /// R07 gates the presence sender on exactly this: a frame sent before
+  /// IDENTIFY has been answered is discarded by the server, and the client
+  /// would then believe it had broadcast a status it never did.
+  bool get isSessionEstablished =>
+      _protocol.state == DiscordDesktopGatewayState.established &&
+      _socket?.isOpen == true;
+
+  /// Sends opcode 3 and remembers the payload for the next IDENTIFY.
+  void updatePresence(Map<String, Object?> payload) =>
+      _send(_protocol.presenceUpdate(payload));
+
+  /// Lets the session's caches answer for `client_state` on each IDENTIFY.
+  void useClientStateProvider(Map<String, Object?> Function() provider) =>
+      _protocol.clientStateProvider = provider;
+
   @override
   Future<void> connect(String gatewayUrl) async {
     _gatewayUri = Uri.parse(gatewayUrl);

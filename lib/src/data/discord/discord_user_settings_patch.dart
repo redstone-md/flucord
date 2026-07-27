@@ -147,16 +147,57 @@ abstract final class DiscordUserSettingsPatch {
     if (patch.showCurrentGame case final value?) {
       group.setBoolWrapper(StatusField.showCurrentGame, value);
     }
+    if (patch.onlineStatus case final status?) {
+      group.setStringWrapper(StatusField.status, status.wireValue);
+    }
     if (patch.clearCustomStatus) {
       group.clearField(StatusField.customStatus);
       return group;
     }
-    if (patch.customStatusText case final text?) {
-      final custom =
-          group.messageAt(StatusField.customStatus) ?? ProtoMessage();
-      custom.setString(CustomStatusField.text, text);
-      group.setMessage(StatusField.customStatus, custom);
-    }
+    final custom = _customStatus(group, patch);
+    if (custom != null) group.setMessage(StatusField.customStatus, custom);
     return group;
+  }
+
+  /// Edits the stored `CustomStatus` submessage, or null when the patch says
+  /// nothing about it.
+  ///
+  /// The submessage is cloned from what is stored for the same reason whole
+  /// groups are: setting only the text would otherwise drop the emoji and the
+  /// expiry the user set from another client.
+  static ProtoMessage? _customStatus(
+    ProtoMessage group,
+    UserSettingsPatch patch,
+  ) {
+    if (patch.customStatusText == null &&
+        patch.customStatusEmojiName == null &&
+        patch.customStatusExpiresAtMs == null) {
+      return null;
+    }
+    final custom = group.messageAt(StatusField.customStatus) ?? ProtoMessage();
+    if (patch.customStatusText case final text?) {
+      custom.setString(CustomStatusField.text, text);
+    }
+    if (patch.customStatusEmojiName case final emoji?) {
+      // An empty name is how the surface says "no emoji"; writing it as an
+      // empty string would leave a present-but-blank emoji on the account.
+      if (emoji.isEmpty) {
+        custom
+          ..clearField(CustomStatusField.emojiName)
+          ..clearField(CustomStatusField.emojiId);
+      } else {
+        custom
+          ..setString(CustomStatusField.emojiName, emoji)
+          ..clearField(CustomStatusField.emojiId);
+      }
+    }
+    if (patch.customStatusExpiresAtMs case final expiry?) {
+      if (expiry <= 0) {
+        custom.clearField(CustomStatusField.expiresAtMs);
+      } else {
+        custom.setFixed64(CustomStatusField.expiresAtMs, expiry);
+      }
+    }
+    return custom;
   }
 }

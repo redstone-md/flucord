@@ -5,6 +5,7 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const dispatch = 0;
   static const heartbeat = 1;
   static const identify = 2;
+  static const presenceUpdate = 3;
   static const voiceStateUpdate = 4;
   static const voiceServerPing = 5;
   static const resume = 6;
@@ -60,6 +61,16 @@ final class DiscordDesktopGatewayReconnect extends DiscordDesktopGatewayAction {
 final class DiscordDesktopGatewayDispatch extends DiscordDesktopGatewayAction {
   const DiscordDesktopGatewayDispatch({required this.name, required this.data});
 
+  /// Where a dispatch whose `d` is a bare JSON array is delivered.
+  ///
+  /// `PRESENCES_REPLACE` and `SESSIONS_REPLACE` are the two events whose whole
+  /// payload is an array rather than an object — R07 confirms both mappers are
+  /// handed the dispatch directly and start with `e.map(...)`. Every other
+  /// dispatch is an object, so the array is wrapped under this key instead of
+  /// widening the payload type of every consumer in the client; a dispatch
+  /// that simply refused to carry an array dropped both events silently.
+  static const arrayPayloadKey = 'items';
+
   final String name;
   final Map<String, Object?> data;
 }
@@ -84,9 +95,24 @@ final class DiscordDesktopGatewayProtocol {
   final DiscordGatewayFraming _framing;
   final Map<String, Object?> properties;
   final DiscordDesktopProtocolProfile profile;
-  final Map<String, Object?> presence;
   final Map<String, Object?> clientState;
   final bool usesLegacyCompression;
+
+  /// The presence IDENTIFY carries.
+  ///
+  /// R07 proves IDENTIFY embeds the very object opcode 3 sends, so a reconnect
+  /// re-asserts the presence this client last committed rather than reverting
+  /// the account to its default while the settings blob reloads. It starts
+  /// empty because nothing is known about the account before the first READY.
+  Map<String, Object?> presence;
+
+  /// Supplies the `client_state` block at the moment IDENTIFY is built.
+  ///
+  /// R03 computes several of those fields from caches that only exist once a
+  /// session has run, so the block cannot be fixed at construction: a socket
+  /// built before the first `READY` would echo versions of zero forever, and a
+  /// reconnect would ask for a full payload it already holds.
+  Map<String, Object?> Function()? clientStateProvider;
 
   DiscordDesktopGatewayState _state = DiscordDesktopGatewayState.closed;
   int? _sequence;
@@ -112,8 +138,17 @@ final class DiscordDesktopGatewayProtocol {
       if (!fastConnect) 'compress': usesLegacyCompression,
       'client_state': fastConnect
           ? const {'guild_versions': <String, Object?>{}}
-          : clientState,
+          : clientStateProvider?.call() ?? clientState,
     });
+  }
+
+  /// Opcode 3. R07: exactly four keys, and no `guild_id` or `broadcast`.
+  DiscordDesktopGatewayFrame presenceUpdate(Map<String, Object?> payload) {
+    presence = Map.unmodifiable({...payload});
+    return DiscordDesktopGatewayFrame(
+      DiscordDesktopGatewayOpcode.presenceUpdate,
+      presence,
+    );
   }
 
   DiscordDesktopGatewayFrame resume() {
@@ -209,7 +244,16 @@ final class DiscordDesktopGatewayProtocol {
     Object? rawName,
     Object? rawData,
   ) {
-    if (rawName is! String || rawData is! Map) return const [];
+    if (rawName is! String) return const [];
+    if (rawData is List) {
+      return [
+        DiscordDesktopGatewayDispatch(
+          name: rawName,
+          data: {DiscordDesktopGatewayDispatch.arrayPayloadKey: rawData},
+        ),
+      ];
+    }
+    if (rawData is! Map) return const [];
     final data = rawData.cast<String, Object?>();
     if (rawName == 'READY') {
       _sessionId = data['session_id'] as String?;

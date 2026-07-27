@@ -4,13 +4,18 @@ import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
+import '../../domain/guild_management_repository.dart';
 import '../../domain/message_forward_repository.dart';
+import '../../domain/moderation_repository.dart';
 import '../../domain/message_flag_repository.dart';
+import '../../domain/message_search_repository.dart';
 import '../../domain/poll_repository.dart';
+import '../../domain/presence_repository.dart';
 import '../../domain/reaction_repository.dart';
 import '../../domain/scheduled_event_repository.dart';
 import '../../domain/sticker_repository.dart';
 import '../../domain/thread_repository.dart';
+import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/voice_connection.dart';
@@ -25,6 +30,7 @@ import 'discord_guild_member_loader.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
+import 'discord_presence_mapper.dart';
 import 'discord_reaction_handler.dart';
 import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';
@@ -41,6 +47,7 @@ part 'discord_chat_repository_forwards.dart';
 part 'discord_chat_repository_stickers.dart';
 part 'discord_chat_repository_voice_messages.dart';
 part 'discord_chat_repository_scheduled_events.dart';
+part 'discord_chat_repository_gateway.dart';
 
 final class DiscordChatRepository
     with
@@ -284,181 +291,6 @@ final class DiscordChatRepository
   Future<void> saveChannelActivity(ConversationChannel channel) =>
       _cache.writeChannelActivity(channel);
 
-  void _onGatewayEvent(DiscordGatewayEvent event) {
-    switch (event) {
-      case DiscordGatewayStatusEvent():
-        _events.addStatus(switch (event.status) {
-          DiscordGatewayStatus.offline => RepositoryConnectionStatus.offline,
-          DiscordGatewayStatus.connecting =>
-            RepositoryConnectionStatus.connecting,
-          DiscordGatewayStatus.connected =>
-            RepositoryConnectionStatus.connected,
-          DiscordGatewayStatus.reconnecting =>
-            RepositoryConnectionStatus.reconnecting,
-        });
-      case DiscordGatewayDispatch():
-        switch (event.name) {
-          case 'MESSAGE_CREATE' || 'MESSAGE_UPDATE':
-            unawaited(_handleMessageDispatch(event));
-          case 'MESSAGE_DELETE':
-            unawaited(_handleMessageDelete(event.data));
-          case 'MESSAGE_REACTION_ADD' || 'MESSAGE_REACTION_REMOVE':
-            unawaited(_handleReaction(event));
-          case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
-            unawaited(_handlePollVote(event));
-          case 'CHANNEL_CREATE' ||
-              'CHANNEL_UPDATE' ||
-              'THREAD_CREATE' ||
-              'THREAD_UPDATE':
-            unawaited(_handleChannelUpsert(event.data));
-          case 'CHANNEL_DELETE' || 'THREAD_DELETE':
-            unawaited(_handleChannelDelete(event.data));
-          case 'GUILD_MEMBER_ADD' || 'GUILD_MEMBER_UPDATE':
-            unawaited(_handleMemberUpsert(event.data));
-          case 'GUILD_MEMBER_REMOVE':
-            _handleMemberRemove(event.data);
-          case 'PRESENCE_UPDATE':
-            _handlePresence(event.data);
-          case 'TYPING_START':
-            _handleTyping(event.data);
-          case 'CHANNEL_PINS_UPDATE':
-            _handlePinsChanged(event.data);
-          case 'GUILD_CREATE':
-            _handleGuildSnapshot(event.data);
-          case 'GUILD_EMOJIS_UPDATE':
-            unawaited(_handleGuildEmojis(event.data));
-          case 'GUILD_STICKERS_UPDATE':
-            unawaited(_handleGuildStickers(event.data));
-          case 'GUILD_SCHEDULED_EVENT_CREATE' ||
-              'GUILD_SCHEDULED_EVENT_UPDATE' ||
-              'GUILD_SCHEDULED_EVENT_DELETE' ||
-              'GUILD_SCHEDULED_EVENT_USER_ADD' ||
-              'GUILD_SCHEDULED_EVENT_USER_REMOVE':
-            unawaited(_handleGuildScheduledEvent(event));
-        }
-    }
-  }
-
-  Future<void> _handleMessageDelete(Map<String, Object?> data) async {
-    final messageId = data['id'] as String?;
-    final channelId = data['channel_id'] as String?;
-    if (messageId == null || channelId == null) return;
-    await _cache.deleteMessage(messageId);
-    if (!_events.isClosed) {
-      _events.add(
-        MessageDeletedEvent(messageId: messageId, channelId: channelId),
-      );
-    }
-  }
-
-  Future<void> _handleReaction(DiscordGatewayDispatch event) async {
-    final update = await _reactionHandler.apply(event);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
-
-  Future<void> _handleChannelUpsert(Map<String, Object?> data) async {
-    final guildId = data['guild_id'] as String?;
-    if (guildId == null) {
-      final currentUserId = _currentMemberId;
-      if (currentUserId == null) return;
-      final conversation = await _directMessages.acceptChannel(
-        data,
-        currentUserId,
-      );
-      if (conversation != null) _emitDirectConversation(conversation);
-      return;
-    }
-    final update = await _channelHandler.upsert(data, guildId);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
-
-  Future<void> _handleChannelDelete(Map<String, Object?> data) async {
-    final update = await _channelHandler.delete(data);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
-
-  Future<void> _handleMemberUpsert(Map<String, Object?> data) async {
-    final guildId = data['guild_id'] as String?;
-    if (guildId == null || data['user'] is! Map) return;
-    final member = _mapper.guildMember(
-      data,
-      guildId,
-      _rolesByGuild[guildId] ?? const [],
-    );
-    await _cache.writeMember(member);
-    if (!_events.isClosed) _events.add(MemberUpsertedEvent(member));
-  }
-
-  void _handleMemberRemove(Map<String, Object?> data) {
-    final guildId = data['guild_id'] as String?;
-    final user = data['user'];
-    final memberId = user is Map ? user['id'] as String? : null;
-    if (guildId == null || memberId == null || _events.isClosed) return;
-    _events.add(MemberRemovedEvent(memberId: memberId, spaceId: guildId));
-  }
-
-  void _handlePresence(Map<String, Object?> data) {
-    final user = data['user'];
-    final memberId = user is Map ? user['id'] as String? : null;
-    final status = data['status'] as String?;
-    if (memberId == null || status == null || _events.isClosed) return;
-    _events.add(
-      PresenceChangedEvent(
-        memberId: memberId,
-        presence: _mapper.presence(status),
-      ),
-    );
-  }
-
-  void _handleTyping(Map<String, Object?> data) {
-    final channelId = data['channel_id'] as String?;
-    final memberId = data['user_id'] as String?;
-    if (channelId == null || memberId == null || _events.isClosed) return;
-    _events.add(TypingStartedEvent(channelId: channelId, memberId: memberId));
-  }
-
-  void _handlePinsChanged(Map<String, Object?> data) {
-    final channelId = data['channel_id'] as String?;
-    if (channelId != null && !_events.isClosed) {
-      _events.add(PinsChangedEvent(channelId));
-    }
-  }
-
-  void _handleGuildSnapshot(Map<String, Object?> data) {
-    final guildId = data['id'] as String?;
-    if (guildId == null) return;
-    if (data['emojis'] is List) unawaited(_handleGuildEmojis(data));
-    final roles = data['roles'];
-    if (roles is List) {
-      _rolesByGuild[guildId] = roles
-          .whereType<Map>()
-          .map((role) => role.cast<String, Object?>())
-          .toList(growable: false);
-    }
-    final members = data['members'];
-    if (members is List && !_events.isClosed) {
-      for (final raw in members.whereType<Map>()) {
-        final payload = raw.cast<String, Object?>();
-        if (payload['user'] is! Map) continue;
-        _events.add(
-          MemberUpsertedEvent(
-            _mapper.guildMember(
-              payload,
-              guildId,
-              _rolesByGuild[guildId] ?? const [],
-            ),
-          ),
-        );
-      }
-    }
-    final presences = data['presences'];
-    if (presences is List) {
-      for (final raw in presences.whereType<Map>()) {
-        _handlePresence(raw.cast<String, Object?>());
-      }
-    }
-  }
-
   /// Handed out whole rather than re-exported member by member: the service is
   /// also the media transport the audio pipeline binds to, and forwarding only
   /// the signalling half hid that second face behind the repository.
@@ -470,11 +302,36 @@ final class DiscordChatRepository
   @override
   UserSettingsRepository? get userSettings => null;
 
+  @override
+  ReadStateRepository? get readState => null;
+
   /// A bot cannot be a party to a DM call: Discord grants the private-call
   /// routes to user sessions only, so this transport truthfully has no call
   /// plane rather than one that always fails.
   @override
   DirectCallService? get directCalls => null;
+
+  /// The settings surface gates every control on the *signed-in member's*
+  /// permissions and role position, so a bot session would judge a moderator's
+  /// buttons by the bot's standing. A bot has no relationship to change either.
+  @override
+  GuildManagementRepository? get guildManagement => null;
+
+  @override
+  ModerationRepository? get moderation => null;
+
+  /// The search routes are scoped to a signed-in user's own session; a
+  /// bot token is rejected by them, so this transport has no search plane
+  /// rather than one that always fails.
+  @override
+  MessageSearchRepository? get messageSearch => null;
+
+  /// A bot has no status to broadcast: opcode 3 is accepted on a bot socket
+  /// but nothing in Discord's UI shows it, and there is no settings blob for a
+  /// custom status to live in. Inbound presence still reaches this transport
+  /// as [PresenceChangedEvent]; only the outbound half is absent.
+  @override
+  PresenceService? get presence => null;
 
   @override
   Future<void> close() async {

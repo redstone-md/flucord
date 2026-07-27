@@ -1,3 +1,4 @@
+import 'discord_snowflake.dart';
 import 'guild_membership.dart';
 import 'message_embed.dart';
 import 'permission_overwrite.dart';
@@ -12,78 +13,11 @@ part 'forum_models.dart';
 part 'guild_emoji.dart';
 part 'guild_sticker.dart';
 part 'guild_scheduled_event.dart';
+part 'user_activity.dart';
+part 'user_presence.dart';
+part 'workspace_member.dart';
 
 enum ChannelKind { text, voice, forum, media }
-
-enum Presence { online, idle, offline }
-
-final class DirectConversation {
-  const DirectConversation({required this.channel, required this.recipient});
-
-  final ConversationChannel channel;
-  final Member recipient;
-}
-
-final class Member {
-  const Member({
-    required this.id,
-    required this.displayName,
-    required this.initials,
-    required this.role,
-    required this.presence,
-    required this.colorValue,
-    this.spaceIds = const {},
-    this.rolesBySpace = const {},
-    this.avatarUrl,
-    this.avatarUrlsBySpace = const {},
-    this.membershipsBySpace = const {},
-  });
-
-  final String id;
-  final String displayName;
-  final String initials;
-  final String role;
-  final Presence presence;
-  final int colorValue;
-  final Set<String> spaceIds;
-  final Map<String, String> rolesBySpace;
-  final String? avatarUrl;
-  final Map<String, String> avatarUrlsBySpace;
-
-  /// Per-guild standing: the role ids, screening state, timeout and member
-  /// flags that permissions are computed from. Absent for a guild whose
-  /// member payload this client never received.
-  final Map<String, GuildMembership> membershipsBySpace;
-
-  String roleFor(String spaceId) => rolesBySpace[spaceId] ?? role;
-  String? avatarUrlFor(String? spaceId) =>
-      spaceId == null ? avatarUrl : avatarUrlsBySpace[spaceId] ?? avatarUrl;
-  GuildMembership? membershipIn(String spaceId) => membershipsBySpace[spaceId];
-
-  Member copyWith({
-    String? displayName,
-    String? role,
-    Presence? presence,
-    int? colorValue,
-    Set<String>? spaceIds,
-    Map<String, String>? rolesBySpace,
-    String? avatarUrl,
-    Map<String, String>? avatarUrlsBySpace,
-    Map<String, GuildMembership>? membershipsBySpace,
-  }) => Member(
-    id: id,
-    displayName: displayName ?? this.displayName,
-    initials: initials,
-    role: role ?? this.role,
-    presence: presence ?? this.presence,
-    colorValue: colorValue ?? this.colorValue,
-    spaceIds: spaceIds ?? this.spaceIds,
-    rolesBySpace: rolesBySpace ?? this.rolesBySpace,
-    avatarUrl: avatarUrl ?? this.avatarUrl,
-    avatarUrlsBySpace: avatarUrlsBySpace ?? this.avatarUrlsBySpace,
-    membershipsBySpace: membershipsBySpace ?? this.membershipsBySpace,
-  );
-}
 
 final class PendingAttachment {
   static const maxCount = 10;
@@ -306,8 +240,21 @@ final class ChatWorkspace {
     final nextMembers = member == null
         ? members
         : _mergeMemberInto(members, member);
-    return copyWith(messages: nextMessages, members: nextMembers);
+    // Unread is decided by comparing this pointer against the read state's ack
+    // cursor, so a message that arrives without advancing it would be invisible
+    // to every unread surface until the next gateway channel update.
+    return copyWith(
+      messages: nextMessages,
+      members: nextMembers,
+    ).recordLatestMessage(message.channelId, message.id);
   }
+
+  /// Records [messageId] as the newest message in [channelId].
+  ChatWorkspace recordLatestMessage(String channelId, String messageId) =>
+      updateChannel(
+        channelId,
+        (channel) => channel.withLatestMessage(messageId),
+      );
 
   ChatWorkspace upsertMember(Member member) =>
       copyWith(members: _mergeMemberInto(members, member));
@@ -345,12 +292,39 @@ final class ChatWorkspace {
         .toList(),
   );
 
-  ChatWorkspace updatePresence(String memberId, Presence presence) => copyWith(
-    members: [
-      for (final member in members)
-        member.id == memberId ? member.copyWith(presence: presence) : member,
-    ],
-  );
+  /// Applies a gateway presence to the member it names.
+  ///
+  /// A presence for somebody the member table has never heard of is dropped
+  /// rather than turned into a nameless row: Discord streams presence for
+  /// friends and for every subscribed guild, so an unmatched id is routine.
+  ChatWorkspace applyPresence(String memberId, UserPresence presence) =>
+      copyWith(
+        members: [
+          for (final member in members)
+            member.id == memberId ? member.withPresence(presence) : member,
+        ],
+      );
+
+  /// Applies a batch of presences with one pass over the member table.
+  ///
+  /// `READY_SUPPLEMENTAL` alone carries a presence for every online friend and
+  /// every subscribed guild member, and folding them in one at a time would
+  /// rebuild the table once per presence.
+  ChatWorkspace applyPresences(Map<String, UserPresence> presences) {
+    if (presences.isEmpty) return this;
+    var touched = false;
+    final next = <Member>[];
+    for (final member in members) {
+      final presence = presences[member.id];
+      if (presence == null) {
+        next.add(member);
+        continue;
+      }
+      touched = true;
+      next.add(member.withPresence(presence));
+    }
+    return touched ? copyWith(members: next) : this;
+  }
 
   ChatWorkspace removeMemberFromSpace(String memberId, String spaceId) {
     final next = <Member>[];
@@ -457,6 +431,10 @@ final class ChatWorkspace {
       presence: incoming.presence == Presence.offline
           ? previous.presence
           : incoming.presence,
+      // A member payload carries no presence, so the mapper defaults it to
+      // offline; letting that erase a presence the gateway already reported
+      // would blank out every activity the moment the member is re-mapped.
+      presenceDetail: incoming.presenceDetail ?? previous.presenceDetail,
     );
   }
 }

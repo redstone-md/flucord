@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flucord/src/data/discord/discord_snowflake.dart';
+import 'package:flucord/src/domain/discord_snowflake.dart';
 
 void main() {
   test('orders snowflakes by value, not lexicographically', () {

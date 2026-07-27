@@ -5,6 +5,11 @@ import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/moderation_repository.dart';
+import 'package:flucord/src/domain/message_search_repository.dart';
+import 'package:flucord/src/domain/presence_repository.dart';
+import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -174,7 +179,22 @@ final class _PagedRepository implements ChatRepository {
   UserSettingsRepository? get userSettings => null;
 
   @override
+  ReadStateRepository? get readState => null;
+
+  @override
   DirectCallService? get directCalls => null;
+
+  @override
+  GuildManagementRepository? get guildManagement => null;
+
+  @override
+  ModerationRepository? get moderation => null;
+
+  @override
+  MessageSearchRepository? get messageSearch => null;
+
+  @override
+  PresenceService? get presence => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;

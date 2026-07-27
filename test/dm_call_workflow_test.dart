@@ -7,6 +7,11 @@ import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/moderation_repository.dart';
+import 'package:flucord/src/domain/message_search_repository.dart';
+import 'package:flucord/src/domain/presence_repository.dart';
+import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -191,7 +196,22 @@ final class _CallableRepository implements ChatRepository {
   UserSettingsRepository? get userSettings => _delegate.userSettings;
 
   @override
+  ReadStateRepository? get readState => _delegate.readState;
+
+  @override
   DirectCallService? get directCalls => calls;
+
+  @override
+  GuildManagementRepository? get guildManagement => _delegate.guildManagement;
+
+  @override
+  ModerationRepository? get moderation => _delegate.moderation;
+
+  @override
+  MessageSearchRepository? get messageSearch => null;
+
+  @override
+  PresenceService? get presence => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();

@@ -24,6 +24,7 @@ class ChatHeader extends StatelessWidget {
     required this.onSelectChannel,
     required this.onSelectVoiceSurface,
     required this.onQueryChanged,
+    required this.onSubmitQuery,
     required this.onToggleMembers,
     required this.onTogglePins,
     required this.onToggleThreads,
@@ -70,6 +71,12 @@ class ChatHeader extends StatelessWidget {
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
   final ValueChanged<String> onQueryChanged;
+
+  /// Runs the query against the server. Typing filters the messages already on
+  /// screen, which is instant but only ever sees the page that is loaded;
+  /// pressing enter asks Discord about the whole conversation. Null when the
+  /// signed-in transport has no search plane to ask.
+  final ValueChanged<String>? onSubmitQuery;
   final VoidCallback onToggleMembers;
   final VoidCallback onTogglePins;
   final VoidCallback onToggleThreads;
@@ -156,7 +163,11 @@ class ChatHeader extends StatelessWidget {
               if (showsMessages && showSearch)
                 SizedBox(
                   width: 190,
-                  child: _SearchField(query: query, onChanged: onQueryChanged),
+                  child: _SearchField(
+                    query: query,
+                    onChanged: onQueryChanged,
+                    onSubmitted: onSubmitQuery,
+                  ),
                 ),
               const SizedBox(width: 4),
               InboxActivityButton(
@@ -231,10 +242,15 @@ class ChatHeader extends StatelessWidget {
 }
 
 class _SearchField extends StatefulWidget {
-  const _SearchField({required this.query, required this.onChanged});
+  const _SearchField({
+    required this.query,
+    required this.onChanged,
+    this.onSubmitted,
+  });
 
   final String query;
   final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   State<_SearchField> createState() => _SearchFieldState();
@@ -269,9 +285,13 @@ class _SearchFieldState extends State<_SearchField> {
       key: const ValueKey('message-search'),
       controller: _controller,
       onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
+      textInputAction: TextInputAction.search,
       style: const TextStyle(fontSize: 12),
       decoration: InputDecoration(
-        hintText: 'Search messages',
+        hintText: widget.onSubmitted == null
+            ? 'Search messages'
+            : 'Search — enter to search the server',
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         suffixIcon: _controller.text.isEmpty

@@ -4,7 +4,10 @@ import '../../application/connection_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../theme/flucord_theme.dart';
+import 'activity_views.dart';
 import 'member_avatar.dart';
+import 'self_presence_scope.dart';
+import 'self_status_menu.dart';
 
 class AccountPanel extends StatelessWidget {
   const AccountPanel({
@@ -20,40 +23,61 @@ class AccountPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (status, color, tooltip) = switch (sessionMode) {
-      SessionMode.disconnected => (
-        'Disconnected',
-        context.surfaces.muted,
-        'No chat transport',
-      ),
-      SessionMode.demo => (
-        'Demo workspace',
-        Theme.of(context).colorScheme.primary,
-        'Deterministic demo data',
-      ),
-      SessionMode.discord => switch (connectionStatus) {
-        RepositoryConnectionStatus.connected => (
-          'Discord online',
-          FlucordColors.success,
-          'Discord Gateway',
+    final presence = SelfPresenceScope.maybeOf(context);
+    final (status, color, tooltip) = _transportStatus(context);
+    // The account's own row is composed locally, so the panel prefers what
+    // this client is broadcasting over whatever the member table last cached.
+    final self = presence?.isAvailable ?? false
+        ? presence!.userPresence
+        : member.presenceOrCoarse;
+    final custom = self.customStatus;
+    final identity = Row(
+      children: [
+        MemberAvatar(
+          member: member.withPresence(self),
+          size: 32,
+          presenceBorderColor: context.surfaces.inset,
         ),
-        RepositoryConnectionStatus.connecting => (
-          'Connecting...',
-          FlucordColors.warning,
-          'Discord Gateway',
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                member.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 1),
+              if (custom != null)
+                ActivitySummaryLine(
+                  key: const ValueKey('account-custom-status'),
+                  activity: custom,
+                )
+              else
+                Text(
+                  presence?.isAvailable ?? false
+                      ? self.displayStatus.label
+                      : status,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: presence?.isAvailable ?? false
+                        ? context.surfaces.muted
+                        : color,
+                    fontSize: 10,
+                  ),
+                ),
+            ],
+          ),
         ),
-        RepositoryConnectionStatus.reconnecting => (
-          'Reconnecting...',
-          FlucordColors.warning,
-          'Discord Gateway',
-        ),
-        RepositoryConnectionStatus.offline => (
-          'Offline',
-          context.surfaces.muted,
-          'Discord Gateway',
-        ),
-      },
-    };
+      ],
+    );
     return Container(
       key: const ValueKey('account-panel'),
       height: 56,
@@ -64,35 +88,10 @@ class AccountPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          MemberAvatar(
-            member: member,
-            size: 32,
-            presenceBorderColor: context.surfaces.inset,
-          ),
-          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  member.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  status,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: color, fontSize: 10),
-                ),
-              ],
-            ),
+            child: presence == null || !presence.isAvailable
+                ? identity
+                : SelfStatusMenu(controller: presence, child: identity),
           ),
           Tooltip(
             message: tooltip,
@@ -102,4 +101,40 @@ class AccountPanel extends StatelessWidget {
       ),
     );
   }
+
+  (String, Color, String) _transportStatus(BuildContext context) =>
+      switch (sessionMode) {
+        SessionMode.disconnected => (
+          'Disconnected',
+          context.surfaces.muted,
+          'No chat transport',
+        ),
+        SessionMode.demo => (
+          'Demo workspace',
+          Theme.of(context).colorScheme.primary,
+          'Deterministic demo data',
+        ),
+        SessionMode.discord => switch (connectionStatus) {
+          RepositoryConnectionStatus.connected => (
+            'Discord online',
+            FlucordColors.success,
+            'Discord Gateway',
+          ),
+          RepositoryConnectionStatus.connecting => (
+            'Connecting...',
+            FlucordColors.warning,
+            'Discord Gateway',
+          ),
+          RepositoryConnectionStatus.reconnecting => (
+            'Reconnecting...',
+            FlucordColors.warning,
+            'Discord Gateway',
+          ),
+          RepositoryConnectionStatus.offline => (
+            'Offline',
+            context.surfaces.muted,
+            'Discord Gateway',
+          ),
+        },
+      };
 }

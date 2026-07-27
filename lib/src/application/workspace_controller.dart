@@ -14,6 +14,7 @@ final class WorkspaceController extends ChangeNotifier {
   bool _showMembers = true;
   bool _showPins = false;
   bool _showThreads = false;
+  bool _showSearch = false;
   final Set<String> _collapsedCategoryIds = {};
   final VoiceChannelSurfaces _voiceSurfaces = VoiceChannelSurfaces();
 
@@ -25,6 +26,7 @@ final class WorkspaceController extends ChangeNotifier {
   bool get showMembers => _showMembers;
   bool get showPins => _showPins;
   bool get showThreads => _showThreads;
+  bool get showSearch => _showSearch;
   Set<String> get collapsedCategoryIds =>
       Set.unmodifiable(_collapsedCategoryIds);
 
@@ -76,6 +78,9 @@ final class WorkspaceController extends ChangeNotifier {
   void selectSpace(ChatWorkspace workspace, String spaceId) {
     if (_selectedSpaceId == spaceId) return;
     _selectedSpaceId = spaceId;
+    // Results belong to the guild they were searched in, so leaving it closes
+    // them rather than showing another server's messages under this one's name.
+    _showSearch = false;
     final channels = _visibleChannels(workspace, spaceId);
     if (channels.isEmpty) {
       _selectedChannelId = null;
@@ -170,6 +175,7 @@ final class WorkspaceController extends ChangeNotifier {
     if (_showMembers) {
       _showPins = false;
       _showThreads = false;
+      _showSearch = false;
     }
     notifyListeners();
   }
@@ -179,6 +185,7 @@ final class WorkspaceController extends ChangeNotifier {
     if (_showPins) {
       _showMembers = false;
       _showThreads = false;
+      _showSearch = false;
     }
     notifyListeners();
   }
@@ -188,7 +195,26 @@ final class WorkspaceController extends ChangeNotifier {
     if (_showThreads) {
       _showMembers = false;
       _showPins = false;
+      _showSearch = false;
     }
+    notifyListeners();
+  }
+
+  /// Search results take the same slot as the pins and thread panels, because
+  /// they answer the same kind of question about the conversation on screen and
+  /// two of them side by side would leave no room for the timeline.
+  void openSearch() {
+    if (_showSearch) return;
+    _showSearch = true;
+    _showMembers = false;
+    _showPins = false;
+    _showThreads = false;
+    notifyListeners();
+  }
+
+  void closeSearch() {
+    if (!_showSearch) return;
+    _showSearch = false;
     notifyListeners();
   }
 

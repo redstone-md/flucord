@@ -269,6 +269,7 @@ final class ChatMessage {
     this.isEdited = false,
     this.isPinned = false,
     this.mentionsCurrentMember = false,
+    this.mentionsEveryone = false,
   }) : attachments = List.unmodifiable(attachments),
        embeds = List.unmodifiable(embeds),
        reactions = List.unmodifiable(reactions),
@@ -293,6 +294,13 @@ final class ChatMessage {
   final bool isEdited;
   final bool isPinned;
   final bool mentionsCurrentMember;
+
+  /// The message carried `@everyone` or `@here`.
+  ///
+  /// Tracked separately from [mentionsCurrentMember] because a guild's
+  /// `suppress_everyone` setting removes exactly this one reason to notify: a
+  /// broadcast that also names the account by id still counts as a mention.
+  final bool mentionsEveryone;
 
   bool get isSystem => type.isSystem;
   bool hasFlag(DiscordMessageFlag flag) => flags & flag.bit != 0;
@@ -325,6 +333,7 @@ final class ChatMessage {
     bool? isEdited,
     bool? isPinned,
     bool? mentionsCurrentMember,
+    bool? mentionsEveryone,
   }) => ChatMessage(
     id: id,
     channelId: channelId,
@@ -344,5 +353,6 @@ final class ChatMessage {
     isEdited: isEdited ?? this.isEdited,
     isPinned: isPinned ?? this.isPinned,
     mentionsCurrentMember: mentionsCurrentMember ?? this.mentionsCurrentMember,
+    mentionsEveryone: mentionsEveryone ?? this.mentionsEveryone,
   );
 }

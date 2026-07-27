@@ -18,12 +18,17 @@ abstract final class DiscordSettingsProtoType {
 /// Field numbers inside `PreloadedUserSettings`.
 abstract final class PreloadedUserSettingsField {
   static const versions = 1;
+  static const voiceAndVideo = 5;
   static const textAndImages = 6;
   static const notifications = 7;
   static const privacy = 8;
   static const status = 11;
   static const localization = 12;
   static const appearance = 13;
+}
+
+abstract final class VoiceAndVideoField {
+  static const afkTimeout = 6;
 }
 
 abstract final class VersionsField {
@@ -79,6 +84,7 @@ abstract final class StatusField {
 
 abstract final class CustomStatusField {
   static const text = 1;
+  static const emojiId = 2;
   static const emojiName = 3;
   static const expiresAtMs = 4;
 }
@@ -141,6 +147,9 @@ abstract final class DiscordUserSettingsProto {
       root.messageAt(PreloadedUserSettingsField.localization),
     ),
     status: _status(root.messageAt(PreloadedUserSettingsField.status)),
+    voiceAndVideo: _voiceAndVideo(
+      root.messageAt(PreloadedUserSettingsField.voiceAndVideo),
+    ),
     dataVersion:
         root
             .messageAt(PreloadedUserSettingsField.versions)
@@ -244,14 +253,25 @@ abstract final class DiscordUserSettingsProto {
   static StatusPreferences _status(ProtoMessage? group) {
     if (group == null) return const StatusPreferences();
     final custom = group.messageAt(StatusField.customStatus);
+    final emojiId = custom?.fixed64At(CustomStatusField.emojiId);
     return StatusPreferences(
       status: group.stringWrapperAt(StatusField.status),
       customStatusText: custom?.stringAt(CustomStatusField.text),
       customStatusEmojiName: custom?.stringAt(CustomStatusField.emojiName),
+      // Stored as a fixed64 rather than a string, and 0 is the proto's "unset"
+      // rather than a snowflake, so it becomes an id only when non-zero.
+      customStatusEmojiId: emojiId == null || emojiId == 0 ? null : '$emojiId',
       customStatusExpiresAtMs:
           custom?.fixed64At(CustomStatusField.expiresAtMs) ?? 0,
       showCurrentGame: group.boolWrapperAt(StatusField.showCurrentGame),
       statusExpiresAtMs: group.fixed64At(StatusField.statusExpiresAtMs) ?? 0,
+    );
+  }
+
+  static VoiceAndVideoPreferences _voiceAndVideo(ProtoMessage? group) {
+    if (group == null) return const VoiceAndVideoPreferences();
+    return VoiceAndVideoPreferences(
+      afkTimeoutSeconds: group.intWrapperAt(VoiceAndVideoField.afkTimeout),
     );
   }
 }

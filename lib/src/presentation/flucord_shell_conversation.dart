@@ -23,6 +23,7 @@ extension _FlucordShellConversation on FlucordShell {
     required bool allowThreadPanel,
     required VoiceChannelSurface voiceSurface,
     required InboxSummary inboxSummary,
+    required bool canSearch,
   }) => _ConversationPane(
     workspace: workspace,
     capabilities: capabilities,
@@ -64,6 +65,9 @@ extension _FlucordShellConversation on FlucordShell {
     onSelectChannel: (id) =>
         _selectChannel(id, voiceSurface: VoiceChannelSurface.chat),
     onQueryChanged: workspaceController.setQuery,
+    onSubmitQuery: canSearch
+        ? (text) => _submitSearch(workspace, space, channel, text)
+        : null,
     onToggleMembers: workspaceController.toggleMembers,
     onTogglePins: () {
       workspaceController.togglePins();
@@ -148,4 +152,47 @@ extension _FlucordShellConversation on FlucordShell {
     ),
     directCallController: directCallController,
   );
+
+  /// Runs [text] against the server and opens the results panel.
+  ///
+  /// The scope is the guild, because that is the corpus Discord's guild route
+  /// answers about; narrowing it to one channel is what the `in:` filter does.
+  /// A private conversation has no guild, so it searches its own channel.
+  ///
+  /// The channels the `in:` filter may name are exactly the ones this account
+  /// can read the history of. Resolving a name the account cannot read would
+  /// ask the server about a channel it is not allowed to see.
+  void _submitSearch(
+    ChatWorkspace workspace,
+    CommunitySpace space,
+    ConversationChannel channel,
+    String text,
+  ) {
+    final controller = messageSearchController;
+    if (controller == null) return;
+    final permissions = WorkspacePermissions(workspace);
+    workspaceController.openSearch();
+    unawaited(
+      controller.search(
+        scope: space.isDirectMessages
+            ? ChannelMessageSearchScope(channel.id)
+            : GuildMessageSearchScope(space.id),
+        text: text,
+        grammar: MessageSearchGrammar(
+          channels: space.isDirectMessages
+              ? [channel]
+              : [
+                  for (final item in permissions.visibleChannelsFor(space.id))
+                    if (permissions.can(
+                      DiscordPermissions.readMessageHistory,
+                      item,
+                    ))
+                      item,
+                ],
+          members: workspace.members,
+          currentMemberId: workspace.currentMemberId,
+        ),
+      ),
+    );
+  }
 }

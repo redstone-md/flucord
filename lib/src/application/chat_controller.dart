@@ -1,16 +1,24 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/discord_snowflake.dart';
 import '../domain/forum_repository.dart';
+import '../domain/guild_management_repository.dart';
 import '../domain/guild_member_list_repository.dart';
+import '../domain/moderation_repository.dart';
 import '../domain/message_forward_repository.dart';
 import '../domain/message_flag_repository.dart';
+import '../domain/message_search_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/presence_repository.dart';
 import '../domain/reaction_repository.dart';
+import '../domain/read_state.dart';
+import '../domain/read_state_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
@@ -34,6 +42,7 @@ part 'chat_controller_stickers.dart';
 part 'chat_controller_voice_messages.dart';
 part 'chat_controller_scheduled_events.dart';
 part 'chat_controller_user_settings.dart';
+part 'chat_controller_read_state.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -44,6 +53,7 @@ final class ChatController extends ChangeNotifier {
 
   ChatRepository _repository;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
+  StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
   final StreamController<MessageUpsertedEvent> _incomingMessages =
       StreamController.broadcast();
 
@@ -86,6 +96,16 @@ final class ChatController extends ChangeNotifier {
   /// The private-call plane of the active transport, when it has one.
   DirectCallService? get directCallService => _repository.directCalls;
 
+  /// The server-side search plane of the active transport, when it has one.
+  ///
+  /// Read through the repository on every call rather than cached, because the
+  /// transport is replaced whenever the session changes and a stale search
+  /// plane would query the account that just signed out.
+  MessageSearchRepository? get messageSearch => _repository.messageSearch;
+
+  /// The presence plane of the active transport, when it has one.
+  PresenceService? get presenceService => _repository.presence;
+
   /// The lazy member-list surface, when the active transport offers one.
   ///
   /// Only the desktop-user transport can serve rosters; every other transport
@@ -108,6 +128,10 @@ final class ChatController extends ChangeNotifier {
     if (value && _activeChannelId != null) {
       _workspace = _workspace?.markChannelRead(_activeChannelId!);
       _persistChannelActivity(_activeChannelId!);
+      // R04 lists window focus among the triggers that acknowledge the open
+      // channel; without it a message read while the app was hidden stays
+      // unread on every other device.
+      acknowledgeChannel(_activeChannelId!);
       notifyListeners();
     }
   }
@@ -130,6 +154,7 @@ final class ChatController extends ChangeNotifier {
 
   Future<void> useRepository(ChatRepository repository) async {
     await _eventSubscription?.cancel();
+    await _readStateSubscription?.cancel();
     await _repository.close();
     _repository = repository;
     _workspace = null;
@@ -201,6 +226,7 @@ final class ChatController extends ChangeNotifier {
     _activeChannelId = channelId;
     _workspace = _workspace?.markChannelRead(channelId);
     _persistChannelActivity(channelId);
+    acknowledgeChannel(channelId);
     final channel = _workspace?.channelOrNull(channelId);
     if (channel?.kind == ChannelKind.forum ||
         channel?.kind == ChannelKind.media) {
@@ -226,6 +252,9 @@ final class ChatController extends ChangeNotifier {
       );
       _loadedChannels.add(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
+      // The page may name a newer message than the channel record did, and the
+      // channel is on screen either way, so the cursor is moved again here.
+      acknowledgeChannel(channelId);
     } catch (error) {
       _channelErrors[channelId] = error;
     } finally {
@@ -448,28 +477,6 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void markAllChannelsRead() {
-    final workspace = _workspace;
-    if (workspace == null) return;
-    final activeIds = workspace.channels
-        .where((channel) => channel.unread || channel.mentionCount > 0)
-        .map((channel) => channel.id)
-        .toSet();
-    if (activeIds.isEmpty) return;
-    _workspace = workspace.copyWith(
-      channels: [
-        for (final channel in workspace.channels)
-          activeIds.contains(channel.id)
-              ? channel.markRead().clearUnreadBoundary()
-              : channel,
-      ],
-    );
-    for (final channelId in activeIds) {
-      _persistChannelActivity(channelId);
-    }
-    notifyListeners();
-  }
-
   void _persistChannelActivity(String channelId) => unawaited(
     ChannelActivityPersistence.save(_repository, _workspace, channelId),
   );
@@ -480,6 +487,7 @@ final class ChatController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _clearTyping();
+    unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
     unawaited(_repository.close());
     unawaited(_incomingMessages.close());

@@ -1,6 +1,7 @@
 part of 'chat_models.dart';
 
 const _keepUnreadBoundary = Object();
+const _keepLastMessageId = Object();
 
 final class ConversationChannel {
   const ConversationChannel({
@@ -25,6 +26,7 @@ final class ConversationChannel {
     this.unread = false,
     this.mentionCount = 0,
     this.firstUnreadMessageId,
+    this.lastMessageId,
     this.permissionOverwrites = const {},
   });
 
@@ -49,6 +51,14 @@ final class ConversationChannel {
   final bool unread;
   final int mentionCount;
   final String? firstUnreadMessageId;
+
+  /// The newest message Discord says this channel holds.
+  ///
+  /// Unread is a comparison, not a flag: a channel is unread when this id is
+  /// newer than the read state's ack cursor. Keeping the pointer on the channel
+  /// is what lets that comparison survive a restart, because the client can
+  /// answer it without having loaded a single message.
+  final String? lastMessageId;
 
   /// The channel's permission overwrites, keyed by role or member id.
   ///
@@ -87,7 +97,18 @@ final class ConversationChannel {
     unread: previous.unread,
     mentionCount: previous.mentionCount,
     firstUnreadMessageId: previous.firstUnreadMessageId,
+    // A `CHANNEL_UPDATE` carries the whole channel but not always its
+    // `last_message_id`; dropping the remembered one would make every unread
+    // channel look read until the next message arrived.
+    lastMessageId: lastMessageId ?? previous.lastMessageId,
   );
+
+  /// Records that [messageId] is the newest message here, never rewinding.
+  ConversationChannel withLatestMessage(String messageId) =>
+      lastMessageId != null &&
+          DiscordSnowflake.compare(messageId, lastMessageId!) <= 0
+      ? this
+      : copyWith(lastMessageId: messageId);
 
   ConversationChannel copyWith({
     bool? unread,
@@ -102,6 +123,7 @@ final class ConversationChannel {
     ForumSortOrder? defaultSortOrder,
     ForumLayout? defaultForumLayout,
     Object? firstUnreadMessageId = _keepUnreadBoundary,
+    Object? lastMessageId = _keepLastMessageId,
   }) => ConversationChannel(
     id: id,
     spaceId: spaceId,
@@ -130,5 +152,8 @@ final class ConversationChannel {
     firstUnreadMessageId: identical(firstUnreadMessageId, _keepUnreadBoundary)
         ? this.firstUnreadMessageId
         : firstUnreadMessageId as String?,
+    lastMessageId: identical(lastMessageId, _keepLastMessageId)
+        ? this.lastMessageId
+        : lastMessageId as String?,
   );
 }

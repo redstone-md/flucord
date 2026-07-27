@@ -2,11 +2,25 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/read_state.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'account_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
+import 'notification_settings_menu.dart';
+
+part 'channel_sidebar_rows.dart';
+
+/// What a notification menu row wants doing, and to which channel.
+///
+/// A null channel means the space itself, which is what lets one callback
+/// serve both the header menu and every row's context menu.
+typedef SidebarNotificationHandler =
+    void Function(
+      NotificationMenuRequest request,
+      ConversationChannel? channel,
+    );
 
 class ChannelSidebar extends StatelessWidget {
   const ChannelSidebar({
@@ -20,10 +34,13 @@ class ChannelSidebar extends StatelessWidget {
     required this.collapsedCategoryIds,
     required this.onToggleCategory,
     required this.onNewDirectMessage,
+    this.readState,
+    this.onNotificationRequest,
     this.scheduledEventCount = 0,
     this.isLoadingScheduledEvents = false,
     this.scheduledEventsError,
     this.onOpenEvents,
+    this.onOpenServerSettings,
     super.key,
   });
 
@@ -37,10 +54,23 @@ class ChannelSidebar extends StatelessWidget {
   final Set<String> collapsedCategoryIds;
   final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
+
+  /// The server's read state, or null on a transport that has none.
+  ///
+  /// Mute, the resolved notification level and the unread-badge rule all come
+  /// from here; without it the sidebar falls back to the channel's own unread
+  /// flags, which is exactly the pre-server behaviour.
+  final ReadStateSnapshot? readState;
+  final SidebarNotificationHandler? onNotificationRequest;
   final int scheduledEventCount;
   final bool isLoadingScheduledEvents;
   final Object? scheduledEventsError;
   final VoidCallback? onOpenEvents;
+
+  /// Opens the server-settings window. Null when the account may administer
+  /// nothing here, or when the transport has no admin plane at all — the header
+  /// then simply has no gear, which is what Discord does too.
+  final VoidCallback? onOpenServerSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -79,18 +109,54 @@ class ChannelSidebar extends StatelessWidget {
                   child: Text(
                     space.name,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
+                      color: _spaceMuted
+                          ? context.surfaces.muted
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
+                if (_spaceMuted)
+                  Padding(
+                    key: const ValueKey('space-muted'),
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.notifications_off_outlined,
+                      size: 15,
+                      color: context.surfaces.muted,
+                    ),
+                  ),
                 if (isDirect)
                   IconButton(
                     key: const ValueKey('new-direct-message'),
                     onPressed: onNewDirectMessage,
                     icon: const Icon(Icons.edit_square),
                     tooltip: 'New message',
+                  ),
+                if (!isDirect && onOpenServerSettings != null)
+                  IconButton(
+                    key: const ValueKey('open-server-settings'),
+                    onPressed: onOpenServerSettings,
+                    icon: const Icon(Icons.settings_outlined, size: 18),
+                    tooltip: 'Server settings',
+                  ),
+                if (onNotificationRequest != null)
+                  PopupMenuButton<NotificationMenuRequest>(
+                    key: const ValueKey('space-notification-menu'),
+                    tooltip: 'Notification settings',
+                    icon: const Icon(Icons.more_vert, size: 18),
+                    padding: EdgeInsets.zero,
+                    onSelected: (request) =>
+                        onNotificationRequest!(request, null),
+                    itemBuilder: (context) => notificationMenuItems(
+                      muted: _spaceMuted,
+                      level: _spaceSettings.messageNotifications,
+                      isSpaceScope: true,
+                      suppressEveryone: _spaceSettings.suppressEveryone,
+                      mobilePush: _spaceSettings.mobilePush,
+                    ),
                   ),
               ],
             ),
@@ -113,6 +179,42 @@ class ChannelSidebar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  ReadStateSnapshot get _readState => readState ?? ReadStateSnapshot.empty;
+
+  GuildNotificationSettings get _spaceSettings =>
+      _readState.settingsFor(space.id);
+
+  bool get _spaceMuted => _readState.isSpaceMuted(space.id);
+
+  bool _isMuted(ConversationChannel channel) =>
+      _readState.isChannelMuted(channel);
+
+  /// Whether the row should read as unread.
+  ///
+  /// A mention always shows. Otherwise R04's resolved unread badge decides: a
+  /// channel set to "only mentions" stays quiet in the sidebar even though the
+  /// server does consider it unread.
+  bool _showsUnread(ConversationChannel channel) {
+    if (channel.mentionCount > 0) return true;
+    if (!channel.unread) return false;
+    return _readState.unreadBadgeFor(channel) == UnreadBadge.allMessages;
+  }
+
+  /// R04's `hide_muted_channels`: a muted channel is dropped from the list
+  /// unless it is the one on screen or it is shouting at the account anyway.
+  List<ConversationChannel> _withoutHiddenMuted(
+    List<ConversationChannel> source,
+  ) {
+    if (!_spaceSettings.hideMutedChannels) return source;
+    return [
+      for (final channel in source)
+        if (channel.id == selectedChannelId ||
+            channel.mentionCount > 0 ||
+            !_isMuted(channel))
+          channel,
+    ];
   }
 
   bool _isForumPost(ConversationChannel channel) {
@@ -252,17 +354,18 @@ class ChannelSidebar extends StatelessWidget {
             channel.parentId == category.id &&
             (!collapsed ||
                 channel.id == selectedChannelId ||
-                channel.unread ||
-                channel.mentionCount > 0),
+                _showsUnread(channel)),
       ),
     );
   }
 
   List<ConversationChannel> _ordered(Iterable<ConversationChannel> source) =>
-      source.toList(growable: false)..sort((left, right) {
-        final position = left.position.compareTo(right.position);
-        return position == 0 ? left.name.compareTo(right.name) : position;
-      });
+      _withoutHiddenMuted(
+        source.toList(growable: false)..sort((left, right) {
+          final position = left.position.compareTo(right.position);
+          return position == 0 ? left.name.compareTo(right.name) : position;
+        }),
+      );
 
   _ChannelRow _rowFor(ConversationChannel channel, {bool indented = false}) =>
       _ChannelRow(
@@ -272,181 +375,12 @@ class ChannelSidebar extends StatelessWidget {
             ? null
             : workspace.memberOrNull(channel.recipientId!),
         indented: indented,
+        muted: _isMuted(channel),
+        showsUnread: _showsUnread(channel),
+        notificationLevel: _readState.notificationLevelFor(channel),
+        onNotificationRequest: onNotificationRequest == null
+            ? null
+            : (request) => onNotificationRequest!(request, channel),
         onPressed: () => onSelectChannel(channel.id),
       );
-}
-
-class _CategorySection extends StatelessWidget {
-  const _CategorySection({
-    required this.category,
-    required this.collapsed,
-    required this.onToggle,
-    required this.children,
-  });
-
-  final ChannelCategory category;
-  final bool collapsed;
-  final VoidCallback onToggle;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey('category-${category.id}'),
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 28,
-              child: Row(
-                children: [
-                  Icon(
-                    collapsed ? Icons.chevron_right : Icons.expand_more,
-                    size: 16,
-                    color: context.surfaces.muted,
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      category.name.toUpperCase(),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        ...children,
-      ],
-    ),
-  );
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 8, 6),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChannelRow extends StatelessWidget {
-  const _ChannelRow({
-    required this.channel,
-    required this.selected,
-    required this.onPressed,
-    this.recipient,
-    this.indented = false,
-  });
-
-  final ConversationChannel channel;
-  final bool selected;
-  final VoidCallback onPressed;
-  final Member? recipient;
-  final bool indented;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected
-        ? Theme.of(context).colorScheme.onSurface
-        : channel.unread
-        ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.88)
-        : context.surfaces.muted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          key: ValueKey('channel-${channel.id}'),
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
-          child: SizedBox(
-            height: 34,
-            child: Row(
-              children: [
-                SizedBox(width: indented ? 18 : 10),
-                if (recipient != null)
-                  MemberAvatar(member: recipient!, size: 24)
-                else
-                  Icon(
-                    channel.isDirectMessage
-                        ? Icons.person_outline
-                        : channel.isThread
-                        ? Icons.forum_outlined
-                        : switch (channel.kind) {
-                            ChannelKind.text => Icons.tag,
-                            ChannelKind.voice => Icons.volume_up_outlined,
-                            ChannelKind.forum => Icons.forum_outlined,
-                            ChannelKind.media => Icons.perm_media_outlined,
-                          },
-                    size: 17,
-                    color: foreground,
-                  ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    channel.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 13,
-                      fontWeight: channel.unread || selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                    ),
-                  ),
-                ),
-                if (channel.mentionCount > 0)
-                  Container(
-                    key: ValueKey('channel-mention-${channel.id}'),
-                    constraints: const BoxConstraints(minWidth: 18),
-                    height: 18,
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: FlucordColors.mention,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${channel.mentionCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 8),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

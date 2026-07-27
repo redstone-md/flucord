@@ -1,6 +1,8 @@
 import 'dart:developer' as developer;
 
+import '../../domain/read_state.dart';
 import 'discord_private_channel_directory.dart';
+import 'discord_read_state_codec.dart';
 import 'discord_ready_user_table.dart';
 
 final class DiscordDesktopWorkspaceSnapshot {
@@ -84,7 +86,9 @@ final class DiscordDesktopBootstrap {
     _channelsByGuild.clear();
     _rolesByGuild.clear();
     _membersByGuild.clear();
-    _privateChannels.applyReady(_expand(_objects(ready['private_channels'])));
+    _privateChannels
+      ..useReadStateCursors(_readStateCursors(ready['read_state']))
+      ..applyReady(_expand(_objects(ready['private_channels'])));
     // `merged_members` is positional against `guilds` and counts every entry,
     // including the unavailable ones, so the two are walked by index rather
     // than zipped over the guilds that happen to have content.
@@ -154,6 +158,20 @@ final class DiscordDesktopBootstrap {
     _membersByGuild.clear();
     _privateChannels.clear();
     users.clear();
+  }
+
+  /// The channel read states' ack cursors, keyed by channel id.
+  static Map<String, String> _readStateCursors(Object? block) {
+    if (block is! Map) return const {};
+    final cursors = <String, String>{};
+    for (final entry in _objects(block.cast<String, Object?>()['entries'])) {
+      final state = DiscordReadStateCodec.readState(entry);
+      final acked = state?.lastAckedId;
+      if (state == null || acked == null) continue;
+      if (state.type != ReadStateType.channel) continue;
+      cursors[state.entityId] = acked;
+    }
+    return cursors;
   }
 
   List<Map<String, Object?>> _expand(List<Map<String, Object?>> channels) {

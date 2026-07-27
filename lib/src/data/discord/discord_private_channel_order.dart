@@ -1,4 +1,4 @@
-import 'discord_snowflake.dart';
+import '../../domain/discord_snowflake.dart';
 
 /// Orders private channels the way Discord's own DM sort store does.
 ///

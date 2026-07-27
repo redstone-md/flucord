@@ -5,6 +5,7 @@ import '../../application/guild_member_list_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
 import '../../theme/flucord_theme.dart';
+import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_profile_popover.dart';
 import 'member_roster_view.dart';
@@ -25,6 +26,8 @@ class MemberSidebar extends StatefulWidget {
     this.channelId,
     this.memberList,
     this.roles = const <CommunityRole>[],
+    this.onReport,
+    this.onBlock,
     super.key,
   });
 
@@ -32,6 +35,14 @@ class MemberSidebar extends StatefulWidget {
   final String spaceId;
   final String currentMemberId;
   final ValueChanged<Member> onMessage;
+
+  /// Opens the report flow for a member. Absent on transports with no
+  /// `/reporting` access, which is what keeps the button off the popover
+  /// instead of putting one there that fails.
+  final ValueChanged<Member>? onReport;
+
+  /// Blocks a member. Same reasoning as [onReport].
+  final ValueChanged<Member>? onBlock;
 
   /// Channel whose roster is shown. Member lists are subscribed per channel
   /// because visibility, not membership, decides who appears.
@@ -157,10 +168,10 @@ class _MemberSidebarState extends State<MemberSidebar> {
   /// Grouping the cached member table locally, used until a roster arrives.
   Widget _buildCachedMembers(List<Member> visibleMembers) {
     final online = visibleMembers
-        .where((member) => member.presence != Presence.offline)
+        .where((member) => member.presence.isOnline)
         .toList(growable: false);
     final offline = visibleMembers
-        .where((member) => member.presence == Presence.offline)
+        .where((member) => !member.presence.isOnline)
         .toList(growable: false);
     final roleGroups = <String, List<Member>>{};
     for (final member in online) {
@@ -232,6 +243,23 @@ class _MemberSidebarState extends State<MemberSidebar> {
                 _dismiss();
                 widget.onMessage(member);
               },
+              // Neither is offered for the account itself: Discord has no
+              // "report yourself", and blocking yourself is a request the
+              // server refuses.
+              onReport:
+                  widget.onReport == null || member.id == widget.currentMemberId
+                  ? null
+                  : () {
+                      _dismiss();
+                      widget.onReport!(member);
+                    },
+              onBlock:
+                  widget.onBlock == null || member.id == widget.currentMemberId
+                  ? null
+                  : () {
+                      _dismiss();
+                      widget.onBlock!(member);
+                    },
             ),
           ),
         ),
@@ -281,7 +309,11 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final offline = member.presence == Presence.offline;
+    final offline = !member.presence.isOnline;
+    // Discord replaces the role line with whatever the member is doing, so a
+    // row never carries both: the activity is the more current fact, and
+    // stacking the two would double every row's height.
+    final activity = member.presenceDetail?.primaryActivity;
     return CompositedTransformTarget(
       link: link,
       child: Opacity(
@@ -316,15 +348,21 @@ class _MemberRow extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            role,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: context.surfaces.muted,
-                              fontSize: 10,
+                          if (activity != null)
+                            ActivitySummaryLine(
+                              key: ValueKey('member-activity-${member.id}'),
+                              activity: activity,
+                            )
+                          else
+                            Text(
+                              role,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.surfaces.muted,
+                                fontSize: 10,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),

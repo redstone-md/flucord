@@ -58,6 +58,50 @@ final class DiscordCdn {
     ).toString();
   }
 
+  /// The artwork behind an `activity.assets.*_image` key.
+  ///
+  /// Three forms reach this field and only three are honoured. `mp:` is
+  /// Discord's media proxy and carries the rest of the path; `spotify:` names
+  /// an image on Spotify's own CDN; anything else is an application asset hash
+  /// that is only addressable together with the application it belongs to. A
+  /// prefix this client does not recognise returns null rather than being
+  /// pasted into a URL, because a guessed host would leak the fact that this
+  /// user is being looked at to whoever owns it.
+  static String? activityAsset(
+    String? key, {
+    String? applicationId,
+    int size = 128,
+  }) {
+    if (key == null || key.isEmpty) return null;
+    if (key.startsWith('mp:')) {
+      final path = key.substring(3);
+      return path.isEmpty
+          ? null
+          : Uri.https('media.discordapp.net', '/$path').toString();
+    }
+    if (key.startsWith('spotify:')) {
+      final id = key.substring(8);
+      return id.isEmpty
+          ? null
+          : Uri.https('i.scdn.co', '/image/$id').toString();
+    }
+    if (key.contains(':') || applicationId == null || applicationId.isEmpty) {
+      return null;
+    }
+    if (!_validSizes.contains(size)) {
+      throw ArgumentError.value(
+        size,
+        'size',
+        'must be a power of two, 16-4096',
+      );
+    }
+    return Uri.https(
+      'cdn.discordapp.com',
+      '/app-assets/$applicationId/$key.png',
+      {'size': '$size'},
+    ).toString();
+  }
+
   static String? defaultUserAvatar(String userId) {
     final snowflake = BigInt.tryParse(userId);
     if (snowflake == null) return null;

@@ -1,3 +1,5 @@
+part 'discord_desktop_rest_read_state.dart';
+
 final class DiscordDesktopRestRequest {
   const DiscordDesktopRestRequest({
     required this.method,
@@ -109,10 +111,20 @@ final class DiscordDesktopRestRequest {
         '/messages/${_snowflake(messageId, 'messageId')}',
   );
 
+  /// `POST /channels/{c}/messages/{m}/ack` — the account has read this far.
+  ///
+  /// Keys are omitted rather than sent as null when they do not apply, because
+  /// Discord's own client relies on JSON omission: it sends `flags` only when
+  /// the recomputed value differs from the stored one, and `last_viewed` only
+  /// once a channel has actually been looked at. A literal null in either slot
+  /// is a different request. `token` is the exception — the first ack after a
+  /// connect genuinely carries `token: null`, which is why [includeToken]
+  /// controls the key rather than the value doing it.
   factory DiscordDesktopRestRequest.ackMessage({
     required String channelId,
     required String messageId,
     String? readStateToken,
+    bool includeToken = true,
     int? lastViewed,
     int? flags,
   }) => DiscordDesktopRestRequest(
@@ -120,20 +132,58 @@ final class DiscordDesktopRestRequest {
     path:
         '/channels/${_snowflake(channelId, 'channelId')}'
         '/messages/${_snowflake(messageId, 'messageId')}/ack',
-    body: {'token': readStateToken, 'last_viewed': lastViewed, 'flags': flags},
-  );
-
-  factory DiscordDesktopRestRequest.ackBulk(
-    List<Map<String, Object?>> readStates,
-  ) => DiscordDesktopRestRequest(
-    method: 'POST',
-    path: '/read-states/ack-bulk',
     body: {
-      'read_states': List.unmodifiable(
-        readStates.map((readState) => Map.unmodifiable({...readState})),
-      ),
+      if (includeToken) 'token': readStateToken,
+      'last_viewed': ?lastViewed,
+      'flags': ?flags,
     },
   );
+
+  /// `POST /read-states/ack-bulk` — up to 100 read states in one request.
+  ///
+  /// Entries are rebuilt rather than forwarded. A caller-shaped map reaches the
+  /// wire unexamined otherwise, and an ack carrying a non-snowflake id or an
+  /// out-of-range type is a request Discord answers by moving nothing, which
+  /// looks exactly like a channel that refuses to go read.
+  factory DiscordDesktopRestRequest.ackBulk(
+    List<Map<String, Object?>> readStates,
+  ) {
+    if (readStates.length > maxBulkAckEntries) {
+      throw ArgumentError.value(
+        readStates.length,
+        'readStates',
+        'Maximum is $maxBulkAckEntries',
+      );
+    }
+    return DiscordDesktopRestRequest(
+      method: 'POST',
+      path: '/read-states/ack-bulk',
+      body: {
+        'read_states': List.unmodifiable([
+          for (final readState in readStates)
+            Map<String, Object?>.unmodifiable({
+              'channel_id': _snowflake(
+                '${readState['channel_id']}',
+                'channel_id',
+              ),
+              'message_id': _snowflake(
+                '${readState['message_id']}',
+                'message_id',
+              ),
+              'read_state_type':
+                  DiscordDesktopReadStateRequests._checkedReadStateType(
+                    readState['read_state_type'] is int
+                        ? readState['read_state_type']! as int
+                        : 0,
+                  ),
+            }),
+        ]),
+      },
+    );
+  }
+
+  /// R04: the bulk pump splices exactly this many entries per request.
+  static const maxBulkAckEntries = 100;
 
   factory DiscordDesktopRestRequest.openDirectMessage(
     Iterable<String> recipientIds,
@@ -154,14 +204,14 @@ final class DiscordDesktopRestRequest {
       body: {'recipients': List.unmodifiable(recipients)},
     );
   }
+}
 
-  static bool _present(String? value) => value != null && value.isNotEmpty;
+bool _present(String? value) => value != null && value.isNotEmpty;
 
-  static String _snowflake(String value, String name) {
-    final normalized = value.trim();
-    if (normalized.isEmpty || int.tryParse(normalized) == null) {
-      throw ArgumentError.value(value, name, 'Expected a numeric snowflake');
-    }
-    return normalized;
+String _snowflake(String value, String name) {
+  final normalized = value.trim();
+  if (normalized.isEmpty || int.tryParse(normalized) == null) {
+    throw ArgumentError.value(value, name, 'Expected a numeric snowflake');
   }
+  return normalized;
 }
