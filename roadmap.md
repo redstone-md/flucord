@@ -548,6 +548,16 @@ browser runtime or dependency on Discord's private user API.
     only acks what is actually unread, and the rolling ack token resets on
     reconnect rather than being replayed from a dead session.
 
+87. Fixed: login reached the workspace again. 0.0.2 shipped ETF together with
+    zstd; when zstd was withdrawn the release became ETF-without-compression, a
+    combination no version had ever run against a real account. The live check
+    only ever decoded a `HELLO`, which is a handful of terms, where a real
+    `READY` is where the term vocabulary is first exercised at size. The shipped
+    default is JSON again until a full authenticated session has proved ETF.
+    The connection surface now reports the transport's own failure instead of
+    one fixed sentence — showing only "Discord is unreachable" is what left two
+    broken releases undiagnosable from the outside.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

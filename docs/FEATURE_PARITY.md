@@ -30,7 +30,7 @@ do not count as desktop-user chat parity.
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
-| ETF Gateway framing | Ready | Binary `encoding=etf` frames, live-validated against the Gateway |
+| ETF Gateway framing | Implemented, not default | Live-checked against a real `HELLO`; a full authenticated `READY` has not been decoded, so the shipped default is JSON |
 | zstd-stream Gateway compression | Off by default | Decoder is in place and live-validated, but stays disabled until proven against a full authenticated `READY` |
 
 See [the bundle capability ledger](DISCORD_BUNDLE_COVERAGE.md) for the complete

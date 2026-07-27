@@ -18,11 +18,11 @@ void main() {
     expect(profile.negotiatedCompression, isNull);
     expect(
       profile.connectionUri().toString(),
-      'wss://gateway.discord.gg?encoding=etf&v=9',
+      'wss://gateway.discord.gg?encoding=json&v=9',
     );
     expect(
       profile.gatewayUri().toString(),
-      'wss://gateway.discord.gg?encoding=etf&v=9&compress=zstd-stream',
+      'wss://gateway.discord.gg?encoding=json&v=9&compress=zstd-stream',
     );
   });
 

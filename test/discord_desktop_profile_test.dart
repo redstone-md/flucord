@@ -22,8 +22,10 @@ void main() {
 
     expect(profile.apiBaseUri.toString(), 'https://discord.com/api/v9');
     expect(
+      // gatewayUri records what the installed client dials; connectionUri is
+      // what Flucord actually dials, and the two differ on purpose.
       profile.gatewayUri().toString(),
-      'wss://gateway.discord.gg?encoding=etf&v=9&compress=zstd-stream',
+      'wss://gateway.discord.gg?encoding=json&v=9&compress=zstd-stream',
     );
   });
 

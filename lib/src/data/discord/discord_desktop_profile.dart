@@ -8,7 +8,14 @@ final class DiscordDesktopProtocolProfile {
     this.apiVersion = 9,
     this.gatewayVersion = 9,
     this.gatewayCapabilities = 1734653,
-    this.gatewayEncoding = 'etf',
+    // JSON, not the ETF the installed client uses.
+    //
+    // The ETF codec is implemented, live-checked against a real HELLO and
+    // covered, but it has never decoded a real authenticated READY — and READY
+    // is where a payload first exercises the whole term vocabulary at size.
+    // Shipping it as the default on that evidence broke login twice. It stays
+    // selectable, and becomes the default once a full session has proved it.
+    this.gatewayEncoding = 'json',
     this.gatewayCompression = 'zstd-stream',
     this.negotiatedCompression,
     this.maxGuildSubscriptionBytes = 15360,

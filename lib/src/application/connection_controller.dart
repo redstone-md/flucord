@@ -224,7 +224,15 @@ final class ConnectionController extends ChangeNotifier {
     if (error is DiscordApiException && error.isUnauthorized) {
       return 'Discord rejected this ${session.credentialLabel}.';
     }
-    return 'Discord is unreachable. No chat transport is connected.';
+    // The transport already explains itself — the bootstrap failure carries the
+    // stage it died at and the last error underneath. Replacing that with one
+    // fixed sentence is what made two broken releases undiagnosable from the
+    // outside: the user could only report "unreachable".
+    if (error is DiscordApiException) {
+      return 'Discord is unreachable: ${error.message}';
+    }
+    return 'Discord is unreachable. No chat transport is connected. '
+        '(${error.runtimeType})';
   }
 
   static String _diagnosticFor(Object error) => switch (error) {

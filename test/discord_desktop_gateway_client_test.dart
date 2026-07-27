@@ -390,7 +390,13 @@ void main() {
 /// The installed profile negotiates zstd-stream; these tests drive the socket
 /// with plain ETF terms, so they pin the encoding without transport
 /// compression. The compressed path has its own test.
-const _uncompressed = DiscordDesktopProtocolProfile(clientBuildNumber: 582977);
+/// These tests drive the socket with ETF terms, so they select that encoding
+/// explicitly. The shipped default is JSON until ETF has decoded a real
+/// authenticated READY rather than only a HELLO.
+const _uncompressed = DiscordDesktopProtocolProfile(
+  clientBuildNumber: 582977,
+  gatewayEncoding: 'etf',
+);
 
 Future<void> _waitFor(bool Function() condition) async {
   for (var attempt = 0; attempt < 50 && !condition(); attempt++) {
