@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/read_state.dart';
+import '../../domain/voice_connection.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'account_panel.dart';
@@ -41,8 +42,17 @@ class ChannelSidebar extends StatelessWidget {
     this.scheduledEventsError,
     this.onOpenEvents,
     this.onOpenServerSettings,
+    this.seatedByChannel = const {},
     super.key,
   });
+
+  /// Who is sitting in each voice channel right now, keyed by channel id.
+  ///
+  /// Discord shows a voice channel's occupants under its row without anyone
+  /// joining, and that is how a user decides which room to walk into. Reading
+  /// it here rather than from the voice connection is what lets the sidebar
+  /// answer for channels this client has never joined.
+  final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
 
   final CommunitySpace space;
   final List<ConversationChannel> channels;
@@ -338,7 +348,7 @@ class ChannelSidebar extends StatelessWidget {
       if (voice.isNotEmpty) ...[
         const SizedBox(height: 18),
         const _SectionLabel(label: 'Voice channels'),
-        for (final channel in voice) _rowFor(channel),
+        for (final channel in voice) ..._voiceEntry(channel),
       ],
     ];
   }
@@ -366,6 +376,22 @@ class ChannelSidebar extends StatelessWidget {
           return position == 0 ? left.name.compareTo(right.name) : position;
         }),
       );
+
+  /// A voice channel row followed by whoever is seated in it.
+  List<Widget> _voiceEntry(
+    ConversationChannel channel, {
+    bool indented = false,
+  }) => [
+    _rowFor(channel, indented: indented),
+    for (final seat in seatedByChannel[channel.id] ?? const [])
+      VoiceSeatRow(
+        key: ValueKey('voice-seat-${channel.id}-${seat.userId}'),
+        state: seat,
+        member: workspace.memberOrNull(seat.userId),
+        spaceId: space.id,
+        indented: indented,
+      ),
+  ];
 
   _ChannelRow _rowFor(ConversationChannel channel, {bool indented = false}) =>
       _ChannelRow(

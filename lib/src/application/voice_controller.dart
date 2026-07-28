@@ -61,6 +61,7 @@ final class VoiceController extends ChangeNotifier {
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
+  StreamSubscription<void>? _seatedSubscription;
   VoiceState _state = VoiceState.idle;
   VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
   List<VoiceDevice> _devices = const [];
@@ -101,6 +102,14 @@ final class VoiceController extends ChangeNotifier {
   /// Whether the connection is a DM or group-DM call rather than guild voice.
   bool get isCallSession => _isCallSession;
   bool get hasDiscordSignaling => _signalingService != null;
+
+  /// Who is seated in each voice channel, whether or not this client is in it.
+  ///
+  /// [participants] deliberately holds only the room we are connected to, so it
+  /// cannot answer for the rest of the sidebar. This reads the transport's own
+  /// view of every voice state instead.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
+      _signalingService?.seatedByChannel ?? const {};
   bool get isTransportReady => _transportSession != null;
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
@@ -327,6 +336,13 @@ final class VoiceController extends ChangeNotifier {
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
     _participants.clear();
+    // The sidebar renders seats for channels this client is not in, so it has
+    // to rebuild on any voice state the transport sees, not only on the events
+    // that belong to the room we joined.
+    unawaited(_seatedSubscription?.cancel());
+    _seatedSubscription = service?.seatedChanges.listen((_) {
+      if (!_disposed) notifyListeners();
+    });
     _signalingSubscription = service?.voiceEvents.listen(
       _handleSignalingEvent,
       onDone: _handleSignalingDone,
@@ -464,6 +480,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
+    unawaited(_seatedSubscription?.cancel());
     unawaited(_audioPipeline?.dispose());
     unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());

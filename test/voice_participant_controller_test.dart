@@ -116,6 +116,12 @@ Future<void> _flushEvents() async {
 }
 
 final class _ParticipantSignalingService implements VoiceSignalingService {
+  @override
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
+
+  @override
+  Stream<void> get seatedChanges => const Stream<void>.empty();
+
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
 

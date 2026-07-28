@@ -234,6 +234,12 @@ Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
 
 final class _FakeVoiceSignalingService
     implements VoiceSignalingService, VoiceAudioTransport {
+  @override
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
+
+  @override
+  Stream<void> get seatedChanges => const Stream<void>.empty();
+
   _FakeVoiceSignalingService({this._operations});
 
   final StreamController<VoiceSignalingEvent> _events =

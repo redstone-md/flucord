@@ -38,6 +38,17 @@ final class DiscordCallStateRoster {
   };
 
   /// Everyone currently known to be in [channelId]'s call.
+  /// Everyone seated, grouped by call channel — the same shape guild voice
+  /// reports, so the sidebar reads one map rather than two.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
+      Map<String, List<VoiceParticipantStateEvent>>.unmodifiable({
+        for (final entry in _byChannel.entries)
+          if (entry.value.isNotEmpty)
+            entry.key: List<VoiceParticipantStateEvent>.unmodifiable(
+              entry.value.values,
+            ),
+      });
+
   List<VoiceParticipantStateEvent> participantsIn(String channelId) =>
       (_byChannel[channelId]?.values ?? const <VoiceParticipantStateEvent>[])
           .toList(growable: false);

@@ -215,3 +215,93 @@ class _ChannelRow extends StatelessWidget {
     if (request != null) onNotificationRequest?.call(request);
   }
 }
+
+/// One person seated in a voice channel, shown under its sidebar row.
+///
+/// Discord puts the occupants directly beneath the channel, and that placement
+/// is the whole point: it answers "is anyone in there" before the user commits
+/// to joining. A member this client has never loaded still gets a row — the
+/// voice state proves they are there, and hiding them would under-report the
+/// room.
+class VoiceSeatRow extends StatelessWidget {
+  const VoiceSeatRow({
+    required this.state,
+    required this.member,
+    required this.spaceId,
+    this.indented = false,
+    super.key,
+  });
+
+  final VoiceParticipantStateEvent state;
+  final Member? member;
+  final String spaceId;
+  final bool indented;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    final name = member?.displayName ?? 'Unknown user';
+    final silenced = state.selfMuted || state.serverMuted;
+    final deafened = state.selfDeafened || state.serverDeafened;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(indented ? 34 : 22, 1, 8, 1),
+      child: Row(
+        children: [
+          if (member case final resolved?)
+            MemberAvatar(member: resolved, size: 18, spaceId: spaceId)
+          else
+            Icon(Icons.person_outline, size: 16, color: surfaces.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: silenced || deafened
+                    ? surfaces.muted
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          if (state.isStreaming)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.screen_share_outlined,
+                size: 13,
+                color: surfaces.muted,
+              ),
+            ),
+          if (state.isVideoEnabled)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.videocam_outlined,
+                size: 13,
+                color: surfaces.muted,
+              ),
+            ),
+          if (deafened)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.headset_off_outlined,
+                size: 13,
+                color: surfaces.muted,
+              ),
+            )
+          else if (silenced)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.mic_off_outlined,
+                size: 13,
+                color: surfaces.muted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

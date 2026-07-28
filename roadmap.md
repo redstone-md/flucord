@@ -558,6 +558,15 @@ browser runtime or dependency on Discord's private user API.
     one fixed sentence — showing only "Discord is unreachable" is what left two
     broken releases undiagnosable from the outside.
 
+88. Fixed: a voice channel now shows who is in it. The voice controller keeps
+    participants only for the room it is connected to and discards every other
+    voice state, so nothing in the client could answer "is anyone in there" —
+    the sidebar showed a bare channel row and the room looked empty until a
+    join succeeded. The roster already tracked every guild's voice states; it
+    is now exposed on the signalling contract and rendered beneath each voice
+    channel with mute, deafen, stream and video state, the way the official
+    client does.
+
 ## Protocol boundaries
 
 - Keep documented Bot, OAuth, and Social SDK transports independent from the

@@ -40,6 +40,7 @@ final class DiscordVoiceSignalingService
   final DiscordVoiceSessionAssembler _assembler =
       DiscordVoiceSessionAssembler();
   final DiscordVoiceStateRoster _roster = DiscordVoiceStateRoster();
+  final StreamController<void> _seatedChanges = StreamController.broadcast();
   final DiscordCallStateRoster _callRoster = DiscordCallStateRoster();
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
@@ -192,6 +193,15 @@ final class DiscordVoiceSignalingService
     );
   }
 
+  @override
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => {
+    ..._roster.seatedByChannel,
+    ..._callRoster.seatedByChannel,
+  };
+
+  @override
+  Stream<void> get seatedChanges => _seatedChanges.stream;
+
   List<VoiceParticipantStateEvent> _seatedIn(
     VoiceSessionKey key,
     String channelId,
@@ -206,10 +216,11 @@ final class DiscordVoiceSignalingService
     // roster is also fed before the current user is known, because the
     // `GUILD_CREATE` burst that carries the occupants arrives *during*
     // bootstrap, minutes before the workspace resolves and names us.
-    for (final state in _roster.accept(
-      eventName: event.name,
-      data: event.data,
-    )) {
+    final applied = _roster.accept(eventName: event.name, data: event.data);
+    if (applied.isNotEmpty && !_seatedChanges.isClosed) {
+      _seatedChanges.add(null);
+    }
+    for (final state in applied) {
       if (_desiredChannels.containsKey(VoiceSessionKey.guild(state.guildId!))) {
         _emit(state);
       }

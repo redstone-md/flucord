@@ -250,6 +250,18 @@ final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
 abstract interface class VoiceSignalingService {
   Stream<VoiceSignalingEvent> get voiceEvents;
 
+  /// Who is currently seated in each voice channel, keyed by channel id.
+  ///
+  /// Discord shows a voice channel's occupants in the sidebar without anyone
+  /// joining it, so this cannot be derived from the connection: the client is
+  /// told about every voice state in a guild whether or not it is in the room.
+  /// Exposing it separately is what lets the sidebar answer "who is in there"
+  /// before the user decides to walk in.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel;
+
+  /// Fires whenever [seatedByChannel] changes.
+  Stream<void> get seatedChanges;
+
   Future<void> joinVoiceChannel({
     required String guildId,
     required String channelId,

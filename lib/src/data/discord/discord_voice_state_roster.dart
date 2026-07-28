@@ -47,6 +47,25 @@ final class DiscordVoiceStateRoster {
 
   void clearAll() => _byGuild.clear();
 
+  /// Everyone seated, grouped by the channel they are in.
+  ///
+  /// The sidebar needs this for channels nobody has joined from here, so it is
+  /// read off the whole tracked set rather than off a connection.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel {
+    final byChannel = <String, List<VoiceParticipantStateEvent>>{};
+    for (final guild in _byGuild.values) {
+      for (final state in guild.values) {
+        final channelId = state.channelId;
+        if (channelId == null) continue;
+        byChannel.putIfAbsent(channelId, () => []).add(state);
+      }
+    }
+    return Map<String, List<VoiceParticipantStateEvent>>.unmodifiable({
+      for (final entry in byChannel.entries)
+        entry.key: List<VoiceParticipantStateEvent>.unmodifiable(entry.value),
+    });
+  }
+
   List<VoiceParticipantStateEvent> _clearOnReady() {
     final departures = [
       for (final guild in _byGuild.values)

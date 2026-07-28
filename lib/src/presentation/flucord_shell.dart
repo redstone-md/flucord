@@ -231,6 +231,7 @@ class FlucordShell extends StatelessWidget {
                         if (showChannels)
                           ChannelSidebar(
                             space: space,
+                            seatedByChannel: voiceController.seatedByChannel,
                             channels: channels,
                             selectedChannelId: channelId,
                             workspace: workspace,
