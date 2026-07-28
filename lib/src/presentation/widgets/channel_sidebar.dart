@@ -43,6 +43,7 @@ class ChannelSidebar extends StatelessWidget {
     this.onOpenEvents,
     this.onOpenServerSettings,
     this.seatedByChannel = const {},
+    this.voiceConnectionBar,
     super.key,
   });
 
@@ -53,6 +54,11 @@ class ChannelSidebar extends StatelessWidget {
   /// it here rather than from the voice connection is what lets the sidebar
   /// answer for channels this client has never joined.
   final Map<String, List<VoiceParticipantStateEvent>> seatedByChannel;
+
+  /// The strip that keeps a live voice connection reachable, or null when
+  /// there is none. Passed in rather than built here so the sidebar does not
+  /// have to know about the voice controller.
+  final Widget? voiceConnectionBar;
 
   final CommunitySpace space;
   final List<ConversationChannel> channels;
@@ -181,6 +187,7 @@ class ChannelSidebar extends StatelessWidget {
               ),
             ),
           ),
+          ?voiceConnectionBar,
           AccountPanel(
             member: workspace.memberById(workspace.currentMemberId),
             sessionMode: sessionMode,

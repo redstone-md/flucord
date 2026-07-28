@@ -55,6 +55,7 @@ import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/typing_indicator.dart';
+import 'widgets/voice_connection_bar.dart';
 import 'widgets/voice_room_view.dart';
 
 part 'flucord_shell_navigation.dart';
@@ -232,6 +233,17 @@ class FlucordShell extends StatelessWidget {
                           ChannelSidebar(
                             space: space,
                             seatedByChannel: voiceController.seatedByChannel,
+                            // A voice connection outlives the room view, so
+                            // leaving it has to stay reachable from wherever
+                            // the user has navigated to since.
+                            voiceConnectionBar: VoiceConnectionBar(
+                              controller: voiceController,
+                              channelNameFor: (id) => channels
+                                  .where((channel) => channel.id == id)
+                                  .map((channel) => channel.name)
+                                  .firstOrNull,
+                              onOpenChannel: _selectChannel,
+                            ),
                             channels: channels,
                             selectedChannelId: channelId,
                             workspace: workspace,

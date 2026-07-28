@@ -291,7 +291,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('channel-forge-voice')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Local media ready'), findsOneWidget);
+    // Twice over: the room says it, and so does the strip that keeps the
+    // connection reachable after navigating away from the room.
+    expect(find.text('Local media ready'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('voice-connection-bar')), findsOneWidget);
     expect(find.text('Input device'), findsOneWidget);
     expect(find.text('Output device'), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
