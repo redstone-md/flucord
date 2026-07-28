@@ -26,6 +26,10 @@ extension ChatControllerUserSettings on ChatController {
   /// The GIF proxy of the connected transport, or `null`.
   GifRepository? get gifs => _repository.gifs;
 
+  /// The slash-command plane of the connected transport, or `null`.
+  ApplicationCommandRepository? get applicationCommands =>
+      _repository.applicationCommands;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

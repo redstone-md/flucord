@@ -10,8 +10,10 @@ import '../../theme/flucord_theme.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
 import '../../application/gif_picker_controller.dart';
+import '../../application/slash_command_controller.dart';
 import 'emoji_picker.dart';
 import 'gif_picker.dart';
+import 'slash_command_list.dart';
 import 'native_voice_message_player.dart';
 import 'pending_attachment_strip.dart';
 import 'remote_identity_image.dart';
@@ -45,6 +47,7 @@ class MessageComposer extends StatefulWidget {
     required this.onCancelReply,
     required this.onTyping,
     this.gifPicker,
+    this.slashCommands,
     this.canAttachFiles = true,
     this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
     this.attachmentPicker = const NativePendingAttachmentPicker(),
@@ -79,6 +82,9 @@ class MessageComposer extends StatefulWidget {
 
   /// The GIF picker, or null on a transport that has no provider proxy.
   final GifPickerController? gifPicker;
+
+  /// Slash commands, or null where they cannot be run.
+  final SlashCommandController? slashCommands;
   final ComposerAutocompleteCatalog autocompleteCatalog;
   final PendingAttachmentPicker attachmentPicker;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -227,6 +233,13 @@ class _MessageComposerState extends State<MessageComposer>
     _focusNode.requestFocus();
   }
 
+  /// Empties the box after a command ran: the slash text was the command, and
+  /// leaving it behind would have the next message start with it.
+  void _clearComposer() {
+    _controller.clear();
+    if (_hasContent) setState(() => _hasContent = false);
+  }
+
   void _showPollDialog() {
     if (widget.isSending) return;
     CreatePollDialog.show(context, onCreate: widget.onCreatePoll);
@@ -240,6 +253,14 @@ class _MessageComposerState extends State<MessageComposer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.slashCommands case final commands?)
+            ListenableBuilder(
+              listenable: commands,
+              builder: (_, _) => SlashCommandList(
+                controller: commands,
+                onPicked: _clearComposer,
+              ),
+            ),
           if (widget.replyTo != null) _replyBar(context),
           if (_attachments.isNotEmpty) ...[
             PendingAttachmentStrip(
@@ -279,6 +300,9 @@ class _MessageComposerState extends State<MessageComposer>
                   onChanged: (value) {
                     final hasContent = value.trim().isNotEmpty;
                     if (hasContent) widget.onTyping();
+                    // A message that begins with a slash is a command being
+                    // chosen, not typed prose, so the list follows the text.
+                    widget.slashCommands?.syncComposer(value);
                     if (hasContent != _hasContent) {
                       setState(() => _hasContent = hasContent);
                     }

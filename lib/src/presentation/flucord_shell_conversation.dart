@@ -149,6 +149,7 @@ extension _FlucordShellConversation on FlucordShell {
     stageController: stageController,
     soundboardController: soundboardController,
     gifPickerController: gifPickerController,
+    slashCommandController: slashCommandController,
     voiceMessageRecorder: voiceMessageRecorder,
     onSendVoiceMessage: (voiceMessage) => chatController.sendVoiceMessage(
       channelId: channel.id,

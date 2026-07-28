@@ -17,6 +17,10 @@ final class _EventRepository implements ChatRepository {
   @override
   GifRepository? get gifs => _delegate.gifs;
 
+  @override
+  ApplicationCommandRepository? get applicationCommands =>
+      _delegate.applicationCommands;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );

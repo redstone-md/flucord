@@ -6,6 +6,7 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_application_command_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
@@ -21,6 +22,7 @@ final class DiscordDesktopApiClient
         DiscordStageTransport,
         DiscordSoundboardTransport,
         DiscordGifTransport,
+        DiscordApplicationCommandTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -134,6 +136,28 @@ final class DiscordDesktopApiClient
         'request_to_speak_timestamp': ?requestToSpeakTimestamp,
     },
   );
+
+  /// The channel's command index. `include_applications` is what brings the
+  /// bot's name and avatar back with each command, so the list can show who
+  /// owns one without a second lookup.
+  @override
+  Future<Map<String, Object?>> searchApplicationCommands(
+    String channelId, {
+    required String query,
+  }) => _rest.requestObject(
+    'GET',
+    '/channels/$channelId/application-commands/search',
+    query: {
+      'type': '1',
+      'query': query,
+      'limit': '25',
+      'include_applications': 'true',
+    },
+  );
+
+  @override
+  Future<void> postInteraction(Map<String, Object?> body) =>
+      _rest.requestEmpty('POST', '/interactions', body: body);
 
   /// Discord's own provider proxy. The client never talks to Tenor or Giphy
   /// directly, and neither does this.

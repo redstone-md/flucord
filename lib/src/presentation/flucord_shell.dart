@@ -19,6 +19,7 @@ import '../application/quick_switcher_catalog.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/gif_picker_controller.dart';
+import '../application/slash_command_controller.dart';
 import '../application/soundboard_controller.dart';
 import '../application/stage_controller.dart';
 import '../application/thread_membership_controller.dart';
@@ -82,6 +83,7 @@ class FlucordShell extends StatelessWidget {
     required this.stageController,
     required this.soundboardController,
     required this.gifPickerController,
+    required this.slashCommandController,
     required this.voiceMessageRecorder,
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
@@ -102,6 +104,7 @@ class FlucordShell extends StatelessWidget {
   final StageController stageController;
   final SoundboardController soundboardController;
   final GifPickerController gifPickerController;
+  final SlashCommandController slashCommandController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;

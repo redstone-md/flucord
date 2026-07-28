@@ -180,6 +180,9 @@ final class DiscordDesktopGatewayClient
     }
   }
 
+  /// The gateway session, or `null` before READY.
+  String? get sessionId => _protocol.sessionId;
+
   void _acceptPayload(Map<String, Object?> payload) {
     if (_bootstrapCompleter?.isCompleted == false) {
       developer.log(

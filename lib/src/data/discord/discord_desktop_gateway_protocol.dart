@@ -125,6 +125,13 @@ final class DiscordDesktopGatewayProtocol {
   Uri? get resumeGatewayUri => _resumeGatewayUri;
   bool get canResume => _sessionId != null && _sequence != null;
 
+  /// The session READY named, or `null` before one exists.
+  ///
+  /// An interaction has to carry it: the session is how Discord routes the
+  /// application's response back to this client rather than another one signed
+  /// into the same account.
+  String? get sessionId => _sessionId;
+
   DiscordDesktopGatewayFrame identify({bool fastConnect = false}) {
     _sequence = 0;
     _sessionId = null;

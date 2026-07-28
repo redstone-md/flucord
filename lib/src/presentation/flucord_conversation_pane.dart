@@ -84,6 +84,7 @@ class _ConversationPane extends StatefulWidget {
     required this.stageController,
     required this.soundboardController,
     required this.gifPickerController,
+    required this.slashCommandController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -159,6 +160,7 @@ class _ConversationPane extends StatefulWidget {
   final StageController stageController;
   final SoundboardController soundboardController;
   final GifPickerController gifPickerController;
+  final SlashCommandController slashCommandController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -206,6 +208,10 @@ class _ConversationPaneState extends State<_ConversationPane> {
       // A soundboard belongs to a server, and only a voice channel can play
       // one, so anything else clears the picker rather than offering sounds
       // with nowhere to send them.
+      widget.slashCommandController.show(
+        channelId: widget.channel.id,
+        guildId: widget.channel.spaceId.isEmpty ? null : widget.channel.spaceId,
+      );
       widget.soundboardController.show(
         widget.channel.kind == ChannelKind.voice
             ? widget.channel.spaceId
@@ -348,6 +354,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         else if (showsMessages)
           MessageComposer(
             gifPicker: widget.gifPickerController,
+            slashCommands: widget.slashCommandController,
             canAttachFiles: widget.capabilities.attachFiles,
             channelId: widget.channel.id,
             channelName: widget.channel.name,

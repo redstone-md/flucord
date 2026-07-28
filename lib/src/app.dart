@@ -19,6 +19,7 @@ import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
 import 'application/gif_picker_controller.dart';
+import 'application/slash_command_controller.dart';
 import 'application/soundboard_controller.dart';
 import 'application/soundboard_playback_controller.dart';
 import 'application/stage_controller.dart';
@@ -181,6 +182,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final SoundboardController _soundboardController;
   late final GifPickerController _gifPickerController;
   late final SoundboardPlaybackController _soundboardPlaybackController;
+  late final SlashCommandController _slashCommandController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -274,6 +276,9 @@ class _FlucordAppState extends State<FlucordApp> {
       () => _chatController.soundboard,
     );
     _gifPickerController = GifPickerController(() => _chatController.gifs);
+    _slashCommandController = SlashCommandController(
+      () => _chatController.applicationCommands,
+    );
     // Discord does not mix a soundboard sound into the voice stream: every
     // client in the channel is told which sound played and fetches it itself.
     _soundboardPlaybackController = SoundboardPlaybackController(
@@ -361,6 +366,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _stageController.dispose();
     _soundboardController.dispose();
     _gifPickerController.dispose();
+    _slashCommandController.dispose();
     _soundboardPlaybackController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
@@ -473,6 +479,7 @@ class _FlucordAppState extends State<FlucordApp> {
                                 stageController: _stageController,
                                 soundboardController: _soundboardController,
                                 gifPickerController: _gifPickerController,
+                                slashCommandController: _slashCommandController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,
