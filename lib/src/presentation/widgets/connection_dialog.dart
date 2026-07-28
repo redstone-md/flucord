@@ -4,7 +4,9 @@ import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'developer_bot_transport_section.dart';
+import 'discord_account_connection_scope.dart';
 import 'discord_desktop_login_section.dart';
+import 'oauth_connection_section.dart';
 
 class ConnectionDialog extends StatelessWidget {
   const ConnectionDialog({
@@ -45,6 +47,18 @@ class ConnectionDialog extends StatelessWidget {
                           controller: desktopLoginController,
                           connectionController: controller,
                         ),
+                        // The OAuth identity and the Social SDK grant, which
+                        // are separate credentials from the desktop session
+                        // above and belong on the same screen as it.
+                        if (DiscordAccountConnectionScope.maybeOf(context)
+                            case final account?) ...[
+                          Divider(height: 1, color: context.surfaces.border),
+                          ListenableBuilder(
+                            listenable: account,
+                            builder: (_, _) =>
+                                OAuthConnectionSection(controller: account),
+                          ),
+                        ],
                         if (controller.botTransportEnabled) ...[
                           Divider(height: 1, color: context.surfaces.border),
                           DeveloperBotTransportSection(
