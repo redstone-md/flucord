@@ -1,3 +1,4 @@
+import '../../domain/automod_rule.dart';
 import 'package:flutter/material.dart';
 import '../../application/slash_command_controller.dart';
 import '../../application/message_component_controller.dart';
@@ -32,6 +33,7 @@ class MessageList extends StatefulWidget {
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    this.onResolveAlert,
     required this.onEndPoll,
     required this.onForward,
     required this.onToggleSuppressEmbeds,
@@ -66,6 +68,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+  final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
@@ -417,6 +420,7 @@ class _MessageListState extends State<MessageList> {
                           onAddReaction: widget.onAddReaction,
                           onCreateThread: widget.onCreateThread,
                           onTogglePin: widget.onTogglePin,
+                          onResolveAlert: widget.onResolveAlert,
                           onEndPoll: widget.onEndPoll,
                           onForward: widget.onForward,
                           onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,

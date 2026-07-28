@@ -132,6 +132,30 @@ final class _EventRepository implements ChatRepository {
     required String messageId,
   }) => _delegate.deleteMessage(channelId: channelId, messageId: messageId);
 
+  /// What the controller asked for, so a test can check it asked at all.
+  ({
+    String guildId,
+    String channelId,
+    String messageId,
+    AutoModAlertAction action,
+  })?
+  resolvedAlert;
+
+  @override
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) async {
+    resolvedAlert = (
+      guildId: guildId,
+      channelId: channelId,
+      messageId: messageId,
+      action: action,
+    );
+  }
+
   @override
   Future<void> addReaction({
     required String channelId,

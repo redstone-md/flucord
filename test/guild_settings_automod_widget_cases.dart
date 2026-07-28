@@ -201,12 +201,18 @@ void _automodDialogCases() {
       '5',
     );
     await tester.pumpAndSettle();
+
+    // Raid protection is a second thing a mention rule can catch: many
+    // members each staying under the limit, which the limit cannot see.
+    await tester.tap(find.byKey(const ValueKey('automod-raid-protection')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('automod-save')));
     await tester.pumpAndSettle();
 
     final created = harness.controller.automodRules.last;
     expect(created.triggerType, AutoModTriggerType.mentionSpam);
     expect(created.metadata.mentionTotalLimit, 5);
+    expect(created.metadata.mentionRaidProtectionEnabled, isTrue);
     // A mention rule carries no words even though the fields once held some.
     expect(created.metadata.keywordFilter, isEmpty);
 

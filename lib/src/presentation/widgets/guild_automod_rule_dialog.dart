@@ -70,6 +70,8 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
   late bool _blockMessage = widget.rule?.blocksMessages ?? true;
   late String _alertChannelId = widget.rule?.alertChannelId ?? '';
   late Duration _timeout = widget.rule?.timeout ?? Duration.zero;
+  late bool _raidProtection =
+      widget.rule?.metadata.mentionRaidProtectionEnabled ?? false;
   late List<AutoModKeywordPreset> _presets = [
     for (final preset in widget.rule?.metadata.presets ?? const [])
       if (preset != AutoModKeywordPreset.unknown) preset,
@@ -209,6 +211,18 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
                   labelText: 'Mentions allowed in one message',
                 ),
               ),
+              SwitchListTile(
+                key: const ValueKey('automod-raid-protection'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Also catch mention raids'),
+                // Separate from the per-message limit: a raid is many members
+                // each staying under it, which the limit alone cannot see.
+                subtitle: const Text(
+                  'Detects many members mentioning at once, not one message.',
+                ),
+                value: _raidProtection,
+                onChanged: (value) => setState(() => _raidProtection = value),
+              ),
             ],
             const SizedBox(height: 16),
             SwitchListTile(
@@ -318,6 +332,8 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
       mentionTotalLimit: _trigger == AutoModTriggerType.mentionSpam
           ? int.tryParse(_mentionLimit.text.trim()) ?? 0
           : 0,
+      mentionRaidProtectionEnabled:
+          _trigger == AutoModTriggerType.mentionSpam && _raidProtection,
     ),
     actions: _actions(),
     exemptRoleIds: _exemptRoleIds,

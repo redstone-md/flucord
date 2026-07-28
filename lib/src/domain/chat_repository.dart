@@ -1,3 +1,4 @@
+import 'automod_rule.dart';
 import 'chat_models.dart';
 import 'guild_management_repository.dart';
 import 'message_search_repository.dart';
@@ -343,6 +344,20 @@ abstract interface class ChatRepository {
   Future<void> deleteMessage({
     required String channelId,
     required String messageId,
+  });
+
+  /// Acts on one message AutoMod flagged, from the alert about it.
+  ///
+  /// [channelId] is the alert channel and [messageId] the alert; Discord
+  /// resolves which message tripped the rule from the alert itself, which is
+  /// why deleting the offending message needs no id of its own. The guild is
+  /// stated rather than derived: the route is a guild route, and a repository
+  /// that looked the channel up would need a workspace it does not hold.
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
   });
 
   Future<void> addReaction({

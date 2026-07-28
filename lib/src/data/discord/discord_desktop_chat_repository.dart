@@ -1,3 +1,4 @@
+import '../../domain/automod_rule.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -444,6 +445,19 @@ final class DiscordDesktopChatRepository
     await _api.deleteMessage(channelId: channelId, messageId: messageId);
     await _cache.deleteMessage(messageId);
   }
+
+  @override
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) => _api.resolveAutoModAlert(
+    guildId: guildId,
+    channelId: channelId,
+    messageId: messageId,
+    actionType: action.code,
+  );
 
   @override
   Future<void> addReaction({

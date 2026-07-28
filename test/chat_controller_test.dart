@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/automod_rule.dart';
 import 'dart:async';
 import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
@@ -118,6 +119,51 @@ void main() {
         controller.workspace!.messagesFor('forge-general').last.isPinned,
         isFalse,
       );
+    });
+
+    test('an alert is resolved against the guild it sits in', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      await controller.openChannel('forge-general');
+      final message = controller.workspace!.messages.first;
+
+      await controller.resolveAutoModAlert(
+        message,
+        AutoModAlertAction.deleteUserMessage,
+      );
+
+      final resolved = repository.resolvedAlert!;
+      // The guild is looked up here rather than asked of the surface: the
+      // route is a guild route and the caller only has the message.
+      expect(resolved.guildId, isNotEmpty);
+      expect(resolved.channelId, message.channelId);
+      expect(resolved.messageId, message.id);
+      expect(resolved.action, AutoModAlertAction.deleteUserMessage);
+      expect(controller.error, isNull);
+    });
+
+    test('an alert in no known channel asks nothing', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await controller.resolveAutoModAlert(
+        ChatMessage(
+          id: 'alert-1',
+          channelId: 'channel-nobody-has',
+          authorId: 'automod',
+          body: 'Blocked',
+          sentAt: DateTime.now(),
+          type: DiscordMessageType.autoModerationAction,
+        ),
+        AutoModAlertAction.setCompleted,
+      );
+
+      expect(repository.resolvedAlert, isNull);
+      expect(controller.error, isNull);
     });
 
     test('tracks live unread, mentions, presence, and typing', () async {

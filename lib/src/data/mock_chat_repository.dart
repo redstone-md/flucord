@@ -1,3 +1,4 @@
+import '../domain/automod_rule.dart';
 import 'dart:async';
 import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
@@ -281,6 +282,14 @@ final class MockChatRepository
       MessageDeletedEvent(messageId: messageId, channelId: channelId),
     );
   }
+
+  @override
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) async {}
 
   @override
   Future<void> addReaction({

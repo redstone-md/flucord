@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/automod_rule.dart';
 import 'dart:async';
 import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
@@ -271,6 +272,14 @@ final class _SearchableRepository implements ChatRepository {
     required String channelId,
     required String messageId,
   }) => _delegate.deleteMessage(channelId: channelId, messageId: messageId);
+
+  @override
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) async {}
 
   @override
   Future<void> addReaction({

@@ -1,3 +1,4 @@
+import '../domain/automod_rule.dart';
 import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
@@ -130,6 +131,14 @@ final class DisconnectedChatRepository implements ChatRepository {
     required String channelId,
     required String messageId,
   }) => _reject();
+
+  @override
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) async {}
 
   @override
   Future<void> addReaction({

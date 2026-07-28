@@ -354,6 +354,23 @@ final class DiscordDesktopApiClient
   }) =>
       _rest.requestEmpty('DELETE', '/channels/$channelId/messages/$messageId');
 
+  /// Acts on one AutoMod alert. Discord reads which message tripped the rule
+  /// from the alert, so the body names the alert rather than the offence.
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required int actionType,
+  }) => _rest.requestEmpty(
+    'POST',
+    '/guilds/$guildId/auto-moderation/alert-action',
+    body: {
+      'message_id': messageId,
+      'channel_id': channelId,
+      'alert_action_type': actionType,
+    },
+  );
+
   Future<void> addReaction({
     required String channelId,
     required String messageId,

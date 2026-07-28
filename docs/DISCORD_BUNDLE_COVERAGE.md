@@ -581,7 +581,8 @@ are excluded from the denominator and are never reported as implemented.
   `GET`/`POST`/`PATCH`/`DELETE /guilds/{id}/auto-moderation/rules`,
   `POST /guilds/{id}/auto-moderation/rules/validate`,
   `POST /guilds/{id}/auto-moderation/clear-mention-raid`,
-  `POST /guilds/{id}/auto-moderation/false-alarm`.
+  `POST /guilds/{id}/auto-moderation/false-alarm`,
+  `POST /guilds/{id}/auto-moderation/alert-action`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: the ban list, ban search, banning and unbanning, kicking a
@@ -597,18 +598,24 @@ are excluded from the denominator and are never reported as implemented.
   word lists are picked as checkboxes, since their contents are server-side and
   never reach a client, and a rule of any kind can be told which roles and
   channels to skip. Exemptions are compared as sets, so reopening a rule and
-  saving it untouched sends nothing. The two raid controls — clear the alert,
-  report a false alarm — sit on the same page.
+  saving it untouched sends nothing. Mention rules carry raid protection as a
+  switch of its own, since a raid is many members each staying under the
+  per-message limit. The two raid controls — clear the alert, report a false
+  alarm — sit on the same page. On the alert AutoMod posts, a moderator can
+  mark it handled, reopen it, delete the message that tripped the rule, or
+  report the rule as wrong; the controls appear only on a type-24 message and
+  only with Manage Messages, which is the check Discord makes.
 - **Tests**: `guild_management_repository_bans_cases.dart`,
   `guild_management_repository_automod_cases.dart`,
   `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`,
   `automod_rule_test.dart`, `automod_description_test.dart`,
-  `automod_section_widget_test.dart`, `automod_fields_widget_test.dart`.
+  `automod_section_widget_test.dart`, `automod_fields_widget_test.dart`,
+  `automod_alert_action_test.dart`, `automod_alert_widget_test.dart`.
 - **Live evidence**: none.
 - **Blocked by**: the reporting and safety-hub flows are untouched. Reporting
-  endpoints will only ever be called from an explicit user action. On AutoMod,
-  mention-raid protection is read and sent but has no control of its own, and
-  the alert-action route that resolves one flagged message is unused.
+  endpoints will only ever be called from an explicit user action. AutoMod
+  itself has no route left unused: the incident-actions and report-raid routes
+  belong to the raid-alert domain rather than to AutoMod rules.
 
 ## FBC-AI — Conversation summaries and text tools
 

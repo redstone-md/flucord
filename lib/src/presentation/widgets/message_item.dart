@@ -1,3 +1,4 @@
+import '../../domain/automod_rule.dart';
 import 'dart:async';
 import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
@@ -45,6 +46,7 @@ class MessageItem extends StatefulWidget {
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    this.onResolveAlert,
     required this.onEndPoll,
     required this.onForward,
     required this.onToggleSuppressEmbeds,
@@ -80,6 +82,9 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+
+  /// Acts on an AutoMod alert, or null where the transport cannot.
+  final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
@@ -400,6 +405,9 @@ class _MessageItemState extends State<MessageItem> {
       _editFocus.requestFocus();
     },
     onTogglePin: () => widget.onTogglePin(widget.message),
+    onResolveAlert: widget.onResolveAlert == null
+        ? null
+        : (action) => unawaited(widget.onResolveAlert!(widget.message, action)),
     onDelete: _confirmDelete,
   );
 

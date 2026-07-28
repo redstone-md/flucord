@@ -78,6 +78,13 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
     await _api.deleteMessage(channelId: channelId, messageId: messageId);
     await _cache.deleteMessage(messageId);
   }
+
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required AutoModAlertAction action,
+  }) async {}
 }
 
 extension _DiscordChatRepositoryMessages on DiscordChatRepository {

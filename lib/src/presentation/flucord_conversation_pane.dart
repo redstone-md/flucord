@@ -75,6 +75,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    this.onResolveAlert,
     required this.onEndPoll,
     required this.onForward,
     required this.onToggleSuppressEmbeds,
@@ -154,6 +155,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+  final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
@@ -479,6 +481,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
       onAddReaction: widget.onAddReaction,
       onCreateThread: widget.onCreateThread,
       onTogglePin: widget.onTogglePin,
+      onResolveAlert: widget.onResolveAlert,
       onEndPoll: widget.onEndPoll,
       onForward: widget.onForward,
       onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/automod_rule.dart';
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
@@ -27,6 +28,7 @@ class MessageActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onTogglePin,
     required this.onDelete,
+    this.onResolveAlert,
     this.apps,
     super.key,
   });
@@ -45,6 +47,10 @@ class MessageActionBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
+
+  /// Acts on an AutoMod alert. Null on a transport that cannot, in which case
+  /// the alert controls are not offered at all.
+  final ValueChanged<AutoModAlertAction>? onResolveAlert;
 
   /// The Apps entry, or null where context-menu commands cannot run.
   final Widget? apps;
@@ -112,6 +118,42 @@ class MessageActionBar extends StatelessWidget {
               tooltip: 'Edit',
               onPressed: onEdit,
             ),
+          // Only on the alert AutoMod posted, and only for somebody who may
+          // moderate the alert channel — which is the same check Discord makes
+          // before offering these at all.
+          if (message.type == DiscordMessageType.autoModerationAction &&
+              capabilities.manageMessages &&
+              onResolveAlert != null) ...[
+            _ActionButton(
+              buttonKey: ValueKey('automod-alert-complete-${message.id}'),
+              icon: Icons.task_alt,
+              tooltip: 'Mark handled',
+              onPressed: () => onResolveAlert!(AutoModAlertAction.setCompleted),
+            ),
+            _ActionButton(
+              buttonKey: ValueKey('automod-alert-reopen-${message.id}'),
+              icon: Icons.restart_alt,
+              tooltip: 'Reopen',
+              onPressed: () =>
+                  onResolveAlert!(AutoModAlertAction.unsetCompleted),
+            ),
+            _ActionButton(
+              buttonKey: ValueKey('automod-alert-delete-${message.id}'),
+              icon: Icons.delete_sweep_outlined,
+              // Deletes what tripped the rule, not the alert. Spelled out
+              // because the delete button beside it does the opposite.
+              tooltip: 'Delete the flagged message',
+              onPressed: () =>
+                  onResolveAlert!(AutoModAlertAction.deleteUserMessage),
+            ),
+            _ActionButton(
+              buttonKey: ValueKey('automod-alert-feedback-${message.id}'),
+              icon: Icons.thumb_down_alt_outlined,
+              tooltip: 'Report as wrong',
+              onPressed: () =>
+                  onResolveAlert!(AutoModAlertAction.submitFeedback),
+            ),
+          ],
           if (capabilities.pinMessages)
             _ActionButton(
               icon: message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,

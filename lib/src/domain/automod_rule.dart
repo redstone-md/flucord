@@ -254,3 +254,26 @@ final class AutoModRule {
         .durationSeconds,
   );
 }
+
+/// What a moderator does with one message AutoMod flagged.
+///
+/// These live on the alert Discord posts to the rule's alert channel, not on
+/// the rule, which is why they are an action rather than a setting. Discord
+/// checks Manage Messages on the alert channel before offering any of them.
+enum AutoModAlertAction {
+  /// Mark the alert handled. The alert stays, struck through.
+  setCompleted(1),
+
+  /// Take that mark back.
+  unsetCompleted(2),
+
+  /// Delete the message that tripped the rule, not the alert about it.
+  deleteUserMessage(3),
+
+  /// Tell Discord the rule was wrong about this one.
+  submitFeedback(4);
+
+  const AutoModAlertAction(this.code);
+
+  final int code;
+}

@@ -1,3 +1,4 @@
+import '../domain/automod_rule.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -432,6 +433,39 @@ final class ChatController extends ChangeNotifier {
       _error = error;
     }
     notifyListeners();
+  }
+
+  /// Acts on an AutoMod alert from the alert itself.
+  ///
+  /// The guild comes from the channel the alert sits in rather than from the
+  /// caller: an alert is always in a guild channel, and asking the surface to
+  /// supply an id it would have to look up here anyway is how the two end up
+  /// disagreeing.
+  Future<void> resolveAutoModAlert(
+    ChatMessage message,
+    AutoModAlertAction action,
+  ) async {
+    final guildId = _channelById(message.channelId)?.spaceId;
+    if (guildId == null || guildId.isEmpty) return;
+    try {
+      await _repository.resolveAutoModAlert(
+        guildId: guildId,
+        channelId: message.channelId,
+        messageId: message.id,
+        action: action,
+      );
+    } catch (error) {
+      _error = error;
+    }
+    notifyListeners();
+  }
+
+  ConversationChannel? _channelById(String channelId) {
+    for (final channel
+        in _workspace?.channels ?? const <ConversationChannel>[]) {
+      if (channel.id == channelId) return channel;
+    }
+    return null;
   }
 
   Future<void> toggleReaction(ChatMessage message, MessageReaction reaction) =>
