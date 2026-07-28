@@ -30,6 +30,10 @@ extension ChatControllerUserSettings on ChatController {
   ApplicationCommandRepository? get applicationCommands =>
       _repository.applicationCommands;
 
+  /// The component plane of the connected transport, or `null`.
+  MessageComponentRepository? get messageComponents =>
+      _repository.messageComponents;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

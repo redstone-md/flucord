@@ -261,6 +261,7 @@ final class ChatMessage {
     List<MessageReaction> reactions = const [],
     List<MessageSticker> stickers = const [],
     List<MessageSnapshot> snapshots = const [],
+    List<MessageActionRow> componentRows = const [],
     this.poll,
     this.reply,
     this.reference,
@@ -274,7 +275,8 @@ final class ChatMessage {
        embeds = List.unmodifiable(embeds),
        reactions = List.unmodifiable(reactions),
        stickers = List.unmodifiable(stickers),
-       snapshots = List.unmodifiable(snapshots);
+       snapshots = List.unmodifiable(snapshots),
+       componentRows = List.unmodifiable(componentRows);
 
   final String id;
   final String channelId;
@@ -285,6 +287,10 @@ final class ChatMessage {
   final List<MessageEmbed> embeds;
   final List<MessageSticker> stickers;
   final List<MessageSnapshot> snapshots;
+
+  /// The interactive rows an application hung off this message.
+  final List<MessageActionRow> componentRows;
+
   final MessagePoll? poll;
   final MessageReply? reply;
   final MessageReference? reference;
@@ -323,6 +329,7 @@ final class ChatMessage {
     String? body,
     List<MessageAttachment>? attachments,
     List<MessageEmbed>? embeds,
+    List<MessageActionRow>? componentRows,
     List<MessageReaction>? reactions,
     List<MessageSticker>? stickers,
     List<MessageSnapshot>? snapshots,
@@ -342,6 +349,7 @@ final class ChatMessage {
     sentAt: sentAt,
     attachments: attachments ?? this.attachments,
     embeds: embeds ?? this.embeds,
+    componentRows: componentRows ?? this.componentRows,
     stickers: stickers ?? this.stickers,
     snapshots: snapshots ?? this.snapshots,
     poll: poll ?? this.poll,

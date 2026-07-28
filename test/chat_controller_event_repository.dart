@@ -21,6 +21,10 @@ final class _EventRepository implements ChatRepository {
   ApplicationCommandRepository? get applicationCommands =>
       _delegate.applicationCommands;
 
+  @override
+  MessageComponentRepository? get messageComponents =>
+      _delegate.messageComponents;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );

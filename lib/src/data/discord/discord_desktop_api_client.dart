@@ -8,6 +8,7 @@ import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
 import 'discord_application_command_service.dart';
 import 'discord_gif_service.dart';
+import 'discord_message_component_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
@@ -23,6 +24,7 @@ final class DiscordDesktopApiClient
         DiscordSoundboardTransport,
         DiscordGifTransport,
         DiscordApplicationCommandTransport,
+        DiscordComponentTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({

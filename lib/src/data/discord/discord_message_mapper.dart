@@ -54,7 +54,14 @@ extension DiscordMessageMapper on DiscordMapper {
     final flags = payload.containsKey('flags')
         ? payload['flags'] as int? ?? 0
         : fallback?.flags ?? 0;
+    // An edit that does not mention components leaves the ones already shown
+    // in place; a payload that names them replaces the set, empty included,
+    // because that is how an application takes its buttons away.
+    final componentRows = payload.containsKey('components')
+        ? DiscordMessageComponentMapper.readRows(payload['components'])
+        : fallback?.componentRows ?? const <MessageActionRow>[];
     return ChatMessage(
+      componentRows: componentRows,
       id: payload['id'] as String? ?? fallback!.id,
       channelId: payload['channel_id'] as String? ?? fallback!.channelId,
       authorId: payload['author'] is Map

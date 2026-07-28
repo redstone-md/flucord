@@ -44,6 +44,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // Soundboard sounds change without being asked for, and an effect
         // somebody else sent arrives on the same stream.
         _soundboard.accept(event.name, event.data);
+        // A modal is opened by the application, not asked for here.
+        _messageComponents.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {

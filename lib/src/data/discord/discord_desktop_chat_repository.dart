@@ -14,6 +14,7 @@ import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/application_command.dart';
+import '../../domain/message_component.dart';
 import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
@@ -35,6 +36,7 @@ import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
+import 'discord_message_component_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
@@ -62,6 +64,10 @@ final class DiscordDesktopChatRepository
        _soundboard = DiscordSoundboardService(_api),
        _gifs = DiscordGifService(_api),
        _applicationCommands = DiscordApplicationCommandService(
+         _api,
+         sessionId: () => _gateway.sessionId,
+       ),
+       _messageComponents = DiscordMessageComponentService(
          _api,
          sessionId: () => _gateway.sessionId,
        ),
@@ -114,6 +120,7 @@ final class DiscordDesktopChatRepository
   final DiscordSoundboardService _soundboard;
   final DiscordGifService _gifs;
   final DiscordApplicationCommandService _applicationCommands;
+  final DiscordMessageComponentService _messageComponents;
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
   final StreamController<ChatRepositoryEvent> _events =
@@ -153,6 +160,10 @@ final class DiscordDesktopChatRepository
 
   @override
   GifRepository? get gifs => _gifs;
+
+  @override
+  @override
+  MessageComponentRepository? get messageComponents => _messageComponents;
 
   @override
   ApplicationCommandRepository? get applicationCommands => _applicationCommands;
@@ -492,6 +503,7 @@ final class DiscordDesktopChatRepository
     await _threadMembership.close();
     await _stages.close();
     await _soundboard.close();
+    await _messageComponents.close();
     await _memberLists.close();
     await _gateway.close();
     _api.close();

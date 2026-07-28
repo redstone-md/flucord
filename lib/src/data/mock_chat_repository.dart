@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/message_component.dart';
 import '../domain/application_command.dart';
 import '../domain/gif_picker.dart';
 import '../domain/soundboard.dart';
@@ -99,6 +100,9 @@ final class MockChatRepository
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;
+
+  @override
+  MessageComponentRepository? get messageComponents => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

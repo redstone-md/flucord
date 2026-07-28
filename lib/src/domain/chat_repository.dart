@@ -7,6 +7,7 @@ import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
 import 'application_command.dart';
+import 'message_component.dart';
 import 'gif_picker.dart';
 import 'soundboard.dart';
 import 'stage_channel.dart';
@@ -226,6 +227,10 @@ abstract interface class ChatRepository {
   /// Slash commands in a channel, or null on a transport that cannot run
   /// them.
   ApplicationCommandRepository? get applicationCommands;
+
+  /// Pressing the buttons and selects an application hangs off a message, or
+  /// null where interactions cannot be sent.
+  MessageComponentRepository? get messageComponents;
 
   /// The account settings this transport can read and write, or `null`.
   ///

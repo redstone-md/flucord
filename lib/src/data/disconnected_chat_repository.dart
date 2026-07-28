@@ -1,4 +1,5 @@
 import '../domain/chat_models.dart';
+import '../domain/message_component.dart';
 import '../domain/application_command.dart';
 import '../domain/gif_picker.dart';
 import '../domain/soundboard.dart';
@@ -49,6 +50,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;
+
+  @override
+  MessageComponentRepository? get messageComponents => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

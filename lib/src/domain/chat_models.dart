@@ -1,4 +1,5 @@
 import 'discord_snowflake.dart';
+import 'message_component.dart';
 import 'guild_membership.dart';
 import 'message_embed.dart';
 import 'permission_overwrite.dart';

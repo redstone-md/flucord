@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../../domain/message_component.dart';
+import 'discord_message_component_service.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';

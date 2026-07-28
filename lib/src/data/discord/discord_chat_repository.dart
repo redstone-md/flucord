@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/message_component.dart';
 import '../../domain/application_command.dart';
 import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
@@ -320,6 +321,9 @@ final class DiscordChatRepository
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;
+
+  @override
+  MessageComponentRepository? get messageComponents => null;
 
   /// A bot token has no user account behind it, and `/users/@me/settings-proto`
   /// answers for a user. The capability is absent rather than empty.

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
@@ -160,6 +161,10 @@ final class _SearchableRepository implements ChatRepository {
   @override
   ApplicationCommandRepository? get applicationCommands =>
       _delegate.applicationCommands;
+
+  @override
+  MessageComponentRepository? get messageComponents =>
+      _delegate.messageComponents;
 
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeSearchPlane search = _FakeSearchPlane();
