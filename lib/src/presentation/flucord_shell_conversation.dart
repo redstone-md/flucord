@@ -133,6 +133,7 @@ extension _FlucordShellConversation on FlucordShell {
     },
     onTogglePin: chatController.togglePin,
     onResolveAlert: chatController.resolveAutoModAlert,
+    onReport: (message) => unawaited(_reportMessage(context, message)),
     onEndPoll: chatController.endPoll,
     onForward: (message, targetChannelId) async {
       final forwarded = await chatController.forwardMessage(

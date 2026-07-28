@@ -29,6 +29,7 @@ class MessageActionBar extends StatelessWidget {
     required this.onTogglePin,
     required this.onDelete,
     this.onResolveAlert,
+    this.onReport,
     this.apps,
     super.key,
   });
@@ -51,6 +52,9 @@ class MessageActionBar extends StatelessWidget {
   /// Acts on an AutoMod alert. Null on a transport that cannot, in which case
   /// the alert controls are not offered at all.
   final ValueChanged<AutoModAlertAction>? onResolveAlert;
+
+  /// Reports the message to Discord. Null on a transport with no report flow.
+  final VoidCallback? onReport;
 
   /// The Apps entry, or null where context-menu commands cannot run.
   final Widget? apps;
@@ -154,6 +158,15 @@ class MessageActionBar extends StatelessWidget {
                   onResolveAlert!(AutoModAlertAction.submitFeedback),
             ),
           ],
+          // Reporting somebody's own message would be reporting oneself, and
+          // Discord withholds it there for the same reason.
+          if (onReport != null && !isCurrentUser)
+            _ActionButton(
+              buttonKey: ValueKey('report-message-${message.id}'),
+              icon: Icons.flag_outlined,
+              tooltip: 'Report message',
+              onPressed: onReport!,
+            ),
           if (capabilities.pinMessages)
             _ActionButton(
               icon: message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,

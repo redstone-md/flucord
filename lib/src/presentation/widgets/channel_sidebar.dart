@@ -42,6 +42,7 @@ class ChannelSidebar extends StatelessWidget {
     this.scheduledEventsError,
     this.onOpenEvents,
     this.onOpenServerSettings,
+    this.onReportServer,
     this.seatedByChannel = const {},
     this.voiceConnectionBar,
     super.key,
@@ -87,6 +88,10 @@ class ChannelSidebar extends StatelessWidget {
   /// nothing here, or when the transport has no admin plane at all — the header
   /// then simply has no gear, which is what Discord does too.
   final VoidCallback? onOpenServerSettings;
+
+  /// Reports the server to Discord, or null on a transport with no report
+  /// flow and in the direct-messages space, which is nobody's server.
+  final VoidCallback? onReportServer;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +162,13 @@ class ChannelSidebar extends StatelessWidget {
                     onPressed: onOpenServerSettings,
                     icon: const Icon(Icons.settings_outlined, size: 18),
                     tooltip: 'Server settings',
+                  ),
+                if (!isDirect && onReportServer != null)
+                  IconButton(
+                    key: const ValueKey('report-server'),
+                    onPressed: onReportServer,
+                    icon: const Icon(Icons.flag_outlined, size: 18),
+                    tooltip: 'Report server',
                   ),
                 if (onNotificationRequest != null)
                   PopupMenuButton<NotificationMenuRequest>(

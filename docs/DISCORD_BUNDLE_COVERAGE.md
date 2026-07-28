@@ -62,7 +62,7 @@ extraction, stated rather than papered over.
 | --- | --- | --- |
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
-| Partial domains | 12 of 19 applicable | at least one vertical slice shipped, remainder open |
+| Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
 | Automated test coverage | 89.27% lines | `flutter test --coverage`, 2,168 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
@@ -576,7 +576,8 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_PRUNE_UPDATE`, `AUTO_MODERATION_MENTION_RAID_DETECTION`,
   `USER_REQUIRED_ACTION_UPDATE`.
 - **Purpose**: reporting flows, AutoMod, bans, family centre.
-- **UI surface**: the moderation and AutoMod sections of guild settings.
+- **UI surface**: the moderation and AutoMod sections of guild settings; the
+  report control on a message, a member and a server.
 - **Contract**: `POST /reporting/{type}`, `PUT /guilds/{id}/bans/{user}`,
   `GET`/`POST`/`PATCH`/`DELETE /guilds/{id}/auto-moderation/rules`,
   `POST /guilds/{id}/auto-moderation/rules/validate`,
@@ -605,17 +606,23 @@ are excluded from the denominator and are never reported as implemented.
   mark it handled, reopen it, delete the message that tripped the rule, or
   report the rule as wrong; the controls appear only on a type-24 message and
   only with Manage Messages, which is the check Discord makes.
+  Reporting walks the menu graph Discord serves per report type and submits
+  the answers back; it is raised from a message, a member or a whole server,
+  and is never sent without an explicit action. A first DM from somebody not
+  yet written to is reported under its own type, because Discord serves a
+  different menu for it.
 - **Tests**: `guild_management_repository_bans_cases.dart`,
   `guild_management_repository_automod_cases.dart`,
   `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`,
   `automod_rule_test.dart`, `automod_description_test.dart`,
   `automod_section_widget_test.dart`, `automod_fields_widget_test.dart`,
-  `automod_alert_action_test.dart`, `automod_alert_widget_test.dart`.
+  `automod_alert_action_test.dart`, `automod_alert_widget_test.dart`,
+  `report_dialog_widget_test.dart`, `report_targets_test.dart`.
 - **Live evidence**: none.
-- **Blocked by**: the reporting and safety-hub flows are untouched. Reporting
-  endpoints will only ever be called from an explicit user action. AutoMod
-  itself has no route left unused: the incident-actions and report-raid routes
-  belong to the raid-alert domain rather than to AutoMod rules.
+- **Blocked by**: the safety hub, account standing and family centre have no
+  slice. AutoMod itself has no route left unused: the incident-actions and
+  report-raid routes belong to the raid-alert domain rather than to AutoMod
+  rules.
 
 ## FBC-AI — Conversation summaries and text tools
 

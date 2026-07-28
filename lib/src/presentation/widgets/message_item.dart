@@ -47,6 +47,7 @@ class MessageItem extends StatefulWidget {
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
+    this.onReport,
     required this.onEndPoll,
     required this.onForward,
     required this.onToggleSuppressEmbeds,
@@ -85,6 +86,9 @@ class MessageItem extends StatefulWidget {
 
   /// Acts on an AutoMod alert, or null where the transport cannot.
   final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
+
+  /// Opens the report flow for a message, or null where there is none.
+  final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
@@ -408,6 +412,9 @@ class _MessageItemState extends State<MessageItem> {
     onResolveAlert: widget.onResolveAlert == null
         ? null
         : (action) => unawaited(widget.onResolveAlert!(widget.message, action)),
+    onReport: widget.onReport == null
+        ? null
+        : () => widget.onReport!(widget.message),
     onDelete: _confirmDelete,
   );
 

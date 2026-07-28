@@ -34,6 +34,7 @@ class MessageList extends StatefulWidget {
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
+    this.onReport,
     required this.onEndPoll,
     required this.onForward,
     required this.onToggleSuppressEmbeds,
@@ -69,6 +70,9 @@ class MessageList extends StatefulWidget {
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
+
+  /// Opens the report flow for a message, or null where there is none.
+  final void Function(ChatMessage)? onReport;
   final Future<bool> Function(ChatMessage) onEndPoll;
   final ForwardMessageCallback onForward;
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
@@ -421,6 +425,7 @@ class _MessageListState extends State<MessageList> {
                           onCreateThread: widget.onCreateThread,
                           onTogglePin: widget.onTogglePin,
                           onResolveAlert: widget.onResolveAlert,
+                          onReport: widget.onReport,
                           onEndPoll: widget.onEndPoll,
                           onForward: widget.onForward,
                           onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,

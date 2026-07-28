@@ -301,6 +301,8 @@ class FlucordShell extends StatelessWidget {
                                     ),
                                   )
                                 : null,
+                            onReportServer: () =>
+                                unawaited(_reportSpace(context, space)),
                             onSelectChannel: _selectChannel,
                             readState: chatController.readState,
                             onNotificationRequest: (request, target) =>
