@@ -61,4 +61,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// The account's own safety record, or `null` where there is none.
   SafetyHubRepository? get safetyHub => _repository.safetyHub;
+
+  /// The family centre, or `null` where there is none.
+  FamilyCentreRepository? get familyCentre => _repository.familyCentre;
 }

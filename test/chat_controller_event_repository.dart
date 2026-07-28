@@ -65,6 +65,9 @@ final class _EventRepository implements ChatRepository {
   SafetyHubRepository? get safetyHub => null;
 
   @override
+  FamilyCentreRepository? get familyCentre => null;
+
+  @override
   MessageSearchRepository? get messageSearch => null;
 
   @override

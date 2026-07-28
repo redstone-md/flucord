@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/account_standing_controller.dart';
+import '../../application/family_centre_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
@@ -11,6 +12,7 @@ import '../../theme/flucord_theme.dart';
 import 'user_profile_controls.dart';
 import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
+import 'user_settings_family_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 
@@ -22,6 +24,7 @@ enum UserSettingsCategory {
   notifications('Notifications', Icons.notifications_none),
   privacy('Privacy', Icons.shield_outlined),
   standing('Account Standing', Icons.gavel_outlined),
+  family('Family Center', Icons.family_restroom_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -37,6 +40,7 @@ class UserSettingsDialog extends StatefulWidget {
     required this.controller,
     this.profileController,
     this.standingController,
+    this.familyController,
     super.key,
   });
 
@@ -54,11 +58,15 @@ class UserSettingsDialog extends StatefulWidget {
   /// none. Like the profile, it is not gated on the settings store.
   final AccountStandingController? standingController;
 
+  /// Answers for the family centre, or null on a transport with none.
+  final FamilyCentreController? familyController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
     UserProfileController? profileController,
     AccountStandingController? standingController,
+    FamilyCentreController? familyController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -66,6 +74,7 @@ class UserSettingsDialog extends StatefulWidget {
       controller: controller,
       profileController: profileController,
       standingController: standingController,
+      familyController: familyController,
     ),
   );
 
@@ -104,6 +113,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               controller: widget.controller,
               profileController: widget.profileController,
               standingController: widget.standingController,
+              familyController: widget.familyController,
               category: _category,
             );
             return wide
@@ -255,12 +265,14 @@ class _Body extends StatelessWidget {
     required this.controller,
     required this.profileController,
     required this.standingController,
+    required this.familyController,
     required this.category,
   });
 
   final UserSettingsController controller;
   final UserProfileController? profileController;
   final AccountStandingController? standingController;
+  final FamilyCentreController? familyController;
   final UserSettingsCategory category;
 
   @override
@@ -345,6 +357,20 @@ class _Body extends StatelessWidget {
       }
       return AccountStandingSection(controller: standing);
     }
+    // The family centre is its own route as well, for the same reason.
+    if (category == UserSettingsCategory.family) {
+      final family = familyController;
+      if (family == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-family-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to see its family centre. The demo '
+              'and bot transports have none.',
+        );
+      }
+      return FamilyCentreSection(controller: family);
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -405,6 +431,7 @@ class _Body extends StatelessWidget {
     ),
     // Handled before the settings store is consulted.
     UserSettingsCategory.standing => const SizedBox.shrink(),
+    UserSettingsCategory.family => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

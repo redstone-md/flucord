@@ -1,3 +1,4 @@
+import '../../domain/family_centre.dart';
 import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
@@ -360,6 +361,9 @@ final class DiscordChatRepository
 
   @override
   SafetyHubRepository? get safetyHub => null;
+
+  @override
+  FamilyCentreRepository? get familyCentre => null;
 
   /// The search routes are scoped to a signed-in user's own session; a
   /// bot token is rejected by them, so this transport has no search plane

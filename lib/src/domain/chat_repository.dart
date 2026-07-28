@@ -1,6 +1,7 @@
 import 'automod_rule.dart';
 import 'account_standing.dart';
 import 'chat_models.dart';
+import 'family_centre.dart';
 import 'guild_management_repository.dart';
 import 'message_search_repository.dart';
 import 'moderation_repository.dart';
@@ -282,6 +283,9 @@ abstract interface class ChatRepository {
 
   /// The account's own safety record, or `null` on a transport that has none.
   SafetyHubRepository? get safetyHub;
+
+  /// The family centre, or `null` on a transport that has none.
+  FamilyCentreRepository? get familyCentre;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///
