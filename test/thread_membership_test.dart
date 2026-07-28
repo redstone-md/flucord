@@ -225,6 +225,64 @@ void main() {
       expect(service.membershipFor('thread-1')?.isSelfJoined, isTrue);
     });
 
+    test('THREAD_MEMBER_LIST_UPDATE replaces the roster', () {
+      final service = DiscordThreadMembershipService(_FakeTransport())
+        ..setCurrentUserId('me');
+      addTearDown(service.close);
+      service.accept('THREAD_MEMBERS_UPDATE', {
+        'id': 'thread-1',
+        'added_members': [
+          {'user_id': 'me'},
+          {'user_id': 'left-since'},
+        ],
+      });
+
+      // This dispatch names the thread on thread_id, not id.
+      final membership = service.accept('THREAD_MEMBER_LIST_UPDATE', {
+        'guild_id': 'guild-1',
+        'thread_id': 'thread-1',
+        'members': [
+          {'user_id': 'me'},
+          {'user_id': 'other'},
+        ],
+      });
+
+      expect(membership?.members.map((member) => member.userId), [
+        'me',
+        'other',
+      ]);
+      expect(membership?.memberCount, 2);
+      expect(membership?.isSelfJoined, isTrue);
+
+      // A roster this account is not in means it is not in the thread.
+      final without = service.accept('THREAD_MEMBER_LIST_UPDATE', {
+        'thread_id': 'thread-1',
+        'members': [
+          {'user_id': 'other'},
+        ],
+      });
+      expect(without?.isSelfJoined, isFalse);
+    });
+
+    test('a member list before the account is known leaves self alone', () {
+      final service = DiscordThreadMembershipService(_FakeTransport());
+      addTearDown(service.close);
+      service.accept('THREAD_MEMBER_UPDATE', {
+        'id': 'thread-1',
+        'user_id': 'someone',
+      });
+
+      final membership = service.accept('THREAD_MEMBER_LIST_UPDATE', {
+        'thread_id': 'thread-1',
+        'members': const <Object?>[],
+      });
+
+      expect(membership?.isSelfJoined, isTrue);
+      expect(membership?.members, isEmpty);
+      // And a list with no thread to attach to says nothing.
+      expect(service.accept('THREAD_MEMBER_LIST_UPDATE', const {}), isNull);
+    });
+
     test('a thread created here already has its creator in it', () {
       final service = DiscordThreadMembershipService(_FakeTransport())
         ..setCurrentUserId('me');

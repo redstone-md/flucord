@@ -86,6 +86,7 @@ final class DiscordThreadMembershipService
       switch (eventName) {
         'THREAD_MEMBER_UPDATE' => _acceptSelfUpdate(data),
         'THREAD_MEMBERS_UPDATE' => _acceptMembersUpdate(data),
+        'THREAD_MEMBER_LIST_UPDATE' => _acceptMemberList(data),
         'THREAD_CREATE' => _acceptThreadCreate(data),
         'THREAD_DELETE' => _forget(data['id']),
         _ => null,
@@ -148,6 +149,35 @@ final class DiscordThreadMembershipService
         memberCount: data['member_count'] is int
             ? data['member_count']! as int
             : previous.memberCount,
+      ),
+    );
+  }
+
+  /// The lazily-loaded roster of a thread, keyed by `thread_id` rather than
+  /// `id` — it is the one thread dispatch that names the thread on a different
+  /// field, because the event is about the list and not about the thread.
+  ///
+  /// A whole snapshot, so it replaces: somebody missing from it has left, and
+  /// merging would keep them listed forever.
+  ThreadMembership? _acceptMemberList(Map<String, Object?> data) {
+    final threadId = data['thread_id'];
+    if (threadId is! String || threadId.isEmpty) return null;
+    final members = [
+      for (final raw in _objects(data['members']))
+        ?readMember(raw, fallbackThreadId: threadId),
+    ];
+    final previous = _byThread[threadId] ?? ThreadMembership.empty(threadId);
+    final self = _currentUserId;
+    return _publish(
+      previous.copyWith(
+        members: members,
+        // The roster is authoritative about who is in the thread, so it is
+        // also the answer about this account — but only once the account is
+        // known, or an empty list would read as having left.
+        isSelfJoined: self == null
+            ? previous.isSelfJoined
+            : members.any((member) => member.userId == self),
+        memberCount: members.length,
       ),
     );
   }
