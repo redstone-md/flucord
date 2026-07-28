@@ -11,7 +11,7 @@ the private protocol stable or treat another client as equivalent to its own.
 ## Analyzed artifacts
 
 - Installed bootstrap `app.asar` and desktop core `core.asar`.
-- Renderer `web.b8b5ddfa0f88ae29.js`.
+- Renderer `web.3c742507ecdea9fa.js`.
 - Renderer `fast-connect.4efb760e37cfd77e.js`.
 - Sanitized renderer log lines that describe Gateway connection state only.
 

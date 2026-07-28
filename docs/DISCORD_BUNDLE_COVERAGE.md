@@ -48,10 +48,10 @@ extraction, stated rather than papered over.
 | --- | --- |
 | Installed client | `1.0.9249` |
 | Client build number | `582977` |
-| Renderer entry chunk | `web.b8b5ddfa0f88ae29.js` |
-| Renderer chunks analyzed | 4,614 |
-| Renderer corpus bytes | 157,588,028 |
-| Endpoint constants | 949 |
+| Renderer entry chunk | `web.3c742507ecdea9fa.js` |
+| Renderer chunks analyzed | 4,622 |
+| Renderer corpus bytes | 157,511,089 |
+| Endpoint constants | 957 |
 | Endpoint path segments | 165 |
 | Gateway dispatch events | 175 |
 | Native desktop modules | 17 |
@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 12 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 84.13% lines | `flutter test --coverage`, 656 passing, 6 skipped |
+| Automated test coverage | 89.27% lines | `flutter test --coverage`, 2,168 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -85,7 +85,7 @@ are excluded from the denominator and are never reported as implemented.
 
 ## FBC-GATEWAY — Gateway transport and session lifecycle
 
-- **Bundle evidence**: `web.b8b5ddfa0f88ae29.js` socket module; native
+- **Bundle evidence**: `web.3c742507ecdea9fa.js` socket module; native
   `discord_erlpack`, `discord_zstd` modules.
 - **Symbols**: `READY`, `READY_SUPPLEMENTAL`, `RESUMED`, `SESSIONS_REPLACE`,
   `STATE_UPDATE`, `DELETED_ENTITY_IDS`.
@@ -268,7 +268,7 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_MEMBERS_CHUNK` remain unimplemented.
 
 > Correction, `2026-07-26`: an earlier revision of this row named opcode 14 as
-> the member-list contract. Static analysis of `web.b8b5ddfa0f88ae29.js` finds
+> the member-list contract. Static analysis of `web.3c742507ecdea9fa.js` finds
 > `GUILD_SUBSCRIPTIONS=14` in the opcode enum with **no call site** in any of
 > the 4,614 chunks; every range subscription travels in opcode 37. Opcode 14 is
 > a legacy enum entry in this build and its payload shape is not recoverable.
@@ -576,18 +576,35 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_PRUNE_UPDATE`, `AUTO_MODERATION_MENTION_RAID_DETECTION`,
   `USER_REQUIRED_ACTION_UPDATE`.
 - **Purpose**: reporting flows, AutoMod, bans, family centre.
-- **UI surface**: the moderation section of guild settings.
-- **Contract**: `POST /reporting/{type}`, `PUT /guilds/{id}/bans/{user}`.
+- **UI surface**: the moderation and AutoMod sections of guild settings.
+- **Contract**: `POST /reporting/{type}`, `PUT /guilds/{id}/bans/{user}`,
+  `GET`/`POST`/`PATCH`/`DELETE /guilds/{id}/auto-moderation/rules`,
+  `POST /guilds/{id}/auto-moderation/rules/validate`,
+  `POST /guilds/{id}/auto-moderation/clear-mention-raid`,
+  `POST /guilds/{id}/auto-moderation/false-alarm`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: the ban list, ban search, banning and unbanning, kicking a
   member, and the audit log. Each control is withheld unless the account holds
   the permission for it rather than offered and then refused by the server.
+  AutoMod rules are listed, created, edited, switched off and deleted, gated
+  on Manage Server. Every trigger and action code the bundle names is read,
+  including the ones this build has no form for, so a rule created elsewhere
+  survives an edit of its name rather than being rewritten. A draft is checked
+  against `/rules/validate` before it is created, because the regexes compile
+  server-side and asking is the only honest check; a refusal that is not a 400
+  is reported as a failure rather than as a verdict on the rule. The two raid
+  controls — clear the alert, report a false alarm — sit on the same page.
 - **Tests**: `guild_management_repository_bans_cases.dart`,
-  `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`.
+  `guild_management_repository_automod_cases.dart`,
+  `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`,
+  `automod_rule_test.dart`, `automod_description_test.dart`,
+  `automod_section_widget_test.dart`.
 - **Live evidence**: none.
-- **Blocked by**: AutoMod rules and the reporting flows are untouched.
-  Reporting endpoints will only ever be called from an explicit user action.
+- **Blocked by**: the reporting and safety-hub flows are untouched. Reporting
+  endpoints will only ever be called from an explicit user action. AutoMod
+  keyword presets and the exempt role and channel lists are read and sent
+  faithfully but have no controls yet.
 
 ## FBC-AI — Conversation summaries and text tools
 
