@@ -167,6 +167,116 @@ void main() {
     expect(find.byKey(const ValueKey('mfa-error')), findsOneWidget);
   });
 
+  testWidgets('text-message codes are switched on from the page', (
+    tester,
+  ) async {
+    final repository = _FakeMfa();
+    await _pump(tester, repository: repository);
+
+    await tester.tap(find.byKey(const ValueKey('mfa-sms-enable')));
+    await tester.pumpAndSettle();
+
+    expect(repository.smsEnabled, isTrue);
+  });
+
+  testWidgets('stopping text codes needs the password, and forgets it', (
+    tester,
+  ) async {
+    final repository = _FakeMfa();
+    await _pump(tester, repository: repository);
+
+    // Nothing to send until the password is there.
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('mfa-sms-disable')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-password')),
+      'hunter2',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-sms-disable')));
+    await tester.pumpAndSettle();
+
+    expect(repository.passwords, ['hunter2']);
+    // The field is emptied rather than left holding the password.
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('mfa-password')))
+          .controller
+          ?.text,
+      isEmpty,
+    );
+  });
+
+  testWidgets('backup codes are shown again, and minted again', (tester) async {
+    final repository = _FakeMfa();
+    await _pump(tester, repository: repository);
+
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('mfa-view-codes')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-password')),
+      'hunter2',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-disable-code')),
+      '123456',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-view-codes')));
+    await tester.pumpAndSettle();
+
+    expect(repository.viewed.single, ('123456', 'view-1', false));
+    expect(find.byKey(const ValueKey('mfa-backup-aaaa-bbbb')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('mfa-done')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-password')),
+      'hunter2',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-disable-code')),
+      '123456',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-regenerate-codes')));
+    await tester.pumpAndSettle();
+
+    expect(repository.viewed.last, ('123456', 'regen-1', true));
+    expect(find.byKey(const ValueKey('mfa-backup-cccc-dddd')), findsOneWidget);
+  });
+
+  testWidgets('a wrong password reads as a refusal, not a crash', (
+    tester,
+  ) async {
+    await _pump(tester, repository: _FakeMfa()..acceptCode = false);
+
+    await tester.enterText(find.byKey(const ValueKey('mfa-password')), 'wrong');
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-disable-code')),
+      '000000',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-view-codes')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('That code was not accepted. Try the next one.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mfa-error')), findsNothing);
+  });
+
   testWidgets('leaving the page forgets the secret', (tester) async {
     final controller = await _pump(tester, repository: _FakeMfa());
     await tester.tap(find.byKey(const ValueKey('mfa-begin')));
@@ -232,6 +342,9 @@ final class _FakeMfa implements MultiFactorAuthRepository {
   bool acceptCode = true;
   bool withCodes = true;
   bool failNext = false;
+  bool smsEnabled = false;
+  final List<String> passwords = [];
+  final List<(String, String, bool)> viewed = [];
 
   @override
   Future<MfaEnrolment?> enableTotp({
@@ -259,5 +372,54 @@ final class _FakeMfa implements MultiFactorAuthRepository {
     if (!acceptCode) return false;
     disabled.add(code);
     return true;
+  }
+
+  @override
+  Future<bool> enableSms() async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('sms failed');
+    }
+    if (!acceptCode) return false;
+    smsEnabled = true;
+    return true;
+  }
+
+  @override
+  Future<bool> disableSms(String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('sms failed');
+    }
+    if (!acceptCode) return false;
+    passwords.add(password);
+    smsEnabled = false;
+    return true;
+  }
+
+  @override
+  Future<BackupCodeNonces?> requestBackupCodeChallenge(String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('challenge failed');
+    }
+    if (!acceptCode) return null;
+    passwords.add(password);
+    return const BackupCodeNonces(view: 'view-1', regenerate: 'regen-1');
+  }
+
+  @override
+  Future<List<String>?> viewBackupCodes({
+    required String key,
+    required BackupCodeNonces nonces,
+    bool regenerate = false,
+  }) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('view failed');
+    }
+    if (!acceptCode) return null;
+    viewed.add((key, nonces.forRequest(regenerating: regenerate), regenerate));
+    return regenerate ? const ['cccc-dddd'] : const ['aaaa-bbbb'];
   }
 }

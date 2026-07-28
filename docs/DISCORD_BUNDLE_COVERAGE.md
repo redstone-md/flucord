@@ -139,7 +139,10 @@ are excluded from the denominator and are never reported as implemented.
 - **Contract**: remote-auth Gateway v2, `POST /users/@me/remote-auth/login`,
   `X-Captcha-Key`/`X-Captcha-Rqtoken`/`X-Captcha-Session-Id`,
   `GET /auth/sessions`, `POST /auth/sessions/logout`,
-  `POST /users/@me/mfa/totp/enable`, `POST /users/@me/mfa/totp/disable`.
+  `POST /users/@me/mfa/totp/enable`, `POST /users/@me/mfa/totp/disable`,
+  `POST /users/@me/mfa/sms/enable`, `POST /users/@me/mfa/sms/disable`,
+  `POST /auth/verify/view-backup-codes-challenge`,
+  `POST /users/@me/mfa/codes-verification`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: RSA-2048 QR remote auth, mandatory hCaptcha through an
@@ -158,7 +161,13 @@ are excluded from the denominator and are never reported as implemented.
   only, dropped the moment the code is accepted or the page closes, and a
   second tap on "add" cannot swap it out from under the app it was just added
   to. A code Discord refuses is reported as the mistyped or expired code it
-  usually is, not as a failure.
+  usually is, not as a failure. Text messages are switched on and off as a
+  second factor — Discord uses the number already on the account, so the page
+  says so rather than offering a field nobody can fill. Backup codes can be
+  read again or minted afresh: the password buys a pair of one-shot nonces and
+  a current authenticator code spends one. The account password is typed for
+  the single request that needs it, cleared from the field before that request
+  is even sent, and held nowhere.
 - **Tests**: `discord_remote_auth_gateway_test.dart`,
   `discord_desktop_login_controller_test.dart`, `auth_session_test.dart`,
   `auth_session_widget_test.dart`, `multi_factor_auth_test.dart`,
@@ -166,9 +175,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Live evidence**: phone approval, hCaptcha completion, encrypted session
   exchange, and restart restoration validated on Windows `2026-07-25`. The
   Devices page has none: listing another session needs a second one to exist.
-- **Blocked by**: age verification, SMS and WebAuthn as second factors, and
-  re-reading backup codes after enrolment — that route wants nonces this
-  session is never handed. Account standing shipped under FBC-MODERATION.
+- **Blocked by**: age verification, and WebAuthn as a second factor — the
+  latter needs the platform authenticator API, which is a native surface this
+  build does not yet carry. Account standing shipped under FBC-MODERATION.
 
 ## FBC-PROFILE — Current user, other users, user settings
 

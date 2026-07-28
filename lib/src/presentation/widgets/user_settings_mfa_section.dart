@@ -23,10 +23,15 @@ class MfaSettingsSection extends StatefulWidget {
 class _MfaSettingsSectionState extends State<MfaSettingsSection> {
   final TextEditingController _code = TextEditingController();
 
+  /// Typed for one request and never kept: this is the account password, and
+  /// the field is cleared the moment the request that needed it is sent.
+  final TextEditingController _password = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _code.addListener(_onCodeChanged);
+    _password.addListener(_onCodeChanged);
   }
 
   void _onCodeChanged() {
@@ -37,6 +42,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
   void dispose() {
     _code
       ..removeListener(_onCodeChanged)
+      ..dispose();
+    _password
+      ..removeListener(_onCodeChanged)
+      ..clear()
       ..dispose();
     // The secret and the backup codes do not outlive the page that showed
     // them; both are credentials.
@@ -109,7 +118,68 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
           : () => unawaited(_disable(controller)),
       child: const Text('Turn two-factor off'),
     ),
+    const SizedBox(height: 20),
+    Text('Text messages', style: Theme.of(context).textTheme.titleSmall),
+    const SizedBox(height: 4),
+    Text(
+      // Discord uses the number already on the account, so there is nothing
+      // to type; saying so is better than an empty field nobody can fill.
+      'Codes go to the phone number already on the account.',
+      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+    ),
+    const SizedBox(height: 6),
+    _PasswordField(controller: _password),
+    const SizedBox(height: 8),
+    Row(
+      children: [
+        TextButton(
+          key: const ValueKey('mfa-sms-enable'),
+          onPressed: controller.isBusy
+              ? null
+              : () => unawaited(controller.enableSms()),
+          child: const Text('Use text messages'),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          key: const ValueKey('mfa-sms-disable'),
+          onPressed: controller.isBusy || _password.text.isEmpty
+              ? null
+              : () => unawaited(_disableSms(controller)),
+          child: const Text('Stop using them'),
+        ),
+      ],
+    ),
+    const SizedBox(height: 20),
+    Text('Backup codes', style: Theme.of(context).textTheme.titleSmall),
+    const SizedBox(height: 4),
+    Text(
+      'Your password and a current code, because these are the way back in.',
+      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+    ),
+    const SizedBox(height: 8),
+    Row(
+      children: [
+        TextButton(
+          key: const ValueKey('mfa-view-codes'),
+          onPressed: controller.isBusy || !_canReveal
+              ? null
+              : () => unawaited(_reveal(controller, regenerate: false)),
+          child: const Text('Show them'),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          key: const ValueKey('mfa-regenerate-codes'),
+          onPressed: controller.isBusy || !_canReveal
+              ? null
+              : () => unawaited(_reveal(controller, regenerate: true)),
+          child: const Text('Make new ones'),
+        ),
+      ],
+    ),
   ];
+
+  bool get _canReveal =>
+      _password.text.isNotEmpty && _code.text.trim().length >= 6;
 
   List<Widget> _awaiting(
     BuildContext context,
@@ -205,6 +275,47 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
     final accepted = await controller.disable(_code.text);
     if (accepted) _code.clear();
   }
+
+  Future<void> _disableSms(MultiFactorAuthController controller) async {
+    final password = _password.text;
+    // Cleared before the await, so it is not sitting in a field while the
+    // request is in flight.
+    _password.clear();
+    await controller.disableSms(password);
+  }
+
+  Future<void> _reveal(
+    MultiFactorAuthController controller, {
+    required bool regenerate,
+  }) async {
+    final password = _password.text;
+    final code = _code.text;
+    _password.clear();
+    _code.clear();
+    await controller.revealBackupCodes(
+      password: password,
+      code: code,
+      regenerate: regenerate,
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  const _PasswordField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    key: const ValueKey('mfa-password'),
+    controller: controller,
+    obscureText: true,
+    decoration: const InputDecoration(
+      isDense: true,
+      labelText: 'Account password',
+      helperText: 'Used for this one request and then forgotten.',
+    ),
+  );
 }
 
 class _CodeField extends StatelessWidget {

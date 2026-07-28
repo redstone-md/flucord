@@ -54,6 +54,77 @@ final class DiscordMfaRepository implements MultiFactorAuthRepository {
     }
   }
 
+  @override
+  Future<bool> enableSms() async {
+    try {
+      await _rest.requestObject('POST', '/users/@me/mfa/sms/enable');
+      return true;
+    } on DiscordApiException catch (error) {
+      // An account with no phone number on it is refused, which is an answer
+      // about the account rather than a fault in the client.
+      if (error.statusCode == 400 || error.statusCode == 401) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> disableSms(String password) async {
+    if (password.isEmpty) return false;
+    try {
+      await _rest.requestObject(
+        'POST',
+        '/users/@me/mfa/sms/disable',
+        body: {'password': password},
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 401) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<BackupCodeNonces?> requestBackupCodeChallenge(String password) async {
+    if (password.isEmpty) return null;
+    try {
+      final payload = await _rest.requestObject(
+        'POST',
+        '/auth/verify/view-backup-codes-challenge',
+        body: {'password': password},
+      );
+      final nonces = BackupCodeNonces(
+        view: _string(payload['nonce']) ?? '',
+        regenerate: _string(payload['regenerate_nonce']) ?? '',
+      );
+      return nonces.isEmpty ? null : nonces;
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<String>?> viewBackupCodes({
+    required String key,
+    required BackupCodeNonces nonces,
+    bool regenerate = false,
+  }) async {
+    final trimmed = key.trim();
+    final nonce = nonces.forRequest(regenerating: regenerate);
+    if (trimmed.isEmpty || nonce.isEmpty) return null;
+    try {
+      final payload = await _rest.requestObject(
+        'POST',
+        '/users/@me/mfa/codes-verification',
+        body: {'key': trimmed, 'nonce': nonce, 'regenerate': regenerate},
+      );
+      return _codes(payload['backup_codes']);
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
+
   /// Backup codes arrive as objects carrying the code and whether it is spent;
   /// a spent one is dropped, because offering it would be offering a code that
   /// no longer opens anything.

@@ -113,6 +113,78 @@ final class MultiFactorAuthController extends ChangeNotifier {
     }
   }
 
+  /// Switches text-message codes on. Discord uses the phone already on the
+  /// account, so there is nothing to type here.
+  Future<bool> enableSms() => _run(() => _repositoryProvider()!.enableSms());
+
+  /// Switches them off, which Discord gates on the account password.
+  ///
+  /// The password is passed straight through to the one request that needs it
+  /// and is never held: this controller has no field to keep it in.
+  Future<bool> disableSms(String password) =>
+      _run(() => _repositoryProvider()!.disableSms(password));
+
+  /// Reads the backup codes again, or mints a new set.
+  ///
+  /// Two steps, because Discord makes them two: the password buys a pair of
+  /// one-shot nonces, and a current authenticator code spends one of them.
+  Future<bool> revealBackupCodes({
+    required String password,
+    required String code,
+    bool regenerate = false,
+  }) async {
+    final repository = _repositoryProvider();
+    if (repository == null || _busy) return false;
+    _busy = true;
+    _codeRefused = false;
+    _error = null;
+    _notify();
+    try {
+      final nonces = await repository.requestBackupCodeChallenge(password);
+      if (nonces == null) {
+        _codeRefused = true;
+        return false;
+      }
+      final codes = await repository.viewBackupCodes(
+        key: code,
+        nonces: nonces,
+        regenerate: regenerate,
+      );
+      if (codes == null) {
+        _codeRefused = true;
+        return false;
+      }
+      _enrolment = MfaEnrolment(backupCodes: codes);
+      _stage = MfaEnrolmentStage.enrolled;
+      return true;
+    } on Object catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _busy = false;
+      _notify();
+    }
+  }
+
+  Future<bool> _run(Future<bool> Function() action) async {
+    if (_repositoryProvider() == null || _busy) return false;
+    _busy = true;
+    _codeRefused = false;
+    _error = null;
+    _notify();
+    try {
+      final accepted = await action();
+      _codeRefused = !accepted;
+      return accepted;
+    } on Object catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _busy = false;
+      _notify();
+    }
+  }
+
   /// Drops the secret and the backup codes. Called when the page closes, and
   /// after switching two-factor off.
   void reset() {

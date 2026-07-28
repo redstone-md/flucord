@@ -82,6 +82,23 @@ final class MfaEnrolment {
   bool get hasBackupCodes => backupCodes.isNotEmpty;
 }
 
+/// The one-time nonces Discord hands back before it will show backup codes.
+///
+/// They are minted per challenge and spent once. Nothing stores them: they
+/// exist between the password prompt and the request that uses them.
+final class BackupCodeNonces {
+  const BackupCodeNonces({this.view = '', this.regenerate = ''});
+
+  final String view;
+  final String regenerate;
+
+  bool get isEmpty => view.isEmpty && regenerate.isEmpty;
+
+  /// The nonce for what is being asked: seeing the codes, or minting new ones.
+  String forRequest({required bool regenerating}) =>
+      regenerating ? regenerate : view;
+}
+
 /// Turns two-factor authentication on and off.
 abstract interface class MultiFactorAuthRepository {
   /// `POST /users/@me/mfa/totp/enable`, with the first working code.
@@ -95,6 +112,31 @@ abstract interface class MultiFactorAuthRepository {
 
   /// `POST /users/@me/mfa/totp/disable`, with a current code.
   Future<bool> disableTotp(String code);
+
+  /// `POST /users/@me/mfa/sms/enable`. Discord sends the codes to the phone
+  /// already on the account; there is nothing to supply here.
+  Future<bool> enableSms();
+
+  /// `POST /users/@me/mfa/sms/disable`, which Discord gates on the password.
+  ///
+  /// The password is passed straight through and never held: it is typed for
+  /// this one request and belongs to nothing else.
+  Future<bool> disableSms(String password);
+
+  /// Asks for the nonces that let backup codes be read again.
+  ///
+  /// Returns null when Discord refused the password, which is an answer.
+  Future<BackupCodeNonces?> requestBackupCodeChallenge(String password);
+
+  /// Reads the backup codes again, or mints a new set.
+  ///
+  /// [key] is a current code from the authenticator. Returns null when Discord
+  /// refused it — the ordinary mistyped-code case.
+  Future<List<String>?> viewBackupCodes({
+    required String key,
+    required BackupCodeNonces nonces,
+    bool regenerate = false,
+  });
 }
 
 /// Base32 without padding, as `TotpSecret` writes it. Exposed for the tests
