@@ -470,6 +470,10 @@ are excluded from the denominator and are never reported as implemented.
 
 - **Symbols**: `STAGE_INSTANCE_CREATE`/`UPDATE`/`DELETE`.
 - **Purpose**: stage discovery, speaker requests, moderation.
+- **UI surface**: the stage controls above the voice connection bar.
+- **Contract**: `POST /stage-instances`, `GET /guild-stages`.
+- **Dependencies**: FBC-VOICE.
+- **Status**: **Partial**.
 - **Implemented**: channel type 13 is recognised rather than flattened into
   ordinary voice; the live instance and its topic are read from
   `STAGE_INSTANCE_*` and from the `stage_instances` a `GUILD_CREATE` or
@@ -484,17 +488,9 @@ are excluded from the denominator and are never reported as implemented.
   `PATCH /guilds/{id}/voice-states/{userId}`. Being a stage moderator is three
   permissions held together — MANAGE_CHANNELS, MUTE_MEMBERS, MOVE_MEMBERS —
   and the controls are withheld unless all three are.
+- **Live evidence**: none.
 - **Blocked by**: nothing outstanding for the desktop-user session; stage
   discovery listings and scheduled-event-linked stages are separate surfaces.
-- **UI surface**: none.
-- **Contract**: `POST /stage-instances`, `GET /guild-stages`.
-- **Dependencies**: FBC-VOICE.
-- **Status**: **Absent**.
-- **Implemented**: stage channels appear in the sidebar and in scheduled-event
-  navigation only.
-- **Tests**: none specific.
-- **Live evidence**: none.
-- **Blocked by**: FBC-VOICE.
 
 ## FBC-EVENTS — Guild scheduled events
 
@@ -580,14 +576,18 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_PRUNE_UPDATE`, `AUTO_MODERATION_MENTION_RAID_DETECTION`,
   `USER_REQUIRED_ACTION_UPDATE`.
 - **Purpose**: reporting flows, AutoMod, bans, family centre.
-- **UI surface**: none.
+- **UI surface**: the moderation section of guild settings.
 - **Contract**: `POST /reporting/{type}`, `PUT /guilds/{id}/bans/{user}`.
 - **Dependencies**: FBC-GUILD.
-- **Status**: **Absent**.
-- **Tests**: none.
+- **Status**: **Partial**.
+- **Implemented**: the ban list, ban search, banning and unbanning, kicking a
+  member, and the audit log. Each control is withheld unless the account holds
+  the permission for it rather than offered and then refused by the server.
+- **Tests**: `guild_management_repository_bans_cases.dart`,
+  `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`.
 - **Live evidence**: none.
-- **Blocked by**: no moderation surface exists yet. Reporting endpoints will
-  only ever be called from an explicit user action.
+- **Blocked by**: AutoMod rules and the reporting flows are untouched.
+  Reporting endpoints will only ever be called from an explicit user action.
 
 ## FBC-AI — Conversation summaries and text tools
 
