@@ -19,7 +19,7 @@ do not count as desktop-user chat parity.
 | Attachments and replies | Ready | Native multipart upload and existing composer |
 | Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
 | Reactions and pins | Ready | Desktop-user message routes |
-| Threads | Ready | Create from message, archived-thread paging, join and leave with a live member count from `THREAD_MEMBER_UPDATE` and `THREAD_MEMBERS_UPDATE` |
+| Threads | Ready | Create from message, archived-thread paging, join and leave with a live member count, and the lazy roster from `THREAD_MEMBER_LIST_UPDATE` |
 | Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
 | Member list and presence | Ready | Server-authoritative lazy member list with scroll-driven subscriptions; presence, activities, hidden activities and the account's own custom status all read and published |
 | Search | Ready | Server-side `GET /guilds/{id}/messages/search` and the DM equivalent, with the loaded page filtered locally as you type |
@@ -27,6 +27,7 @@ do not count as desktop-user chat parity.
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
 | Stage channels | Ready | Type 13 recognised, live instance and topic; audience may request to speak, withdraw, accept an invitation and step down; a moderator may start, rename and end a stage and move anybody on or off it |
+| GIF picker | Ready | Trending categories, search with suggestions, sent as a link through Discord's own provider proxy |
 | Soundboard | Ready to send | Server and default sounds, played into a voice channel; incoming `VOICE_CHANNEL_EFFECT_SEND` is surfaced but the sound itself is not played back locally |
 | Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |

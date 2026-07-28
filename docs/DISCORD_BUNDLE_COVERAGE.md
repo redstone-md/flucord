@@ -297,9 +297,11 @@ are excluded from the denominator and are never reported as implemented.
   `discord_chat_repository_forums_test.dart`, `thread_membership_test.dart`,
   `thread_membership_widget_test.dart`, `widget_test.dart`.
 - **Live evidence**: channel history on Windows `2026-07-25`.
-- **Blocked by**: `THREAD_MEMBER_LIST_UPDATE` — the lazy roster of a thread's
-  members, distinct from the membership list — and per-thread notification
-  settings under `thread-members/@me/settings`.
+  The lazy roster arrives as `THREAD_MEMBER_LIST_UPDATE`, which names its
+  thread on `thread_id` rather than `id` and replaces the held set because it
+  is a whole snapshot.
+- **Blocked by**: per-thread notification settings under
+  `thread-members/@me/settings`.
 
 ## FBC-MESSAGE — Messages and message content
 
@@ -383,7 +385,10 @@ are excluded from the denominator and are never reported as implemented.
 - **Blocked by**: an incoming `VOICE_CHANNEL_EFFECT_SEND` is surfaced but the
   sound is not played back locally — that needs the CDN object decoded and
   mixed into playback, which the voice pipeline does not expose yet. GIF
-  providers still need a media proxy.
+  providers are done: trending, search and suggestions go through Discord's
+  own `/gifs/*` proxy — the desktop client never talks to Tenor or Giphy
+  directly and neither does this — and a pick is sent as the `gif_src` link
+  rather than the `src` preview.
 
 ## FBC-VOICE — Voice, video, screen share, calls
 
