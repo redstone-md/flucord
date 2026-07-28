@@ -308,4 +308,94 @@ void _regressions() {
       );
     });
   });
+
+  test('seats the occupants READY_SUPPLEMENTAL announces', () {
+    final roster = DiscordVoiceStateRoster();
+
+    // How a desktop-user session is actually told who is already seated: the
+    // guilds in READY carry no voice states, and one supplemental burst
+    // follows with them.
+    final applied = roster.accept(
+      eventName: 'READY_SUPPLEMENTAL',
+      data: const {
+        'guilds': [
+          {
+            'id': 'guild-1',
+            'voice_states': [
+              {'user_id': 'member-1', 'channel_id': 'voice-1'},
+            ],
+          },
+          {
+            'id': 'guild-2',
+            'voice_states': [
+              {
+                'user_id': 'member-2',
+                'channel_id': 'voice-9',
+                'self_mute': true,
+              },
+            ],
+          },
+          // Nothing to report for this one, which is not the same as empty.
+          {'id': 'guild-3'},
+        ],
+      },
+    );
+
+    expect(applied.map((state) => state.userId), ['member-1', 'member-2']);
+    expect(
+      roster
+          .participantsIn(guildId: 'guild-1', channelId: 'voice-1')
+          .single
+          .userId,
+      'member-1',
+    );
+    expect(
+      roster
+          .participantsIn(guildId: 'guild-2', channelId: 'voice-9')
+          .single
+          .selfMuted,
+      isTrue,
+    );
+    expect(roster.seatedByChannel.keys, containsAll(['voice-1', 'voice-9']));
+  });
+
+  test('a supplemental guild without states leaves its seats alone', () {
+    final roster = DiscordVoiceStateRoster()
+      ..accept(
+        eventName: 'GUILD_CREATE',
+        data: const {
+          'id': 'guild-1',
+          'voice_states': [
+            {'user_id': 'member-1', 'channel_id': 'voice-1'},
+          ],
+        },
+      );
+
+    final applied = roster.accept(
+      eventName: 'READY_SUPPLEMENTAL',
+      data: const {
+        'guilds': [
+          {'id': 'guild-1'},
+        ],
+      },
+    );
+
+    expect(applied, isEmpty);
+    expect(
+      roster
+          .participantsIn(guildId: 'guild-1', channelId: 'voice-1')
+          .single
+          .userId,
+      'member-1',
+    );
+  });
+
+  test('a supplemental burst with no guilds changes nothing', () {
+    final roster = DiscordVoiceStateRoster();
+
+    expect(
+      roster.accept(eventName: 'READY_SUPPLEMENTAL', data: const {}),
+      isEmpty,
+    );
+  });
 }

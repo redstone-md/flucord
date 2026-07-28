@@ -204,11 +204,14 @@ class _VoiceStage extends StatelessWidget {
             ],
           ),
         ),
-        if (controller.error != null)
+        // What is wrong, rather than the old fixed sentence: a room that says
+        // nothing is indistinguishable from one that is simply quiet.
+        if (voiceRoomWarning(controller) case final warning?)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
             child: Text(
-              'Media device unavailable',
+              warning,
+              key: const ValueKey('voice-room-warning'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
                 fontSize: 11,

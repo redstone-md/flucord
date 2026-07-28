@@ -8,6 +8,8 @@ import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
 import 'voice_audio_pipeline.dart';
 
+part 'voice_controller_devices.dart';
+
 enum VoiceState { idle, loading, ready, failure }
 
 typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
@@ -74,6 +76,7 @@ final class VoiceController extends ChangeNotifier {
   VoiceTransportSession? _transportSession;
   final Map<String, VoiceParticipant> _participants = {};
   Object? _error;
+  Object? _microphoneError;
   bool _isMuted = false;
   bool _isScreenSharing = false;
   bool _isAudioPlaybackActive = false;
@@ -97,6 +100,29 @@ final class VoiceController extends ChangeNotifier {
   List<VoiceParticipant> get participants =>
       List.unmodifiable(_participants.values);
   Object? get error => _error;
+
+  /// Why the microphone could not be opened, or `null` when it is running.
+  ///
+  /// Separate from [error] because it is not a failure to join: the room is
+  /// connected and audible, the uplink simply has nothing to send.
+  Object? get microphoneError => _microphoneError;
+
+  /// Why joining a voice channel is not possible at all, or `null`.
+  ///
+  /// Answered before a join is attempted so the room can say what is missing
+  /// instead of showing "Disconnected" with no reason.
+  String? get joinBlockedReason {
+    if (_state == VoiceState.failure && _signalingService == null) {
+      return 'Audio devices could not be opened, and this session has no '
+          'Discord voice transport.';
+    }
+    if (!hasDiscordSignaling && _signalingServiceProvider() == null) {
+      return 'This session cannot reach Discord voice. Sign in with a Discord '
+          'account to join voice channels.';
+    }
+    return null;
+  }
+
   bool get isConnected => _connectedChannelId != null;
 
   /// Whether the connection is a DM or group-DM call rather than guild voice.
@@ -169,12 +195,16 @@ final class VoiceController extends ChangeNotifier {
     required bool isCall,
   }) async {
     await initialize();
-    if (_state != VoiceState.ready ||
-        (_connectedGuildId == guildId &&
-            _connectedChannelId == channelId &&
-            _isCallSession == isCall)) {
+    if (_connectedGuildId == guildId &&
+        _connectedChannelId == channelId &&
+        _isCallSession == isCall) {
       return;
     }
+    // A machine with no working capture device must still be able to walk into
+    // a channel and listen, which is what Discord does. Refusing the join
+    // outright — the old behaviour — left the room showing "Disconnected" with
+    // nothing said about why, and no way to hear anybody.
+    if (_state == VoiceState.loading) return;
     await _run(() async {
       final signalingService = _signalingServiceProvider();
       await _bindSignaling(signalingService);
@@ -188,8 +218,16 @@ final class VoiceController extends ChangeNotifier {
               : _connectedGuildId != guildId);
       if (movedSession) await _leaveActiveSession();
       if (_connectedChannelId == null) {
-        await _mediaService.startMicrophone(_selectedInputId);
-        await _mediaService.setMicrophoneEnabled(!_isMuted);
+        // Failing to open the microphone must not abort the join: the room is
+        // still worth being in to listen. The reason is kept so the room can
+        // say the uplink is off rather than leaving a silent mic looking fine.
+        try {
+          await _mediaService.startMicrophone(_selectedInputId);
+          await _mediaService.setMicrophoneEnabled(!_isMuted);
+          _microphoneError = null;
+        } on Object catch (error) {
+          _microphoneError = error;
+        }
       }
       _connectedGuildId = guildId;
       _connectedChannelId = channelId;
@@ -249,60 +287,6 @@ final class VoiceController extends ChangeNotifier {
       if (service == null || _connectedChannelId == null) return;
       _connectionStatus = VoiceConnectionStatus.joining;
       await _sendJoin();
-    });
-  }
-
-  Future<void> selectInput(String deviceId) async {
-    if (_selectedInputId == deviceId) return;
-    await _run(() async {
-      _selectedInputId = deviceId;
-      if (isConnected) {
-        await _mediaService.startMicrophone(deviceId);
-        await _mediaService.setMicrophoneEnabled(!_isMuted);
-      }
-    });
-  }
-
-  Future<void> selectOutput(String deviceId) async {
-    if (_selectedOutputId == deviceId) return;
-    await _run(() async {
-      final playbackService = _playbackService;
-      if (playbackService == null) {
-        await _mediaService.selectAudioOutput(deviceId);
-      } else {
-        await playbackService.selectOutput(deviceId);
-      }
-      _selectedOutputId = deviceId;
-    });
-  }
-
-  Future<void> toggleMute() async {
-    if (!isConnected) return;
-    await _run(() async {
-      _isMuted = !_isMuted;
-      await _mediaService.setMicrophoneEnabled(!_isMuted);
-      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
-      await _sendJoin();
-    });
-  }
-
-  Future<void> loadCaptureSources() async {
-    await _run(() async {
-      _captureSources = await _mediaService.enumerateCaptureSources();
-    });
-  }
-
-  Future<void> shareScreen(String sourceId) async {
-    await _run(() async {
-      await _mediaService.startScreenShare(sourceId);
-      _isScreenSharing = true;
-    });
-  }
-
-  Future<void> stopScreenShare() async {
-    await _run(() async {
-      await _mediaService.stopScreenShare();
-      _isScreenSharing = false;
     });
   }
 

@@ -218,6 +218,36 @@ void main() {
     expect(controller.error, isA<StateError>());
     expect(controller.isAudioPlaybackActive, isFalse);
   });
+
+  test('joins and listens when the microphone will not open', () async {
+    final media = _FakeVoiceMediaService()..failMicrophone = true;
+    final signaling = _FakeVoiceSignalingService();
+    final controller = VoiceController(
+      media,
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+
+    // A machine with no working capture device still belongs in the room: it
+    // can hear everyone, and refusing the join left it with neither.
+    expect(controller.isConnected, isTrue);
+    expect(signaling.joins.single.$2, 'forge-voice');
+    expect(controller.microphoneError, isNotNull);
+    expect(controller.joinBlockedReason, isNull);
+  });
+
+  test('a session with no voice transport says why it cannot join', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+
+    await controller.initialize();
+
+    expect(controller.joinBlockedReason, isNotNull);
+  });
 }
 
 const _transportSession = VoiceTransportSession(
@@ -302,6 +332,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
       StreamController.broadcast();
   final List<String>? _operations;
   final List<String?> startedInputs = [];
+  bool failMicrophone = false;
   bool microphoneEnabled = true;
   bool microphoneStopped = false;
   bool screenStopped = false;
@@ -374,6 +405,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   @override
   Future<void> startMicrophone(String? deviceId) async {
     startedInputs.add(deviceId);
+    if (failMicrophone) throw StateError('no capture device');
   }
 
   @override

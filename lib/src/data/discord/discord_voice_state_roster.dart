@@ -30,6 +30,13 @@ final class DiscordVoiceStateRoster {
     'VOICE_STATE_UPDATE' => _apply([data], null),
     'VOICE_STATE_UPDATE_BATCH' => _apply(_objects(data['voice_states']), null),
     'GUILD_CREATE' => _replaceGuild(data),
+    // Where a desktop-user session actually learns who is already seated.
+    // `GUILD_CREATE` carries occupants for a bot, but a user account is sent
+    // its guilds in READY without voice states and then a single
+    // READY_SUPPLEMENTAL whose `guilds` entries carry `voice_states` — which
+    // is why a client listening only to GUILD_CREATE shows every voice
+    // channel as empty until somebody joins one while it is watching.
+    'READY_SUPPLEMENTAL' => _replaceGuilds(data['guilds']),
     // A replayed READY starts a new session's view of the world. Keeping the
     // old seats would replay occupants who may have left, and the following
     // GUILD_CREATE burst is what repopulates them.
@@ -74,6 +81,16 @@ final class DiscordVoiceStateRoster {
     _byGuild.clear();
     return departures;
   }
+
+  /// Each guild in a supplemental burst, as its own snapshot.
+  ///
+  /// An entry with no `voice_states` is Discord saying it has nothing to
+  /// report for that guild, not that the guild emptied, so it is skipped
+  /// rather than treated as a snapshot that clears the seats.
+  List<VoiceParticipantStateEvent> _replaceGuilds(Object? guilds) => [
+    for (final guild in _objects(guilds))
+      if (guild['voice_states'] != null) ..._replaceGuild(guild),
+  ];
 
   /// `GUILD_CREATE` is a whole snapshot, so it replaces rather than merges.
   ///

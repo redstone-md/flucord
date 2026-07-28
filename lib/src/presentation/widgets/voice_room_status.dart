@@ -21,3 +21,22 @@ String voiceRoomStatusLabel(VoiceController controller) {
     VoiceConnectionStatus.failure => 'Voice transport failed',
   };
 }
+
+/// The one thing most worth saying about a room that is not working, or null.
+///
+/// Ordered by what blocks the most: a session that cannot reach voice at all,
+/// then a transport that failed, then a microphone that would not open — which
+/// still leaves a usable room, so it is reported last.
+String? voiceRoomWarning(VoiceController controller) {
+  if (controller.joinBlockedReason case final reason?) return reason;
+  if (controller.connectionStatus == VoiceConnectionStatus.failure) {
+    return 'Discord refused the voice connection. Leaving and rejoining the '
+        'channel usually re-establishes it.';
+  }
+  if (controller.microphoneError != null) {
+    return 'Your microphone could not be opened, so nobody can hear you. '
+        'You can still hear everyone else.';
+  }
+  if (controller.error != null) return 'Media device unavailable.';
+  return null;
+}
