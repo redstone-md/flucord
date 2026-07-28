@@ -455,10 +455,16 @@ are excluded from the denominator and are never reported as implemented.
   for byte, and the system decoder produced 556 pictures from them. A second
   run with the transport cipher in place encrypted all 1314 packets of 171
   frames with AES-256-GCM, 1.2 MB, with no transport error.
-- **Blocked by**: a second account watching is the only thing that can show a
-  Discord viewer drawing the picture; what is ruled out is the sender
-  producing a stream nothing can decode. A stream's audio also still rides the
-  voice connection rather than the stream's own.
+  The receiving half is implemented too: a native H.264 decoder with an
+  NV12-to-BGRA conversion behind it, and a viewer widget that draws the
+  pictures. That is both a feature — watching somebody else's share — and the
+  only way this machine can exercise the sending half end to end, since the
+  stream it produces is decoded back in-process exactly as a watching client
+  would.
+- **Blocked by**: a second Discord account is the only thing that can show the
+  picture arriving over Discord's own servers rather than through a local
+  loop. A stream's audio also still rides the voice connection rather than the
+  stream's own.
 
 ## FBC-STAGE — Stage channels
 

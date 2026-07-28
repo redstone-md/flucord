@@ -15,7 +15,6 @@ import 'package:flucord/src/data/discord/discord_voice_transport_cipher.dart';
 import 'package:flucord/src/data/video/native_video_bindings.dart';
 import 'package:flucord/src/data/video/native_video_decoder_service.dart';
 import 'package:flucord/src/data/video/native_video_encoder_service.dart';
-import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 
 Future<void> main() async {
