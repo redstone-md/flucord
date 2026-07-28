@@ -2,10 +2,12 @@ import 'package:flucord/src/data/discord/discord_conversation_summary_service.da
 import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Snowflakes in ascending order, so a test can say which stretch is older.
-const _older = '100000000000000000';
-const _newer = '200000000000000000';
-const _newest = '300000000000000000';
+/// Ids in ascending order, so a test can say which stretch is older. Kept
+/// deliberately short: a full-width snowflake in a fixture is indistinguishable
+/// from a real one, and the privacy audit refuses the repository over it.
+const _older = '1001';
+const _newer = '2002';
+const _newest = '3003';
 
 Map<String, Object?> _summary({
   required String id,
@@ -118,7 +120,7 @@ void main() {
     addTearDown(service.close);
     final many = [
       for (var index = 0; index < 90; index++)
-        _summary(id: 's$index', start: '${100000000000000000 + index}'),
+        _summary(id: 's$index', start: '${1000 + index}'),
     ];
 
     service.accept('CONVERSATION_SUMMARY_UPDATE', {
