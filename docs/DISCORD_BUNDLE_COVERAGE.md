@@ -511,10 +511,15 @@ are excluded from the denominator and are never reported as implemented.
   the nonce the modal was opened with. The component tree is walked rather
   than read two deep, because Components V2 nests action rows inside
   containers. A link button sends nothing — it is a hyperlink.
-- **Blocked by**: user, role, channel and mentionable selects need a directory
-  picker this surface does not have and are shown disabled; user and message
-  context-menu commands have no surface to be invoked from; embedded
-  activities are a separate transport.
+  Context-menu commands are listed and run on a target: the two kinds are the
+  same type-2 interaction as a slash command, distinguished by carrying a
+  `target_id` instead of options, and the kind being asked for travels in the
+  search query. The directory selects — user, role, channel, mentionable —
+  carry a type and no options, so the picker offers the workspace's own
+  members, roles and channels.
+- **Blocked by**: embedded activities are a separate transport, and a
+  premium-button component (style 6) resolves to a purchase flow this client
+  has no surface for.
 
 ## FBC-OAUTH — OAuth2, connections, integrations, invites, webhooks
 

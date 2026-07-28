@@ -27,7 +27,7 @@ do not count as desktop-user chat parity.
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
 | Stage channels | Ready | Type 13 recognised, live instance and topic; audience may request to speak, withdraw, accept an invitation and step down; a moderator may start, rename and end a stage and move anybody on or off it |
-| Slash commands and components | Ready | The channel's command index filtered as you type, run as a type-2 interaction; message buttons and string selects as type 3; modals as type 5 |
+| Slash commands and components | Ready | Chat-input commands from the channel index, context-menu commands on a message or member, buttons and every select kind, and modals — interaction types 2, 3 and 5 |
 | GIF picker | Ready | Trending categories, search with suggestions, sent as a link through Discord's own provider proxy |
 | Soundboard | Ready | Server and default sounds sent into a voice channel, and incoming `VOICE_CHANNEL_EFFECT_SEND` fetched from the CDN and played locally — which is how Discord itself does it, since the sound is never mixed into the RTP stream |
 | Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
