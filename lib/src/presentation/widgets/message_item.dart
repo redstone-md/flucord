@@ -1,4 +1,10 @@
 import 'dart:async';
+import '../../domain/application_command.dart';
+import '../../application/slash_command_controller.dart';
+import '../../application/message_component_controller.dart';
+import 'application_command_menu.dart';
+import 'component_directory_picker.dart';
+import 'message_component_row.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,11 +50,20 @@ class MessageItem extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
+    this.componentController,
+    this.applicationCommands,
     this.attachmentDownloadService,
     super.key,
   });
 
   final ChatMessage message;
+
+  /// Presses the buttons and selects an application hung off this message.
+  /// Null on a transport that cannot send interactions.
+  final MessageComponentController? componentController;
+
+  /// The Apps menu's controller, or null where context commands cannot run.
+  final SlashCommandController? applicationCommands;
   final Member member;
   final ChatWorkspace workspace;
   final bool grouped;
@@ -236,6 +251,31 @@ class _MessageItemState extends State<MessageItem> {
             ),
         if (message.stickers.isNotEmpty)
           MessageStickerStrip(stickers: message.stickers),
+        // The buttons an application put on this message. Drawn under the
+        // content and above the poll, which is where Discord puts them.
+        if (widget.componentController case final controller?
+            when message.componentRows.isNotEmpty)
+          ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => MessageComponentRows(
+              controller: controller,
+              rows: message.componentRows,
+              messageId: message.id,
+              applicationId: message.authorId,
+              messageFlags: message.flags,
+              onOpenLink: (url) =>
+                  unawaited(widget.linkLauncher.open(Uri.parse(url))),
+              directoryEntries: (component) => ComponentDirectory.entriesFor(
+                component,
+                workspace: widget.workspace,
+                spaceId:
+                    widget.workspace
+                        .channelOrNull(message.channelId)
+                        ?.spaceId ??
+                    '',
+              ),
+            ),
+          ),
         if (message.poll case final poll?)
           Padding(
             padding: const EdgeInsets.only(top: 7),
@@ -333,6 +373,13 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Widget _actionBar(BuildContext context) => MessageActionBar(
+    apps: widget.applicationCommands == null
+        ? null
+        : ApplicationCommandMenuButton(
+            controller: widget.applicationCommands!,
+            type: ApplicationCommandType.message,
+            targetId: widget.message.id,
+          ),
     message: widget.message,
     workspace: widget.workspace,
     capabilities: widget.capabilities,

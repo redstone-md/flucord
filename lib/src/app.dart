@@ -21,6 +21,7 @@ import 'application/self_presence_controller.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
 import 'application/stream_viewer_controller.dart';
+import 'application/message_component_controller.dart';
 import 'application/slash_command_controller.dart';
 import 'application/soundboard_controller.dart';
 import 'application/soundboard_playback_controller.dart';
@@ -199,6 +200,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final GoLiveController _goLiveController;
   late final StreamViewerController _streamViewerController;
   late final SlashCommandController _slashCommandController;
+  late final MessageComponentController _messageComponentController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -305,6 +307,9 @@ class _FlucordAppState extends State<FlucordApp> {
       repositoryProvider: () => _chatController.goLive,
       decoder: widget.videoDecoderService ?? NativeVideoDecoderService(),
     );
+    _messageComponentController = MessageComponentController(
+      () => _chatController.messageComponents,
+    );
     _slashCommandController = SlashCommandController(
       () => _chatController.applicationCommands,
     );
@@ -396,6 +401,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _soundboardController.dispose();
     _gifPickerController.dispose();
     _slashCommandController.dispose();
+    _messageComponentController.dispose();
     _soundboardPlaybackController.dispose();
     _goLiveController.dispose();
     _streamViewerController.dispose();
@@ -514,6 +520,8 @@ class _FlucordAppState extends State<FlucordApp> {
                                 streamViewerController: _streamViewerController,
                                 gifPickerController: _gifPickerController,
                                 slashCommandController: _slashCommandController,
+                                messageComponentController:
+                                    _messageComponentController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,

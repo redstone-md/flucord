@@ -152,6 +152,7 @@ extension _FlucordShellConversation on FlucordShell {
     streamViewerController: streamViewerController,
     gifPickerController: gifPickerController,
     slashCommandController: slashCommandController,
+    messageComponentController: messageComponentController,
     voiceMessageRecorder: voiceMessageRecorder,
     onSendVoiceMessage: (voiceMessage) => chatController.sendVoiceMessage(
       channelId: channel.id,

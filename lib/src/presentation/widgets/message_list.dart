@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../application/slash_command_controller.dart';
+import '../../application/message_component_controller.dart';
 
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
@@ -17,6 +19,8 @@ part 'message_list_states.dart';
 class MessageList extends StatefulWidget {
   const MessageList({
     required this.workspace,
+    this.componentController,
+    this.applicationCommands,
     required this.channel,
     required this.query,
     required this.targetMessageId,
@@ -43,6 +47,11 @@ class MessageList extends StatefulWidget {
   });
 
   final ChatWorkspace workspace;
+
+  /// Interaction planes, threaded through to each message: the buttons an
+  /// application put on it, and the Apps menu that acts on it.
+  final MessageComponentController? componentController;
+  final SlashCommandController? applicationCommands;
   final ConversationChannel channel;
 
   /// Which per-message actions this channel's permissions allow.
@@ -389,6 +398,8 @@ class _MessageListState extends State<MessageList> {
                         )
                       else
                         MessageItem(
+                          componentController: widget.componentController,
+                          applicationCommands: widget.applicationCommands,
                           key: ValueKey('message-${message.id}'),
                           message: message,
                           member: widget.workspace.memberById(message.authorId),

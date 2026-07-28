@@ -21,6 +21,7 @@ import '../application/workspace_controller.dart';
 import '../application/gif_picker_controller.dart';
 import '../application/go_live_controller.dart';
 import '../application/stream_viewer_controller.dart';
+import '../application/message_component_controller.dart';
 import '../application/slash_command_controller.dart';
 import '../application/soundboard_controller.dart';
 import '../application/stage_controller.dart';
@@ -90,6 +91,7 @@ class FlucordShell extends StatelessWidget {
     required this.streamViewerController,
     required this.gifPickerController,
     required this.slashCommandController,
+    required this.messageComponentController,
     required this.voiceMessageRecorder,
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
@@ -113,6 +115,7 @@ class FlucordShell extends StatelessWidget {
   final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
   final SlashCommandController slashCommandController;
+  final MessageComponentController messageComponentController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;

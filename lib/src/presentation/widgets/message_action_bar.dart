@@ -27,6 +27,7 @@ class MessageActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onTogglePin,
     required this.onDelete,
+    this.apps,
     super.key,
   });
 
@@ -45,6 +46,9 @@ class MessageActionBar extends StatelessWidget {
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
 
+  /// The Apps entry, or null where context-menu commands cannot run.
+  final Widget? apps;
+
   @override
   Widget build(BuildContext context) {
     final canModerate = capabilities.canModerate(
@@ -61,6 +65,7 @@ class MessageActionBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ?apps,
           if (capabilities.sendMessages)
             _ActionButton(
               icon: Icons.reply,

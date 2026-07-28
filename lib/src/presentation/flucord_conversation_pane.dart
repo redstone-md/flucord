@@ -87,6 +87,7 @@ class _ConversationPane extends StatefulWidget {
     required this.streamViewerController,
     required this.gifPickerController,
     required this.slashCommandController,
+    required this.messageComponentController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -165,6 +166,7 @@ class _ConversationPane extends StatefulWidget {
   final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
   final SlashCommandController slashCommandController;
+  final MessageComponentController messageComponentController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -460,6 +462,8 @@ class _ConversationPaneState extends State<_ConversationPane> {
       return ChannelFailureView(onRetry: widget.onRetry);
     }
     return MessageList(
+      componentController: widget.messageComponentController,
+      applicationCommands: widget.slashCommandController,
       workspace: widget.workspace,
       capabilities: widget.capabilities,
       externalLinkLauncher: widget.externalLinkLauncher,
