@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
@@ -139,6 +140,9 @@ final class _Repository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  @override
+  GifRepository? get gifs => null;
 
   _Repository({
     bool failing = false,

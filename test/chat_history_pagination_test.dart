@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
@@ -175,6 +176,9 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => _delegate.soundboard;
+
+  @override
+  GifRepository? get gifs => _delegate.gifs;
 
   _PagedRepository(this._results, {ChatWorkspace? workspace})
     : _workspace = workspace ?? _defaultWorkspace();

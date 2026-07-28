@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
 import '../../domain/thread_membership.dart';
@@ -312,6 +313,9 @@ final class DiscordChatRepository
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  @override
+  GifRepository? get gifs => null;
 
   /// A bot token has no user account behind it, and `/users/@me/settings-proto`
   /// answers for a user. The capability is absent rather than empty.

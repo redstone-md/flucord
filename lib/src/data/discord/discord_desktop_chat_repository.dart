@@ -13,6 +13,7 @@ import '../../domain/presence_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
+import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
 import '../../domain/thread_membership.dart';
@@ -32,6 +33,7 @@ import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
+import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
@@ -56,6 +58,7 @@ final class DiscordDesktopChatRepository
        _threadMembership = DiscordThreadMembershipService(_api),
        _stages = DiscordStageService(_api),
        _soundboard = DiscordSoundboardService(_api),
+       _gifs = DiscordGifService(_api),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
@@ -103,6 +106,7 @@ final class DiscordDesktopChatRepository
   final DiscordThreadMembershipService _threadMembership;
   final DiscordStageService _stages;
   final DiscordSoundboardService _soundboard;
+  final DiscordGifService _gifs;
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
   final StreamController<ChatRepositoryEvent> _events =
@@ -139,6 +143,9 @@ final class DiscordDesktopChatRepository
 
   @override
   SoundboardRepository? get soundboard => _soundboard;
+
+  @override
+  GifRepository? get gifs => _gifs;
 
   /// The desktop-user session is the only transport holding the account's
   /// settings blob: `READY` delivers it on this very socket.

@@ -23,6 +23,9 @@ extension ChatControllerUserSettings on ChatController {
   /// The soundboard plane of the connected transport, or `null`.
   SoundboardRepository? get soundboard => _repository.soundboard;
 
+  /// The GIF proxy of the connected transport, or `null`.
+  GifRepository? get gifs => _repository.gifs;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

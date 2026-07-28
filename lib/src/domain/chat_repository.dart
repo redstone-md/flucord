@@ -6,6 +6,7 @@ import 'presence_repository.dart';
 import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
+import 'gif_picker.dart';
 import 'soundboard.dart';
 import 'stage_channel.dart';
 import 'thread_membership.dart';
@@ -216,6 +217,10 @@ abstract interface class ChatRepository {
   /// The soundboard, or null on a transport that cannot play into a voice
   /// channel.
   SoundboardRepository? get soundboard;
+
+  /// GIFs through Discord's provider proxy, or null on a transport that has
+  /// no account to ask on behalf of.
+  GifRepository? get gifs;
 
   /// The account settings this transport can read and write, or `null`.
   ///

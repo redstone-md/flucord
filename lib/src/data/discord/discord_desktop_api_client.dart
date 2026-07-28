@@ -6,6 +6,7 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
@@ -19,6 +20,7 @@ final class DiscordDesktopApiClient
         DiscordThreadMembershipTransport,
         DiscordStageTransport,
         DiscordSoundboardTransport,
+        DiscordGifTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -132,6 +134,47 @@ final class DiscordDesktopApiClient
         'request_to_speak_timestamp': ?requestToSpeakTimestamp,
     },
   );
+
+  /// Discord's own provider proxy. The client never talks to Tenor or Giphy
+  /// directly, and neither does this.
+  @override
+  Future<Map<String, Object?>> getTrendingGifs({
+    required String mediaFormat,
+    required String provider,
+  }) => _rest.requestObject(
+    'GET',
+    '/gifs/trending',
+    query: {'media_format': mediaFormat, 'provider': provider},
+  );
+
+  @override
+  Future<List<Map<String, Object?>>> searchGifs({
+    required String query,
+    required String mediaFormat,
+    required String provider,
+    int limit = 50,
+  }) => _rest.getList(
+    '/gifs/search',
+    query: {
+      'q': query,
+      'media_format': mediaFormat,
+      'provider': provider,
+      'limit': '$limit',
+    },
+  );
+
+  @override
+  Future<List<Object?>> suggestGifs({
+    required String query,
+    int limit = 8,
+  }) async {
+    final payload = await _rest.request(
+      'GET',
+      '/gifs/suggest',
+      query: {'q': query, 'limit': '$limit'},
+    );
+    return payload is List ? payload : const [];
+  }
 
   @override
   Future<List<Map<String, Object?>>> listDefaultSounds() =>

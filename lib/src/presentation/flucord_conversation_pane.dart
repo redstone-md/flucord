@@ -83,6 +83,7 @@ class _ConversationPane extends StatefulWidget {
     required this.threadMembershipController,
     required this.stageController,
     required this.soundboardController,
+    required this.gifPickerController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -157,6 +158,7 @@ class _ConversationPane extends StatefulWidget {
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
   final SoundboardController soundboardController;
+  final GifPickerController gifPickerController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -345,6 +347,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
           const ReadOnlyChannelNotice()
         else if (showsMessages)
           MessageComposer(
+            gifPicker: widget.gifPickerController,
             canAttachFiles: widget.capabilities.attachFiles,
             channelId: widget.channel.id,
             channelName: widget.channel.name,

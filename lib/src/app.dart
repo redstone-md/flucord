@@ -18,6 +18,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/gif_picker_controller.dart';
 import 'application/soundboard_controller.dart';
 import 'application/stage_controller.dart';
 import 'application/thread_membership_controller.dart';
@@ -171,6 +172,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final ThreadMembershipController _threadMembershipController;
   late final StageController _stageController;
   late final SoundboardController _soundboardController;
+  late final GifPickerController _gifPickerController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -263,6 +265,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _soundboardController = SoundboardController(
       () => _chatController.soundboard,
     );
+    _gifPickerController = GifPickerController(() => _chatController.gifs);
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -342,6 +345,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _threadMembershipController.dispose();
     _stageController.dispose();
     _soundboardController.dispose();
+    _gifPickerController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -451,6 +455,7 @@ class _FlucordAppState extends State<FlucordApp> {
                                     _threadMembershipController,
                                 stageController: _stageController,
                                 soundboardController: _soundboardController,
+                                gifPickerController: _gifPickerController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,

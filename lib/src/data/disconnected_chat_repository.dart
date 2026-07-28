@@ -1,4 +1,5 @@
 import '../domain/chat_models.dart';
+import '../domain/gif_picker.dart';
 import '../domain/soundboard.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
@@ -41,6 +42,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  @override
+  GifRepository? get gifs => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

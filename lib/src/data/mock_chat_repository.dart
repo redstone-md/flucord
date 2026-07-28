@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/gif_picker.dart';
 import '../domain/soundboard.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
@@ -91,6 +92,9 @@ final class MockChatRepository
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  @override
+  GifRepository? get gifs => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

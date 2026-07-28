@@ -9,7 +9,9 @@ import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_theme.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
+import '../../application/gif_picker_controller.dart';
 import 'emoji_picker.dart';
+import 'gif_picker.dart';
 import 'native_voice_message_player.dart';
 import 'pending_attachment_strip.dart';
 import 'remote_identity_image.dart';
@@ -42,6 +44,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
+    this.gifPicker,
     this.canAttachFiles = true,
     this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
     this.attachmentPicker = const NativePendingAttachmentPicker(),
@@ -73,6 +76,9 @@ class MessageComposer extends StatefulWidget {
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
+
+  /// The GIF picker, or null on a transport that has no provider proxy.
+  final GifPickerController? gifPicker;
   final ComposerAutocompleteCatalog autocompleteCatalog;
   final PendingAttachmentPicker attachmentPicker;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -193,6 +199,18 @@ class _MessageComposerState extends State<MessageComposer>
     _focusNode.requestFocus();
   }
 
+  /// Sends the GIF straight away, as Discord's own client does: the picker is
+  /// a send action, not a way to paste a link into a half-written message.
+  Future<void> _sendGif(String url) async {
+    if (widget.isSending) return;
+    await widget.onSend(
+      url,
+      const [],
+      widget.replyTo?.id,
+      _suppressNotifications,
+    );
+  }
+
   void _insertEmoji(String token) {
     final text = _controller.text;
     final selection = _controller.selection;
@@ -295,6 +313,17 @@ class _MessageComposerState extends State<MessageComposer>
                           customEmojis: widget.customEmojis,
                           onSelected: _insertEmoji,
                         ),
+                        if (widget.gifPicker case final picker?)
+                          ListenableBuilder(
+                            listenable: picker,
+                            builder: (_, _) => GifPickerButton(
+                              controller: picker,
+                              // A GIF is sent as its link, which is what
+                              // Discord's own client posts: the embed comes
+                              // from the url, not from an upload.
+                              onSelected: _sendGif,
+                            ),
+                          ),
                         StickerPickerButton(
                           stickers: widget.guildStickers,
                           isSending: widget.isSending,
