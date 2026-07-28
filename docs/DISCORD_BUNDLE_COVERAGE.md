@@ -439,9 +439,16 @@ are excluded from the denominator and are never reported as implemented.
 - **Live evidence**: the encoder was run against this machine's displays on
   `2026-07-28` — 359 frames in five seconds at 15fps, 24 keyframes, 1.39 MB of
   Annex B, each access unit starting `00 00 00 01`.
-- **Blocked by**: the RTP sender is not yet pointed at those frames, so no
-  viewer sees the picture; and a stream's audio still rides the voice
-  connection rather than the stream's own.
+  The frames are packetised for RTP as RFC 6184 defines it: single NAL units
+  where they fit, FU-A fragments where they do not, both start-code lengths
+  recognised because the encoder uses both, and the marker only on the last
+  payload of an access unit.
+- **Live evidence**: run against this machine's displays on `2026-07-28` —
+  337 captured frames became 1464 RTP packets, 791 of them fragments, none
+  over the payload budget, 46 parameter sets for 23 keyframes.
+- **Blocked by**: only a live session with a second account watching can show
+  that a viewer decodes the picture, and a stream's audio still rides the
+  voice connection rather than the stream's own.
 
 ## FBC-STAGE — Stage channels
 
