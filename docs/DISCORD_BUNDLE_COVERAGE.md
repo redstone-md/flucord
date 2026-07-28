@@ -446,10 +446,15 @@ are excluded from the denominator and are never reported as implemented.
   A depacketiser reverses all of it, so the sender can be checked against
   itself, and a decode probe runs the result through the system H.264 decoder
   MFT — the same decoder a Discord client on Windows draws with.
+  Packets are then built into RTP frames on payload type 101 — not the voice
+  connection's 0x78, which a receiver would decode as Opus and discard — and
+  handed to the transport that encrypts and sends them.
 - **Live evidence**: run against this machine's displays on `2026-07-28` —
   556 captured frames became 2144 RTP packets, 1038 of them fragments, none
   over the payload budget; all 556 access units came back with every NAL byte
-  for byte, and the system decoder produced 556 pictures from them.
+  for byte, and the system decoder produced 556 pictures from them. A second
+  run with the transport cipher in place encrypted all 1314 packets of 171
+  frames with AES-256-GCM, 1.2 MB, with no transport error.
 - **Blocked by**: a second account watching is the only thing that can show a
   Discord viewer drawing the picture; what is ruled out is the sender
   producing a stream nothing can decode. A stream's audio also still rides the

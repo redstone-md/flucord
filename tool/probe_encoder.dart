@@ -8,7 +8,6 @@ import 'package:ffi/ffi.dart';
 
 import 'package:flucord/src/data/discord/discord_h264_depacketizer.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
-import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_video_rtp_sender.dart';
 import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_transport_cipher.dart';
