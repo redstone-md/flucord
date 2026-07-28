@@ -422,6 +422,12 @@ are excluded from the denominator and are never reported as implemented.
   `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`.
 - **Live evidence**: an account reported Flucord's join appearing in the real
   client's voice channel; audio interoperability itself is still unverified.
+  Go Live's signalling half is implemented: opcodes 18-22 and the four
+  `STREAM_*` dispatches, with the composed stream key
+  (`guild:<guild>:<channel>:<user>` or `call:<channel>:<user>`) built locally
+  at start because every later frame carries it back, and the RTC endpoint
+  tracked apart from the stream since Discord assigns it afterwards and
+  reassigns it on a region change.
 - **Blocked by**: video and screen share have no reachable encoder. The
   correction matters: `libwebrtc.dll` already ships in the release directory
   and does contain encoders — `libvpx_vp8_encoder`, VP9 and H.264 symbols are

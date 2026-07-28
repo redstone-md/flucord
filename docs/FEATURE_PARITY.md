@@ -30,7 +30,7 @@ do not count as desktop-user chat parity.
 | Slash commands and components | Ready | Chat-input commands from the channel index, context-menu commands on a message or member, buttons and every select kind, and modals — interaction types 2, 3 and 5 |
 | GIF picker | Ready | Trending categories, search with suggestions, sent as a link through Discord's own provider proxy |
 | Soundboard | Ready | Server and default sounds sent into a voice channel, and incoming `VOICE_CHANNEL_EFFECT_SEND` fetched from the CDN and played locally — which is how Discord itself does it, since the sound is never mixed into the RTP stream |
-| Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
+| Video and screen share | Signalling ready, media blocked | Opcodes 18-22, stream keys, RTC endpoint assignment, ping and pause all implemented and tested; sending pixels needs a native plugin because no Dart path to an encoded frame exists |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
