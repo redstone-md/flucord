@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
@@ -363,6 +364,9 @@ final class _PermissionRepository implements ChatRepository {
 
   @override
   MessageComponentRepository? get messageComponents => null;
+
+  @override
+  GoLiveRepository? get goLive => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

@@ -14,6 +14,11 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const hello = 10;
   static const heartbeatAck = 11;
   static const callConnect = 13;
+  static const streamCreate = 18;
+  static const streamDelete = 19;
+  static const streamWatch = 20;
+  static const streamPing = 21;
+  static const streamSetPaused = 22;
   static const guildSubscriptionsBulk = 37;
   static const qosHeartbeat = 40;
 }

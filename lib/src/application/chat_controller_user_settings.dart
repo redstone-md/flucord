@@ -34,6 +34,9 @@ extension ChatControllerUserSettings on ChatController {
   MessageComponentRepository? get messageComponents =>
       _repository.messageComponents;
 
+  /// The Go Live plane of the connected transport, or `null`.
+  GoLiveRepository? get goLive => _repository.goLive;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

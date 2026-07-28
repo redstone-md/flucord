@@ -9,6 +9,7 @@ import 'voice_call.dart';
 import 'application_command.dart';
 import 'message_component.dart';
 import 'gif_picker.dart';
+import 'go_live_stream.dart';
 import 'soundboard.dart';
 import 'stage_channel.dart';
 import 'thread_membership.dart';
@@ -231,6 +232,9 @@ abstract interface class ChatRepository {
   /// Pressing the buttons and selects an application hangs off a message, or
   /// null where interactions cannot be sent.
   MessageComponentRepository? get messageComponents;
+
+  /// Go Live streaming, or null on a transport that cannot open one.
+  GoLiveRepository? get goLive;
 
   /// The account settings this transport can read and write, or `null`.
   ///

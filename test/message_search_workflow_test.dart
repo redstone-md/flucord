@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
@@ -165,6 +166,9 @@ final class _SearchableRepository implements ChatRepository {
   @override
   MessageComponentRepository? get messageComponents =>
       _delegate.messageComponents;
+
+  @override
+  GoLiveRepository? get goLive => _delegate.goLive;
 
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeSearchPlane search = _FakeSearchPlane();

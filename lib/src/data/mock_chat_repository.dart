@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/go_live_stream.dart';
 import '../domain/message_component.dart';
 import '../domain/application_command.dart';
 import '../domain/gif_picker.dart';
@@ -103,6 +104,9 @@ final class MockChatRepository
 
   @override
   MessageComponentRepository? get messageComponents => null;
+
+  @override
+  GoLiveRepository? get goLive => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

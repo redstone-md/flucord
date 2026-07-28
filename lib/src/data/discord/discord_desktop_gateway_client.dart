@@ -183,6 +183,51 @@ final class DiscordDesktopGatewayClient
   /// The gateway session, or `null` before READY.
   String? get sessionId => _protocol.sessionId;
 
+  /// Opcode 18. `type` is `guild` or `call`, matching how the stream key is
+  /// composed, and the region is a preference Discord may ignore.
+  void sendStreamCreate({
+    required String type,
+    required String channelId,
+    String? guildId,
+    String? preferredRegion,
+  }) => _send(
+    DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamCreate, {
+      'type': type,
+      'channel_id': channelId,
+      'guild_id': ?guildId,
+      'preferred_region': ?preferredRegion,
+    }),
+  );
+
+  /// Opcode 19.
+  void sendStreamDelete(String streamKey) => _send(
+    DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamDelete, {
+      'stream_key': streamKey,
+    }),
+  );
+
+  /// Opcode 20.
+  void sendStreamWatch(String streamKey) => _send(
+    DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamWatch, {
+      'stream_key': streamKey,
+    }),
+  );
+
+  /// Opcode 21.
+  void sendStreamPing(String streamKey) => _send(
+    DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamPing, {
+      'stream_key': streamKey,
+    }),
+  );
+
+  /// Opcode 22.
+  void sendStreamSetPaused(String streamKey, {required bool paused}) => _send(
+    DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamSetPaused, {
+      'stream_key': streamKey,
+      'paused': paused,
+    }),
+  );
+
   void _acceptPayload(Map<String, Object?> payload) {
     if (_bootstrapCompleter?.isCompleted == false) {
       developer.log(

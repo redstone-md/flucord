@@ -14,6 +14,7 @@ import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/application_command.dart';
+import '../../domain/go_live_stream.dart';
 import '../../domain/message_component.dart';
 import '../../domain/gif_picker.dart';
 import '../../domain/soundboard.dart';
@@ -36,6 +37,7 @@ import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
+import 'discord_go_live_service.dart';
 import 'discord_message_component_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
@@ -71,6 +73,7 @@ final class DiscordDesktopChatRepository
          _api,
          sessionId: () => _gateway.sessionId,
        ),
+
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
@@ -121,6 +124,11 @@ final class DiscordDesktopChatRepository
   final DiscordGifService _gifs;
   final DiscordApplicationCommandService _applicationCommands;
   final DiscordMessageComponentService _messageComponents;
+  // Built after construction because the adapter reads the signed-in account
+  // off this repository, which does not exist yet in the initialiser list.
+  late final DiscordGoLiveService _goLive = DiscordGoLiveService(
+    _DesktopGoLiveGateway(_gateway, () => _currentMemberId),
+  );
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
   final StreamController<ChatRepositoryEvent> _events =
@@ -164,6 +172,9 @@ final class DiscordDesktopChatRepository
   @override
   @override
   MessageComponentRepository? get messageComponents => _messageComponents;
+
+  @override
+  GoLiveRepository? get goLive => _goLive;
 
   @override
   ApplicationCommandRepository? get applicationCommands => _applicationCommands;
@@ -504,10 +515,52 @@ final class DiscordDesktopChatRepository
     await _stages.close();
     await _soundboard.close();
     await _messageComponents.close();
+    await _goLive.close();
     await _memberLists.close();
     await _gateway.close();
     _api.close();
     await _cache.close();
     await _events.close();
   }
+}
+
+/// Adapts the desktop gateway to the frames Go Live needs.
+///
+/// The service is written against the five frames rather than the whole
+/// gateway so it can be tested without a socket, and this is the seam.
+final class _DesktopGoLiveGateway implements DiscordGoLiveGateway {
+  const _DesktopGoLiveGateway(this._gateway, this._currentUserId);
+
+  final DiscordDesktopGatewayClient _gateway;
+  final String? Function() _currentUserId;
+
+  @override
+  String? get currentUserId => _currentUserId();
+
+  @override
+  void sendStreamCreate({
+    required String type,
+    required String channelId,
+    String? guildId,
+    String? preferredRegion,
+  }) => _gateway.sendStreamCreate(
+    type: type,
+    channelId: channelId,
+    guildId: guildId,
+    preferredRegion: preferredRegion,
+  );
+
+  @override
+  void sendStreamDelete(String streamKey) =>
+      _gateway.sendStreamDelete(streamKey);
+
+  @override
+  void sendStreamWatch(String streamKey) => _gateway.sendStreamWatch(streamKey);
+
+  @override
+  void sendStreamPing(String streamKey) => _gateway.sendStreamPing(streamKey);
+
+  @override
+  void sendStreamSetPaused(String streamKey, {required bool paused}) =>
+      _gateway.sendStreamSetPaused(streamKey, paused: paused);
 }

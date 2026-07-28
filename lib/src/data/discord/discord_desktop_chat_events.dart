@@ -46,6 +46,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         _soundboard.accept(event.name, event.data);
         // A modal is opened by the application, not asked for here.
         _messageComponents.accept(event.name, event.data);
+        _goLive.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {
