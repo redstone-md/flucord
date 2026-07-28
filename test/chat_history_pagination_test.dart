@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
@@ -193,6 +194,10 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   GoLiveRepository? get goLive => _delegate.goLive;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries =>
+      _delegate.conversationSummaries;
 
   _PagedRepository(this._results, {ChatWorkspace? workspace})
     : _workspace = workspace ?? _defaultWorkspace();

@@ -594,14 +594,22 @@ are excluded from the denominator and are never reported as implemented.
 - **Bundle evidence**: 5 endpoint constants under `ai`.
 - **Symbols**: `CONVERSATION_SUMMARY_UPDATE`.
 - **Purpose**: thread summaries, translation, grammar, titles.
-- **UI surface**: none.
-- **Contract**: `POST /ai/summarize-thread/{id}`, `/ai/translate`.
+- **UI surface**: none yet; the store is in place for one.
+- **Contract**: `CONVERSATION_SUMMARY_UPDATE`, `POST /ai/summarize-thread/{id}`,
+  `/ai/translate`.
 - **Dependencies**: FBC-MESSAGE.
-- **Status**: **Absent**.
-- **Tests**: none.
+- **Status**: **Partial**.
+- **Implemented**: summaries are read from the dispatch that carries them and
+  held per channel — merged rather than replaced, since a dispatch names only
+  what changed; ordered by the message each stretch starts at, so a late
+  dispatch about an old stretch lands where that stretch is; capped at the 75
+  the desktop client keeps; and a summary Discord has not written yet is
+  dropped rather than shown as a blank card.
+- **Tests**: `conversation_summary_test.dart`.
 - **Live evidence**: none.
-- **Blocked by**: server-side gating. Availability is decided by Discord
-  experiments per account and cannot be verified from the bundle alone.
+- **Blocked by**: server-side gating — whether an account receives summaries
+  at all is an experiment, and the `/ai/*` routes that ask for one on demand
+  are refused without it. Translation and grammar tools are untouched.
 
 ## FBC-PLATFORM — Experiments, telemetry, changelogs, client shell
 

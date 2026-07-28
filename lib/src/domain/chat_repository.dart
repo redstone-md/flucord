@@ -9,6 +9,7 @@ import 'voice_call.dart';
 import 'application_command.dart';
 import 'message_component.dart';
 import 'gif_picker.dart';
+import 'conversation_summary.dart';
 import 'go_live_stream.dart';
 import 'soundboard.dart';
 import 'stage_channel.dart';
@@ -235,6 +236,10 @@ abstract interface class ChatRepository {
 
   /// Go Live streaming, or null on a transport that cannot open one.
   GoLiveRepository? get goLive;
+
+  /// Conversation summaries, or null on a transport Discord never sends them
+  /// to. Availability is an experiment decided per account.
+  ConversationSummaryRepository? get conversationSummaries;
 
   /// The account settings this transport can read and write, or `null`.
   ///

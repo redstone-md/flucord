@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/conversation_summary.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/message_component.dart';
 import '../../domain/application_command.dart';
@@ -328,6 +329,9 @@ final class DiscordChatRepository
 
   @override
   GoLiveRepository? get goLive => null;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries => null;
 
   /// A bot token has no user account behind it, and `/users/@me/settings-proto`
   /// answers for a user. The capability is absent rather than empty.

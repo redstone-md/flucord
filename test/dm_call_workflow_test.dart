@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
@@ -217,6 +218,10 @@ final class _CallableRepository implements ChatRepository {
 
   @override
   GoLiveRepository? get goLive => _delegate.goLive;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries =>
+      _delegate.conversationSummaries;
 
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeCallService calls = _FakeCallService();

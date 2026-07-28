@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
@@ -155,6 +156,9 @@ final class _Repository implements ChatRepository {
 
   @override
   GoLiveRepository? get goLive => null;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries => null;
 
   _Repository({
     bool failing = false,

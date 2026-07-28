@@ -14,6 +14,7 @@ import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
 import '../../domain/application_command.dart';
+import '../../domain/conversation_summary.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/message_component.dart';
 import '../../domain/gif_picker.dart';
@@ -37,6 +38,7 @@ import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
+import 'discord_conversation_summary_service.dart';
 import 'discord_go_live_service.dart';
 import 'discord_message_component_service.dart';
 import 'discord_gif_service.dart';
@@ -126,6 +128,8 @@ final class DiscordDesktopChatRepository
   final DiscordMessageComponentService _messageComponents;
   // Built after construction because the adapter reads the signed-in account
   // off this repository, which does not exist yet in the initialiser list.
+  final DiscordConversationSummaryService _summaries =
+      DiscordConversationSummaryService();
   late final DiscordGoLiveService _goLive = DiscordGoLiveService(
     _DesktopGoLiveGateway(_gateway, () => _currentMemberId),
   );
@@ -175,6 +179,9 @@ final class DiscordDesktopChatRepository
 
   @override
   GoLiveRepository? get goLive => _goLive;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries => _summaries;
 
   @override
   ApplicationCommandRepository? get applicationCommands => _applicationCommands;
@@ -516,6 +523,7 @@ final class DiscordDesktopChatRepository
     await _soundboard.close();
     await _messageComponents.close();
     await _goLive.close();
+    await _summaries.close();
     await _memberLists.close();
     await _gateway.close();
     _api.close();

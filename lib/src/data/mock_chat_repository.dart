@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/message_component.dart';
 import '../domain/application_command.dart';
@@ -107,6 +108,9 @@ final class MockChatRepository
 
   @override
   GoLiveRepository? get goLive => null;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

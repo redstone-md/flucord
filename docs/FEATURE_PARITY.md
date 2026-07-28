@@ -30,10 +30,11 @@ do not count as desktop-user chat parity.
 | Slash commands and components | Ready | Chat-input commands from the channel index, context-menu commands on a message or member, buttons and every select kind, and modals — interaction types 2, 3 and 5 |
 | GIF picker | Ready | Trending categories, search with suggestions, sent as a link through Discord's own provider proxy |
 | Soundboard | Ready | Server and default sounds sent into a voice channel, and incoming `VOICE_CHANNEL_EFFECT_SEND` fetched from the CDN and played locally — which is how Discord itself does it, since the sound is never mixed into the RTP stream |
-| Video and screen share | Pipeline built and self-verified | Opcodes 18-22, a native Media Foundation encoder, RFC 6184 packetisation and its inverse — 556 real frames became 2144 packets, returned NAL-identical, and decoded to 556 pictures through the system H.264 decoder; a watching account is the only thing left that can confirm a Discord viewer draws it |
+| Video and screen share | Built, wired both ways and self-verified | Share, stop, pause and a viewer count from the voice room; watch somebody else's stream in place of the participant grid. 544 real frames became 2151 encrypted packets and came back as 516 pictures at 1280x720; a second Discord account is the only thing left that can confirm delivery over Discord's own servers |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
-| Calls, activities, store, moderation, settings | Not ready | Outside current desktop-user tracer bullet |
+| Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store; Discord decides per account whether it sends any |
+| Embedded activities, store and Nitro | Not ready | Activities are a separate transport; commerce is outside a chat client's remit |
 | ETF Gateway framing | Implemented, not default | Live-checked against a real `HELLO`; a full authenticated `READY` has not been decoded, so the shipped default is JSON |
 | zstd-stream Gateway compression | Off by default | Decoder is in place and live-validated, but stays disabled until proven against a full authenticated `READY` |
 

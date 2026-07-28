@@ -37,6 +37,10 @@ extension ChatControllerUserSettings on ChatController {
   /// The Go Live plane of the connected transport, or `null`.
   GoLiveRepository? get goLive => _repository.goLive;
 
+  /// Conversation summaries, or `null` where Discord sends none.
+  ConversationSummaryRepository? get conversationSummaries =>
+      _repository.conversationSummaries;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

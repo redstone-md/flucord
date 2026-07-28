@@ -28,6 +28,10 @@ final class _EventRepository implements ChatRepository {
   @override
   GoLiveRepository? get goLive => _delegate.goLive;
 
+  @override
+  ConversationSummaryRepository? get conversationSummaries =>
+      _delegate.conversationSummaries;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );
