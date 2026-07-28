@@ -8,7 +8,10 @@ import 'package:ffi/ffi.dart';
 
 import 'package:flucord/src/data/discord/discord_h264_depacketizer.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_video_rtp_sender.dart';
+import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
+import 'package:flucord/src/data/discord/discord_voice_transport_cipher.dart';
 import 'package:flucord/src/data/video/native_video_bindings.dart';
 import 'package:flucord/src/data/video/native_video_encoder_service.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
@@ -32,6 +35,23 @@ Future<void> main() async {
   var oversized = 0;
   var parameterSets = 0;
   final sender = DiscordVideoRtpSender(ssrc: 0x1234);
+  // The transport as the stream connection would hold it, encrypting each
+  // packet the way the voice socket does before it goes out.
+  final cipher = DiscordVoiceTransportCipher(
+    mode: DiscordVoiceTransportMode.aes256GcmRtpSize,
+    secretKey: List<int>.generate(32, (index) => index),
+  );
+  var encryptedPackets = 0;
+  var encryptedBytes = 0;
+  final transport = DiscordVideoStreamTransport(
+    ssrc: 0x1234,
+    sink: (frame) {
+      final packet = cipher.encryptFrame(frame);
+      encryptedPackets++;
+      encryptedBytes += packet.length;
+      return packet.length;
+    },
+  );
   // The receiving half, so the sender can be checked against itself: what
   // comes back out must be what the encoder put in.
   final depacketizer = DiscordH264Depacketizer();
@@ -48,6 +68,7 @@ Future<void> main() async {
     for (final unit in DiscordH264Packetizer.splitAnnexB(frame.bytes)) {
       if (DiscordH264Packetizer.isParameterSet(unit)) parameterSets++;
     }
+    transport.send(frame);
     final produced = sender.packetsFor(frame);
     packets += produced.length;
     for (final packet in produced) {
@@ -134,6 +155,10 @@ Future<void> main() async {
   final decoded = bindings.decodeProbe(buffer, stream.length);
   calloc.free(buffer);
   stdout.writeln('decoded pictures: $decoded');
+  stdout.writeln(
+    'encrypted packets: $encryptedPackets, bytes on the wire: '
+    '$encryptedBytes, transport error: ${transport.error}',
+  );
 
   exit(
     frames > 0 && packets > 0 && oversized == 0 && differing == 0 && decoded > 0
