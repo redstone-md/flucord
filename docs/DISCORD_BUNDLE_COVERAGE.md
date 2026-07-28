@@ -505,9 +505,16 @@ are excluded from the denominator and are never reported as implemented.
 - **Tests**: `slash_command_test.dart`, `slash_command_widget_test.dart`,
   `social_sdk_activity_*_test.dart` for the SDK path.
 - **Live evidence**: none.
-- **Blocked by**: message components (buttons, selects) and modals — types 3
-  and 5 — have no renderer, and user and message context-menu commands have no
-  surface to be invoked from.
+  Message components are rendered and pressed: buttons and string selects go
+  out as type-3 interactions carrying the message id and flags, and an
+  `INTERACTION_MODAL_CREATE` opens a form whose submission is type 5 reusing
+  the nonce the modal was opened with. The component tree is walked rather
+  than read two deep, because Components V2 nests action rows inside
+  containers. A link button sends nothing — it is a hyperlink.
+- **Blocked by**: user, role, channel and mentionable selects need a directory
+  picker this surface does not have and are shown disabled; user and message
+  context-menu commands have no surface to be invoked from; embedded
+  activities are a separate transport.
 
 ## FBC-OAUTH — OAuth2, connections, integrations, invites, webhooks
 
