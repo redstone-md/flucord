@@ -312,6 +312,215 @@ void CaptureLoop(FlucordVideoEncoder* state) {
 
 }  // namespace
 
+
+struct FlucordVideoDecoder {
+  ComPtr<IMFTransform> transform;
+  FlucordVideoPictureCallback callback = nullptr;
+  void* user_data = nullptr;
+  std::vector<uint8_t> bgra;
+  int32_t width = 0;
+  int32_t height = 0;
+};
+
+namespace {
+
+// NV12 is what the decoder hands back; a texture wants BGRA, and the two are
+// far enough apart that nothing downstream would accept the wrong one.
+void Nv12ToBgra(const uint8_t* source,
+                int source_stride,
+                int width,
+                int height,
+                uint8_t* destination) {
+  const uint8_t* luma = source;
+  const uint8_t* chroma = source + static_cast<size_t>(source_stride) * height;
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      const int c = luma[static_cast<size_t>(y) * source_stride + x] - 16;
+      const size_t chroma_index =
+          static_cast<size_t>(y / 2) * source_stride + (x & ~1);
+      const int u = chroma[chroma_index] - 128;
+      const int v = chroma[chroma_index + 1] - 128;
+      const int r = (298 * c + 409 * v + 128) >> 8;
+      const int g = (298 * c - 100 * u - 208 * v + 128) >> 8;
+      const int b = (298 * c + 516 * u + 128) >> 8;
+      uint8_t* pixel = destination + (static_cast<size_t>(y) * width + x) * 4;
+      pixel[0] = static_cast<uint8_t>(b < 0 ? 0 : (b > 255 ? 255 : b));
+      pixel[1] = static_cast<uint8_t>(g < 0 ? 0 : (g > 255 ? 255 : g));
+      pixel[2] = static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
+      pixel[3] = 255;
+    }
+  }
+}
+
+void ReadDecoderSize(FlucordVideoDecoder* decoder) {
+  ComPtr<IMFMediaType> type;
+  if (FAILED(decoder->transform->GetOutputCurrentType(0, &type))) return;
+  UINT32 width = 0;
+  UINT32 height = 0;
+  if (SUCCEEDED(
+          MFGetAttributeSize(type.Get(), MF_MT_FRAME_SIZE, &width, &height))) {
+    decoder->width = static_cast<int32_t>(width);
+    decoder->height = static_cast<int32_t>(height);
+  }
+}
+
+void TakeAvailableOutputType(FlucordVideoDecoder* decoder) {
+  ComPtr<IMFMediaType> type;
+  for (DWORD index = 0;
+       SUCCEEDED(decoder->transform->GetOutputAvailableType(0, index, &type));
+       ++index) {
+    if (SUCCEEDED(decoder->transform->SetOutputType(0, type.Get(), 0))) {
+      ReadDecoderSize(decoder);
+      return;
+    }
+    type.Reset();
+  }
+}
+
+void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
+  while (true) {
+    MFT_OUTPUT_STREAM_INFO info{};
+    decoder->transform->GetOutputStreamInfo(0, &info);
+    const bool allocates =
+        (info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES |
+                         MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES)) != 0;
+    ComPtr<IMFSample> sample;
+    ComPtr<IMFMediaBuffer> buffer;
+    if (!allocates) {
+      if (FAILED(MFCreateSample(&sample))) return;
+      if (FAILED(MFCreateMemoryBuffer(info.cbSize, &buffer))) return;
+      sample->AddBuffer(buffer.Get());
+    }
+
+    MFT_OUTPUT_DATA_BUFFER out{};
+    out.pSample = allocates ? nullptr : sample.Get();
+    DWORD status = 0;
+    const HRESULT hr = decoder->transform->ProcessOutput(0, 1, &out, &status);
+    if (out.pEvents != nullptr) out.pEvents->Release();
+    if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) return;
+    if (hr == MF_E_TRANSFORM_STREAM_CHANGE) {
+      // The decoder has read the parameter sets and is restating its output.
+      TakeAvailableOutputType(decoder);
+      continue;
+    }
+    if (FAILED(hr)) return;
+
+    ComPtr<IMFSample> produced = allocates ? out.pSample : sample;
+    if (!produced) return;
+    if (decoder->width <= 0 || decoder->height <= 0) ReadDecoderSize(decoder);
+
+    ComPtr<IMFMediaBuffer> contiguous;
+    if (SUCCEEDED(produced->ConvertToContiguousBuffer(&contiguous)) &&
+        decoder->width > 0 && decoder->height > 0) {
+      BYTE* data = nullptr;
+      DWORD length = 0;
+      if (SUCCEEDED(contiguous->Lock(&data, nullptr, &length))) {
+        const size_t needed =
+            static_cast<size_t>(decoder->width) * decoder->height * 4;
+        if (decoder->bgra.size() != needed) decoder->bgra.resize(needed);
+        Nv12ToBgra(data, decoder->width, decoder->width, decoder->height,
+                   decoder->bgra.data());
+        LONGLONG sample_time = 0;
+        produced->GetSampleTime(&sample_time);
+        decoder->callback(decoder->user_data, decoder->bgra.data(),
+                          decoder->width, decoder->height, decoder->width * 4,
+                          sample_time != 0 ? sample_time / 10 : timestamp_us);
+        contiguous->Unlock();
+      }
+    }
+    if (allocates && out.pSample != nullptr) out.pSample->Release();
+  }
+}
+
+}  // namespace
+
+extern "C" {
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_open(FlucordVideoPictureCallback callback,
+                           void* user_data,
+                           FlucordVideoDecoder** out_decoder) {
+  if (callback == nullptr || out_decoder == nullptr) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  auto decoder = std::make_unique<FlucordVideoDecoder>();
+  decoder->callback = callback;
+  decoder->user_data = user_data;
+
+  HRESULT hr =
+      CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr, CLSCTX_INPROC_SERVER,
+                       IID_PPV_ARGS(&decoder->transform));
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  ComPtr<IMFMediaType> input;
+  MFCreateMediaType(&input);
+  input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+  input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+  hr = decoder->transform->SetInputType(0, input.Get(), 0);
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  TakeAvailableOutputType(decoder.get());
+  decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+  *out_decoder = decoder.release();
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
+                             const uint8_t* annex_b,
+                             int32_t length,
+                             int64_t timestamp_us) {
+  if (decoder == nullptr || annex_b == nullptr || length <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  ComPtr<IMFMediaBuffer> buffer;
+  if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(length), &buffer))) {
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  BYTE* target = nullptr;
+  if (FAILED(buffer->Lock(&target, nullptr, nullptr))) {
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  memcpy(target, annex_b, static_cast<size_t>(length));
+  buffer->Unlock();
+  buffer->SetCurrentLength(static_cast<DWORD>(length));
+
+  ComPtr<IMFSample> sample;
+  if (FAILED(MFCreateSample(&sample))) return FLUCORD_VIDEO_ERROR_ENCODER;
+  sample->AddBuffer(buffer.Get());
+  sample->SetSampleTime(timestamp_us * 10);
+
+  const HRESULT hr = decoder->transform->ProcessInput(0, sample.Get(), 0);
+  if (FAILED(hr)) return FLUCORD_VIDEO_ERROR_ENCODER;
+  DrainDecoder(decoder, timestamp_us);
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
+    FlucordVideoDecoder* decoder) {
+  if (decoder == nullptr) return;
+  if (decoder->transform) {
+    decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+    decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+  }
+  decoder->transform.Reset();
+  delete decoder;
+  MFShutdown();
+}
+
+}  // extern "C"
+
 extern "C" {
 
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus

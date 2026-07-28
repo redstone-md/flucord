@@ -1,5 +1,6 @@
 // Drives the native encoder against this machine's real display, which is the
 // only way to know whether it encodes anything at all.
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
@@ -12,7 +13,9 @@ import 'package:flucord/src/data/discord/discord_video_rtp_sender.dart';
 import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_transport_cipher.dart';
 import 'package:flucord/src/data/video/native_video_bindings.dart';
+import 'package:flucord/src/data/video/native_video_decoder_service.dart';
 import 'package:flucord/src/data/video/native_video_encoder_service.dart';
+import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 
 Future<void> main() async {
@@ -54,6 +57,31 @@ Future<void> main() async {
   // The receiving half, so the sender can be checked against itself: what
   // comes back out must be what the encoder put in.
   final depacketizer = DiscordH264Depacketizer();
+  // The viewer's half, in-process: what the sender put on the wire is decoded
+  // back into pictures exactly as a watching client would.
+  final viewer = NativeVideoDecoderService(
+    bindings: NativeVideoBindings(DynamicLibrary.open(dll)),
+  );
+  await viewer.start();
+  var pictures = 0;
+  var completePictures = 0;
+  var pictureWidth = 0;
+  var pictureHeight = 0;
+  var nonBlackPictures = 0;
+  final viewing = viewer.frames.listen((picture) {
+    pictures++;
+    if (picture.isComplete) completePictures++;
+    pictureWidth = picture.width;
+    pictureHeight = picture.height;
+    // A decoder that produced nothing but black would satisfy every count
+    // above while showing a viewer an empty rectangle.
+    for (var index = 0; index < picture.pixels.length; index += 4096) {
+      if (picture.pixels[index] > 8) {
+        nonBlackPictures++;
+        break;
+      }
+    }
+  });
   final rebuilt = <int>[];
   var rebuiltUnits = 0;
   var identical = 0;
@@ -84,6 +112,7 @@ Future<void> main() async {
       if (unit == null) continue;
       rebuiltUnits++;
       rebuilt.addAll(unit);
+      unawaited(viewer.submit(unit, timestamp: frame.timestamp));
       // Start-code lengths cannot survive the round trip — RTP does not carry
       // them, so the depacketiser chooses its own — but every NAL unit must
       // come back byte for byte. That is what a decoder actually reads.
@@ -154,13 +183,25 @@ Future<void> main() async {
   final decoded = bindings.decodeProbe(buffer, stream.length);
   calloc.free(buffer);
   stdout.writeln('decoded pictures: $decoded');
+  await viewing.cancel();
+  await viewer.close();
+  stdout.writeln(
+    'viewer pictures: $pictures, complete: $completePictures, '
+    'non-black: $nonBlackPictures, size: ${pictureWidth}x$pictureHeight',
+  );
   stdout.writeln(
     'encrypted packets: $encryptedPackets, bytes on the wire: '
     '$encryptedBytes, transport error: ${transport.error}',
   );
 
   exit(
-    frames > 0 && packets > 0 && oversized == 0 && differing == 0 && decoded > 0
+    frames > 0 &&
+            packets > 0 &&
+            oversized == 0 &&
+            differing == 0 &&
+            decoded > 0 &&
+            completePictures > 0 &&
+            nonBlackPictures > 0
         ? 0
         : 2,
   );

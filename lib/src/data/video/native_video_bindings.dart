@@ -21,6 +21,29 @@ final class NativeVideoConfig extends Struct {
 typedef NativeFrameCallback =
     Void Function(Pointer<Void>, Pointer<Uint8>, Int32, Int64, Int32);
 
+typedef NativePictureCallback =
+    Void Function(Pointer<Void>, Pointer<Uint8>, Int32, Int32, Int32, Int64);
+
+typedef _DecoderOpenNative =
+    Int32 Function(
+      Pointer<NativeFunction<NativePictureCallback>>,
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+    );
+
+typedef VideoDecoderOpenDart =
+    int Function(
+      Pointer<NativeFunction<NativePictureCallback>>,
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+    );
+
+typedef _DecoderSubmitNative =
+    Int32 Function(Pointer<Void>, Pointer<Uint8>, Int32, Int64);
+
+typedef VideoDecoderSubmitDart =
+    int Function(Pointer<Void>, Pointer<Uint8>, int, int);
+
 typedef VideoOpenNative =
     Int32 Function(
       Pointer<NativeVideoConfig>,
@@ -71,6 +94,19 @@ final class NativeVideoBindings {
             Int32 Function(Pointer<Uint8>, Int32),
             int Function(Pointer<Uint8>, int)
           >('flucord_video_decode_probe'),
+      decoderOpen = library
+          .lookupFunction<_DecoderOpenNative, VideoDecoderOpenDart>(
+            'flucord_video_decoder_open',
+          ),
+      decoderSubmit = library
+          .lookupFunction<_DecoderSubmitNative, VideoDecoderSubmitDart>(
+            'flucord_video_decoder_submit',
+          ),
+      decoderClose = library
+          .lookupFunction<
+            Void Function(Pointer<Void>),
+            void Function(Pointer<Void>)
+          >('flucord_video_decoder_close'),
       displayCount = library.lookupFunction<Int32 Function(), int Function()>(
         'flucord_video_display_count',
       );
@@ -84,6 +120,11 @@ final class NativeVideoBindings {
   /// Runs an Annex B stream through the system decoder; returns the picture
   /// count, or a negative status.
   final int Function(Pointer<Uint8>, int) decodeProbe;
+
+  /// Opens a decoder for somebody else's stream.
+  final VideoDecoderOpenDart decoderOpen;
+  final VideoDecoderSubmitDart decoderSubmit;
+  final void Function(Pointer<Void>) decoderClose;
   final int Function() displayCount;
 }
 

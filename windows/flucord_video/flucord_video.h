@@ -81,6 +81,35 @@ FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
 // Releases a buffer handed out by the frame callback.
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data);
 
+typedef struct FlucordVideoDecoder FlucordVideoDecoder;
+
+// One decoded picture, as BGRA ready for a texture. Valid for the duration of
+// the callback only: the decoder reuses its buffer.
+typedef void (*FlucordVideoPictureCallback)(void* user_data,
+                                            const uint8_t* bgra,
+                                            int32_t width,
+                                            int32_t height,
+                                            int32_t stride,
+                                            int64_t timestamp_us);
+
+// Opens a decoder for somebody else's stream. Frames are fed in as Annex B
+// access units and come back out as pictures.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_open(FlucordVideoPictureCallback callback,
+                           void* user_data,
+                           FlucordVideoDecoder** out_decoder);
+
+// Feeds one access unit in. Pictures arrive on the callback, synchronously,
+// before this returns.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
+                             const uint8_t* annex_b,
+                             int32_t length,
+                             int64_t timestamp_us);
+
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
+    FlucordVideoDecoder* decoder);
+
 // Runs an Annex B stream through the system H.264 decoder and returns how
 // many pictures came out, or a negative status on failure.
 //
