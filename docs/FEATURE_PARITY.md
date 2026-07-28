@@ -9,7 +9,7 @@ do not count as desktop-user chat parity.
 | Native desktop shell | Ready | Flutter widgets; no Electron or embedded Discord UI |
 | Account login | Ready | Native QR remote-auth plus an ephemeral system WebView2 for mandatory hCaptcha; phone approval and challenge completion live-validated |
 | Saved login | Ready | Versioned operating-system credential vault |
-| User profile | Ready | Hydrated from Gateway `READY` |
+| User profile | Ready | Hydrated from Gateway `READY`; display name, pronouns, about me, accent colour, avatar and banner edited over `PATCH /users/@me`, each field three-state so an untouched image is never cleared |
 | Server list | Ready | Hydrated from `READY`/`GUILD_CREATE` |
 | Server channels | Ready | Hydrated from `GUILD_CREATE` |
 | Direct Message list | Ready | `READY.users` expansion gives recipients names and avatars; ordered by last activity |
@@ -24,7 +24,7 @@ do not count as desktop-user chat parity.
 | Member list and presence | Ready for guild rosters | Server-authoritative lazy member list with scroll-driven subscriptions; presence beyond what a roster item carries is still open |
 | Search | Local only | Loaded/cached workspace; Discord server search absent |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
-| Server voice channels | Ready | Desktop-user session joins over its own gateway; live interoperability still unverified |
+| Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
 | Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |

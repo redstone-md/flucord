@@ -157,8 +157,8 @@ are excluded from the denominator and are never reported as implemented.
 - **Purpose**: identity, profile cards, client settings synchronization.
 - **UI surface**: account panel, member and friend profile popovers, user
   settings dialog.
-- **Contract**: `GET /users/@me`, `GET /users/{id}/profile`,
-  `GET`/`PATCH /users/@me/settings-proto/{n}`.
+- **Contract**: `GET /users/@me`, `PATCH /users/@me`,
+  `GET /users/{id}/profile`, `GET`/`PATCH /users/@me/settings-proto/{n}`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: `READY` identity projection, guild member profile popover,
@@ -167,15 +167,24 @@ are excluded from the denominator and are never reported as implemented.
   `USER_SETTINGS_PROTO_UPDATE` applied as whole-group replacements. Appearance,
   chat, notification, privacy, language and status groups are surfaced; each
   row states whether Flucord applies it, only stores it, or cannot honour it.
+  The account's own profile is editable: display name, pronouns, about me,
+  accent colour, avatar and banner over `PATCH /users/@me`, each image and the
+  accent carried as untouched/set/cleared so an unrelated save cannot strip
+  what nobody edited, every write adopting the server's echo, and `USER_UPDATE`
+  from another device applied to the same store.
 - **Tests**: `discord_oauth_account_mapper_test.dart`, `proto_wire_test.dart`,
   `discord_user_settings_codec_test.dart`,
   `discord_user_settings_repository_test.dart`,
   `user_settings_controller_test.dart`, `user_settings_widget_test.dart`,
-  `user_settings_display_test.dart`, `widget_test.dart`.
+  `user_settings_display_test.dart`, `user_profile_test.dart`,
+  `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
+  `widget_test.dart`.
 - **Live evidence**: authenticated identity hydrated on Windows `2026-07-25`.
 - **Blocked by**: `FrecencyUserSettings` (type 2) has no codec; offline-edit
   replay with `required_data_version` is not implemented; keybinds are not in
-  `PreloadedUserSettings` at all and need a different capability.
+  `PreloadedUserSettings` at all and need a different capability; changing a
+  username or password needs a password confirmation this client does not
+  collect, so both are stated read-only rather than offered.
 
 ## FBC-PRESENCE — Presence and typing
 
@@ -367,14 +376,27 @@ are excluded from the denominator and are never reported as implemented.
 - **Contract**: opcode 4 voice state, Voice Gateway v8, UDP discovery, DAVE
   MLS, RTP v2.
 - **Dependencies**: FBC-GATEWAY, FBC-GUILD, FBC-CHANNEL.
-- **Status**: **Absent** for the desktop-user transport.
-- **Implemented**: a separate Bot-transport voice stack exists — Voice Gateway
-  v8, DAVE, AES-256-GCM and XChaCha20-Poly1305 transport encryption, Opus
-  capture/playback, participant roster.
-- **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`.
-- **Live evidence**: none; interoperability in a real session is unverified.
-- **Blocked by**: the desktop-user session has never been wired to the voice
-  signalling service, and video plus screen share have no encoder path.
+- **Status**: **Partial** — audio is implemented for the desktop-user
+  transport; video and screen share are not.
+- **Implemented**: Voice Gateway v8, DAVE, AES-256-GCM and
+  XChaCha20-Poly1305 transport encryption, Opus capture/playback, participant
+  roster, guild voice and DM/group calls over the desktop-user session. Who is
+  already seated is read from `READY_SUPPLEMENTAL.guilds[].voice_states` — the
+  only place a user account is told, `GUILD_CREATE` being the bot path — and
+  shown under every voice channel in the sidebar. DAVE is not a precondition:
+  the identify carries `max_dave_protocol_version: 0` when secure frames are
+  unavailable, which is what the desktop client itself sends, and the room runs
+  on the transport cipher. A microphone that will not open no longer refuses
+  the join; the room is still joined to listen and says the uplink is silent.
+  A live connection stays reachable from the sidebar after navigating away.
+- **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`,
+  `voice_controller_test.dart`, `voice_connection_bar_test.dart`,
+  `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`.
+- **Live evidence**: an account reported Flucord's join appearing in the real
+  client's voice channel; audio interoperability itself is still unverified.
+- **Blocked by**: video and screen share have no encoder path — nothing in the
+  dependency set produces H.264 or VP8, so a native `flucord_video` library is
+  required before opcodes 18-22 can carry a stream.
 
 ## FBC-STAGE — Stage channels
 
