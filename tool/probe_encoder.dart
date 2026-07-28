@@ -2,7 +2,11 @@
 // only way to know whether it encodes anything at all.
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:ffi/ffi.dart';
+
+import 'package:flucord/src/data/discord/discord_h264_depacketizer.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/data/discord/discord_video_rtp_sender.dart';
 import 'package:flucord/src/data/video/native_video_bindings.dart';
@@ -28,6 +32,13 @@ Future<void> main() async {
   var oversized = 0;
   var parameterSets = 0;
   final sender = DiscordVideoRtpSender(ssrc: 0x1234);
+  // The receiving half, so the sender can be checked against itself: what
+  // comes back out must be what the encoder put in.
+  final depacketizer = DiscordH264Depacketizer();
+  final rebuilt = <int>[];
+  var rebuiltUnits = 0;
+  var identical = 0;
+  var differing = 0;
   final subscription = service.frames.listen((frame) {
     frames++;
     bytes += frame.bytes.length;
@@ -47,6 +58,31 @@ Future<void> main() async {
     }
     if (produced.isNotEmpty && !produced.last.marker) {
       stdout.writeln('BAD: picture with no marker');
+    }
+    for (final packet in produced) {
+      final unit = depacketizer.accept(packet.payload, marker: packet.marker);
+      if (unit == null) continue;
+      rebuiltUnits++;
+      rebuilt.addAll(unit);
+      // Start-code lengths cannot survive the round trip — RTP does not carry
+      // them, so the depacketiser chooses its own — but every NAL unit must
+      // come back byte for byte. That is what a decoder actually reads.
+      final sent = DiscordH264Packetizer.splitAnnexB(frame.bytes);
+      final back = DiscordH264Packetizer.splitAnnexB(unit);
+      var same = sent.length == back.length;
+      for (var index = 0; same && index < sent.length; index++) {
+        if (sent[index].length != back[index].length) {
+          same = false;
+          break;
+        }
+        for (var byte = 0; byte < sent[index].length; byte++) {
+          if (sent[index][byte] != back[index][byte]) {
+            same = false;
+            break;
+          }
+        }
+      }
+      same ? identical++ : differing++;
     }
     if (frames <= 3) {
       final head = frame.bytes.take(5).toList();
@@ -83,5 +119,25 @@ Future<void> main() async {
     'rtp packets: $packets, fragments: $fragments, oversized: $oversized, '
     'parameter sets: $parameterSets, final sequence: ${sender.sequence}',
   );
-  exit(frames > 0 && packets > 0 && oversized == 0 ? 0 : 2);
+  stdout.writeln(
+    'rebuilt access units: $rebuiltUnits, NAL-identical: $identical, '
+    'differing: $differing',
+  );
+
+  // The last question a machine can answer alone: does a decoder accept what
+  // came back off the wire? This is the same Media Foundation H.264 decoder a
+  // Discord client on Windows draws with.
+  final bindings = NativeVideoBindings(DynamicLibrary.open(dll));
+  final stream = Uint8List.fromList(rebuilt);
+  final buffer = calloc<Uint8>(stream.length);
+  buffer.asTypedList(stream.length).setAll(0, stream);
+  final decoded = bindings.decodeProbe(buffer, stream.length);
+  calloc.free(buffer);
+  stdout.writeln('decoded pictures: $decoded');
+
+  exit(
+    frames > 0 && packets > 0 && oversized == 0 && differing == 0 && decoded > 0
+        ? 0
+        : 2,
+  );
 }

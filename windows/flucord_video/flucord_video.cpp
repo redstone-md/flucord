@@ -401,6 +401,112 @@ FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder) {
   MFShutdown();
 }
 
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
+  if (annex_b == nullptr || length <= 0) return -1;
+  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
+    // Already initialised on this thread is not a failure.
+  }
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return -2;
+
+  int32_t decoded = 0;
+  {
+    ComPtr<IMFTransform> decoder;
+    HRESULT hr = CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr,
+                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&decoder));
+    if (SUCCEEDED(hr)) {
+      ComPtr<IMFMediaType> input;
+      MFCreateMediaType(&input);
+      input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+      input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+      input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+      hr = decoder->SetInputType(0, input.Get(), 0);
+    }
+    if (SUCCEEDED(hr)) {
+      // The decoder picks its own output type once it has seen the parameter
+      // sets, so the first available one is taken rather than demanded.
+      ComPtr<IMFMediaType> output;
+      for (DWORD index = 0;
+           SUCCEEDED(decoder->GetOutputAvailableType(0, index, &output));
+           ++index) {
+        if (SUCCEEDED(decoder->SetOutputType(0, output.Get(), 0))) break;
+        output.Reset();
+      }
+      decoder->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+
+      ComPtr<IMFMediaBuffer> buffer;
+      if (SUCCEEDED(MFCreateMemoryBuffer(static_cast<DWORD>(length),
+                                         &buffer))) {
+        BYTE* target = nullptr;
+        if (SUCCEEDED(buffer->Lock(&target, nullptr, nullptr))) {
+          memcpy(target, annex_b, static_cast<size_t>(length));
+          buffer->Unlock();
+          buffer->SetCurrentLength(static_cast<DWORD>(length));
+
+          ComPtr<IMFSample> sample;
+          if (SUCCEEDED(MFCreateSample(&sample))) {
+            sample->AddBuffer(buffer.Get());
+            sample->SetSampleTime(0);
+            if (SUCCEEDED(decoder->ProcessInput(0, sample.Get(), 0))) {
+              decoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+              decoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+              while (true) {
+                MFT_OUTPUT_STREAM_INFO info{};
+                decoder->GetOutputStreamInfo(0, &info);
+                ComPtr<IMFSample> produced;
+                ComPtr<IMFMediaBuffer> produced_buffer;
+                const bool allocates =
+                    (info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES |
+                                     MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES)) !=
+                    0;
+                if (!allocates) {
+                  if (FAILED(MFCreateSample(&produced))) break;
+                  if (FAILED(MFCreateMemoryBuffer(info.cbSize,
+                                                  &produced_buffer))) {
+                    break;
+                  }
+                  produced->AddBuffer(produced_buffer.Get());
+                }
+                MFT_OUTPUT_DATA_BUFFER out{};
+                out.pSample = allocates ? nullptr : produced.Get();
+                DWORD status = 0;
+                const HRESULT drained =
+                    decoder->ProcessOutput(0, 1, &out, &status);
+                if (out.pEvents != nullptr) out.pEvents->Release();
+                if (drained == MF_E_TRANSFORM_NEED_MORE_INPUT) break;
+                if (drained == MF_E_TRANSFORM_STREAM_CHANGE) {
+                  // The decoder has read the parameter sets and wants to
+                  // restate its output; taking the new type is what lets the
+                  // pictures through.
+                  ComPtr<IMFMediaType> changed;
+                  for (DWORD index = 0;
+                       SUCCEEDED(
+                           decoder->GetOutputAvailableType(0, index, &changed));
+                       ++index) {
+                    if (SUCCEEDED(decoder->SetOutputType(0, changed.Get(), 0))) {
+                      break;
+                    }
+                    changed.Reset();
+                  }
+                  continue;
+                }
+                if (FAILED(drained)) break;
+                ++decoded;
+                if (allocates && out.pSample != nullptr) out.pSample->Release();
+              }
+            }
+          }
+        }
+      }
+      decoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+    }
+    if (FAILED(hr) && decoded == 0) decoded = -3;
+  }
+
+  MFShutdown();
+  return decoded;
+}
+
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data) {
   free(data);
 }

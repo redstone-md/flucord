@@ -66,6 +66,11 @@ final class NativeVideoBindings {
             Void Function(Pointer<Uint8>),
             void Function(Pointer<Uint8>)
           >('flucord_video_release_frame'),
+      decodeProbe = library
+          .lookupFunction<
+            Int32 Function(Pointer<Uint8>, Int32),
+            int Function(Pointer<Uint8>, int)
+          >('flucord_video_decode_probe'),
       displayCount = library.lookupFunction<Int32 Function(), int Function()>(
         'flucord_video_display_count',
       );
@@ -75,6 +80,10 @@ final class NativeVideoBindings {
   final int Function(Pointer<Void>, int) setPaused;
   final void Function(Pointer<Void>) close;
   final void Function(Pointer<Uint8>) releaseFrame;
+
+  /// Runs an Annex B stream through the system decoder; returns the picture
+  /// count, or a negative status.
+  final int Function(Pointer<Uint8>, int) decodeProbe;
   final int Function() displayCount;
 }
 

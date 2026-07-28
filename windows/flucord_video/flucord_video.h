@@ -81,6 +81,16 @@ FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
 // Releases a buffer handed out by the frame callback.
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data);
 
+// Runs an Annex B stream through the system H.264 decoder and returns how
+// many pictures came out, or a negative status on failure.
+//
+// This is how the client checks its own output without a second account
+// watching: the decoder here is the same Media Foundation one a Discord
+// client on Windows decodes with, so a stream it accepts is a stream a viewer
+// can draw.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decode_probe(const uint8_t* annex_b, int32_t length);
+
 // How many displays are available, so a picker has something to list.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void);
 
