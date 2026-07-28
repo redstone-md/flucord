@@ -58,4 +58,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// The reporting and blocking plane of the connected transport, or `null`.
   ModerationRepository? get moderation => _repository.moderation;
+
+  /// The account's own safety record, or `null` where there is none.
+  SafetyHubRepository? get safetyHub => _repository.safetyHub;
 }

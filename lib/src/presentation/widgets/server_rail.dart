@@ -8,6 +8,7 @@ import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'account_standing_scope.dart';
 import 'user_profile_scope.dart';
 import 'user_settings_dialog.dart';
 import 'user_settings_scope.dart';
@@ -116,6 +117,7 @@ class ServerRail extends StatelessWidget {
                   context,
                   controller: settings,
                   profileController: UserProfileScope.maybeOf(context),
+                  standingController: AccountStandingScope.maybeOf(context),
                 ),
               ),
               icon: const Icon(Icons.settings_outlined),

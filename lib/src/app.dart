@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'application/account_standing_controller.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/direct_call_controller.dart';
@@ -75,6 +76,7 @@ import 'presentation/widgets/discord_social_activity_scope.dart';
 import 'presentation/widgets/discord_social_presence_scope.dart';
 import 'presentation/widgets/discord_social_sdk_scope.dart';
 import 'presentation/widgets/self_presence_scope.dart';
+import 'presentation/widgets/account_standing_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'platform/desktop_integration.dart';
@@ -192,6 +194,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final MessageSearchController _messageSearchController;
   late final UserSettingsController _userSettingsController;
   late final UserProfileController _userProfileController;
+  late final AccountStandingController _accountStandingController;
   late final ThreadMembershipController _threadMembershipController;
   late final StageController _stageController;
   late final SoundboardController _soundboardController;
@@ -281,6 +284,11 @@ class _FlucordAppState extends State<FlucordApp> {
     // session, which is replaced when the account changes.
     _userProfileController = UserProfileController(
       () => _chatController.userProfile,
+    );
+    // And the safety hub: what Discord has on record belongs to the account
+    // that is signed in, not to the application.
+    _accountStandingController = AccountStandingController(
+      () => _chatController.safetyHub,
     );
     // Same again: joining a thread is per-account state, and the plane that
     // holds it is swapped out with the session.
@@ -396,6 +404,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _messageSearchController.dispose();
     _userSettingsController.dispose();
     _userProfileController.dispose();
+    _accountStandingController.dispose();
     _threadMembershipController.dispose();
     _stageController.dispose();
     _soundboardController.dispose();
@@ -481,53 +490,59 @@ class _FlucordAppState extends State<FlucordApp> {
           controller: _selfPresenceController,
           child: UserProfileScope(
             controller: _userProfileController,
-            child: UserSettingsScope(
-              controller: _userSettingsController,
-              child: DiscordDesktopLoginScope(
-                controller: _discordDesktopLoginController,
-                child: DiscordAccountConnectionScope(
-                  controller: _discordAccountConnectionController,
-                  child: DiscordSocialSdkScope(
-                    controller: _discordSocialSdkController,
-                    child: DiscordSocialActivityScope(
-                      controller: _discordSocialActivityController,
-                      child: DiscordSocialPresenceScope(
-                        controller: _discordSocialPresenceController,
-                        child: DiscordSocialDmNavigationScope(
-                          controller: _discordSocialDmNavigationController,
-                          child: DiscordSocialDmScope(
-                            controller: _discordSocialDmController,
-                            child: DiscordFriendsScope(
-                              controller: _discordFriendsController,
-                              child: FlucordShell(
-                                chatController: _chatController,
-                                connectionController: _connectionController,
-                                discordOAuthController: _discordOAuthController,
-                                oauthGuildDirectoryController:
-                                    _oauthGuildDirectoryController,
-                                oauthGuildMembershipController:
-                                    _oauthGuildMembershipController,
-                                workspaceController: _workspaceController,
-                                memberListController: _memberListController,
-                                messageSearchController:
-                                    _messageSearchController,
-                                voiceController: _voiceController,
-                                threadMembershipController:
-                                    _threadMembershipController,
-                                stageController: _stageController,
-                                soundboardController: _soundboardController,
-                                goLiveController: _goLiveController,
-                                streamViewerController: _streamViewerController,
-                                gifPickerController: _gifPickerController,
-                                slashCommandController: _slashCommandController,
-                                messageComponentController:
-                                    _messageComponentController,
-                                directCallController: _directCallController,
-                                voiceMessageRecorder:
-                                    widget.voiceMessageRecorder,
-                                attachmentDownloadService:
-                                    _attachmentDownloadService,
-                                externalLinkLauncher: _externalLinkLauncher,
+            child: AccountStandingScope(
+              controller: _accountStandingController,
+              child: UserSettingsScope(
+                controller: _userSettingsController,
+                child: DiscordDesktopLoginScope(
+                  controller: _discordDesktopLoginController,
+                  child: DiscordAccountConnectionScope(
+                    controller: _discordAccountConnectionController,
+                    child: DiscordSocialSdkScope(
+                      controller: _discordSocialSdkController,
+                      child: DiscordSocialActivityScope(
+                        controller: _discordSocialActivityController,
+                        child: DiscordSocialPresenceScope(
+                          controller: _discordSocialPresenceController,
+                          child: DiscordSocialDmNavigationScope(
+                            controller: _discordSocialDmNavigationController,
+                            child: DiscordSocialDmScope(
+                              controller: _discordSocialDmController,
+                              child: DiscordFriendsScope(
+                                controller: _discordFriendsController,
+                                child: FlucordShell(
+                                  chatController: _chatController,
+                                  connectionController: _connectionController,
+                                  discordOAuthController:
+                                      _discordOAuthController,
+                                  oauthGuildDirectoryController:
+                                      _oauthGuildDirectoryController,
+                                  oauthGuildMembershipController:
+                                      _oauthGuildMembershipController,
+                                  workspaceController: _workspaceController,
+                                  memberListController: _memberListController,
+                                  messageSearchController:
+                                      _messageSearchController,
+                                  voiceController: _voiceController,
+                                  threadMembershipController:
+                                      _threadMembershipController,
+                                  stageController: _stageController,
+                                  soundboardController: _soundboardController,
+                                  goLiveController: _goLiveController,
+                                  streamViewerController:
+                                      _streamViewerController,
+                                  gifPickerController: _gifPickerController,
+                                  slashCommandController:
+                                      _slashCommandController,
+                                  messageComponentController:
+                                      _messageComponentController,
+                                  directCallController: _directCallController,
+                                  voiceMessageRecorder:
+                                      widget.voiceMessageRecorder,
+                                  attachmentDownloadService:
+                                      _attachmentDownloadService,
+                                  externalLinkLauncher: _externalLinkLauncher,
+                                ),
                               ),
                             ),
                           ),

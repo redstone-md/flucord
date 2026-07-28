@@ -1,3 +1,4 @@
+import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
 import 'dart:async';
 import '../domain/conversation_summary.dart';
@@ -134,6 +135,9 @@ final class MockChatRepository
 
   @override
   ModerationRepository? get moderation => null;
+
+  @override
+  SafetyHubRepository? get safetyHub => null;
 
   /// Nothing is signed in, so there is no account whose status could be
   /// broadcast and no socket that could carry it.

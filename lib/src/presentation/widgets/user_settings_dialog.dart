@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/account_standing_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
@@ -10,6 +11,7 @@ import '../../theme/flucord_theme.dart';
 import 'user_profile_controls.dart';
 import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
+import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
@@ -19,6 +21,7 @@ enum UserSettingsCategory {
   chat('Chat', Icons.chat_bubble_outline),
   notifications('Notifications', Icons.notifications_none),
   privacy('Privacy', Icons.shield_outlined),
+  standing('Account Standing', Icons.gavel_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -33,6 +36,7 @@ class UserSettingsDialog extends StatefulWidget {
   const UserSettingsDialog({
     required this.controller,
     this.profileController,
+    this.standingController,
     super.key,
   });
 
@@ -46,16 +50,22 @@ class UserSettingsDialog extends StatefulWidget {
   /// transports — in which case the category explains itself instead.
   final UserProfileController? profileController;
 
+  /// Answers for the account's safety record, or null on a transport with
+  /// none. Like the profile, it is not gated on the settings store.
+  final AccountStandingController? standingController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
     UserProfileController? profileController,
+    AccountStandingController? standingController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
     builder: (_) => UserSettingsDialog(
       controller: controller,
       profileController: profileController,
+      standingController: standingController,
     ),
   );
 
@@ -93,6 +103,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
             final body = _Body(
               controller: widget.controller,
               profileController: widget.profileController,
+              standingController: widget.standingController,
               category: _category,
             );
             return wide
@@ -243,11 +254,13 @@ class _Body extends StatelessWidget {
   const _Body({
     required this.controller,
     required this.profileController,
+    required this.standingController,
     required this.category,
   });
 
   final UserSettingsController controller;
   final UserProfileController? profileController;
+  final AccountStandingController? standingController;
   final UserSettingsCategory category;
 
   @override
@@ -317,6 +330,21 @@ class _Body extends StatelessWidget {
         builder: (_, _) => UserProfileSection(controller: profile),
       );
     }
+    // The safety hub is its own route too: an account with no settings store
+    // still has a record, and gating this on settings would hide it.
+    if (category == UserSettingsCategory.standing) {
+      final standing = standingController;
+      if (standing == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-standing-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to see what is on its record. The '
+              'demo and bot transports have none.',
+        );
+      }
+      return AccountStandingSection(controller: standing);
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -375,6 +403,8 @@ class _Body extends StatelessWidget {
       settings: settings,
       onEdit: _edit,
     ),
+    // Handled before the settings store is consulted.
+    UserSettingsCategory.standing => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

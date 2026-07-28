@@ -1,3 +1,4 @@
+import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
@@ -212,6 +213,9 @@ final class DiscordDesktopChatRepository
 
   @override
   ModerationRepository? get moderation => _api.moderation;
+
+  @override
+  SafetyHubRepository? get safetyHub => _api.safetyHub;
 
   /// The account's own session is what Discord's search routes answer to, so
   /// this is the one transport that can offer them.

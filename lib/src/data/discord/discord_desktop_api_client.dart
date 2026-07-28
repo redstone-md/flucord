@@ -3,6 +3,7 @@ import 'discord_call_api.dart';
 import 'discord_desktop_rest_protocol.dart';
 import 'discord_guild_management_repository.dart';
 import 'discord_moderation_repository.dart';
+import 'discord_safety_hub_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
@@ -52,6 +53,10 @@ final class DiscordDesktopApiClient
 
   late final DiscordModerationRepository moderation =
       DiscordModerationRepository(_rest);
+
+  late final DiscordSafetyHubRepository safetyHub = DiscordSafetyHubRepository(
+    _rest,
+  );
 
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {

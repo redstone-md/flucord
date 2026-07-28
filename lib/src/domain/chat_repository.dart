@@ -1,4 +1,5 @@
 import 'automod_rule.dart';
+import 'account_standing.dart';
 import 'chat_models.dart';
 import 'guild_management_repository.dart';
 import 'message_search_repository.dart';
@@ -278,6 +279,9 @@ abstract interface class ChatRepository {
   /// these are actions the signed-in account takes about itself, and a session
   /// can hold them while being able to administer no guild at all.
   ModerationRepository? get moderation;
+
+  /// The account's own safety record, or `null` on a transport that has none.
+  SafetyHubRepository? get safetyHub;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///

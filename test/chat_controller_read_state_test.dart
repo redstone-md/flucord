@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/account_standing.dart';
 import 'package:flucord/src/domain/automod_rule.dart';
 import 'dart:async';
 import 'package:flucord/src/domain/conversation_summary.dart';
@@ -198,6 +199,9 @@ final class _Repository implements ChatRepository {
 
   @override
   ModerationRepository? get moderation => null;
+
+  @override
+  SafetyHubRepository? get safetyHub => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;

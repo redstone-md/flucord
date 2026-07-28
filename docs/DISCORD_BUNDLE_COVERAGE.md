@@ -577,13 +577,15 @@ are excluded from the denominator and are never reported as implemented.
   `USER_REQUIRED_ACTION_UPDATE`.
 - **Purpose**: reporting flows, AutoMod, bans, family centre.
 - **UI surface**: the moderation and AutoMod sections of guild settings; the
-  report control on a message, a member and a server.
+  report control on a message, a member and a server; the Account Standing
+  page in user settings.
 - **Contract**: `POST /reporting/{type}`, `PUT /guilds/{id}/bans/{user}`,
   `GET`/`POST`/`PATCH`/`DELETE /guilds/{id}/auto-moderation/rules`,
   `POST /guilds/{id}/auto-moderation/rules/validate`,
   `POST /guilds/{id}/auto-moderation/clear-mention-raid`,
   `POST /guilds/{id}/auto-moderation/false-alarm`,
-  `POST /guilds/{id}/auto-moderation/alert-action`.
+  `POST /guilds/{id}/auto-moderation/alert-action`,
+  `GET /safety-hub/@me`, `POST /safety-hub/request-review/{id}`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: the ban list, ban search, banning and unbanning, kicking a
@@ -611,16 +613,26 @@ are excluded from the denominator and are never reported as implemented.
   and is never sent without an explicit action. A first DM from somebody not
   yet written to is reported under its own type, because Discord serves a
   different menu for it.
+  Account standing reads what Discord has on record — records against the
+  account and against servers it owns, shown apart — and asks for a record to
+  be looked at again where that is allowed. Discord's numeric standing is
+  carried but deliberately not translated into named tiers: the bundle ships
+  no enum for it that static analysis recovers, and telling somebody their
+  account is "limited" on a guessed mapping would be worse than showing the
+  records and letting them speak. A record Discord declines to reopen reads as
+  an answer rather than as an error.
 - **Tests**: `guild_management_repository_bans_cases.dart`,
   `guild_management_repository_automod_cases.dart`,
   `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`,
   `automod_rule_test.dart`, `automod_description_test.dart`,
   `automod_section_widget_test.dart`, `automod_fields_widget_test.dart`,
   `automod_alert_action_test.dart`, `automod_alert_widget_test.dart`,
-  `report_dialog_widget_test.dart`, `report_targets_test.dart`.
+  `report_dialog_widget_test.dart`, `report_targets_test.dart`,
+  `account_standing_test.dart`, `account_standing_widget_test.dart`.
 - **Live evidence**: none.
-- **Blocked by**: the safety hub, account standing and family centre have no
-  slice. AutoMod itself has no route left unused: the incident-actions and
+- **Blocked by**: the suspended-account routes and the family centre have no
+  slice. A suspended session cannot be exercised without suspending an account,
+  which is not something to arrange deliberately. AutoMod itself has no route left unused: the incident-actions and
   report-raid routes belong to the raid-alert domain rather than to AutoMod
   rules.
 

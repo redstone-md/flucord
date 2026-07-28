@@ -1,3 +1,4 @@
+import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
 import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
@@ -81,6 +82,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   ModerationRepository? get moderation => null;
+
+  @override
+  SafetyHubRepository? get safetyHub => null;
 
   @override
   PresenceService? get presence => null;
