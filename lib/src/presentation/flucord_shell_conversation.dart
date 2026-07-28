@@ -148,6 +148,7 @@ extension _FlucordShellConversation on FlucordShell {
     threadMembershipController: threadMembershipController,
     stageController: stageController,
     soundboardController: soundboardController,
+    goLiveController: goLiveController,
     gifPickerController: gifPickerController,
     slashCommandController: slashCommandController,
     voiceMessageRecorder: voiceMessageRecorder,

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
+import '../domain/video_encoder.dart';
 import '../domain/voice_media.dart';
 
 /// Drives Go Live: opening a stream, holding it alive, and ending it.
@@ -14,14 +16,26 @@ final class GoLiveController extends ChangeNotifier {
   GoLiveController({
     required GoLiveRepository? Function() repositoryProvider,
     required VoiceMediaService mediaService,
+    VideoEncoderService? encoder,
+    VideoEncoderSettings settings = const VideoEncoderSettings(),
     Duration pingInterval = const Duration(seconds: 30),
   }) : _repositoryProvider = repositoryProvider,
        _mediaService = mediaService,
+       _encoder = encoder,
+       _settings = settings,
        _pingInterval = pingInterval;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VoiceMediaService _mediaService;
+
+  /// Turns the display into H.264. Null on a build without the native module,
+  /// where a stream can still be opened and watched but not sent.
+  final VideoEncoderService? _encoder;
+
+  final VideoEncoderSettings _settings;
   final Duration _pingInterval;
+
+  DiscordVideoStreamTransport? _transport;
 
   GoLiveRepository? _repository;
   StreamSubscription<GoLiveStream>? _updates;
@@ -50,6 +64,29 @@ final class GoLiveController extends ChangeNotifier {
   /// The RTC endpoint Discord assigned, once it has.
   GoLiveServer? get server => _server;
 
+  /// Whether this build can send pictures at all.
+  bool get canEncode => _encoder?.isSupported ?? false;
+
+  /// How many RTP packets the picture has taken so far, which is what tells a
+  /// caller the stream is moving rather than merely open.
+  int get sentPackets => _transport?.sentPackets ?? 0;
+
+  /// Why sending stopped, if it did.
+  Object? get transportError => _transport?.error;
+
+  /// Points the encoder's output at a stream connection.
+  ///
+  /// Called once the RTC side has an SSRC and somewhere to send: the encoder
+  /// runs from the moment the stream opens, but its frames go nowhere until
+  /// there is a socket to take them.
+  void bindTransport({required int ssrc, required VideoFrameSink sink}) {
+    final encoder = _encoder;
+    if (encoder == null) return;
+    _transport?.stop();
+    _transport = DiscordVideoStreamTransport(ssrc: ssrc, sink: sink)
+      ..attach(encoder.frames);
+  }
+
   bool get isStreaming =>
       _status == GoLiveStatus.live || _status == GoLiveStatus.paused;
 
@@ -74,6 +111,9 @@ final class GoLiveController extends ChangeNotifier {
       // Capture first: a stream Discord has announced with nothing behind it
       // shows every viewer a black rectangle.
       await _mediaService.startScreenShare(sourceId);
+      // The encoder is what actually produces the picture; the media service's
+      // capture is what the local preview draws.
+      await _encoder?.start(_settings);
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
@@ -97,6 +137,9 @@ final class GoLiveController extends ChangeNotifier {
     if (repository == null || key == null || !isStreaming) return false;
     try {
       await repository.setPaused(key, paused: paused);
+      // The encoder stops producing too: pausing that only told Discord would
+      // keep burning the CPU on frames nobody receives.
+      await _encoder?.setPaused(paused: paused);
       _status = paused ? GoLiveStatus.paused : GoLiveStatus.live;
       return true;
     } on Object catch (error) {
@@ -167,6 +210,13 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   Future<void> _stopCapture() async {
+    await _transport?.stop();
+    _transport = null;
+    try {
+      await _encoder?.stop();
+    } on Object catch (_) {
+      // Already stopped. Not worth reporting over whatever ended the stream.
+    }
     try {
       await _mediaService.stopScreenShare();
     } on Object catch (_) {

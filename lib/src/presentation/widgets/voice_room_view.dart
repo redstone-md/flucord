@@ -21,6 +21,7 @@ class VoiceRoomView extends StatefulWidget {
     required this.currentMemberId,
     this.stageControls,
     this.soundboard,
+    this.goLive,
     this._spaceId,
     super.key,
   });
@@ -40,6 +41,9 @@ class VoiceRoomView extends StatefulWidget {
 
   /// The soundboard button, or null where there is nothing to play into.
   final Widget? soundboard;
+
+  /// The Go Live control, or null outside a server voice channel.
+  final Widget? goLive;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -87,6 +91,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
           final horizontal = constraints.maxWidth >= 720;
           final stage = Expanded(
             child: _VoiceStage(
+              goLive: widget.goLive,
               soundboard: widget.soundboard,
               stageControls: widget.stageControls,
               channelName: widget.channelName,
@@ -137,6 +142,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
 
 class _VoiceStage extends StatelessWidget {
   const _VoiceStage({
+    required this.goLive,
     required this.soundboard,
     required this.stageControls,
     required this.channelName,
@@ -153,6 +159,7 @@ class _VoiceStage extends StatelessWidget {
   final String spaceId;
   final Widget? stageControls;
   final Widget? soundboard;
+  final Widget? goLive;
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +212,7 @@ class _VoiceStage extends StatelessWidget {
                   ),
                 ),
               ),
+              ?goLive,
               ?soundboard,
               const SizedBox(width: 12),
               Text(

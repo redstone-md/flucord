@@ -83,6 +83,7 @@ class _ConversationPane extends StatefulWidget {
     required this.threadMembershipController,
     required this.stageController,
     required this.soundboardController,
+    required this.goLiveController,
     required this.gifPickerController,
     required this.slashCommandController,
     required this.voiceMessageRecorder,
@@ -159,6 +160,7 @@ class _ConversationPane extends StatefulWidget {
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
   final SoundboardController soundboardController;
+  final GoLiveController goLiveController;
   final GifPickerController gifPickerController;
   final SlashCommandController slashCommandController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -270,6 +272,16 @@ class _ConversationPaneState extends State<_ConversationPane> {
           )
         : switch (widget.channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
+              goLive: ListenableBuilder(
+                listenable: widget.goLiveController,
+                builder: (_, _) => GoLiveButton(
+                  controller: widget.goLiveController,
+                  channelId: widget.channel.id,
+                  guildId: widget.channel.spaceId.isEmpty
+                      ? null
+                      : widget.channel.spaceId,
+                ),
+              ),
               soundboard: ListenableBuilder(
                 listenable: widget.soundboardController,
                 builder: (_, _) => SoundboardButton(
