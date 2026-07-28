@@ -593,18 +593,22 @@ are excluded from the denominator and are never reported as implemented.
   survives an edit of its name rather than being rewritten. A draft is checked
   against `/rules/validate` before it is created, because the regexes compile
   server-side and asking is the only honest check; a refusal that is not a 400
-  is reported as a failure rather than as a verdict on the rule. The two raid
-  controls — clear the alert, report a false alarm — sit on the same page.
+  is reported as a failure rather than as a verdict on the rule. Discord's own
+  word lists are picked as checkboxes, since their contents are server-side and
+  never reach a client, and a rule of any kind can be told which roles and
+  channels to skip. Exemptions are compared as sets, so reopening a rule and
+  saving it untouched sends nothing. The two raid controls — clear the alert,
+  report a false alarm — sit on the same page.
 - **Tests**: `guild_management_repository_bans_cases.dart`,
   `guild_management_repository_automod_cases.dart`,
   `guild_admin_capabilities_test.dart`, `guild_settings_widget_test.dart`,
   `automod_rule_test.dart`, `automod_description_test.dart`,
-  `automod_section_widget_test.dart`.
+  `automod_section_widget_test.dart`, `automod_fields_widget_test.dart`.
 - **Live evidence**: none.
 - **Blocked by**: the reporting and safety-hub flows are untouched. Reporting
-  endpoints will only ever be called from an explicit user action. AutoMod
-  keyword presets and the exempt role and channel lists are read and sent
-  faithfully but have no controls yet.
+  endpoints will only ever be called from an explicit user action. On AutoMod,
+  mention-raid protection is read and sent but has no control of its own, and
+  the alert-action route that resolves one flagged message is unused.
 
 ## FBC-AI — Conversation summaries and text tools
 

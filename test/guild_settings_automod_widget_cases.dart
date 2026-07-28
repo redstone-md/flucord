@@ -328,6 +328,205 @@ void _automodDialogCases() {
     harness.dispose();
   });
 
+  testWidgets("a preset rule picks from Discord's lists", (tester) async {
+    final harness = await _pump(tester);
+    await _openAutoMod(tester);
+    await tester.tap(find.byKey(const ValueKey('automod-create-open')));
+    await tester.pumpAndSettle();
+
+    // A word rule has no presets to pick; a preset rule has nothing to type.
+    expect(
+      find.byKey(const ValueKey('automod-preset-profanity')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('automod-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Discord's word lists").last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('automod-keywords')), findsNothing);
+    // The unknown member is a round-trip placeholder, never an option.
+    expect(find.byKey(const ValueKey('automod-preset-unknown')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('automod-name')),
+      'House rules',
+    );
+    await tester.pumpAndSettle();
+    // Nothing to save until at least one list is on.
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('automod-save')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('automod-preset-slurs')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-preset-profanity')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('automod-allow-list')),
+      'damn',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-save')));
+    await tester.pumpAndSettle();
+
+    final created = harness.controller.automodRules.last;
+    expect(created.triggerType, AutoModTriggerType.defaultKeywordList);
+    expect(created.metadata.presets, [
+      AutoModKeywordPreset.profanity,
+      AutoModKeywordPreset.slurs,
+    ]);
+    expect(created.metadata.allowList, ['damn']);
+
+    harness.dispose();
+  });
+
+  testWidgets('a preset can be turned back off', (tester) async {
+    final harness = await _pump(tester);
+    await _openAutoMod(tester);
+    await tester.tap(find.byKey(const ValueKey('automod-create-open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Discord's word lists").last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('automod-preset-slurs')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-preset-slurs')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('automod-save')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    harness.dispose();
+  });
+
+  testWidgets('exemptions are chosen and sent as whole lists', (tester) async {
+    final harness = await _pump(tester);
+    await _openAutoMod(tester);
+
+    await tester.tap(find.byKey(const ValueKey('automod-edit-rule-1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('automod-exempt-role-moderator')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('automod-exempt-channel-$textChannelId')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-save')));
+    await tester.pumpAndSettle();
+
+    final edit = harness.repository.lastAutoModEdit;
+    expect(edit?['exempt_roles'], ['moderator']);
+    expect(edit?['exempt_channels'], [textChannelId]);
+    // Nothing else moved, so nothing else was sent.
+    expect(edit?.keys, ['exempt_roles', 'exempt_channels']);
+
+    harness.dispose();
+  });
+
+  testWidgets('an exemption already held is offered as held', (tester) async {
+    final harness = await _pump(tester);
+    harness.repository.automodRules['rule-3'] = AutoModRule(
+      id: 'rule-3',
+      guildId: guildId,
+      name: 'Exempt already',
+      eventType: AutoModEventType.messageSend,
+      triggerType: AutoModTriggerType.keyword,
+      metadata: const AutoModTriggerMetadata(keywordFilter: ['a']),
+      actions: const [AutoModAction(type: AutoModActionType.blockMessage)],
+      exemptRoleIds: const ['moderator'],
+      exemptChannelIds: [textChannelId],
+    );
+    await _openAutoMod(tester);
+
+    await tester.tap(find.byKey(const ValueKey('automod-edit-rule-3')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.byKey(const ValueKey('automod-exempt-role-moderator')),
+          )
+          .selected,
+      isTrue,
+    );
+
+    // Reopening and saving without touching anything sends nothing, so the
+    // order the server listed the exemptions in is not read as a change.
+    await tester.tap(find.byKey(const ValueKey('automod-save')));
+    await tester.pumpAndSettle();
+    expect(harness.repository.calls, isNot(contains('updateAutoModRule')));
+
+    harness.dispose();
+  });
+
+  testWidgets('a preset rule opens with its lists already ticked', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    harness.repository.automodRules['rule-4'] = const AutoModRule(
+      id: 'rule-4',
+      guildId: guildId,
+      name: 'House lists',
+      eventType: AutoModEventType.messageSend,
+      triggerType: AutoModTriggerType.defaultKeywordList,
+      metadata: AutoModTriggerMetadata(
+        // The unknown member stands for a preset newer than this build; it
+        // must not come back as a tick nobody can see.
+        presets: [AutoModKeywordPreset.slurs, AutoModKeywordPreset.unknown],
+        allowList: ['heck'],
+      ),
+      actions: [AutoModAction(type: AutoModActionType.blockMessage)],
+    );
+    await _openAutoMod(tester);
+
+    await tester.tap(find.byKey(const ValueKey('automod-edit-rule-4')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const ValueKey('automod-preset-slurs')),
+          )
+          .value,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('automod-allow-list')))
+          .controller
+          ?.text,
+      'heck',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('automod-preset-profanity')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automod-save')));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.lastAutoModEdit?['trigger_metadata'], {
+      'presets': [1, 3],
+      'allow_list': ['heck'],
+    });
+
+    harness.dispose();
+  });
+
   testWidgets('a dialog dismissed changes nothing', (tester) async {
     final harness = await _pump(tester);
     await _openAutoMod(tester);

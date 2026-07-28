@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/automod_rule.dart';
 import '../../domain/automod_rule_editing.dart';
-import '../../domain/chat_models.dart';
-import '../../domain/guild_management.dart';
+import 'guild_automod_rule_fields.dart';
 
 /// What the dialog hands back: a draft for a new rule, or an edit for an
 /// existing one. Never both — which of the two it is follows from whether the
@@ -32,8 +31,8 @@ class GuildAutoModRuleDialog extends StatefulWidget {
   });
 
   final AutoModRule? rule;
-  final List<ConversationChannel> channels;
-  final List<GuildRole> roles;
+  final List<AutoModExemptTarget> channels;
+  final List<AutoModExemptTarget> roles;
   final List<AutoModTriggerType> availableTriggers;
 
   /// Asks the server whether the draft is acceptable. Optional: without it the
@@ -54,6 +53,9 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
   late final TextEditingController _patterns = TextEditingController(
     text: widget.rule?.metadata.regexPatterns.join(', ') ?? '',
   );
+  late final TextEditingController _allowList = TextEditingController(
+    text: widget.rule?.metadata.allowList.join(', ') ?? '',
+  );
   late final TextEditingController _mentionLimit = TextEditingController(
     text: (widget.rule?.metadata.mentionTotalLimit ?? 0) > 0
         ? '${widget.rule!.metadata.mentionTotalLimit}'
@@ -68,6 +70,13 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
   late bool _blockMessage = widget.rule?.blocksMessages ?? true;
   late String _alertChannelId = widget.rule?.alertChannelId ?? '';
   late Duration _timeout = widget.rule?.timeout ?? Duration.zero;
+  late List<AutoModKeywordPreset> _presets = [
+    for (final preset in widget.rule?.metadata.presets ?? const [])
+      if (preset != AutoModKeywordPreset.unknown) preset,
+  ];
+  late List<String> _exemptRoleIds = [...?widget.rule?.exemptRoleIds]..sort();
+  late List<String> _exemptChannelIds = [...?widget.rule?.exemptChannelIds]
+    ..sort();
 
   String? _serverVerdict;
   bool _checking = false;
@@ -80,10 +89,18 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
     // Save is offered only for a draft the server would take, and whether it
     // would depends on what is typed. Without this the button stays disabled
     // until some other control happens to rebuild the dialog.
-    for (final field in [_name, _keywords, _patterns, _mentionLimit]) {
+    for (final field in _fields) {
       field.addListener(_onFieldChanged);
     }
   }
+
+  List<TextEditingController> get _fields => [
+    _name,
+    _keywords,
+    _patterns,
+    _allowList,
+    _mentionLimit,
+  ];
 
   void _onFieldChanged() {
     if (mounted) setState(() {});
@@ -91,13 +108,10 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
 
   @override
   void dispose() {
-    for (final field in [_name, _keywords, _patterns, _mentionLimit]) {
+    for (final field in _fields) {
       field.removeListener(_onFieldChanged);
+      field.dispose();
     }
-    _name.dispose();
-    _keywords.dispose();
-    _patterns.dispose();
-    _mentionLimit.dispose();
     super.dispose();
   }
 
@@ -165,6 +179,25 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
                 ),
               ),
             ],
+            if (_trigger == AutoModTriggerType.defaultKeywordList) ...[
+              const SizedBox(height: 12),
+              AutoModPresetField(
+                selected: _presets,
+                onChanged: (presets) => setState(() => _presets = presets),
+              ),
+            ],
+            if (_trigger.hasKeywords ||
+                _trigger == AutoModTriggerType.defaultKeywordList) ...[
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('automod-allow-list'),
+                controller: _allowList,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Words to allow anyway, comma separated',
+                ),
+              ),
+            ],
             if (_trigger == AutoModTriggerType.mentionSpam) ...[
               const SizedBox(height: 12),
               TextField(
@@ -197,7 +230,7 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
                 for (final channel in widget.channels)
                   DropdownMenuItem(
                     value: channel.id,
-                    child: Text('#${channel.name}'),
+                    child: Text(channel.label),
                   ),
               ],
               onChanged: (value) =>
@@ -220,6 +253,16 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
               ],
               onChanged: (value) =>
                   setState(() => _timeout = Duration(seconds: value ?? 0)),
+            ),
+            const SizedBox(height: 16),
+            AutoModExemptionField(
+              roles: widget.roles,
+              channels: widget.channels,
+              exemptRoleIds: _exemptRoleIds,
+              exemptChannelIds: _exemptChannelIds,
+              onRolesChanged: (ids) => setState(() => _exemptRoleIds = ids),
+              onChannelsChanged: (ids) =>
+                  setState(() => _exemptChannelIds = ids),
             ),
             if (_serverVerdict case final verdict?) ...[
               const SizedBox(height: 12),
@@ -264,11 +307,21 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
     metadata: AutoModTriggerMetadata(
       keywordFilter: _trigger.hasKeywords ? _split(_keywords.text) : const [],
       regexPatterns: _trigger.hasKeywords ? _split(_patterns.text) : const [],
+      presets: _trigger == AutoModTriggerType.defaultKeywordList
+          ? _presets
+          : const [],
+      allowList:
+          _trigger.hasKeywords ||
+              _trigger == AutoModTriggerType.defaultKeywordList
+          ? _split(_allowList.text)
+          : const [],
       mentionTotalLimit: _trigger == AutoModTriggerType.mentionSpam
           ? int.tryParse(_mentionLimit.text.trim()) ?? 0
           : 0,
     ),
     actions: _actions(),
+    exemptRoleIds: _exemptRoleIds,
+    exemptChannelIds: _exemptChannelIds,
   );
 
   List<AutoModAction> _actions() => [
@@ -309,6 +362,12 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
     if (!_sameActions(draft.actions, rule.actions)) {
       edit.actions = draft.actions;
     }
+    if (!_sameIds(draft.exemptRoleIds, rule.exemptRoleIds)) {
+      edit.exemptRoleIds = draft.exemptRoleIds;
+    }
+    if (!_sameIds(draft.exemptChannelIds, rule.exemptChannelIds)) {
+      edit.exemptChannelIds = draft.exemptChannelIds;
+    }
     // An edit that changed nothing is closed rather than sent: the server
     // would accept it and write an audit-log entry saying nothing happened.
     Navigator.of(
@@ -319,6 +378,17 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
   static bool _sameActions(List<AutoModAction> a, List<AutoModAction> b) =>
       a.length == b.length &&
       [for (var i = 0; i < a.length; i++) a[i] == b[i]].every((same) => same);
+
+  /// Order-insensitive: the rule states its exemptions in whatever order the
+  /// server returned them, and reordering is not a change to send.
+  static bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final left = [...a]..sort();
+    final right = [...b]..sort();
+    return [
+      for (var i = 0; i < left.length; i++) left[i] == right[i],
+    ].every((same) => same);
+  }
 
   static List<String> _split(String text) => [
     for (final part in text.split(','))

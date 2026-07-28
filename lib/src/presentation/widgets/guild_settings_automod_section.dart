@@ -6,6 +6,7 @@ import '../../application/guild_settings_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/chat_models.dart';
 import 'guild_automod_rule_dialog.dart';
+import 'guild_automod_rule_fields.dart';
 import 'guild_settings_controls.dart';
 
 /// The AutoMod page: which rules the server runs, and what each one does.
@@ -108,8 +109,18 @@ class GuildSettingsAutoModSection extends StatelessWidget {
       context: context,
       builder: (_) => GuildAutoModRuleDialog(
         rule: rule,
-        channels: channels,
-        roles: controller.roles,
+        channels: [
+          for (final channel in channels)
+            AutoModExemptTarget(id: channel.id, label: '#${channel.name}'),
+        ],
+        // From the workspace rather than from the settings window's roles
+        // page: that page loads only when it is opened, and a rule cannot
+        // offer an exemption for a role nobody fetched.
+        roles: [
+          for (final role in workspace.roles)
+            if (role.spaceId == spaceId)
+              AutoModExemptTarget(id: role.id, label: role.name),
+        ],
         availableTriggers: controller.availableAutoModTriggers,
         validate: controller.validateAutoModDraft,
       ),
