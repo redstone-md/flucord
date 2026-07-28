@@ -20,6 +20,7 @@ import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
 import '../application/gif_picker_controller.dart';
 import '../application/go_live_controller.dart';
+import '../application/stream_viewer_controller.dart';
 import '../application/slash_command_controller.dart';
 import '../application/soundboard_controller.dart';
 import '../application/stage_controller.dart';
@@ -62,6 +63,7 @@ import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/go_live_button.dart';
+import 'widgets/go_live_viewer.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/stage_controls.dart';
 import 'widgets/thread_membership_button.dart';
@@ -85,6 +87,7 @@ class FlucordShell extends StatelessWidget {
     required this.stageController,
     required this.soundboardController,
     required this.goLiveController,
+    required this.streamViewerController,
     required this.gifPickerController,
     required this.slashCommandController,
     required this.voiceMessageRecorder,
@@ -107,6 +110,7 @@ class FlucordShell extends StatelessWidget {
   final StageController stageController;
   final SoundboardController soundboardController;
   final GoLiveController goLiveController;
+  final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
   final SlashCommandController slashCommandController;
   final VoiceMessageRecorder? voiceMessageRecorder;

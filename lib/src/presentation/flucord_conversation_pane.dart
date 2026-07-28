@@ -84,6 +84,7 @@ class _ConversationPane extends StatefulWidget {
     required this.stageController,
     required this.soundboardController,
     required this.goLiveController,
+    required this.streamViewerController,
     required this.gifPickerController,
     required this.slashCommandController,
     required this.voiceMessageRecorder,
@@ -161,6 +162,7 @@ class _ConversationPane extends StatefulWidget {
   final StageController stageController;
   final SoundboardController soundboardController;
   final GoLiveController goLiveController;
+  final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
   final SlashCommandController slashCommandController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -272,6 +274,18 @@ class _ConversationPaneState extends State<_ConversationPane> {
           )
         : switch (widget.channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
+              // Whoever is being watched takes the stage; the participant grid
+              // is what the room shows when nobody is.
+              streamViewer: ListenableBuilder(
+                listenable: widget.streamViewerController,
+                builder: (_, _) =>
+                    widget.streamViewerController.watching == null
+                    ? const SizedBox.shrink()
+                    : GoLiveViewer(
+                        frames: widget.streamViewerController.frames,
+                        label: widget.streamViewerController.watching!.userId,
+                      ),
+              ),
               goLive: ListenableBuilder(
                 listenable: widget.goLiveController,
                 builder: (_, _) => GoLiveButton(

@@ -20,6 +20,7 @@ import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
+import 'application/stream_viewer_controller.dart';
 import 'application/slash_command_controller.dart';
 import 'application/soundboard_controller.dart';
 import 'application/soundboard_playback_controller.dart';
@@ -49,6 +50,7 @@ import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
 import 'domain/discord_social_sdk.dart';
 import 'domain/soundboard_playback.dart';
+import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
@@ -57,6 +59,7 @@ import 'domain/voice_message_recorder.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
+import 'data/video/native_video_decoder_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
@@ -92,6 +95,7 @@ class FlucordApp extends StatefulWidget {
     this.externalLinkLauncher,
     this.soundboardAudioPlayer,
     this.videoEncoderService,
+    this.videoDecoderService,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -153,6 +157,9 @@ class FlucordApp extends StatefulWidget {
 
   /// Overridden in tests, which have no display to capture.
   final VideoEncoderService? videoEncoderService;
+
+  /// Overridden in tests, which have no decoder to open.
+  final VideoDecoderService? videoDecoderService;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -190,6 +197,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final GifPickerController _gifPickerController;
   late final SoundboardPlaybackController _soundboardPlaybackController;
   late final GoLiveController _goLiveController;
+  late final StreamViewerController _streamViewerController;
   late final SlashCommandController _slashCommandController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
@@ -291,6 +299,12 @@ class _FlucordAppState extends State<FlucordApp> {
       mediaService: widget.voiceMediaService ?? const NoopVoiceMediaService(),
       encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
     );
+    // Watching somebody else's share: the decoder and the depacketiser in
+    // front of it.
+    _streamViewerController = StreamViewerController(
+      repositoryProvider: () => _chatController.goLive,
+      decoder: widget.videoDecoderService ?? NativeVideoDecoderService(),
+    );
     _slashCommandController = SlashCommandController(
       () => _chatController.applicationCommands,
     );
@@ -384,6 +398,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _slashCommandController.dispose();
     _soundboardPlaybackController.dispose();
     _goLiveController.dispose();
+    _streamViewerController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -496,6 +511,7 @@ class _FlucordAppState extends State<FlucordApp> {
                                 stageController: _stageController,
                                 soundboardController: _soundboardController,
                                 goLiveController: _goLiveController,
+                                streamViewerController: _streamViewerController,
                                 gifPickerController: _gifPickerController,
                                 slashCommandController: _slashCommandController,
                                 directCallController: _directCallController,

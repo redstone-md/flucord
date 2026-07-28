@@ -22,6 +22,7 @@ class VoiceRoomView extends StatefulWidget {
     this.stageControls,
     this.soundboard,
     this.goLive,
+    this.streamViewer,
     this._spaceId,
     super.key,
   });
@@ -44,6 +45,10 @@ class VoiceRoomView extends StatefulWidget {
 
   /// The Go Live control, or null outside a server voice channel.
   final Widget? goLive;
+
+  /// Somebody else's stream, drawn in place of the participant grid while it
+  /// is being watched.
+  final Widget? streamViewer;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -91,6 +96,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
           final horizontal = constraints.maxWidth >= 720;
           final stage = Expanded(
             child: _VoiceStage(
+              streamViewer: widget.streamViewer,
               goLive: widget.goLive,
               soundboard: widget.soundboard,
               stageControls: widget.stageControls,
@@ -142,6 +148,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
 
 class _VoiceStage extends StatelessWidget {
   const _VoiceStage({
+    required this.streamViewer,
     required this.goLive,
     required this.soundboard,
     required this.stageControls,
@@ -160,6 +167,7 @@ class _VoiceStage extends StatelessWidget {
   final Widget? stageControls;
   final Widget? soundboard;
   final Widget? goLive;
+  final Widget? streamViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -243,12 +251,14 @@ class _VoiceStage extends StatelessWidget {
           ),
         ?stageControls,
         Expanded(
-          child: VoiceParticipantGrid(
-            participants: controller.participants,
-            members: members,
-            currentMemberId: currentMemberId,
-            spaceId: spaceId,
-          ),
+          child:
+              streamViewer ??
+              VoiceParticipantGrid(
+                participants: controller.participants,
+                members: members,
+                currentMemberId: currentMemberId,
+                spaceId: spaceId,
+              ),
         ),
       ],
     );
