@@ -225,13 +225,13 @@
                                         ]
                         },
     "renderer":  {
-                     "entryChunk":  "web.b8b5ddfa0f88ae29.js",
-                     "chunkCount":  4614,
-                     "totalBytes":  157588028,
-                     "corpusDigest":  "69c571844f48834f9c90a187f055b7958f452771445a0dbb8d9a7b72f5afd168"
+                     "entryChunk":  "web.3c742507ecdea9fa.js",
+                     "chunkCount":  4622,
+                     "totalBytes":  157511089,
+                     "corpusDigest":  "d7538283266f916f3ca00e8e6f6a693154e3e0dfd396b2c9a24683f4e9b5c034"
                  },
     "symbols":  {
-                    "endpointConstants":  949,
+                    "endpointConstants":  957,
                     "endpointSegments":  165,
                     "gatewayDispatchEvents":  175
                 },
@@ -288,7 +288,7 @@
                                                                 "unique-username",
                                                                 "users"
                                                             ],
-                                               "endpointCount":  213,
+                                               "endpointCount":  217,
                                                "events":  [
                                                               "USER_BADGE_STATE_UPDATE",
                                                               "USER_NOTE_UPDATE",
@@ -348,7 +348,7 @@
                                                               "templates",
                                                               "widget-configs"
                                                           ],
-                                             "endpointCount":  194,
+                                             "endpointCount":  197,
                                              "events":  [
                                                             "GUILD_DELETE",
                                                             "GUILD_DIRECTORY_ENTRY_CREATE",
@@ -602,7 +602,7 @@
                                                                  "wishlist",
                                                                  "wishlists"
                                                              ],
-                                                "endpointCount":  124,
+                                                "endpointCount":  125,
                                                 "events":  [
                                                                "BILLING_POPUP_BRIDGE_CALLBACK",
                                                                "BILLING_REFERRAL_TRIAL_OFFER_UPDATE",
