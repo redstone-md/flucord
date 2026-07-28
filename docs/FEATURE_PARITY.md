@@ -19,10 +19,10 @@ do not count as desktop-user chat parity.
 | Attachments and replies | Ready | Native multipart upload and existing composer |
 | Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
 | Reactions and pins | Ready | Desktop-user message routes |
-| Threads | Partial | Create from message; initial Gateway thread hydration |
+| Threads | Ready | Create from message, archived-thread paging, join and leave with a live member count from `THREAD_MEMBER_UPDATE` and `THREAD_MEMBERS_UPDATE` |
 | Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
 | Member list and presence | Ready for guild rosters | Server-authoritative lazy member list with scroll-driven subscriptions; presence beyond what a roster item carries is still open |
-| Search | Local only | Loaded/cached workspace; Discord server search absent |
+| Search | Ready | Server-side `GET /guilds/{id}/messages/search` and the DM equivalent, with the loaded page filtered locally as you type |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |

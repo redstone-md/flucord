@@ -394,9 +394,16 @@ are excluded from the denominator and are never reported as implemented.
   `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`.
 - **Live evidence**: an account reported Flucord's join appearing in the real
   client's voice channel; audio interoperability itself is still unverified.
-- **Blocked by**: video and screen share have no encoder path — nothing in the
-  dependency set produces H.264 or VP8, so a native `flucord_video` library is
-  required before opcodes 18-22 can carry a stream.
+- **Blocked by**: video and screen share have no reachable encoder. The
+  correction matters: `libwebrtc.dll` already ships in the release directory
+  and does contain encoders — `libvpx_vp8_encoder`, VP9 and H.264 symbols are
+  all present in the binary — so the earlier claim that nothing in the
+  dependency set can encode was wrong. What is missing is a path from Dart to
+  the encoded frames: `flutter_webrtc` exposes capture and a renderer, not an
+  encoded-frame callback, and Discord's Go Live carries its own RTP over the
+  voice UDP socket rather than through a WebRTC peer connection. Closing this
+  needs a native plugin wiring capture to the encoder to Flucord's own RTP
+  sender; opcodes 18-22 are the smaller half of the work.
 
 ## FBC-STAGE — Stage channels
 
