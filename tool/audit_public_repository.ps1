@@ -33,11 +33,18 @@ class RepositoryPrivacyAudit {
     $this.AllowedSnowflakes = [System.Collections.Generic.HashSet[string]]::new(
       [System.StringComparer]::Ordinal
     )
+    # Values no account, guild or channel can be behind: a repeated digit, a
+    # run of consecutive ones, or a one followed by nothing but zeroes. Test
+    # fixtures reach for these, and history keeps them forever, so they are
+    # named here rather than treated as a leak.
     foreach ($value in @(
+      '100000000000000000',
       '111111111111111111',
       '123456789012345678',
+      '200000000000000000',
       '222222222222222222',
       '234567890123456789',
+      '300000000000000000',
       '333333333333333333',
       '987654321098765432'
     )) {
