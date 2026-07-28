@@ -1,3 +1,4 @@
+import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
 import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';

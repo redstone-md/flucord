@@ -138,7 +138,8 @@ are excluded from the denominator and are never reported as implemented.
   Devices page in user settings.
 - **Contract**: remote-auth Gateway v2, `POST /users/@me/remote-auth/login`,
   `X-Captcha-Key`/`X-Captcha-Rqtoken`/`X-Captcha-Session-Id`,
-  `GET /auth/sessions`, `POST /auth/sessions/logout`.
+  `GET /auth/sessions`, `POST /auth/sessions/logout`,
+  `POST /users/@me/mfa/totp/enable`, `POST /users/@me/mfa/totp/disable`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: RSA-2048 QR remote auth, mandatory hCaptcha through an
@@ -149,15 +150,25 @@ are excluded from the denominator and are never reported as implemented.
   session is offered no end control, because ending it is signing out. Discord
   asking for the account password before it will end a session is reported as
   the refusal it is rather than as a fault: Flucord holds no password to offer
-  it.
+  it. Two-factor authentication is switched on and off from the Two-Factor
+  page. The secret is minted locally from `Random.secure()` — twenty bytes,
+  base32, the length Discord's own client uses — and reaches the server only
+  alongside the first code that works, so Discord is never told about a secret
+  the account has not proved it can use. It is shown once, held in memory
+  only, dropped the moment the code is accepted or the page closes, and a
+  second tap on "add" cannot swap it out from under the app it was just added
+  to. A code Discord refuses is reported as the mistyped or expired code it
+  usually is, not as a failure.
 - **Tests**: `discord_remote_auth_gateway_test.dart`,
   `discord_desktop_login_controller_test.dart`, `auth_session_test.dart`,
-  `auth_session_widget_test.dart`.
+  `auth_session_widget_test.dart`, `multi_factor_auth_test.dart`,
+  `multi_factor_auth_widget_test.dart`.
 - **Live evidence**: phone approval, hCaptcha completion, encrypted session
   exchange, and restart restoration validated on Windows `2026-07-25`. The
   Devices page has none: listing another session needs a second one to exist.
-- **Blocked by**: authenticator management and age verification have no
-  vertical slice. Account standing shipped under FBC-MODERATION.
+- **Blocked by**: age verification, SMS and WebAuthn as second factors, and
+  re-reading backup codes after enrolment — that route wants nonces this
+  session is never handed. Account standing shipped under FBC-MODERATION.
 
 ## FBC-PROFILE — Current user, other users, user settings
 

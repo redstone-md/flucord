@@ -67,4 +67,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// The account's sessions, or `null` where there are none to manage.
   AuthSessionRepository? get authSessions => _repository.authSessions;
+
+  /// Two-factor authentication, or `null` where it cannot be set.
+  MultiFactorAuthRepository? get multiFactorAuth => _repository.multiFactorAuth;
 }

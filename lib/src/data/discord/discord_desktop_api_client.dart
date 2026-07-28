@@ -4,6 +4,7 @@ import 'discord_desktop_rest_protocol.dart';
 import 'discord_auth_session_repository.dart';
 import 'discord_family_centre_repository.dart';
 import 'discord_guild_management_repository.dart';
+import 'discord_mfa_repository.dart';
 import 'discord_moderation_repository.dart';
 import 'discord_safety_hub_repository.dart';
 import 'discord_multipart_body.dart';
@@ -65,6 +66,8 @@ final class DiscordDesktopApiClient
 
   late final DiscordAuthSessionRepository authSessions =
       DiscordAuthSessionRepository(_rest);
+
+  late final DiscordMfaRepository multiFactorAuth = DiscordMfaRepository(_rest);
 
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {

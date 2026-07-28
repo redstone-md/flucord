@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
 import 'package:flucord/src/domain/family_centre.dart';
 import 'package:flucord/src/domain/account_standing.dart';
@@ -242,6 +243,9 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   AuthSessionRepository? get authSessions => null;
+
+  @override
+  MultiFactorAuthRepository? get multiFactorAuth => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;

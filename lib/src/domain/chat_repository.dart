@@ -2,6 +2,7 @@ import 'automod_rule.dart';
 import 'account_standing.dart';
 import 'auth_session.dart';
 import 'chat_models.dart';
+import 'multi_factor_auth.dart';
 import 'family_centre.dart';
 import 'guild_management_repository.dart';
 import 'message_search_repository.dart';
@@ -290,6 +291,9 @@ abstract interface class ChatRepository {
 
   /// The account's signed-in sessions, or `null` on a transport with none.
   AuthSessionRepository? get authSessions;
+
+  /// Two-factor authentication, or `null` on a transport that cannot set it.
+  MultiFactorAuthRepository? get multiFactorAuth;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///

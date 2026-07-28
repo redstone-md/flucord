@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/account_standing_controller.dart';
 import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
+import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
@@ -15,6 +16,7 @@ import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
 import 'user_settings_devices_section.dart';
 import 'user_settings_family_section.dart';
+import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 
@@ -28,6 +30,7 @@ enum UserSettingsCategory {
   standing('Account Standing', Icons.gavel_outlined),
   family('Family Center', Icons.family_restroom_outlined),
   devices('Devices', Icons.devices_outlined),
+  security('Two-Factor', Icons.key_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -45,6 +48,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.standingController,
     this.familyController,
     this.sessionController,
+    this.mfaController,
     super.key,
   });
 
@@ -68,6 +72,9 @@ class UserSettingsDialog extends StatefulWidget {
   /// Answers for the account's sessions, or null on a transport with none.
   final AuthSessionController? sessionController;
 
+  /// Answers for two-factor authentication, or null where it cannot be set.
+  final MultiFactorAuthController? mfaController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -75,6 +82,7 @@ class UserSettingsDialog extends StatefulWidget {
     AccountStandingController? standingController,
     FamilyCentreController? familyController,
     AuthSessionController? sessionController,
+    MultiFactorAuthController? mfaController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -84,6 +92,7 @@ class UserSettingsDialog extends StatefulWidget {
       standingController: standingController,
       familyController: familyController,
       sessionController: sessionController,
+      mfaController: mfaController,
     ),
   );
 
@@ -124,6 +133,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               standingController: widget.standingController,
               familyController: widget.familyController,
               sessionController: widget.sessionController,
+              mfaController: widget.mfaController,
               category: _category,
             );
             return wide
@@ -277,6 +287,7 @@ class _Body extends StatelessWidget {
     required this.standingController,
     required this.familyController,
     required this.sessionController,
+    required this.mfaController,
     required this.category,
   });
 
@@ -285,6 +296,7 @@ class _Body extends StatelessWidget {
   final AccountStandingController? standingController;
   final FamilyCentreController? familyController;
   final AuthSessionController? sessionController;
+  final MultiFactorAuthController? mfaController;
   final UserSettingsCategory category;
 
   @override
@@ -397,6 +409,19 @@ class _Body extends StatelessWidget {
       }
       return DevicesSettingsSection(controller: sessions);
     }
+    if (category == UserSettingsCategory.security) {
+      final mfa = mfaController;
+      if (mfa == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-mfa-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to manage two-factor authentication. '
+              'The demo and bot transports have no account to secure.',
+        );
+      }
+      return MfaSettingsSection(controller: mfa);
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -459,6 +484,7 @@ class _Body extends StatelessWidget {
     UserSettingsCategory.standing => const SizedBox.shrink(),
     UserSettingsCategory.family => const SizedBox.shrink(),
     UserSettingsCategory.devices => const SizedBox.shrink(),
+    UserSettingsCategory.security => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

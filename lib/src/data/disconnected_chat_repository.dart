@@ -1,3 +1,4 @@
+import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
 import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';
@@ -93,6 +94,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   AuthSessionRepository? get authSessions => null;
+
+  @override
+  MultiFactorAuthRepository? get multiFactorAuth => null;
 
   @override
   PresenceService? get presence => null;

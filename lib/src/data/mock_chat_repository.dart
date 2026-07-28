@@ -1,3 +1,4 @@
+import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
 import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';
@@ -146,6 +147,9 @@ final class MockChatRepository
 
   @override
   AuthSessionRepository? get authSessions => null;
+
+  @override
+  MultiFactorAuthRepository? get multiFactorAuth => null;
 
   /// Nothing is signed in, so there is no account whose status could be
   /// broadcast and no socket that could carry it.
