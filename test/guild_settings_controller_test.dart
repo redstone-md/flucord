@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/guild_settings_controller.dart';
+import 'package:flucord/src/domain/automod_rule.dart';
+import 'package:flucord/src/domain/automod_rule_editing.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
@@ -8,9 +10,12 @@ import 'package:flucord/src/domain/workspace_permissions.dart';
 
 import 'support/guild_settings_fixtures.dart';
 
+part 'guild_settings_automod_cases.dart';
 part 'guild_settings_structure_cases.dart';
 
 void main() {
+  _automodControllerCases();
+
   test('only the permitted sections are listed', () {
     final controller = _controller(
       permissions: DiscordPermissions.combine([

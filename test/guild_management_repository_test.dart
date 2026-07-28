@@ -4,13 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_guild_management_repository.dart';
 import 'package:flucord/src/data/discord/discord_moderation_repository.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/domain/automod_rule.dart';
+import 'package:flucord/src/domain/automod_rule_editing.dart';
 import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/moderation_report.dart';
 
+part 'guild_management_repository_automod_cases.dart';
 part 'guild_management_repository_bans_cases.dart';
 
 void main() {
+  _automodCases();
+
   group('guild overview', () {
     test('reads and writes a partial patch', () async {
       final transport = _Transport([

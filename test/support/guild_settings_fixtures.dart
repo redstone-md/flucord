@@ -4,6 +4,7 @@ import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/guild_membership.dart';
+import 'fake_automod_routes.dart';
 
 /// Fixtures shared by the guild-settings controller and widget tests.
 ///
@@ -126,7 +127,15 @@ ChatWorkspace guildWorkspace({BigInt? moderatorPermissions}) => ChatWorkspace(
 );
 
 /// An in-memory stand-in for the guild-administration routes.
-final class FakeGuildManagementRepository implements GuildManagementRepository {
+final class FakeGuildManagementRepository
+    with FakeAutoModRoutes
+    implements GuildManagementRepository {
+  @override
+  void recordAutoModCall(String call) => _record(call);
+
+  @override
+  String get automodGuildId => guildId;
+
   final List<String> calls = [];
 
   /// The next call throws, then the flag clears itself.

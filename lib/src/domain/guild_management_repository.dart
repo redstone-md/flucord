@@ -1,3 +1,5 @@
+import 'automod_rule.dart';
+import 'automod_rule_editing.dart';
 import 'chat_models.dart';
 import 'guild_audit_log.dart';
 import 'guild_management.dart';
@@ -104,4 +106,39 @@ abstract interface class GuildManagementRepository {
     required String guildId,
     AuditLogQuery query,
   });
+
+  /// The guild's AutoMod rules, in the order the server lists them.
+  Future<List<AutoModRule>> loadAutoModRules(String guildId);
+
+  Future<AutoModRule> createAutoModRule({
+    required String guildId,
+    required AutoModRuleDraft draft,
+    String? reason,
+  });
+
+  Future<AutoModRule> updateAutoModRule({
+    required String guildId,
+    required String ruleId,
+    required AutoModRuleEdit edit,
+    String? reason,
+  });
+
+  Future<void> deleteAutoModRule({
+    required String guildId,
+    required String ruleId,
+    String? reason,
+  });
+
+  /// The server's verdict on a draft, or null when it would be accepted. The
+  /// regexes are compiled server-side, so asking is the only honest check.
+  Future<String?> validateAutoModRule({
+    required String guildId,
+    required AutoModRuleDraft draft,
+  });
+
+  /// Ends the mention-raid alert the guild is under.
+  Future<void> clearMentionRaid(String guildId);
+
+  /// Tells Discord the raid it flagged was not one.
+  Future<void> reportMentionRaidFalseAlarm(String guildId);
 }

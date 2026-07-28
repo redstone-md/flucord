@@ -1,17 +1,28 @@
 import 'package:flutter/foundation.dart';
 
+import '../domain/automod_rule.dart';
+import '../domain/automod_rule_editing.dart';
 import '../domain/chat_models.dart';
 import '../domain/guild_audit_log.dart';
 import '../domain/guild_management.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/workspace_permissions.dart';
 
+part 'guild_settings_controller_automod.dart';
 part 'guild_settings_controller_channels.dart';
 part 'guild_settings_controller_moderation.dart';
 part 'guild_settings_controller_roles.dart';
 
 /// The pages of the server-settings window.
-enum GuildSettingsSection { overview, roles, channels, bans, invites, auditLog }
+enum GuildSettingsSection {
+  overview,
+  roles,
+  channels,
+  bans,
+  automod,
+  invites,
+  auditLog,
+}
 
 /// Drives the server-settings window.
 ///
@@ -45,6 +56,7 @@ final class GuildSettingsController extends ChangeNotifier {
   GuildOverviewSettings? _overview;
   List<GuildRole> _roles = const [];
   List<GuildBan> _bans = const [];
+  List<AutoModRule> _automodRules = const [];
   List<GuildInvite> _invites = const [];
   List<AuditLogRecord> _auditRecords = const [];
   Map<String, String> _auditUserNames = const {};
@@ -70,6 +82,7 @@ final class GuildSettingsController extends ChangeNotifier {
   GuildOverviewSettings? get overview => _overview;
   List<GuildRole> get roles => List.unmodifiable(_roles);
   List<GuildBan> get bans => List.unmodifiable(_bans);
+  List<AutoModRule> get automodRules => List.unmodifiable(_automodRules);
   List<GuildInvite> get invites => List.unmodifiable(_invites);
   List<AuditLogRecord> get auditRecords => List.unmodifiable(_auditRecords);
   Map<String, String> get auditUserNames => Map.unmodifiable(_auditUserNames);
@@ -99,6 +112,9 @@ final class GuildSettingsController extends ChangeNotifier {
     GuildSettingsSection.roles => _capabilities.canManageRoles,
     GuildSettingsSection.channels => _capabilities.canManageChannels,
     GuildSettingsSection.bans => _capabilities.canBanMembers,
+    // AutoMod is a guild-wide setting, not a per-member action: Discord gates
+    // the page on Manage Server rather than on the ban permission.
+    GuildSettingsSection.automod => _capabilities.canManageGuild,
     GuildSettingsSection.invites => _capabilities.canManageGuild,
     GuildSettingsSection.auditLog => _capabilities.canViewAuditLog,
   };
@@ -148,6 +164,8 @@ final class GuildSettingsController extends ChangeNotifier {
         break;
       case GuildSettingsSection.bans:
         _bans = await _repository.loadBans(guildId: guildId);
+      case GuildSettingsSection.automod:
+        _automodRules = await _repository.loadAutoModRules(guildId);
       case GuildSettingsSection.invites:
         _invites = await _repository.loadGuildInvites(guildId);
       case GuildSettingsSection.auditLog:

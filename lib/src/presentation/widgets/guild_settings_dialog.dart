@@ -6,6 +6,7 @@ import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'guild_settings_audit_section.dart';
+import 'guild_settings_automod_section.dart';
 import 'guild_settings_channels_section.dart';
 import 'guild_settings_controls.dart';
 import 'guild_settings_invites_section.dart';
@@ -214,6 +215,11 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
         workspace: widget.workspace,
         spaceId: widget.space.id,
       ),
+      GuildSettingsSection.automod => GuildSettingsAutoModSection(
+        controller: controller,
+        workspace: widget.workspace,
+        spaceId: widget.space.id,
+      ),
       GuildSettingsSection.invites => GuildSettingsInvitesSection(
         controller: controller,
         workspace: widget.workspace,
@@ -251,6 +257,7 @@ String guildSettingsSectionLabel(GuildSettingsSection section) =>
       GuildSettingsSection.roles => 'Roles',
       GuildSettingsSection.channels => 'Channels',
       GuildSettingsSection.bans => 'Bans',
+      GuildSettingsSection.automod => 'AutoMod',
       GuildSettingsSection.invites => 'Invites',
       GuildSettingsSection.auditLog => 'Audit Log',
     };
@@ -261,6 +268,7 @@ IconData guildSettingsSectionIcon(GuildSettingsSection section) =>
       GuildSettingsSection.roles => Icons.shield_outlined,
       GuildSettingsSection.channels => Icons.tag,
       GuildSettingsSection.bans => Icons.gavel,
+      GuildSettingsSection.automod => Icons.shield_moon_outlined,
       GuildSettingsSection.invites => Icons.link,
       GuildSettingsSection.auditLog => Icons.receipt_long,
     };
