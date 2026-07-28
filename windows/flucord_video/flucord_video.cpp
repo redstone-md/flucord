@@ -1,0 +1,422 @@
+#include "flucord_video.h"
+
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include <windows.h>
+
+#include <codecapi.h>
+#include <d3d11.h>
+#include <dxgi1_2.h>
+#include <mfapi.h>
+#include <mferror.h>
+#include <mfidl.h>
+#include <mftransform.h>
+#include <wrl/client.h>
+
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfuuid.lib")
+#pragma comment(lib, "wmcodecdspuuid.lib")
+
+using Microsoft::WRL::ComPtr;
+
+namespace {
+
+// Desktop Duplication hands out BGRA; the H.264 MFT wants NV12, and nothing in
+// between will convert for us, so the conversion is done here rather than
+// hoping a colour-space negotiation picks it up.
+void BgraToNv12(const uint8_t* source,
+                int source_stride,
+                int width,
+                int height,
+                uint8_t* destination) {
+  uint8_t* luma = destination;
+  uint8_t* chroma = destination + static_cast<size_t>(width) * height;
+  for (int y = 0; y < height; ++y) {
+    const uint8_t* row = source + static_cast<size_t>(y) * source_stride;
+    for (int x = 0; x < width; ++x) {
+      const uint8_t b = row[x * 4 + 0];
+      const uint8_t g = row[x * 4 + 1];
+      const uint8_t r = row[x * 4 + 2];
+      luma[static_cast<size_t>(y) * width + x] = static_cast<uint8_t>(
+          ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
+    }
+  }
+  // Chroma is sampled at half resolution in both directions, averaged over the
+  // 2x2 block so a downscaled edge does not shimmer.
+  for (int y = 0; y + 1 < height; y += 2) {
+    for (int x = 0; x + 1 < width; x += 2) {
+      int sum_b = 0;
+      int sum_g = 0;
+      int sum_r = 0;
+      for (int dy = 0; dy < 2; ++dy) {
+        const uint8_t* row = source + static_cast<size_t>(y + dy) * source_stride;
+        for (int dx = 0; dx < 2; ++dx) {
+          sum_b += row[(x + dx) * 4 + 0];
+          sum_g += row[(x + dx) * 4 + 1];
+          sum_r += row[(x + dx) * 4 + 2];
+        }
+      }
+      const int b = sum_b / 4;
+      const int g = sum_g / 4;
+      const int r = sum_r / 4;
+      const size_t index =
+          static_cast<size_t>(y / 2) * width + static_cast<size_t>(x);
+      chroma[index] = static_cast<uint8_t>(
+          ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128);
+      chroma[index + 1] = static_cast<uint8_t>(
+          ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128);
+    }
+  }
+}
+
+bool IsKeyframe(IMFSample* sample) {
+  UINT32 value = 0;
+  return SUCCEEDED(sample->GetUINT32(MFSampleExtension_CleanPoint, &value)) &&
+         value != 0;
+}
+
+}  // namespace
+
+struct FlucordVideoEncoder {
+  FlucordVideoConfig config{};
+  FlucordVideoFrameCallback callback = nullptr;
+  void* user_data = nullptr;
+
+  ComPtr<ID3D11Device> device;
+  ComPtr<ID3D11DeviceContext> context;
+  ComPtr<IDXGIOutputDuplication> duplication;
+  ComPtr<IMFTransform> encoder;
+
+  std::thread worker;
+  std::atomic<bool> running{false};
+  std::atomic<bool> paused{false};
+  std::atomic<bool> keyframe_requested{true};
+  std::mutex encoder_lock;
+
+  std::vector<uint8_t> nv12;
+};
+
+namespace {
+
+HRESULT ConfigureEncoder(FlucordVideoEncoder* state) {
+  ComPtr<IMFTransform> transform;
+  HRESULT hr = CoCreateInstance(CLSID_MSH264EncoderMFT, nullptr,
+                                CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&transform));
+  if (FAILED(hr)) return hr;
+
+  // Output first: the H.264 MFT refuses an input type until it knows what it
+  // is producing.
+  ComPtr<IMFMediaType> output;
+  hr = MFCreateMediaType(&output);
+  if (FAILED(hr)) return hr;
+  output->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  output->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+  output->SetUINT32(MF_MT_AVG_BITRATE,
+                    static_cast<UINT32>(state->config.bitrate_bits_per_second));
+  MFSetAttributeSize(output.Get(), MF_MT_FRAME_SIZE,
+                     static_cast<UINT32>(state->config.width),
+                     static_cast<UINT32>(state->config.height));
+  MFSetAttributeRatio(output.Get(), MF_MT_FRAME_RATE,
+                      static_cast<UINT32>(state->config.frames_per_second), 1);
+  MFSetAttributeRatio(output.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+  output->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+  // Baseline: every Discord client decodes it, and the constrained profiles
+  // are what a screen share is expected to carry.
+  output->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base);
+  hr = transform->SetOutputType(0, output.Get(), 0);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IMFMediaType> input;
+  hr = MFCreateMediaType(&input);
+  if (FAILED(hr)) return hr;
+  input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+  MFSetAttributeSize(input.Get(), MF_MT_FRAME_SIZE,
+                     static_cast<UINT32>(state->config.width),
+                     static_cast<UINT32>(state->config.height));
+  MFSetAttributeRatio(input.Get(), MF_MT_FRAME_RATE,
+                      static_cast<UINT32>(state->config.frames_per_second), 1);
+  input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+  hr = transform->SetInputType(0, input.Get(), 0);
+  if (FAILED(hr)) return hr;
+
+  transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+  transform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+  state->encoder = transform;
+  return S_OK;
+}
+
+HRESULT OpenDuplication(FlucordVideoEncoder* state) {
+  ComPtr<IDXGIDevice> dxgi_device;
+  HRESULT hr = state->device.As(&dxgi_device);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IDXGIAdapter> adapter;
+  hr = dxgi_device->GetAdapter(&adapter);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IDXGIOutput> output;
+  hr = adapter->EnumOutputs(static_cast<UINT>(state->config.display_index),
+                            &output);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IDXGIOutput1> output1;
+  hr = output.As(&output1);
+  if (FAILED(hr)) return hr;
+
+  return output1->DuplicateOutput(state->device.Get(), &state->duplication);
+}
+
+void DrainEncoder(FlucordVideoEncoder* state) {
+  MFT_OUTPUT_STREAM_INFO info{};
+  if (FAILED(state->encoder->GetOutputStreamInfo(0, &info))) return;
+
+  while (true) {
+    ComPtr<IMFSample> sample;
+    ComPtr<IMFMediaBuffer> buffer;
+    const bool allocates =
+        (info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES |
+                         MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES)) != 0;
+    if (!allocates) {
+      if (FAILED(MFCreateSample(&sample))) return;
+      if (FAILED(MFCreateMemoryBuffer(info.cbSize, &buffer))) return;
+      sample->AddBuffer(buffer.Get());
+    }
+
+    MFT_OUTPUT_DATA_BUFFER out{};
+    out.dwStreamID = 0;
+    out.pSample = allocates ? nullptr : sample.Get();
+    DWORD status = 0;
+    const HRESULT hr = state->encoder->ProcessOutput(0, 1, &out, &status);
+    if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) return;
+    if (FAILED(hr)) return;
+
+    ComPtr<IMFSample> produced = allocates ? out.pSample : sample;
+    if (allocates && out.pSample != nullptr) out.pSample->AddRef();
+    if (out.pEvents != nullptr) out.pEvents->Release();
+    if (!produced) return;
+
+    ComPtr<IMFMediaBuffer> contiguous;
+    if (SUCCEEDED(produced->ConvertToContiguousBuffer(&contiguous))) {
+      BYTE* data = nullptr;
+      DWORD length = 0;
+      if (SUCCEEDED(contiguous->Lock(&data, nullptr, &length))) {
+        LONGLONG timestamp = 0;
+        produced->GetSampleTime(&timestamp);
+        // Ownership is handed over: the callee may be a Dart listener that
+        // runs long after this buffer would have been unlocked.
+        auto* owned = static_cast<uint8_t*>(malloc(length));
+        if (owned != nullptr) {
+          memcpy(owned, data, length);
+          state->callback(state->user_data, owned, static_cast<int32_t>(length),
+                          timestamp / 10,  // 100ns units to microseconds.
+                          IsKeyframe(produced.Get()) ? 1 : 0);
+        }
+        contiguous->Unlock();
+      }
+    }
+    if (allocates && out.pSample != nullptr) out.pSample->Release();
+  }
+}
+
+void EncodeFrame(FlucordVideoEncoder* state,
+                 const uint8_t* bgra,
+                 int stride,
+                 int64_t timestamp_us) {
+  const size_t nv12_size =
+      static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
+  if (state->nv12.size() != nv12_size) state->nv12.resize(nv12_size);
+  BgraToNv12(bgra, stride, state->config.width, state->config.height,
+             state->nv12.data());
+
+  ComPtr<IMFMediaBuffer> buffer;
+  if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(nv12_size), &buffer))) {
+    return;
+  }
+  BYTE* target = nullptr;
+  if (FAILED(buffer->Lock(&target, nullptr, nullptr))) return;
+  memcpy(target, state->nv12.data(), nv12_size);
+  buffer->Unlock();
+  buffer->SetCurrentLength(static_cast<DWORD>(nv12_size));
+
+  ComPtr<IMFSample> sample;
+  if (FAILED(MFCreateSample(&sample))) return;
+  sample->AddBuffer(buffer.Get());
+  sample->SetSampleTime(timestamp_us * 10);
+  sample->SetSampleDuration(10000000 / state->config.frames_per_second);
+
+  std::lock_guard<std::mutex> guard(state->encoder_lock);
+  if (state->keyframe_requested.exchange(false)) {
+    // A viewer who joined midway decodes nothing until one of these.
+    sample->SetUINT32(MFSampleExtension_CleanPoint, 1);
+  }
+  if (SUCCEEDED(state->encoder->ProcessInput(0, sample.Get(), 0))) {
+    DrainEncoder(state);
+  }
+}
+
+void CaptureLoop(FlucordVideoEncoder* state) {
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  const int frame_interval_ms = 1000 / state->config.frames_per_second;
+  auto started = GetTickCount64();
+
+  while (state->running.load()) {
+    if (state->paused.load()) {
+      Sleep(static_cast<DWORD>(frame_interval_ms));
+      continue;
+    }
+    DXGI_OUTDUPL_FRAME_INFO info{};
+    ComPtr<IDXGIResource> resource;
+    HRESULT hr = state->duplication->AcquireNextFrame(
+        static_cast<UINT>(frame_interval_ms), &info, &resource);
+    if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
+      // Nothing changed on screen. Discord expects frames anyway, so the last
+      // one is re-sent rather than the stream stalling.
+      continue;
+    }
+    if (FAILED(hr)) break;
+
+    ComPtr<ID3D11Texture2D> texture;
+    if (SUCCEEDED(resource.As(&texture))) {
+      D3D11_TEXTURE2D_DESC desc{};
+      texture->GetDesc(&desc);
+      desc.Usage = D3D11_USAGE_STAGING;
+      desc.BindFlags = 0;
+      desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+      desc.MiscFlags = 0;
+
+      ComPtr<ID3D11Texture2D> staging;
+      if (SUCCEEDED(state->device->CreateTexture2D(&desc, nullptr, &staging))) {
+        state->context->CopyResource(staging.Get(), texture.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (SUCCEEDED(state->context->Map(staging.Get(), 0, D3D11_MAP_READ, 0,
+                                          &mapped))) {
+          EncodeFrame(state, static_cast<const uint8_t*>(mapped.pData),
+                      static_cast<int>(mapped.RowPitch),
+                      static_cast<int64_t>(GetTickCount64() - started) * 1000);
+          state->context->Unmap(staging.Get(), 0);
+        }
+      }
+    }
+    state->duplication->ReleaseFrame();
+  }
+  CoUninitialize();
+}
+
+}  // namespace
+
+extern "C" {
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open(const FlucordVideoConfig* config,
+                   FlucordVideoFrameCallback callback,
+                   void* user_data,
+                   FlucordVideoEncoder** out_encoder) {
+  if (config == nullptr || callback == nullptr || out_encoder == nullptr) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  if (config->width <= 0 || config->height <= 0 ||
+      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+
+  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) &&
+      GetLastError() != 0) {
+    // Already initialised on this thread is fine; anything else is not.
+  }
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  auto state = std::make_unique<FlucordVideoEncoder>();
+  state->config = *config;
+  state->callback = callback;
+  state->user_data = user_data;
+
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                                 levels, ARRAYSIZE(levels), D3D11_SDK_VERSION,
+                                 &state->device, nullptr, &state->context);
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  hr = OpenDuplication(state.get());
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
+  }
+
+  hr = ConfigureEncoder(state.get());
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+
+  state->running.store(true);
+  FlucordVideoEncoder* raw = state.release();
+  raw->worker = std::thread(CaptureLoop, raw);
+  *out_encoder = raw;
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_request_keyframe(FlucordVideoEncoder* encoder) {
+  if (encoder == nullptr) return FLUCORD_VIDEO_ERROR_STATE;
+  encoder->keyframe_requested.store(true);
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_set_paused(FlucordVideoEncoder* encoder, int32_t paused) {
+  if (encoder == nullptr) return FLUCORD_VIDEO_ERROR_STATE;
+  encoder->paused.store(paused != 0);
+  // Resuming asks for a keyframe: whatever the viewers were holding is stale.
+  if (paused == 0) encoder->keyframe_requested.store(true);
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder) {
+  if (encoder == nullptr) return;
+  encoder->running.store(false);
+  if (encoder->worker.joinable()) encoder->worker.join();
+  if (encoder->encoder) {
+    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+  }
+  encoder->duplication.Reset();
+  encoder->encoder.Reset();
+  encoder->context.Reset();
+  encoder->device.Reset();
+  delete encoder;
+  MFShutdown();
+}
+
+FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data) {
+  free(data);
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void) {
+  ComPtr<IDXGIFactory1> factory;
+  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0;
+  ComPtr<IDXGIAdapter1> adapter;
+  if (FAILED(factory->EnumAdapters1(0, &adapter))) return 0;
+  int32_t count = 0;
+  ComPtr<IDXGIOutput> output;
+  while (SUCCEEDED(adapter->EnumOutputs(static_cast<UINT>(count), &output))) {
+    ++count;
+    output.Reset();
+  }
+  return count;
+}
+
+}  // extern "C"

@@ -146,6 +146,14 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Screen capture and H.264 encoding for Go Live. Built from source in-tree:
+# it is Media Foundation and Desktop Duplication, both of which ship with
+# Windows, so there is nothing to fetch.
+add_subdirectory("flucord_video")
+add_dependencies(${BINARY_NAME} flucord_video)
+install(FILES "$<TARGET_FILE:flucord_video>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 set(LIBDAVE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdave/libdave.dll")
 if(NOT EXISTS "${LIBDAVE_DLL}")
   message(FATAL_ERROR "Missing ${LIBDAVE_DLL}; run tool/build_libdave.ps1")
