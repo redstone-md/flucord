@@ -325,6 +325,126 @@ void main() {
     });
   });
 
+  group('moderation', () {
+    test('starting a stage adopts the server echo', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+      // The channel's guild is known from bootstrap, not from the response.
+      service.accept('GUILD_CREATE', const {
+        'id': 'guild-1',
+        'channels': [
+          {'id': 'stage-1'},
+        ],
+      });
+
+      await service.startStage(
+        'stage-1',
+        topic: 'Release notes',
+        sendStartNotification: true,
+      );
+
+      expect(transport.created.single, {
+        'channel_id': 'stage-1',
+        'topic': 'Release notes',
+        'notify': true,
+      });
+      final stage = service.stageFor('stage-1');
+      expect(stage?.topic, 'Release notes');
+      expect(stage?.id, 'instance-1');
+      expect(stage?.guildId, 'guild-1');
+    });
+
+    test('a response the mapper cannot read leaves the store alone', () async {
+      final transport = _FakeTransport()..echo = const {'topic': 'nonsense'};
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+      service.accept('GUILD_CREATE', const {
+        'id': 'guild-1',
+        'channels': [
+          {'id': 'stage-1'},
+        ],
+      });
+
+      await service.startStage('stage-1', topic: 'x');
+
+      expect(service.stageFor('stage-1'), isNull);
+    });
+
+    test('renaming republishes the topic', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+      service.accept('STAGE_INSTANCE_CREATE', const {
+        'channel_id': 'stage-1',
+        'guild_id': 'guild-1',
+        'topic': 'Before',
+      });
+
+      await service.setStageTopic('stage-1', 'After');
+
+      expect(transport.renamed.single['topic'], 'After');
+      expect(service.stageFor('stage-1')?.topic, 'After');
+    });
+
+    test('ending it clears the store without the dispatch', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+      service.accept('STAGE_INSTANCE_CREATE', const {
+        'channel_id': 'stage-1',
+        'guild_id': 'guild-1',
+      });
+
+      await service.endStage('stage-1');
+
+      expect(transport.ended, ['stage-1']);
+      expect(service.stageFor('stage-1'), isNull);
+      // Ending one that is already gone reports nothing further.
+      await service.endStage('stage-1');
+      expect(transport.ended.length, 2);
+    });
+
+    test('a moderator moves somebody on and off stage', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+      service.accept('STAGE_INSTANCE_CREATE', const {
+        'channel_id': 'stage-1',
+        'guild_id': 'guild-1',
+      });
+
+      await service.setMemberSpeaking(
+        'stage-1',
+        userId: 'someone',
+        speaking: true,
+      );
+      await service.setMemberSpeaking(
+        'stage-1',
+        userId: 'someone',
+        speaking: false,
+      );
+
+      expect(transport.memberPatches.first, {
+        'guild_id': 'guild-1',
+        'user_id': 'someone',
+        'channel_id': 'stage-1',
+        'suppress': false,
+      });
+      expect(transport.memberPatches.last['suppress'], isTrue);
+    });
+
+    test('a channel with no known guild moves nobody', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      addTearDown(service.close);
+
+      await service.setMemberSpeaking('nope', userId: 'a', speaking: true);
+
+      expect(transport.memberPatches, isEmpty);
+    });
+  });
+
   group('controller', () {
     test('a transport with no stage plane offers nothing', () async {
       final controller = StageController(() => null);
@@ -384,6 +504,74 @@ void main() {
       expect(await controller.leaveStage(), isTrue);
       expect(transport.patches.length, 4);
       expect(controller.error, isNull);
+    });
+
+    test('moderation is refused without the permission', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      final controller = StageController(() => service);
+      addTearDown(controller.dispose);
+      addTearDown(service.close);
+      service.accept('STAGE_INSTANCE_CREATE', const {
+        'channel_id': 'stage-1',
+        'guild_id': 'guild-1',
+      });
+      controller.show('stage-1');
+
+      expect(controller.canModerate, isFalse);
+      expect(await controller.startStage('x'), isFalse);
+      expect(await controller.setTopic('x'), isFalse);
+      expect(await controller.endStage(), isFalse);
+      expect(await controller.setMemberSpeaking('a', speaking: true), isFalse);
+      // Nothing was sent for Discord to refuse.
+      expect(transport.created, isEmpty);
+      expect(transport.renamed, isEmpty);
+      expect(transport.ended, isEmpty);
+      expect(transport.memberPatches, isEmpty);
+    });
+
+    test('a moderator runs the stage', () async {
+      final transport = _FakeTransport();
+      final service = DiscordStageService(transport);
+      final controller = StageController(() => service);
+      addTearDown(controller.dispose);
+      addTearDown(service.close);
+      service.accept('GUILD_CREATE', const {
+        'id': 'guild-1',
+        'channels': [
+          {'id': 'stage-1'},
+        ],
+      });
+      controller.show('stage-1', canModerate: true);
+
+      expect(controller.canModerate, isTrue);
+      // The topic is trimmed before it is sent: Discord stores what it is
+      // given, trailing spaces included.
+      expect(await controller.startStage('  Release notes  '), isTrue);
+      expect(transport.created.single['topic'], 'Release notes');
+      expect(await controller.setTopic(' Renamed '), isTrue);
+      expect(transport.renamed.single['topic'], 'Renamed');
+      expect(await controller.setMemberSpeaking('a', speaking: true), isTrue);
+      expect(await controller.endStage(), isTrue);
+      expect(transport.ended, ['stage-1']);
+    });
+
+    test('a permission change alone repaints the controls', () {
+      final service = DiscordStageService(_FakeTransport());
+      final controller = StageController(() => service);
+      addTearDown(controller.dispose);
+      addTearDown(service.close);
+
+      controller.show('stage-1');
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.show('stage-1', canModerate: true);
+      expect(notifications, 1);
+      expect(controller.canModerate, isTrue);
+
+      controller.show('stage-1', canModerate: true);
+      expect(notifications, 1);
     });
 
     test('a rejected request is reported', () async {
@@ -479,6 +667,16 @@ final class _FakeTransport implements DiscordStageTransport {
   final bool failWrites;
   final Completer<void>? gate;
   final List<Map<String, Object?>> patches = [];
+  final List<Map<String, Object?>> memberPatches = [];
+  final List<Map<String, Object?>> created = [];
+  final List<Map<String, Object?>> renamed = [];
+  final List<String> ended = [];
+  Map<String, Object?> echo = const {
+    'id': 'instance-1',
+    'channel_id': 'stage-1',
+    'topic': 'Live',
+    'privacy_level': 2,
+  };
 
   @override
   Future<void> patchSelfVoiceState(
@@ -497,5 +695,56 @@ final class _FakeTransport implements DiscordStageTransport {
       'request_to_speak_timestamp': requestToSpeakTimestamp,
       'clear': clearRequestToSpeak,
     });
+  }
+
+  @override
+  Future<void> patchMemberVoiceState(
+    String guildId, {
+    required String userId,
+    required String channelId,
+    required bool suppress,
+  }) async {
+    await gate?.future;
+    if (failWrites) throw StateError('rejected');
+    memberPatches.add({
+      'guild_id': guildId,
+      'user_id': userId,
+      'channel_id': channelId,
+      'suppress': suppress,
+    });
+  }
+
+  @override
+  Future<Map<String, Object?>> createStageInstance({
+    required String channelId,
+    required String topic,
+    bool sendStartNotification = false,
+  }) async {
+    await gate?.future;
+    if (failWrites) throw StateError('rejected');
+    created.add({
+      'channel_id': channelId,
+      'topic': topic,
+      'notify': sendStartNotification,
+    });
+    return {...echo, 'topic': topic};
+  }
+
+  @override
+  Future<Map<String, Object?>> updateStageInstance(
+    String channelId, {
+    required String topic,
+  }) async {
+    await gate?.future;
+    if (failWrites) throw StateError('rejected');
+    renamed.add({'channel_id': channelId, 'topic': topic});
+    return {...echo, 'topic': topic};
+  }
+
+  @override
+  Future<void> deleteStageInstance(String channelId) async {
+    await gate?.future;
+    if (failWrites) throw StateError('rejected');
+    ended.add(channelId);
   }
 }

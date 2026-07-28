@@ -17,6 +17,7 @@ final class ChannelCapabilities {
     required this.addReactions,
     required this.attachFiles,
     required this.embedLinks,
+    required this.moderateStage,
   });
 
   /// Everything allowed. Used where no permission data exists at all — a demo
@@ -32,6 +33,7 @@ final class ChannelCapabilities {
     addReactions: true,
     attachFiles: true,
     embedLinks: true,
+    moderateStage: true,
   );
 
   /// Nothing allowed, for a channel that resolved to no permissions at all.
@@ -44,6 +46,7 @@ final class ChannelCapabilities {
     addReactions: false,
     attachFiles: false,
     embedLinks: false,
+    moderateStage: false,
   );
 
   /// Reads the answers out of a computed permission bitfield.
@@ -81,6 +84,17 @@ final class ChannelCapabilities {
           permissions,
           DiscordPermissions.embedLinks,
         ),
+        // Discord calls this being a stage moderator, and it is not one
+        // permission but three held together: MANAGE_CHANNELS to start and end
+        // the stage, MUTE_MEMBERS to decide who is audible, MOVE_MEMBERS to
+        // move somebody off it. Anybody short of all three cannot run a stage,
+        // so offering the controls would only produce refusals.
+        moderateStage: DiscordPermissions.hasAll(
+          permissions,
+          DiscordPermissions.manageChannels |
+              DiscordPermissions.muteMembers |
+              DiscordPermissions.moveMembers,
+        ),
       );
 
   final bool viewChannel;
@@ -93,6 +107,9 @@ final class ChannelCapabilities {
   final bool addReactions;
   final bool attachFiles;
   final bool embedLinks;
+
+  /// Whether this account may run a stage in this channel.
+  final bool moderateStage;
 
   /// Whether [message] may be acted on as its owner would: your own always,
   /// anyone else's only with `MANAGE_MESSAGES`. This is the rule behind both

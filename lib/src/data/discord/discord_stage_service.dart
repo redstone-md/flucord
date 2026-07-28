@@ -16,6 +16,31 @@ abstract interface class DiscordStageTransport {
     String? requestToSpeakTimestamp,
     bool clearRequestToSpeak = false,
   });
+
+  /// `PATCH /guilds/{guildId}/voice-states/{userId}` — the moderator's half of
+  /// the same route, which is how somebody else is put on or taken off stage.
+  Future<void> patchMemberVoiceState(
+    String guildId, {
+    required String userId,
+    required String channelId,
+    required bool suppress,
+  });
+
+  /// `POST /stage-instances`.
+  Future<Map<String, Object?>> createStageInstance({
+    required String channelId,
+    required String topic,
+    bool sendStartNotification = false,
+  });
+
+  /// `PATCH /stage-instances/{channelId}`.
+  Future<Map<String, Object?>> updateStageInstance(
+    String channelId, {
+    required String topic,
+  });
+
+  /// `DELETE /stage-instances/{channelId}`.
+  Future<void> deleteStageInstance(String channelId);
 }
 
 /// Stage instances and this account's standing in them.
@@ -85,6 +110,65 @@ final class DiscordStageService implements StageRepository {
       suppress: !speaking,
       clearRequestToSpeak: speaking,
     );
+  }
+
+  @override
+  Future<void> startStage(
+    String channelId, {
+    required String topic,
+    bool sendStartNotification = false,
+  }) async {
+    final payload = await _transport.createStageInstance(
+      channelId: channelId,
+      topic: topic,
+      sendStartNotification: sendStartNotification,
+    );
+    _adopt(payload, channelId);
+  }
+
+  @override
+  Future<void> setStageTopic(String channelId, String topic) async {
+    final payload = await _transport.updateStageInstance(
+      channelId,
+      topic: topic,
+    );
+    _adopt(payload, channelId);
+  }
+
+  @override
+  Future<void> endStage(String channelId) async {
+    await _transport.deleteStageInstance(channelId);
+    // Applied here rather than waiting for STAGE_INSTANCE_DELETE, for the same
+    // reason a join is: the controls must stop offering to end a stage the
+    // moment the route succeeded.
+    if (_stages.remove(channelId) != null) _publish(channelId);
+  }
+
+  @override
+  Future<void> setMemberSpeaking(
+    String channelId, {
+    required String userId,
+    required bool speaking,
+  }) async {
+    final guildId = _guildFor(channelId);
+    if (guildId == null) return;
+    await _transport.patchMemberVoiceState(
+      guildId,
+      userId: userId,
+      channelId: channelId,
+      suppress: !speaking,
+    );
+  }
+
+  /// Takes the server's echo, which carries the id and privacy level the
+  /// request did not know.
+  void _adopt(Map<String, Object?> payload, String channelId) {
+    final guildId = _guildFor(channelId);
+    final stage = readStage({'guild_id': ?guildId, ...payload});
+    if (stage == null) return;
+    _stages[stage.channelId] = stage;
+    _guildByChannel[stage.channelId] = stage.guildId;
+    _publish(stage.channelId);
   }
 
   /// Folds a gateway dispatch into the stores.

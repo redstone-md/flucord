@@ -119,4 +119,24 @@ abstract interface class StageRepository {
 
   /// Accepts an invitation, or steps back down when [speaking] is false.
   Future<void> setSpeaking(String channelId, {required bool speaking});
+
+  /// Starts a stage in [channelId]. Moderator only.
+  Future<void> startStage(
+    String channelId, {
+    required String topic,
+    bool sendStartNotification = false,
+  });
+
+  /// Renames the running stage. Moderator only.
+  Future<void> setStageTopic(String channelId, String topic);
+
+  /// Ends it. Moderator only.
+  Future<void> endStage(String channelId);
+
+  /// Puts somebody else on stage, or moves them back to the audience.
+  Future<void> setMemberSpeaking(
+    String channelId, {
+    required String userId,
+    required bool speaking,
+  });
 }

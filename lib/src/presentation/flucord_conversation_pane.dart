@@ -195,7 +195,10 @@ class _ConversationPaneState extends State<_ConversationPane> {
     scheduleMicrotask(() {
       if (!mounted) return;
       widget.threadMembershipController.show(threadId);
-      widget.stageController.show(stageId);
+      widget.stageController.show(
+        stageId,
+        canModerate: widget.capabilities.moderateStage,
+      );
     });
   }
 

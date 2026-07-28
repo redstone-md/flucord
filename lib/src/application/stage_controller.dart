@@ -17,6 +17,7 @@ final class StageController extends ChangeNotifier {
   bool _disposed = false;
 
   String? _channelId;
+  bool _canModerate = false;
   bool _isBusy = false;
   Object? _error;
 
@@ -43,12 +44,19 @@ final class StageController extends ChangeNotifier {
   bool get isBusy => _isBusy;
   Object? get error => _error;
 
+  /// Whether this account may start, rename and end the stage.
+  bool get canModerate => _canModerate;
+
   /// Points the controller at [channelId], or clears it for a channel that is
   /// not a stage.
-  void show(String? channelId) {
+  ///
+  /// [canModerate] travels with the channel because it is a per-channel
+  /// permission answer: the same account moderates one stage and not another.
+  void show(String? channelId, {bool canModerate = false}) {
     _bind();
-    if (_channelId == channelId) return;
+    if (_channelId == channelId && _canModerate == canModerate) return;
     _channelId = channelId;
+    _canModerate = canModerate;
     _error = null;
     _notify();
   }
@@ -64,6 +72,40 @@ final class StageController extends ChangeNotifier {
 
   Future<bool> leaveStage() =>
       _apply((repository, id) => repository.setSpeaking(id, speaking: false));
+
+  /// Opens a stage. Refused outright without the permission, rather than sent
+  /// for Discord to reject.
+  Future<bool> startStage(String topic, {bool notify = false}) {
+    if (!_canModerate) return Future.value(false);
+    return _apply(
+      (repository, id) => repository.startStage(
+        id,
+        topic: topic.trim(),
+        sendStartNotification: notify,
+      ),
+    );
+  }
+
+  Future<bool> setTopic(String topic) {
+    if (!_canModerate) return Future.value(false);
+    return _apply(
+      (repository, id) => repository.setStageTopic(id, topic.trim()),
+    );
+  }
+
+  Future<bool> endStage() {
+    if (!_canModerate) return Future.value(false);
+    return _apply((repository, id) => repository.endStage(id));
+  }
+
+  /// Puts somebody on stage, or moves them back to the audience.
+  Future<bool> setMemberSpeaking(String userId, {required bool speaking}) {
+    if (!_canModerate) return Future.value(false);
+    return _apply(
+      (repository, id) =>
+          repository.setMemberSpeaking(id, userId: userId, speaking: speaking),
+    );
+  }
 
   @override
   void dispose() {

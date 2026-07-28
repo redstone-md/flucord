@@ -172,6 +172,143 @@ void main() {
     expect(find.byKey(const ValueKey('stage-error')), findsOne);
     expect(find.text('You are in the audience.'), findsOne);
   });
+
+  testWidgets('a listener is offered nothing to manage', (tester) async {
+    final repository = _FakeRepository(
+      stage: const StageInstance(
+        id: 'i',
+        channelId: 'stage-1',
+        guildId: 'guild-1',
+      ),
+    );
+    final controller = StageController(() => repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    controller.show('stage-1');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('stage-moderator-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('stage-start')), findsNothing);
+  });
+
+  testWidgets('a moderator starts a stage through the topic dialog', (
+    tester,
+  ) async {
+    final repository = _FakeRepository();
+    final controller = StageController(() => repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    controller.show('stage-1', canModerate: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('stage-start')));
+    await tester.pumpAndSettle();
+
+    // Discord requires a topic, so an empty one cannot be submitted.
+    final confirm = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('stage-topic-confirm')),
+    );
+    expect(confirm.onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('stage-topic-field')),
+      '  Release notes  ',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-topic-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.started, ['Release notes']);
+    expect(find.text('Release notes'), findsOne);
+  });
+
+  testWidgets('backing out of the dialog starts nothing', (tester) async {
+    final repository = _FakeRepository();
+    final controller = StageController(() => repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    controller.show('stage-1', canModerate: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('stage-start')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-topic-cancel')));
+    await tester.pumpAndSettle();
+
+    expect(repository.started, isEmpty);
+  });
+
+  testWidgets('a moderator renames and ends the stage', (tester) async {
+    final repository = _FakeRepository(
+      stage: const StageInstance(
+        id: 'i',
+        channelId: 'stage-1',
+        guildId: 'guild-1',
+        topic: 'Before',
+      ),
+    );
+    final controller = StageController(() => repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    controller.show('stage-1', canModerate: true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('stage-moderator-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-rename')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('stage-topic-field')),
+      'After',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-topic-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.renamed, ['After']);
+
+    await tester.tap(find.byKey(const ValueKey('stage-moderator-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-end')));
+    await tester.pumpAndSettle();
+
+    expect(repository.ended, ['stage-1']);
+    // With the stage gone, the moderator is offered the way to start another.
+    expect(find.byKey(const ValueKey('stage-start')), findsOne);
+  });
+
+  testWidgets('submitting the topic from the keyboard works too', (
+    tester,
+  ) async {
+    final repository = _FakeRepository();
+    final controller = StageController(() => repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller);
+    controller.show('stage-1', canModerate: true);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stage-start')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('stage-topic-field')),
+      'Typed',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(repository.started, ['Typed']);
+  });
 }
 
 final class _FakeRepository implements StageRepository {
@@ -181,6 +318,10 @@ final class _FakeRepository implements StageRepository {
   final List<String> requested = [];
   final List<String> cancelled = [];
   final List<bool> speaking = [];
+  final List<String> started = [];
+  final List<String> renamed = [];
+  final List<String> ended = [];
+  final List<String> moved = [];
   final bool failWrites;
 
   StageInstance? stage;
@@ -222,6 +363,54 @@ final class _FakeRepository implements StageRepository {
       channelId,
       StagePresence(channelId: channelId, isSuppressed: !speaking),
     );
+  }
+
+  @override
+  Future<void> startStage(
+    String channelId, {
+    required String topic,
+    bool sendStartNotification = false,
+  }) async {
+    if (failWrites) throw StateError('rejected');
+    started.add(topic);
+    stage = StageInstance(
+      id: 'i',
+      channelId: channelId,
+      guildId: 'guild-1',
+      topic: topic,
+    );
+    if (!_updates.isClosed) _updates.add(channelId);
+  }
+
+  @override
+  Future<void> setStageTopic(String channelId, String topic) async {
+    if (failWrites) throw StateError('rejected');
+    renamed.add(topic);
+    stage = StageInstance(
+      id: 'i',
+      channelId: channelId,
+      guildId: 'guild-1',
+      topic: topic,
+    );
+    if (!_updates.isClosed) _updates.add(channelId);
+  }
+
+  @override
+  Future<void> endStage(String channelId) async {
+    if (failWrites) throw StateError('rejected');
+    ended.add(channelId);
+    stage = null;
+    if (!_updates.isClosed) _updates.add(channelId);
+  }
+
+  @override
+  Future<void> setMemberSpeaking(
+    String channelId, {
+    required String userId,
+    required bool speaking,
+  }) async {
+    if (failWrites) throw StateError('rejected');
+    moved.add(userId);
   }
 
   void _publish(String channelId, StagePresence value) {

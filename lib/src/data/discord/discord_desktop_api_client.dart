@@ -131,6 +131,51 @@ final class DiscordDesktopApiClient
     },
   );
 
+  /// The moderator's half of the voice-state route.
+  @override
+  Future<void> patchMemberVoiceState(
+    String guildId, {
+    required String userId,
+    required String channelId,
+    required bool suppress,
+  }) => _rest.requestEmpty(
+    'PATCH',
+    '/guilds/$guildId/voice-states/$userId',
+    body: {'channel_id': channelId, 'suppress': suppress},
+  );
+
+  /// `privacy_level` is sent as guild-only: Discord retired the public value
+  /// and rejects a stage created with it.
+  @override
+  Future<Map<String, Object?>> createStageInstance({
+    required String channelId,
+    required String topic,
+    bool sendStartNotification = false,
+  }) => _rest.requestObject(
+    'POST',
+    '/stage-instances',
+    body: {
+      'channel_id': channelId,
+      'topic': topic,
+      'privacy_level': 2,
+      'send_start_notification': sendStartNotification,
+    },
+  );
+
+  @override
+  Future<Map<String, Object?>> updateStageInstance(
+    String channelId, {
+    required String topic,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/stage-instances/$channelId',
+    body: {'topic': topic},
+  );
+
+  @override
+  Future<void> deleteStageInstance(String channelId) =>
+      _rest.requestEmpty('DELETE', '/stage-instances/$channelId');
+
   /// `GET /channels/{id}/thread-members`, with the guild member attached so a
   /// name and avatar can be shown without a second lookup.
   @override
