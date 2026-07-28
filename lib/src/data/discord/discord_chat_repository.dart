@@ -1,3 +1,4 @@
+import '../../domain/auth_session.dart';
 import '../../domain/family_centre.dart';
 import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
@@ -364,6 +365,9 @@ final class DiscordChatRepository
 
   @override
   FamilyCentreRepository? get familyCentre => null;
+
+  @override
+  AuthSessionRepository? get authSessions => null;
 
   /// The search routes are scoped to a signed-in user's own session; a
   /// bot token is rejected by them, so this transport has no search plane

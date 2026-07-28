@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/account_standing_controller.dart';
+import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -12,6 +13,7 @@ import '../../theme/flucord_theme.dart';
 import 'user_profile_controls.dart';
 import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
+import 'user_settings_devices_section.dart';
 import 'user_settings_family_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
@@ -25,6 +27,7 @@ enum UserSettingsCategory {
   privacy('Privacy', Icons.shield_outlined),
   standing('Account Standing', Icons.gavel_outlined),
   family('Family Center', Icons.family_restroom_outlined),
+  devices('Devices', Icons.devices_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -41,6 +44,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.profileController,
     this.standingController,
     this.familyController,
+    this.sessionController,
     super.key,
   });
 
@@ -61,12 +65,16 @@ class UserSettingsDialog extends StatefulWidget {
   /// Answers for the family centre, or null on a transport with none.
   final FamilyCentreController? familyController;
 
+  /// Answers for the account's sessions, or null on a transport with none.
+  final AuthSessionController? sessionController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
     UserProfileController? profileController,
     AccountStandingController? standingController,
     FamilyCentreController? familyController,
+    AuthSessionController? sessionController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -75,6 +83,7 @@ class UserSettingsDialog extends StatefulWidget {
       profileController: profileController,
       standingController: standingController,
       familyController: familyController,
+      sessionController: sessionController,
     ),
   );
 
@@ -114,6 +123,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               profileController: widget.profileController,
               standingController: widget.standingController,
               familyController: widget.familyController,
+              sessionController: widget.sessionController,
               category: _category,
             );
             return wide
@@ -266,6 +276,7 @@ class _Body extends StatelessWidget {
     required this.profileController,
     required this.standingController,
     required this.familyController,
+    required this.sessionController,
     required this.category,
   });
 
@@ -273,6 +284,7 @@ class _Body extends StatelessWidget {
   final UserProfileController? profileController;
   final AccountStandingController? standingController;
   final FamilyCentreController? familyController;
+  final AuthSessionController? sessionController;
   final UserSettingsCategory category;
 
   @override
@@ -371,6 +383,20 @@ class _Body extends StatelessWidget {
       }
       return FamilyCentreSection(controller: family);
     }
+    if (category == UserSettingsCategory.devices) {
+      final sessions = sessionController;
+      if (sessions == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-devices-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to see where it is signed in. The '
+              'demo and bot transports have one session and no route to list '
+              'it.',
+        );
+      }
+      return DevicesSettingsSection(controller: sessions);
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -432,6 +458,7 @@ class _Body extends StatelessWidget {
     // Handled before the settings store is consulted.
     UserSettingsCategory.standing => const SizedBox.shrink(),
     UserSettingsCategory.family => const SizedBox.shrink(),
+    UserSettingsCategory.devices => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

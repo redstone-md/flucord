@@ -1,3 +1,4 @@
+import '../../domain/auth_session.dart';
 import '../../domain/family_centre.dart';
 import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
@@ -220,6 +221,9 @@ final class DiscordDesktopChatRepository
 
   @override
   FamilyCentreRepository? get familyCentre => _api.familyCentre;
+
+  @override
+  AuthSessionRepository? get authSessions => _api.authSessions;
 
   /// The account's own session is what Discord's search routes answer to, so
   /// this is the one transport that can offer them.

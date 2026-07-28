@@ -1,8 +1,9 @@
 import '../../domain/chat_models.dart';
 import 'discord_call_api.dart';
 import 'discord_desktop_rest_protocol.dart';
-import 'discord_guild_management_repository.dart';
+import 'discord_auth_session_repository.dart';
 import 'discord_family_centre_repository.dart';
+import 'discord_guild_management_repository.dart';
 import 'discord_moderation_repository.dart';
 import 'discord_safety_hub_repository.dart';
 import 'discord_multipart_body.dart';
@@ -61,6 +62,9 @@ final class DiscordDesktopApiClient
 
   late final DiscordFamilyCentreRepository familyCentre =
       DiscordFamilyCentreRepository(_rest);
+
+  late final DiscordAuthSessionRepository authSessions =
+      DiscordAuthSessionRepository(_rest);
 
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {

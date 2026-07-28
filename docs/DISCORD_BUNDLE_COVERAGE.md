@@ -134,19 +134,30 @@ are excluded from the denominator and are never reported as implemented.
 - **Symbols**: `AUTH_SESSION_CHANGE`, `AUTHENTICATOR_CREATE`,
   `AUTHENTICATOR_DELETE`, `AUTHENTICATOR_UPDATE`.
 - **Purpose**: obtain and retain a desktop account session.
-- **UI surface**: Connections, QR login dialog, hCaptcha challenge window.
+- **UI surface**: Connections, QR login dialog, hCaptcha challenge window, the
+  Devices page in user settings.
 - **Contract**: remote-auth Gateway v2, `POST /users/@me/remote-auth/login`,
-  `X-Captcha-Key`/`X-Captcha-Rqtoken`/`X-Captcha-Session-Id`.
+  `X-Captcha-Key`/`X-Captcha-Rqtoken`/`X-Captcha-Session-Id`,
+  `GET /auth/sessions`, `POST /auth/sessions/logout`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: RSA-2048 QR remote auth, mandatory hCaptcha through an
-  ephemeral system WebView2, versioned operating-system session vault.
+  ephemeral system WebView2, versioned operating-system session vault. Also
+  the Devices page — every session signed in to the account, and ending one or
+  all of the others. Sessions are named by the hash Discord identifies them
+  with, never by anything that could be turned back into a token. The current
+  session is offered no end control, because ending it is signing out. Discord
+  asking for the account password before it will end a session is reported as
+  the refusal it is rather than as a fault: Flucord holds no password to offer
+  it.
 - **Tests**: `discord_remote_auth_gateway_test.dart`,
-  `discord_desktop_login_controller_test.dart`.
+  `discord_desktop_login_controller_test.dart`, `auth_session_test.dart`,
+  `auth_session_widget_test.dart`.
 - **Live evidence**: phone approval, hCaptcha completion, encrypted session
-  exchange, and restart restoration validated on Windows `2026-07-25`.
-- **Blocked by**: authenticator management, age verification, account standing,
-  and session revocation have no vertical slice.
+  exchange, and restart restoration validated on Windows `2026-07-25`. The
+  Devices page has none: listing another session needs a second one to exist.
+- **Blocked by**: authenticator management and age verification have no
+  vertical slice. Account standing shipped under FBC-MODERATION.
 
 ## FBC-PROFILE — Current user, other users, user settings
 

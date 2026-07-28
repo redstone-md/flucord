@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/auth_session.dart';
 import 'package:flucord/src/domain/family_centre.dart';
 import 'package:flucord/src/domain/account_standing.dart';
 import 'package:flucord/src/domain/automod_rule.dart';
@@ -238,6 +239,9 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   FamilyCentreRepository? get familyCentre => null;
+
+  @override
+  AuthSessionRepository? get authSessions => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;

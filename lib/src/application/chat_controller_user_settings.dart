@@ -64,4 +64,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// The family centre, or `null` where there is none.
   FamilyCentreRepository? get familyCentre => _repository.familyCentre;
+
+  /// The account's sessions, or `null` where there are none to manage.
+  AuthSessionRepository? get authSessions => _repository.authSessions;
 }

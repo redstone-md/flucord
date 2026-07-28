@@ -1,5 +1,6 @@
 import 'automod_rule.dart';
 import 'account_standing.dart';
+import 'auth_session.dart';
 import 'chat_models.dart';
 import 'family_centre.dart';
 import 'guild_management_repository.dart';
@@ -286,6 +287,9 @@ abstract interface class ChatRepository {
 
   /// The family centre, or `null` on a transport that has none.
   FamilyCentreRepository? get familyCentre;
+
+  /// The account's signed-in sessions, or `null` on a transport with none.
+  AuthSessionRepository? get authSessions;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///
