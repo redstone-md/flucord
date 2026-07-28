@@ -18,6 +18,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/thread_membership_controller.dart';
 import 'application/user_profile_controller.dart';
 import 'application/user_settings_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
@@ -165,6 +166,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final MessageSearchController _messageSearchController;
   late final UserSettingsController _userSettingsController;
   late final UserProfileController _userProfileController;
+  late final ThreadMembershipController _threadMembershipController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -246,6 +248,11 @@ class _FlucordAppState extends State<FlucordApp> {
     _userProfileController = UserProfileController(
       () => _chatController.userProfile,
     );
+    // Same again: joining a thread is per-account state, and the plane that
+    // holds it is swapped out with the session.
+    _threadMembershipController = ThreadMembershipController(
+      () => _chatController.threadMembership,
+    );
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -322,6 +329,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _messageSearchController.dispose();
     _userSettingsController.dispose();
     _userProfileController.dispose();
+    _threadMembershipController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -427,6 +435,8 @@ class _FlucordAppState extends State<FlucordApp> {
                                 messageSearchController:
                                     _messageSearchController,
                                 voiceController: _voiceController,
+                                threadMembershipController:
+                                    _threadMembershipController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,

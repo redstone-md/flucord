@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter/material.dart';
@@ -186,6 +187,10 @@ Future<void> _openDirectMessage(
 final class _CallableRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+
+  @override
+  ThreadMembershipRepository? get threadMembership =>
+      _delegate.threadMembership;
 
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeCallService calls = _FakeCallService();

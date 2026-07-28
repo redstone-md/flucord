@@ -13,6 +13,7 @@ import '../../domain/presence_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../domain/voice_call.dart';
+import '../../domain/thread_membership.dart';
 import '../../domain/user_profile.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
@@ -29,6 +30,7 @@ import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
+import 'discord_thread_membership_service.dart';
 import 'discord_voice_signaling_service.dart';
 
 part 'discord_desktop_chat_events.dart';
@@ -47,6 +49,7 @@ final class DiscordDesktopChatRepository
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
        _userSettings = DiscordUserSettingsRepository(_api),
        _readState = DiscordReadStateRepository(_api),
+       _threadMembership = DiscordThreadMembershipService(_api),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
          nativeDaveService: daveService,
@@ -91,6 +94,7 @@ final class DiscordDesktopChatRepository
   final DiscordUserSettingsRepository _userSettings;
   final DiscordReadStateRepository _readState;
   final DiscordVoiceSignalingService _voiceSignaling;
+  final DiscordThreadMembershipService _threadMembership;
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
   final StreamController<ChatRepositoryEvent> _events =
@@ -118,6 +122,9 @@ final class DiscordDesktopChatRepository
   /// the only transport that can read or edit that account's profile.
   @override
   UserProfileRepository? get userProfile => _userProfile;
+
+  @override
+  ThreadMembershipRepository? get threadMembership => _threadMembership;
 
   /// The desktop-user session is the only transport holding the account's
   /// settings blob: `READY` delivers it on this very socket.
@@ -451,6 +458,7 @@ final class DiscordDesktopChatRepository
     await _readState.close();
     await _directCalls.close();
     await _voiceSignaling.close();
+    await _threadMembership.close();
     await _memberLists.close();
     await _gateway.close();
     _api.close();

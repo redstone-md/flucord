@@ -145,6 +145,7 @@ extension _FlucordShellConversation on FlucordShell {
     onToggleSuppressEmbeds: chatController.toggleSuppressEmbeds,
     onTyping: () => chatController.startTyping(channel.id),
     voiceController: voiceController,
+    threadMembershipController: threadMembershipController,
     voiceMessageRecorder: voiceMessageRecorder,
     onSendVoiceMessage: (voiceMessage) => chatController.sendVoiceMessage(
       channelId: channel.id,

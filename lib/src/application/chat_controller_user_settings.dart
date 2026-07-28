@@ -13,6 +13,10 @@ extension ChatControllerUserSettings on ChatController {
   /// account behind it. Read live for the same reason as the settings store.
   UserProfileRepository? get userProfile => _repository.userProfile;
 
+  /// The thread-membership plane of the connected transport, or `null`.
+  ThreadMembershipRepository? get threadMembership =>
+      _repository.threadMembership;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

@@ -4,6 +4,10 @@ final class _EventRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
 
+  @override
+  ThreadMembershipRepository? get threadMembership =>
+      _delegate.threadMembership;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );

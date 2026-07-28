@@ -20,6 +20,7 @@ extension _DiscordDesktopChatSession on DiscordDesktopChatRepository {
     // The ACK token belongs to one logged-in account; carrying it across a
     // switch would have the new account acking with the old one's credential.
     _readState.setCurrentUserId(memberId);
+    _threadMembership.setCurrentUserId(memberId);
     _emitSelfPresence();
   }
 

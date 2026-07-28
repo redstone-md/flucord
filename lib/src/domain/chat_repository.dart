@@ -6,6 +6,7 @@ import 'presence_repository.dart';
 import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
+import 'thread_membership.dart';
 import 'user_profile.dart';
 import 'voice_connection.dart';
 
@@ -199,6 +200,12 @@ abstract interface class ChatRepository {
   /// repository reports null and the settings window hides the section rather
   /// than presenting an editor that cannot save.
   UserProfileRepository? get userProfile;
+
+  /// Joining, leaving and listing a thread's members.
+  ///
+  /// Null on a transport with no account behind it: membership is per-account
+  /// state, and a demo session has nobody to add to a thread.
+  ThreadMembershipRepository? get threadMembership;
 
   /// The account settings this transport can read and write, or `null`.
   ///

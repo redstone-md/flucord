@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -162,6 +163,10 @@ const _member = Member(
 final class _PagedRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+
+  @override
+  ThreadMembershipRepository? get threadMembership =>
+      _delegate.threadMembership;
 
   _PagedRepository(this._results, {ChatWorkspace? workspace})
     : _workspace = workspace ?? _defaultWorkspace();

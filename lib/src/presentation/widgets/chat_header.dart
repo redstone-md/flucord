@@ -29,6 +29,7 @@ class ChatHeader extends StatelessWidget {
     required this.onTogglePins,
     required this.onToggleThreads,
     required this.onOpenInbox,
+    this.threadMembership,
     this.showVoiceSurfaces = false,
     this.isInCall = false,
     this.callLabel,
@@ -68,6 +69,10 @@ class ChatHeader extends StatelessWidget {
   final bool showPins;
   final bool showThreads;
   final InboxSummary inboxSummary;
+
+  /// Join/leave for a thread, or null when the channel is not one.
+  final Widget? threadMembership;
+
   final ValueChanged<String> onSelectChannel;
   final ValueChanged<VoiceChannelSurface> onSelectVoiceSurface;
   final ValueChanged<String> onQueryChanged;
@@ -142,6 +147,10 @@ class ChatHeader extends StatelessWidget {
                 ),
               ] else
                 const Spacer(),
+              if (threadMembership case final membership?) ...[
+                const SizedBox(width: 4),
+                membership,
+              ],
               if (onToggleCall != null) ...[
                 const SizedBox(width: 4),
                 IconButton(

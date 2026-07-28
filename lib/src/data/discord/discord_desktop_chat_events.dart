@@ -34,6 +34,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // Read state hangs off READY and five ack dispatches, so it too sees
         // the whole stream rather than a hand-picked slice of it.
         _readState.acceptGatewayDispatch(event.name, event.data);
+        // Thread membership answers to four dispatches and has to see them all:
+        // a join made on another device arrives as THREAD_MEMBER_UPDATE with no
+        // request from here.
+        _threadMembership.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {

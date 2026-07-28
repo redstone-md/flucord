@@ -6,6 +6,7 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_thread_membership_service.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_user_settings_transport.dart';
 
@@ -13,6 +14,7 @@ final class DiscordDesktopApiClient
     implements
         DiscordCallApi,
         DiscordUserProfileTransport,
+        DiscordThreadMembershipTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -100,6 +102,24 @@ final class DiscordDesktopApiClient
     '/channels/$channelId/messages/$messageId/threads',
     body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
   );
+
+  /// `GET /channels/{id}/thread-members`, with the guild member attached so a
+  /// name and avatar can be shown without a second lookup.
+  @override
+  Future<List<Map<String, Object?>>> listThreadMembers(String threadId) =>
+      _rest.getList(
+        '/channels/$threadId/thread-members',
+        query: const {'with_member': 'true', 'limit': '100'},
+      );
+
+  /// The desktop client posts rather than puts here, and so does this.
+  @override
+  Future<void> joinThread(String threadId) =>
+      _rest.requestEmpty('POST', '/channels/$threadId/thread-members/@me');
+
+  @override
+  Future<void> leaveThread(String threadId) =>
+      _rest.requestEmpty('DELETE', '/channels/$threadId/thread-members/@me');
 
   Future<Map<String, Object?>> createMessage({
     required String channelId,

@@ -80,6 +80,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.onTyping,
     required this.voiceController,
+    required this.threadMembershipController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -151,6 +152,7 @@ class _ConversationPane extends StatefulWidget {
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final VoidCallback onTyping;
   final VoiceController voiceController;
+  final ThreadMembershipController threadMembershipController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -169,6 +171,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
   void initState() {
     super.initState();
     _watchCall();
+    _watchThreadMembership();
   }
 
   @override
@@ -177,6 +180,18 @@ class _ConversationPaneState extends State<_ConversationPane> {
     if (oldWidget.channel.id == widget.channel.id) return;
     _replyTo = null;
     _watchCall();
+    _watchThreadMembership();
+  }
+
+  /// Points the membership controller at this channel, when it is a thread.
+  ///
+  /// Deferred by a microtask because pointing it somewhere notifies
+  /// synchronously, and this runs while the listener above is building.
+  void _watchThreadMembership() {
+    final threadId = widget.channel.isThread ? widget.channel.id : null;
+    scheduleMicrotask(() {
+      if (mounted) widget.threadMembershipController.show(threadId);
+    });
   }
 
   /// Subscribes the session to this channel's call (gateway opcode 13).
@@ -255,6 +270,16 @@ class _ConversationPaneState extends State<_ConversationPane> {
       children: [
         ChatHeader(
           channel: widget.channel,
+          // Only a thread has a membership to join; every other channel gets
+          // nothing rather than a control that would have nothing to act on.
+          threadMembership: widget.channel.isThread
+              ? ListenableBuilder(
+                  listenable: widget.threadMembershipController,
+                  builder: (_, _) => ThreadMembershipButton(
+                    controller: widget.threadMembershipController,
+                  ),
+                )
+              : null,
           channels: widget.channels,
           query: widget.query,
           showCompactPicker: widget.compact,

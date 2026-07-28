@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter_test/flutter_test.dart';
