@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/user_profile.dart';
 
@@ -83,6 +84,9 @@ final class MockChatRepository
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
+
+  @override
+  StageRepository? get stages => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

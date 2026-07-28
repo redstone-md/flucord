@@ -42,6 +42,7 @@ extension DiscordChannelMapper on DiscordMapper {
       position: payload['position'] as int? ?? 0,
       parentId: payload['parent_id'] as String?,
       isThread: type == 10 || type == 11 || type == 12,
+      isStage: type == 13,
       isArchived: threadMetadata['archived'] as bool? ?? false,
       isLocked: threadMetadata['locked'] as bool? ?? false,
       archiveTimestamp: archiveTimestamp == null

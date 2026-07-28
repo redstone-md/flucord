@@ -6,6 +6,7 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_user_settings_transport.dart';
@@ -15,6 +16,7 @@ final class DiscordDesktopApiClient
         DiscordCallApi,
         DiscordUserProfileTransport,
         DiscordThreadMembershipTransport,
+        DiscordStageTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -101,6 +103,32 @@ final class DiscordDesktopApiClient
     'POST',
     '/channels/$channelId/messages/$messageId/threads',
     body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
+  );
+
+  /// Moves this account between a stage's audience and its speakers.
+  ///
+  /// `request_to_speak_timestamp` is three-valued on the wire: absent leaves
+  /// the hand as it is, a timestamp raises it, and an explicit null lowers it.
+  /// Collapsing the last two would make cancelling a request indistinguishable
+  /// from not touching it.
+  @override
+  Future<void> patchSelfVoiceState(
+    String guildId, {
+    required String channelId,
+    bool? suppress,
+    String? requestToSpeakTimestamp,
+    bool clearRequestToSpeak = false,
+  }) => _rest.requestEmpty(
+    'PATCH',
+    '/guilds/$guildId/voice-states/@me',
+    body: {
+      'channel_id': channelId,
+      'suppress': ?suppress,
+      if (clearRequestToSpeak)
+        'request_to_speak_timestamp': null
+      else
+        'request_to_speak_timestamp': ?requestToSpeakTimestamp,
+    },
   );
 
   /// `GET /channels/{id}/thread-members`, with the guild member attached so a

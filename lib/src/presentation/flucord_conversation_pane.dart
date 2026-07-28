@@ -81,6 +81,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onTyping,
     required this.voiceController,
     required this.threadMembershipController,
+    required this.stageController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -153,6 +154,7 @@ class _ConversationPane extends StatefulWidget {
   final VoidCallback onTyping;
   final VoiceController voiceController;
   final ThreadMembershipController threadMembershipController;
+  final StageController stageController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -189,8 +191,11 @@ class _ConversationPaneState extends State<_ConversationPane> {
   /// synchronously, and this runs while the listener above is building.
   void _watchThreadMembership() {
     final threadId = widget.channel.isThread ? widget.channel.id : null;
+    final stageId = widget.channel.isStage ? widget.channel.id : null;
     scheduleMicrotask(() {
-      if (mounted) widget.threadMembershipController.show(threadId);
+      if (!mounted) return;
+      widget.threadMembershipController.show(threadId);
+      widget.stageController.show(stageId);
     });
   }
 
@@ -244,6 +249,13 @@ class _ConversationPaneState extends State<_ConversationPane> {
           )
         : switch (widget.channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
+              stageControls: widget.channel.isStage
+                  ? ListenableBuilder(
+                      listenable: widget.stageController,
+                      builder: (_, _) =>
+                          StageControls(controller: widget.stageController),
+                    )
+                  : null,
               guildId: widget.channel.spaceId,
               channelId: widget.channel.id,
               channelName: widget.channel.name,

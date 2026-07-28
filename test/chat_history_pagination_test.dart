@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
@@ -167,6 +168,9 @@ final class _PagedRepository implements ChatRepository {
   @override
   ThreadMembershipRepository? get threadMembership =>
       _delegate.threadMembership;
+
+  @override
+  StageRepository? get stages => _delegate.stages;
 
   _PagedRepository(this._results, {ChatWorkspace? workspace})
     : _workspace = workspace ?? _defaultWorkspace();

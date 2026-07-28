@@ -6,6 +6,7 @@ import 'presence_repository.dart';
 import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
+import 'stage_channel.dart';
 import 'thread_membership.dart';
 import 'user_profile.dart';
 import 'voice_connection.dart';
@@ -206,6 +207,10 @@ abstract interface class ChatRepository {
   /// Null on a transport with no account behind it: membership is per-account
   /// state, and a demo session has nobody to add to a thread.
   ThreadMembershipRepository? get threadMembership;
+
+  /// Stage instances and this account's standing in them, or null on a
+  /// transport with no account to put on a stage.
+  StageRepository? get stages;
 
   /// The account settings this transport can read and write, or `null`.
   ///

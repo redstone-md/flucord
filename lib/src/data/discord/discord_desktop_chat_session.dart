@@ -21,6 +21,7 @@ extension _DiscordDesktopChatSession on DiscordDesktopChatRepository {
     // switch would have the new account acking with the old one's credential.
     _readState.setCurrentUserId(memberId);
     _threadMembership.setCurrentUserId(memberId);
+    _stages.setCurrentUserId(memberId);
     _emitSelfPresence();
   }
 

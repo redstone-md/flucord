@@ -146,6 +146,7 @@ extension _FlucordShellConversation on FlucordShell {
     onTyping: () => chatController.startTyping(channel.id),
     voiceController: voiceController,
     threadMembershipController: threadMembershipController,
+    stageController: stageController,
     voiceMessageRecorder: voiceMessageRecorder,
     onSendVoiceMessage: (voiceMessage) => chatController.sendVoiceMessage(
       channelId: channel.id,

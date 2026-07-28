@@ -18,6 +18,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/stage_controller.dart';
 import 'application/thread_membership_controller.dart';
 import 'application/user_profile_controller.dart';
 import 'application/user_settings_controller.dart';
@@ -167,6 +168,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final UserSettingsController _userSettingsController;
   late final UserProfileController _userProfileController;
   late final ThreadMembershipController _threadMembershipController;
+  late final StageController _stageController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -253,6 +255,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _threadMembershipController = ThreadMembershipController(
       () => _chatController.threadMembership,
     );
+    // And the stage plane, for the same reason: standing in a stage is state
+    // that belongs to the signed-in account.
+    _stageController = StageController(() => _chatController.stages);
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -330,6 +335,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _userSettingsController.dispose();
     _userProfileController.dispose();
     _threadMembershipController.dispose();
+    _stageController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -437,6 +443,7 @@ class _FlucordAppState extends State<FlucordApp> {
                                 voiceController: _voiceController,
                                 threadMembershipController:
                                     _threadMembershipController,
+                                stageController: _stageController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,

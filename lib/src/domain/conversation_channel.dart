@@ -13,6 +13,7 @@ final class ConversationChannel {
     this.position = 0,
     this.parentId,
     this.isThread = false,
+    this.isStage = false,
     this.isArchived = false,
     this.isLocked = false,
     this.archiveTimestamp,
@@ -38,6 +39,12 @@ final class ConversationChannel {
   final int position;
   final String? parentId;
   final bool isThread;
+
+  /// A stage channel: a voice channel where only speakers may talk and
+  /// everyone else has to ask. Discord types it separately (13), and the
+  /// distinction changes what the room offers, so it is carried rather than
+  /// flattened into [ChannelKind.voice].
+  final bool isStage;
   final bool isArchived;
   final bool isLocked;
   final DateTime? archiveTimestamp;
@@ -133,6 +140,7 @@ final class ConversationChannel {
     position: position,
     parentId: parentId,
     isThread: isThread,
+    isStage: isStage,
     isArchived: isArchived ?? this.isArchived,
     isLocked: isLocked ?? this.isLocked,
     archiveTimestamp: archiveTimestamp ?? this.archiveTimestamp,

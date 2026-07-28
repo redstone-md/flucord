@@ -1,4 +1,5 @@
 import '../domain/chat_models.dart';
+import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/user_profile.dart';
 import '../domain/chat_repository.dart';
@@ -33,6 +34,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
+
+  @override
+  StageRepository? get stages => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

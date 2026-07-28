@@ -38,6 +38,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // a join made on another device arrives as THREAD_MEMBER_UPDATE with no
         // request from here.
         _threadMembership.accept(event.name, event.data);
+        // A stage running before this client connected is only ever announced
+        // in the bootstrap burst, so the service sees every dispatch too.
+        _stages.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {
