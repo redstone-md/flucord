@@ -26,7 +26,8 @@ do not count as desktop-user chat parity.
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
-| Stage channels | Ready for the audience | Type 13 recognised, live instance and topic, request to speak, withdraw, accept an invitation and step down; running a stage as a moderator is not offered |
+| Stage channels | Ready | Type 13 recognised, live instance and topic; audience may request to speak, withdraw, accept an invitation and step down; a moderator may start, rename and end a stage and move anybody on or off it |
+| Soundboard | Ready to send | Server and default sounds, played into a voice channel; incoming `VOICE_CHANNEL_EFFECT_SEND` is surfaced but the sound itself is not played back locally |
 | Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |

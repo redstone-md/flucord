@@ -369,11 +369,21 @@ are excluded from the denominator and are never reported as implemented.
 - **Dependencies**: FBC-GUILD, FBC-MESSAGE.
 - **Status**: **Partial**.
 - **Implemented**: guild emoji catalogue with live updates, guild stickers,
-  searchable pickers, inline custom-emoji rendering.
+  searchable pickers, inline custom-emoji rendering. The soundboard sends:
+  a server's own sounds and the shared defaults are listed together and played
+  into a voice channel over `POST /channels/{id}/send-soundboard-sound`, with
+  `source_guild_id` carried only for a server sound because Discord refuses it
+  on a default one. Sounds a server lost its boost level for stay listed and
+  are refused locally rather than sent for a 403. Ids arrive as numbers for
+  defaults and strings for guild sounds; both are read.
 - **Tests**: `discord_chat_repository_emojis_test.dart`,
-  `discord_chat_repository_stickers_test.dart`.
+  `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
+  `soundboard_widget_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: soundboard needs FBC-VOICE; GIF providers need a media proxy.
+- **Blocked by**: an incoming `VOICE_CHANNEL_EFFECT_SEND` is surfaced but the
+  sound is not played back locally — that needs the CDN object decoded and
+  mixed into playback, which the voice pipeline does not expose yet. GIF
+  providers still need a media proxy.
 
 ## FBC-VOICE — Voice, video, screen share, calls
 
@@ -427,9 +437,14 @@ are excluded from the denominator and are never reported as implemented.
   works over `PATCH /guilds/{id}/voice-states/@me`: request to speak, withdraw,
   accept an invitation, step back down.
 - **Tests**: `stage_channel_test.dart`, `stage_controls_widget_test.dart`.
-- **Blocked by**: running a stage — creating, renaming and ending an instance,
-  and inviting or removing speakers — is moderator surface that has not been
-  built.
+- **Moderation**: starting, renaming and ending an instance, and moving
+  anybody on or off the stage, all through
+  `POST`/`PATCH`/`DELETE /stage-instances` and
+  `PATCH /guilds/{id}/voice-states/{userId}`. Being a stage moderator is three
+  permissions held together — MANAGE_CHANNELS, MUTE_MEMBERS, MOVE_MEMBERS —
+  and the controls are withheld unless all three are.
+- **Blocked by**: nothing outstanding for the desktop-user session; stage
+  discovery listings and scheduled-event-linked stages are separate surfaces.
 - **UI surface**: none.
 - **Contract**: `POST /stage-instances`, `GET /guild-stages`.
 - **Dependencies**: FBC-VOICE.
