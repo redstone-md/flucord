@@ -20,6 +20,9 @@ extension ChatControllerUserSettings on ChatController {
   /// The stage plane of the connected transport, or `null`.
   StageRepository? get stages => _repository.stages;
 
+  /// The soundboard plane of the connected transport, or `null`.
+  SoundboardRepository? get soundboard => _repository.soundboard;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

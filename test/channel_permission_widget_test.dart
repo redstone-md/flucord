@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
@@ -347,6 +348,9 @@ final class _PermissionRepository implements ChatRepository {
 
   @override
   StageRepository? get stages => null;
+
+  @override
+  SoundboardRepository? get soundboard => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

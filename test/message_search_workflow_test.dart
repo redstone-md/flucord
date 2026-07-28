@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/soundboard.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
@@ -147,6 +148,9 @@ final class _SearchableRepository implements ChatRepository {
 
   @override
   StageRepository? get stages => _delegate.stages;
+
+  @override
+  SoundboardRepository? get soundboard => _delegate.soundboard;
 
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeSearchPlane search = _FakeSearchPlane();

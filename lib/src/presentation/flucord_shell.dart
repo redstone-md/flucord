@@ -18,6 +18,7 @@ import '../application/oauth_guild_membership_controller.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
+import '../application/soundboard_controller.dart';
 import '../application/stage_controller.dart';
 import '../application/thread_membership_controller.dart';
 import '../application/voice_controller.dart';
@@ -57,6 +58,7 @@ import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/typing_indicator.dart';
+import 'widgets/soundboard_picker.dart';
 import 'widgets/stage_controls.dart';
 import 'widgets/thread_membership_button.dart';
 import 'widgets/voice_connection_bar.dart';
@@ -77,6 +79,7 @@ class FlucordShell extends StatelessWidget {
     required this.voiceController,
     required this.threadMembershipController,
     required this.stageController,
+    required this.soundboardController,
     required this.voiceMessageRecorder,
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
@@ -95,6 +98,7 @@ class FlucordShell extends StatelessWidget {
   final VoiceController voiceController;
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
+  final SoundboardController soundboardController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;

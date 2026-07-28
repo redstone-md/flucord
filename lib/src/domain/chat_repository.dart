@@ -6,6 +6,7 @@ import 'presence_repository.dart';
 import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
+import 'soundboard.dart';
 import 'stage_channel.dart';
 import 'thread_membership.dart';
 import 'user_profile.dart';
@@ -211,6 +212,10 @@ abstract interface class ChatRepository {
   /// Stage instances and this account's standing in them, or null on a
   /// transport with no account to put on a stage.
   StageRepository? get stages;
+
+  /// The soundboard, or null on a transport that cannot play into a voice
+  /// channel.
+  SoundboardRepository? get soundboard;
 
   /// The account settings this transport can read and write, or `null`.
   ///

@@ -11,6 +11,9 @@ final class _EventRepository implements ChatRepository {
   @override
   StageRepository? get stages => _delegate.stages;
 
+  @override
+  SoundboardRepository? get soundboard => _delegate.soundboard;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );

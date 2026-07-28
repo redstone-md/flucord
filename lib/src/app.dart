@@ -18,6 +18,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/soundboard_controller.dart';
 import 'application/stage_controller.dart';
 import 'application/thread_membership_controller.dart';
 import 'application/user_profile_controller.dart';
@@ -169,6 +170,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final UserProfileController _userProfileController;
   late final ThreadMembershipController _threadMembershipController;
   late final StageController _stageController;
+  late final SoundboardController _soundboardController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -258,6 +260,9 @@ class _FlucordAppState extends State<FlucordApp> {
     // And the stage plane, for the same reason: standing in a stage is state
     // that belongs to the signed-in account.
     _stageController = StageController(() => _chatController.stages);
+    _soundboardController = SoundboardController(
+      () => _chatController.soundboard,
+    );
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -336,6 +341,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _userProfileController.dispose();
     _threadMembershipController.dispose();
     _stageController.dispose();
+    _soundboardController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -444,6 +450,7 @@ class _FlucordAppState extends State<FlucordApp> {
                                 threadMembershipController:
                                     _threadMembershipController,
                                 stageController: _stageController,
+                                soundboardController: _soundboardController,
                                 directCallController: _directCallController,
                                 voiceMessageRecorder:
                                     widget.voiceMessageRecorder,

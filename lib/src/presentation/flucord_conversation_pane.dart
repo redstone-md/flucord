@@ -82,6 +82,7 @@ class _ConversationPane extends StatefulWidget {
     required this.voiceController,
     required this.threadMembershipController,
     required this.stageController,
+    required this.soundboardController,
     required this.voiceMessageRecorder,
     required this.onSendVoiceMessage,
     this.directCallController,
@@ -155,6 +156,7 @@ class _ConversationPane extends StatefulWidget {
   final VoiceController voiceController;
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
+  final SoundboardController soundboardController;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback onSendVoiceMessage;
 
@@ -198,6 +200,14 @@ class _ConversationPaneState extends State<_ConversationPane> {
       widget.stageController.show(
         stageId,
         canModerate: widget.capabilities.moderateStage,
+      );
+      // A soundboard belongs to a server, and only a voice channel can play
+      // one, so anything else clears the picker rather than offering sounds
+      // with nowhere to send them.
+      widget.soundboardController.show(
+        widget.channel.kind == ChannelKind.voice
+            ? widget.channel.spaceId
+            : null,
       );
     });
   }
@@ -252,6 +262,13 @@ class _ConversationPaneState extends State<_ConversationPane> {
           )
         : switch (widget.channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
+              soundboard: ListenableBuilder(
+                listenable: widget.soundboardController,
+                builder: (_, _) => SoundboardButton(
+                  controller: widget.soundboardController,
+                  channelId: widget.channel.id,
+                ),
+              ),
               stageControls: widget.channel.isStage
                   ? ListenableBuilder(
                       listenable: widget.stageController,

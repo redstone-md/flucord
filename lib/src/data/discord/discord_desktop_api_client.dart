@@ -6,6 +6,7 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
 import 'discord_user_profile_repository.dart';
@@ -17,6 +18,7 @@ final class DiscordDesktopApiClient
         DiscordUserProfileTransport,
         DiscordThreadMembershipTransport,
         DiscordStageTransport,
+        DiscordSoundboardTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -128,6 +130,34 @@ final class DiscordDesktopApiClient
         'request_to_speak_timestamp': null
       else
         'request_to_speak_timestamp': ?requestToSpeakTimestamp,
+    },
+  );
+
+  @override
+  Future<List<Map<String, Object?>>> listDefaultSounds() =>
+      _rest.getList('/soundboard-default-sounds');
+
+  @override
+  Future<Map<String, Object?>> listGuildSounds(String guildId) =>
+      _rest.requestObject('GET', '/guilds/$guildId/soundboard-sounds');
+
+  /// `source_guild_id` goes out only for a server's own sound; Discord rejects
+  /// it on a default one.
+  @override
+  Future<void> sendSoundboardSound(
+    String channelId, {
+    required String soundId,
+    String? emojiId,
+    String? emojiName,
+    String? sourceGuildId,
+  }) => _rest.requestEmpty(
+    'POST',
+    '/channels/$channelId/send-soundboard-sound',
+    body: {
+      'sound_id': soundId,
+      'emoji_id': emojiId,
+      'emoji_name': emojiName,
+      'source_guild_id': ?sourceGuildId,
     },
   );
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
 import '../../domain/thread_membership.dart';
 import '../../domain/user_profile.dart';
@@ -308,6 +309,9 @@ final class DiscordChatRepository
 
   @override
   StageRepository? get stages => null;
+
+  @override
+  SoundboardRepository? get soundboard => null;
 
   /// A bot token has no user account behind it, and `/users/@me/settings-proto`
   /// answers for a user. The capability is absent rather than empty.

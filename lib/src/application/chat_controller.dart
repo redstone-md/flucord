@@ -21,6 +21,7 @@ import '../domain/read_state.dart';
 import '../domain/read_state_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
+import '../domain/soundboard.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/thread_repository.dart';

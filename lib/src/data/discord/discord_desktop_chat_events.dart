@@ -41,6 +41,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // A stage running before this client connected is only ever announced
         // in the bootstrap burst, so the service sees every dispatch too.
         _stages.accept(event.name, event.data);
+        // Soundboard sounds change without being asked for, and an effect
+        // somebody else sent arrives on the same stream.
+        _soundboard.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {

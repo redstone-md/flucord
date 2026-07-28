@@ -20,6 +20,7 @@ class VoiceRoomView extends StatefulWidget {
     required this.members,
     required this.currentMemberId,
     this.stageControls,
+    this.soundboard,
     this._spaceId,
     super.key,
   });
@@ -36,6 +37,9 @@ class VoiceRoomView extends StatefulWidget {
 
   /// The stage strip, or null for an ordinary voice channel.
   final Widget? stageControls;
+
+  /// The soundboard button, or null where there is nothing to play into.
+  final Widget? soundboard;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -83,6 +87,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
           final horizontal = constraints.maxWidth >= 720;
           final stage = Expanded(
             child: _VoiceStage(
+              soundboard: widget.soundboard,
               stageControls: widget.stageControls,
               channelName: widget.channelName,
               controller: widget.controller,
@@ -132,6 +137,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
 
 class _VoiceStage extends StatelessWidget {
   const _VoiceStage({
+    required this.soundboard,
     required this.stageControls,
     required this.channelName,
     required this.controller,
@@ -146,6 +152,7 @@ class _VoiceStage extends StatelessWidget {
   final String currentMemberId;
   final String spaceId;
   final Widget? stageControls;
+  final Widget? soundboard;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +205,7 @@ class _VoiceStage extends StatelessWidget {
                   ),
                 ),
               ),
+              ?soundboard,
               const SizedBox(width: 12),
               Text(
                 voiceRoomStatusLabel(controller),
