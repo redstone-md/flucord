@@ -77,14 +77,19 @@ final class DiscordVoiceGatewayProtocol {
   /// `server_id` is the guild for guild voice and the channel for a DM or
   /// group-DM call (R08) — the credentials know which, so the identify body
   /// does not have to.
+  /// `channel_id` and `video` are what the desktop client sends alongside the
+  /// four identifying fields; `streams` is omitted because this session
+  /// publishes no video, which is the same thing an empty list says.
   Map<String, Object?> identify() => {
     'op': 0,
     'd': {
       'server_id': credentials.serverId,
+      'channel_id': credentials.channelId,
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,
       'max_dave_protocol_version': maxDaveProtocolVersion,
+      'video': false,
     },
   };
 

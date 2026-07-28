@@ -13,7 +13,7 @@ import 'discord_voice_state_roster.dart';
 typedef DiscordVoiceClientFactory =
     DiscordVoiceClient Function(
       VoiceServerCredentials credentials,
-      VoiceDaveService daveService,
+      VoiceDaveService? daveService,
     );
 
 final class DiscordVoiceSignalingService
@@ -122,16 +122,11 @@ final class DiscordVoiceSignalingService
     required bool selfDeaf,
   }) async {
     if (_closed) throw StateError('Voice signaling service is closed');
-    final daveService = _daveService;
-    if (daveService == null || daveService.maxProtocolVersion <= 0) {
-      _emit(
-        VoiceSignalingStatusEvent(
-          VoiceConnectionStatus.failure,
-          error: StateError('DAVE voice encryption is unavailable'),
-        ),
-      );
-      return;
-    }
+    // DAVE is not a precondition for being in a voice channel. Discord's own
+    // client identifies with `max_dave_protocol_version: 0` whenever secure
+    // frames are unavailable and the room runs on the transport cipher alone,
+    // so refusing the join outright — the old behaviour — turned a missing
+    // native library into "voice does not work" with the join never sent.
     if (_currentUserId == null) {
       _emit(
         VoiceSignalingStatusEvent(
@@ -276,8 +271,6 @@ final class DiscordVoiceSignalingService
     VoiceServerCredentials credentials,
     int generation,
   ) async {
-    final daveService = _daveService;
-    if (daveService == null) return;
     final key = credentials.sessionKey;
     await _closeClient(key);
     if (_closed ||
@@ -285,7 +278,7 @@ final class DiscordVoiceSignalingService
         _desiredChannels[key] != credentials.channelId) {
       return;
     }
-    final client = _clientFactory(credentials, daveService);
+    final client = _clientFactory(credentials, _daveService);
     _clients[key] = client;
     _clientSubscriptions[key] = client.events.listen(
       (event) => _onClientEvent(key, event),
@@ -355,10 +348,13 @@ final class DiscordVoiceSignalingService
 
   static DiscordVoiceClient _createVoiceClient(
     VoiceServerCredentials credentials,
-    VoiceDaveService daveService,
+    VoiceDaveService? daveService,
   ) => DiscordVoiceGatewayClient(
     credentials: credentials,
-    maxDaveProtocolVersion: daveService.maxProtocolVersion,
+    // Zero is what the desktop client sends when it cannot do secure frames,
+    // and it is what tells Discord to leave the room on transport encryption
+    // rather than negotiating an MLS group this session could not join.
+    maxDaveProtocolVersion: daveService?.maxProtocolVersion ?? 0,
     daveService: daveService,
   );
 }

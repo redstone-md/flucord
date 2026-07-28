@@ -29,10 +29,12 @@ void main() {
         'op': 0,
         'd': {
           'server_id': 'guild-1',
+          'channel_id': 'voice-1',
           'user_id': 'bot-1',
           'session_id': 'session-1',
           'token': 'voice-token',
           'max_dave_protocol_version': 1,
+          'video': false,
         },
       });
       expect(protocol.resume()['d'], {

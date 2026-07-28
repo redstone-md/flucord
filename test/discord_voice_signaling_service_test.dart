@@ -85,7 +85,7 @@ void main() {
     expect(clients.single.closed, isTrue);
   });
 
-  test('does not send a voice state when DAVE is unavailable', () async {
+  test('joins without DAVE, on the transport cipher alone', () async {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
@@ -95,7 +95,10 @@ void main() {
 
     await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
 
-    expect(gateway.updates, isEmpty);
+    // Discord's own client identifies with max_dave_protocol_version 0 when
+    // secure frames are unavailable; a missing native library is not a reason
+    // to refuse the channel.
+    expect(gateway.updates.single.channelId, 'voice-1');
   });
 
   test('emits documented participant voice state fields', () async {
