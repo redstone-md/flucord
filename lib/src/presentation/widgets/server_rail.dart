@@ -8,6 +8,7 @@ import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'user_profile_scope.dart';
 import 'user_settings_dialog.dart';
 import 'user_settings_scope.dart';
 
@@ -111,7 +112,11 @@ class ServerRail extends StatelessWidget {
             IconButton(
               key: const ValueKey('open-user-settings'),
               onPressed: () => unawaited(
-                UserSettingsDialog.show(context, controller: settings),
+                UserSettingsDialog.show(
+                  context,
+                  controller: settings,
+                  profileController: UserProfileScope.maybeOf(context),
+                ),
               ),
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'User settings',

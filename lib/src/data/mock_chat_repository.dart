@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../domain/user_profile.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/chat_repository.dart';
@@ -75,6 +76,9 @@ final class MockChatRepository
   /// and nobody to ring.
   @override
   VoiceSignalingService? get voiceSignaling => null;
+
+  @override
+  UserProfileRepository? get userProfile => null;
 
   /// There is no Discord account behind the demo data, so there is no settings
   /// blob to read and nowhere for a change to be saved.

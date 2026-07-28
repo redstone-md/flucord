@@ -1,4 +1,5 @@
 import '../domain/chat_models.dart';
+import '../domain/user_profile.dart';
 import '../domain/chat_repository.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/message_search_repository.dart';
@@ -25,6 +26,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   VoiceSignalingService? get voiceSignaling => null;
+
+  @override
+  UserProfileRepository? get userProfile => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

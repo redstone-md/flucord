@@ -18,6 +18,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/user_profile_controller.dart';
 import 'application/user_settings_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
 import 'application/oauth_guild_membership_controller.dart';
@@ -59,6 +60,7 @@ import 'presentation/widgets/discord_social_activity_scope.dart';
 import 'presentation/widgets/discord_social_presence_scope.dart';
 import 'presentation/widgets/discord_social_sdk_scope.dart';
 import 'presentation/widgets/self_presence_scope.dart';
+import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'platform/desktop_integration.dart';
 import 'theme/flucord_theme.dart';
@@ -162,6 +164,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final GuildMemberListController _memberListController;
   late final MessageSearchController _messageSearchController;
   late final UserSettingsController _userSettingsController;
+  late final UserProfileController _userProfileController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -238,6 +241,11 @@ class _FlucordAppState extends State<FlucordApp> {
     _userSettingsController = UserSettingsController(
       () => _chatController.userSettings,
     );
+    // Same reason once more: the profile route belongs to the signed-in
+    // session, which is replaced when the account changes.
+    _userProfileController = UserProfileController(
+      () => _chatController.userProfile,
+    );
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -313,6 +321,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _memberListController.dispose();
     _messageSearchController.dispose();
     _userSettingsController.dispose();
+    _userProfileController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -328,7 +337,10 @@ class _FlucordAppState extends State<FlucordApp> {
     }
   }
 
-  void _syncUserSettings() => _userSettingsController.reconcile();
+  void _syncUserSettings() {
+    _userSettingsController.reconcile();
+    _userProfileController.reconcile();
+  }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
 
@@ -382,41 +394,46 @@ class _FlucordAppState extends State<FlucordApp> {
             _userSettingsController.themeMode ?? _workspaceController.themeMode,
         home: SelfPresenceScope(
           controller: _selfPresenceController,
-          child: UserSettingsScope(
-            controller: _userSettingsController,
-            child: DiscordDesktopLoginScope(
-              controller: _discordDesktopLoginController,
-              child: DiscordAccountConnectionScope(
-                controller: _discordAccountConnectionController,
-                child: DiscordSocialSdkScope(
-                  controller: _discordSocialSdkController,
-                  child: DiscordSocialActivityScope(
-                    controller: _discordSocialActivityController,
-                    child: DiscordSocialPresenceScope(
-                      controller: _discordSocialPresenceController,
-                      child: DiscordSocialDmNavigationScope(
-                        controller: _discordSocialDmNavigationController,
-                        child: DiscordSocialDmScope(
-                          controller: _discordSocialDmController,
-                          child: DiscordFriendsScope(
-                            controller: _discordFriendsController,
-                            child: FlucordShell(
-                              chatController: _chatController,
-                              connectionController: _connectionController,
-                              discordOAuthController: _discordOAuthController,
-                              oauthGuildDirectoryController:
-                                  _oauthGuildDirectoryController,
-                              oauthGuildMembershipController:
-                                  _oauthGuildMembershipController,
-                              workspaceController: _workspaceController,
-                              memberListController: _memberListController,
-                              messageSearchController: _messageSearchController,
-                              voiceController: _voiceController,
-                              directCallController: _directCallController,
-                              voiceMessageRecorder: widget.voiceMessageRecorder,
-                              attachmentDownloadService:
-                                  _attachmentDownloadService,
-                              externalLinkLauncher: _externalLinkLauncher,
+          child: UserProfileScope(
+            controller: _userProfileController,
+            child: UserSettingsScope(
+              controller: _userSettingsController,
+              child: DiscordDesktopLoginScope(
+                controller: _discordDesktopLoginController,
+                child: DiscordAccountConnectionScope(
+                  controller: _discordAccountConnectionController,
+                  child: DiscordSocialSdkScope(
+                    controller: _discordSocialSdkController,
+                    child: DiscordSocialActivityScope(
+                      controller: _discordSocialActivityController,
+                      child: DiscordSocialPresenceScope(
+                        controller: _discordSocialPresenceController,
+                        child: DiscordSocialDmNavigationScope(
+                          controller: _discordSocialDmNavigationController,
+                          child: DiscordSocialDmScope(
+                            controller: _discordSocialDmController,
+                            child: DiscordFriendsScope(
+                              controller: _discordFriendsController,
+                              child: FlucordShell(
+                                chatController: _chatController,
+                                connectionController: _connectionController,
+                                discordOAuthController: _discordOAuthController,
+                                oauthGuildDirectoryController:
+                                    _oauthGuildDirectoryController,
+                                oauthGuildMembershipController:
+                                    _oauthGuildMembershipController,
+                                workspaceController: _workspaceController,
+                                memberListController: _memberListController,
+                                messageSearchController:
+                                    _messageSearchController,
+                                voiceController: _voiceController,
+                                directCallController: _directCallController,
+                                voiceMessageRecorder:
+                                    widget.voiceMessageRecorder,
+                                attachmentDownloadService:
+                                    _attachmentDownloadService,
+                                externalLinkLauncher: _externalLinkLauncher,
+                              ),
                             ),
                           ),
                         ),

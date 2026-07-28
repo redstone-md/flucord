@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -183,6 +184,9 @@ Future<void> _openDirectMessage(
 /// way to drive the shell's call surfaces is a repository that answers
 /// [directCalls] with something. Everything else is the demo workspace.
 final class _CallableRepository implements ChatRepository {
+  @override
+  UserProfileRepository? get userProfile => _delegate.userProfile;
+
   final MockChatRepository _delegate = MockChatRepository();
   final _FakeCallService calls = _FakeCallService();
 

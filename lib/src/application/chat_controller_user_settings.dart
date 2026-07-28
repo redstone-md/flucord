@@ -9,6 +9,10 @@ part of 'chat_controller.dart';
 extension ChatControllerUserSettings on ChatController {
   UserSettingsRepository? get userSettings => _repository.userSettings;
 
+  /// The account's own profile plane, or `null` for a transport with no
+  /// account behind it. Read live for the same reason as the settings store.
+  UserProfileRepository? get userProfile => _repository.userProfile;
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the

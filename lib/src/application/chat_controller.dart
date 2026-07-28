@@ -22,6 +22,7 @@ import '../domain/read_state_repository.dart';
 import '../domain/scheduled_event_repository.dart';
 import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
+import '../domain/user_profile.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';

@@ -6,11 +6,13 @@ import 'discord_moderation_repository.dart';
 import 'discord_multipart_body.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
+import 'discord_user_profile_repository.dart';
 import 'discord_user_settings_transport.dart';
 
 final class DiscordDesktopApiClient
     implements
         DiscordCallApi,
+        DiscordUserProfileTransport,
         DiscordUserSettingsTransport,
         DiscordReadStateTransport {
   DiscordDesktopApiClient({
@@ -233,6 +235,14 @@ final class DiscordDesktopApiClient
 
   /// Reads one settings blob. A missing `settings` string is an account that
   /// has never stored anything for this type, not a transport failure.
+  @override
+  Future<Map<String, Object?>> readCurrentUser() =>
+      _rest.getObject('/users/@me');
+
+  @override
+  Future<Map<String, Object?>> patchCurrentUser(Map<String, Object?> body) =>
+      _rest.requestObject('PATCH', '/users/@me', body: body);
+
   @override
   Future<String?> readSettingsProto(int type) async {
     final payload = await _rest.getObject(

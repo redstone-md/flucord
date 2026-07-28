@@ -1,6 +1,9 @@
 part of 'chat_controller_test.dart';
 
 final class _EventRepository implements ChatRepository {
+  @override
+  UserProfileRepository? get userProfile => _delegate.userProfile;
+
   final MockChatRepository _delegate = MockChatRepository(
     latency: Duration.zero,
   );

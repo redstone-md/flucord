@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../domain/user_profile.dart';
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
@@ -296,6 +297,9 @@ final class DiscordChatRepository
   /// the signalling half hid that second face behind the repository.
   @override
   VoiceSignalingService? get voiceSignaling => _voiceSignaling;
+
+  @override
+  UserProfileRepository? get userProfile => null;
 
   /// A bot token has no user account behind it, and `/users/@me/settings-proto`
   /// answers for a user. The capability is absent rather than empty.

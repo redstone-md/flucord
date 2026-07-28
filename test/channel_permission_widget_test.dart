@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/connection_controller.dart';
@@ -335,6 +336,9 @@ final class _PermissionRepository implements ChatRepository {
 
   @override
   VoiceSignalingService? get voiceSignaling => null;
+
+  @override
+  UserProfileRepository? get userProfile => null;
 
   @override
   UserSettingsRepository? get userSettings => null;

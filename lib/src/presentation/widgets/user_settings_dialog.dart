@@ -2,15 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../theme/flucord_theme.dart';
+import 'user_profile_controls.dart';
+import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
 import 'user_settings_sections.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
+  profile('Profile', Icons.person_outline),
   appearance('Appearance', Icons.palette_outlined),
   chat('Chat', Icons.chat_bubble_outline),
   notifications('Notifications', Icons.notifications_none),
@@ -26,7 +30,11 @@ enum UserSettingsCategory {
 
 /// Discord's user settings screen, for the settings Flucord can speak for.
 class UserSettingsDialog extends StatefulWidget {
-  const UserSettingsDialog({required this.controller, super.key});
+  const UserSettingsDialog({
+    required this.controller,
+    this.profileController,
+    super.key,
+  });
 
   /// Below this width the category rail becomes a scrolling strip so the pane
   /// keeps its full width for the controls.
@@ -34,13 +42,21 @@ class UserSettingsDialog extends StatefulWidget {
 
   final UserSettingsController controller;
 
+  /// Null when the session has no editable profile — the demo and bot
+  /// transports — in which case the category explains itself instead.
+  final UserProfileController? profileController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
+    UserProfileController? profileController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
-    builder: (_) => UserSettingsDialog(controller: controller),
+    builder: (_) => UserSettingsDialog(
+      controller: controller,
+      profileController: profileController,
+    ),
   );
 
   @override
@@ -48,7 +64,7 @@ class UserSettingsDialog extends StatefulWidget {
 }
 
 class _UserSettingsDialogState extends State<UserSettingsDialog> {
-  UserSettingsCategory _category = UserSettingsCategory.appearance;
+  UserSettingsCategory _category = UserSettingsCategory.profile;
 
   @override
   void initState() {
@@ -76,6 +92,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
             );
             final body = _Body(
               controller: widget.controller,
+              profileController: widget.profileController,
               category: _category,
             );
             return wide
@@ -223,9 +240,14 @@ class _NavigationTile extends StatelessWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.controller, required this.category});
+  const _Body({
+    required this.controller,
+    required this.profileController,
+    required this.category,
+  });
 
   final UserSettingsController controller;
+  final UserProfileController? profileController;
   final UserSettingsCategory category;
 
   @override
@@ -277,6 +299,24 @@ class _Body extends StatelessWidget {
   );
 
   Widget _content(BuildContext context) {
+    // The profile lives on a different route from the settings store, so it
+    // answers for itself rather than being gated on settings having loaded.
+    if (category == UserSettingsCategory.profile) {
+      final profile = profileController;
+      if (profile == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-profile-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to edit its profile. The demo and '
+              'bot transports have no profile behind them.',
+        );
+      }
+      return ListenableBuilder(
+        listenable: profile,
+        builder: (_, _) => UserProfileSection(controller: profile),
+      );
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -317,6 +357,8 @@ class _Body extends StatelessWidget {
   }
 
   Widget _section(UserSettings settings) => switch (category) {
+    // Handled before the settings store is consulted.
+    UserSettingsCategory.profile => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
       settings: settings,
       onEdit: _edit,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';

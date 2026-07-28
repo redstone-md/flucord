@@ -256,6 +256,10 @@ void main() {
       120,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-nav-privacy')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('settings-nav-privacy')));
     await tester.pumpAndSettle();
     expect(
@@ -277,6 +281,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('user-settings-dialog')), findsOneWidget);
+    // The demo transport has no profile either, and the first category says so.
+    expect(
+      find.byKey(const ValueKey('user-profile-unavailable')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('settings-nav-appearance')));
+    await tester.pumpAndSettle();
     // The demo transport has no account, and the surface says so instead of
     // offering controls that could never be saved.
     expect(
@@ -359,6 +370,10 @@ Future<void> _pumpApp(
       home: Scaffold(body: UserSettingsDialog(controller: controller)),
     ),
   );
+  await tester.pumpAndSettle();
+  // The dialog opens on the profile, which is a different store; these tests
+  // are about the settings ones, so they start where they used to.
+  await tester.tap(find.byKey(const ValueKey('settings-nav-appearance')));
   await tester.pumpAndSettle();
 }
 

@@ -6,6 +6,7 @@ import 'presence_repository.dart';
 import 'read_state_repository.dart';
 import 'user_settings_repository.dart';
 import 'voice_call.dart';
+import 'user_profile.dart';
 import 'voice_connection.dart';
 
 enum RepositoryConnectionStatus { offline, connecting, connected, reconnecting }
@@ -190,6 +191,14 @@ abstract interface class ChatRepository {
   /// or loses voice, and stops a controller from silently deciding that an
   /// implementation it does not recognise has none.
   VoiceSignalingService? get voiceSignaling;
+
+  /// The account's own profile, when this transport can read and edit it.
+  ///
+  /// A profile belongs to the account, not the installation, so only a
+  /// transport authenticated as that account can offer one; every other
+  /// repository reports null and the settings window hides the section rather
+  /// than presenting an editor that cannot save.
+  UserProfileRepository? get userProfile;
 
   /// The account settings this transport can read and write, or `null`.
   ///

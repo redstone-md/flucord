@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -124,6 +125,9 @@ final class _FakeReadStateRepository implements ReadStateRepository {
 }
 
 final class _Repository implements ChatRepository {
+  @override
+  UserProfileRepository? get userProfile => null;
+
   _Repository({
     bool failing = false,
     this.withReadState = true,
