@@ -20,6 +20,7 @@ import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/soundboard_controller.dart';
+import 'application/soundboard_playback_controller.dart';
 import 'application/stage_controller.dart';
 import 'application/thread_membership_controller.dart';
 import 'application/user_profile_controller.dart';
@@ -45,12 +46,14 @@ import 'domain/discord_social_activity.dart';
 import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
 import 'domain/discord_social_sdk.dart';
+import 'domain/soundboard_playback.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/voice_media.dart';
 import 'domain/voice_message_recorder.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
+import 'data/media_kit_soundboard_player.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'data/secure_discord_oauth_vault.dart';
@@ -83,6 +86,7 @@ class FlucordApp extends StatefulWidget {
     this.voiceMessageRecorder,
     this.attachmentDownloadService,
     this.externalLinkLauncher,
+    this.soundboardAudioPlayer,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -138,6 +142,9 @@ class FlucordApp extends StatefulWidget {
   final VoiceMessageRecorder? voiceMessageRecorder;
   final AttachmentDownloadService? attachmentDownloadService;
   final ExternalLinkLauncher? externalLinkLauncher;
+
+  /// Overridden in tests, which have no audio device to open.
+  final SoundboardAudioPlayer? soundboardAudioPlayer;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -173,6 +180,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final StageController _stageController;
   late final SoundboardController _soundboardController;
   late final GifPickerController _gifPickerController;
+  late final SoundboardPlaybackController _soundboardPlaybackController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final DirectCallController _directCallController;
@@ -266,6 +274,13 @@ class _FlucordAppState extends State<FlucordApp> {
       () => _chatController.soundboard,
     );
     _gifPickerController = GifPickerController(() => _chatController.gifs);
+    // Discord does not mix a soundboard sound into the voice stream: every
+    // client in the channel is told which sound played and fetches it itself.
+    _soundboardPlaybackController = SoundboardPlaybackController(
+      repositoryProvider: () => _chatController.soundboard,
+      connectedChannelId: () => _voiceController.connectedChannelId,
+      player: widget.soundboardAudioPlayer ?? MediaKitSoundboardPlayer(),
+    );
     // And again: only a signed-in user's own session can reach the search
     // routes, so the plane is resolved per call rather than captured here.
     _messageSearchController = MessageSearchController(
@@ -346,6 +361,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _stageController.dispose();
     _soundboardController.dispose();
     _gifPickerController.dispose();
+    _soundboardPlaybackController.dispose();
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -364,6 +380,7 @@ class _FlucordAppState extends State<FlucordApp> {
   void _syncUserSettings() {
     _userSettingsController.reconcile();
     _userProfileController.reconcile();
+    _soundboardPlaybackController.reconcile();
   }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();

@@ -21,6 +21,10 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
+    # A private field fed by a named parameter cannot use an initialising
+    # formal without exposing the underscore to every caller, and a controller
+    # taking three collaborators reads better naming them.
+    prefer_initializing_formals: false
     # avoid_print: false  # Uncomment to disable the `avoid_print` rule
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
 
