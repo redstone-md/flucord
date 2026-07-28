@@ -382,9 +382,12 @@ are excluded from the denominator and are never reported as implemented.
   `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
   `soundboard_widget_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: an incoming `VOICE_CHANNEL_EFFECT_SEND` is surfaced but the
-  sound is not played back locally — that needs the CDN object decoded and
-  mixed into playback, which the voice pipeline does not expose yet. GIF
+  An incoming effect is played: Discord never mixes a soundboard sound into
+  the RTP stream, it tells every client which sound was played and each one
+  fetches the CDN object itself, so the effect is played through the same
+  engine the voice-message player uses and only for the channel this client is
+  actually sitting in.
+- **Blocked by**: GIF
   providers are done: trending, search and suggestions go through Discord's
   own `/gifs/*` proxy — the desktop client never talks to Tenor or Giphy
   directly and neither does this — and a pick is sent as the `gif_src` link
@@ -483,16 +486,28 @@ are excluded from the denominator and are never reported as implemented.
   `INTERACTION_MODAL_CREATE`, `APPLICATION_COMMAND_*`, `ACTIVITY_START`,
   and 8 more.
 - **Purpose**: slash commands, message components, modals, embedded activities.
-- **UI surface**: none for the desktop-user transport.
+- **UI surface**: the command list under the composer, and the option form.
 - **Contract**: `GET /channels/{id}/application-commands/search`,
   `POST /interactions`.
 - **Dependencies**: FBC-GATEWAY, FBC-CHANNEL, FBC-MESSAGE.
-- **Status**: **Absent**.
-- **Implemented**: application-command mentions render as static text; the
+- **Status**: **Partial**.
+- **Implemented**: chat-input commands are listed per channel, filtered as the
+  composer is typed past the slash, and run as a type-2 interaction. A user
+  session invokes by echoing the whole command object back inside `data`
+  rather than naming it by id, so the search result is kept verbatim — a
+  re-serialised command would differ from what Discord sent and be refused —
+  and the `version` field is required for the same reason. The interaction
+  names the gateway session, read live because a reconnect replaces it, and
+  carries a per-invocation nonce. Required options are collected before the
+  call, since Discord refuses an incomplete one with nothing on screen to
+  explain it. Application-command mentions still render as static text; the
   Social SDK activity-invite and lobby-call path is separate.
-- **Tests**: `social_sdk_activity_*_test.dart` for the SDK path only.
+- **Tests**: `slash_command_test.dart`, `slash_command_widget_test.dart`,
+  `social_sdk_activity_*_test.dart` for the SDK path.
 - **Live evidence**: none.
-- **Blocked by**: no interaction transport, no component or modal renderer.
+- **Blocked by**: message components (buttons, selects) and modals — types 3
+  and 5 — have no renderer, and user and message context-menu commands have no
+  surface to be invoked from.
 
 ## FBC-OAUTH — OAuth2, connections, integrations, invites, webhooks
 
