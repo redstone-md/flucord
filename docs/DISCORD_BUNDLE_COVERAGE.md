@@ -428,16 +428,20 @@ are excluded from the denominator and are never reported as implemented.
   at start because every later frame carries it back, and the RTC endpoint
   tracked apart from the stream since Discord assigns it afterwards and
   reassigns it on a region change.
-- **Blocked by**: video and screen share have no reachable encoder. The
-  correction matters: `libwebrtc.dll` already ships in the release directory
-  and does contain encoders — `libvpx_vp8_encoder`, VP9 and H.264 symbols are
-  all present in the binary — so the earlier claim that nothing in the
-  dependency set can encode was wrong. What is missing is a path from Dart to
-  the encoded frames: `flutter_webrtc` exposes capture and a renderer, not an
-  encoded-frame callback, and Discord's Go Live carries its own RTP over the
-  voice UDP socket rather than through a WebRTC peer connection. Closing this
-  needs a native plugin wiring capture to the encoder to Flucord's own RTP
-  sender; opcodes 18-22 are the smaller half of the work.
+  Encoding is implemented natively. `libwebrtc.dll` does contain VP8, VP9 and
+  H.264 encoders, but `flutter_webrtc` ships no headers, no import library and
+  no encoded-frame callback, so none of it is reachable from this process.
+  `windows/flucord_video` uses what Windows itself provides instead: Desktop
+  Duplication for capture, the H.264 encoder MFT for compression, BGRA to NV12
+  converted in between. Frame buffers are handed to the callee rather than
+  borrowed, because a Dart native callback is delivered asynchronously and the
+  capture thread has released the surface by then.
+- **Live evidence**: the encoder was run against this machine's displays on
+  `2026-07-28` — 359 frames in five seconds at 15fps, 24 keyframes, 1.39 MB of
+  Annex B, each access unit starting `00 00 00 01`.
+- **Blocked by**: the RTP sender is not yet pointed at those frames, so no
+  viewer sees the picture; and a stream's audio still rides the voice
+  connection rather than the stream's own.
 
 ## FBC-STAGE — Stage channels
 
