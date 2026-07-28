@@ -93,10 +93,32 @@ final class SlashCommandController extends ChangeNotifier {
     _notify();
   }
 
+  /// The context-menu commands that act on [type]'s target.
+  ///
+  /// Read on demand rather than held: the menu is opened rarely, and a
+  /// catalogue cached from the last channel would offer commands that do not
+  /// exist in this one.
+  Future<List<ApplicationCommand>> contextCommands(
+    ApplicationCommandType type,
+  ) async {
+    _bind();
+    final repository = _repository;
+    final channelId = _channelId;
+    if (repository == null || channelId == null) return const [];
+    try {
+      return await repository.searchCommands(channelId, type: type);
+    } on Object catch (error) {
+      _error = error;
+      _notify();
+      return const [];
+    }
+  }
+
   /// Runs [command] in the channel on screen.
   Future<bool> invoke(
     ApplicationCommand command, {
     Map<String, Object?> values = const {},
+    String? targetId,
   }) async {
     final repository = _repository;
     final channelId = _channelId;
@@ -111,6 +133,7 @@ final class SlashCommandController extends ChangeNotifier {
           channelId: channelId,
           guildId: _guildId,
           values: values,
+          targetId: targetId,
         ),
       );
       close();

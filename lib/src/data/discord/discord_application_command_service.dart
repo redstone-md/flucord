@@ -6,6 +6,7 @@ abstract interface class DiscordApplicationCommandTransport {
   Future<Map<String, Object?>> searchApplicationCommands(
     String channelId, {
     required String query,
+    required int type,
   });
 
   /// `POST /interactions`.
@@ -41,10 +42,12 @@ final class DiscordApplicationCommandService
   Future<List<ApplicationCommand>> searchCommands(
     String channelId, {
     String query = '',
+    ApplicationCommandType type = ApplicationCommandType.chatInput,
   }) async {
     final payload = await _transport.searchApplicationCommands(
       channelId,
       query: query.trim(),
+      type: type.wireValue,
     );
     return [
       for (final raw in _objects(payload['application_commands']))
@@ -75,6 +78,8 @@ final class DiscordApplicationCommandService
         'name': command.name,
         'type': command.type.wireValue,
         'options': invocation.optionPayload,
+        // A context-menu command names what it was invoked on instead.
+        'target_id': ?invocation.targetId,
         // Verbatim, for the reason on the class.
         'application_command': command.raw,
         'attachments': const <Object?>[],

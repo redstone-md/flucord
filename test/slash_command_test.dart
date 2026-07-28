@@ -445,6 +445,7 @@ final class _FakeTransport implements DiscordApplicationCommandTransport {
   Future<Map<String, Object?>> searchApplicationCommands(
     String channelId, {
     required String query,
+    required int type,
   }) async {
     searches.add((channelId, query));
     return rawPayload ?? {'application_commands': commands};
@@ -474,6 +475,7 @@ final class _FakeRepository implements ApplicationCommandRepository {
   Future<List<ApplicationCommand>> searchCommands(
     String channelId, {
     String query = '',
+    ApplicationCommandType type = ApplicationCommandType.chatInput,
   }) async {
     searches.add((channelId, query));
     await gate?.future;

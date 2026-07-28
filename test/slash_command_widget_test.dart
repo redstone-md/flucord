@@ -271,6 +271,7 @@ final class _FakeRepository implements ApplicationCommandRepository {
   Future<List<ApplicationCommand>> searchCommands(
     String channelId, {
     String query = '',
+    ApplicationCommandType type = ApplicationCommandType.chatInput,
   }) async {
     await gate?.future;
     if (failSearch) throw StateError('unreachable');

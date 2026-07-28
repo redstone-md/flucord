@@ -146,11 +146,12 @@ final class DiscordDesktopApiClient
   Future<Map<String, Object?>> searchApplicationCommands(
     String channelId, {
     required String query,
+    required int type,
   }) => _rest.requestObject(
     'GET',
     '/channels/$channelId/application-commands/search',
     query: {
-      'type': '1',
+      'type': '$type',
       'query': query,
       'limit': '25',
       'include_applications': 'true',

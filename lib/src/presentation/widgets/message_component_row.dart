@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_component_controller.dart';
 import '../../domain/message_component.dart';
+import 'component_directory_picker.dart';
 import '../../theme/flucord_theme.dart';
 
 /// The buttons and selects an application hung off a message.
@@ -15,6 +16,7 @@ class MessageComponentRows extends StatelessWidget {
     required this.applicationId,
     required this.messageFlags,
     required this.onOpenLink,
+    this.directoryEntries,
     super.key,
   });
 
@@ -28,6 +30,12 @@ class MessageComponentRows extends StatelessWidget {
 
   final int messageFlags;
   final ValueChanged<String> onOpenLink;
+
+  /// What a user, role, channel or mentionable select may resolve to. Null
+  /// where the surface has no directory to offer, in which case those selects
+  /// stay disabled rather than opening an empty picker.
+  final List<DirectoryEntry> Function(MessageComponent component)?
+  directoryEntries;
 
   @override
   Widget build(BuildContext context) {
@@ -67,13 +75,14 @@ class MessageComponentRows extends StatelessWidget {
       return _SelectMenu(
         component: component,
         isBusy: busy,
-        onChanged: (value) => unawaited(
+        directory: component.type == 3 ? null : directoryEntries,
+        onChanged: (values) => unawaited(
           controller.activate(
             messageId: messageId,
             applicationId: applicationId,
             component: component,
             messageFlags: messageFlags,
-            values: [value],
+            values: values,
           ),
         ),
       );
@@ -166,20 +175,38 @@ class _SelectMenu extends StatelessWidget {
   const _SelectMenu({
     required this.component,
     required this.isBusy,
+    required this.directory,
     required this.onChanged,
   });
 
   final MessageComponent component;
   final bool isBusy;
-  final ValueChanged<String> onChanged;
+
+  /// Supplies the workspace's own entries for a directory select.
+  final List<DirectoryEntry> Function(MessageComponent component)? directory;
+
+  final ValueChanged<List<String>> onChanged;
 
   @override
   Widget build(BuildContext context) {
     // Only a string select carries its own choices. The user, role, channel
-    // and mentionable flavours are resolved against the server's directory,
-    // which this surface has no picker for, so they are shown disabled rather
-    // than as an empty menu that answers nothing.
-    if (component.type != 3 || component.options.isEmpty) {
+    // and mentionable flavours name a kind and expect the client to offer the
+    // server's own directory, which is what the picker does.
+    if (component.type != 3) {
+      final entries = directory?.call(component) ?? const <DirectoryEntry>[];
+      return OutlinedButton(
+        key: ValueKey('component-select-${component.customId}'),
+        onPressed: entries.isEmpty || component.isDisabled || isBusy
+            ? null
+            : () => unawaited(_pick(context, entries)),
+        child: Text(
+          component.placeholder.isEmpty
+              ? 'Make a selection'
+              : component.placeholder,
+        ),
+      );
+    }
+    if (component.options.isEmpty) {
       return OutlinedButton(
         key: ValueKey('component-select-${component.customId}'),
         onPressed: null,
@@ -216,10 +243,20 @@ class _SelectMenu extends StatelessWidget {
         onChanged: component.isDisabled || isBusy
             ? null
             : (value) {
-                if (value != null) onChanged(value);
+                if (value != null) onChanged([value]);
               },
       ),
     );
+  }
+
+  Future<void> _pick(BuildContext context, List<DirectoryEntry> entries) async {
+    final chosen = await ComponentDirectoryPicker.show(
+      context,
+      title: component.placeholder,
+      entries: entries,
+      maxValues: component.maxValues,
+    );
+    if (chosen != null && chosen.isNotEmpty) onChanged(chosen);
   }
 }
 

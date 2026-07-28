@@ -87,6 +87,7 @@ final class ApplicationCommandInvocation {
     required this.channelId,
     this.guildId,
     this.values = const {},
+    this.targetId,
   });
 
   final ApplicationCommand command;
@@ -98,6 +99,13 @@ final class ApplicationCommandInvocation {
   /// Option name to value, for the options the caller filled in.
   final Map<String, Object?> values;
 
+  /// The user or message a context-menu command was invoked on.
+  ///
+  /// Discord distinguishes the three command types by what they act on rather
+  /// than by a different route: a chat-input command carries options, and the
+  /// two context-menu kinds carry a target instead.
+  final String? targetId;
+
   /// The `data.options` array Discord expects: only what was filled in, in
   /// the command's own order so the receiving application reads them the way
   /// it declared them.
@@ -108,17 +116,27 @@ final class ApplicationCommandInvocation {
   ];
 
   /// Whether every required option has a value.
-  bool get isComplete => command.inputs
-      .where((option) => option.isRequired)
-      .every((option) => values[option.name] != null);
+  ///
+  /// A context-menu command declares no options at all — its argument is the
+  /// thing it was invoked on — so it is complete as soon as it has a target.
+  bool get isComplete => command.type == ApplicationCommandType.chatInput
+      ? command.inputs
+            .where((option) => option.isRequired)
+            .every((option) => values[option.name] != null)
+      : targetId != null;
 }
 
 /// Slash commands in a channel, and running them.
 abstract interface class ApplicationCommandRepository {
   /// Commands available in [channelId], optionally filtered by [query].
+  ///
+  /// [type] selects which of the three kinds are listed: chat-input commands
+  /// for the composer, and the two context-menu kinds for the surfaces that
+  /// act on a user or a message.
   Future<List<ApplicationCommand>> searchCommands(
     String channelId, {
     String query = '',
+    ApplicationCommandType type = ApplicationCommandType.chatInput,
   });
 
   /// Runs [invocation]. Completes when Discord accepts it, not when the
