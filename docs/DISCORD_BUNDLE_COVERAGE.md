@@ -400,7 +400,7 @@ are excluded from the denominator and are never reported as implemented.
 - **Symbols**: `VOICE_STATE_UPDATE`, `VOICE_SERVER_UPDATE`, `CALL_CREATE`,
   `STREAM_CREATE`, `GUILD_RING_START`, and 14 more.
 - **Purpose**: voice rooms, direct calls, video, screen sharing, Go Live.
-- **UI surface**: voice room grid, call strip, screen picker.
+- **UI surface**: voice room grid, call strip, Go Live control with viewer count, stream viewer.
 - **Contract**: opcode 4 voice state, Voice Gateway v8, UDP discovery, DAVE
   MLS, RTP v2.
 - **Dependencies**: FBC-GATEWAY, FBC-GUILD, FBC-CHANNEL.
