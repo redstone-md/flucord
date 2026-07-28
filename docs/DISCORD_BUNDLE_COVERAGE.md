@@ -281,15 +281,25 @@ are excluded from the denominator and are never reported as implemented.
 - **Purpose**: channel tree, categories, threads, forum and media posts.
 - **UI surface**: channel sidebar, Threads panel, forum feed.
 - **Contract**: `GUILD_CREATE.channels/threads`,
-  `GET /channels/{id}/threads/archived/public`, forum thread creation.
+  `GET /channels/{id}/threads/archived/public`, forum thread creation,
+  `GET /channels/{id}/thread-members`,
+  `POST`/`DELETE /channels/{id}/thread-members/@me`.
 - **Dependencies**: FBC-GATEWAY, FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: categories, positions, collapsible sidebar, active and
   archived threads, forum/media posts with tags, layouts, and attachments.
+  Thread membership is joinable: the store is fed from the list route,
+  `THREAD_MEMBER_UPDATE` — only ever about this account — `THREAD_MEMBERS_UPDATE`
+  with its authoritative count, and the member object nested in a
+  `THREAD_CREATE` for a thread made here. The desktop client posts rather than
+  puts to join, and so does this.
 - **Tests**: `discord_chat_repository_threads_test.dart`,
-  `discord_chat_repository_forums_test.dart`, `widget_test.dart`.
+  `discord_chat_repository_forums_test.dart`, `thread_membership_test.dart`,
+  `thread_membership_widget_test.dart`, `widget_test.dart`.
 - **Live evidence**: channel history on Windows `2026-07-25`.
-- **Blocked by**: thread member lists and channel permission overwrites.
+- **Blocked by**: `THREAD_MEMBER_LIST_UPDATE` — the lazy roster of a thread's
+  members, distinct from the membership list — and per-thread notification
+  settings under `thread-members/@me/settings`.
 
 ## FBC-MESSAGE — Messages and message content
 
@@ -409,6 +419,17 @@ are excluded from the denominator and are never reported as implemented.
 
 - **Symbols**: `STAGE_INSTANCE_CREATE`/`UPDATE`/`DELETE`.
 - **Purpose**: stage discovery, speaker requests, moderation.
+- **Implemented**: channel type 13 is recognised rather than flattened into
+  ordinary voice; the live instance and its topic are read from
+  `STAGE_INSTANCE_*` and from the `stage_instances` a `GUILD_CREATE` or
+  `READY_SUPPLEMENTAL` carries, which is the only notice of a stage that
+  started before this client connected. The audience side of participation
+  works over `PATCH /guilds/{id}/voice-states/@me`: request to speak, withdraw,
+  accept an invitation, step back down.
+- **Tests**: `stage_channel_test.dart`, `stage_controls_widget_test.dart`.
+- **Blocked by**: running a stage — creating, renaming and ending an instance,
+  and inviting or removing speakers — is moderator surface that has not been
+  built.
 - **UI surface**: none.
 - **Contract**: `POST /stage-instances`, `GET /guild-stages`.
 - **Dependencies**: FBC-VOICE.

@@ -21,11 +21,12 @@ do not count as desktop-user chat parity.
 | Reactions and pins | Ready | Desktop-user message routes |
 | Threads | Ready | Create from message, archived-thread paging, join and leave with a live member count from `THREAD_MEMBER_UPDATE` and `THREAD_MEMBERS_UPDATE` |
 | Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
-| Member list and presence | Ready for guild rosters | Server-authoritative lazy member list with scroll-driven subscriptions; presence beyond what a roster item carries is still open |
+| Member list and presence | Ready | Server-authoritative lazy member list with scroll-driven subscriptions; presence, activities, hidden activities and the account's own custom status all read and published |
 | Search | Ready | Server-side `GET /guilds/{id}/messages/search` and the DM equivalent, with the loaded page filtered locally as you type |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
+| Stage channels | Ready for the audience | Type 13 recognised, live instance and topic, request to speak, withdraw, accept an invitation and step down; running a stage as a moderator is not offered |
 | Video and screen share | Not ready | Opcodes 18-22; needs a native capture and encoder library |
 | User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
