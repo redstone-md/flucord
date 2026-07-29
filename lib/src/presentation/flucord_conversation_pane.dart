@@ -351,8 +351,11 @@ class _ConversationPaneState extends State<_ConversationPane> {
               // that dialled every share in it would be paying for streams
               // nobody is looking at.
               onWatchStream: _toggleWatch,
-              watchedUserId:
-                  widget.streamViewerController.watching?.userId ??
+              // What is on the stage, which is only a stream that is actually
+              // arriving. Keying this on the ask meant a request Discord never
+              // answered hid the participant grid for the rest of the call.
+              watchedUserId: widget.streamViewerController.watching?.userId,
+              pendingWatchUserId:
                   widget.streamViewerController.requested?.userId,
               // Whoever is being watched takes the stage; the participant grid
               // is what the room shows when nobody is.

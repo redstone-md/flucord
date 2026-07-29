@@ -414,6 +414,46 @@ void main() {
       expect(statuses.last.error.toString(), contains('4017'));
     });
 
+    test('one unanswered heartbeat does not end the call', () async {
+      final socket = _FakeVoiceWebSocket();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      final statuses = <VoiceSignalingStatusEvent>[];
+      final subscription = client.events.listen((event) {
+        if (event is VoiceSignalingStatusEvent) statuses.add(event);
+      });
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
+
+      await client.connect();
+      socket.addJson({
+        'op': 8,
+        'd': {'heartbeat_interval': 20},
+      });
+      await _flushEvents();
+      // Two intervals with nothing coming back. An acknowledgement that lands
+      // a moment after the next one is a slow network, not a dead socket —
+      // and tearing the connection down for it was the first link in a chain
+      // that had the call reconnecting for its whole life.
+      await Future<void>.delayed(const Duration(milliseconds: 45));
+
+      expect(
+        statuses.where(
+          (status) => status.status == VoiceConnectionStatus.reconnecting,
+        ),
+        isEmpty,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 45));
+
+      expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
+      expect(statuses.last.error.toString(), contains('heartbeat'));
+    });
+
     test('a session Discord ended waits to be handed a new one', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);

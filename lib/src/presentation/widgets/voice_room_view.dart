@@ -26,6 +26,7 @@ class VoiceRoomView extends StatefulWidget {
     this.streamViewer,
     this.onWatchStream,
     this.watchedUserId,
+    this.pendingWatchUserId,
     this.cameraFrameFor,
     this._spaceId,
     super.key,
@@ -63,6 +64,11 @@ class VoiceRoomView extends StatefulWidget {
 
   /// Whose share is on screen, so the tile offers to leave it.
   final String? watchedUserId;
+
+  /// Whose share has been asked for but is not arriving yet. Kept apart from
+  /// [watchedUserId] because an ask Discord never answers must not take the
+  /// stage away from the room.
+  final String? pendingWatchUserId;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -122,6 +128,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 streamViewer: widget.streamViewer,
                 onWatchStream: widget.onWatchStream,
                 watchedUserId: widget.watchedUserId,
+                pendingWatchUserId: widget.pendingWatchUserId,
                 goLive: widget.goLive,
                 soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
@@ -223,6 +230,7 @@ class _VoiceStage extends StatelessWidget {
     required this.streamViewer,
     required this.onWatchStream,
     required this.watchedUserId,
+    required this.pendingWatchUserId,
     required this.goLive,
     required this.soundboard,
     required this.stageControls,
@@ -249,6 +257,7 @@ class _VoiceStage extends StatelessWidget {
   final Widget? streamViewer;
   final void Function(String userId)? onWatchStream;
   final String? watchedUserId;
+  final String? pendingWatchUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +369,7 @@ class _VoiceStage extends StatelessWidget {
                 spaceId: spaceId,
                 cameraFrameFor: cameraFrameFor,
                 onWatchStream: onWatchStream,
-                watchedUserId: watchedUserId,
+                watchedUserId: watchedUserId ?? pendingWatchUserId,
               ),
         ),
       ],

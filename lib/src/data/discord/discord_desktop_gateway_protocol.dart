@@ -124,7 +124,16 @@ final class DiscordDesktopGatewayProtocol {
   int? _sequence;
   String? _sessionId;
   Uri? _resumeGatewayUri;
-  bool _heartbeatAcknowledged = true;
+  int _unacknowledgedHeartbeats = 0;
+
+  /// How many heartbeats may go unanswered before the session is written off.
+  ///
+  /// One is too few: an acknowledgement arriving a moment after the next
+  /// interval is a slow network rather than a dead socket. Dropping this
+  /// session costs more than the wait — every voice connection is identified
+  /// with its id, so a needless reconnect here ends the call downstream with
+  /// "session no longer valid".
+  static const _heartbeatTolerance = 2;
 
   DiscordDesktopGatewayState get state => _state;
   int? get sequence => _sequence;
@@ -198,7 +207,7 @@ final class DiscordDesktopGatewayProtocol {
         return [DiscordDesktopGatewaySend(identify())];
       case DiscordDesktopGatewayOpcode.hello:
         if (data is! Map || data['heartbeat_interval'] is! num) return const [];
-        _heartbeatAcknowledged = true;
+        _unacknowledgedHeartbeats = 0;
         return [
           DiscordDesktopGatewayScheduleHeartbeat(
             Duration(
@@ -207,7 +216,7 @@ final class DiscordDesktopGatewayProtocol {
           ),
         ];
       case DiscordDesktopGatewayOpcode.heartbeatAck:
-        _heartbeatAcknowledged = true;
+        _unacknowledgedHeartbeats = 0;
         return const [];
       default:
         return const [];
@@ -217,11 +226,11 @@ final class DiscordDesktopGatewayProtocol {
   DiscordDesktopGatewayAction heartbeatDue({
     Map<String, Object?> qos = const {},
   }) {
-    if (!_heartbeatAcknowledged) {
+    if (_unacknowledgedHeartbeats >= _heartbeatTolerance) {
       _state = DiscordDesktopGatewayState.reconnectPending;
       return const DiscordDesktopGatewayReconnect(immediate: true);
     }
-    _heartbeatAcknowledged = false;
+    _unacknowledgedHeartbeats++;
     return DiscordDesktopGatewaySend(_qosHeartbeat(qos));
   }
 

@@ -102,6 +102,9 @@ void main() {
               },
             )
             as DiscordDesktopGatewaySend;
+    // One unanswered heartbeat is a slow network, not a dead socket: dropping
+    // the session here ends every voice connection identified with its id.
+    final tolerated = gateway.heartbeatDue();
     final timeout = gateway.heartbeatDue();
 
     expect(
@@ -115,6 +118,7 @@ void main() {
         'reasons': ['foregrounded'],
       },
     });
+    expect(tolerated, isA<DiscordDesktopGatewaySend>());
     expect(timeout, isA<DiscordDesktopGatewayReconnect>());
 
     gateway.accept({'op': DiscordDesktopGatewayOpcode.heartbeatAck, 'd': null});

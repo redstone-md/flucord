@@ -69,7 +69,7 @@ final class DiscordVoiceGatewayClient
   StreamSubscription<Object?>? _socketSubscription;
   Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
-  bool _heartbeatAcknowledged = true;
+  int _unacknowledgedHeartbeats = 0;
   bool _canResume = false;
   bool _closing = false;
   bool _failed = false;
@@ -219,7 +219,7 @@ final class DiscordVoiceGatewayClient
       case 5:
         if (data is Map) _handleSpeaking(data.cast<String, Object?>());
       case 6:
-        _heartbeatAcknowledged = true;
+        _unacknowledgedHeartbeats = 0;
       case 8:
         if (data is Map) _handleHello(data.cast<String, Object?>());
       case 9:
@@ -262,7 +262,7 @@ final class DiscordVoiceGatewayClient
     final rawInterval = data['heartbeat_interval'];
     if (rawInterval is! num || rawInterval <= 0) return;
     _heartbeatTimer?.cancel();
-    _heartbeatAcknowledged = true;
+    _unacknowledgedHeartbeats = 0;
     final interval = Duration(milliseconds: rawInterval.round());
     _heartbeatTimer = Timer.periodic(interval, (_) => _heartbeat());
   }
@@ -318,12 +318,28 @@ final class DiscordVoiceGatewayClient
     if (!_events.isClosed) _events.add(VoiceUserDisconnectedEvent(userId));
   }
 
+  /// How many heartbeats may go unanswered before the connection is written
+  /// off.
+  ///
+  /// One is too few. An acknowledgement that arrives a moment after the next
+  /// interval is a slow network, not a dead socket, and tearing the connection
+  /// down for it was the first link in a chain: the redial was answered with
+  /// 4006, that with 4014, and the call spent its life reconnecting.
+  static const _heartbeatTolerance = 2;
+
   void _heartbeat() {
-    if (!_heartbeatAcknowledged) {
-      _scheduleReconnect(error: StateError('Voice heartbeat not acknowledged'));
+    if (_unacknowledgedHeartbeats >= _heartbeatTolerance) {
+      // Not resumable: a session this far behind is one Discord has already
+      // stopped recognising, and resuming into it is answered with 4006.
+      _canResume = false;
+      _scheduleReconnect(
+        error: StateError(
+          'Discord did not acknowledge $_unacknowledgedHeartbeats heartbeats',
+        ),
+      );
       return;
     }
-    _heartbeatAcknowledged = false;
+    _unacknowledgedHeartbeats++;
     _send(_protocol.heartbeat(DateTime.now().millisecondsSinceEpoch));
   }
 
