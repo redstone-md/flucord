@@ -1,13 +1,28 @@
 part of 'chat_models.dart';
 
-enum GuildScheduledEventEntityType { stage, voice, external, unknown }
+enum GuildScheduledEventEntityType {
+  stage(1),
+  voice(2),
+  external(3),
+  unknown(0);
+
+  const GuildScheduledEventEntityType(this.discordValue);
+
+  /// Discord's own number. Carried on the type rather than mapped at each end
+  /// so the reader and the writer cannot drift apart.
+  final int discordValue;
+}
 
 enum GuildScheduledEventStatus {
-  scheduled,
-  active,
-  completed,
-  canceled,
-  unknown,
+  scheduled(1),
+  active(2),
+  completed(3),
+  canceled(4),
+  unknown(0);
+
+  const GuildScheduledEventStatus(this.discordValue);
+
+  final int discordValue;
 }
 
 final class GuildScheduledEvent {

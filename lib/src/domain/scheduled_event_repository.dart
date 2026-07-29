@@ -18,4 +18,25 @@ abstract interface class ScheduledEventRepository {
     required bool interested,
     String? exceptionId,
   });
+
+  /// Creates an event. Returns it as the server stored it, so the surface
+  /// shows what Discord actually recorded rather than what was typed.
+  Future<GuildScheduledEvent?> createScheduledEvent({
+    required String spaceId,
+    required GuildScheduledEventDraft draft,
+  });
+
+  /// Applies a partial edit.
+  Future<GuildScheduledEvent?> editScheduledEvent({
+    required String spaceId,
+    required String eventId,
+    required GuildScheduledEventEdit edit,
+  });
+
+  /// Deletes an event outright. Cancelling one is an edit of its status, and
+  /// the two are deliberately not the same call.
+  Future<bool> deleteScheduledEvent({
+    required String spaceId,
+    required String eventId,
+  });
 }

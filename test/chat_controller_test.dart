@@ -127,6 +127,134 @@ void main() {
       );
     });
 
+    test('a created event appears without waiting for the dispatch', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final draft = GuildScheduledEventDraft(
+        name: 'Forge night',
+        startTime: DateTime.utc(2026, 8, 1, 18),
+        endTime: DateTime.utc(2026, 8, 1, 20),
+        entityType: GuildScheduledEventEntityType.external,
+        location: 'The workshop',
+      );
+
+      final created = await controller.createScheduledEvent('forge', draft);
+
+      expect(created?.name, 'Forge night');
+      expect(repository.created.single.name, 'Forge night');
+      // The whole object came back from the server, so showing it is repeating
+      // Discord rather than guessing at it.
+      expect(
+        controller.scheduledEventsFor('forge').map((e) => e.id),
+        contains('event-new'),
+      );
+    });
+
+    test('an edit replaces the row it changed', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+      final edit = GuildScheduledEventEdit()..name = 'Renamed';
+
+      final updated = await controller.editScheduledEvent(event, edit);
+
+      expect(updated?.name, 'Renamed');
+      expect(repository.edited.single['name'], 'Renamed');
+      expect(
+        controller
+            .scheduledEventsFor('forge')
+            .firstWhere((item) => item.id == 'event-1')
+            .name,
+        'Renamed',
+      );
+    });
+
+    test('a deleted event leaves the list', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+      await controller.editScheduledEvent(
+        event,
+        GuildScheduledEventEdit()..name = 'Forge night',
+      );
+
+      expect(await controller.deleteScheduledEvent(event), isTrue);
+
+      expect(repository.deleted, ['event-1']);
+      expect(
+        controller.scheduledEventsFor('forge').map((item) => item.id),
+        isNot(contains('event-1')),
+      );
+    });
+
+    test('a refused write changes nothing and is not an error', () async {
+      final repository = _EventRepository()..acceptEventWrite = false;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      expect(
+        await controller.editScheduledEvent(
+          event,
+          GuildScheduledEventEdit()..name = 'Renamed',
+        ),
+        isNull,
+      );
+      expect(await controller.deleteScheduledEvent(event), isFalse);
+      expect(controller.scheduledEventsError('forge'), isNull);
+    });
+
+    test('a failed write is recorded against its own guild', () async {
+      final repository = _EventRepository()..failNextEventWrite = true;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(
+        await controller.createScheduledEvent(
+          'forge',
+          GuildScheduledEventDraft(
+            name: 'Forge night',
+            startTime: DateTime.utc(2026, 8, 1, 18),
+            endTime: DateTime.utc(2026, 8, 1, 20),
+            entityType: GuildScheduledEventEntityType.external,
+            location: 'The workshop',
+          ),
+        ),
+        isNull,
+      );
+
+      expect(controller.scheduledEventsError('forge'), isA<StateError>());
+    });
+
     test('an event RSVP names the guild it belongs to', () async {
       final repository = _EventRepository();
       final controller = ChatController(repository);

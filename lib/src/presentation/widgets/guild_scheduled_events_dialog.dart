@@ -12,6 +12,9 @@ class GuildScheduledEventsDialog extends StatelessWidget {
     required this.error,
     required this.onRefresh,
     this.onSetInterest,
+    this.onCreate,
+    this.onEdit,
+    this.onDelete,
     super.key,
   });
 
@@ -27,6 +30,13 @@ class GuildScheduledEventsDialog extends StatelessWidget {
   final Future<bool> Function(GuildScheduledEvent, {required bool interested})?
   onSetInterest;
 
+  /// Creates, edits and deletes an event. All null unless the account may
+  /// manage events here, because Discord withholds the affordance rather than
+  /// the request.
+  final VoidCallback? onCreate;
+  final void Function(GuildScheduledEvent)? onEdit;
+  final void Function(GuildScheduledEvent)? onDelete;
+
   @override
   Widget build(BuildContext context) => Dialog(
     key: const ValueKey('guild-events-dialog'),
@@ -40,7 +50,11 @@ class GuildScheduledEventsDialog extends StatelessWidget {
         height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(
           children: [
-            _EventsHeader(spaceName: space.name, onRefresh: onRefresh),
+            _EventsHeader(
+              spaceName: space.name,
+              onRefresh: onRefresh,
+              onCreate: onCreate,
+            ),
             Divider(height: 1, color: context.surfaces.border),
             Expanded(child: _buildBody(context)),
           ],
@@ -86,15 +100,22 @@ class GuildScheduledEventsDialog extends StatelessWidget {
       channel: channel,
       canOpen: channel != null,
       onSetInterest: onSetInterest,
+      onEdit: onEdit,
+      onDelete: onDelete,
     );
   }
 }
 
 class _EventsHeader extends StatelessWidget {
-  const _EventsHeader({required this.spaceName, required this.onRefresh});
+  const _EventsHeader({
+    required this.spaceName,
+    required this.onRefresh,
+    this.onCreate,
+  });
 
   final String spaceName;
   final VoidCallback onRefresh;
+  final VoidCallback? onCreate;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -125,6 +146,13 @@ class _EventsHeader extends StatelessWidget {
           icon: const Icon(Icons.refresh, size: 19),
           tooltip: 'Refresh events',
         ),
+        if (onCreate != null)
+          IconButton(
+            key: const ValueKey('create-guild-event'),
+            onPressed: onCreate,
+            icon: const Icon(Icons.add, size: 19),
+            tooltip: 'Create event',
+          ),
         IconButton(
           key: const ValueKey('close-guild-events'),
           onPressed: () => Navigator.of(context).pop(),
@@ -143,6 +171,8 @@ class _ScheduledEventRow extends StatelessWidget {
     required this.channel,
     required this.canOpen,
     this.onSetInterest,
+    this.onEdit,
+    this.onDelete,
   });
 
   final GuildScheduledEvent event;
@@ -153,6 +183,8 @@ class _ScheduledEventRow extends StatelessWidget {
   /// cannot say — in which case the control is not offered at all.
   final Future<bool> Function(GuildScheduledEvent, {required bool interested})?
   onSetInterest;
+  final void Function(GuildScheduledEvent)? onEdit;
+  final void Function(GuildScheduledEvent)? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -238,6 +270,32 @@ class _ScheduledEventRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onEdit != null)
+                  IconButton(
+                    key: ValueKey('guild-event-edit-${event.id}'),
+                    tooltip: 'Edit event',
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
+                    ),
+                    onPressed: () => onEdit!(event),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    key: ValueKey('guild-event-delete-${event.id}'),
+                    tooltip: 'Delete event',
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
+                    ),
+                    onPressed: () => onDelete!(event),
+                  ),
                 if (canOpen)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),

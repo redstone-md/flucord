@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
@@ -175,6 +176,154 @@ void main() {
         (await _repository(
           transport,
         )).setEventInterest(spaceId: _guild, eventId: _event, interested: true),
+        throwsA(isA<DiscordApiException>()),
+      );
+    });
+  });
+
+  group('managing events', () {
+    test(
+      'a create sends the whole event and reads back what was stored',
+      () async {
+        final transport = _Transport([
+          DiscordHttpResponse(
+            statusCode: 200,
+            headers: const {},
+            body: jsonEncode({
+              'id': _event,
+              'guild_id': _guild,
+              'name': 'Forge night',
+              'scheduled_start_time': '2026-08-01T18:00:00.000Z',
+              'entity_type': 3,
+              'status': 1,
+            }),
+          ),
+        ]);
+
+        final created = await (await _repository(transport))
+            .createScheduledEvent(
+              spaceId: _guild,
+              draft: GuildScheduledEventDraft(
+                name: 'Forge night',
+                startTime: DateTime.utc(2026, 8, 1, 18),
+                endTime: DateTime.utc(2026, 8, 1, 20),
+                entityType: GuildScheduledEventEntityType.external,
+                location: 'The workshop',
+              ),
+            );
+
+        expect(created!.name, 'Forge night');
+        final request = transport.requests.single;
+        expect(request.method, 'POST');
+        expect(request.uri.path, endsWith('/guilds/$_guild/scheduled-events'));
+        expect(request.body?['entity_type'], 3);
+        expect(request.body?['privacy_level'], 2);
+      },
+    );
+
+    test('a draft Discord would refuse is never sent', () async {
+      final transport = _Transport();
+
+      final created = await (await _repository(transport)).createScheduledEvent(
+        spaceId: _guild,
+        draft: GuildScheduledEventDraft(
+          name: '',
+          startTime: DateTime.utc(2026, 8, 1, 18),
+          entityType: GuildScheduledEventEntityType.external,
+        ),
+      );
+
+      expect(created, isNull);
+      expect(transport.requests, isEmpty);
+    });
+
+    test('an edit patches only what it carries', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode({
+            'id': _event,
+            'guild_id': _guild,
+            'name': 'Renamed',
+            'scheduled_start_time': '2026-08-01T18:00:00.000Z',
+            'entity_type': 3,
+            'status': 1,
+          }),
+        ),
+      ]);
+      final edit = GuildScheduledEventEdit()..name = 'Renamed';
+
+      final updated = await (await _repository(
+        transport,
+      )).editScheduledEvent(spaceId: _guild, eventId: _event, edit: edit);
+
+      expect(updated!.name, 'Renamed');
+      expect(transport.requests.single.method, 'PATCH');
+      expect(transport.requests.single.body, {'name': 'Renamed'});
+    });
+
+    test('an empty edit is not a request', () async {
+      final transport = _Transport();
+
+      expect(
+        await (await _repository(transport)).editScheduledEvent(
+          spaceId: _guild,
+          eventId: _event,
+          edit: GuildScheduledEventEdit(),
+        ),
+        isNull,
+      );
+      expect(transport.requests, isEmpty);
+    });
+
+    test('a delete answers whether it happened', () async {
+      final transport = _Transport([
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+
+      expect(
+        await (await _repository(
+          transport,
+        )).deleteScheduledEvent(spaceId: _guild, eventId: _event),
+        isTrue,
+      );
+      expect(transport.requests.single.method, 'DELETE');
+    });
+
+    test('an event already gone, or not ours, answers no', () async {
+      for (final status in [403, 404]) {
+        final transport = _Transport([
+          DiscordHttpResponse(
+            statusCode: status,
+            headers: const {},
+            body: jsonEncode({'message': 'Unknown event'}),
+          ),
+        ]);
+
+        expect(
+          await (await _repository(
+            transport,
+          )).deleteScheduledEvent(spaceId: _guild, eventId: _event),
+          isFalse,
+          reason: '$status',
+        );
+      }
+    });
+
+    test('anything else on a delete is still an error', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 500,
+          headers: const {},
+          body: jsonEncode({'message': 'Server error'}),
+        ),
+      ]);
+
+      await expectLater(
+        (await _repository(
+          transport,
+        )).deleteScheduledEvent(spaceId: _guild, eventId: _event),
         throwsA(isA<DiscordApiException>()),
       );
     });

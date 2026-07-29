@@ -26,19 +26,16 @@ extension DiscordScheduledEventMapper on DiscordMapper {
       scheduledEndTime: DateTime.tryParse(
         payload['scheduled_end_time'] as String? ?? '',
       ),
-      entityType: switch (payload['entity_type']) {
-        1 => GuildScheduledEventEntityType.stage,
-        2 => GuildScheduledEventEntityType.voice,
-        3 => GuildScheduledEventEntityType.external,
-        _ => GuildScheduledEventEntityType.unknown,
-      },
-      status: switch (payload['status']) {
-        1 => GuildScheduledEventStatus.scheduled,
-        2 => GuildScheduledEventStatus.active,
-        3 => GuildScheduledEventStatus.completed,
-        4 => GuildScheduledEventStatus.canceled,
-        _ => GuildScheduledEventStatus.unknown,
-      },
+      // Read through the codes the types carry, so the reader and the writer
+      // cannot disagree about what a 3 means.
+      entityType: GuildScheduledEventEntityType.values.firstWhere(
+        (value) => value.discordValue == payload['entity_type'],
+        orElse: () => GuildScheduledEventEntityType.unknown,
+      ),
+      status: GuildScheduledEventStatus.values.firstWhere(
+        (value) => value.discordValue == payload['status'],
+        orElse: () => GuildScheduledEventStatus.unknown,
+      ),
       interestedCount: payload['user_count'] as int? ?? 0,
     );
   }

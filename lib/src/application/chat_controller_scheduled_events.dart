@@ -68,6 +68,81 @@ extension ChatControllerScheduledEvents on ChatController {
     }
   }
 
+  /// Creates an event and shows it without waiting for the dispatch.
+  ///
+  /// Unlike the RSVP count, this is the whole object as the server stored it,
+  /// so putting it in the list is repeating Discord rather than guessing at
+  /// it. The dispatch that follows replaces the same row.
+  Future<GuildScheduledEvent?> createScheduledEvent(
+    String spaceId,
+    GuildScheduledEventDraft draft,
+  ) async {
+    final repository = _repository;
+    if (repository is! ScheduledEventRepository) return null;
+    final scheduledRepository = repository as ScheduledEventRepository;
+    try {
+      final created = await scheduledRepository.createScheduledEvent(
+        spaceId: spaceId,
+        draft: draft,
+      );
+      if (created != null) {
+        _upsertScheduledEvent(created);
+        _notify();
+      }
+      return created;
+    } catch (error) {
+      _scheduledEventErrors[spaceId] = error;
+      _notify();
+      return null;
+    }
+  }
+
+  Future<GuildScheduledEvent?> editScheduledEvent(
+    GuildScheduledEvent event,
+    GuildScheduledEventEdit edit,
+  ) async {
+    final repository = _repository;
+    if (repository is! ScheduledEventRepository) return null;
+    final scheduledRepository = repository as ScheduledEventRepository;
+    try {
+      final updated = await scheduledRepository.editScheduledEvent(
+        spaceId: event.spaceId,
+        eventId: event.id,
+        edit: edit,
+      );
+      if (updated != null) {
+        _upsertScheduledEvent(updated);
+        _notify();
+      }
+      return updated;
+    } catch (error) {
+      _scheduledEventErrors[event.spaceId] = error;
+      _notify();
+      return null;
+    }
+  }
+
+  Future<bool> deleteScheduledEvent(GuildScheduledEvent event) async {
+    final repository = _repository;
+    if (repository is! ScheduledEventRepository) return false;
+    final scheduledRepository = repository as ScheduledEventRepository;
+    try {
+      final deleted = await scheduledRepository.deleteScheduledEvent(
+        spaceId: event.spaceId,
+        eventId: event.id,
+      );
+      if (deleted) {
+        _deleteScheduledEvent(event.spaceId, event.id);
+        _notify();
+      }
+      return deleted;
+    } catch (error) {
+      _scheduledEventErrors[event.spaceId] = error;
+      _notify();
+      return false;
+    }
+  }
+
   void _upsertScheduledEvent(GuildScheduledEvent event) {
     final current = _scheduledEventsBySpace[event.spaceId] ?? const [];
     final next = [

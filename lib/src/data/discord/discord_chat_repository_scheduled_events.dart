@@ -32,6 +32,25 @@ mixin _DiscordChatRepositoryScheduledEvents
   }
 
   @override
+  Future<GuildScheduledEvent?> createScheduledEvent({
+    required String spaceId,
+    required GuildScheduledEventDraft draft,
+  }) async => null;
+
+  @override
+  Future<GuildScheduledEvent?> editScheduledEvent({
+    required String spaceId,
+    required String eventId,
+    required GuildScheduledEventEdit edit,
+  }) async => null;
+
+  @override
+  Future<bool> deleteScheduledEvent({
+    required String spaceId,
+    required String eventId,
+  }) async => false;
+
+  @override
   Future<bool> setEventInterest({
     required String spaceId,
     required String eventId,

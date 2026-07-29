@@ -139,6 +139,12 @@ extension _FlucordShellNavigation on FlucordShell {
     BuildContext context,
     CommunitySpace space,
   ) async {
+    // Discord withholds the affordance rather than the request: an account
+    // without Manage Events sees the list and none of the controls.
+    final canManage = WorkspacePermissions(
+      chatController.workspace!,
+      memberId: chatController.workspace!.currentMemberId,
+    ).administrationOf(space.id).canManageEvents;
     final channelId = await showDialog<String>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -152,11 +158,75 @@ extension _FlucordShellNavigation on FlucordShell {
           error: chatController.scheduledEventsError(space.id),
           onRefresh: () => chatController.loadScheduledEvents(space.id),
           onSetInterest: chatController.setEventInterest,
+          onCreate: canManage
+              ? () => unawaited(_openEventForm(context, space))
+              : null,
+          onEdit: canManage
+              ? (event) =>
+                    unawaited(_openEventForm(context, space, event: event))
+              : null,
+          onDelete: canManage
+              ? (event) => unawaited(_confirmDeleteEvent(context, event))
+              : null,
         ),
       ),
     );
     if (channelId == null || !context.mounted) return;
     _openDestination(spaceId: space.id, channelId: channelId);
+  }
+
+  /// Opens the create or edit form for a server event.
+  Future<void> _openEventForm(
+    BuildContext context,
+    CommunitySpace space, {
+    GuildScheduledEvent? event,
+  }) async {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
+    final channels = [
+      for (final channel in workspace.channels)
+        if (channel.spaceId == space.id && channel.kind == ChannelKind.voice)
+          channel,
+    ];
+    final result = await showDialog<GuildEventFormResult>(
+      context: context,
+      builder: (_) => GuildEventFormDialog(channels: channels, event: event),
+    );
+    if (result == null) return;
+    if (result.edit case final edit? when event != null) {
+      await chatController.editScheduledEvent(event, edit);
+      return;
+    }
+    if (result.draft case final draft?) {
+      await chatController.createScheduledEvent(space.id, draft);
+    }
+  }
+
+  /// Deletes an event, after asking. Deleting one cannot be undone from here.
+  Future<void> _confirmDeleteEvent(
+    BuildContext context,
+    GuildScheduledEvent event,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('guild-event-delete-confirm'),
+        title: const Text('Delete this event?'),
+        content: Text('${event.name} will be removed for everybody.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('guild-event-delete-accept'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) await chatController.deleteScheduledEvent(event);
   }
 
   /// Opens the server-settings window for [space].

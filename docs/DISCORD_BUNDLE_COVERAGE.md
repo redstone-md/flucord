@@ -541,7 +541,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Purpose**: event calendar, RSVP, recurrence exceptions.
 - **UI surface**: server Events surface.
 - **Contract**: `GET /guilds/{id}/scheduled-events?with_user_count=true`,
-  `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`.
+  `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`,
+  `POST /guilds/{id}/scheduled-events`,
+  `PATCH`/`DELETE /guilds/{id}/scheduled-events/{event}`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: event loading, SQLite v16 persistence, live create/update/
@@ -554,13 +556,21 @@ are excluded from the denominator and are never reported as implemented.
   than patched locally, since two places counting the same thing is how a
   count ends up permanently wrong by one. An event that has ended refuses the
   request, and the control reads that as a refusal rather than as a fault.
+  Events are also created, edited and deleted, gated on Manage Events — the
+  affordance is withheld rather than the request, so an account without it
+  sees the list and none of the controls. A create sends the whole event
+  because Discord takes one; an edit sends only what moved, and an edit that
+  moved nothing closes instead of recording a change nobody made. Deleting
+  asks first, since it cannot be undone from here, and cancelling an event is
+  deliberately a different call: a status change, not a delete.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
   `discord_scheduled_event_mapper_test.dart`,
   `scheduled_event_rsvp_test.dart`,
-  `scheduled_event_rsvp_repository_test.dart`.
+  `scheduled_event_rsvp_repository_test.dart`,
+  `guild_event_editing_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: the four recurrence-exception dispatches. Creating and
-  editing an event is untouched, as is the RSVP list of who else is going.
+- **Blocked by**: the four recurrence-exception dispatches, recurrence rules
+  themselves, the cover image, and the list of who else is going.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 

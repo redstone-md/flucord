@@ -165,6 +165,70 @@ final class _EventRepository
   Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) =>
       _delegate.loadScheduledEvents(spaceId);
 
+  /// What the controller asked of the event routes.
+  final List<GuildScheduledEventDraft> created = [];
+  final List<GuildScheduledEventEdit> edited = [];
+  final List<String> deleted = [];
+  bool failNextEventWrite = false;
+  bool acceptEventWrite = true;
+
+  @override
+  Future<GuildScheduledEvent?> createScheduledEvent({
+    required String spaceId,
+    required GuildScheduledEventDraft draft,
+  }) async {
+    if (failNextEventWrite) {
+      failNextEventWrite = false;
+      throw StateError('create failed');
+    }
+    if (!acceptEventWrite) return null;
+    created.add(draft);
+    return GuildScheduledEvent(
+      id: 'event-new',
+      spaceId: spaceId,
+      name: draft.name,
+      scheduledStartTime: draft.startTime,
+      entityType: draft.entityType,
+      status: GuildScheduledEventStatus.scheduled,
+    );
+  }
+
+  @override
+  Future<GuildScheduledEvent?> editScheduledEvent({
+    required String spaceId,
+    required String eventId,
+    required GuildScheduledEventEdit edit,
+  }) async {
+    if (failNextEventWrite) {
+      failNextEventWrite = false;
+      throw StateError('edit failed');
+    }
+    if (!acceptEventWrite) return null;
+    edited.add(edit);
+    return GuildScheduledEvent(
+      id: eventId,
+      spaceId: spaceId,
+      name: edit['name'] as String? ?? 'Forge night',
+      scheduledStartTime: DateTime.utc(2026, 8),
+      entityType: GuildScheduledEventEntityType.external,
+      status: GuildScheduledEventStatus.scheduled,
+    );
+  }
+
+  @override
+  Future<bool> deleteScheduledEvent({
+    required String spaceId,
+    required String eventId,
+  }) async {
+    if (failNextEventWrite) {
+      failNextEventWrite = false;
+      throw StateError('delete failed');
+    }
+    if (!acceptEventWrite) return false;
+    deleted.add(eventId);
+    return true;
+  }
+
   @override
   Future<bool> setEventInterest({
     required String spaceId,

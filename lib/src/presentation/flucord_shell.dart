@@ -45,6 +45,7 @@ import 'widgets/create_forum_post_dialog.dart';
 import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/forum_channel_view.dart';
+import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
 import 'widgets/report_dialog.dart';

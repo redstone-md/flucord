@@ -81,6 +81,33 @@ final class DiscordDesktopApiClient
         query: const {'with_user_count': 'true'},
       );
 
+  Future<Map<String, Object?>> createGuildScheduledEvent({
+    required String guildId,
+    required Map<String, Object?> body,
+  }) => _rest.requestObject(
+    'POST',
+    '/guilds/$guildId/scheduled-events',
+    body: body,
+  );
+
+  Future<Map<String, Object?>> editGuildScheduledEvent({
+    required String guildId,
+    required String eventId,
+    required Map<String, Object?> body,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/guilds/$guildId/scheduled-events/$eventId',
+    body: body,
+  );
+
+  Future<void> deleteGuildScheduledEvent({
+    required String guildId,
+    required String eventId,
+  }) => _rest.requestEmpty(
+    'DELETE',
+    '/guilds/$guildId/scheduled-events/$eventId',
+  );
+
   /// `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`.
   ///
   /// The response value is Discord's own: 1 for interested. Withdrawing sends

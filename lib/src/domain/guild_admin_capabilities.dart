@@ -34,6 +34,9 @@ final class GuildAdminCapabilities {
   bool get canCreateInvite => _has(DiscordPermissions.createInstantInvite);
   bool get canViewAuditLog => _has(DiscordPermissions.viewAuditLog);
 
+  /// Creating, editing and deleting the server's scheduled events.
+  bool get canManageEvents => _has(DiscordPermissions.manageEvents);
+
   /// Whether the account may grant [permission] to a role.
   ///
   /// Discord refuses to let a member hand out a permission they do not hold

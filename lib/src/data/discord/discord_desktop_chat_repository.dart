@@ -480,6 +480,50 @@ final class DiscordDesktopChatRepository
   }
 
   @override
+  Future<GuildScheduledEvent?> createScheduledEvent({
+    required String spaceId,
+    required GuildScheduledEventDraft draft,
+  }) async {
+    if (!draft.isValid) return null;
+    final payload = await _api.createGuildScheduledEvent(
+      guildId: spaceId,
+      body: GuildScheduledEventEdit.encodeDraft(draft),
+    );
+    return _mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId);
+  }
+
+  @override
+  Future<GuildScheduledEvent?> editScheduledEvent({
+    required String spaceId,
+    required String eventId,
+    required GuildScheduledEventEdit edit,
+  }) async {
+    if (edit.isEmpty) return null;
+    final payload = await _api.editGuildScheduledEvent(
+      guildId: spaceId,
+      eventId: eventId,
+      body: edit.toJson(),
+    );
+    return _mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId);
+  }
+
+  @override
+  Future<bool> deleteScheduledEvent({
+    required String spaceId,
+    required String eventId,
+  }) async {
+    try {
+      await _api.deleteGuildScheduledEvent(guildId: spaceId, eventId: eventId);
+      return true;
+    } on DiscordApiException catch (error) {
+      // An event somebody else already deleted, or one this account may not
+      // manage, is refused. Neither is a fault here.
+      if (error.statusCode == 403 || error.statusCode == 404) return false;
+      rethrow;
+    }
+  }
+
+  @override
   Future<bool> setEventInterest({
     required String spaceId,
     required String eventId,
