@@ -117,6 +117,12 @@ Future<void> _flushEvents() async {
 
 final class _ParticipantSignalingService implements VoiceSignalingService {
   @override
+  VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
+
+  @override
+  VoiceTransportSession? currentSession;
+
+  @override
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
 
   @override

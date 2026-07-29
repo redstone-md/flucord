@@ -274,7 +274,14 @@ final class VoiceController extends ChangeNotifier {
       _transportSession = null;
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
-      _connectionStatus = VoiceConnectionStatus.joining;
+      // Only a session that is actually being established says "joining". A
+      // transport already up for this channel — a rebind, or a second call
+      // into the same room — keeps what it has, or the room announces a
+      // connection it never lost.
+      if (movedSession ||
+          signalingService?.currentStatus != VoiceConnectionStatus.ready) {
+        _connectionStatus = VoiceConnectionStatus.joining;
+      }
       if (!await _sendJoin()) {
         _connectionStatus = VoiceConnectionStatus.disconnected;
       }
@@ -345,7 +352,9 @@ final class VoiceController extends ChangeNotifier {
     await _run(() async {
       await _bindSignaling(service);
       if (service == null || _connectedChannelId == null) return;
-      _connectionStatus = VoiceConnectionStatus.joining;
+      if (service.currentStatus != VoiceConnectionStatus.ready) {
+        _connectionStatus = VoiceConnectionStatus.joining;
+      }
       await _sendJoin();
     });
   }
@@ -379,8 +388,13 @@ final class VoiceController extends ChangeNotifier {
         : null;
     await _audioPipeline?.bindTransport(audioTransport);
     await _setPlaybackEnabled(false);
-    _connectionStatus = VoiceConnectionStatus.disconnected;
-    _transportSession = null;
+    // Read rather than waited for. Binding to a service that is already
+    // connected used to reset the status to disconnected and then sit there:
+    // the `ready` it was waiting for had already been announced, and nothing
+    // announces it twice, so a working call showed as joining forever.
+    _connectionStatus = service?.currentStatus ??
+        VoiceConnectionStatus.disconnected;
+    _transportSession = service?.currentSession;
     _participants.clear();
     // The sidebar renders seats for channels this client is not in, so it has
     // to rebuild on any voice state the transport sees, not only on the events

@@ -51,6 +51,8 @@ final class DiscordVoiceSignalingService
   final Set<VoiceSessionKey> _pingedSessions = <VoiceSessionKey>{};
   final Map<VoiceSessionKey, int> _generations = {};
   final Map<VoiceSessionKey, DiscordVoiceClient> _clients = {};
+  VoiceConnectionStatus _currentStatus = VoiceConnectionStatus.disconnected;
+  VoiceTransportSession? _currentSession;
   final Map<VoiceSessionKey, StreamSubscription<VoiceSignalingEvent>>
   _clientSubscriptions = {};
   final Map<VoiceSessionKey, StreamSubscription<VoiceRemoteOpusFrame>>
@@ -272,7 +274,19 @@ final class DiscordVoiceSignalingService
   /// fires on the transition into that state and not on every repeat. Left
   /// unguarded it turns one broken voice connection into a flood on the main
   /// gateway, which is the socket carrying every message.
+  @override
+  VoiceConnectionStatus get currentStatus => _currentStatus;
+
+  @override
+  VoiceTransportSession? get currentSession => _currentSession;
+
   void _onClientEvent(VoiceSessionKey key, VoiceSignalingEvent event) {
+    // Only the session being listened to speaks for the client's state: a
+    // second connection winding down must not report the first as gone.
+    if (key == _activeSession) {
+      if (event is VoiceSignalingStatusEvent) _currentStatus = event.status;
+      if (event is VoiceTransportReadyEvent) _currentSession = event.session;
+    }
     if (event is VoiceSignalingStatusEvent) {
       final wasReconnecting = _pingedSessions.contains(key);
       final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;

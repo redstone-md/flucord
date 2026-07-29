@@ -572,6 +572,12 @@ final class _FakeVoiceVideoTransport implements VoiceVideoTransport {
 }
 
 final class _FakeSignaling implements VoiceSignalingService, VoiceAudioTransport {
+  @override
+  VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
+
+  @override
+  VoiceTransportSession? currentSession;
+
   final List<(String, String, bool)> joins = [];
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();

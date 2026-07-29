@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -69,9 +70,14 @@ class GoLiveButton extends StatelessWidget {
                   : Icons.pause,
             ),
           ),
-        if (controller.error != null)
+        if (controller.error case final error?)
           Tooltip(
-            message: 'Discord did not accept the stream.',
+            // What Discord actually said, rather than the fixed sentence the
+            // room used to show for every refusal. "Missing permissions" and
+            // "no encoder on this machine" need different things done about
+            // them, and only the answer says which happened.
+            message: 'Discord did not accept the stream: '
+                '${_describe(error)}',
             child: Icon(
               Icons.error_outline,
               key: const ValueKey('go-live-error'),
@@ -96,4 +102,17 @@ class GoLiveButton extends StatelessWidget {
       guildId: guildId,
     );
   }
+}
+
+/// One line of whatever went wrong.
+///
+/// Trimmed because these arrive as API exceptions with a payload attached,
+/// and a tooltip is not the place for a paragraph.
+String _describe(Object error) {
+  final lines = const LineSplitter().convert(error.toString().trim());
+  final firstLine = lines.isEmpty ? '' : lines.first.trim();
+  const limit = 140;
+  return firstLine.length <= limit
+      ? firstLine
+      : '${firstLine.substring(0, limit)}…';
 }

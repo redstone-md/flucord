@@ -250,6 +250,19 @@ final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
 abstract interface class VoiceSignalingService {
   Stream<VoiceSignalingEvent> get voiceEvents;
 
+  /// Where the connection stands right now.
+  ///
+  /// Held as well as announced, because a status is a state rather than a
+  /// notification: anything that subscribes after the connection came up —
+  /// a controller rebinding to the same service, a surface opened later —
+  /// would otherwise wait forever for an event that already happened, and
+  /// show a working call as still joining.
+  VoiceConnectionStatus get currentStatus;
+
+  /// The transport in force, or null before one is negotiated. Held for the
+  /// same reason.
+  VoiceTransportSession? get currentSession;
+
   /// Who is currently seated in each voice channel, keyed by channel id.
   ///
   /// Discord shows a voice channel's occupants in the sidebar without anyone

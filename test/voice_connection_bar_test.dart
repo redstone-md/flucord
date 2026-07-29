@@ -125,6 +125,12 @@ void main() {
 }
 
 final class _FakeSignaling implements VoiceSignalingService {
+  @override
+  VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
+
+  @override
+  VoiceTransportSession? currentSession;
+
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final List<String> left = [];

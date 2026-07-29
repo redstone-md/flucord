@@ -312,6 +312,12 @@ Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
 final class _FakeVoiceSignalingService
     implements VoiceSignalingService, VoiceAudioTransport {
   @override
+  VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
+
+  @override
+  VoiceTransportSession? currentSession;
+
+  @override
   Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
 
   @override

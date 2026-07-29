@@ -55,6 +55,47 @@ void main() {
     });
   });
 
+
+  group('binding to a connection that is already up', () {
+    test('a rebind keeps the connection it found', () async {
+      var signaling = _FakeSignaling();
+      final controller = VoiceController(
+        _FakeMedia(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      expect(controller.connectionStatus, VoiceConnectionStatus.joining);
+
+      // The transport comes up, and then something replaces the service —
+      // which the app does whenever the chat session is rebuilt. The `ready`
+      // had already been announced and nothing announces it twice, so a
+      // controller that waited for one showed a working call as joining
+      // forever.
+      signaling = _FakeSignaling()
+        ..currentStatus = VoiceConnectionStatus.ready;
+      await controller.refreshSignalingService();
+
+      expect(controller.connectionStatus, VoiceConnectionStatus.ready);
+    });
+
+    test('a rebind onto a service that is not connected still says joining',
+        () async {
+      var signaling = _FakeSignaling();
+      final controller = VoiceController(
+        _FakeMedia(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+
+      signaling = _FakeSignaling();
+      await controller.refreshSignalingService();
+
+      expect(controller.connectionStatus, VoiceConnectionStatus.joining);
+    });
+  });
+
   group('what the room says is wrong', () {
     test('a device failure says so, and carries the reason', () async {
       final signaling = _FakeSignaling();
@@ -194,6 +235,12 @@ final class _FakeMedia implements VoiceMediaService {
 }
 
 final class _FakeSignaling implements VoiceSignalingService {
+  @override
+  VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
+
+  @override
+  VoiceTransportSession? currentSession;
+
   // Open rather than an empty stream: an empty one closes immediately, and
   // the controller quite correctly reads a closed event stream as the
   // transport having gone away.
