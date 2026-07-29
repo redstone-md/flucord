@@ -128,6 +128,18 @@ final class ChatController extends ChangeNotifier {
   /// Only the desktop-user transport can serve rosters; every other transport
   /// reports `null` so the member panel falls back to what the workspace
   /// already knows rather than waiting for rows that will never arrive.
+  /// Asks a guild about members matching [query].
+  ///
+  /// Fire-and-forget: Discord answers on the gateway and the reply arrives as
+  /// an ordinary member update, which is what refreshes anything showing them.
+  void searchGuildMembers({required String spaceId, required String query}) {
+    if (spaceId.isEmpty || query.trim().isEmpty) return;
+    memberListRepository?.searchGuildMembers(
+      guildId: spaceId,
+      query: query.trim(),
+    );
+  }
+
   GuildMemberListRepository? get memberListRepository {
     final repository = _repository;
     return repository is GuildMemberListRepository

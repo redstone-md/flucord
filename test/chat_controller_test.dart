@@ -22,6 +22,8 @@ import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/guild_member_list.dart';
+import 'package:flucord/src/domain/guild_member_list_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
@@ -330,6 +332,33 @@ void main() {
       repository.failNextEventWrite = true;
       expect(await controller.deleteScheduledEvent(event), isFalse);
       expect(controller.scheduledEventsError('forge'), isA<StateError>());
+    });
+
+    test('a mention being typed asks the guild about it', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      controller.searchGuildMembers(spaceId: 'forge', query: '  mir  ');
+
+      // Trimmed, because the trailing space is part of typing rather than
+      // part of the name.
+      expect(repository.memberSearches.single, ('forge', 'mir'));
+    });
+
+    test('an at-sign with nothing after it asks nothing', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      controller.searchGuildMembers(spaceId: 'forge', query: '   ');
+      controller.searchGuildMembers(spaceId: '', query: 'mir');
+
+      // A blank query would ask for the head of the whole guild, which nobody
+      // meant by typing an at-sign.
+      expect(repository.memberSearches, isEmpty);
     });
 
     test('an event RSVP names the guild it belongs to', () async {

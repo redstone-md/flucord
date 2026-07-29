@@ -304,6 +304,26 @@ final class DiscordDesktopGatewayClient
     });
   }
 
+  /// Asks a guild for members whose name starts with [query].
+  ///
+  /// Discord answers with `GUILD_MEMBERS_CHUNK`. A blank query is not sent:
+  /// it would ask for the head of the whole guild, which is a request nobody
+  /// meant to make by typing an at-sign.
+  void requestGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+  }) {
+    if (guildId.isEmpty || query.trim().isEmpty) return;
+    _send(
+      _protocol.requestGuildMembers(
+        guildId: guildId,
+        query: query.trim(),
+        limit: limit,
+      ),
+    );
+  }
+
   /// Subscribes a channel's member-list row ranges.
   ///
   /// Discord answers with `GUILD_MEMBER_LIST_UPDATE` for the channel's

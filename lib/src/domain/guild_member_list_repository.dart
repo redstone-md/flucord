@@ -9,6 +9,17 @@ import 'guild_member_list.dart';
 /// has vouched for since. Keeping that asymmetry in the contract stops the UI
 /// from assuming a complete list exists somewhere.
 abstract interface class GuildMemberListRepository {
+  /// Asks the guild for members whose name starts with [query].
+  ///
+  /// Answers arrive as ordinary member updates rather than as a return value:
+  /// Discord replies on the gateway, and the same reply also reaches anybody
+  /// else watching the roster. A blank query asks nothing.
+  void searchGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+  });
+
   /// Lists that changed, one event per applied `GUILD_MEMBER_LIST_UPDATE`.
   Stream<GuildMemberList> get memberListUpdates;
 

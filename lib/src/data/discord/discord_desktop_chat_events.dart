@@ -30,6 +30,13 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // than only the roster event.
         final members = _memberLists.accept(event.name, event.data);
         if (members.isNotEmpty) _events.add(MembersUpsertedEvent(members));
+        // A chunk answers opcode 8. The presence service already reads the
+        // presences out of it; the members themselves are what makes somebody
+        // mentionable who was not in READY at all.
+        if (event.name == 'GUILD_MEMBERS_CHUNK') {
+          final chunked = _mapper.membersFromChunk(event.data);
+          if (chunked.isNotEmpty) _events.add(MembersUpsertedEvent(chunked));
+        }
         _acceptPresence(event);
         // Read state hangs off READY and five ack dispatches, so it too sees
         // the whole stream rather than a hand-picked slice of it.

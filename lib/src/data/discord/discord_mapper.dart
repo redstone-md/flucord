@@ -244,6 +244,38 @@ final class DiscordMapper {
     );
   }
 
+  /// The members carried by a `GUILD_MEMBERS_CHUNK`.
+  ///
+  /// Each row is a guild member wrapping a user, and the guild is named once
+  /// on the chunk rather than on every row, so it is threaded in here. A row
+  /// with no user is dropped: it names nobody to mention.
+  List<Member> membersFromChunk(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    final rows = payload['members'];
+    if (guildId is! String || guildId.isEmpty || rows is! List) {
+      return const [];
+    }
+    return [
+      for (final row in rows.whereType<Map>())
+        if (row['user'] case final Map user when user['id'] is String)
+          _chunkMember(user.cast<String, Object?>(), row, guildId),
+    ];
+  }
+
+  /// One row of a chunk. The guild nickname wins where there is one: it is
+  /// the name that guild knows somebody by, and the name everybody there sees.
+  Member _chunkMember(
+    Map<String, Object?> user,
+    Map<Object?, Object?> row,
+    String guildId,
+  ) {
+    final mapped = member(user, spaceIds: {guildId});
+    final nickname = row['nick'];
+    return nickname is String && nickname.isNotEmpty
+        ? mapped.copyWith(displayName: nickname)
+        : mapped;
+  }
+
   Member member(
     Map<String, Object?> payload, {
     String role = 'Member',

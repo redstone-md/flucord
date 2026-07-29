@@ -50,6 +50,7 @@ class MessageComposer extends StatefulWidget {
     this.slashCommands,
     this.canAttachFiles = true,
     this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
+    this.onSearchMembers,
     this.attachmentPicker = const NativePendingAttachmentPicker(),
     this.voiceMessageRecorder,
     this.onSendVoiceMessage,
@@ -86,6 +87,10 @@ class MessageComposer extends StatefulWidget {
   /// Slash commands, or null where they cannot be run.
   final SlashCommandController? slashCommands;
   final ComposerAutocompleteCatalog autocompleteCatalog;
+
+  /// Asks the guild about members matching what is being typed after an
+  /// at-sign, or null where the transport cannot ask.
+  final ValueChanged<String>? onSearchMembers;
   final PendingAttachmentPicker attachmentPicker;
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback? onSendVoiceMessage;

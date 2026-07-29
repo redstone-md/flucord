@@ -1,7 +1,10 @@
 part of 'chat_controller_test.dart';
 
 final class _EventRepository
-    implements ChatRepository, ScheduledEventRepository {
+    implements
+        ChatRepository,
+        ScheduledEventRepository,
+        GuildMemberListRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
 
@@ -175,6 +178,46 @@ final class _EventRepository
   /// Who to answer the interested list with, and what was asked for.
   final List<String> attendeeRequests = [];
   bool failNextAttendees = false;
+
+  /// What the composer asked the guild about.
+  final List<(String, String)> memberSearches = [];
+
+  /// The rest of the roster contract, which these tests do not exercise: the
+  /// controller only needs the repository to be one for the search to reach it.
+  @override
+  Stream<GuildMemberList> get memberListUpdates => const Stream.empty();
+
+  @override
+  String memberListIdFor({
+    required String guildId,
+    required String channelId,
+  }) => 'everyone';
+
+  @override
+  GuildMemberList? memberListFor({
+    required String guildId,
+    required String listId,
+  }) => null;
+
+  @override
+  void subscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+    required List<List<int>> ranges,
+  }) {}
+
+  @override
+  void unsubscribeMemberRanges({
+    required String guildId,
+    required String channelId,
+  }) {}
+
+  @override
+  void searchGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+  }) => memberSearches.add((guildId, query));
 
   @override
   Future<List<GuildScheduledEventAttendee>> loadEventAttendees({

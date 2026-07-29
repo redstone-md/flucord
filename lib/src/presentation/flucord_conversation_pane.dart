@@ -75,6 +75,7 @@ class _ConversationPane extends StatefulWidget {
     required this.onAddReaction,
     required this.onCreateThread,
     required this.onTogglePin,
+    this.onSearchMembers,
     this.onResolveAlert,
     this.onReport,
     required this.onEndPoll,
@@ -156,6 +157,10 @@ class _ConversationPane extends StatefulWidget {
   final Future<void> Function(ChatMessage, String) onAddReaction;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
+
+  /// Asks the guild about members matching what is typed after an at-sign,
+  /// or null on a transport that cannot ask.
+  final ValueChanged<String>? onSearchMembers;
   final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
 
   /// Opens the report flow for a message, or null where there is none.
@@ -398,6 +403,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
               widget.workspace,
               widget.channel,
             ),
+            onSearchMembers: widget.onSearchMembers,
             customEmojis: widget.workspace.emojisFor(widget.channel.spaceId),
             guildStickers: widget.workspace.stickersFor(widget.channel.spaceId),
             isSending: widget.isSending,

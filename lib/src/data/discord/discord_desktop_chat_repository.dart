@@ -471,6 +471,17 @@ final class DiscordDesktopChatRepository
   }
 
   @override
+  void searchGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+  }) => _gateway.requestGuildMembers(
+    guildId: guildId,
+    query: query,
+    limit: limit,
+  );
+
+  @override
   Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
     final payloads = await _api.getGuildScheduledEvents(spaceId);
     return [

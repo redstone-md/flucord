@@ -132,6 +132,10 @@ extension _FlucordShellConversation on FlucordShell {
       return true;
     },
     onTogglePin: chatController.togglePin,
+    onSearchMembers: (query) => chatController.searchGuildMembers(
+      spaceId: channel.spaceId,
+      query: query,
+    ),
     onResolveAlert: chatController.resolveAutoModAlert,
     onReport: (message) => unawaited(_reportMessage(context, message)),
     onEndPoll: chatController.endPoll,

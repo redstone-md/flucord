@@ -68,6 +68,13 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _autocompleteSuggestions = suggestions;
       _autocompleteSelection = retainedIndex < 0 ? 0 : retainedIndex;
     });
+    // A large guild sends only a fraction of its members at login, so the
+    // names already loaded are not the names that can be mentioned. Asking
+    // costs one gateway frame and the answer arrives as ordinary member
+    // updates, which is what refreshes this list.
+    if (query.trigger == ComposerAutocompleteTrigger.mention) {
+      widget.onSearchMembers?.call(query.text);
+    }
     if (!_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.show();
     }

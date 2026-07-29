@@ -266,4 +266,14 @@ final class _FakeMemberListRepository implements GuildMemberListRepository {
     required String guildId,
     required String channelId,
   }) => unsubscribed.add((guildId, channelId));
+
+  /// What the surface asked to search for, so a test can check it asked.
+  final List<(String, String)> searches = [];
+
+  @override
+  void searchGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+  }) => searches.add((guildId, query));
 }

@@ -9,6 +9,7 @@ abstract final class DiscordDesktopGatewayOpcode {
   static const voiceStateUpdate = 4;
   static const voiceServerPing = 5;
   static const resume = 6;
+  static const requestGuildMembers = 8;
   static const reconnect = 7;
   static const invalidSession = 9;
   static const hello = 10;
@@ -223,6 +224,28 @@ final class DiscordDesktopGatewayProtocol {
     _heartbeatAcknowledged = false;
     return DiscordDesktopGatewaySend(_qosHeartbeat(qos));
   }
+
+  /// Opcode 8: asks the guild for members matching [query].
+  ///
+  /// This is how a client learns about anybody the session was not told about
+  /// at login. A large guild sends a fraction of its members in READY, so the
+  /// only way to mention somebody outside that fraction is to ask.
+  DiscordDesktopGatewayFrame requestGuildMembers({
+    required String guildId,
+    required String query,
+    int limit = 25,
+    bool presences = true,
+  }) => DiscordDesktopGatewayFrame(
+    DiscordDesktopGatewayOpcode.requestGuildMembers,
+    {
+      'guild_id': guildId,
+      'query': query,
+      // Zero would mean "everybody", which on a large guild is a request
+      // nobody wants to have made by accident.
+      'limit': limit.clamp(1, 100),
+      'presences': presences,
+    },
+  );
 
   List<DiscordDesktopGatewayFrame> guildSubscriptionFrames(
     Map<String, Map<String, Object?>> subscriptions,

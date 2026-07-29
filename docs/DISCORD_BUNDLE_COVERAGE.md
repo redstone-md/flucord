@@ -304,10 +304,14 @@ are excluded from the denominator and are never reported as implemented.
   checked against twelve `mmh3` reference values.
 - **Live evidence**: guild and channel hydration on Windows `2026-07-25`. None
   yet for `GUILD_MEMBER_LIST_UPDATE` itself.
-- **Blocked by**: the controller and member-panel cut. The roster is parsed and
-  cached but not yet projected into the sidebar, so the panel still groups a
-  flat member list locally. `GET /guilds/{id}/members` enumeration and
-  `GUILD_MEMBERS_CHUNK` remain unimplemented.
+- **Blocked by**: `GET /guilds/{id}/members` enumeration, which is the bot
+  route for walking a whole guild and is deliberately not used by a user
+  session. Nothing else here is outstanding: the roster reaches the member
+  panel, and opcode 8 with `GUILD_MEMBERS_CHUNK` now answers a mention being
+  typed — a large guild sends a fraction of its members at login, so the names
+  already loaded are not the names that can be mentioned, and typing an
+  at-sign asks the guild about the rest. A guild nickname wins over a global
+  name in what comes back, since that is the name everybody there sees.
 
 > Correction, `2026-07-26`: an earlier revision of this row named opcode 14 as
 > the member-list contract. Static analysis of `web.3c742507ecdea9fa.js` finds
