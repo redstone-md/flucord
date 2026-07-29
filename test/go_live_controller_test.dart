@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -84,12 +85,13 @@ void main() {
     expect(repository.pings.length, pings);
   });
 
-  test('a capture that fails leaves nothing announced', () async {
+  test('an encoder that fails leaves nothing announced', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia(failShare: true);
+    final media = _FakeMedia();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       mediaService: media,
+      encoder: _FakeEncoder()..failStart = true,
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -99,6 +101,8 @@ void main() {
       isFalse,
     );
 
+    // The encoder is the picture. Announcing a stream with nothing behind it
+    // shows every viewer a black rectangle.
     expect(controller.status, GoLiveStatus.failure);
     expect(controller.error, isNotNull);
     expect(repository.started, isEmpty);
@@ -360,8 +364,7 @@ void main() {
       expect(media.shared, ['<primary screen>']);
     });
 
-    test('a machine with no display to capture reports what it was told',
-        () async {
+    test('a preview that will not open does not stop the stream', () async {
       final media = _FakeMedia(failShare: true);
       final controller = GoLiveController(
         repositoryProvider: () => _FakeRepository(),
@@ -369,12 +372,69 @@ void main() {
       )..reconcile();
       addTearDown(controller.dispose);
 
-      expect(await controller.start(channelId: 'voice-1'), isFalse);
+      expect(await controller.start(channelId: 'voice-1'), isTrue);
 
-      expect(controller.status, GoLiveStatus.failure);
-      expect(controller.error.toString(), contains('no display'));
+      // The encoder reads the display itself; the media service's capture only
+      // draws the room's thumbnail. Aborting the share for it left the whole
+      // stream refused with "that display is no longer attached".
+      expect(controller.status, isNot(GoLiveStatus.failure));
+      expect(controller.previewError.toString(), contains('no display'));
+    });
+
+    test('a chosen screen is the one the encoder captures', () async {
+      final media = _FakeMedia();
+      final encoder = _FakeEncoder();
+      final controller = GoLiveController(
+        repositoryProvider: () => _FakeRepository(),
+        mediaService: media,
+        encoder: encoder,
+      )..reconcile();
+      addTearDown(controller.dispose);
+
+      await controller.start(channelId: 'voice-1', sourceId: 'screen:2:0');
+
+      // The capturer names a screen by its index; the encoder addresses
+      // displays by the same index, and sharing the second monitor used to
+      // encode the first.
+      expect(encoder.settings?.displayIndex, 2);
     });
   });
+}
+
+final class _FakeEncoder implements VideoEncoderService {
+  final StreamController<EncodedVideoFrame> _frames =
+      StreamController.broadcast();
+  VideoEncoderSettings? settings;
+  bool failStart = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  int get displayCount => 2;
+
+  @override
+  List<String> get cameraNames => const [];
+
+  @override
+  Stream<EncodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Future<void> start(VideoEncoderSettings requested) async {
+    if (failStart) throw StateError('no encoder');
+    settings = requested;
+  }
+
+  @override
+  Future<void> setPaused({required bool paused}) async {}
+
+  @override
+  Future<void> requestKeyframe() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  Future<void> dispose() async => _frames.close();
 }
 
 final class _FakeMedia implements VoiceMediaService {

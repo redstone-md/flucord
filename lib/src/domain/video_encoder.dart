@@ -59,6 +59,16 @@ final class VideoEncoderSettings {
   /// Bits per second. Discord's own default for a 720p30 share.
   final int bitrate;
 
+  /// The same settings pointed at another display.
+  VideoEncoderSettings onDisplay(int index) => VideoEncoderSettings(
+    source: source,
+    displayIndex: index,
+    width: width,
+    height: height,
+    framesPerSecond: framesPerSecond,
+    bitrate: bitrate,
+  );
+
   bool get isValid =>
       width > 0 &&
       height > 0 &&

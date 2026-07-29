@@ -49,6 +49,7 @@ final class GoLiveController extends ChangeNotifier {
   GoLiveServer? _server;
   List<String> _viewerIds = const [];
   Object? _error;
+  Object? _previewError;
 
   bool get isSupported {
     _bind();
@@ -92,6 +93,9 @@ final class GoLiveController extends ChangeNotifier {
 
   Object? get error => _error;
 
+  /// Why the local preview is missing while the stream itself is running.
+  Object? get previewError => _previewError;
+
   /// Attaches to the active transport.
   void reconcile() => _bind();
 
@@ -112,15 +116,22 @@ final class GoLiveController extends ChangeNotifier {
     if (repository == null || _status != GoLiveStatus.idle) return false;
     _status = GoLiveStatus.creating;
     _error = null;
+    _previewError = null;
     _notify();
     try {
-      // Capture first: a stream Discord has announced with nothing behind it
-      // shows every viewer a black rectangle. A null source is the primary
-      // screen, which the platform picks at the moment of capture.
-      await _mediaService.startScreenShare(sourceId);
-      // The encoder is what actually produces the picture; the media service's
-      // capture is what the local preview draws.
-      await _encoder?.start(_settings);
+      // The encoder is what produces the picture Discord receives: it reads
+      // the display itself, through Desktop Duplication. The media service's
+      // capture only feeds the local preview, so it is attempted rather than
+      // required — a preview that will not open is a room without a
+      // thumbnail, not a stream nobody can watch. It was aborting the entire
+      // share with "that display is no longer attached" while the encoder
+      // would have been perfectly happy.
+      await _encoder?.start(_settingsFor(sourceId));
+      try {
+        await _mediaService.startScreenShare(sourceId);
+      } on Object catch (error) {
+        _previewError = error;
+      }
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
@@ -135,6 +146,19 @@ final class GoLiveController extends ChangeNotifier {
     } finally {
       _notify();
     }
+  }
+
+  /// The encoder settings for [sourceId].
+  ///
+  /// A screen picked from the capturer is named `screen:<index>:<n>`; the
+  /// encoder addresses displays by index, so the index is read back out of it.
+  /// Anything else — a window, or no choice at all — is the primary display,
+  /// which is what the encoder captures by default.
+  VideoEncoderSettings _settingsFor(String? sourceId) {
+    if (sourceId == null || !sourceId.startsWith('screen:')) return _settings;
+    final index = int.tryParse(sourceId.split(':').elementAtOrNull(1) ?? '');
+    if (index == null || index < 0) return _settings;
+    return _settings.onDisplay(index);
   }
 
   /// Holds frames back without tearing the stream down.

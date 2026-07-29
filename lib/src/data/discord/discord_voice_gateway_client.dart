@@ -68,6 +68,8 @@ final class DiscordVoiceGatewayClient
   DiscordVoiceWebSocket? _socket;
   StreamSubscription<Object?>? _socketSubscription;
   Timer? _heartbeatTimer;
+  Timer? _keepaliveTimer;
+  int _keepaliveCounter = 0;
   Timer? _reconnectTimer;
   int _unacknowledgedHeartbeats = 0;
   bool _canResume = false;
@@ -327,6 +329,37 @@ final class DiscordVoiceGatewayClient
   /// 4006, that with 4014, and the call spent its life reconnecting.
   static const _heartbeatTolerance = 2;
 
+  /// Keeps the UDP path open while nothing is being said.
+  ///
+  /// The voice socket's heartbeat proves the *websocket* is alive; it says
+  /// nothing about the UDP path the audio actually takes. A muted client sends
+  /// no RTP at all, so the NAT mapping that path depends on expires, Discord
+  /// stops hearing from the address it was told to send to, and the session is
+  /// closed with 4014 — which is what had a quiet call reconnecting every
+  /// minute or so. Discord's own libraries send a counter on the same socket
+  /// for exactly this.
+  void _startUdpKeepalive() {
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _sendKeepalive(),
+    );
+  }
+
+  void _sendKeepalive() {
+    if (_closing || _failed || _discovered == null) return;
+    final packet = Uint8List(8);
+    ByteData.sublistView(packet).setUint32(0, _keepaliveCounter, Endian.little);
+    _keepaliveCounter = (_keepaliveCounter + 1) & 0xffffffff;
+    try {
+      _udpTransport.send(packet);
+    } on Object catch (error) {
+      // A keepalive that cannot go out is a dead socket, and the socket's own
+      // failure path is the one that should report it.
+      _diagnose('keepalive failed', error);
+    }
+  }
+
   void _heartbeat() {
     if (_unacknowledgedHeartbeats >= _heartbeatTolerance) {
       // Not resumable: a session this far behind is one Discord has already
@@ -423,6 +456,7 @@ final class DiscordVoiceGatewayClient
       daveEnabled: description.daveProtocolVersion > 0,
     );
     _canResume = true;
+    _startUdpKeepalive();
     _emitStatus(VoiceConnectionStatus.ready);
     if (!_events.isClosed) _events.add(VoiceTransportReadyEvent(_session!));
   }
@@ -610,6 +644,8 @@ final class DiscordVoiceGatewayClient
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = null;
     _discovered = null;
     _session = null;
     _mediaTransport.reset();
@@ -624,6 +660,8 @@ final class DiscordVoiceGatewayClient
   void _fail(Object error) {
     if (_closing || _failed) return;
     _diagnose('failed', error);
+    _keepaliveTimer?.cancel();
+    _keepaliveTimer = null;
     _failed = true;
     _generation++;
     _heartbeatTimer?.cancel();
@@ -676,6 +714,7 @@ final class DiscordVoiceGatewayClient
     _failed = false;
     _generation++;
     _heartbeatTimer?.cancel();
+    _keepaliveTimer?.cancel();
     _reconnectTimer?.cancel();
     await _socketSubscription?.cancel();
     await _socket?.close();
