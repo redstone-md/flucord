@@ -35,6 +35,7 @@ do not count as desktop-user chat parity.
 | Screen share audio | Built, unverified over Discord | The machine's own output captured through WASAPI loopback and sent as Opus on the stream connection's audio SSRC rather than the voice one |
 | Camera in a voice channel | Built both ways, unverified over Discord | Media Foundation capture through the same encoder and voice socket as the share; opcode 12 declares the SSRCs and opcode 4 sets `self_video`. Incoming cameras are split off by payload type, attributed by announced SSRC, decoded per sender and drawn in the participant tile |
 | User settings | Partial | Both `settings-proto` types read, written and live-updated, every write guarded by `required_data_version`; groups Flucord cannot apply are shown unavailable |
+| Custom themes | Ready | Installed by dropping a file in a folder; Flucord JSON, or a BetterDiscord .theme.css of which the colour variables are read |
 | Keybinds | Ready | Eleven actions bound and carried out from the settings page, stored locally as the desktop client does, and fired system-wide through a low-level keyboard hook that reports without swallowing |
 | Screenshots | Ready | Saved as PNG from the same capture path the screen share uses, under a sortable name, with the location reported |
 | Clips | Ready | The last thirty seconds of whatever the encoder is producing, muxed to MP4 without re-encoding, saved from a keybind |

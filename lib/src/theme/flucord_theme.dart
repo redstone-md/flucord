@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../domain/flucord_palette.dart';
+
 abstract final class FlucordColors {
   static const brand = Color(0xff5865f2);
   static const brandPressed = Color(0xff4752c4);
@@ -25,30 +27,29 @@ abstract final class FlucordColors {
 }
 
 abstract final class FlucordTheme {
-  static ThemeData get dark => _build(
-    brightness: Brightness.dark,
-    rail: FlucordColors.darkRail,
-    canvas: FlucordColors.darkCanvas,
-    surface: FlucordColors.darkSurface,
-    raised: FlucordColors.darkRaised,
-    inset: FlucordColors.darkInset,
-    control: FlucordColors.darkControl,
-    text: const Color(0xfff2f3f5),
-    muted: const Color(0xff949ba4),
-    border: const Color(0xff3f4147),
-  );
+  static ThemeData get dark => fromPalette(FlucordPalette.dark);
 
-  static ThemeData get light => _build(
-    brightness: Brightness.light,
-    rail: FlucordColors.lightRail,
-    canvas: FlucordColors.lightCanvas,
-    surface: FlucordColors.lightSurface,
-    raised: FlucordColors.lightRaised,
-    inset: FlucordColors.lightInset,
-    control: FlucordColors.lightControl,
-    text: const Color(0xff313338),
-    muted: const Color(0xff5c5e66),
-    border: const Color(0xffd7d9dc),
+  static ThemeData get light => fromPalette(FlucordPalette.light);
+
+  /// Builds the whole theme from one palette.
+  ///
+  /// Every colour comes from here rather than from a constant, which is what
+  /// lets an installed theme change them: a widget reaching for a hard-coded
+  /// shade would keep Discord's own colour under somebody else's theme.
+  static ThemeData fromPalette(FlucordPalette palette) => _build(
+    brightness: palette.isDark ? Brightness.dark : Brightness.light,
+    rail: Color(palette.rail),
+    canvas: Color(palette.canvas),
+    surface: Color(palette.surface),
+    raised: Color(palette.raised),
+    inset: Color(palette.inset),
+    control: Color(palette.control),
+    text: Color(palette.text),
+    muted: Color(palette.muted),
+    border: Color(palette.border),
+    brand: Color(palette.brand),
+    success: Color(palette.success),
+    danger: Color(palette.danger),
   );
 
   static ThemeData _build({
@@ -62,14 +63,17 @@ abstract final class FlucordTheme {
     required Color text,
     required Color muted,
     required Color border,
+    required Color brand,
+    required Color success,
+    required Color danger,
   }) {
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: FlucordColors.brand,
+      primary: brand,
       onPrimary: Colors.white,
-      secondary: FlucordColors.success,
+      secondary: success,
       onSecondary: const Color(0xff051b10),
-      error: FlucordColors.danger,
+      error: danger,
       onError: Colors.white,
       surface: surface,
       onSurface: text,
@@ -86,7 +90,7 @@ abstract final class FlucordTheme {
       canvasColor: canvas,
       cardColor: raised,
       hoverColor: text.withValues(alpha: 0.05),
-      focusColor: FlucordColors.brand.withValues(alpha: 0.24),
+      focusColor: brand.withValues(alpha: 0.24),
       textTheme: base.textTheme.apply(bodyColor: text, displayColor: text),
       iconTheme: IconThemeData(color: muted, size: 19),
       iconButtonTheme: IconButtonThemeData(
@@ -154,7 +158,7 @@ abstract final class FlucordTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: const BorderSide(color: FlucordColors.brand),
+          borderSide: BorderSide(color: brand),
         ),
       ),
       extensions: [

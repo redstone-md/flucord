@@ -31,9 +31,11 @@ import 'data/discord/discord_rtp_packet.dart';
 import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/streamer_mode_controller.dart';
+import 'application/theme_controller.dart';
 import 'application/voice_overlay_controller.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/file_keybind_repository.dart';
+import 'data/theme/file_theme_store.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
@@ -103,6 +105,7 @@ import 'presentation/widgets/age_verification_scope.dart';
 import 'presentation/widgets/multi_factor_auth_scope.dart';
 import 'presentation/widgets/keybind_scope.dart';
 import 'presentation/widgets/streamer_mode_scope.dart';
+import 'presentation/widgets/theme_scope.dart';
 import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
@@ -130,6 +133,7 @@ class FlucordApp extends StatefulWidget {
     this.videoEncoderService,
     this.videoDecoderService,
     this.keybindRepository,
+    this.themeStore,
     this.streamerModeRepository,
     this.windowCaptureShield,
     this.globalKeyboardHook,
@@ -205,6 +209,9 @@ class FlucordApp extends StatefulWidget {
   /// the real support directory.
   final KeybindRepository? keybindRepository;
 
+  /// Where installed themes are read from, injected for the same reason.
+  final ThemeStore? themeStore;
+
   /// Where streamer mode's switches are kept, injected for the same reason.
   final StreamerModeRepository? streamerModeRepository;
 
@@ -278,6 +285,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final SelfVideoController _selfVideoController;
   late final RemoteCameraController _remoteCameraController;
   late final KeybindController _keybindController;
+  late final ThemeController _themeController;
   late final StreamerModeController _streamerModeController;
   late final ScreenshotService _screenshotService;
   late final ClipRecorder _clipRecorder;
@@ -488,6 +496,10 @@ class _FlucordAppState extends State<FlucordApp> {
       hook: widget.globalKeyboardHook ?? _defaultKeyboardHook(),
     );
     unawaited(_keybindController.load());
+    _themeController = ThemeController(
+      widget.themeStore ?? FileThemeStore(),
+    );
+    unawaited(_themeController.load());
     _streamerModeController = StreamerModeController(
       widget.streamerModeRepository ?? FileStreamerModeRepository(),
       shield: widget.windowCaptureShield ?? _defaultCaptureShield(),
@@ -625,6 +637,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _streamerModeController.removeListener(_refreshOverlay);
     _voiceOverlayController.dispose();
     _keybindController.dispose();
+    _themeController.dispose();
     _streamerModeController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
@@ -642,6 +655,11 @@ class _FlucordAppState extends State<FlucordApp> {
   /// Bound on ready rather than on join: the SSRC map the packets are matched
   /// against is filled from the voice socket, and a listener attached before
   /// it would be reading a socket that has not finished opening.
+  /// The theme to draw with, built from whichever palette is in force.
+  ThemeData _installedTheme({required bool dark}) => FlucordTheme.fromPalette(
+    _themeController.paletteFor(systemIsDark: dark),
+  );
+
   void _syncRemoteCameras() {
     final connected =
         _voiceController.connectionStatus == VoiceConnectionStatus.ready;
@@ -793,6 +811,7 @@ class _FlucordAppState extends State<FlucordApp> {
         _workspaceController,
         _userSettingsController,
         _selfPresenceController,
+        _themeController,
       ]),
       builder: (context, _) => MaterialApp(
         // Held so a keybind can say where a screenshot went: the action runs
@@ -801,8 +820,11 @@ class _FlucordAppState extends State<FlucordApp> {
         scaffoldMessengerKey: _messengerKey,
         title: 'Flucord',
         debugShowCheckedModeBanner: false,
-        theme: FlucordTheme.light,
-        darkTheme: FlucordTheme.dark,
+        // An installed theme carries its own light-or-dark answer, so it is
+        // given to both slots: somebody who chose a dark theme did not ask for
+        // it to turn pale when the account's setting says light.
+        theme: _installedTheme(dark: false),
+        darkTheme: _installedTheme(dark: true),
         // The account's theme wins whenever it names one Flucord can draw; the
         // rail's toggle stays usable for sessions that have no account behind
         // them, and for a stored theme Flucord does not ship.
@@ -822,7 +844,9 @@ class _FlucordAppState extends State<FlucordApp> {
                     controller: _multiFactorAuthController,
                     child: AgeVerificationScope(
                       controller: _ageVerificationController,
-                      child: StreamerModeScope(
+                      child: ThemeScope(
+                        controller: _themeController,
+                        child: StreamerModeScope(
                         controller: _streamerModeController,
                         child: KeybindScope(
                         controller: _keybindController,
@@ -907,6 +931,7 @@ class _FlucordAppState extends State<FlucordApp> {
             ),
           ),
         ),
+      ),
       ),
       ),
       ),

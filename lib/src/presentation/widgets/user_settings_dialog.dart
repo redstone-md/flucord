@@ -8,6 +8,7 @@ import '../../application/family_centre_controller.dart';
 import '../../application/age_verification_controller.dart';
 import '../../application/keybind_controller.dart';
 import '../../application/streamer_mode_controller.dart';
+import '../../application/theme_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -26,6 +27,7 @@ import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 import 'keybind_section.dart';
 import 'streamer_mode_section.dart';
+import 'theme_section.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -41,6 +43,7 @@ enum UserSettingsCategory {
   age('Age Verification', Icons.badge_outlined),
   keybinds('Keybinds', Icons.keyboard_outlined),
   streamer('Streamer Mode', Icons.videocam_outlined),
+  themes('Themes', Icons.brush_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -62,6 +65,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.ageController,
     this.keybindController,
     this.streamerModeController,
+    this.themeController,
     super.key,
   });
 
@@ -98,6 +102,10 @@ class UserSettingsDialog extends StatefulWidget {
   /// Streamer mode, local for the same reason.
   final StreamerModeController? streamerModeController;
 
+  /// The installed themes, which belong to the machine rather than the
+  /// account and so are there whatever the session is.
+  final ThemeController? themeController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -109,6 +117,7 @@ class UserSettingsDialog extends StatefulWidget {
     AgeVerificationController? ageController,
     KeybindController? keybindController,
     StreamerModeController? streamerModeController,
+    ThemeController? themeController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -122,6 +131,7 @@ class UserSettingsDialog extends StatefulWidget {
       ageController: ageController,
       keybindController: keybindController,
       streamerModeController: streamerModeController,
+      themeController: themeController,
     ),
   );
 
@@ -166,6 +176,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               ageController: widget.ageController,
               keybindController: widget.keybindController,
               streamerModeController: widget.streamerModeController,
+              themeController: widget.themeController,
               category: _category,
             );
             return wide
@@ -323,6 +334,7 @@ class _Body extends StatelessWidget {
     required this.ageController,
     required this.keybindController,
     required this.streamerModeController,
+    required this.themeController,
     required this.category,
   });
 
@@ -335,6 +347,7 @@ class _Body extends StatelessWidget {
   final AgeVerificationController? ageController;
   final KeybindController? keybindController;
   final StreamerModeController? streamerModeController;
+  final ThemeController? themeController;
   final UserSettingsCategory category;
 
   @override
@@ -437,6 +450,17 @@ class _Body extends StatelessWidget {
         );
       }
       return StreamerModeSection(controller: streamer);
+    }
+    if (category == UserSettingsCategory.themes) {
+      final themes = themeController;
+      if (themes == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-themes-unavailable'),
+          icon: Icons.brush_outlined,
+          message: 'Themes are unavailable in this build.',
+        );
+      }
+      return ThemeSection(controller: themes);
     }
     // The safety hub is its own route too: an account with no settings store
     // still has a record, and gating this on settings would hide it.
@@ -550,7 +574,8 @@ class _Body extends StatelessWidget {
     // Handled before the settings store is consulted.
     UserSettingsCategory.profile ||
     UserSettingsCategory.keybinds ||
-    UserSettingsCategory.streamer => const SizedBox.shrink(),
+    UserSettingsCategory.streamer ||
+    UserSettingsCategory.themes => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
       settings: settings,
       onEdit: _edit,

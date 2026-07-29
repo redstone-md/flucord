@@ -140,8 +140,7 @@ void main() {
     final repository = _Repository();
     await _pumpDialog(tester, repository);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nav-status')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'status');
     expect(find.text('dnd'), findsOneWidget);
 
     await tester.enterText(
@@ -338,7 +337,17 @@ Future<void> _tapSetting(WidgetTester tester, String key) async {
 }
 
 Future<void> _openSection(WidgetTester tester, String name) async {
-  await tester.tap(find.byKey(ValueKey('settings-nav-$name')));
+  // The rail scrolls: with every category installed it is taller than the
+  // window, and a lazy list has not built what is off-screen.
+  final tile = find.byKey(ValueKey('settings-nav-$name'));
+  if (tile.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      tile,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+  }
+  await tester.tap(tile);
   await tester.pumpAndSettle();
 }
 
