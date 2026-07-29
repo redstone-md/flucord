@@ -927,6 +927,78 @@ FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data) {
   free(data);
 }
 
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_capture_screen(int32_t display_index,
+                             FlucordVideoScreenshotCallback callback,
+                             void* user_data) {
+  if (callback == nullptr || display_index < 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
+  ComPtr<ID3D11Device> device;
+  ComPtr<ID3D11DeviceContext> context;
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                               levels, ARRAYSIZE(levels), D3D11_SDK_VERSION,
+                               &device, nullptr, &context))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  ComPtr<IDXGIDevice> dxgi_device;
+  ComPtr<IDXGIAdapter> adapter;
+  ComPtr<IDXGIOutput> output;
+  ComPtr<IDXGIOutput1> output1;
+  ComPtr<IDXGIOutputDuplication> duplication;
+  if (FAILED(device.As(&dxgi_device)) ||
+      FAILED(dxgi_device->GetAdapter(&adapter)) ||
+      FAILED(adapter->EnumOutputs(static_cast<UINT>(display_index), &output)) ||
+      FAILED(output.As(&output1)) ||
+      FAILED(output1->DuplicateOutput(device.Get(), &duplication))) {
+    return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
+  }
+
+  // The first frame after DuplicateOutput is often the accumulated difference
+  // rather than the screen, so a few attempts are made before giving up: a
+  // desktop nobody is touching produces no new frame at all.
+  for (int attempt = 0; attempt < 30; ++attempt) {
+    DXGI_OUTDUPL_FRAME_INFO info{};
+    ComPtr<IDXGIResource> resource;
+    const HRESULT hr = duplication->AcquireNextFrame(200, &info, &resource);
+    if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;
+    if (FAILED(hr)) break;
+
+    ComPtr<ID3D11Texture2D> texture;
+    if (SUCCEEDED(resource.As(&texture))) {
+      D3D11_TEXTURE2D_DESC desc{};
+      texture->GetDesc(&desc);
+      desc.Usage = D3D11_USAGE_STAGING;
+      desc.BindFlags = 0;
+      desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+      desc.MiscFlags = 0;
+
+      ComPtr<ID3D11Texture2D> staging;
+      if (SUCCEEDED(device->CreateTexture2D(&desc, nullptr, &staging))) {
+        context->CopyResource(staging.Get(), texture.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (SUCCEEDED(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0,
+                                   &mapped))) {
+          callback(user_data, static_cast<const uint8_t*>(mapped.pData),
+                   static_cast<int32_t>(desc.Width),
+                   static_cast<int32_t>(desc.Height),
+                   static_cast<int32_t>(mapped.RowPitch));
+          context->Unmap(staging.Get(), 0);
+          duplication->ReleaseFrame();
+          return FLUCORD_VIDEO_OK;
+        }
+      }
+    }
+    duplication->ReleaseFrame();
+  }
+  return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
+}
+
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void) {
   ComPtr<IDXGIFactory1> factory;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0;

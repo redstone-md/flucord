@@ -152,6 +152,24 @@ FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
 FLUCORD_VIDEO_EXPORT int32_t
 flucord_video_decode_probe(const uint8_t* annex_b, int32_t length);
 
+// One BGRA frame from a display, for a screenshot.
+//
+// Its own entry point rather than a mode of the encoder: a screenshot wants a
+// picture, not an H.264 stream, and running a frame through the encoder and
+// back out of a decoder to get one would be a round trip for nothing.
+//
+// The buffer is valid for the duration of the callback only.
+typedef void (*FlucordVideoScreenshotCallback)(void* user_data,
+                                               const uint8_t* bgra,
+                                               int32_t width,
+                                               int32_t height,
+                                               int32_t stride);
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_capture_screen(int32_t display_index,
+                             FlucordVideoScreenshotCallback callback,
+                             void* user_data);
+
 // How many displays are available, so a picker has something to list.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void);
 

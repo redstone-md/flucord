@@ -80,6 +80,7 @@ import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
 import 'data/video/native_video_decoder_service.dart';
+import 'data/video/screenshot_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
@@ -129,6 +130,7 @@ class FlucordApp extends StatefulWidget {
     this.streamerModeRepository,
     this.windowCaptureShield,
     this.globalKeyboardHook,
+    this.screenshotService,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -208,6 +210,10 @@ class FlucordApp extends StatefulWidget {
   /// Keys from outside this window. Injected so a test does not install a
   /// system-wide hook on the machine running it.
   final GlobalKeyboardHook? globalKeyboardHook;
+
+  /// Saves a picture of the screen. Injected so a test does not read the
+  /// display of whoever is running it.
+  final ScreenshotService? screenshotService;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -261,6 +267,9 @@ class _FlucordAppState extends State<FlucordApp> {
   late final RemoteCameraController _remoteCameraController;
   late final KeybindController _keybindController;
   late final StreamerModeController _streamerModeController;
+  late final ScreenshotService _screenshotService;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   late final DirectCallController _directCallController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -470,6 +479,11 @@ class _FlucordAppState extends State<FlucordApp> {
       shield: widget.windowCaptureShield ?? _defaultCaptureShield(),
     );
     unawaited(_streamerModeController.load());
+    _screenshotService =
+        widget.screenshotService ??
+        (Platform.isWindows
+            ? NativeScreenshotService()
+            : const UnavailableScreenshotService());
     // Going live is the only streaming this client knows about, so it is
     // what the automatic switch follows.
     _goLiveController.addListener(_syncStreamerMode);
@@ -597,6 +611,29 @@ class _FlucordAppState extends State<FlucordApp> {
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
 
+  /// Writes a screenshot and says where it went.
+  ///
+  /// Reported through the same messenger the rest of the client speaks with:
+  /// a screenshot saved with no acknowledgement is one nobody can find, and
+  /// one that failed silently is worse.
+  Future<void> _saveScreenshot() async {
+    final result = await _screenshotService.save();
+    final messenger = _messengerKey.currentState;
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        key: const ValueKey('screenshot-result'),
+        content: Text(
+          result.isSaved
+              ? 'Screenshot saved to ${result.path}'
+              : result.failure == ScreenshotFailure.write
+              ? 'The screenshot could not be written to disk.'
+              : 'This build cannot capture the screen.',
+        ),
+      ),
+    );
+  }
+
   /// The hook this platform has, or one that plainly says it has none.
   static GlobalKeyboardHook _defaultKeyboardHook() => Platform.isWindows
       ? WindowsGlobalKeyboardHook()
@@ -634,6 +671,8 @@ class _FlucordAppState extends State<FlucordApp> {
         if (pressed) _workspaceController.toggleVoiceChannelChat();
       case KeybindAction.toggleStreamerMode:
         if (pressed) unawaited(_streamerModeController.toggle());
+      case KeybindAction.saveScreenshot:
+        if (pressed) unawaited(_saveScreenshot());
     }
   }
 
@@ -676,6 +715,10 @@ class _FlucordAppState extends State<FlucordApp> {
         _selfPresenceController,
       ]),
       builder: (context, _) => MaterialApp(
+        // Held so a keybind can say where a screenshot went: the action runs
+        // from the keyboard rather than from a widget, and has no context of
+        // its own to find a messenger through.
+        scaffoldMessengerKey: _messengerKey,
         title: 'Flucord',
         debugShowCheckedModeBanner: false,
         theme: FlucordTheme.light,

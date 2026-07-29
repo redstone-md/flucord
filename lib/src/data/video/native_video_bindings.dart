@@ -122,7 +122,21 @@ final class NativeVideoBindings {
           .lookupFunction<
             Int32 Function(Int32, Pointer<Utf8>, Int32),
             int Function(int, Pointer<Utf8>, int)
-          >('flucord_video_camera_name');
+          >('flucord_video_camera_name'),
+      captureScreen = _lookUpCaptureScreen(library);
+
+  /// Absent in a module built before screenshots existed, which is a build
+  /// that must still run rather than fail to load.
+  static ScreenshotCaptureDart? _lookUpCaptureScreen(DynamicLibrary library) {
+    try {
+      return library
+          .lookupFunction<ScreenshotCaptureNative, ScreenshotCaptureDart>(
+            'flucord_video_capture_screen',
+          );
+    } on Object {
+      return null;
+    }
+  }
 
   final VideoOpenDart open;
   final int Function(Pointer<Void>) requestKeyframe;
@@ -147,7 +161,27 @@ final class NativeVideoBindings {
   /// Writes a camera's UTF-8 name into the buffer and answers how many bytes
   /// it needed; a capacity of zero asks the length without writing.
   final int Function(int, Pointer<Utf8>, int) cameraName;
+
+  /// One BGRA frame from a display, or null in a module without it.
+  final ScreenshotCaptureDart? captureScreen;
 }
+
+typedef NativeScreenshotCallback =
+    Void Function(Pointer<Void>, Pointer<Uint8>, Int32, Int32, Int32);
+
+typedef ScreenshotCaptureNative =
+    Int32 Function(
+      Int32,
+      Pointer<NativeFunction<NativeScreenshotCallback>>,
+      Pointer<Void>,
+    );
+
+typedef ScreenshotCaptureDart =
+    int Function(
+      int,
+      Pointer<NativeFunction<NativeScreenshotCallback>>,
+      Pointer<Void>,
+    );
 
 /// `FlucordVideoStatus`.
 abstract final class NativeVideoStatus {

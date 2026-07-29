@@ -19,7 +19,8 @@ enum KeybindAction {
     'TOGGLE_VOICE_CHANNEL_CHAT',
     'Toggle voice channel chat',
   ),
-  toggleStreamerMode('TOGGLE_STREAMER_MODE', 'Toggle streamer mode');
+  toggleStreamerMode('TOGGLE_STREAMER_MODE', 'Toggle streamer mode'),
+  saveScreenshot('SAVE_SCREENSHOT', 'Save a screenshot');
 
   const KeybindAction(this.code, this.label, {this.holdToUse = false});
 
