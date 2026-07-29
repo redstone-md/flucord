@@ -256,7 +256,13 @@ class _ScheduledEventRow extends StatelessWidget {
                       if (event.recurrence case final rule?) ...[
                         const SizedBox(height: 3),
                         Text(
-                          rule.summary,
+                          event.exceptions.isEmpty
+                              ? rule.summary
+                              // An occurrence that differs is worth saying so
+                              // beside the rule, because the rule alone would
+                              // be a lie about that one week.
+                              : '${rule.summary} · '
+                                    '${event.exceptions.length} changed',
                           key: ValueKey('guild-event-repeats-${event.id}'),
                           style: TextStyle(
                             fontSize: 11,

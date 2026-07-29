@@ -7,6 +7,7 @@ import 'package:flucord/src/data/discord/discord_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -31,6 +32,202 @@ void main() {
     expect(event.entityType.name, 'external');
     expect(event.status.name, 'scheduled');
     expect(event.interestedCount, 12);
+  });
+
+  test('folds changes to one occurrence of a repeating event in', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final gateway = _FakeGateway();
+    final transport = _QueueTransport([
+      _response('{"id":"bot-1","username":"Flucord Bot"}'),
+      _response('[{"id":"guild-1","name":"Forge","icon":null}]'),
+      _response('[{"id":"channel-1","name":"stage","type":2}]'),
+      _response('{"threads":[]}'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('{"url":"wss://gateway.discord.gg"}'),
+      _response('[${_eventJson(status: 1, count: 4)}]'),
+    ]);
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      gateway,
+      cache,
+    );
+    addTearDown(repository.close);
+    await repository.loadWorkspace();
+    await repository.loadScheduledEvents('guild-1');
+
+    Future<GuildScheduledEvent> nextEvent() => repository.events
+        .firstWhere((event) => event is GuildScheduledEventUpsertedEvent)
+        .then((event) => (event as GuildScheduledEventUpsertedEvent).event);
+
+    final created = nextEvent();
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE',
+        data: {
+          'guild_id': 'guild-1',
+          'guild_scheduled_event_exception': {
+            'event_exception_id': 'exception-1',
+            'event_id': 'event-1',
+            'guild_id': 'guild-1',
+            'scheduled_start_time': '2026-08-08T19:00:00+00:00',
+          },
+        },
+      ),
+    );
+    expect((await created).exceptions.single.id, 'exception-1');
+
+    final updated = nextEvent();
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE',
+        data: {
+          'guild_id': 'guild-1',
+          'guild_scheduled_event_exception': {
+            'event_exception_id': 'exception-1',
+            'event_id': 'event-1',
+            'is_canceled': true,
+          },
+        },
+      ),
+    );
+    // Revised, not duplicated: it is the same occurrence.
+    final revised = await updated;
+    expect(revised.exceptions.single.isCanceled, isTrue);
+    expect(revised.exceptions, hasLength(1));
+
+    final deleted = nextEvent();
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_DELETE',
+        data: {
+          'guild_id': 'guild-1',
+          'guild_scheduled_event_exception': {
+            'event_exception_id': 'exception-1',
+            'event_id': 'event-1',
+          },
+        },
+      ),
+    );
+    expect((await deleted).exceptions, isEmpty);
+  });
+
+  test('the plural delete puts a whole series back to its rule', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final gateway = _FakeGateway();
+    final transport = _QueueTransport([
+      _response('{"id":"bot-1","username":"Flucord Bot"}'),
+      _response('[{"id":"guild-1","name":"Forge","icon":null}]'),
+      _response('[{"id":"channel-1","name":"stage","type":2}]'),
+      _response('{"threads":[]}'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('{"url":"wss://gateway.discord.gg"}'),
+      _response('[${_eventJson(status: 1, count: 4)}]'),
+    ]);
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      gateway,
+      cache,
+    );
+    addTearDown(repository.close);
+    await repository.loadWorkspace();
+    await repository.loadScheduledEvents('guild-1');
+
+    Future<GuildScheduledEvent> nextEvent() => repository.events
+        .firstWhere((event) => event is GuildScheduledEventUpsertedEvent)
+        .then((event) => (event as GuildScheduledEventUpsertedEvent).event);
+
+    final created = nextEvent();
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE',
+        data: {
+          'guild_id': 'guild-1',
+          'guild_scheduled_event_exception': {
+            'event_exception_id': 'exception-1',
+            'event_id': 'event-1',
+          },
+        },
+      ),
+    );
+    await created;
+
+    final cleared = nextEvent();
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTIONS_DELETE',
+        data: {'guild_id': 'guild-1', 'guild_scheduled_event_id': 'event-1'},
+      ),
+    );
+    expect((await cleared).exceptions, isEmpty);
+  });
+
+  test('an exception for an event nobody has read is left alone', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    final gateway = _FakeGateway();
+    final transport = _QueueTransport([
+      _response('{"id":"bot-1","username":"Flucord Bot"}'),
+      _response('[{"id":"guild-1","name":"Forge","icon":null}]'),
+      _response('[{"id":"channel-1","name":"stage","type":2}]'),
+      _response('{"threads":[]}'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('[]'),
+      _response('{"url":"wss://gateway.discord.gg"}'),
+    ]);
+    final repository = DiscordChatRepository(
+      DiscordApiClient(botToken: 'token', transport: transport),
+      gateway,
+      cache,
+    );
+    addTearDown(repository.close);
+    await repository.loadWorkspace();
+
+    var emitted = 0;
+    final subscription = repository.events.listen((event) {
+      if (event is GuildScheduledEventUpsertedEvent) emitted++;
+    });
+    addTearDown(subscription.cancel);
+
+    // Nothing to fold it into: inventing a row would show an event with no
+    // name to somebody who never asked for it.
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE',
+        data: {
+          'guild_id': 'guild-1',
+          'guild_scheduled_event_exception': {
+            'event_exception_id': 'exception-1',
+            'event_id': 'event-unknown',
+          },
+        },
+      ),
+    );
+    // A dispatch naming nothing at all is dropped for the same reason.
+    gateway.emit(
+      const DiscordGatewayDispatch(
+        name: 'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE',
+        data: {'guild_id': 'guild-1'},
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(emitted, 0);
   });
 
   test('persists scheduled event and subscriber Gateway updates', () async {

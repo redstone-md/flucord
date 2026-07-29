@@ -114,6 +114,45 @@ mixin _DiscordChatRepositoryScheduledEvents
     }
   }
 
+  /// Folds a change to one occurrence of a repeating event in.
+  ///
+  /// Discord sends these separately from the event, and the plural delete puts
+  /// a whole series back to its rule at once. The event is left alone when it
+  /// is not in the cache: an exception to an event nobody has read yet is
+  /// nothing to show, and inventing a row for it would show an event with no
+  /// name.
+  Future<void> _handleGuildScheduledEventException(
+    DiscordGatewayDispatch event,
+  ) async {
+    final data = event.data;
+    final exception = GuildScheduledEventException.fromJson(
+      data['guild_scheduled_event_exception'] ?? data,
+    );
+    final spaceId = (data['guild_id'] ?? exception?.spaceId) as String? ?? '';
+    final eventId =
+        (data['guild_scheduled_event_id'] ??
+                data['event_id'] ??
+                exception?.eventId)
+            as String? ??
+        '';
+    if (spaceId.isEmpty || eventId.isEmpty) return;
+    final cached = await _cache.readGuildScheduledEvents(spaceId);
+    final matches = cached.where((item) => item.id == eventId);
+    if (matches.isEmpty) return;
+    final current = matches.first;
+    final next = switch (event.name) {
+      'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE' ||
+      'GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE' =>
+        exception == null ? null : current.withException(exception),
+      'GUILD_SCHEDULED_EVENT_EXCEPTION_DELETE' =>
+        exception == null ? null : current.withoutException(exception.id),
+      // The plural form clears every exception on the event at once.
+      _ => current.withoutExceptions(),
+    };
+    if (next == null) return;
+    await _writeAndEmitScheduledEvent(next);
+  }
+
   Future<void> _writeAndEmitScheduledEvent(GuildScheduledEvent event) async {
     await _cache.writeGuildScheduledEvent(event);
     if (!_events.isClosed) {

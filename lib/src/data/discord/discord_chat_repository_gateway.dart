@@ -58,6 +58,11 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
               'GUILD_SCHEDULED_EVENT_USER_ADD' ||
               'GUILD_SCHEDULED_EVENT_USER_REMOVE':
             unawaited(_handleGuildScheduledEvent(event));
+          case 'GUILD_SCHEDULED_EVENT_EXCEPTION_CREATE' ||
+              'GUILD_SCHEDULED_EVENT_EXCEPTION_UPDATE' ||
+              'GUILD_SCHEDULED_EVENT_EXCEPTION_DELETE' ||
+              'GUILD_SCHEDULED_EVENT_EXCEPTIONS_DELETE':
+            unawaited(_handleGuildScheduledEventException(event));
         }
     }
   }

@@ -40,6 +40,7 @@ final class GuildScheduledEvent {
     this.interestedCount = 0,
     this.coverImageHash,
     this.recurrence,
+    this.exceptions = const [],
   });
 
   final String id;
@@ -62,6 +63,49 @@ final class GuildScheduledEvent {
   final EventRecurrenceRule? recurrence;
 
   bool get repeats => recurrence != null;
+
+  /// Occurrences that differ from the rule: moved, or called off.
+  final List<GuildScheduledEventException> exceptions;
+
+  /// The same event with one exception folded in, replacing any it already
+  /// held for that occurrence.
+  GuildScheduledEvent withException(GuildScheduledEventException exception) =>
+      _copyExceptions([
+        for (final held in exceptions)
+          if (held.id != exception.id) held,
+        exception,
+      ]);
+
+  /// The same event without the named exception — the occurrence goes back to
+  /// whatever the rule says.
+  GuildScheduledEvent withoutException(String exceptionId) => _copyExceptions([
+    for (final held in exceptions)
+      if (held.id != exceptionId) held,
+  ]);
+
+  /// The same event with no exceptions at all, which is what Discord sends
+  /// when a whole series is put back to its rule.
+  GuildScheduledEvent withoutExceptions() =>
+      exceptions.isEmpty ? this : _copyExceptions(const []);
+
+  GuildScheduledEvent _copyExceptions(
+    List<GuildScheduledEventException> next,
+  ) => GuildScheduledEvent(
+    id: id,
+    spaceId: spaceId,
+    name: name,
+    channelId: channelId,
+    description: description,
+    location: location,
+    scheduledStartTime: scheduledStartTime,
+    scheduledEndTime: scheduledEndTime,
+    entityType: entityType,
+    status: status,
+    interestedCount: interestedCount,
+    coverImageHash: coverImageHash,
+    recurrence: recurrence,
+    exceptions: next,
+  );
 
   bool get isActive => status == GuildScheduledEventStatus.active;
   bool get isTerminal =>
@@ -90,5 +134,6 @@ final class GuildScheduledEvent {
     interestedCount: interestedCount ?? this.interestedCount,
     coverImageHash: coverImageHash,
     recurrence: recurrence,
+    exceptions: exceptions,
   );
 }

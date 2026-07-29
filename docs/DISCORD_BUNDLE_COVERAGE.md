@@ -580,15 +580,21 @@ are excluded from the denominator and are never reported as implemented.
   not quietly rewrite the rest of when it happens. The three frequencies
   Discord never offers a guild event are absent rather than listed and
   refused, because a choice nobody can make is not a choice.
+  All four exception dispatches are handled: an occurrence moved or called off
+  is folded into the event it belongs to, a revised one replaces the one it is
+  for rather than joining it, and the plural delete puts a whole series back
+  to its rule. An exception for an event this session has never read is
+  dropped rather than turned into a row, since inventing one would show an
+  event with no name to somebody who never asked for it.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
   `discord_scheduled_event_mapper_test.dart`,
   `scheduled_event_rsvp_test.dart`,
   `scheduled_event_rsvp_repository_test.dart`,
   `guild_event_editing_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: the four recurrence-exception dispatches, which move a
-  single occurrence of a repeating event. Nothing else in this domain is
-  outstanding for the desktop-user session.
+- **Blocked by**: nothing outstanding for the desktop-user session. Live
+  evidence is still missing: the routes and dispatches are exercised against
+  fixtures, not against a real guild.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 
