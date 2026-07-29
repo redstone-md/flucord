@@ -6,6 +6,83 @@ import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'muting a thread joins it first, because that is where it is kept',
+    () async {
+      final transport = _FakeTransport();
+      final service = DiscordThreadMembershipService(transport)
+        ..setCurrentUserId('me');
+      addTearDown(service.close);
+
+      expect(
+        await service.setThreadNotifications(threadId: 'thread-1', muted: true),
+        isTrue,
+      );
+
+      // An account that is not a member has nowhere for the setting to live, so
+      // Discord's own client joins for the same reason.
+      expect(transport.joined, ['thread-1']);
+      expect(transport.settingsPatches.single, {
+        'threadId': 'thread-1',
+        'muted': true,
+      });
+      // Held locally as well: Discord echoes no dispatch back for this, so the
+      // switch would otherwise spring back on the next rebuild.
+      expect(service.membershipFor('thread-1')?.isSelfMuted, isTrue);
+    },
+  );
+
+  test('a thread already joined is not joined again', () async {
+    final transport = _FakeTransport(
+      members: const [
+        {
+          'id': 'thread-1',
+          'user_id': 'me',
+          'join_timestamp': '2026-07-28T09:00:00+00:00',
+        },
+      ],
+    );
+    final service = DiscordThreadMembershipService(transport)
+      ..setCurrentUserId('me');
+    addTearDown(service.close);
+    await service.loadMembers('thread-1');
+
+    await service.setThreadNotifications(threadId: 'thread-1', muted: true);
+
+    expect(transport.joined, isEmpty);
+  });
+
+  test('a refused change leaves the held setting alone', () async {
+    final transport = _FakeTransport()..acceptSettings = false;
+    final service = DiscordThreadMembershipService(transport)
+      ..setCurrentUserId('me');
+    addTearDown(service.close);
+
+    expect(
+      await service.setThreadNotifications(threadId: 'thread-1', muted: true),
+      isFalse,
+    );
+
+    expect(service.membershipFor('thread-1')?.isSelfMuted, isNot(isTrue));
+  });
+
+  test('the mute this account set is read back from the member list', () async {
+    final transport = _FakeTransport(
+      members: const [
+        {'id': 'thread-1', 'user_id': 'me', 'muted': true},
+        {'id': 'thread-1', 'user_id': 'other', 'muted': false},
+      ],
+    );
+    final service = DiscordThreadMembershipService(transport)
+      ..setCurrentUserId('me');
+    addTearDown(service.close);
+
+    final membership = await service.loadMembers('thread-1');
+
+    // Somebody else's mute is not this account's.
+    expect(membership.isSelfMuted, isTrue);
+  });
+
   group('model', () {
     test('shows Discord\'s count when it gave one', () {
       final capped = ThreadMembership(
@@ -615,5 +692,19 @@ final class _FakeTransport implements DiscordThreadMembershipTransport {
     await writeGate?.future;
     if (failWrites) throw StateError('rejected');
     left.add(threadId);
+  }
+
+  /// What was asked of the settings route, so a test can check it asked.
+  final List<Map<String, Object?>> settingsPatches = [];
+  bool acceptSettings = true;
+
+  @override
+  Future<bool> patchThreadMemberSettings({
+    required String threadId,
+    required Map<String, Object?> body,
+  }) async {
+    if (!acceptSettings) return false;
+    settingsPatches.add({'threadId': threadId, ...body});
+    return true;
   }
 }

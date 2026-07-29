@@ -377,8 +377,16 @@ are excluded from the denominator and are never reported as implemented.
   The lazy roster arrives as `THREAD_MEMBER_LIST_UPDATE`, which names its
   thread on `thread_id` rather than `id` and replaces the held set because it
   is a whole snapshot.
-- **Blocked by**: per-thread notification settings under
-  `thread-members/@me/settings`.
+- **Implemented**: also per-thread notifications. Muting joins the thread
+  first, because Discord keeps the setting on the thread member and an account
+  that is not one has nowhere for it to be stored — the change would be
+  silently lost otherwise, which is why Discord's own client joins too. The
+  control is offered only to a member for the same reason. Discord echoes
+  nothing back for a settings change, so the held membership is updated here
+  or the switch springs back on the next rebuild. Which status codes count as
+  a refusal is decided in the transport rather than in the membership layer,
+  which is deliberately free of REST.
+- **Blocked by**: nothing outstanding for the desktop-user session.
 
 ## FBC-MESSAGE — Messages and message content
 

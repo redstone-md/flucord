@@ -12,6 +12,16 @@ abstract interface class DiscordThreadMembershipTransport {
 
   /// `DELETE /channels/{id}/thread-members/@me`.
   Future<void> leaveThread(String threadId);
+
+  /// `PATCH /channels/{id}/thread-members/@me/settings`.
+  ///
+  /// Answers whether Discord took it. The refusal is decided in the transport
+  /// rather than here: this layer is deliberately free of REST, and teaching
+  /// it which status codes mean "no" would undo that.
+  Future<bool> patchThreadMemberSettings({
+    required String threadId,
+    required Map<String, Object?> body,
+  });
 }
 
 /// Thread membership over the desktop-user transport.
@@ -59,8 +69,35 @@ final class DiscordThreadMembershipService
         isSelfJoined:
             self != null && members.any((member) => member.userId == self),
         memberCount: members.length,
+        selfMuted: members.any(
+          (member) => member.userId == self && member.isMuted,
+        ),
       ),
     );
+  }
+
+  @override
+  Future<bool> setThreadNotifications({
+    required String threadId,
+    required bool muted,
+    int? flags,
+  }) async {
+    // Discord's own client joins first for the same reason: the settings live
+    // on the thread member, so a non-member has nowhere to keep them.
+    if (membershipFor(threadId)?.isSelfJoined != true) {
+      await joinThread(threadId);
+    }
+    final accepted = await _transport.patchThreadMemberSettings(
+      threadId: threadId,
+      body: {'muted': muted, 'flags': ?flags},
+    );
+    if (accepted) {
+      // Discord does not echo a settings change back, so the held membership
+      // is updated here or the switch springs back on the next rebuild.
+      final held = membershipFor(threadId);
+      if (held != null) _publish(held.copyWith(selfMuted: muted));
+    }
+    return accepted;
   }
 
   @override
@@ -109,6 +146,8 @@ final class DiscordThreadMembershipService
         members: member == null
             ? previous.members
             : _withMember(previous.members, member),
+        // This dispatch is about this account, so its mute is ours.
+        selfMuted: member?.isMuted,
       ),
     );
   }
@@ -200,6 +239,8 @@ final class DiscordThreadMembershipService
         members: member == null
             ? previous.members
             : _withMember(previous.members, member),
+        // This dispatch is about this account, so its mute is ours.
+        selfMuted: member?.isMuted,
       ),
     );
   }

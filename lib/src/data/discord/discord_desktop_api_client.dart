@@ -73,6 +73,26 @@ final class DiscordDesktopApiClient
   late final DiscordAgeVerificationRepository ageVerification =
       DiscordAgeVerificationRepository(_rest);
 
+  @override
+  Future<bool> patchThreadMemberSettings({
+    required String threadId,
+    required Map<String, Object?> body,
+  }) async {
+    try {
+      await _rest.requestEmpty(
+        'PATCH',
+        '/channels/$threadId/thread-members/@me/settings',
+        body: body,
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      // A thread archived out from under the change, or one this account may
+      // no longer see, refuses it. That is an answer about the thread.
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
+      rethrow;
+    }
+  }
+
   /// `GET /friend-suggestions`.
   Future<List<Map<String, Object?>>> getFriendSuggestions() =>
       _rest.getList('/friend-suggestions');

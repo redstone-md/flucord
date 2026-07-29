@@ -83,6 +83,39 @@ final class ThreadMembershipController extends ChangeNotifier {
   /// Joins or leaves, whichever the current membership makes sense.
   Future<bool> toggle() => isJoined ? leave() : join();
 
+  /// Whether this account has this thread muted, as far as the session knows.
+  bool get isMuted {
+    final threadId = _threadId;
+    if (threadId == null) return false;
+    return _repository?.membershipFor(threadId)?.isSelfMuted ?? false;
+  }
+
+  /// Mutes or unmutes this thread for this account.
+  ///
+  /// Joining first is the repository's business, not this one's: the settings
+  /// live on the thread member, and Discord's own client joins for the same
+  /// reason rather than losing the change.
+  Future<bool> setMuted({required bool muted}) async {
+    final repository = _repository;
+    final threadId = _threadId;
+    if (repository == null || threadId == null || _isBusy) return false;
+    _isBusy = true;
+    _error = null;
+    _notify();
+    try {
+      return await repository.setThreadNotifications(
+        threadId: threadId,
+        muted: muted,
+      );
+    } on Object catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _isBusy = false;
+      _notify();
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;

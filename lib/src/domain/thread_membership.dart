@@ -46,12 +46,15 @@ final class ThreadMembership {
     required Iterable<ThreadMember> members,
     required this.isSelfJoined,
     this.memberCount,
-  }) : members = List.unmodifiable(members);
+    bool selfMuted = false,
+  }) : members = List.unmodifiable(members),
+       _selfMuted = selfMuted;
 
   ThreadMembership.empty(this.threadId)
     : members = const [],
       isSelfJoined = false,
-      memberCount = null;
+      memberCount = null,
+      _selfMuted = false;
 
   final String threadId;
   final List<ThreadMember> members;
@@ -59,9 +62,16 @@ final class ThreadMembership {
   /// Whether the signed-in account is a member.
   final bool isSelfJoined;
 
+  /// Whether this account muted the thread. Carried on the membership rather
+  /// than looked up in [members], because only the session knows which member
+  /// is this account and a surface must not have to guess.
+  bool get isSelfMuted => _selfMuted;
+
   /// Discord's own count, which can exceed [members]: the list route caps at
   /// 100 and `THREAD_MEMBERS_UPDATE` reports the total separately.
   final int? memberCount;
+
+  final bool _selfMuted;
 
   /// The count worth showing: Discord's when it gave one, otherwise what is
   /// actually known.
@@ -71,11 +81,13 @@ final class ThreadMembership {
     Iterable<ThreadMember>? members,
     bool? isSelfJoined,
     int? memberCount,
+    bool? selfMuted,
   }) => ThreadMembership(
     threadId: threadId,
     members: members ?? this.members,
     isSelfJoined: isSelfJoined ?? this.isSelfJoined,
     memberCount: memberCount ?? this.memberCount,
+    selfMuted: selfMuted ?? isSelfMuted,
   );
 }
 
@@ -95,4 +107,15 @@ abstract interface class ThreadMembershipRepository {
 
   /// Removes this account from the thread.
   Future<void> leaveThread(String threadId);
+
+  /// Sets how this account is notified about one thread.
+  ///
+  /// Joining first is not a convenience: Discord keeps these settings on the
+  /// thread member, so an account that is not one has nowhere for them to be
+  /// stored and the change is silently lost.
+  Future<bool> setThreadNotifications({
+    required String threadId,
+    required bool muted,
+    int? flags,
+  });
 }

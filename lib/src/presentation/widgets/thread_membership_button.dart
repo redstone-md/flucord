@@ -53,6 +53,29 @@ class ThreadMembershipButton extends StatelessWidget {
               ),
             ),
           ),
+        // Only for a member: the settings live on the thread member, so
+        // muting a thread nobody has joined has nowhere to be kept.
+        if (joined)
+          IconButton(
+            key: const ValueKey('thread-mute-toggle'),
+            tooltip: controller.isMuted
+                ? 'Notify me about this thread'
+                : 'Stop notifying me about this thread',
+            icon: Icon(
+              controller.isMuted
+                  ? Icons.notifications_off
+                  : Icons.notifications_none,
+              size: 15,
+            ),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+            onPressed: controller.isBusy
+                ? null
+                : () => unawaited(
+                    controller.setMuted(muted: !controller.isMuted),
+                  ),
+          ),
         TextButton.icon(
           key: const ValueKey('thread-membership-toggle'),
           onPressed: controller.isBusy
