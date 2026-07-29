@@ -81,6 +81,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the room shows the people in it while nobody is watched', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: VoiceRoomView(
+            guildId: null,
+            spaceId: 'direct-messages',
+            channelId: 'dm-1',
+            channelName: 'Jack',
+            controller: harness.voice,
+            members: const [_jack],
+            currentMemberId: 'me',
+            // A viewer widget that draws nothing while idle. `??` cannot tell
+            // it apart from one that is showing a stream, so the participant
+            // grid was never reached and the room looked empty.
+            streamViewer: const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('voice-participants-empty')), findsWidgets);
+  });
+
   testWidgets('the room joins a call when there is no guild', (tester) async {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));

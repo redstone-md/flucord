@@ -5,10 +5,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
-import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
-import 'voice_capture_source_dialog.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
 import '../../domain/voice_connection.dart';
@@ -135,7 +133,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 cameraFrameFor: widget.cameraFrameFor,
               ),
             ),
-            _VoiceToolbar(controller: widget.controller),
+            _VoiceToolbar(controller: widget.controller, goLive: widget.goLive),
           ],
         );
       },
@@ -303,7 +301,6 @@ class _VoiceStage extends StatelessWidget {
                   ),
                 ),
               ),
-              ?goLive,
               ?soundboard,
               const SizedBox(width: 12),
               Text(
@@ -350,8 +347,12 @@ class _VoiceStage extends StatelessWidget {
           ),
         ?stageControls,
         Expanded(
+          // The viewer only takes the stage while somebody is actually being
+          // watched. It used to be handed down as a widget that rendered
+          // nothing when idle, and `??` cannot see the difference — so the
+          // participant grid was never reached and the room looked empty.
           child:
-              streamViewer ??
+              (watchedUserId != null ? streamViewer : null) ??
               VoiceParticipantGrid(
                 participants: controller.participants,
                 members: members,
@@ -397,9 +398,12 @@ class _StatusLabel extends StatelessWidget {
 }
 
 class _VoiceToolbar extends StatelessWidget {
-  const _VoiceToolbar({required this.controller});
+  const _VoiceToolbar({required this.controller, this.goLive});
 
   final VoiceController controller;
+
+  /// The Go Live control, which is the room's only share button.
+  final Widget? goLive;
 
   @override
   Widget build(BuildContext context) {
@@ -424,27 +428,14 @@ class _VoiceToolbar extends StatelessWidget {
             ),
             icon: Icon(controller.isMuted ? Icons.mic_off : Icons.mic),
           ),
-          const SizedBox(width: 12),
-          IconButton(
-            key: const ValueKey('voice-share-screen'),
-            onPressed: controller.isConnected && !controller.isBusy
-                ? () => _toggleScreenShare(context)
-                : null,
-            tooltip: controller.isScreenSharing
-                ? 'Stop sharing'
-                : 'Share screen',
-            style: _controlStyle(
-              context,
-              foreground: controller.isScreenSharing
-                  ? FlucordColors.brand
-                  : null,
-            ),
-            icon: Icon(
-              controller.isScreenSharing
-                  ? Icons.stop_screen_share_outlined
-                  : Icons.screen_share_outlined,
-            ),
-          ),
+          // One share control, not two. The room used to carry a local
+          // capture button here and a Go Live button in the header, which
+          // looked like a choice and was not one: only Go Live puts a picture
+          // in the channel.
+          if (goLive case final control?) ...[
+            const SizedBox(width: 12),
+            control,
+          ],
           const SizedBox(width: 12),
           IconButton.filled(
             key: const ValueKey('voice-disconnect'),
@@ -469,19 +460,4 @@ class _VoiceToolbar extends StatelessWidget {
         foregroundColor: foreground ?? Theme.of(context).colorScheme.onSurface,
         side: BorderSide(color: context.surfaces.border),
       );
-
-  Future<void> _toggleScreenShare(BuildContext context) async {
-    if (controller.isScreenSharing) {
-      await controller.stopScreenShare();
-      return;
-    }
-    await controller.loadCaptureSources();
-    if (!context.mounted) return;
-    final source = await showDialog<VoiceCaptureSource>(
-      context: context,
-      builder: (_) =>
-          VoiceCaptureSourceDialog(sources: controller.captureSources),
-    );
-    if (source != null) await controller.shareScreen(source.id);
-  }
 }

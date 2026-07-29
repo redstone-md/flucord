@@ -13,6 +13,7 @@ class GoLiveButton extends StatelessWidget {
     required this.controller,
     required this.channelId,
     this.guildId,
+    this.pickSource,
     super.key,
   });
 
@@ -20,9 +21,24 @@ class GoLiveButton extends StatelessWidget {
   final String channelId;
   final String? guildId;
 
+  /// Asks which screen or window to share, answering null when the picker was
+  /// dismissed. Absent on a surface with no picker, where the primary screen
+  /// is shared instead.
+  final Future<String?> Function()? pickSource;
+
   @override
   Widget build(BuildContext context) {
-    if (!controller.isSupported) return const SizedBox.shrink();
+    // Shown even where it cannot be used. This is the room's only share
+    // control now, and a control that vanishes leaves somebody looking for a
+    // button rather than reading why there isn't one.
+    if (!controller.isSupported) {
+      return IconButton(
+        key: const ValueKey('go-live-toggle'),
+        tooltip: 'Screen sharing needs a Discord session',
+        onPressed: null,
+        icon: const Icon(Icons.screen_share_outlined),
+      );
+    }
     final streaming =
         controller.isStreaming ||
         controller.status == GoLiveStatus.creating ||
@@ -95,10 +111,20 @@ class GoLiveButton extends StatelessWidget {
       await controller.stop();
       return;
     }
-    // The primary display, which is what Discord's own share defaults to; the
-    // picker for the rest is a separate surface. Which display that is comes
-    // from the platform — the id cannot be guessed.
-    await controller.start(channelId: channelId, guildId: guildId);
+    final picker = pickSource;
+    String? sourceId;
+    if (picker != null) {
+      sourceId = await picker();
+      // Dismissed. Starting the primary screen because somebody closed a
+      // picker would share the wrong thing, which is worse than sharing
+      // nothing.
+      if (sourceId == null) return;
+    }
+    await controller.start(
+      channelId: channelId,
+      guildId: guildId,
+      sourceId: sourceId,
+    );
   }
 }
 

@@ -474,11 +474,21 @@ final class VoiceController extends ChangeNotifier {
         // only — no channel, no session, nothing about who is in the room.
         _logStatus('signalled', event.status, error: event.error);
         _connectionStatus = event.status;
-        if (event.error != null) _error = event.error;
+        // A reconnect is not a problem to report. The status line already says
+        // "Reconnecting", and putting the close code underneath it in red said
+        // the same thing twice — the second time as though something needed
+        // doing about it.
+        if (event.error != null &&
+            event.status != VoiceConnectionStatus.reconnecting) {
+          _error = event.error;
+        }
         // A connection that came back clears what killed the last one. The
         // room used to keep showing "closed with code 4014" in red over a
         // working call, because nothing ever took the message down.
-        if (event.status == VoiceConnectionStatus.ready) _error = null;
+        if (event.status == VoiceConnectionStatus.ready ||
+            event.status == VoiceConnectionStatus.reconnecting) {
+          _error = null;
+        }
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;

@@ -1,4 +1,5 @@
 import '../domain/go_live_stream.dart';
+import '../domain/voice_media.dart';
 import '../domain/automod_rule.dart';
 import 'dart:async';
 
@@ -75,6 +76,7 @@ import 'widgets/go_live_viewer.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/stage_controls.dart';
 import 'widgets/thread_membership_button.dart';
+import 'widgets/voice_capture_source_dialog.dart';
 import 'widgets/voice_connection_bar.dart';
 import 'widgets/voice_room_view.dart';
 

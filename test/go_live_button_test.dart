@@ -34,7 +34,9 @@ void main() {
         ),
       );
 
-  testWidgets('a transport that cannot stream shows nothing', (tester) async {
+  testWidgets('a transport that cannot stream refuses rather than vanishes', (
+    tester,
+  ) async {
     final controller = GoLiveController(
       repositoryProvider: () => null,
       mediaService: _FakeMedia(),
@@ -45,6 +47,59 @@ void main() {
     await pump(tester, controller);
 
     expect(find.byKey(const ValueKey('go-live-controls')), findsNothing);
+    // This is the room's only share control now, and one that disappears
+    // leaves somebody hunting for a button rather than reading why.
+    final button = tester.widget<IconButton>(
+      find.byKey(const ValueKey('go-live-toggle')),
+    );
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('shares what the picker chose, and nothing when dismissed', (
+    tester,
+  ) async {
+    final media = _FakeMedia();
+    final controller = GoLiveController(
+      repositoryProvider: _FakeRepository.new,
+      mediaService: media,
+      encoder: _FakeEncoder(),
+    )..reconcile();
+    addTearDown(controller.dispose);
+    String? answer = 'window:42';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => GoLiveButton(
+              controller: controller,
+              channelId: 'voice-1',
+              guildId: 'guild-1',
+              pickSource: () async => answer,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(media.shared, ['window:42']);
+
+    await controller.stop();
+    await tester.pumpAndSettle();
+    answer = null;
+    media.shared.clear();
+
+    await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
+    await tester.pumpAndSettle();
+
+    // Dismissed. Sharing the primary screen because somebody closed a picker
+    // would put the wrong thing in the channel, which is worse than nothing.
+    expect(media.shared, isEmpty);
   });
 
   testWidgets('starts and stops a stream, driving the encoder with it', (

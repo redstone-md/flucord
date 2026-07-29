@@ -317,12 +317,16 @@ void main() {
     // while the room said Unmute.
     expect(find.byTooltip('Unmute'), findsNWidgets(2));
 
-    await tester.tap(find.byKey(const ValueKey('voice-share-screen')));
-    await tester.pumpAndSettle();
-    expect(find.text('Share a screen or window'), findsOneWidget);
-    expect(find.text('No capture sources available'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
+    // One share control, in the toolbar: the room used to carry a local
+    // capture button and a Go Live button, which looked like a choice and was
+    // not one — only Go Live puts a picture in the channel.
+    expect(find.byKey(const ValueKey('voice-share-screen')), findsNothing);
+    // Present but refused: this transport has no stream plane, and a control
+    // that disappeared would leave somebody hunting for a button.
+    final share = tester.widget<IconButton>(
+      find.byKey(const ValueKey('go-live-toggle')),
+    );
+    expect(share.onPressed, isNull);
 
     await tester.tap(find.byKey(const ValueKey('voice-disconnect')));
     await tester.pumpAndSettle();

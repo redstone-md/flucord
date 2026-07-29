@@ -108,10 +108,7 @@ final class WebRtcVoiceMediaService implements VoiceMediaService {
 
   @override
   Future<List<VoiceCaptureSource>> enumerateCaptureSources() async {
-    final sources = await desktopCapturer.getSources(
-      types: const [SourceType.Screen, SourceType.Window],
-      thumbnailSize: ThumbnailSize(320, 180),
-    );
+    final sources = await _currentSources(thumbnails: true);
     return [
       for (final source in sources)
         VoiceCaptureSource(
@@ -125,15 +122,35 @@ final class WebRtcVoiceMediaService implements VoiceMediaService {
     ];
   }
 
+  /// The capture sources as they are right now.
+  ///
+  /// Re-enumerated rather than remembered. The capturer's list is a snapshot:
+  /// a display that slept, a window that closed, or a monitor unplugged since
+  /// the last read leaves handles behind that fail with "that display is no
+  /// longer attached" when they are used.
+  Future<List<DesktopCapturerSource>> _currentSources({
+    bool thumbnails = false,
+  }) async {
+    const types = [SourceType.Screen, SourceType.Window];
+    await desktopCapturer.updateSources(types: types);
+    return desktopCapturer.getSources(
+      types: types,
+      thumbnailSize: thumbnails ? ThumbnailSize(320, 180) : ThumbnailSize(1, 1),
+    );
+  }
+
   @override
   Future<void> startScreenShare(String? sourceId) async {
     await stopScreenShare();
+    // Windows will not capture without being told what to capture: an absent
+    // deviceId is answered with "source not found". So the primary screen is
+    // resolved here, against a list read at the moment of the share rather
+    // than whenever the picker last ran.
+    final source = sourceId ?? await _primaryScreenId();
     final stream = await navigator.mediaDevices.getDisplayMedia({
       'audio': false,
       'video': {
-        // No `deviceId` means the primary screen, chosen by the platform at
-        // the moment of capture rather than from a list read earlier.
-        if (sourceId != null) 'deviceId': {'exact': sourceId},
+        'deviceId': {'exact': source},
         'mandatory': {'frameRate': 30.0},
       },
     });
@@ -143,6 +160,19 @@ final class WebRtcVoiceMediaService implements VoiceMediaService {
     if (tracks.isNotEmpty) {
       tracks.first.onEnded = () => unawaited(_handleScreenShareEnded());
     }
+  }
+
+  Future<String> _primaryScreenId() async {
+    final sources = await _currentSources();
+    final screen = sources
+        .where((source) => source.type == SourceType.Screen)
+        .firstOrNull;
+    // Windows are deliberately not a fallback: sharing whatever window
+    // enumerated first is worse than saying there is nothing to share.
+    if (screen == null) {
+      throw StateError('This machine reported no screen to capture');
+    }
+    return screen.id;
   }
 
   Future<void> _handleScreenShareEnded() async {

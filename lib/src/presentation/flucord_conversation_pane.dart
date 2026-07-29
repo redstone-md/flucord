@@ -268,6 +268,23 @@ class _ConversationPaneState extends State<_ConversationPane> {
 
   /// The call state is read on every build, so the pane has to be rebuilt when
   /// it moves — joining a call is what swaps the timeline for the room.
+  /// Asks which screen or window to share.
+  ///
+  /// The sources are read at the moment of asking: the list is a snapshot, and
+  /// a display that has slept since the last read leaves a handle behind that
+  /// fails when it is used.
+  Future<String?> _pickCaptureSource(BuildContext context) async {
+    await widget.voiceController.loadCaptureSources();
+    if (!context.mounted) return null;
+    final source = await showDialog<VoiceCaptureSource>(
+      context: context,
+      builder: (_) => VoiceCaptureSourceDialog(
+        sources: widget.voiceController.captureSources,
+      ),
+    );
+    return source?.id;
+  }
+
   /// Opens somebody's screen share, or closes the one already on screen.
   void _toggleWatch(String userId) {
     final viewer = widget.streamViewerController;
@@ -354,6 +371,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
                 builder: (_, _) => GoLiveButton(
                   controller: widget.goLiveController,
                   channelId: widget.channel.id,
+                  pickSource: () => _pickCaptureSource(context),
                   guildId: widget.channel.spaceId.isEmpty
                       ? null
                       : widget.channel.spaceId,
