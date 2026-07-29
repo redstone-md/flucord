@@ -1,11 +1,9 @@
 /// What streamer mode hides while it is on.
 ///
 /// The switches are Discord's own, read out of the desktop bundle's settings
-/// ids rather than invented: hide personal information, hide invite links,
-/// disable sounds, disable notifications. Its two remaining switches — hiding
-/// the window from screen capture, and hiding overlay widgets — need
-/// capabilities this build does not have, and are left out rather than shown
-/// as toggles that change nothing.
+/// ids rather than invented. Five of its six are here; hiding overlay widgets
+/// is the one left out, because this build has no overlay to hide and a
+/// toggle that changed nothing would be worse here than anywhere else.
 final class StreamerModeSettings {
   const StreamerModeSettings({
     this.enabled = false,
@@ -14,6 +12,7 @@ final class StreamerModeSettings {
     this.hideInviteLinks = true,
     this.disableSounds = true,
     this.disableNotifications = true,
+    this.hideFromCapture = false,
   });
 
   /// Whether it is on right now.
@@ -29,12 +28,20 @@ final class StreamerModeSettings {
   final bool disableSounds;
   final bool disableNotifications;
 
+  /// Whether the window itself is kept out of screen recordings.
+  ///
+  /// Off by default, unlike the rest: it makes the client invisible in a
+  /// recording, and somebody who meant to show it would have no way of
+  /// telling why it had gone.
+  final bool hideFromCapture;
+
   static const off = StreamerModeSettings();
 
   bool get hidesPersonalInformation => enabled && hidePersonalInformation;
   bool get hidesInviteLinks => enabled && hideInviteLinks;
   bool get silencesSounds => enabled && disableSounds;
   bool get silencesNotifications => enabled && disableNotifications;
+  bool get hidesWindowFromCapture => enabled && hideFromCapture;
 
   StreamerModeSettings copyWith({
     bool? enabled,
@@ -43,6 +50,7 @@ final class StreamerModeSettings {
     bool? hideInviteLinks,
     bool? disableSounds,
     bool? disableNotifications,
+    bool? hideFromCapture,
   }) => StreamerModeSettings(
     enabled: enabled ?? this.enabled,
     automatic: automatic ?? this.automatic,
@@ -51,6 +59,7 @@ final class StreamerModeSettings {
     hideInviteLinks: hideInviteLinks ?? this.hideInviteLinks,
     disableSounds: disableSounds ?? this.disableSounds,
     disableNotifications: disableNotifications ?? this.disableNotifications,
+    hideFromCapture: hideFromCapture ?? this.hideFromCapture,
   );
 
   Map<String, Object?> toJson() => {
@@ -62,6 +71,7 @@ final class StreamerModeSettings {
     'hide_invite_links': hideInviteLinks,
     'disable_sounds': disableSounds,
     'disable_notifications': disableNotifications,
+    'hide_from_capture': hideFromCapture,
   };
 
   /// Reads stored settings, falling back per field.
@@ -84,6 +94,7 @@ final class StreamerModeSettings {
       hideInviteLinks: read('hide_invite_links', fallback: true),
       disableSounds: read('disable_sounds', fallback: true),
       disableNotifications: read('disable_notifications', fallback: true),
+      hideFromCapture: read('hide_from_capture', fallback: false),
     );
   }
 }

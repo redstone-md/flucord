@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.72% lines | `flutter test --coverage`, 2,640 passing, 6 skipped |
+| Automated test coverage | 89.74% lines | `flutter test --coverage`, 2,649 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -256,10 +256,8 @@ are excluded from the denominator and are never reported as implemented.
   fire wherever the focus is — including mid-message — and a bound chord is
   swallowed so it does not also type its letter into the composer.
 - **Implemented**: streamer mode, kept locally for the same reason as the
-  keybinds. Four of Discord's six switches, and the two left out are left out
-  because this build has neither capability rather than to save work: hiding
-  the window from screen capture needs a native call against the window
-  handle, and hiding overlay widgets needs an overlay. Offering either as a
+  keybinds. Five of Discord's six switches; hiding overlay widgets is the one
+  left out, because this build has no overlay to hide, and offering it as a
   toggle that changed nothing would be worse here than anywhere else, since
   believing something is hidden is the entire point. What is implemented:
   invite links in messages are replaced as they are drawn rather than as they
@@ -272,6 +270,16 @@ are excluded from the denominator and are never reported as implemented.
   stream turns it on and stopping turns it off again — but only if it was the
   stream that turned it on, so a mode set by hand outlives the stream. It also
   has a keybind, `TOGGLE_STREAMER_MODE`, which is Discord's own name for it.
+  The window itself is kept out of screen recordings through
+  `SetWindowDisplayAffinity` with `WDA_EXCLUDEFROMCAPTURE` — straight FFI
+  against `user32.dll`, no package for three calls — on this process's first
+  visible top-level window, found by walking the window list rather than by
+  title, since the title follows whichever channel is open. The switch is off
+  by default: it makes the client invisible in a recording, and somebody who
+  meant to show it would have nothing to go on. What the platform answers is
+  reported rather than assumed: a refused call leaves the page saying the
+  window is still visible to a recorder, because believing otherwise is the
+  one failure this feature must not pass over.
 - **Blocked by**: offline-edit replay with `required_data_version` is not
   implemented. The frecency tables inside type 2 are round-tripped but not
   read: nothing in Flucord sorts by how often an expression was used yet. A

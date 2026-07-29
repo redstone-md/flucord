@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -103,6 +104,7 @@ import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'platform/desktop_integration.dart';
+import 'platform/window_capture_shield.dart';
 import 'theme/flucord_theme.dart';
 
 class FlucordApp extends StatefulWidget {
@@ -124,6 +126,7 @@ class FlucordApp extends StatefulWidget {
     this.videoDecoderService,
     this.keybindRepository,
     this.streamerModeRepository,
+    this.windowCaptureShield,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -195,6 +198,10 @@ class FlucordApp extends StatefulWidget {
 
   /// Where streamer mode's switches are kept, injected for the same reason.
   final StreamerModeRepository? streamerModeRepository;
+
+  /// Keeps the window out of screen recordings. Injected so a test does not
+  /// reach for the real window list.
+  final WindowCaptureShield? windowCaptureShield;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -453,6 +460,7 @@ class _FlucordAppState extends State<FlucordApp> {
     unawaited(_keybindController.load());
     _streamerModeController = StreamerModeController(
       widget.streamerModeRepository ?? FileStreamerModeRepository(),
+      shield: widget.windowCaptureShield ?? _defaultCaptureShield(),
     );
     unawaited(_streamerModeController.load());
     // Going live is the only streaming this client knows about, so it is
@@ -581,6 +589,11 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
+
+  /// The shield this platform has, or one that plainly says it has none.
+  static WindowCaptureShield _defaultCaptureShield() => Platform.isWindows
+      ? WindowsWindowCaptureShield()
+      : const UnavailableWindowCaptureShield();
 
   void _syncStreamerMode() => _streamerModeController.reconcileStreaming(
     isStreaming: _goLiveController.isStreaming,

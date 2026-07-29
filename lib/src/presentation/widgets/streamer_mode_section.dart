@@ -7,10 +7,9 @@ import '../../theme/flucord_theme.dart';
 
 /// Streamer mode's switches.
 ///
-/// Four of Discord's six. Hiding the window from screen capture and hiding
-/// overlay widgets are left out because this build has neither capability, and
-/// a switch that changes nothing is worse than an absent one — especially
-/// here, where believing something is hidden is the whole point.
+/// Five of Discord's six. Hiding overlay widgets is the one left out, because
+/// this build has no overlay — and a switch that changes nothing is worse than
+/// an absent one here, where believing something is hidden is the whole point.
 class StreamerModeSection extends StatelessWidget {
   const StreamerModeSection({required this.controller, super.key});
 
@@ -85,6 +84,35 @@ class StreamerModeSection extends StatelessWidget {
             onChanged: (value) =>
                 controller.setDisableNotifications(disable: value),
           ),
+          _Switch(
+            switchKey: const ValueKey('streamer-mode-capture'),
+            title: 'Hide this window from screen capture',
+            subtitle: controller.canHideFromCapture
+                ? 'The recording sees whatever is behind Flucord. Off by '
+                      'default: a window that vanished with no explanation '
+                      'is its own problem.'
+                : 'This platform cannot exclude a window from capture.',
+            value: settings.hideFromCapture,
+            onChanged: controller.canHideFromCapture
+                ? (value) => controller.setHideFromCapture(hide: value)
+                : null,
+          ),
+          if (controller.wasCaptureShieldRefused)
+            Padding(
+              key: const ValueKey('streamer-mode-capture-refused'),
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                // Said out loud: believing the window is hidden when it is
+                // still on the recording is the one failure this must not
+                // pass over in silence.
+                'Windows would not exclude the window. It is still visible '
+                'to a screen recorder.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
         ],
       );
     },
@@ -104,14 +132,20 @@ class _Switch extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final Future<void> Function(bool) onChanged;
+
+  /// Null where the platform cannot honour the switch, which leaves it drawn
+  /// and dead rather than hidden — somebody looking for it should find it and
+  /// read why.
+  final Future<void> Function(bool)? onChanged;
 
   @override
   Widget build(BuildContext context) => SwitchListTile(
     key: switchKey,
     contentPadding: EdgeInsets.zero,
     value: value,
-    onChanged: (next) => unawaited(onChanged(next)),
+    onChanged: onChanged == null
+        ? null
+        : (next) => unawaited(onChanged!(next)),
     title: Text(title, style: const TextStyle(fontSize: 13)),
     subtitle: Text(
       subtitle,

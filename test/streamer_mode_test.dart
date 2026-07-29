@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flucord/src/application/streamer_mode_controller.dart';
 import 'package:flucord/src/data/file_streamer_mode_repository.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
+import 'package:flucord/src/platform/window_capture_shield.dart';
 import 'package:flucord/src/presentation/widgets/streamer_mode_scope.dart';
 import 'package:flucord/src/presentation/widgets/streamer_mode_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -188,6 +189,117 @@ void main() {
     });
   });
 
+  group('keeping the window off the recording', () {
+    test('a platform with no shield says so rather than pretending', () async {
+      final controller = StreamerModeController(
+        _MemorySettings()
+          ..stored = const StreamerModeSettings(hideFromCapture: true),
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(controller.canHideFromCapture, isFalse);
+      await controller.setEnabled(enabled: true);
+
+      // The switch is on and the window is not hidden: the two are reported
+      // apart, because saying it is hidden when it is still on the recording
+      // is the one lie this must not tell.
+      expect(controller.settings.hideFromCapture, isTrue);
+      expect(controller.isHiddenFromCapture, isFalse);
+      expect(controller.wasCaptureShieldRefused, isTrue);
+    });
+
+    test('the window is excluded while the mode is on, and put back after',
+        () async {
+      final shield = _FakeShield();
+      final controller = StreamerModeController(
+        _MemorySettings()
+          ..stored = const StreamerModeSettings(hideFromCapture: true),
+        shield: shield,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await controller.setEnabled(enabled: true);
+      expect(shield.calls, [true]);
+      expect(controller.isHiddenFromCapture, isTrue);
+      expect(controller.wasCaptureShieldRefused, isFalse);
+
+      // Asked again for the same thing: the window list is not walked twice.
+      await controller.setHidePersonalInformation(hide: false);
+      expect(shield.calls, [true]);
+
+      await controller.setEnabled(enabled: false);
+      expect(shield.calls, [true, false]);
+      expect(controller.isHiddenFromCapture, isFalse);
+    });
+
+    test('a refusal from the platform is reported, not assumed away',
+        () async {
+      final shield = _FakeShield()..accept = false;
+      final controller = StreamerModeController(
+        _MemorySettings()
+          ..stored = const StreamerModeSettings(hideFromCapture: true),
+        shield: shield,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await controller.setEnabled(enabled: true);
+
+      expect(shield.calls, [true]);
+      expect(controller.isHiddenFromCapture, isFalse);
+      expect(controller.wasCaptureShieldRefused, isTrue);
+    });
+
+    test('the switch alone hides nothing until the mode is on', () async {
+      final shield = _FakeShield();
+      final controller = StreamerModeController(
+        _MemorySettings(),
+        shield: shield,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      await controller.setHideFromCapture(hide: true);
+
+      expect(shield.calls, isEmpty);
+      expect(controller.settings.hideFromCapture, isTrue);
+    });
+
+    test('a shield on a platform without one refuses every request', () {
+      const shield = UnavailableWindowCaptureShield();
+
+      expect(shield.isSupported, isFalse);
+      expect(shield.setExcluded(excluded: true), isFalse);
+    });
+
+
+    test('on Windows it walks the real window list and answers honestly',
+        () {
+      if (!Platform.isWindows) return;
+      final shield = WindowsWindowCaptureShield();
+
+      expect(shield.isSupported, isTrue);
+      // A test host has no Flutter window, so the walk finds none and the
+      // shield says no rather than reporting a success it did not have. On a
+      // real client the same walk finds the window and the call goes through.
+      expect(shield.setExcluded(excluded: true), isA<bool>());
+      expect(shield.setExcluded(excluded: false), isA<bool>());
+    });
+
+    test('the Windows shield refuses when the libraries are not there', () {
+      // What every non-Windows host and every stripped build actually sees.
+      final shield = const WindowsWindowCaptureShield.withLibraries(
+        user32: null,
+        kernel32: null,
+      );
+
+      expect(shield.isSupported, isFalse);
+      expect(shield.setExcluded(excluded: true), isFalse);
+    });
+  });
+
   group('the surface', () {
     testWidgets('the switches are drawn and flip', (tester) async {
       final repository = _MemorySettings();
@@ -229,6 +341,71 @@ void main() {
       expect(settings.hideInviteLinks, isFalse);
       expect(settings.disableSounds, isFalse);
       expect(settings.disableNotifications, isFalse);
+    });
+
+
+    testWidgets('the capture switch is dead where the platform has no shield',
+        (tester) async {
+      final controller = StreamerModeController(_MemorySettings());
+      addTearDown(controller.dispose);
+      await controller.load();
+      await tester.binding.setSurfaceSize(const Size(700, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: FlucordTheme.dark,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StreamerModeSection(controller: controller),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Drawn and dead rather than hidden: somebody looking for it should
+      // find it and read why it cannot be used.
+      final tile = tester.widget<SwitchListTile>(
+        find.byKey(const ValueKey('streamer-mode-capture')),
+      );
+      expect(tile.onChanged, isNull);
+      expect(
+        find.textContaining('cannot exclude a window from capture'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a platform that refuses says so on the page', (tester) async {
+      final shield = _FakeShield()..accept = false;
+      final controller = StreamerModeController(
+        _MemorySettings(),
+        shield: shield,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+      await tester.binding.setSurfaceSize(const Size(700, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: FlucordTheme.dark,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StreamerModeSection(controller: controller),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('streamer-mode-capture')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('streamer-mode-enabled')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('streamer-mode-capture-refused')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the scope answers for whoever draws something', (
@@ -294,4 +471,19 @@ final class _MemorySettings implements StreamerModeRepository {
   @override
   Future<void> save(StreamerModeSettings settings) async =>
       saved.add(settings);
+}
+
+
+final class _FakeShield implements WindowCaptureShield {
+  final List<bool> calls = [];
+  bool accept = true;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  bool setExcluded({required bool excluded}) {
+    calls.add(excluded);
+    return accept;
+  }
 }
