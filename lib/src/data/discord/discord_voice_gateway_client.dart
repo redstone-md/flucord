@@ -88,8 +88,13 @@ final class DiscordVoiceGatewayClient
   /// work twice and, with a nonce-carrying cipher, twice is not merely
   /// wasteful.
   late final Stream<DiscordRtpFrame> _decryptedPackets = _udpTransport.packets
-      .map(_decryptAudioPacket)
+      .expand(_decryptOrDrop)
       .asBroadcastStream();
+
+  /// How many packets in a row failed to authenticate, and whether any ever
+  /// have. Together they tell a stray packet apart from the wrong key.
+  int _consecutiveAuthFailures = 0;
+  bool _hasDecryptedAnyPacket = false;
 
   /// The audio plane: everything that is not a camera.
   ///
@@ -451,6 +456,47 @@ final class DiscordVoiceGatewayClient
 
   @override
   Future<void> finishSpeaking() => _mediaTransport.finishSpeaking();
+
+  /// One packet, or nothing at all.
+  ///
+  /// A packet that will not authenticate is dropped rather than thrown. That
+  /// is what RTP implementations do, and it has to be: the same port carries
+  /// RTCP, packets that arrive after a key rotation, and anything else the
+  /// network delivers, and none of those should end a call. Letting one
+  /// through as an exception took the whole voice stream down.
+  ///
+  /// Silence is not the answer either. If nothing has ever decrypted, the key
+  /// or the mode is wrong rather than the packet, and the room is told after
+  /// enough attempts to be sure.
+  Iterable<DiscordRtpFrame> _decryptOrDrop(Uint8List packet) {
+    try {
+      final frame = _decryptAudioPacket(packet);
+      _hasDecryptedAnyPacket = true;
+      _consecutiveAuthFailures = 0;
+      return [frame];
+    } on Object catch (error) {
+      _consecutiveAuthFailures++;
+      if (!_hasDecryptedAnyPacket &&
+          _consecutiveAuthFailures == _authFailureLimit) {
+        if (!_events.isClosed) {
+          _events.add(
+            VoiceSignalingStatusEvent(
+              VoiceConnectionStatus.failure,
+              error: StateError(
+                'Voice packets from Discord could not be decrypted '
+                '($_authFailureLimit in a row, none succeeded): $error',
+              ),
+            ),
+          );
+        }
+      }
+      return const [];
+    }
+  }
+
+  /// How many failures in a row are needed before the key is blamed rather
+  /// than the packet. A handful of strays is ordinary; fifty is not.
+  static const _authFailureLimit = 50;
 
   DiscordRtpFrame _decryptAudioPacket(Uint8List packet) {
     final cipher = _transportCipher;

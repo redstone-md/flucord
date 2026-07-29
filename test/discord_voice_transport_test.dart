@@ -170,6 +170,127 @@ void main() {
       expect(socket.sent.last, [26, 3, 2, 1]);
     });
 
+
+    test('a packet that will not authenticate is dropped, not fatal', () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      final events = <VoiceSignalingEvent>[];
+      final subscription = client.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'seq': 1,
+        'd': {
+          'ssrc': 42,
+          'ip': '198.51.100.4',
+          'port': 50001,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'seq': 2,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+
+      final received = <DiscordRtpFrame>[];
+      final packets = client.audioPackets.listen(received.add);
+      addTearDown(packets.cancel);
+
+      // The same port carries RTCP, packets from before a key rotation, and
+      // whatever else the network delivers. One of those used to travel out
+      // as an exception and end the call.
+      udp.addPacket(Uint8List.fromList(List<int>.filled(40, 7)));
+      await _flushEvents();
+
+      expect(received, isEmpty);
+      expect(
+        events.whereType<VoiceSignalingStatusEvent>().where(
+          (event) => event.status == VoiceConnectionStatus.failure,
+        ),
+        isEmpty,
+      );
+
+      // A real one still arrives afterwards: the stream was not torn down.
+      final frame = DiscordRtpFrame(
+        header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
+        payload: const [3, 4, 5],
+      );
+      client.sendAudioFrame(frame);
+      udp.addPacket(udp.sentPackets.last);
+      await _flushEvents();
+      expect(received.single.payload, [3, 4, 5]);
+    });
+
+    test('nothing decrypting at all is reported rather than passed over',
+        () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      final events = <VoiceSignalingEvent>[];
+      final subscription = client.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'seq': 1,
+        'd': {
+          'ssrc': 42,
+          'ip': '198.51.100.4',
+          'port': 50001,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'seq': 2,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+      final packets = client.audioPackets.listen((_) {});
+      addTearDown(packets.cancel);
+
+      // Fifty in a row with none succeeding is the key or the mode, not a
+      // stray packet, and staying quiet about it would leave a silent call
+      // looking healthy.
+      for (var index = 0; index < 50; index++) {
+        udp.addPacket(Uint8List.fromList(List<int>.filled(40, 7)));
+      }
+      await _flushEvents();
+
+      expect(
+        events.whereType<VoiceSignalingStatusEvent>().any(
+          (event) => event.status == VoiceConnectionStatus.failure,
+        ),
+        isTrue,
+      );
+    });
+
     test('splits cameras from audio and attributes them by SSRC', () async {
       final socket = _FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
