@@ -432,6 +432,12 @@ void CaptureLoop(FlucordVideoEncoder* state) {
 }  // namespace
 
 
+struct FlucordVideoClip {
+  ComPtr<IMFSinkWriter> writer;
+  DWORD stream = 0;
+  int32_t frames_per_second = 30;
+};
+
 struct FlucordVideoDecoder {
   ComPtr<IMFTransform> transform;
   FlucordVideoPictureCallback callback = nullptr;
@@ -997,6 +1003,115 @@ flucord_video_capture_screen(int32_t display_index,
     duplication->ReleaseFrame();
   }
   return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_open(const char* utf8_path,
+                        int32_t width,
+                        int32_t height,
+                        int32_t frames_per_second,
+                        int32_t bitrate_bits_per_second,
+                        FlucordVideoClip** out_clip) {
+  if (utf8_path == nullptr || out_clip == nullptr || width <= 0 ||
+      height <= 0 || frames_per_second <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  const int wide_length =
+      MultiByteToWideChar(CP_UTF8, 0, utf8_path, -1, nullptr, 0);
+  if (wide_length <= 0) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  std::vector<wchar_t> path(static_cast<size_t>(wide_length));
+  MultiByteToWideChar(CP_UTF8, 0, utf8_path, -1, path.data(), wide_length);
+
+  auto clip = std::make_unique<FlucordVideoClip>();
+  clip->frames_per_second = frames_per_second;
+  if (FAILED(MFCreateSinkWriterFromURL(path.data(), nullptr, nullptr,
+                                       &clip->writer))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+
+  // Output and input are both H.264: the frames arrive encoded, and the file
+  // sink's job here is the container rather than the codec.
+  ComPtr<IMFMediaType> type;
+  if (FAILED(MFCreateMediaType(&type))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+  type->SetUINT32(MF_MT_AVG_BITRATE,
+                  static_cast<UINT32>(bitrate_bits_per_second > 0
+                                          ? bitrate_bits_per_second
+                                          : 2500000));
+  MFSetAttributeSize(type.Get(), MF_MT_FRAME_SIZE,
+                     static_cast<UINT32>(width),
+                     static_cast<UINT32>(height));
+  MFSetAttributeRatio(type.Get(), MF_MT_FRAME_RATE,
+                      static_cast<UINT32>(frames_per_second), 1);
+  MFSetAttributeRatio(type.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+  type->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+
+  if (FAILED(clip->writer->AddStream(type.Get(), &clip->stream)) ||
+      FAILED(clip->writer->SetInputMediaType(clip->stream, type.Get(),
+                                             nullptr)) ||
+      FAILED(clip->writer->BeginWriting())) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+
+  *out_clip = clip.release();
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_write(FlucordVideoClip* clip,
+                         const uint8_t* annex_b,
+                         int32_t length,
+                         int64_t timestamp_us,
+                         int32_t is_keyframe) {
+  if (clip == nullptr || annex_b == nullptr || length <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  ComPtr<IMFMediaBuffer> buffer;
+  if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(length), &buffer))) {
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  BYTE* target = nullptr;
+  if (FAILED(buffer->Lock(&target, nullptr, nullptr))) {
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+  memcpy(target, annex_b, static_cast<size_t>(length));
+  buffer->Unlock();
+  buffer->SetCurrentLength(static_cast<DWORD>(length));
+
+  ComPtr<IMFSample> sample;
+  if (FAILED(MFCreateSample(&sample))) return FLUCORD_VIDEO_ERROR_ENCODER;
+  sample->AddBuffer(buffer.Get());
+  sample->SetSampleTime(timestamp_us * 10);
+  sample->SetSampleDuration(10000000 / clip->frames_per_second);
+  if (is_keyframe != 0) sample->SetUINT32(MFSampleExtension_CleanPoint, 1);
+
+  return SUCCEEDED(clip->writer->WriteSample(clip->stream, sample.Get()))
+             ? FLUCORD_VIDEO_OK
+             : FLUCORD_VIDEO_ERROR_ENCODER;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_close(FlucordVideoClip* clip) {
+  if (clip == nullptr) return FLUCORD_VIDEO_ERROR_STATE;
+  const HRESULT hr = clip->writer ? clip->writer->Finalize() : E_FAIL;
+  clip->writer.Reset();
+  delete clip;
+  MFShutdown();
+  return SUCCEEDED(hr) ? FLUCORD_VIDEO_OK : FLUCORD_VIDEO_ERROR_ENCODER;
 }
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void) {

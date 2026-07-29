@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.73% lines | `flutter test --coverage`, 2,671 passing, 6 skipped |
+| Automated test coverage | 89.72% lines | `flutter test --coverage`, 2,683 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -255,10 +255,13 @@ are excluded from the denominator and are never reported as implemented.
   Dart rather than natively, since Flutter already has an encoder and a second
   one in C++ would be a second thing to get wrong; the row padding the GPU
   leaves on each line is stripped first, because a picture encoded from the
-  padded buffer shears further with every row. The overlay and clip actions in
-  the same table are left out rather than drawn as rows that would do
-  nothing — there is no overlay, and a clip is a replay buffer plus an MP4
-  muxer that is not written. The handler is installed on
+  padded buffer shears further with every row. A clip is the same encoder's
+  output kept in a ring buffer and muxed into MP4 through a Media Foundation
+  sink writer: the frames were compressed once already, so they are written as
+  they are rather than encoded a second time, timestamps rebased so the file
+  starts at zero, and the buffer never drops past the oldest keyframe still
+  needed — a clip that began on a delta frame decodes to nothing. Only the
+  overlay actions are left out, because there is no overlay to act on. The handler is installed on
   the keyboard itself, not in a `Shortcuts` widget, because a binding has to
   fire wherever the focus is — including mid-message — and a bound chord is
   swallowed so it does not also type its letter into the composer. They also

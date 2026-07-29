@@ -80,6 +80,7 @@ import 'data/discord/discord_repository_factory.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
 import 'data/video/native_video_decoder_service.dart';
+import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/noop_voice_media_service.dart';
@@ -131,6 +132,7 @@ class FlucordApp extends StatefulWidget {
     this.windowCaptureShield,
     this.globalKeyboardHook,
     this.screenshotService,
+    this.clipRecorder,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -214,6 +216,9 @@ class FlucordApp extends StatefulWidget {
   /// Saves a picture of the screen. Injected so a test does not read the
   /// display of whoever is running it.
   final ScreenshotService? screenshotService;
+
+  /// Keeps the last few seconds of encoded video, for the clip keybind.
+  final ClipRecorder? clipRecorder;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -268,6 +273,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final KeybindController _keybindController;
   late final StreamerModeController _streamerModeController;
   late final ScreenshotService _screenshotService;
+  late final ClipRecorder _clipRecorder;
   final GlobalKey<ScaffoldMessengerState> _messengerKey =
       GlobalKey<ScaffoldMessengerState>();
   late final DirectCallController _directCallController;
@@ -484,6 +490,15 @@ class _FlucordAppState extends State<FlucordApp> {
         (Platform.isWindows
             ? NativeScreenshotService()
             : const UnavailableScreenshotService());
+    _clipRecorder =
+        widget.clipRecorder ??
+        (Platform.isWindows
+            ? NativeClipRecorder()
+            : const UnavailableClipRecorder());
+    // Fed from whichever encoder is running: the screen share and the camera
+    // are the same encoder, so the buffer follows whichever opened it.
+    final encoder = widget.videoEncoderService ?? NativeVideoEncoderService();
+    _clipRecorder.attach(encoder.frames, const VideoEncoderSettings());
     // Going live is the only streaming this client knows about, so it is
     // what the automatic switch follows.
     _goLiveController.addListener(_syncStreamerMode);
@@ -611,6 +626,29 @@ class _FlucordAppState extends State<FlucordApp> {
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
 
+  /// Writes the last few seconds of what was being encoded.
+  ///
+  /// Only whatever the encoder is already producing: a clip is the recording
+  /// that was running, and nothing starts one on the way to saving it.
+  Future<void> _saveClip() async {
+    final result = await _clipRecorder.save();
+    _messengerKey.currentState?.showSnackBar(
+      SnackBar(
+        key: const ValueKey('clip-result'),
+        content: Text(
+          result.isSaved
+              ? 'Clip saved to ${result.path}'
+              : switch (result.failure) {
+                  ClipFailure.empty =>
+                    'Nothing to clip: start a stream or a camera first.',
+                  ClipFailure.write => 'The clip could not be written.',
+                  _ => 'This build cannot save clips.',
+                },
+        ),
+      ),
+    );
+  }
+
   /// Writes a screenshot and says where it went.
   ///
   /// Reported through the same messenger the rest of the client speaks with:
@@ -673,6 +711,8 @@ class _FlucordAppState extends State<FlucordApp> {
         if (pressed) unawaited(_streamerModeController.toggle());
       case KeybindAction.saveScreenshot:
         if (pressed) unawaited(_saveScreenshot());
+      case KeybindAction.saveClip:
+        if (pressed) unawaited(_saveClip());
     }
   }
 

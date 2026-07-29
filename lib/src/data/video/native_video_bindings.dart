@@ -123,7 +123,8 @@ final class NativeVideoBindings {
             Int32 Function(Int32, Pointer<Utf8>, Int32),
             int Function(int, Pointer<Utf8>, int)
           >('flucord_video_camera_name'),
-      captureScreen = _lookUpCaptureScreen(library);
+      captureScreen = _lookUpCaptureScreen(library),
+      clip = ClipWriterBindings.lookUp(library);
 
   /// Absent in a module built before screenshots existed, which is a build
   /// that must still run rather than fail to load.
@@ -164,7 +165,71 @@ final class NativeVideoBindings {
 
   /// One BGRA frame from a display, or null in a module without it.
   final ScreenshotCaptureDart? captureScreen;
+
+  /// The MP4 writer, or null in a module built before clips existed.
+  final ClipWriterBindings? clip;
 }
+
+/// The three calls that turn encoded frames into a file.
+final class ClipWriterBindings {
+  const ClipWriterBindings({
+    required this.open,
+    required this.write,
+    required this.close,
+  });
+
+  /// Looked up together: a module with one of them has all three, and one
+  /// with none is simply older than the feature.
+  static ClipWriterBindings? lookUp(DynamicLibrary library) {
+    try {
+      return ClipWriterBindings(
+        open: library.lookupFunction<ClipOpenNative, ClipOpenDart>(
+          'flucord_video_clip_open',
+        ),
+        write: library.lookupFunction<ClipWriteNative, ClipWriteDart>(
+          'flucord_video_clip_write',
+        ),
+        close: library
+            .lookupFunction<
+              Int32 Function(Pointer<Void>),
+              int Function(Pointer<Void>)
+            >('flucord_video_clip_close'),
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  final ClipOpenDart open;
+  final ClipWriteDart write;
+  final int Function(Pointer<Void>) close;
+}
+
+typedef ClipOpenNative =
+    Int32 Function(
+      Pointer<Utf8>,
+      Int32,
+      Int32,
+      Int32,
+      Int32,
+      Pointer<Pointer<Void>>,
+    );
+
+typedef ClipOpenDart =
+    int Function(
+      Pointer<Utf8>,
+      int,
+      int,
+      int,
+      int,
+      Pointer<Pointer<Void>>,
+    );
+
+typedef ClipWriteNative =
+    Int32 Function(Pointer<Void>, Pointer<Uint8>, Int32, Int64, Int32);
+
+typedef ClipWriteDart =
+    int Function(Pointer<Void>, Pointer<Uint8>, int, int, int);
 
 typedef NativeScreenshotCallback =
     Void Function(Pointer<Void>, Pointer<Uint8>, Int32, Int32, Int32);

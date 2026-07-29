@@ -170,6 +170,35 @@ flucord_video_capture_screen(int32_t display_index,
                              FlucordVideoScreenshotCallback callback,
                              void* user_data);
 
+// Writes already-encoded H.264 into an MP4 file.
+//
+// The clip recorder holds the last few seconds of what the encoder produced
+// and hands them here when somebody asks for a clip. Encoding again would be
+// both slower and worse: these frames were encoded once already, and the file
+// sink only has to wrap them.
+typedef struct FlucordVideoClip FlucordVideoClip;
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_open(const char* utf8_path,
+                        int32_t width,
+                        int32_t height,
+                        int32_t frames_per_second,
+                        int32_t bitrate_bits_per_second,
+                        FlucordVideoClip** out_clip);
+
+// Appends one Annex B access unit. `timestamp_us` is measured from the start
+// of the clip, not from when the frame was captured.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_write(FlucordVideoClip* clip,
+                         const uint8_t* annex_b,
+                         int32_t length,
+                         int64_t timestamp_us,
+                         int32_t is_keyframe);
+
+// Finalises the file. A clip not closed is a file no player will open.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_close(FlucordVideoClip* clip);
+
 // How many displays are available, so a picker has something to list.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void);
 

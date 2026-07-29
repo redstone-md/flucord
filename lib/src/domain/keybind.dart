@@ -20,7 +20,8 @@ enum KeybindAction {
     'Toggle voice channel chat',
   ),
   toggleStreamerMode('TOGGLE_STREAMER_MODE', 'Toggle streamer mode'),
-  saveScreenshot('SAVE_SCREENSHOT', 'Save a screenshot');
+  saveScreenshot('SAVE_SCREENSHOT', 'Save a screenshot'),
+  saveClip('SAVE_CLIP', 'Save the last few seconds');
 
   const KeybindAction(this.code, this.label, {this.holdToUse = false});
 
