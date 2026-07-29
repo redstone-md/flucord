@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flucord/src/application/friends_controller.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
@@ -243,6 +244,27 @@ void main() {
       expect(find.text('Unknown'), findsOneWidget);
     });
 
+    testWidgets('presence is shown beside a name the session knows', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _FakeGraph(_graph),
+        presenceOf: (id) => id == 'friend' ? Presence.online : null,
+      );
+
+      expect(
+        find.byKey(const ValueKey('friend-presence-friend')),
+        findsOneWidget,
+      );
+      // Somebody the session has no presence for gets no indicator rather
+      // than a grey one that claims they are offline.
+      expect(
+        find.byKey(const ValueKey('friend-presence-incoming')),
+        findsNothing,
+      );
+    });
+
     testWidgets('an account with nobody says so', (tester) async {
       await _pump(tester, _FakeGraph(const []));
 
@@ -251,7 +273,11 @@ void main() {
   });
 }
 
-Future<void> _pump(WidgetTester tester, _FakeGraph graph) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _FakeGraph graph, {
+  Presence? Function(String userId)? presenceOf,
+}) async {
   await tester.binding.setSurfaceSize(const Size(500, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final controller = FriendsController(() => graph);
@@ -259,7 +285,9 @@ Future<void> _pump(WidgetTester tester, _FakeGraph graph) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: FlucordTheme.dark,
-      home: Scaffold(body: FriendsPanel(controller: controller)),
+      home: Scaffold(
+        body: FriendsPanel(controller: controller, presenceOf: presenceOf),
+      ),
     ),
   );
   await tester.pumpAndSettle();

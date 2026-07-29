@@ -288,14 +288,16 @@ are excluded from the denominator and are never reported as implemented.
   two places would disagree with itself. A relationship the account never
   asked for — somebody it plays with, or a kind newer than this build — is
   shown under its own heading rather than dropped, because one that exists and
-  appears nowhere is one nobody can act on.
+  appears nowhere is one nobody can act on. Each name carries the presence the
+  session already knows, drawn with the shared indicator rather than a coloured
+  dot — the shape is what keeps the four statuses apart for somebody who cannot
+  separate green from red. Somebody the session has no presence for gets no
+  indicator at all, rather than a grey one claiming they are offline.
 - **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`,
   `friends_panel_test.dart`.
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
-- **Blocked by**: friend suggestions and game relationships are untouched, and
-  the desktop surface has no presence beside each name yet — the presence
-  service knows it, but the two are not joined up.
+- **Blocked by**: friend suggestions and game relationships are untouched.
 
 ## FBC-GUILD — Servers, members, roles, discovery
 

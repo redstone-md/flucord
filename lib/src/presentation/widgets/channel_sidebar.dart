@@ -213,7 +213,14 @@ class ChannelSidebar extends StatelessWidget {
                 // The friend graph takes the whole pane rather than sitting
                 // above the conversations: both are long lists, and stacking
                 // them means neither can be read.
-                ? FriendsPanel(controller: friends!)
+                ? FriendsPanel(
+                    controller: friends!,
+                    // From the workspace, which the presence service already
+                    // keeps current; a second copy would be a second thing to
+                    // go stale.
+                    presenceOf: (userId) =>
+                        workspace.memberOrNull(userId)?.presence,
+                  )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
                     children: _navigationEntries(

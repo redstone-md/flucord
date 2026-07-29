@@ -3,17 +3,26 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/friends_controller.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import 'presence_indicator.dart';
 
 /// The account's friends, requests and blocks.
 ///
 /// Requests come first: they are the entries that want an answer, and burying
 /// them under a long friend list is how somebody misses one for a week.
 class FriendsPanel extends StatefulWidget {
-  const FriendsPanel({required this.controller, super.key});
+  const FriendsPanel({required this.controller, this.presenceOf, super.key});
 
   final FriendsController controller;
+
+  /// What somebody's presence is, or null where the session does not know.
+  ///
+  /// Read from the workspace rather than held here: the presence service
+  /// already keeps it current, and a second copy would be a second thing to
+  /// go stale.
+  final Presence? Function(String userId)? presenceOf;
 
   @override
   State<FriendsPanel> createState() => _FriendsPanelState();
@@ -101,18 +110,21 @@ class _FriendsPanelState extends State<FriendsPanel> {
                     title: 'Requests',
                     entries: requests,
                     controller: controller,
+                    presenceOf: widget.presenceOf,
                   ),
                 if (friends.isNotEmpty)
                   _Group(
                     title: 'Friends',
                     entries: friends,
                     controller: controller,
+                    presenceOf: widget.presenceOf,
                   ),
                 if (blocked.isNotEmpty)
                   _Group(
                     title: 'Blocked',
                     entries: blocked,
                     controller: controller,
+                    presenceOf: widget.presenceOf,
                   ),
                 if (others.isNotEmpty)
                   _Group(
@@ -152,11 +164,13 @@ class _Group extends StatelessWidget {
     required this.title,
     required this.entries,
     required this.controller,
+    this.presenceOf,
   });
 
   final String title;
   final List<DiscordRelationship> entries;
   final FriendsController controller;
+  final Presence? Function(String userId)? presenceOf;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -174,16 +188,25 @@ class _Group extends StatelessWidget {
         ),
       ),
       for (final entry in entries)
-        _RelationshipRow(entry: entry, controller: controller),
+        _RelationshipRow(
+          entry: entry,
+          controller: controller,
+          presence: presenceOf?.call(entry.user.id),
+        ),
     ],
   );
 }
 
 class _RelationshipRow extends StatelessWidget {
-  const _RelationshipRow({required this.entry, required this.controller});
+  const _RelationshipRow({
+    required this.entry,
+    required this.controller,
+    this.presence,
+  });
 
   final DiscordRelationship entry;
   final FriendsController controller;
+  final Presence? presence;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -196,6 +219,16 @@ class _RelationshipRow extends StatelessWidget {
     ),
     child: Row(
       children: [
+        if (presence case final status?) ...[
+          // The shared indicator rather than a coloured dot: it paints a
+          // distinct shape per status, which is what keeps the four apart for
+          // somebody who cannot separate green from red.
+          PresenceIndicator(
+            key: ValueKey('friend-presence-${entry.user.id}'),
+            presence: UserPresence(status: status),
+          ),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
