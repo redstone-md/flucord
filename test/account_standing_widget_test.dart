@@ -43,6 +43,78 @@ Future<AccountStandingController> _pump(
 }
 
 void main() {
+  testWidgets('a suspended account is told so, and can appeal once', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeSafetyHub(const AccountStanding())
+      ..suspension = const AccountSuspension(
+        isSuspended: true,
+        reason: 'Harassment',
+        classificationId: 'record-1',
+        canRequestReview: true,
+      );
+    final controller = AccountStandingController(() => repository);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AccountStandingSection(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('account-suspended')), findsOneWidget);
+    expect(find.text('Harassment'), findsOneWidget);
+    // An absent end is said rather than left blank: it is not "today".
+    expect(find.textContaining('has not said when it ends'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('account-suspended-appeal')));
+    await tester.pumpAndSettle();
+
+    expect(repository.suspendedReviews, ['record-1']);
+    expect(find.text('Review requested'), findsOneWidget);
+  });
+
+  testWidgets('a suspension that says when it ends shows the date', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeSafetyHub(const AccountStanding())
+      ..suspension = AccountSuspension(
+        isSuspended: true,
+        endsAt: DateTime.utc(2026, 8),
+      );
+    final controller = AccountStandingController(() => repository);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AccountStandingSection(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Until'), findsOneWidget);
+    // No record to appeal, so no button offering one.
+    expect(
+      find.byKey(const ValueKey('account-suspended-appeal')),
+      findsNothing,
+    );
+  });
+
   testWidgets('the page shows every record, split by what it is against', (
     tester,
   ) async {
@@ -207,6 +279,19 @@ void main() {
 }
 
 final class _FakeSafetyHub implements SafetyHubRepository {
+  AccountSuspension suspension = AccountSuspension.none;
+  final List<String> suspendedReviews = [];
+  bool acceptSuspendedReview = true;
+
+  @override
+  Future<AccountSuspension> loadSuspension() async => suspension;
+
+  @override
+  Future<bool> requestSuspendedReview(String classificationId) async {
+    suspendedReviews.add(classificationId);
+    return acceptSuspendedReview;
+  }
+
   _FakeSafetyHub(this._standing);
 
   final AccountStanding _standing;

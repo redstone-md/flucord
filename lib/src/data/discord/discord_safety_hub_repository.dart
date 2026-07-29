@@ -34,6 +34,55 @@ final class DiscordSafetyHubRepository implements SafetyHubRepository {
     }
   }
 
+  @override
+  Future<AccountSuspension> loadSuspension() async {
+    try {
+      return readSuspension(await _rest.getObject('/safety-hub/suspended/@me'));
+    } on DiscordApiException catch (error) {
+      // 404 is Discord saying the account is not suspended, which is an
+      // answer rather than a fault; 403 is the same for a session that may
+      // not ask.
+      if (error.statusCode == 404 || error.statusCode == 403) {
+        return AccountSuspension.none;
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> requestSuspendedReview(String classificationId) async {
+    if (classificationId.isEmpty) return false;
+    try {
+      await _rest.requestEmpty(
+        'POST',
+        '/safety-hub/suspended/request-review/'
+            '${Uri.encodeComponent(classificationId)}',
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 409) return false;
+      rethrow;
+    }
+  }
+
+  /// Reads the suspended payload.
+  ///
+  /// Every field is optional on the wire, and an account really can be
+  /// suspended with nothing said about when it ends.
+  static AccountSuspension readSuspension(Map<String, Object?> payload) {
+    final ends = payload['ends_at'] ?? payload['expires_at'];
+    return AccountSuspension(
+      isSuspended: payload['suspended'] == true || payload['is_suspended'] == true,
+      reason: _string(payload['reason']) ?? _string(payload['title']) ?? '',
+      classificationId:
+          _string(payload['classification_id']) ?? _string(payload['id']),
+      canRequestReview:
+          payload['can_request_review'] == true ||
+          payload['appeal_eligible'] == true,
+      endsAt: ends is String ? DateTime.tryParse(ends)?.toUtc() : null,
+    );
+  }
+
   /// Reads the safety-hub payload.
   ///
   /// The two classification lists are folded into one, with the guild ones

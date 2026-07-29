@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.73% lines | `flutter test --coverage`, 2,699 passing, 6 skipped |
+| Automated test coverage | 89.74% lines | `flutter test --coverage`, 2,716 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -222,6 +222,18 @@ are excluded from the denominator and are never reported as implemented.
   `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
   `account_credentials_test.dart`, `expression_favorites_test.dart`,
   `widget_test.dart`.
+- **Implemented**: the suspended-account routes. A suspended account cannot
+  read `GET /safety-hub/@me` at all — the suspension closes it off — so the
+  client reads `GET /safety-hub/suspended/@me` first and only asks for the
+  ordinary hub when that says the account is not suspended; a client that
+  knew one route reported the suspension as an outage. A 404 or a 403 there
+  is Discord saying "not suspended" rather than a fault. The reason is shown
+  verbatim, because the wording is the only thing an appeal can be written
+  against, and an absent end date is said out loud instead of left blank —
+  a blank one reads as "today". The appeal goes to
+  `POST /safety-hub/suspended/request-review/{id}`, which is a different route
+  from the ordinary review for the same reason, and a 400 or 409 there is a
+  refusal rather than a failure.
 - **Live evidence**: authenticated identity hydrated on Windows `2026-07-25`.
 - **Implemented**: also changing the account name and the password, both of
   which Discord gates on the current password. The password is typed for the

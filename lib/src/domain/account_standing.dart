@@ -90,10 +90,53 @@ final class AccountStanding {
   ];
 }
 
+/// What a suspended account is told.
+///
+/// Its own route because a suspended account cannot read the ordinary safety
+/// hub: `GET /safety-hub/@me` is one of the things the suspension closes off,
+/// which is why a client that only knew that route showed such an account
+/// nothing at all.
+final class AccountSuspension {
+  const AccountSuspension({
+    this.isSuspended = false,
+    this.reason = '',
+    this.classificationId,
+    this.canRequestReview = false,
+    this.endsAt,
+  });
+
+  final bool isSuspended;
+
+  /// What Discord says it is for, verbatim. Not interpreted: the wording is
+  /// the only thing an appeal can be written against.
+  final String reason;
+
+  /// The record a review would be asked about, when there is one.
+  final String? classificationId;
+
+  final bool canRequestReview;
+
+  /// When it lifts, or null for one that does not say — which includes a
+  /// permanent one, and the surface must not read the absence as "today".
+  final DateTime? endsAt;
+
+  static const none = AccountSuspension();
+}
+
 /// Reads the account's standing, and asks for a review of one record.
 abstract interface class SafetyHubRepository {
   /// `GET /safety-hub/@me`.
   Future<AccountStanding> loadAccountStanding();
+
+  /// `GET /safety-hub/suspended/@me`.
+  ///
+  /// Answers [AccountSuspension.none] for an account that is not suspended,
+  /// rather than throwing: not being suspended is the ordinary case.
+  Future<AccountSuspension> loadSuspension();
+
+  /// `POST /safety-hub/suspended/request-review/{id}`, the appeal a suspended
+  /// account can file. Answers whether it was taken.
+  Future<bool> requestSuspendedReview(String classificationId);
 
   /// Asks Discord to look at one record again.
   ///

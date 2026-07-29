@@ -19,6 +19,7 @@ final class AccountStandingController extends ChangeNotifier {
   bool get isAvailable => _repositoryProvider() != null;
 
   AccountStanding? _standing;
+  AccountSuspension _suspension = AccountSuspension.none;
   Object? _error;
   bool _loading = false;
   bool _disposed = false;
@@ -26,6 +27,9 @@ final class AccountStandingController extends ChangeNotifier {
   final Set<String> _refused = {};
 
   AccountStanding? get standing => _standing;
+
+  /// What a suspension says, or [AccountSuspension.none].
+  AccountSuspension get suspension => _suspension;
   Object? get error => _error;
   bool get isLoading => _loading;
 
@@ -48,12 +52,39 @@ final class AccountStandingController extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      _standing = await repository.loadAccountStanding();
+      // Read first: a suspended account cannot read the ordinary hub, so
+      // asking for that one before knowing would report a suspension as an
+      // outage.
+      _suspension = await repository.loadSuspension();
+      if (!_suspension.isSuspended) {
+        _standing = await repository.loadAccountStanding();
+      }
     } on Object catch (error) {
       _error = error;
     } finally {
       _loading = false;
       _notify();
+    }
+  }
+
+  /// Appeals the suspension itself.
+  ///
+  /// A different route from [requestReview]: the ordinary one is closed to a
+  /// suspended account, which is the whole reason this exists.
+  Future<bool> requestSuspendedReview() async {
+    final id = _suspension.classificationId;
+    final repository = _repositoryProvider();
+    if (id == null || repository == null) return false;
+    if (_requested.contains(id)) return false;
+    try {
+      final accepted = await repository.requestSuspendedReview(id);
+      (accepted ? _requested : _refused).add(id);
+      _notify();
+      return accepted;
+    } on Object catch (error) {
+      _error = error;
+      _notify();
+      return false;
     }
   }
 

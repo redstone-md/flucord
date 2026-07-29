@@ -44,6 +44,14 @@ class _AccountStandingSectionState extends State<AccountStandingSection> {
             title: 'Account Standing',
             subtitle: 'What Discord has recorded about this account.',
           ),
+          if (controller.suspension.isSuspended)
+            _SuspensionNotice(
+              suspension: controller.suspension,
+              hasAppealed: controller.hasRequestedReview(
+                controller.suspension.classificationId ?? '',
+              ),
+              onAppeal: controller.requestSuspendedReview,
+            ),
           if (controller.isLoading && standing == null)
             const Padding(
               key: ValueKey('standing-loading'),
@@ -233,6 +241,71 @@ class _StandingError extends StatelessWidget {
           onPressed: onRetry,
           child: const Text('Try again'),
         ),
+      ],
+    ),
+  );
+}
+
+/// What a suspended account is shown instead of a record list.
+///
+/// The ordinary hub is closed to it, so this is the only thing there is to
+/// show — and showing nothing would read as the client failing rather than as
+/// the account being suspended.
+class _SuspensionNotice extends StatelessWidget {
+  const _SuspensionNotice({
+    required this.suspension,
+    required this.hasAppealed,
+    required this.onAppeal,
+  });
+
+  final AccountSuspension suspension;
+  final bool hasAppealed;
+  final Future<bool> Function() onAppeal;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('account-suspended'),
+    margin: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'This account is suspended',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        if (suspension.reason.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          // Verbatim: the wording is the only thing an appeal can be written
+          // against, and paraphrasing it would change what is being answered.
+          Text(suspension.reason, style: const TextStyle(fontSize: 12)),
+        ],
+        if (suspension.endsAt case final DateTime ends) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Until ${ends.toLocal()}',
+            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          ),
+        ] else ...[
+          const SizedBox(height: 4),
+          Text(
+            // Said rather than left blank: an absent end is not "today".
+            'Discord has not said when it ends.',
+            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          ),
+        ],
+        if (suspension.canRequestReview) ...[
+          const SizedBox(height: 8),
+          FilledButton.tonal(
+            key: const ValueKey('account-suspended-appeal'),
+            onPressed: hasAppealed ? null : () => unawaited(onAppeal()),
+            child: Text(hasAppealed ? 'Review requested' : 'Request a review'),
+          ),
+        ],
       ],
     ),
   );

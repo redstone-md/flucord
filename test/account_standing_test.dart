@@ -38,6 +38,146 @@ Map<String, Object?> _payload({
 };
 
 void main() {
+  group('a suspended account', () {
+    test('reads its own route, and the ordinary hub is not asked', () async {
+      final repository = _FakeSafetyHub()
+        ..suspension = const AccountSuspension(
+          isSuspended: true,
+          reason: 'Harassment',
+          classificationId: 'record-1',
+          canRequestReview: true,
+        );
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+
+      await controller.load();
+
+      expect(controller.suspension.isSuspended, isTrue);
+      expect(controller.suspension.reason, 'Harassment');
+      // The hub is closed to a suspended account: asking would report the
+      // suspension as an outage.
+      expect(controller.standing, isNull);
+    });
+
+    test('an account that is not suspended reads the hub as before', () async {
+      final repository = _FakeSafetyHub();
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+
+      await controller.load();
+
+      expect(controller.suspension.isSuspended, isFalse);
+      expect(controller.standing, isNotNull);
+    });
+
+    test('the appeal goes to the suspended route', () async {
+      final repository = _FakeSafetyHub()
+        ..suspension = const AccountSuspension(
+          isSuspended: true,
+          classificationId: 'record-1',
+          canRequestReview: true,
+        );
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(await controller.requestSuspendedReview(), isTrue);
+
+      expect(repository.suspendedReviews, ['record-1']);
+      expect(controller.hasRequestedReview('record-1'), isTrue);
+      // Asked twice is not asked twice.
+      expect(await controller.requestSuspendedReview(), isFalse);
+      expect(repository.suspendedReviews, hasLength(1));
+    });
+
+    test('a suspension with no record to appeal offers none', () async {
+      final repository = _FakeSafetyHub()
+        ..suspension = const AccountSuspension(isSuspended: true);
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(await controller.requestSuspendedReview(), isFalse);
+      expect(repository.suspendedReviews, isEmpty);
+    });
+
+
+    test('an appeal that could not be sent is reported', () async {
+      final repository = _FakeSafetyHub()
+        ..suspension = const AccountSuspension(
+          isSuspended: true,
+          classificationId: 'record-1',
+        )
+        ..failReview = true;
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(await controller.requestSuspendedReview(), isFalse);
+
+      expect(controller.error, isA<StateError>());
+    });
+
+    test('with no transport there is nothing to appeal to', () async {
+      final controller = AccountStandingController(() => null);
+      addTearDown(controller.dispose);
+
+      expect(await controller.requestSuspendedReview(), isFalse);
+    });
+
+    test('a refused appeal is an answer, not a failure', () async {
+      final repository = _FakeSafetyHub()
+        ..suspension = const AccountSuspension(
+          isSuspended: true,
+          classificationId: 'record-1',
+        )
+        ..acceptSuspendedReview = false;
+      final controller = AccountStandingController(() => repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(await controller.requestSuspendedReview(), isFalse);
+
+      expect(controller.wasReviewRefused('record-1'), isTrue);
+      expect(controller.error, isNull);
+    });
+  });
+
+  group('what the suspended route says', () {
+    test('every field is optional, and an absent end is not today', () {
+      final read = DiscordSafetyHubRepository.readSuspension(const {
+        'suspended': true,
+      });
+
+      expect(read.isSuspended, isTrue);
+      expect(read.reason, isEmpty);
+      expect(read.endsAt, isNull);
+      expect(read.canRequestReview, isFalse);
+    });
+
+    test('the alternate spellings Discord uses are all read', () {
+      final read = DiscordSafetyHubRepository.readSuspension(const {
+        'is_suspended': true,
+        'title': 'Spam',
+        'id': 'record-9',
+        'appeal_eligible': true,
+        'expires_at': '2026-08-01T00:00:00Z',
+      });
+
+      expect(read.isSuspended, isTrue);
+      expect(read.reason, 'Spam');
+      expect(read.classificationId, 'record-9');
+      expect(read.canRequestReview, isTrue);
+      expect(read.endsAt, DateTime.utc(2026, 8));
+    });
+
+    test('a payload for an account that is not suspended reads as none', () {
+      final read = DiscordSafetyHubRepository.readSuspension(const {});
+
+      expect(read.isSuspended, isFalse);
+    });
+  });
+
   group('reading the record', () {
     test('reads what the safety hub says', () {
       final standing = DiscordSafetyHubRepository.readStanding(_payload());
@@ -130,6 +270,104 @@ void main() {
       expect(standing.username, 'mira');
       expect(transport.requests.single.uri.path, endsWith('/safety-hub/@me'));
       expect(transport.requests.single.method, 'GET');
+    });
+
+
+    test('a suspension is read from its own route', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode({
+            'suspended': true,
+            'reason': 'Harassment',
+            'classification_id': 'record-1',
+            'can_request_review': true,
+            'ends_at': '2026-08-01T00:00:00Z',
+          }),
+        ),
+      ]);
+
+      final suspension = await _repository(transport).loadSuspension();
+
+      expect(suspension.isSuspended, isTrue);
+      expect(suspension.endsAt, DateTime.utc(2026, 8));
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/safety-hub/suspended/@me'),
+      );
+    });
+
+    test('a 404 or a 403 means not suspended, not an outage', () async {
+      for (final status in [404, 403]) {
+        final transport = _Transport([
+          DiscordHttpResponse(
+            statusCode: status,
+            headers: const {},
+            body: '{"message": "no"}',
+          ),
+        ]);
+
+        expect(
+          (await _repository(transport).loadSuspension()).isSuspended,
+          isFalse,
+        );
+      }
+    });
+
+    test('an appeal goes to the suspended route', () async {
+      final transport = _Transport([
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+
+      expect(
+        await _repository(transport).requestSuspendedReview('record-1'),
+        isTrue,
+      );
+
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/safety-hub/suspended/request-review/record-1'),
+      );
+      expect(transport.requests.single.method, 'POST');
+    });
+
+    test('an appeal with no record asks nothing', () async {
+      final transport = _Transport([]);
+
+      expect(await _repository(transport).requestSuspendedReview(''), isFalse);
+      expect(transport.requests, isEmpty);
+    });
+
+    test('a refused appeal is an answer; anything else still throws', () async {
+      for (final status in [400, 409]) {
+        final transport = _Transport([
+          DiscordHttpResponse(
+            statusCode: status,
+            headers: const {},
+            body: '{"message": "already appealed"}',
+          ),
+        ]);
+        expect(
+          await _repository(transport).requestSuspendedReview('record-1'),
+          isFalse,
+        );
+      }
+
+      final broken = _Transport([
+        const DiscordHttpResponse(statusCode: 500, headers: {}, body: '{}'),
+      ]);
+      await expectLater(
+        _repository(broken).requestSuspendedReview('record-1'),
+        throwsA(isA<DiscordApiException>()),
+      );
+      final unreadable = _Transport([
+        const DiscordHttpResponse(statusCode: 500, headers: {}, body: '{}'),
+      ]);
+      await expectLater(
+        _repository(unreadable).loadSuspension(),
+        throwsA(isA<DiscordApiException>()),
+      );
     });
 
     test('a review is asked for by record', () async {
@@ -286,6 +524,22 @@ DiscordSafetyHubRepository _repository(_Transport transport) =>
     );
 
 final class _FakeSafetyHub implements SafetyHubRepository {
+  AccountSuspension suspension = AccountSuspension.none;
+  final List<String> suspendedReviews = [];
+  bool acceptSuspendedReview = true;
+
+  @override
+  Future<AccountSuspension> loadSuspension() async => suspension;
+
+  bool failReview = false;
+
+  @override
+  Future<bool> requestSuspendedReview(String classificationId) async {
+    if (failReview) throw StateError('appeal failed');
+    suspendedReviews.add(classificationId);
+    return acceptSuspendedReview;
+  }
+
   int loads = 0;
   final List<String> reviews = [];
   bool acceptReviews = true;
