@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../zstd/zstd_codec.dart';
 import 'discord_desktop_bootstrap.dart';
@@ -254,6 +256,9 @@ final class DiscordDesktopGatewayClient
         _scheduleReconnect(immediate: action.immediate);
       case DiscordDesktopGatewayDispatch():
         _captureBootstrap(action);
+        if (action.name == 'READY' || action.name == 'RESUMED') {
+          _diagnose(action.name.toLowerCase());
+        }
         if (action.name == 'READY') {
           _emitStatus(DiscordGatewayStatus.connected);
           _subscribeReadyGuilds(action.data);
@@ -458,8 +463,20 @@ final class DiscordDesktopGatewayClient
     _ => '${error.runtimeType}: $error',
   };
 
+  /// Says what the session just did, where it can be read.
+  ///
+  /// The voice sockets identify with this session's id, so its reconnects are
+  /// the first thing to check when Discord starts answering voice with 4022 —
+  /// "session expired" downstream is this session having been replaced.
+  void _diagnose(String what, [Object? detail]) {
+    final line = 'flucord.gateway $what${detail == null ? '' : ': $detail'}';
+    developer.log(line, name: 'flucord.discord.gateway', level: 900);
+    if (kDebugMode) stdout.writeln(line);
+  }
+
   void _scheduleReconnect({bool immediate = false}) {
     if (_closing || _reconnectTimer?.isActive == true) return;
+    _diagnose('reconnecting', immediate ? 'immediate' : 'in 2s');
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     _emitStatus(DiscordGatewayStatus.reconnecting);

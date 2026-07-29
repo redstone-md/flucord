@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -136,9 +138,15 @@ final class GoLiveController extends ChangeNotifier {
         channelId: channelId,
         guildId: guildId,
       );
+      _diagnose(
+        'started',
+        '${sourceId ?? 'primary screen'}'
+            '${_previewError == null ? '' : ' (no preview: $_previewError)'}',
+      );
       _startPinging();
       return true;
     } on Object catch (error) {
+      _diagnose('start failed', error);
       _error = error;
       _status = GoLiveStatus.failure;
       await _stopCapture();
@@ -287,6 +295,12 @@ final class GoLiveController extends ChangeNotifier {
       _status = GoLiveStatus.live;
     }
     _notify();
+  }
+
+  void _diagnose(String what, [Object? detail]) {
+    final line = 'flucord.golive $what${detail == null ? '' : ': $detail'}';
+    developer.log(line, name: 'flucord.golive', level: 900);
+    if (kDebugMode) stdout.writeln(line);
   }
 
   void _notify() {

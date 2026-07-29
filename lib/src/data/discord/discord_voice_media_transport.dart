@@ -50,6 +50,12 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
   DiscordAudioRtpPacketizer? _packetizer;
   bool _daveEnabled = false;
   bool _speaking = false;
+  int _consecutiveSendFailures = 0;
+
+  /// Frames in a row the socket may refuse before it counts as broken. Fifty
+  /// is a second of speech: long enough to outlast a reconnect, short enough
+  /// that a genuinely dead path is still reported.
+  static const _sendFailureLimit = 50;
 
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio =>
@@ -84,7 +90,27 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
       final sent = _sendFrame(
         packetizer.packetize(payload, marker: startsSpeaking),
       );
-      if (sent <= 0) throw StateError('Discord voice UDP packet was not sent');
+      if (sent <= 0) {
+        // One frame that did not make it onto the wire is a socket being
+        // replaced, which happens on every reconnect. Twenty milliseconds of
+        // audio is not worth telling somebody about, and reporting each one
+        // put "voice ran into a problem" over a call that was reconnecting
+        // perfectly well. A path that is genuinely gone says so below.
+        _consecutiveSendFailures++;
+        if (_consecutiveSendFailures >= _sendFailureLimit) {
+          _consecutiveSendFailures = 0;
+          throw StateError(
+            'Discord accepted no voice packets for '
+            '$_sendFailureLimit frames',
+          );
+        }
+        if (startsSpeaking) {
+          _speaking = false;
+          _sendSpeaking(false);
+        }
+        return;
+      }
+      _consecutiveSendFailures = 0;
     } catch (_) {
       if (startsSpeaking) {
         _speaking = false;

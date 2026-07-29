@@ -42,6 +42,52 @@ void main() {
     },
   );
 
+  test('a frame the socket refuses is dropped until they all are', () {
+    var accept = false;
+    var refused = 0;
+    final incoming = StreamController<DiscordRtpFrame>.broadcast();
+    addTearDown(incoming.close);
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: incoming.stream,
+      encryptDave: (opus) => opus,
+      decryptDave: (_, frame) => frame,
+      sendFrame: (frame) {
+        if (accept) return frame.payload.length + 12;
+        refused++;
+        return 0;
+      },
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => null,
+    )..configure(ssrc: 42, daveEnabled: false);
+
+    // Twenty milliseconds of audio lost to a socket being replaced is every
+    // reconnect. Reporting each one put "voice ran into a problem" over a call
+    // that was recovering perfectly well.
+    for (var index = 0; index < 49; index++) {
+      transport.sendOpusFrame(Uint8List.fromList([1]));
+    }
+    expect(refused, 49);
+
+    // A path that is genuinely gone still says so.
+    expect(
+      () => transport.sendOpusFrame(Uint8List.fromList([1])),
+      throwsStateError,
+    );
+
+    accept = true;
+    transport.sendOpusFrame(Uint8List.fromList([1]));
+    accept = false;
+    for (var index = 0; index < 49; index++) {
+      transport.sendOpusFrame(Uint8List.fromList([1]));
+    }
+
+    // The count starts again after a frame that landed.
+    expect(
+      () => transport.sendOpusFrame(Uint8List.fromList([1])),
+      throwsStateError,
+    );
+  });
+
   test('maps SSRC, decrypts DAVE, and drops unknown senders', () async {
     final incoming = StreamController<DiscordRtpFrame>.broadcast();
     addTearDown(incoming.close);
