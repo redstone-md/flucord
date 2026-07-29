@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.75% lines | `flutter test --coverage`, 2,723 passing, 6 skipped |
+| Automated test coverage | 89.76% lines | `flutter test --coverage`, 2,728 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -714,10 +714,20 @@ are excluded from the denominator and are never reported as implemented.
   only way this machine can exercise the sending half end to end, since the
   stream it produces is decoded back in-process exactly as a watching client
   would.
+- **Implemented**: the sound of a share is captured. `windows/flucord_audio`
+  opens the default render endpoint for loopback — the documented way to read
+  what is already going to the speakers, needing no driver and no injection —
+  and hands back interleaved PCM, float samples clamped rather than wrapped
+  because a sample past full scale is loud and wrapping turns loud into a
+  click. Silence still produces blocks, since WASAPI reports the silent flag
+  rather than stopping, which is what would otherwise end a share's audio at
+  the first quiet moment.
 - **Blocked by**: a second Discord account is the only thing that can show the
   picture arriving over Discord's own servers rather than through a local
-  loop. A stream's audio also still rides the voice connection rather than the
-  stream's own.
+  loop. The captured sound is not yet sent on the stream connection's own
+  audio SSRC: that is the half this cannot verify without somebody listening,
+  and putting it on the voice uplink instead would play the game to everybody
+  in the channel whether they opened the stream or not.
 
 ## FBC-STAGE — Stage channels
 

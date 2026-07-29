@@ -168,6 +168,12 @@ add_dependencies(${BINARY_NAME} flucord_overlay)
 install(FILES "$<TARGET_FILE:flucord_overlay>"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 
+# What the machine is playing, for a share's own sound.
+add_subdirectory("flucord_audio")
+add_dependencies(${BINARY_NAME} flucord_audio)
+install(FILES "$<TARGET_FILE:flucord_audio>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 set(LIBDAVE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdave/libdave.dll")
 if(NOT EXISTS "${LIBDAVE_DLL}")
   message(FATAL_ERROR "Missing ${LIBDAVE_DLL}; run tool/build_libdave.ps1")
