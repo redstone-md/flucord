@@ -29,8 +29,10 @@ import 'application/self_video_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
+import 'application/streamer_mode_controller.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/file_keybind_repository.dart';
+import 'data/file_streamer_mode_repository.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
 import 'application/stream_viewer_controller.dart';
@@ -56,6 +58,7 @@ import 'data/discord/discord_remote_auth_gateway.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/keybind.dart';
+import 'domain/streamer_mode.dart';
 import 'domain/chat_repository_factory.dart';
 import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
@@ -95,6 +98,7 @@ import 'presentation/widgets/auth_session_scope.dart';
 import 'presentation/widgets/age_verification_scope.dart';
 import 'presentation/widgets/multi_factor_auth_scope.dart';
 import 'presentation/widgets/keybind_scope.dart';
+import 'presentation/widgets/streamer_mode_scope.dart';
 import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
@@ -119,6 +123,7 @@ class FlucordApp extends StatefulWidget {
     this.videoEncoderService,
     this.videoDecoderService,
     this.keybindRepository,
+    this.streamerModeRepository,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -187,6 +192,9 @@ class FlucordApp extends StatefulWidget {
   /// Where the keybinds are kept. Injected so a test does not write into
   /// the real support directory.
   final KeybindRepository? keybindRepository;
+
+  /// Where streamer mode's switches are kept, injected for the same reason.
+  final StreamerModeRepository? streamerModeRepository;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -239,6 +247,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final SelfVideoController _selfVideoController;
   late final RemoteCameraController _remoteCameraController;
   late final KeybindController _keybindController;
+  late final StreamerModeController _streamerModeController;
   late final DirectCallController _directCallController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -442,6 +451,13 @@ class _FlucordAppState extends State<FlucordApp> {
       onTriggered: _runKeybind,
     );
     unawaited(_keybindController.load());
+    _streamerModeController = StreamerModeController(
+      widget.streamerModeRepository ?? FileStreamerModeRepository(),
+    );
+    unawaited(_streamerModeController.load());
+    // Going live is the only streaming this client knows about, so it is
+    // what the automatic switch follows.
+    _goLiveController.addListener(_syncStreamerMode);
     _chatController.addListener(_syncVoiceSignaling);
     _voiceController.addListener(_syncRemoteCameras);
     _chatController.addListener(_syncUserSettings);
@@ -527,7 +543,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _voiceController.dispose();
     _selfVideoController.dispose();
     _remoteCameraController.dispose();
+    _goLiveController.removeListener(_syncStreamerMode);
     _keybindController.dispose();
+    _streamerModeController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
   }
@@ -564,6 +582,10 @@ class _FlucordAppState extends State<FlucordApp> {
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
 
+  void _syncStreamerMode() => _streamerModeController.reconcileStreaming(
+    isStreaming: _goLiveController.isStreaming,
+  );
+
   /// Carries out one bound action.
   ///
   /// Push to talk and push to mute are opposites of each other rather than two
@@ -585,6 +607,8 @@ class _FlucordAppState extends State<FlucordApp> {
         if (pressed) unawaited(_voiceController.disconnect());
       case KeybindAction.toggleVoiceChannelChat:
         if (pressed) _workspaceController.toggleVoiceChannelChat();
+      case KeybindAction.toggleStreamerMode:
+        if (pressed) unawaited(_streamerModeController.toggle());
     }
   }
 
@@ -650,7 +674,9 @@ class _FlucordAppState extends State<FlucordApp> {
                     controller: _multiFactorAuthController,
                     child: AgeVerificationScope(
                       controller: _ageVerificationController,
-                      child: KeybindScope(
+                      child: StreamerModeScope(
+                        controller: _streamerModeController,
+                        child: KeybindScope(
                         controller: _keybindController,
                         child: UserSettingsScope(
                         controller: _userSettingsController,
@@ -733,6 +759,7 @@ class _FlucordAppState extends State<FlucordApp> {
             ),
           ),
         ),
+      ),
       ),
       ),
     );

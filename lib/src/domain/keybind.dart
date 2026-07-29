@@ -18,7 +18,8 @@ enum KeybindAction {
   toggleVoiceChannelChat(
     'TOGGLE_VOICE_CHANNEL_CHAT',
     'Toggle voice channel chat',
-  );
+  ),
+  toggleStreamerMode('TOGGLE_STREAMER_MODE', 'Toggle streamer mode');
 
   const KeybindAction(this.code, this.label, {this.holdToUse = false});
 

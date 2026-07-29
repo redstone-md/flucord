@@ -97,15 +97,27 @@ final class DesktopMessageNotificationController {
   factory DesktopMessageNotificationController({
     required DesktopFocusProbe isFocused,
     DesktopNotificationGateway? gateway,
+    bool Function()? isSuppressed,
   }) => DesktopMessageNotificationController._(
     isFocused,
     gateway ?? LocalDesktopNotificationGateway(),
+    isSuppressed ?? _neverSuppressed,
   );
 
-  DesktopMessageNotificationController._(this._isFocused, this._gateway);
+  DesktopMessageNotificationController._(
+    this._isFocused,
+    this._gateway,
+    this._isSuppressed,
+  );
+
+  static bool _neverSuppressed() => false;
 
   final DesktopFocusProbe _isFocused;
   final DesktopNotificationGateway _gateway;
+
+  /// Whether something outside the account — streamer mode — is holding
+  /// notifications back.
+  final bool Function() _isSuppressed;
 
   ChatController? _chatController;
   ChannelLinkActivator? _activateLink;
@@ -154,6 +166,10 @@ final class DesktopMessageNotificationController {
     // so it is read per message rather than captured when this controller was
     // attached.
     if (chatController.suppressesMessageNotifications) return;
+    // Read per message for the same reason: streamer mode can go on between
+    // one message and the next, and a toast is exactly what it exists to
+    // keep off a stream.
+    if (_isSuppressed()) return;
 
     if (chatController.activeChannelId == event.message.channelId &&
         await _isFocusedSafely()) {

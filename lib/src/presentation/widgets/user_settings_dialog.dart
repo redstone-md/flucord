@@ -7,6 +7,7 @@ import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
 import '../../application/age_verification_controller.dart';
 import '../../application/keybind_controller.dart';
+import '../../application/streamer_mode_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -24,6 +25,7 @@ import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 import 'keybind_section.dart';
+import 'streamer_mode_section.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -38,6 +40,7 @@ enum UserSettingsCategory {
   security('Two-Factor', Icons.key_outlined),
   age('Age Verification', Icons.badge_outlined),
   keybinds('Keybinds', Icons.keyboard_outlined),
+  streamer('Streamer Mode', Icons.videocam_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -58,6 +61,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.mfaController,
     this.ageController,
     this.keybindController,
+    this.streamerModeController,
     super.key,
   });
 
@@ -91,6 +95,9 @@ class UserSettingsDialog extends StatefulWidget {
   /// the session is — including the demo one.
   final KeybindController? keybindController;
 
+  /// Streamer mode, local for the same reason.
+  final StreamerModeController? streamerModeController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -101,6 +108,7 @@ class UserSettingsDialog extends StatefulWidget {
     MultiFactorAuthController? mfaController,
     AgeVerificationController? ageController,
     KeybindController? keybindController,
+    StreamerModeController? streamerModeController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -113,6 +121,7 @@ class UserSettingsDialog extends StatefulWidget {
       mfaController: mfaController,
       ageController: ageController,
       keybindController: keybindController,
+      streamerModeController: streamerModeController,
     ),
   );
 
@@ -156,6 +165,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               mfaController: widget.mfaController,
               ageController: widget.ageController,
               keybindController: widget.keybindController,
+              streamerModeController: widget.streamerModeController,
               category: _category,
             );
             return wide
@@ -312,6 +322,7 @@ class _Body extends StatelessWidget {
     required this.mfaController,
     required this.ageController,
     required this.keybindController,
+    required this.streamerModeController,
     required this.category,
   });
 
@@ -323,6 +334,7 @@ class _Body extends StatelessWidget {
   final MultiFactorAuthController? mfaController;
   final AgeVerificationController? ageController;
   final KeybindController? keybindController;
+  final StreamerModeController? streamerModeController;
   final UserSettingsCategory category;
 
   @override
@@ -414,6 +426,17 @@ class _Body extends StatelessWidget {
         );
       }
       return KeybindSection(controller: keybinds);
+    }
+    if (category == UserSettingsCategory.streamer) {
+      final streamer = streamerModeController;
+      if (streamer == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-streamer-unavailable'),
+          icon: Icons.videocam_off_outlined,
+          message: 'Streamer mode is unavailable in this build.',
+        );
+      }
+      return StreamerModeSection(controller: streamer);
     }
     // The safety hub is its own route too: an account with no settings store
     // still has a record, and gating this on settings would hide it.
@@ -526,7 +549,8 @@ class _Body extends StatelessWidget {
   Widget _section(UserSettings settings) => switch (category) {
     // Handled before the settings store is consulted.
     UserSettingsCategory.profile ||
-    UserSettingsCategory.keybinds => const SizedBox.shrink(),
+    UserSettingsCategory.keybinds ||
+    UserSettingsCategory.streamer => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
       settings: settings,
       onEdit: _edit,

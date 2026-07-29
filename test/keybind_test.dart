@@ -9,6 +9,8 @@ import 'package:flucord/src/domain/keybind.dart';
 import 'package:flucord/src/presentation/widgets/keybind_section.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
+import 'package:flucord/src/application/streamer_mode_controller.dart';
+import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -410,6 +412,48 @@ void main() {
 
       expect(find.byKey(const ValueKey('keybind-section')), findsOneWidget);
     });
+
+    testWidgets('the streamer page is reachable, with and without a controller',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final settings = UserSettingsController(() => null);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: FlucordTheme.dark,
+          home: Scaffold(body: UserSettingsDialog(controller: settings)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('user-streamer-unavailable')),
+        findsOneWidget,
+      );
+
+      final streamer = StreamerModeController(_NoStreamerSettings());
+      addTearDown(streamer.dispose);
+      await streamer.load();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: FlucordTheme.dark,
+          home: Scaffold(
+            body: UserSettingsDialog(
+              controller: settings,
+              streamerModeController: streamer,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('streamer-mode-section')), findsOneWidget);
+    });
   });
 }
 
@@ -475,4 +519,13 @@ final class _MemoryKeybinds implements KeybindRepository {
   @override
   Future<void> save(Map<KeybindAction, Keybind> bindings) async =>
       saved.add(Map.of(bindings));
+}
+
+
+final class _NoStreamerSettings implements StreamerModeRepository {
+  @override
+  Future<StreamerModeSettings> load() async => const StreamerModeSettings();
+
+  @override
+  Future<void> save(StreamerModeSettings settings) async {}
 }

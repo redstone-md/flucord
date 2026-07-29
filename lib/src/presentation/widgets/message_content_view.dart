@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'streamer_mode_scope.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -68,10 +70,14 @@ class _MessageContentViewState extends State<MessageContentView> {
 
   @override
   Widget build(BuildContext context) {
+    // Redacted here rather than where the message was stored: the mode can go
+    // on and off while the same message is on screen, and the copy held by the
+    // cache is the one that has to survive it being turned off again.
+    final body = StreamerModeScope.redact(context, widget.body);
     return SelectionArea(
       child: MarkdownBody(
-        key: ValueKey(_resolutionSignature),
-        data: widget.body,
+        key: ValueKey(Object.hash(_resolutionSignature, body)),
+        data: body,
         selectable: false,
         softLineBreak: true,
         extensionSet: md.ExtensionSet.gitHubFlavored,

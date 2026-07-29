@@ -6,6 +6,7 @@ import '../../domain/chat_repository.dart';
 import '../../theme/flucord_theme.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
+import 'streamer_mode_scope.dart';
 import 'self_presence_scope.dart';
 import 'self_status_menu.dart';
 
@@ -45,7 +46,13 @@ class AccountPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                member.displayName,
+                // Blanked rather than truncated: the panel is in the corner of
+                // every frame of a stream, and a name half shown is still a
+                // name shown.
+                StreamerModeScope.hidesPersonalInformation(context)
+                    ? 'Hidden'
+                    : member.displayName,
+                key: const ValueKey('account-panel-name'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

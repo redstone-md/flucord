@@ -44,6 +44,50 @@ void main() {
     expect(controller.error, isNull);
   });
 
+
+  test('streamer mode records the effect and keeps it off the speakers',
+      () async {
+    final repository = _FakeRepository(
+      sounds: const [
+        SoundboardSound(
+          id: '10',
+          name: 'airhorn',
+          guildId: 'guild-1',
+          volume: 0.5,
+        ),
+      ],
+    );
+    final player = _FakePlayer();
+    var silenced = true;
+    final controller = SoundboardPlaybackController(
+      repositoryProvider: () => repository,
+      connectedChannelId: () => 'voice-1',
+      player: player,
+      isSilenced: () => silenced,
+    )..reconcile();
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    const effect = SoundboardPlayback(
+      channelId: 'voice-1',
+      userId: 'someone',
+      soundId: '10',
+      guildId: 'guild-1',
+    );
+    repository.send(effect);
+    await Future<void>.delayed(Duration.zero);
+
+    // The room still shows who pressed what — that is information — while the
+    // sound itself is what would go out over somebody's stream.
+    expect(controller.lastPlayed?.userId, 'someone');
+    expect(player.played, isEmpty);
+
+    silenced = false;
+    repository.send(effect);
+    await Future<void>.delayed(Duration.zero);
+    expect(player.played, hasLength(1));
+  });
+
   test('a room this client is not in stays silent', () async {
     final repository = _FakeRepository(
       sounds: const [

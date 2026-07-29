@@ -147,6 +147,49 @@ void main() {
     expect(gateway.requests, hasLength(1));
   });
 
+
+  test('stays silent while streamer mode is on', () async {
+    final gateway = _NotificationGateway();
+    var streaming = true;
+    final controller = DesktopMessageNotificationController(
+      isFocused: () async => false,
+      gateway: gateway,
+      isSuppressed: () => streaming,
+    );
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    addTearDown(chat.dispose);
+    addTearDown(controller.dispose);
+    await chat.load();
+    controller.attach(chatController: chat, onActivateLink: (_) async {});
+    await controller.initialize();
+    final workspace = chat.workspace!;
+    final channel = workspace.channels.firstWhere(
+      (item) => item.kind == ChannelKind.text && !item.isThread,
+    );
+    final author = workspace.members.firstWhere(
+      (item) => item.id != workspace.currentMemberId,
+    );
+    final message = ChatMessage(
+      id: 'streamer-notification',
+      channelId: channel.id,
+      authorId: author.id,
+      body: 'Kept off the stream',
+      sentAt: DateTime.utc(2026, 7, 29),
+    );
+
+    await controller.notify(
+      MessageUpsertedEvent(message: message, member: author, isNew: true),
+    );
+    expect(gateway.requests, isEmpty);
+
+    // Read per message: the mode can go on and off between two of them.
+    streaming = false;
+    await controller.notify(
+      MessageUpsertedEvent(message: message, member: author, isNew: true),
+    );
+    expect(gateway.requests, hasLength(1));
+  });
+
   test('honours mute, the notification level and suppress @everyone', () async {
     final gateway = _NotificationGateway();
     final controller = DesktopMessageNotificationController(

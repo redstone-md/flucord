@@ -16,13 +16,20 @@ final class SoundboardPlaybackController extends ChangeNotifier {
     required SoundboardRepository? Function() repositoryProvider,
     required String? Function() connectedChannelId,
     required SoundboardAudioPlayer player,
+    bool Function()? isSilenced,
   }) : _repositoryProvider = repositoryProvider,
        _connectedChannelId = connectedChannelId,
-       _player = player;
+       _player = player,
+       _isSilenced = isSilenced ?? _neverSilenced;
+
+  static bool _neverSilenced() => false;
 
   final SoundboardRepository? Function() _repositoryProvider;
   final String? Function() _connectedChannelId;
   final SoundboardAudioPlayer _player;
+
+  /// Whether something — streamer mode — is holding the speakers quiet.
+  final bool Function() _isSilenced;
 
   SoundboardRepository? _repository;
   StreamSubscription<SoundboardPlayback>? _effects;
@@ -58,6 +65,10 @@ final class SoundboardPlaybackController extends ChangeNotifier {
     _lastPlayed = playback;
     _error = null;
     _notify();
+    // Recorded and then not played: the room still shows who pressed what,
+    // which is information, while the sound itself is what would go out over
+    // somebody's stream.
+    if (_isSilenced()) return;
     if (sound == null) return;
     try {
       await _player.play(sound.url, volume: sound.volume);
