@@ -96,7 +96,11 @@ enum VideoEncoderFailure {
 }
 
 final class VideoEncoderException implements Exception {
-  const VideoEncoderException(this.failure, {this.platformCode});
+  const VideoEncoderException(
+    this.failure, {
+    this.platformCode,
+    this.platformStage,
+  });
 
   final VideoEncoderFailure failure;
 
@@ -105,6 +109,9 @@ final class VideoEncoderException implements Exception {
   /// gone, and a duplication another process is holding, and only this
   /// separates them.
   final int? platformCode;
+
+  /// Which call produced [platformCode], where the platform reports one.
+  final int? platformStage;
 
   String get message => switch (failure) {
     VideoEncoderFailure.unsupported =>
@@ -116,9 +123,14 @@ final class VideoEncoderException implements Exception {
     VideoEncoderFailure.state => 'The encoder is already running.',
   };
 
-  String get _platformSuffix => platformCode == null || platformCode == 0
-      ? ''
-      : ' (0x${platformCode!.toUnsigned(32).toRadixString(16)})';
+  String get _platformSuffix {
+    if (platformCode == null || platformCode == 0) return '';
+    final code = '0x${platformCode!.toUnsigned(32).toRadixString(16)}';
+    final stage = platformStage == null || platformStage == 0
+        ? ''
+        : ' at step $platformStage';
+    return ' ($code$stage)';
+  }
 
   @override
   String toString() => '$message$_platformSuffix';

@@ -200,8 +200,24 @@ HRESULT FindOutput(int index, ComPtr<IDXGIAdapter1>* out_adapter,
   return DXGI_ERROR_NOT_FOUND;
 }
 
-// The platform's own answer to whatever failed last, for diagnostics only.
+// The platform's own answer to whatever failed last, for diagnostics only,
+// paired with the call that produced it. One HRESULT with no idea which of
+// four calls returned it is a guess, and two rounds have been spent guessing.
 std::atomic<int32_t> g_last_error{0};
+std::atomic<int32_t> g_last_error_stage{0};
+
+void RecordFailure(int32_t stage, HRESULT hr) {
+  g_last_error_stage.store(stage);
+  g_last_error.store(static_cast<int32_t>(hr));
+}
+
+// Which call refused, reported alongside its HRESULT.
+enum DuplicationStage {
+  kStageFindOutput = 1,
+  kStageCreateDevice = 2,
+  kStageDuplicate = 3,
+  kStageDuplicateOnOriginalDevice = 4,
+};
 
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
   ComPtr<IDXGIAdapter1> adapter;
@@ -212,7 +228,10 @@ HRESULT OpenDuplication(FlucordVideoEncoder* state) {
   if (FAILED(hr) && state->config.display_index != 0) {
     hr = FindOutput(0, &adapter, &output);
   }
-  if (FAILED(hr)) return hr;
+  if (FAILED(hr)) {
+    RecordFailure(kStageFindOutput, hr);
+    return hr;
+  }
 
   // The device is rebuilt on the adapter that actually owns the display:
   // DuplicateOutput refuses a device from any other one.
@@ -223,13 +242,26 @@ HRESULT OpenDuplication(FlucordVideoEncoder* state) {
   hr = D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
                          levels, ARRAYSIZE(levels), D3D11_SDK_VERSION, &device,
                          nullptr, &context);
-  if (FAILED(hr)) return hr;
+  if (SUCCEEDED(hr)) {
+    hr = output->DuplicateOutput(device.Get(), &state->duplication);
+    if (SUCCEEDED(hr)) {
+      state->device = device;
+      state->context = context;
+      return S_OK;
+    }
+    RecordFailure(kStageDuplicate, hr);
+  } else {
+    RecordFailure(kStageCreateDevice, hr);
+  }
 
-  hr = output->DuplicateOutput(device.Get(), &state->duplication);
-  if (FAILED(hr)) return hr;
-  state->device = device;
-  state->context = context;
-  return S_OK;
+  // The device this encoder was opened with is tried too. On a single-GPU
+  // machine it is the same adapter, and a driver that refuses a second device
+  // will still duplicate onto the first.
+  HRESULT fallback = output->DuplicateOutput(state->device.Get(),
+                                             &state->duplication);
+  if (SUCCEEDED(fallback)) return S_OK;
+  RecordFailure(kStageDuplicateOnOriginalDevice, fallback);
+  return fallback;
 }
 
 void DrainEncoder(FlucordVideoEncoder* state) {
@@ -738,7 +770,6 @@ flucord_video_open(const FlucordVideoConfig* config,
 
   hr = OpenDuplication(state.get());
   if (FAILED(hr)) {
-    g_last_error.store(static_cast<int32_t>(hr));
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
   }
@@ -984,6 +1015,10 @@ flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void) {
   return g_last_error.load();
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void) {
+  return g_last_error_stage.load();
 }
 
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data) {

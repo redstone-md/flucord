@@ -121,6 +121,11 @@ FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data);
 // only the HRESULT separates them.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
 
+// Which call produced that HRESULT: 1 finding the output, 2 creating the
+// device on its adapter, 3 duplicating onto that device, 4 duplicating onto
+// the device the encoder already had. Zero when nothing has failed.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
+
 typedef struct FlucordVideoDecoder FlucordVideoDecoder;
 
 // One decoded picture, as BGRA ready for a texture. Valid for the duration of

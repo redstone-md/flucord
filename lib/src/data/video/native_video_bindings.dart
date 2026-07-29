@@ -124,16 +124,21 @@ final class NativeVideoBindings {
             int Function(int, Pointer<Utf8>, int)
           >('flucord_video_camera_name'),
       captureScreen = _lookUpCaptureScreen(library),
-      lastError = _lookUpLastError(library),
+      lastError = _lookUpOptionalCounter(library, 'flucord_video_last_error'),
+      lastErrorStage = _lookUpOptionalCounter(
+        library,
+        'flucord_video_last_error_stage',
+      ),
       clip = ClipWriterBindings.lookUp(library);
 
-  /// The platform's own answer behind the last failure, where the module
-  /// reports one. Absent in a module built before it did.
-  static int Function()? _lookUpLastError(DynamicLibrary library) {
+  /// A zero-argument counter the module may or may not export, depending on
+  /// when it was built. A build without it must still load.
+  static int Function()? _lookUpOptionalCounter(
+    DynamicLibrary library,
+    String symbol,
+  ) {
     try {
-      return library.lookupFunction<Int32 Function(), int Function()>(
-        'flucord_video_last_error',
-      );
+      return library.lookupFunction<Int32 Function(), int Function()>(symbol);
     } on Object {
       return null;
     }
@@ -181,6 +186,11 @@ final class NativeVideoBindings {
 
   /// Reads the HRESULT behind the last failure, when the module reports one.
   final int Function()? lastError;
+
+  /// Which call produced it: 1 finding the output, 2 creating the device on
+  /// its adapter, 3 duplicating onto that device, 4 duplicating onto the one
+  /// the encoder already had.
+  final int Function()? lastErrorStage;
 
   /// The MP4 writer, or null in a module built before clips existed.
   final ClipWriterBindings? clip;

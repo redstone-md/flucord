@@ -77,6 +77,7 @@ final class NativeVideoEncoderService implements VideoEncoderService {
         throw VideoEncoderException(
           _failureFor(status),
           platformCode: _bindings?.lastError?.call(),
+          platformStage: _bindings?.lastErrorStage?.call(),
         );
       }
       _handle = out.value;

@@ -111,13 +111,12 @@ void main() {
       (hello.single as DiscordDesktopGatewayScheduleHeartbeat).interval,
       const Duration(milliseconds: 41250),
     );
-    expect(first.frame.opcode, DiscordDesktopGatewayOpcode.qosHeartbeat);
-    expect(first.frame.data, {
-      'seq': null,
-      'qos': {
-        'reasons': ['foregrounded'],
-      },
-    });
+    // Opcode 1 with the sequence, not the desktop client's opcode 40 with
+    // telemetry attached: Discord closed the socket without a code the moment
+    // a QoS heartbeat arrived, every interval, for the life of the session.
+    // Voice identifies with that session, so each closure ended the call too.
+    expect(first.frame.opcode, DiscordDesktopGatewayOpcode.heartbeat);
+    expect(first.frame.data, isNull);
     expect(tolerated, isA<DiscordDesktopGatewaySend>());
     expect(timeout, isA<DiscordDesktopGatewayReconnect>());
 

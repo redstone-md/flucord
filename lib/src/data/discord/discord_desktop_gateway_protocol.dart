@@ -195,7 +195,7 @@ final class DiscordDesktopGatewayProtocol {
       case DiscordDesktopGatewayOpcode.dispatch:
         return _acceptDispatch(payload['t'], data);
       case DiscordDesktopGatewayOpcode.heartbeat:
-        return [DiscordDesktopGatewaySend(_qosHeartbeat(qos))];
+        return [DiscordDesktopGatewaySend(_heartbeatFrame(qos))];
       case DiscordDesktopGatewayOpcode.reconnect:
         _state = DiscordDesktopGatewayState.reconnectPending;
         return const [DiscordDesktopGatewayReconnect(immediate: true)];
@@ -231,7 +231,7 @@ final class DiscordDesktopGatewayProtocol {
       return const DiscordDesktopGatewayReconnect(immediate: true);
     }
     _unacknowledgedHeartbeats++;
-    return DiscordDesktopGatewaySend(_qosHeartbeat(qos));
+    return DiscordDesktopGatewaySend(_heartbeatFrame(qos));
   }
 
   /// Opcode 8: asks the guild for members matching [query].
@@ -310,11 +310,20 @@ final class DiscordDesktopGatewayProtocol {
     return [DiscordDesktopGatewayDispatch(name: rawName, data: data)];
   }
 
-  DiscordDesktopGatewayFrame _qosHeartbeat(Map<String, Object?> qos) =>
-      DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.qosHeartbeat, {
-        'seq': _sequence,
-        'qos': Map.unmodifiable({...qos}),
-      });
+  /// Opcode 1 with the last sequence number, which is the heartbeat every
+  /// Discord gateway accepts.
+  ///
+  /// Not opcode 40. The desktop client's QoS heartbeat carries the same
+  /// sequence with telemetry attached, and sending it here had Discord close
+  /// the socket without a code the moment it arrived — every interval, for
+  /// the life of the session. Voice identifies with this session, so each
+  /// closure ended the call with 4022 as well. The telemetry is not worth a
+  /// connection.
+  DiscordDesktopGatewayFrame _heartbeatFrame(Map<String, Object?> qos) =>
+      DiscordDesktopGatewayFrame(
+        DiscordDesktopGatewayOpcode.heartbeat,
+        _sequence,
+      );
 
   static DiscordDesktopGatewayFrame _subscriptionFrame(
     Map<String, Map<String, Object?>> subscriptions,
