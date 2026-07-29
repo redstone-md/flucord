@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.74% lines | `flutter test --coverage`, 2,716 passing, 6 skipped |
+| Automated test coverage | 89.75% lines | `flutter test --coverage`, 2,723 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -222,6 +222,17 @@ are excluded from the denominator and are never reported as implemented.
   `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
   `account_credentials_test.dart`, `expression_favorites_test.dart`,
   `widget_test.dart`.
+- **Implemented**: a linked teen's restrictions, read from
+  `GET /family-center/{teenId}/settings-and-consents`. Both halves are kept as
+  Discord names them: these are controls over somebody else's account, and a
+  client that renamed one would tell a parent they had set something other
+  than what they set. Read per teen rather than with the rest of the family
+  centre, so a parent with several links does not spend a request on each to
+  open a page about one, and a 403 or 404 is an answer — a teen can unlink at
+  any moment — rather than an outage. Writing them is not implemented: Discord
+  writes through the teen's own settings-proto, a different blob with its own
+  permission model, and guessing at that write would be changing what somebody
+  else's account is allowed to do.
 - **Implemented**: the suspended-account routes. A suspended account cannot
   read `GET /safety-hub/@me` at all — the suspension closes it off — so the
   client reads `GET /safety-hub/suspended/@me` first and only asks for the

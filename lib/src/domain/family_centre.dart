@@ -63,9 +63,41 @@ final class TeenActivitySummary {
 }
 
 /// Reads the family centre and asks for a link code.
+/// What a parent may see about a linked teen account.
+///
+/// Read-only here. Discord writes these through the teen's own settings-proto,
+/// a different blob from the account's own with its own permission model, and
+/// a client that guessed at that write would be changing what somebody else's
+/// account is allowed to do.
+final class TeenControls {
+  const TeenControls({
+    this.userId = '',
+    this.settings = const {},
+    this.consents = const {},
+  });
+
+  final String userId;
+
+  /// The restrictions, as Discord names them. Carried verbatim: these are
+  /// controls over another person's account, and renaming one in the surface
+  /// would tell a parent they had set something other than what they set.
+  final Map<String, bool> settings;
+
+  /// What the teen has agreed to, by the same rule.
+  final Map<String, bool> consents;
+
+  bool get isEmpty => settings.isEmpty && consents.isEmpty;
+}
+
 abstract interface class FamilyCentreRepository {
   /// `GET /family-center/@me`.
   Future<FamilyCentre> loadFamilyCentre();
+
+  /// `GET /family-center/{teenId}/settings-and-consents`.
+  ///
+  /// Answers empty controls for a link the parent may not read, which is an
+  /// answer rather than a fault: a teen can unlink at any time.
+  Future<TeenControls> loadTeenControls(String teenId);
 
   /// Asks for the code a parent enters to link to this account.
   ///

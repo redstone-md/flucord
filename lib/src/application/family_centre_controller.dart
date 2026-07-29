@@ -15,6 +15,7 @@ final class FamilyCentreController extends ChangeNotifier {
   final FamilyCentreRepository? Function() _repositoryProvider;
 
   FamilyCentre? _familyCentre;
+  final Map<String, TeenControls> _teenControls = {};
   Object? _error;
   String? _linkCode;
   bool _loading = false;
@@ -27,6 +28,31 @@ final class FamilyCentreController extends ChangeNotifier {
   Object? get error => _error;
   bool get isLoading => _loading;
   bool get isRequestingLinkCode => _requestingCode;
+
+  /// What a linked teen account is restricted to, once it has been read.
+  TeenControls? teenControlsFor(String teenId) => _teenControls[teenId];
+
+  /// Reads one linked teen's restrictions.
+  ///
+  /// Kept per teen rather than loaded with the rest: a parent with several
+  /// linked accounts would otherwise spend a request on every one of them to
+  /// open a page about one.
+  Future<TeenControls?> loadTeenControls(String teenId) async {
+    if (teenId.isEmpty) return null;
+    if (_teenControls[teenId] case final TeenControls held) return held;
+    final repository = _repositoryProvider();
+    if (repository == null) return null;
+    try {
+      final controls = await repository.loadTeenControls(teenId);
+      _teenControls[teenId] = controls;
+      _notify();
+      return controls;
+    } on Object catch (error) {
+      _error = error;
+      _notify();
+      return null;
+    }
+  }
 
   /// The code a parent types, once one has been asked for.
   String? get linkCode => _linkCode;

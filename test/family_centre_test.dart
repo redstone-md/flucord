@@ -37,6 +37,76 @@ Map<String, Object?> _payload({Object? auditLog, Object? linked}) => {
 };
 
 void main() {
+  group('a linked teen', () {
+    test('the restrictions come back as Discord names them', () async {
+      final repository = _FakeFamilyCentre()
+        ..teenControls['teen-1'] = const TeenControls(
+          userId: 'teen-1',
+          settings: {'block_dms_from_non_friends': true},
+          consents: {'share_activity': false},
+        );
+      final controller = FamilyCentreController(() => repository);
+      addTearDown(controller.dispose);
+
+      final controls = await controller.loadTeenControls('teen-1');
+
+      expect(controls!.settings['block_dms_from_non_friends'], isTrue);
+      expect(controls.consents['share_activity'], isFalse);
+      expect(controller.teenControlsFor('teen-1'), isNotNull);
+
+      // Held per teen: opening the page again spends no second request.
+      await controller.loadTeenControls('teen-1');
+      expect(repository.teenReads, ['teen-1']);
+    });
+
+    test('nothing is asked for a teen nobody named', () async {
+      final repository = _FakeFamilyCentre();
+      final controller = FamilyCentreController(() => repository);
+      addTearDown(controller.dispose);
+
+      expect(await controller.loadTeenControls(''), isNull);
+      expect(repository.teenReads, isEmpty);
+    });
+
+    test('a failed read is reported rather than thrown', () async {
+      final repository = _FakeFamilyCentre()
+        ..teenFailure = StateError('read failed');
+      final controller = FamilyCentreController(() => repository);
+      addTearDown(controller.dispose);
+
+      expect(await controller.loadTeenControls('teen-1'), isNull);
+      expect(controller.error, isA<StateError>());
+    });
+
+    test('with no transport there is nobody to ask', () async {
+      final controller = FamilyCentreController(() => null);
+      addTearDown(controller.dispose);
+
+      expect(await controller.loadTeenControls('teen-1'), isNull);
+    });
+
+    test('both halves are read, and anything not a flag is left out', () {
+      final read = DiscordFamilyCentreRepository.readTeenControls('teen-1', {
+        'settings': {'block_dms': true, 'nonsense': 'not a flag'},
+        'consents': {'share_activity': false},
+      });
+
+      expect(read.userId, 'teen-1');
+      expect(read.settings, {'block_dms': true});
+      expect(read.consents, {'share_activity': false});
+      expect(read.isEmpty, isFalse);
+    });
+
+    test('a payload with neither half reads as empty', () {
+      final read = DiscordFamilyCentreRepository.readTeenControls(
+        'teen-1',
+        const {'settings': 'not a map'},
+      );
+
+      expect(read.isEmpty, isTrue);
+    });
+  });
+
   group('reading the family centre', () {
     test('reads who is linked and what was counted', () {
       final family = DiscordFamilyCentreRepository.readFamilyCentre(_payload());
@@ -113,6 +183,59 @@ void main() {
   });
 
   group('the routes', () {
+    test('the teen route is read, and a refusal is not an outage', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode({
+            'settings': {'block_dms': true},
+            'consents': {'share_activity': true},
+          }),
+        ),
+      ]);
+
+      final controls = await _repository(transport).loadTeenControls('teen-1');
+
+      expect(controls.settings['block_dms'], isTrue);
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/family-center/teen-1/settings-and-consents'),
+      );
+
+      for (final status in [403, 404]) {
+        final refused = _Transport([
+          DiscordHttpResponse(
+            statusCode: status,
+            headers: const {},
+            body: '{"message": "no"}',
+          ),
+        ]);
+        // A teen can unlink at any moment, and reading a link that has gone
+        // is an answer rather than a fault.
+        expect(
+          (await _repository(refused).loadTeenControls('teen-1')).isEmpty,
+          isTrue,
+        );
+      }
+
+      final broken = _Transport([
+        const DiscordHttpResponse(statusCode: 500, headers: {}, body: '{}'),
+      ]);
+      await expectLater(
+        _repository(broken).loadTeenControls('teen-1'),
+        throwsA(isA<DiscordApiException>()),
+      );
+
+      final untouched = _Transport([]);
+      expect(
+        (await _repository(untouched).loadTeenControls('')).isEmpty,
+        isTrue,
+      );
+      expect(untouched.requests, isEmpty);
+    });
+
+
     test('the centre is read from the account route', () async {
       final transport = _Transport([
         DiscordHttpResponse(
@@ -293,6 +416,17 @@ DiscordFamilyCentreRepository _repository(_Transport transport) =>
     );
 
 final class _FakeFamilyCentre implements FamilyCentreRepository {
+  final Map<String, TeenControls> teenControls = {};
+  final List<String> teenReads = [];
+  Object? teenFailure;
+
+  @override
+  Future<TeenControls> loadTeenControls(String teenId) async {
+    teenReads.add(teenId);
+    if (teenFailure case final error?) throw error;
+    return teenControls[teenId] ?? TeenControls(userId: teenId);
+  }
+
   int loads = 0;
   bool issueCode = true;
   bool failNextLoad = false;

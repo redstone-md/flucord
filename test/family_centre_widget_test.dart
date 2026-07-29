@@ -186,6 +186,17 @@ void main() {
 }
 
 final class _FakeFamilyCentre implements FamilyCentreRepository {
+  final Map<String, TeenControls> teenControls = {};
+  final List<String> teenReads = [];
+  Object? teenFailure;
+
+  @override
+  Future<TeenControls> loadTeenControls(String teenId) async {
+    teenReads.add(teenId);
+    if (teenFailure case final error?) throw error;
+    return teenControls[teenId] ?? TeenControls(userId: teenId);
+  }
+
   _FakeFamilyCentre(this._family);
 
   final FamilyCentre _family;

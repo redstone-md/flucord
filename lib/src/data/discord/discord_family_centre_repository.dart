@@ -12,6 +12,49 @@ final class DiscordFamilyCentreRepository implements FamilyCentreRepository {
       readFamilyCentre(await _rest.getObject('/family-center/@me'));
 
   @override
+  Future<TeenControls> loadTeenControls(String teenId) async {
+    if (teenId.isEmpty) return const TeenControls();
+    try {
+      return readTeenControls(
+        teenId,
+        await _rest.getObject(
+          '/family-center/${Uri.encodeComponent(teenId)}/settings-and-consents',
+        ),
+      );
+    } on DiscordApiException catch (error) {
+      // A teen can unlink at any moment, and a parent reading a link that has
+      // gone gets a refusal rather than an outage.
+      if (error.statusCode == 403 || error.statusCode == 404) {
+        return TeenControls(userId: teenId);
+      }
+      rethrow;
+    }
+  }
+
+  /// Reads the settings-and-consents payload.
+  ///
+  /// Both halves are flat maps of name to flag on the wire, and both are kept
+  /// as they arrived: these are controls over somebody else's account, and a
+  /// client that renamed one would tell a parent they had set something other
+  /// than what they set.
+  static TeenControls readTeenControls(
+    String teenId,
+    Map<String, Object?> payload,
+  ) => TeenControls(
+    userId: teenId,
+    settings: _flags(payload['settings']),
+    consents: _flags(payload['consents']),
+  );
+
+  static Map<String, bool> _flags(Object? value) {
+    if (value is! Map) return const {};
+    return {
+      for (final entry in value.entries)
+        if (entry.value is bool) '${entry.key}': entry.value! as bool,
+    };
+  }
+
+  @override
   Future<String?> requestLinkCode() async {
     try {
       final payload = await _rest.requestObject(
