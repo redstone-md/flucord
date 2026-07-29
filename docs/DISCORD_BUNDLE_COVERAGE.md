@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,596 passing, 6 skipped |
+| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,606 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -554,7 +554,16 @@ are excluded from the denominator and are never reported as implemented.
   list shows the icon; and the RTP goes out on the connection already open. A
   camera announced but not producing is prevented in both directions — the
   room is told only once the encoder has opened, and a gateway that refuses
-  the flag takes the declaration back.
+  the flag takes the declaration back. Everybody else's cameras are drawn as
+  well: the socket is split by payload type — 101 is a picture, anything else
+  is Opus, and the split has to work before any opcode 12 has arrived because
+  a video packet fed to the Opus decoder is noise — then attributed by the
+  SSRC the sender announced rather than one derived from theirs. A packet on
+  an unclaimed SSRC is dropped instead of guessed at, since guessing draws one
+  person's face on another's tile. Each sender gets its own depacketiser and
+  its own decoder, because two senders interleave on one socket and a shared
+  depacketiser would splice one person's fragments into the other's picture.
+  The picture replaces the avatar in that participant's tile.
 - **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`,
   `voice_controller_test.dart`, `voice_connection_bar_test.dart`,
   `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`,
@@ -603,9 +612,7 @@ are excluded from the denominator and are never reported as implemented.
 - **Blocked by**: a second Discord account is the only thing that can show the
   picture arriving over Discord's own servers rather than through a local
   loop. A stream's audio also still rides the voice connection rather than the
-  stream's own. Somebody else's camera is not drawn yet either: the decoder
-  and the viewer widget exist and are used for Go Live, but a camera arrives
-  demultiplexed by SSRC on the voice socket, and that reader is not written.
+  stream's own.
 
 ## FBC-STAGE — Stage channels
 

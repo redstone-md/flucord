@@ -90,6 +90,7 @@ class _ConversationPane extends StatefulWidget {
     required this.streamViewerController,
     required this.gifPickerController,
     required this.expressionFavoritesController,
+    required this.remoteCameraController,
     required this.slashCommandController,
     required this.messageComponentController,
     required this.voiceMessageRecorder,
@@ -178,6 +179,7 @@ class _ConversationPane extends StatefulWidget {
   final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
   final ExpressionFavoritesController expressionFavoritesController;
+  final RemoteCameraController remoteCameraController;
   final SlashCommandController slashCommandController;
   final MessageComponentController messageComponentController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -199,6 +201,20 @@ class _ConversationPaneState extends State<_ConversationPane> {
     super.initState();
     _watchCall();
     _watchThreadMembership();
+    // A decoded picture is not a state change anywhere else in the tree, so
+    // without this the tiles would draw the first frame each sender produced
+    // and then never move.
+    widget.remoteCameraController.addListener(_onCameraFrame);
+  }
+
+  void _onCameraFrame() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.remoteCameraController.removeListener(_onCameraFrame);
+    super.dispose();
   }
 
   @override
@@ -276,6 +292,9 @@ class _ConversationPaneState extends State<_ConversationPane> {
         widget.channel.isThread &&
         widget.channel.isArchived &&
         widget.channel.isLocked;
+    // The camera controller notifies per decoded picture rather than per
+    // build, so the room is rebuilt from it: without this the tiles would draw
+    // the first frame each sender produced and then never change.
     final conversation = inCall && !showsMessages
         ? VoiceRoomView(
             // A call has no guild; the DM pseudo-space still supplies avatars.
@@ -284,6 +303,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
             channelId: widget.channel.id,
             channelName: widget.channel.name,
             controller: widget.voiceController,
+            cameraFrameFor: widget.remoteCameraController.frameFor,
             members: widget.workspace.members,
             currentMemberId: widget.workspace.currentMemberId,
           )
@@ -329,6 +349,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
               channelId: widget.channel.id,
               channelName: widget.channel.name,
               controller: widget.voiceController,
+              cameraFrameFor: widget.remoteCameraController.frameFor,
               members: widget.workspace.members,
               currentMemberId: widget.workspace.currentMemberId,
             ),

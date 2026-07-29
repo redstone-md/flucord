@@ -26,6 +26,8 @@ import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
 import 'application/expression_favorites_controller.dart';
 import 'application/self_video_controller.dart';
+import 'data/discord/discord_rtp_packet.dart';
+import 'application/remote_camera_controller.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
@@ -64,6 +66,7 @@ import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
 import 'domain/external_link_launcher.dart';
+import 'domain/voice_connection.dart';
 import 'domain/voice_media.dart';
 import 'domain/voice_message_recorder.dart';
 import 'data/discord/discord_repository_factory.dart';
@@ -225,6 +228,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
   late final SelfVideoController _selfVideoController;
+  late final RemoteCameraController _remoteCameraController;
   late final DirectCallController _directCallController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -410,7 +414,21 @@ class _FlucordAppState extends State<FlucordApp> {
       announceSelfVideo: ({required bool enabled}) =>
           _voiceController.setCameraAnnounced(enabled: enabled),
     );
+    // Everybody else's cameras. One decoder per sender, made on demand: a room
+    // where nobody turns a camera on opens none at all.
+    _remoteCameraController = RemoteCameraController(
+      packetsProvider: () {
+        final signaling = _chatController.voiceSignalingService;
+        if (signaling is! DiscordVoiceSignalingService) {
+          return const Stream<(String, DiscordRtpFrame)>.empty();
+        }
+        return signaling.remoteVideo;
+      },
+      decoderFactory: () =>
+          widget.videoDecoderService ?? NativeVideoDecoderService(),
+    );
     _chatController.addListener(_syncVoiceSignaling);
+    _voiceController.addListener(_syncRemoteCameras);
     _chatController.addListener(_syncUserSettings);
     _chatController.addListener(_syncSelfPresence);
     // R07's non-embedded fallback marks the account active on real input.
@@ -439,6 +457,7 @@ class _FlucordAppState extends State<FlucordApp> {
     unawaited(widget.desktopIntegration?.dispose());
     ServicesBinding.instance.keyboard.removeHandler(_markActiveOnKey);
     _chatController.removeListener(_syncVoiceSignaling);
+    _voiceController.removeListener(_syncRemoteCameras);
     _chatController.removeListener(_syncUserSettings);
     _chatController.removeListener(_syncSelfPresence);
     _discordOAuthController.removeListener(_syncOAuthAccount);
@@ -484,6 +503,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _directCallController.dispose();
     _voiceController.dispose();
     _selfVideoController.dispose();
+    _remoteCameraController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
   }
@@ -492,6 +512,22 @@ class _FlucordAppState extends State<FlucordApp> {
     if (_chatController.state == ChatLoadState.ready) {
       unawaited(_voiceController.refreshSignalingService());
       _directCallController.reconcileService();
+    }
+  }
+
+  /// Reads everybody else's cameras only while a room is actually connected.
+  ///
+  /// Bound on ready rather than on join: the SSRC map the packets are matched
+  /// against is filled from the voice socket, and a listener attached before
+  /// it would be reading a socket that has not finished opening.
+  void _syncRemoteCameras() {
+    final connected =
+        _voiceController.connectionStatus == VoiceConnectionStatus.ready;
+    if (connected == _remoteCameraController.isListening) return;
+    if (connected) {
+      _remoteCameraController.listen();
+    } else {
+      _remoteCameraController.stop();
     }
   }
 
@@ -610,6 +646,8 @@ class _FlucordAppState extends State<FlucordApp> {
                                           goLiveController: _goLiveController,
                                           selfVideoController:
                                               _selfVideoController,
+                                          remoteCameraController:
+                                              _remoteCameraController,
                                           streamViewerController:
                                               _streamViewerController,
                                           gifPickerController:

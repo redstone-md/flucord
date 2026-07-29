@@ -158,6 +158,7 @@ extension _FlucordShellConversation on FlucordShell {
     streamViewerController: streamViewerController,
     gifPickerController: gifPickerController,
     expressionFavoritesController: expressionFavoritesController,
+    remoteCameraController: remoteCameraController,
     slashCommandController: slashCommandController,
     messageComponentController: messageComponentController,
     voiceMessageRecorder: voiceMessageRecorder,

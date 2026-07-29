@@ -326,6 +326,20 @@ final class DiscordVoiceSignalingService
     await _clients.remove(key)?.close();
   }
 
+  /// Everybody else's cameras on the session currently joined.
+  ///
+  /// Rebuilt on every join rather than held: the session is a different socket
+  /// with different SSRCs, and a subscriber left on the old one would draw a
+  /// room nobody is in.
+  Stream<(String, DiscordRtpFrame)> get remoteVideo {
+    final session = _activeSession;
+    final client = session == null ? null : _clients[session];
+    if (client is! DiscordVoiceGatewayClient) {
+      return const Stream<(String, DiscordRtpFrame)>.empty();
+    }
+    return client.videoPackets;
+  }
+
   /// The video plane of the session currently joined, or null when there is
   /// none — no session, or a client that cannot carry pictures.
   VoiceVideoTransport? get activeVideoTransport {

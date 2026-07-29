@@ -7,6 +7,7 @@ import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
+import '../../domain/video_decoder.dart';
 import 'voice_capture_source_dialog.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
@@ -23,6 +24,7 @@ class VoiceRoomView extends StatefulWidget {
     this.soundboard,
     this.goLive,
     this.streamViewer,
+    this.cameraFrameFor,
     this._spaceId,
     super.key,
   });
@@ -36,6 +38,10 @@ class VoiceRoomView extends StatefulWidget {
   final VoiceController controller;
   final List<Member> members;
   final String currentMemberId;
+
+  /// The latest picture from a participant's camera, when one is
+  /// arriving.
+  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
 
   /// The stage strip, or null for an ordinary voice channel.
   final Widget? stageControls;
@@ -105,6 +111,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               members: widget.members,
               currentMemberId: widget.currentMemberId,
               spaceId: widget.spaceId,
+              cameraFrameFor: widget.cameraFrameFor,
             ),
           );
           return Column(
@@ -157,7 +164,12 @@ class _VoiceStage extends StatelessWidget {
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
+    this.cameraFrameFor,
   });
+
+  /// The latest picture from a participant's camera, when one is
+  /// arriving.
+  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
 
   final String channelName;
   final VoiceController controller;
@@ -258,6 +270,7 @@ class _VoiceStage extends StatelessWidget {
                 members: members,
                 currentMemberId: currentMemberId,
                 spaceId: spaceId,
+                cameraFrameFor: cameraFrameFor,
               ),
         ),
       ],

@@ -19,7 +19,11 @@ import '../../theme/flucord_theme.dart';
 typedef PictureConverter =
     void Function(DecodedVideoFrame frame, ValueChanged<ui.Image> onDecoded);
 
-void _decodeWithEngine(
+/// The default converter: the engine's own BGRA decode.
+///
+/// Named rather than private because the participant tiles draw the same
+/// pictures and would otherwise each need their own copy of it.
+void decodePictureWithEngine(
   DecodedVideoFrame frame,
   ValueChanged<ui.Image> onDecoded,
 ) => ui.decodeImageFromPixels(
@@ -34,7 +38,7 @@ class GoLiveViewer extends StatefulWidget {
   const GoLiveViewer({
     required this.frames,
     this.label = '',
-    this.converter = _decodeWithEngine,
+    this.converter = decodePictureWithEngine,
     super.key,
   });
 

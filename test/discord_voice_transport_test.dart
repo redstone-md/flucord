@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
@@ -167,6 +168,103 @@ void main() {
       client.sendDaveMessage(opcode: 26, payload: [3, 2, 1]);
       expect(socket.sent.last, isA<Uint8List>());
       expect(socket.sent.last, [26, 3, 2, 1]);
+    });
+
+    test('splits cameras from audio and attributes them by SSRC', () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      addTearDown(client.close);
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'seq': 1,
+        'd': {
+          'ssrc': 42,
+          'ip': '198.51.100.4',
+          'port': 50001,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'seq': 2,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+
+      // The peer says which SSRC its pictures will arrive on.
+      socket.addJson({
+        'op': 12,
+        'seq': 3,
+        'd': {'user_id': 'remote-2', 'audio_ssrc': 91, 'video_ssrc': 92},
+      });
+      await _flushEvents();
+      expect(client.userIdForVideoSsrc(92), 'remote-2');
+      // The session the pictures will be attributed within.
+      expect(client.session?.ssrc, 42);
+
+      final audio = <DiscordRtpFrame>[];
+      final video = <(String, DiscordRtpFrame)>[];
+      final audioSubscription = client.audioPackets.listen(audio.add);
+      final videoSubscription = client.videoPackets.listen(video.add);
+      addTearDown(audioSubscription.cancel);
+      addTearDown(videoSubscription.cancel);
+
+      for (final frame in [
+        // Opus on the voice payload type, a camera on 101, and a camera from
+        // somebody whose opcode 12 has not arrived.
+        DiscordRtpFrame(
+          header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
+          payload: const [1, 2, 3],
+        ),
+        DiscordRtpFrame(
+          header: DiscordRtpHeader(
+            sequence: 2,
+            timestamp: 3,
+            ssrc: 92,
+            payloadType: DiscordVideoStreamTransport.videoPayloadType,
+          ),
+          payload: const [4, 5, 6],
+        ),
+        DiscordRtpFrame(
+          header: DiscordRtpHeader(
+            sequence: 3,
+            timestamp: 4,
+            ssrc: 500,
+            payloadType: DiscordVideoStreamTransport.videoPayloadType,
+          ),
+          payload: const [7, 8, 9],
+        ),
+      ]) {
+        client.sendAudioFrame(frame);
+        udp.addPacket(udp.sentPackets.last);
+      }
+      await _flushEvents();
+
+      expect(audio.single.payload, [1, 2, 3]);
+      // Attributed to whoever announced the SSRC; the unclaimed one is
+      // dropped rather than drawn over somebody else's tile.
+      expect(video.single.$1, 'remote-2');
+      expect(video.single.$2.payload, [4, 5, 6]);
+
+      socket.addJson({
+        'op': 13,
+        'seq': 4,
+        'd': {'user_id': 'remote-2'},
+      });
+      await _flushEvents();
+      expect(client.userIdForVideoSsrc(92), isNull);
     });
 
     test('treats close code 4017 as terminal', () async {

@@ -7,6 +7,7 @@ import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
+import 'discord_video_stream_transport.dart';
 import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_media_transport.dart';
 import 'discord_voice_transport_cipher.dart';
@@ -72,6 +73,8 @@ final class DiscordVoiceGatewayClient
   int _generation = 0;
   int? _ssrc;
   final Map<int, String> _userIdsBySsrc = {};
+  /// Video SSRC to whoever announced it, from opcode 12.
+  final Map<int, String> _videoSsrcOwners = {};
   String? _mode;
   DiscordVoiceIpDiscovery? _discovered;
   VoiceTransportSession? _session;
@@ -79,10 +82,44 @@ final class DiscordVoiceGatewayClient
 
   @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
-  Stream<DiscordRtpFrame> get audioPackets =>
-      _udpTransport.packets.map(_decryptAudioPacket);
+  /// Every packet the socket produced, decrypted once.
+  ///
+  /// One subscription behind both planes: decrypting per listener would do the
+  /// work twice and, with a nonce-carrying cipher, twice is not merely
+  /// wasteful.
+  late final Stream<DiscordRtpFrame> _decryptedPackets = _udpTransport.packets
+      .map(_decryptAudioPacket)
+      .asBroadcastStream();
+
+  /// The audio plane: everything that is not a camera.
+  ///
+  /// Split by payload type rather than by SSRC because the split has to work
+  /// before anybody has announced anything — a video packet fed to the Opus
+  /// decoder is noise, and one arriving before its opcode 12 would otherwise
+  /// be exactly that.
+  Stream<DiscordRtpFrame> get audioPackets => _decryptedPackets.where(
+    (frame) => frame.header.payloadType != DiscordVideoStreamTransport.videoPayloadType,
+  );
+
+  /// Somebody else's camera, paired with whoever is sending it.
+  ///
+  /// A packet whose SSRC nobody has claimed is dropped: it belongs to a peer
+  /// whose opcode 12 has not arrived, and guessing the owner would draw one
+  /// person's face over another's tile.
+  Stream<(String, DiscordRtpFrame)> get videoPackets => _decryptedPackets
+      .where(
+        (frame) =>
+            frame.header.payloadType ==
+            DiscordVideoStreamTransport.videoPayloadType,
+      )
+      .map((frame) => (_videoSsrcOwners[frame.header.ssrc], frame))
+      .where((pair) => pair.$1 != null)
+      .map((pair) => (pair.$1!, pair.$2));
   VoiceTransportSession? get session => _session;
   String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
+
+  /// Who sends on a video SSRC, once their opcode 12 has said so.
+  String? userIdForVideoSsrc(int ssrc) => _videoSsrcOwners[ssrc];
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _mediaTransport.remoteAudio;
 
@@ -252,12 +289,20 @@ final class DiscordVoiceGatewayClient
     final audioSsrc = data['audio_ssrc'];
     if (userId is! String || audioSsrc is! int || audioSsrc == 0) return;
     _userIdsBySsrc[audioSsrc] = userId;
+    // Taken from the frame rather than derived: the peer says which SSRC its
+    // pictures will arrive on, and a client that assumed audio + 1 would
+    // mis-attribute anybody whose layout differs.
+    final videoSsrc = data['video_ssrc'];
+    if (videoSsrc is int && videoSsrc != 0) {
+      _videoSsrcOwners[videoSsrc] = userId;
+    }
   }
 
   void _handleClientDisconnect(Map<String, Object?> data) {
     final userId = data['user_id'];
     if (userId is! String) return;
     _userIdsBySsrc.removeWhere((_, mappedUserId) => mappedUserId == userId);
+    _videoSsrcOwners.removeWhere((_, mappedUserId) => mappedUserId == userId);
     if (!_events.isClosed) _events.add(VoiceUserDisconnectedEvent(userId));
   }
 

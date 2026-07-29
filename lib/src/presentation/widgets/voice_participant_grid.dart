@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
+import '../../domain/video_decoder.dart';
+import 'camera_picture.dart';
 import 'member_avatar.dart';
 
 class VoiceParticipantGrid extends StatelessWidget {
@@ -11,6 +13,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.members,
     required this.currentMemberId,
     required this.spaceId,
+    this.cameraFrameFor,
     super.key,
   });
 
@@ -18,6 +21,9 @@ class VoiceParticipantGrid extends StatelessWidget {
   final List<Member> members;
   final String currentMemberId;
   final String spaceId;
+
+  /// The latest picture from a participant's camera, when one is arriving.
+  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +61,7 @@ class VoiceParticipantGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final participant = participants[index];
         return _ParticipantTile(
+          cameraFrame: cameraFrameFor?.call(participant.userId),
           participant: participant,
           member:
               memberById[participant.userId] ??
@@ -87,8 +94,10 @@ class _ParticipantTile extends StatelessWidget {
     required this.member,
     required this.isCurrentUser,
     required this.spaceId,
+    this.cameraFrame,
   });
 
+  final DecodedVideoFrame? cameraFrame;
   final VoiceParticipant participant;
   final Member member;
   final bool isCurrentUser;
@@ -114,21 +123,30 @@ class _ParticipantTile extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: borderColor, width: 2),
+            if (cameraFrame case final DecodedVideoFrame frame)
+              Positioned.fill(
+                key: ValueKey('voice-camera-${participant.userId}'),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: CameraPicture(frame: frame),
                 ),
-                child: MemberAvatar(
-                  member: member,
-                  size: 64,
-                  showPresence: false,
-                  spaceId: spaceId,
+              )
+            else
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: borderColor, width: 2),
+                  ),
+                  child: MemberAvatar(
+                    member: member,
+                    size: 64,
+                    showPresence: false,
+                    spaceId: spaceId,
+                  ),
                 ),
               ),
-            ),
             Positioned(
               left: 10,
               right: 10,

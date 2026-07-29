@@ -7,6 +7,7 @@ import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/expression_favorites_controller.dart';
 import '../application/self_video_controller.dart';
+import '../application/remote_camera_controller.dart';
 import '../application/friends_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/direct_call_controller.dart';
@@ -90,6 +91,7 @@ class FlucordShell extends StatelessWidget {
     required this.workspaceController,
     required this.voiceController,
     required this.selfVideoController,
+    required this.remoteCameraController,
     required this.threadMembershipController,
     required this.stageController,
     required this.soundboardController,
@@ -117,6 +119,7 @@ class FlucordShell extends StatelessWidget {
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final SelfVideoController selfVideoController;
+  final RemoteCameraController remoteCameraController;
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
   final SoundboardController soundboardController;
