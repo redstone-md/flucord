@@ -279,6 +279,24 @@ void main() {
       expect(repository.lastWriteError, isNull);
     });
 
+
+    test('every write says which version it was composed against', () async {
+      final transport = _Transport(stored: _blob(theme: 1, dataVersion: 7));
+      final repository = DiscordUserSettingsRepository(transport);
+      addTearDown(repository.close);
+      await repository.load();
+
+      await repository.apply(
+        const UserSettingsPatch(theme: UserSettingsTheme.light),
+      );
+      await repository.flush();
+
+      // Without this the server cannot refuse a stale write, and an edit
+      // composed against a blob another device has replaced is accepted over
+      // the top of it.
+      expect(transport.writtenVersions, [7]);
+    });
+
     test('drops changes the server calls out of date', () async {
       final transport = _Transport(response: _blob(theme: 1), outOfDate: true);
       final repository = _loaded(transport);
@@ -292,6 +310,9 @@ void main() {
 
       expect(repository.current!.appearance.theme, UserSettingsTheme.dark);
       expect(transport.writes, hasLength(1));
+      // Re-read afterwards: the held blob is the one thing known to be wrong
+      // once the server has said so.
+      expect(transport.reads, isNotEmpty);
     });
 
     test(
@@ -418,8 +439,14 @@ DiscordUserSettingsRepository _loaded(_Transport transport) {
   return repository;
 }
 
-String _blob({int? theme, bool quiet = false}) {
+String _blob({int? theme, bool quiet = false, int? dataVersion}) {
   final root = ProtoMessage();
+  if (dataVersion != null) {
+    root.setMessage(
+      PreloadedUserSettingsField.versions,
+      ProtoMessage()..setVarint(VersionsField.dataVersion, dataVersion),
+    );
+  }
   if (theme != null) {
     root.setMessage(
       PreloadedUserSettingsField.appearance,
@@ -456,6 +483,7 @@ final class _Transport implements DiscordUserSettingsTransport {
 
   final List<int> reads = [];
   final List<String> writes = [];
+  final List<int?> writtenVersions = [];
 
   /// Held open until [release], so a test can watch what a second write does
   /// while the first one is still on the wire.
@@ -474,8 +502,10 @@ final class _Transport implements DiscordUserSettingsTransport {
   Future<DiscordSettingsWriteResult> writeSettingsProto({
     required int type,
     required String settings,
+    int? requiredDataVersion,
   }) async {
     writes.add(settings);
+    writtenVersions.add(requiredDataVersion);
     if (_gate case final gate?) await gate.future;
     if (failure case final error?) throw error;
     return DiscordSettingsWriteResult(settings: response, outOfDate: outOfDate);

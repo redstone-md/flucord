@@ -328,6 +328,25 @@ void main() {
       expect(store.isLoaded, isTrue);
     });
 
+
+    test('a write says which version of the blob it was built on', () async {
+      final root = ProtoMessage()
+        ..setMessage(
+          FrecencyUserSettingsField.versions,
+          ProtoMessage()..setVarint(3, 11),
+        );
+      final transport = _FakeTransport()..blob = _base64(root.encode());
+      final store = DiscordExpressionFavoritesRepository(transport);
+      addTearDown(store.close);
+      await store.load();
+
+      await store.setEmojiFavorite(idOrName: 'smile', favorite: true);
+
+      // The same guard the preloaded settings use: without it a star made
+      // here overwrites whatever another device starred in between.
+      expect(transport.writtenVersions, [11]);
+    });
+
     test('starring a GIF writes it and shows it at once', () async {
       final transport = _FakeTransport();
       final store = DiscordExpressionFavoritesRepository(transport);
@@ -727,6 +746,7 @@ ExpressionFavorites _decodeWrite(_FakeTransport transport) =>
 
 final class _FakeTransport implements DiscordUserSettingsTransport {
   final List<String> writes = [];
+  final List<int?> writtenVersions = [];
   int reads = 0;
   String? blob;
   bool failWrite = false;
@@ -747,10 +767,12 @@ final class _FakeTransport implements DiscordUserSettingsTransport {
   Future<DiscordSettingsWriteResult> writeSettingsProto({
     required int type,
     required String settings,
+    int? requiredDataVersion,
   }) async {
     expect(type, 2);
     if (failWrite) throw StateError('write failed');
     writes.add(settings);
+    writtenVersions.add(requiredDataVersion);
     return response;
   }
 }

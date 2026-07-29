@@ -20,8 +20,14 @@ abstract interface class DiscordUserSettingsTransport {
   Future<String?> readSettingsProto(int type);
 
   /// `PATCH`, sending a root that carries only the changed groups.
+  ///
+  /// [requiredDataVersion] is the `data_version` of the blob the change was
+  /// composed against. The server refuses the write when its own has moved on,
+  /// which is the only thing standing between two devices editing at once and
+  /// one of them quietly losing.
   Future<DiscordSettingsWriteResult> writeSettingsProto({
     required int type,
     required String settings,
+    int? requiredDataVersion,
   });
 }

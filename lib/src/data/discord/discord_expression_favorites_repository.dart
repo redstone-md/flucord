@@ -26,6 +26,10 @@ final class DiscordExpressionFavoritesRepository
       StreamController.broadcast();
 
   ProtoMessage? _root;
+
+  /// The `data_version` of the blob held, which every write carries so a
+  /// stale one is refused rather than written over somebody else's.
+  int? _dataVersion;
   ExpressionFavorites _current = ExpressionFavorites.empty;
   Future<ExpressionFavorites>? _loadInFlight;
   Future<void>? _writeInFlight;
@@ -179,6 +183,7 @@ final class DiscordExpressionFavoritesRepository
       final result = await _transport.writeSettingsProto(
         type: _type,
         settings: DiscordUserSettingsProto.encodeBase64(composed.encode()),
+        requiredDataVersion: _dataVersion,
       );
       if (result.outOfDate) {
         _log('Discord rejected a stale favourites write; re-reading');
@@ -247,6 +252,9 @@ final class DiscordExpressionFavoritesRepository
 
   void _install(ProtoMessage root, ExpressionFavorites favorites) {
     _root = root;
+    _dataVersion = root
+        .messageAt(FrecencyUserSettingsField.versions)
+        ?.varintAt(VersionsField.dataVersion);
     _current = favorites;
     if (!_updates.isClosed) _updates.add(favorites);
   }

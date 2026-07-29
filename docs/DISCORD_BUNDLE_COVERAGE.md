@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.72% lines | `flutter test --coverage`, 2,683 passing, 6 skipped |
+| Automated test coverage | 89.72% lines | `flutter test --coverage`, 2,685 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -300,8 +300,15 @@ are excluded from the denominator and are never reported as implemented.
   reported rather than assumed: a refused call leaves the page saying the
   window is still visible to a recorder, because believing otherwise is the
   one failure this feature must not pass over.
-- **Blocked by**: offline-edit replay with `required_data_version` is not
-  implemented. The frecency tables inside type 2 are round-tripped but not
+- **Implemented**: also `required_data_version`. Every settings write now
+  carries the `data_version` of the blob it was composed against, for both
+  proto types, which is the only thing that lets the server refuse a write
+  built against settings another device has since replaced — without it a
+  stale edit is accepted straight over the top of theirs. A refusal drops the
+  change and re-reads, which is what the desktop client does with the same
+  answer: the edit was a decision about a state that no longer exists, and
+  replaying it would reapply that decision to a different one.
+- **Blocked by**: the frecency tables inside type 2 are round-tripped but not
   read: nothing in Flucord sorts by how often an expression was used yet. A
   keybind is matched by virtual-key code from the hook, and only the codes
   somebody would bind are mapped — an unmapped one is dropped rather than

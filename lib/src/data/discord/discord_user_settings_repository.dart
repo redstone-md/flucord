@@ -165,10 +165,19 @@ final class DiscordUserSettingsRepository implements UserSettingsRepository {
       final result = await _transport.writeSettingsProto(
         type: _type,
         settings: encoded,
+        // The version the change was composed against, so a write built from
+        // a blob another device has since replaced is refused rather than
+        // accepted over the top of it.
+        requiredDataVersion: _current?.dataVersion,
       );
       _lastWriteError = null;
       if (result.outOfDate) {
+        // Dropped rather than replayed, which is what the desktop client does
+        // with the same answer: the edit was composed against settings that
+        // no longer exist, and replaying it would reapply a decision made
+        // about a different state.
         _log('Discord rejected a stale user settings write; changes dropped');
+        await _reload();
       }
       final settings = result.settings;
       if (settings != null && settings.isNotEmpty) {

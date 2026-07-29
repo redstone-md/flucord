@@ -612,11 +612,18 @@ final class DiscordDesktopApiClient
   Future<DiscordSettingsWriteResult> writeSettingsProto({
     required int type,
     required String settings,
+    int? requiredDataVersion,
   }) async {
     final payload = await _rest.requestObject(
       'PATCH',
       '/users/@me/settings-proto/${_settingsType(type)}',
-      body: {'settings': settings},
+      body: {
+        'settings': settings,
+        // What makes the server able to refuse a write composed against a
+        // blob that has since changed. Without it a stale edit is accepted
+        // and silently undoes whatever the other device did.
+        'required_data_version': ?requiredDataVersion,
+      },
     );
     final merged = payload['settings'];
     return DiscordSettingsWriteResult(
