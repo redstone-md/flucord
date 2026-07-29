@@ -10,7 +10,6 @@ import 'package:flucord/src/presentation/widgets/gif_picker.dart';
 import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -305,13 +304,7 @@ void main() {
       // A screen reader picks the sticker the same way a click does.
       await tester.enterText(find.byKey(const ValueKey('sticker-search')), '');
       await tester.pumpAndSettle();
-      final node = tester.getSemantics(
-        find.byKey(const ValueKey('sticker-option-s1')),
-      );
-      tester.binding.pipelineOwner.semanticsOwner!.performAction(
-        node.id,
-        SemanticsAction.tap,
-      );
+      tester.semantics.tap(find.semantics.byLabel('first'));
       await tester.pumpAndSettle();
       expect(find.text('1/3 selected'), findsOneWidget);
 
@@ -448,6 +441,7 @@ final class _FakeStore implements ExpressionFavoritesRepository {
   final List<(String, bool)> gifWrites = [];
   final List<(String, bool)> stickerWrites = [];
   final List<(String, bool)> emojiWrites = [];
+  @override
   ExpressionFavorites current = ExpressionFavorites.empty;
   int loads = 0;
   bool accept = true;

@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.64% lines | `flutter test --coverage`, 2,565 passing, 6 skipped |
+| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,571 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -486,7 +486,7 @@ are excluded from the denominator and are never reported as implemented.
 - **Tests**: `discord_chat_repository_emojis_test.dart`,
   `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
   `soundboard_widget_test.dart`, `expression_favorites_test.dart`,
-  `expression_favorites_ui_test.dart`.
+  `expression_favorites_ui_test.dart`, `emoji_picker_widget_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
   An incoming effect is played: Discord never mixes a soundboard sound into
   the RTP stream, it tells every client which sound was played and each one
@@ -503,14 +503,18 @@ are excluded from the denominator and are never reported as implemented.
   goes out: 250 stickers, 250 emoji, and for GIFs a measured ceiling on the
   encoded group rather than a count, because each entry carries a URL of no
   fixed length. A refusal is said out loud instead of leaving the star
-  unchanged with no explanation.
+  unchanged with no explanation. Emoji are starred from the emoji picker and
+  the reaction picker with a right-click or a long press rather than from a
+  control drawn on the tile — these are 27 pixels across, and a star pinned to
+  one would sit on top of the emoji it describes; a starred one carries a
+  corner mark and leads the panel in its own row. A row entry naming an emoji
+  the session cannot see, a custom one from a server the account has left, is
+  skipped rather than drawn as a gap: the blob outlives membership.
 - **Blocked by**: GIF
   providers are done: trending, search and suggestions go through Discord's
   own `/gifs/*` proxy — the desktop client never talks to Tenor or Giphy
   directly and neither does this — and a pick is sent as the `gif_src` link
-  rather than the `src` preview. Favourite emoji are stored but have no picker
-  row yet: Flucord's emoji picker is built from the guild catalogue and has no
-  place to hang a starred unicode name.
+  rather than the `src` preview.
 
 ## FBC-VOICE — Voice, video, screen share, calls
 

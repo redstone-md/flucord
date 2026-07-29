@@ -1,3 +1,4 @@
+import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 import '../../domain/application_command.dart';
@@ -55,10 +56,13 @@ class MessageItem extends StatefulWidget {
     required this.onSelectChannel,
     this.componentController,
     this.applicationCommands,
+    this.expressionFavorites,
     this.attachmentDownloadService,
     super.key,
   });
 
+  /// The starred expressions, when the transport holds any.
+  final ExpressionFavoritesController? expressionFavorites;
   final ChatMessage message;
 
   /// Presses the buttons and selects an application hung off this message.
@@ -382,6 +386,7 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Widget _actionBar(BuildContext context) => MessageActionBar(
+    expressionFavorites: widget.expressionFavorites,
     apps: widget.applicationCommands == null
         ? null
         : ApplicationCommandMenuButton(

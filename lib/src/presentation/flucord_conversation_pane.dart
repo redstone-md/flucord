@@ -477,6 +477,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
       return ChannelFailureView(onRetry: widget.onRetry);
     }
     return MessageList(
+      expressionFavorites: widget.expressionFavoritesController,
       componentController: widget.messageComponentController,
       applicationCommands: widget.slashCommandController,
       workspace: widget.workspace,

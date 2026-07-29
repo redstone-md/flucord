@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
@@ -30,10 +31,13 @@ class MessageActionBar extends StatelessWidget {
     required this.onDelete,
     this.onResolveAlert,
     this.onReport,
+    this.expressionFavorites,
     this.apps,
     super.key,
   });
 
+  /// The starred expressions, when the transport holds any.
+  final ExpressionFavoritesController? expressionFavorites;
   final ChatMessage message;
   final ChatWorkspace workspace;
   final ChannelCapabilities capabilities;
@@ -197,6 +201,7 @@ class MessageActionBar extends StatelessWidget {
       iconSize: 16,
       onMenuStateChanged: onReactionPickerToggled,
       onSelected: onAddReaction,
+      favorites: expressionFavorites,
     );
   }
 }

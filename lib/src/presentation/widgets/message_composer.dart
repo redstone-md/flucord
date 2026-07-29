@@ -346,6 +346,7 @@ class _MessageComposerState extends State<MessageComposer>
                           spaceName: widget.spaceName,
                           customEmojis: widget.customEmojis,
                           onSelected: _insertEmoji,
+                          favorites: widget.expressionFavorites,
                         ),
                         if (widget.gifPicker case final picker?)
                           ListenableBuilder(

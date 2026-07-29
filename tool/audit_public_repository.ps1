@@ -52,7 +52,18 @@ class RepositoryPrivacyAudit {
       '777777777777777777',
       '888888888888888888',
       '999999999999999999',
-      '987654321098765432'
+      '987654321098765432',
+      '400000000000000000',
+      '500000000000000000',
+      '600000000000000000',
+      '700000000000000000',
+      '800000000000000000',
+      '900000000000000000',
+      # 2^64 - 1 and 2^63: the largest a fixed64 field can carry and the first
+      # value past the signed range. Both exist in tests to prove a snowflake
+      # is read unsigned, and neither is a number Discord has ever minted.
+      '18446744073709551615',
+      '9223372036854775808'
     )) {
       [void] $this.AllowedSnowflakes.Add($value)
     }

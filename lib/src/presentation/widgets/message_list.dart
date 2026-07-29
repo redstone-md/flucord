@@ -1,3 +1,4 @@
+import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'package:flutter/material.dart';
 import '../../application/slash_command_controller.dart';
@@ -22,6 +23,7 @@ class MessageList extends StatefulWidget {
     required this.workspace,
     this.componentController,
     this.applicationCommands,
+    this.expressionFavorites,
     required this.channel,
     required this.query,
     required this.targetMessageId,
@@ -49,6 +51,8 @@ class MessageList extends StatefulWidget {
     super.key,
   });
 
+  /// The starred expressions, when the transport holds any.
+  final ExpressionFavoritesController? expressionFavorites;
   final ChatWorkspace workspace;
 
   /// Interaction planes, threaded through to each message: the buttons an
@@ -407,6 +411,7 @@ class _MessageListState extends State<MessageList> {
                         MessageItem(
                           componentController: widget.componentController,
                           applicationCommands: widget.applicationCommands,
+                          expressionFavorites: widget.expressionFavorites,
                           key: ValueKey('message-${message.id}'),
                           message: message,
                           member: widget.workspace.memberById(message.authorId),
