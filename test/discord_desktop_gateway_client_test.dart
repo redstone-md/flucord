@@ -61,6 +61,37 @@ void main() {
     expect(data['properties'], containsPair('is_fast_connect', false));
   });
 
+
+  test('a write that fails mid-frame reconnects instead of taking the isolate '
+      'down', () async {
+    final socket = _MemoryDesktopWebSocket();
+    final second = _MemoryDesktopWebSocket();
+    final connector = _MemoryDesktopWebSocketConnector(socket, second);
+    final gateway = DiscordDesktopGatewayClient(
+      authorization: 'account-session',
+      properties: const {'os': 'Windows'},
+      profile: _uncompressed,
+      socketConnector: connector,
+    );
+    addTearDown(gateway.close);
+
+    await gateway.connect('wss://gateway.discord.gg');
+    // A socket can close between the check and the write. WinHTTP reports
+    // that as a failed send — 12017 — rather than as a closed socket, and it
+    // used to travel out of the receive handler as an unhandled exception,
+    // leaving the session looking connected while nothing moved.
+    socket.sendFailure = StateError('WinHTTP WebSocket send failed (12017)');
+    socket.receiveTerm(const {
+      'op': 10,
+      'd': {'heartbeat_interval': 60000},
+    });
+
+    await _waitFor(() => connector.dials > 1);
+
+    expect(connector.dials, greaterThan(1));
+    expect(socket.isOpen, isFalse);
+  });
+
   test('builds a typed workspace snapshot from an ETF READY', () async {
     final socket = _MemoryDesktopWebSocket();
     final gateway = DiscordDesktopGatewayClient(
@@ -407,15 +438,22 @@ Future<void> _waitFor(bool Function() condition) async {
 
 final class _MemoryDesktopWebSocketConnector
     implements DiscordDesktopWebSocketConnector {
-  _MemoryDesktopWebSocketConnector(this.socket);
+  _MemoryDesktopWebSocketConnector(this.socket, [this.replacement]);
 
   final DiscordDesktopWebSocket socket;
+
+  /// Handed out on the second dial, so a reconnect can be told apart from the
+  /// first connection.
+  final DiscordDesktopWebSocket? replacement;
+
   final List<Uri> uris = [];
+
+  int get dials => uris.length;
 
   @override
   Future<DiscordDesktopWebSocket> connect(Uri uri) async {
     uris.add(uri);
-    return socket;
+    return uris.length > 1 ? (replacement ?? socket) : socket;
   }
 }
 
@@ -444,11 +482,21 @@ final class _MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
   void receiveJson(Map<String, Object?> payload) =>
       _messages.add(jsonEncode(payload));
 
-  @override
-  void send(String data) => sent.add(data);
+  /// Set to make a write fail the way a socket that closed mid-frame does:
+  /// the platform reports it as a failed send rather than as a closed socket.
+  Object? sendFailure;
 
   @override
-  void sendBinary(List<int> data) => sent.add(Uint8List.fromList(data));
+  void send(String data) {
+    if (sendFailure case final error?) throw error;
+    sent.add(data);
+  }
+
+  @override
+  void sendBinary(List<int> data) {
+    if (sendFailure case final error?) throw error;
+    sent.add(Uint8List.fromList(data));
+  }
 
   @override
   Future<void> close() async {

@@ -388,10 +388,26 @@ final class DiscordDesktopGatewayClient
     final socket = _socket;
     if (socket == null || !socket.isOpen) return;
     final encoded = _codec.encode(frame.toJson());
-    if (encoded is String) {
-      socket.send(encoded);
-    } else {
-      socket.sendBinary(encoded as Uint8List);
+    try {
+      if (encoded is String) {
+        socket.send(encoded);
+      } else {
+        socket.sendBinary(encoded as Uint8List);
+      }
+    } on Object catch (error) {
+      // A socket can close between the check above and the write: the
+      // platform reports it as a failed send rather than as a closed socket,
+      // and WinHTTP in particular answers 12017 for a connection that went
+      // away mid-frame. Left to propagate it killed the isolate's error zone
+      // — the session then sat there looking connected while nothing moved.
+      developer.log(
+        'Gateway send failed, reconnecting: ${_diagnosticFor(error)}',
+        name: 'flucord.discord.gateway',
+        level: 900,
+      );
+      unawaited(socket.close());
+      _socket = null;
+      _scheduleReconnect(immediate: true);
     }
   }
 
