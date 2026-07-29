@@ -11,6 +11,7 @@ class GuildScheduledEventsDialog extends StatelessWidget {
     required this.isLoading,
     required this.error,
     required this.onRefresh,
+    this.onSetInterest,
     super.key,
   });
 
@@ -20,6 +21,11 @@ class GuildScheduledEventsDialog extends StatelessWidget {
   final bool isLoading;
   final Object? error;
   final VoidCallback onRefresh;
+
+  /// Says whether this account is interested in an event, or null on a
+  /// transport that cannot say.
+  final Future<bool> Function(GuildScheduledEvent, {required bool interested})?
+  onSetInterest;
 
   @override
   Widget build(BuildContext context) => Dialog(
@@ -79,6 +85,7 @@ class GuildScheduledEventsDialog extends StatelessWidget {
       event: event,
       channel: channel,
       canOpen: channel != null,
+      onSetInterest: onSetInterest,
     );
   }
 }
@@ -135,11 +142,17 @@ class _ScheduledEventRow extends StatelessWidget {
     required this.event,
     required this.channel,
     required this.canOpen,
+    this.onSetInterest,
   });
 
   final GuildScheduledEvent event;
   final ConversationChannel? channel;
   final bool canOpen;
+
+  /// Says whether this account is interested, or null on a transport that
+  /// cannot say — in which case the control is not offered at all.
+  final Future<bool> Function(GuildScheduledEvent, {required bool interested})?
+  onSetInterest;
 
   @override
   Widget build(BuildContext context) {
@@ -204,12 +217,23 @@ class _ScheduledEventRow extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 7),
-                      Text(
-                        '${event.interestedCount} interested',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.surfaces.muted,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '${event.interestedCount} interested',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.surfaces.muted,
+                            ),
+                          ),
+                          if (onSetInterest != null) ...[
+                            const SizedBox(width: 10),
+                            _InterestButton(
+                              event: event,
+                              onSetInterest: onSetInterest!,
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -376,4 +400,54 @@ class _InlineEventError extends StatelessWidget {
       label: const Text('Refresh failed - retry'),
     ),
   );
+}
+
+/// The interested toggle on one event.
+///
+/// Optimistic in appearance only: the label flips while the request is in
+/// flight and flips back if Discord refused, because the count it sits beside
+/// moves on the dispatch rather than on this tap.
+class _InterestButton extends StatefulWidget {
+  const _InterestButton({required this.event, required this.onSetInterest});
+
+  final GuildScheduledEvent event;
+  final Future<bool> Function(GuildScheduledEvent, {required bool interested})
+  onSetInterest;
+
+  @override
+  State<_InterestButton> createState() => _InterestButtonState();
+}
+
+class _InterestButtonState extends State<_InterestButton> {
+  bool _interested = false;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    key: ValueKey('guild-event-interest-${widget.event.id}'),
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: const TextStyle(fontSize: 11),
+    ),
+    onPressed: _busy ? null : _toggle,
+    child: Text(_interested ? 'Not interested' : 'Interested'),
+  );
+
+  Future<void> _toggle() async {
+    final next = !_interested;
+    setState(() {
+      _busy = true;
+      _interested = next;
+    });
+    final accepted = await widget.onSetInterest(widget.event, interested: next);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      // An event that has already ended is refused; the label goes back rather
+      // than claiming an RSVP that was never recorded.
+      if (!accepted) _interested = !next;
+    });
+  }
 }

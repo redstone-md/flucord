@@ -151,6 +151,7 @@ extension _FlucordShellNavigation on FlucordShell {
           isLoading: chatController.isLoadingScheduledEvents(space.id),
           error: chatController.scheduledEventsError(space.id),
           onRefresh: () => chatController.loadScheduledEvents(space.id),
+          onSetInterest: chatController.setEventInterest,
         ),
       ),
     );

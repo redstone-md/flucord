@@ -31,6 +31,32 @@ mixin _DiscordChatRepositoryScheduledEvents
     }
   }
 
+  @override
+  Future<bool> setEventInterest({
+    required String spaceId,
+    required String eventId,
+    required bool interested,
+    String? exceptionId,
+  }) async {
+    try {
+      await _api.setGuildScheduledEventInterest(
+        guildId: spaceId,
+        eventId: eventId,
+        interested: interested,
+        exceptionId: exceptionId,
+      );
+    } on DiscordApiException catch (error) {
+      // An event that has ended, or one this account cannot see, is refused.
+      // That is an answer about the event rather than a fault here.
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
+      rethrow;
+    }
+    // Discord echoes the change back as GUILD_SCHEDULED_EVENT_USER_ADD, which
+    // moves the count. Nothing is patched locally: two places counting the
+    // same thing is how a count ends up wrong by one forever.
+    return true;
+  }
+
   Future<void> _handleGuildScheduledEvent(DiscordGatewayDispatch event) async {
     final data = event.data;
     final spaceId = data['guild_id'] as String?;

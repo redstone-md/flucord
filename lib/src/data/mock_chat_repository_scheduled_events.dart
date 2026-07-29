@@ -35,4 +35,12 @@ mixin _MockChatRepositoryScheduledEvents implements ScheduledEventRepository {
       ),
     ];
   }
+
+  @override
+  Future<bool> setEventInterest({
+    required String spaceId,
+    required String eventId,
+    required bool interested,
+    String? exceptionId,
+  }) async => true;
 }

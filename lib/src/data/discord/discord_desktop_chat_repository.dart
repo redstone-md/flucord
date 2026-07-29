@@ -1,3 +1,4 @@
+import '../../domain/scheduled_event_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
@@ -57,7 +58,10 @@ part 'discord_desktop_chat_events.dart';
 part 'discord_desktop_chat_session.dart';
 
 final class DiscordDesktopChatRepository
-    implements ChatRepository, GuildMemberListRepository {
+    implements
+        ChatRepository,
+        GuildMemberListRepository,
+        ScheduledEventRepository {
   DiscordDesktopChatRepository(
     this._api,
     this._gateway,
@@ -464,6 +468,40 @@ final class DiscordDesktopChatRepository
   }) async {
     await _api.deleteMessage(channelId: channelId, messageId: messageId);
     await _cache.deleteMessage(messageId);
+  }
+
+  @override
+  Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
+    final payloads = await _api.getGuildScheduledEvents(spaceId);
+    return [
+      for (final payload in payloads)
+        ?_mapper.guildScheduledEvent(payload, fallbackSpaceId: spaceId),
+    ]..sort(GuildScheduledEvent.compareForDisplay);
+  }
+
+  @override
+  Future<bool> setEventInterest({
+    required String spaceId,
+    required String eventId,
+    required bool interested,
+    String? exceptionId,
+  }) async {
+    try {
+      await _api.setGuildScheduledEventInterest(
+        guildId: spaceId,
+        eventId: eventId,
+        interested: interested,
+        exceptionId: exceptionId,
+      );
+    } on DiscordApiException catch (error) {
+      // An event that has ended, or one this account cannot see, is refused.
+      // That is an answer about the event, not a fault here.
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
+      rethrow;
+    }
+    // The count moves when Discord echoes the change back. Patching it here
+    // as well is how a count ends up permanently wrong by one.
+    return true;
   }
 
   @override

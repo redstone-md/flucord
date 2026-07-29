@@ -540,15 +540,27 @@ are excluded from the denominator and are never reported as implemented.
   `GUILD_SCHEDULED_EVENT_USER_ADD`/`REMOVE`, and 4 exception events.
 - **Purpose**: event calendar, RSVP, recurrence exceptions.
 - **UI surface**: server Events surface.
-- **Contract**: `GET /guilds/{id}/scheduled-events?with_user_count=true`.
+- **Contract**: `GET /guilds/{id}/scheduled-events?with_user_count=true`,
+  `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: event loading, SQLite v16 persistence, live create/update/
   delete and subscriber dispatches, navigation into voice and stage channels.
+  RSVP: the desktop-user transport now reads a guild's events with their
+  interested counts and says whether this account is interested. Discord
+  carries both answers on one route — a `PUT` with its own response value, and
+  a `DELETE` with no body — and one occurrence of a recurring event names
+  itself in the path. The count is left to the dispatch that moves it rather
+  than patched locally, since two places counting the same thing is how a
+  count ends up permanently wrong by one. An event that has ended refuses the
+  request, and the control reads that as a refusal rather than as a fault.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
-  `discord_scheduled_event_mapper_test.dart`.
+  `discord_scheduled_event_mapper_test.dart`,
+  `scheduled_event_rsvp_test.dart`,
+  `scheduled_event_rsvp_repository_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: RSVP mutation and the four recurrence-exception dispatches.
+- **Blocked by**: the four recurrence-exception dispatches. Creating and
+  editing an event is untouched, as is the RSVP list of who else is going.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 

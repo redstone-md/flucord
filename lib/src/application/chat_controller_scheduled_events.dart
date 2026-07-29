@@ -43,6 +43,31 @@ extension ChatControllerScheduledEvents on ChatController {
     }
   }
 
+  /// Says whether this account is interested in an event.
+  ///
+  /// The count is not touched here. Discord echoes the change back as a
+  /// dispatch that moves it, and two places counting the same thing is how a
+  /// count ends up permanently wrong by one.
+  Future<bool> setEventInterest(
+    GuildScheduledEvent event, {
+    required bool interested,
+  }) async {
+    final repository = _repository;
+    if (repository is! ScheduledEventRepository) return false;
+    final scheduledRepository = repository as ScheduledEventRepository;
+    try {
+      return await scheduledRepository.setEventInterest(
+        spaceId: event.spaceId,
+        eventId: event.id,
+        interested: interested,
+      );
+    } catch (error) {
+      _scheduledEventErrors[event.spaceId] = error;
+      _notify();
+      return false;
+    }
+  }
+
   void _upsertScheduledEvent(GuildScheduledEvent event) {
     final current = _scheduledEventsBySpace[event.spaceId] ?? const [];
     final next = [

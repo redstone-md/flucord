@@ -1,6 +1,7 @@
 part of 'chat_controller_test.dart';
 
-final class _EventRepository implements ChatRepository {
+final class _EventRepository
+    implements ChatRepository, ScheduledEventRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
 
@@ -155,6 +156,29 @@ final class _EventRepository implements ChatRepository {
     AutoModAlertAction action,
   })?
   resolvedAlert;
+
+  /// What the controller asked for, so a test can check it asked at all.
+  final List<(String, String, bool)> rsvps = [];
+  bool failNextRsvp = false;
+
+  @override
+  Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) =>
+      _delegate.loadScheduledEvents(spaceId);
+
+  @override
+  Future<bool> setEventInterest({
+    required String spaceId,
+    required String eventId,
+    required bool interested,
+    String? exceptionId,
+  }) async {
+    if (failNextRsvp) {
+      failNextRsvp = false;
+      throw StateError('rsvp failed');
+    }
+    rsvps.add((spaceId, eventId, interested));
+    return true;
+  }
 
   @override
   Future<void> resolveAutoModAlert({

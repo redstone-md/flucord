@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/scheduled_event_repository.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -124,6 +125,51 @@ void main() {
         controller.workspace!.messagesFor('forge-general').last.isPinned,
         isFalse,
       );
+    });
+
+    test('an event RSVP names the guild it belongs to', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      expect(
+        await controller.setEventInterest(event, interested: true),
+        isTrue,
+      );
+
+      expect(repository.rsvps.single, ('forge', 'event-1', true));
+      expect(controller.scheduledEventsError('forge'), isNull);
+    });
+
+    test('an RSVP that failed is recorded against its own guild', () async {
+      final repository = _EventRepository()..failNextRsvp = true;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      expect(
+        await controller.setEventInterest(event, interested: false),
+        isFalse,
+      );
+
+      expect(controller.scheduledEventsError('forge'), isA<StateError>());
     });
 
     test('an alert is resolved against the guild it sits in', () async {
