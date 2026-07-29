@@ -104,6 +104,7 @@ final class DiscordDirectCallService implements DirectCallService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) {
     // Joining a channel nobody has subscribed to would leave the client blind
     // to the call it just walked into.
@@ -112,6 +113,7 @@ final class DiscordDirectCallService implements DirectCallService {
       channelId: channelId,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
     );
   }
 

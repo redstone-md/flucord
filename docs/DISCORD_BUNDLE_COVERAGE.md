@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,571 passing, 6 skipped |
+| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,596 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -527,8 +527,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Contract**: opcode 4 voice state, Voice Gateway v8, UDP discovery, DAVE
   MLS, RTP v2.
 - **Dependencies**: FBC-GATEWAY, FBC-GUILD, FBC-CHANNEL.
-- **Status**: **Partial** — audio is implemented for the desktop-user
-  transport; video and screen share are not.
+- **Status**: **Partial** — audio, screen share and the camera are
+  implemented for the desktop-user transport; what is missing is proof over
+  Discord's own servers rather than a missing half.
 - **Implemented**: Voice Gateway v8, DAVE, AES-256-GCM and
   XChaCha20-Poly1305 transport encryption, Opus capture/playback, participant
   roster, guild voice and DM/group calls over the desktop-user session. Who is
@@ -540,9 +541,24 @@ are excluded from the denominator and are never reported as implemented.
   on the transport cipher. A microphone that will not open no longer refuses
   the join; the room is still joined to listen and says the uplink is silent.
   A live connection stays reachable from the sidebar after navigating away.
+- **Implemented**: the camera. `windows/flucord_video` grew a second source —
+  Media Foundation's source reader against a capture device, with its advanced
+  video processing on so a webcam that only speaks YUY2 or MJPEG still arrives
+  as the NV12 the encoder wants — and everything downstream is the screen
+  share's: the same H.264 MFT, the same RFC 6184 packetiser, the same
+  encrypted voice socket. Turning it on takes three announcements and all
+  three are sent: opcode 12 declares the SSRCs, which are derived from the
+  audio SSRC rather than invented (video is one above it, retransmission one
+  above that, `rid` `100`, quality 100 — what the desktop client falls back to
+  when it has no simulcast layout); opcode 4 sets `self_video` so every member
+  list shows the icon; and the RTP goes out on the connection already open. A
+  camera announced but not producing is prevented in both directions — the
+  room is told only once the encoder has opened, and a gateway that refuses
+  the flag takes the declaration back.
 - **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`,
   `voice_controller_test.dart`, `voice_connection_bar_test.dart`,
-  `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`.
+  `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`,
+  `self_video_test.dart`.
 - **Live evidence**: an account reported Flucord's join appearing in the real
   client's voice channel; audio interoperability itself is still unverified.
   Go Live's signalling half is implemented: opcodes 18-22 and the four
@@ -587,7 +603,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Blocked by**: a second Discord account is the only thing that can show the
   picture arriving over Discord's own servers rather than through a local
   loop. A stream's audio also still rides the voice connection rather than the
-  stream's own.
+  stream's own. Somebody else's camera is not drawn yet either: the decoder
+  and the viewer widget exist and are used for Go Live, but a camera arrives
+  demultiplexed by SSRC on the voice socket, and that reader is not written.
 
 ## FBC-STAGE — Stage channels
 

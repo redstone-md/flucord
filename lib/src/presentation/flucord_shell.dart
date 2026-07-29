@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/expression_favorites_controller.dart';
+import '../application/self_video_controller.dart';
 import '../application/friends_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/direct_call_controller.dart';
@@ -88,6 +89,7 @@ class FlucordShell extends StatelessWidget {
     required this.oauthGuildMembershipController,
     required this.workspaceController,
     required this.voiceController,
+    required this.selfVideoController,
     required this.threadMembershipController,
     required this.stageController,
     required this.soundboardController,
@@ -114,6 +116,7 @@ class FlucordShell extends StatelessWidget {
   final OAuthGuildMembershipController oauthGuildMembershipController;
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
+  final SelfVideoController selfVideoController;
   final ThreadMembershipController threadMembershipController;
   final StageController stageController;
   final SoundboardController soundboardController;
@@ -279,6 +282,7 @@ class FlucordShell extends StatelessWidget {
                             // the user has navigated to since.
                             voiceConnectionBar: VoiceConnectionBar(
                               controller: voiceController,
+                              camera: selfVideoController,
                               channelNameFor: (id) => channels
                                   .where((channel) => channel.id == id)
                                   .map((channel) => channel.name)

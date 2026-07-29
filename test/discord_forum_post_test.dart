@@ -232,6 +232,7 @@ final class _FakeGateway implements DiscordChatGateway {
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) {}
 
   @override

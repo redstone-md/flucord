@@ -272,6 +272,7 @@ final class _FakeCallGateway
     required bool connected,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => callStates.add((channelId, connected, selfMute));
 
   @override
@@ -280,6 +281,7 @@ final class _FakeCallGateway
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => throw UnsupportedError('Guild voice is not part of this test');
 
   @override

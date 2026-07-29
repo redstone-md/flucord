@@ -460,6 +460,7 @@ final class DiscordDesktopGatewayClient
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => _send(
     _voiceFrames.voiceState(
       sessionKey: guildId,
@@ -467,6 +468,7 @@ final class DiscordDesktopGatewayClient
       channelId: channelId,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
     ),
   );
 
@@ -481,6 +483,7 @@ final class DiscordDesktopGatewayClient
     required bool connected,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => _send(
     _voiceFrames.voiceState(
       sessionKey: channelId,
@@ -488,6 +491,7 @@ final class DiscordDesktopGatewayClient
       channelId: connected ? channelId : null,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
     ),
   );
 

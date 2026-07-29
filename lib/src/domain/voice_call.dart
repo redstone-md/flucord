@@ -141,6 +141,7 @@ abstract interface class DirectCallService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   });
 
   Future<void> leaveCall(String channelId);

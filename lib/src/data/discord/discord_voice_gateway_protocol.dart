@@ -125,6 +125,58 @@ final class DiscordVoiceGatewayProtocol {
     'd': {'speaking': enabled ? 1 : 0, 'delay': 0, 'ssrc': ssrc},
   };
 
+  /// Opcode 12, which declares the SSRCs this session's camera will send on.
+  ///
+  /// The three are not negotiated: the desktop client derives them from the
+  /// audio SSRC the voice `READY` handed out — video is one above it and the
+  /// retransmission stream one above that — and announces the result. A client
+  /// that picked its own numbers would send on SSRCs the server is not
+  /// forwarding.
+  ///
+  /// Turning the camera off is the same frame with [enabled] false: the stream
+  /// stays declared and inactive, which is what the renderer sends, rather than
+  /// the SSRCs being withdrawn.
+  Map<String, Object?> video({
+    required int audioSsrc,
+    required bool enabled,
+    int width = 1280,
+    int height = 720,
+    int framesPerSecond = 30,
+    int maxBitrate = 1200000,
+  }) {
+    final videoSsrc = audioSsrc + 1;
+    return {
+      'op': 12,
+      'd': {
+        'audio_ssrc': audioSsrc,
+        'video_ssrc': videoSsrc,
+        'rtx_ssrc': audioSsrc + 2,
+        'streams': [
+          {
+            'type': 'video',
+            // The single-stream rid the client falls back to when it has not
+            // been told a simulcast layout; Flucord never sends more than one.
+            'rid': '100',
+            'ssrc': videoSsrc,
+            'active': enabled,
+            'quality': 100,
+            'rtx_ssrc': audioSsrc + 2,
+            'max_bitrate': maxBitrate,
+            'max_framerate': framesPerSecond,
+            'max_resolution': {
+              'type': 'fixed',
+              'width': width,
+              'height': height,
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  /// The SSRC a camera's RTP goes out on, given the audio one.
+  static int videoSsrcFor(int audioSsrc) => audioSsrc + 1;
+
   void acceptSequence(Object? value) {
     if (value is int) sequenceAck = value;
   }

@@ -32,6 +32,7 @@ do not count as desktop-user chat parity.
 | Favourite GIFs, stickers, emoji | Ready | Starred in the account's `FrecencyUserSettings` blob, so they follow the account; each picker leads with what was starred |
 | Soundboard | Ready | Server and default sounds sent into a voice channel, and incoming `VOICE_CHANNEL_EFFECT_SEND` fetched from the CDN and played locally — which is how Discord itself does it, since the sound is never mixed into the RTP stream |
 | Video and screen share | Built, wired both ways and self-verified | Share, stop, pause and a viewer count from the voice room; watch somebody else's stream in place of the participant grid. 544 real frames became 2151 encrypted packets and came back as 516 pictures at 1280x720; a second Discord account is the only thing left that can confirm delivery over Discord's own servers |
+| Camera in a voice channel | Built, unverified over Discord | Media Foundation capture through the same encoder and voice socket as the share; opcode 12 declares the SSRCs and opcode 4 sets `self_video`. Somebody else's camera is not drawn yet — the per-SSRC reader is not written |
 | User settings | Partial | Both `settings-proto` types read, written and live-updated; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store; Discord decides per account whether it sends any |

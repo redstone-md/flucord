@@ -17,9 +17,19 @@ final class EncodedVideoFrame {
   final bool isKeyframe;
 }
 
+/// Where the pictures come from.
+///
+/// The two share everything downstream of the capture — the same encoder, the
+/// same packetiser, the same socket — but they are not the same feature on
+/// Discord: a screen is a Go Live stream with its own SSRC and its own
+/// viewers, and a camera is the account's own video in the room it is sitting
+/// in, announced with `self_video` on the voice state.
+enum VideoCaptureSource { display, camera }
+
 /// What a stream is being encoded at.
 final class VideoEncoderSettings {
   const VideoEncoderSettings({
+    this.source = VideoCaptureSource.display,
     this.displayIndex = 0,
     this.width = 1280,
     this.height = 720,
@@ -27,6 +37,20 @@ final class VideoEncoderSettings {
     this.bitrate = 2500000,
   });
 
+  /// A camera at 720p30 rather than a screen's 2.5 Mbit: Discord sends camera
+  /// video considerably smaller than a share, and a webcam picture carries far
+  /// less detail than a desktop full of text.
+  const VideoEncoderSettings.camera({
+    this.displayIndex = 0,
+    this.width = 1280,
+    this.height = 720,
+    this.framesPerSecond = 30,
+    this.bitrate = 1200000,
+  }) : source = VideoCaptureSource.camera;
+
+  final VideoCaptureSource source;
+
+  /// Which display, or which camera when [source] is a camera.
   final int displayIndex;
   final int width;
   final int height;
@@ -51,6 +75,9 @@ enum VideoEncoderFailure {
   /// The display asked for is not there.
   noDisplay,
 
+  /// No camera at that index, or another application is holding it.
+  noCamera,
+
   /// The encoder rejected the settings.
   encoder,
 
@@ -67,6 +94,8 @@ final class VideoEncoderException implements Exception {
     VideoEncoderFailure.unsupported =>
       'This machine has no usable H.264 encoder.',
     VideoEncoderFailure.noDisplay => 'That display is no longer attached.',
+    VideoEncoderFailure.noCamera =>
+      'That camera is not there, or another application is using it.',
     VideoEncoderFailure.encoder => 'The encoder refused those settings.',
     VideoEncoderFailure.state => 'The encoder is already running.',
   };
@@ -86,6 +115,13 @@ abstract interface class VideoEncoderService {
 
   /// How many displays there are to choose from.
   int get displayCount;
+
+  /// The cameras attached, by name, in the order the platform lists them.
+  ///
+  /// Names rather than a count, because one webcam looks like another in a
+  /// list of indexes and a machine with two of them is the case that needs
+  /// choosing at all.
+  List<String> get cameraNames;
 
   /// Encoded frames, from the moment [start] returns until [stop].
   Stream<EncodedVideoFrame> get frames;

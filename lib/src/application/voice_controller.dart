@@ -78,6 +78,7 @@ final class VoiceController extends ChangeNotifier {
   Object? _error;
   Object? _microphoneError;
   bool _isMuted = false;
+  bool _isCameraOn = false;
   bool _isScreenSharing = false;
   bool _isAudioPlaybackActive = false;
   bool _isBusy = false;
@@ -140,6 +141,13 @@ final class VoiceController extends ChangeNotifier {
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
   bool get isMuted => _isMuted;
+
+  /// Whether this account's camera is announced to the room.
+  ///
+  /// Held here rather than on the camera controller because opcode 4 is a
+  /// whole-state frame: the flag has to be replayed with every mute toggle and
+  /// every reconnect, and the thing that replays those is this.
+  bool get isCameraOn => _isCameraOn;
   bool get isScreenSharing => _isScreenSharing;
   bool get isBusy => _isBusy;
   Object? get previewRenderer => _mediaService.previewRenderer;
@@ -243,6 +251,21 @@ final class VoiceController extends ChangeNotifier {
     });
   }
 
+  /// Sets the camera flag and re-announces the session with it.
+  ///
+  /// Answers whether the room was told. A camera turned on while nothing is
+  /// connected is refused rather than remembered: the flag would then be
+  /// replayed into whatever channel is joined next.
+  Future<bool> setCameraAnnounced({required bool enabled}) async {
+    if (_connectedChannelId == null) return false;
+    if (_isCameraOn == enabled) return true;
+    _isCameraOn = enabled;
+    final sent = await _sendJoin();
+    if (!sent) _isCameraOn = !enabled;
+    if (!_disposed) notifyListeners();
+    return sent;
+  }
+
   /// Re-announces the current session, returning whether anything was sent.
   ///
   /// Both the join and every mute toggle go through here: R08's opcode 4 is a
@@ -254,7 +277,11 @@ final class VoiceController extends ChangeNotifier {
     if (_isCallSession) {
       final callService = _callServiceProvider();
       if (callService == null) return false;
-      await callService.joinCall(channelId: channelId, selfMute: _isMuted);
+      await callService.joinCall(
+        channelId: channelId,
+        selfMute: _isMuted,
+        selfVideo: _isCameraOn,
+      );
       return true;
     }
     final guildId = _connectedGuildId;
@@ -264,6 +291,7 @@ final class VoiceController extends ChangeNotifier {
       guildId: guildId,
       channelId: channelId,
       selfMute: _isMuted,
+      selfVideo: _isCameraOn,
     );
     return true;
   }
@@ -305,6 +333,7 @@ final class VoiceController extends ChangeNotifier {
       _participants.clear();
       _isScreenSharing = false;
       _isMuted = false;
+      _isCameraOn = false;
     });
   }
 

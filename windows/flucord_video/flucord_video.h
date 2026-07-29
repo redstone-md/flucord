@@ -32,6 +32,10 @@ typedef enum {
   FLUCORD_VIDEO_ERROR_NO_DISPLAY = 2,
   FLUCORD_VIDEO_ERROR_ENCODER = 3,
   FLUCORD_VIDEO_ERROR_STATE = 4,
+  // No camera at that index, or one that another application already holds.
+  // Kept apart from NO_DISPLAY: a busy camera is a thing the user can fix,
+  // and a missing display is not.
+  FLUCORD_VIDEO_ERROR_NO_CAMERA = 5,
 } FlucordVideoStatus;
 
 typedef struct FlucordVideoEncoder FlucordVideoEncoder;
@@ -50,7 +54,8 @@ typedef void (*FlucordVideoFrameCallback)(void* user_data,
                                           int32_t is_keyframe);
 
 typedef struct {
-  // Which display to capture. 0 is the primary one.
+  // Which display to capture, or which camera when the pipeline was opened
+  // with flucord_video_open_camera. 0 is the primary one either way.
   int32_t display_index;
   int32_t width;
   int32_t height;
@@ -65,6 +70,33 @@ flucord_video_open(const FlucordVideoConfig* config,
                    FlucordVideoFrameCallback callback,
                    void* user_data,
                    FlucordVideoEncoder** out_encoder);
+
+// Opens the same pipeline against a camera instead of a display.
+//
+// The frames come out identically — Annex B on the same callback — because
+// everything downstream of the capture is shared: a camera and a screen differ
+// only in where the NV12 comes from. Media Foundation's source reader does the
+// format conversion and the scaling, so a camera that only speaks YUY2 or
+// MJPEG still arrives as the NV12 the encoder wants.
+//
+// `config->width`/`height` are what the encoder produces; the reader is asked
+// for the nearest thing the camera offers and the result is scaled to fit.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open_camera(const FlucordVideoConfig* config,
+                          FlucordVideoFrameCallback callback,
+                          void* user_data,
+                          FlucordVideoEncoder** out_encoder);
+
+// How many cameras are attached.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_count(void);
+
+// Writes the UTF-8 name of camera `index` into `buffer` and returns how many
+// bytes it needed, including the terminator. A capacity of 0 asks for the
+// length without writing anything, which is how a caller sizes its buffer.
+// Returns 0 when there is no camera at that index.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_name(int32_t index,
+                                                       char* buffer,
+                                                       int32_t capacity);
 
 // Asks the encoder for a keyframe on the next capture, which is what a viewer
 // joining midway needs before anything decodes.

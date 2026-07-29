@@ -322,6 +322,7 @@ final class _FakeCallGateway
     required bool connected,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => callStates.add((channelId, connected));
 
   @override
@@ -330,6 +331,7 @@ final class _FakeCallGateway
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => updates.add(_GuildUpdate(guildId, channelId));
 
   @override

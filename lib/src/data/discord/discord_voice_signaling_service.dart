@@ -5,6 +5,7 @@ import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_call_state_roster.dart';
+import 'discord_rtp_packet.dart';
 import 'discord_gateway_client.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_session_assembler.dart';
@@ -75,11 +76,13 @@ final class DiscordVoiceSignalingService
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) => _join(
     VoiceSessionKey.guild(guildId),
     channelId: channelId,
     selfMute: selfMute,
     selfDeaf: selfDeaf,
+    selfVideo: selfVideo,
   );
 
   @override
@@ -94,6 +97,7 @@ final class DiscordVoiceSignalingService
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) {
     if (_callGateway == null) {
       _emit(
@@ -109,6 +113,7 @@ final class DiscordVoiceSignalingService
       channelId: channelId,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
     );
   }
 
@@ -120,6 +125,7 @@ final class DiscordVoiceSignalingService
     required String channelId,
     required bool selfMute,
     required bool selfDeaf,
+    bool selfVideo = false,
   }) async {
     if (_closed) throw StateError('Voice signaling service is closed');
     // DAVE is not a precondition for being in a voice channel. Discord's own
@@ -138,7 +144,13 @@ final class DiscordVoiceSignalingService
     }
     _activeSession = key;
     if (_desiredChannels[key] == channelId) {
-      _sendVoiceState(key, channelId, selfMute: selfMute, selfDeaf: selfDeaf);
+      _sendVoiceState(
+        key,
+        channelId,
+        selfMute: selfMute,
+        selfDeaf: selfDeaf,
+        selfVideo: selfVideo,
+      );
       return;
     }
     _desiredChannels[key] = channelId;
@@ -151,7 +163,13 @@ final class DiscordVoiceSignalingService
     for (final state in _seatedIn(key, channelId)) {
       _emit(state);
     }
-    _sendVoiceState(key, channelId, selfMute: selfMute, selfDeaf: selfDeaf);
+    _sendVoiceState(
+      key,
+      channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
+    );
   }
 
   Future<void> _leave(VoiceSessionKey key) async {
@@ -169,6 +187,7 @@ final class DiscordVoiceSignalingService
     String? channelId, {
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) {
     final guildId = key.guildId;
     if (guildId != null) {
@@ -177,6 +196,7 @@ final class DiscordVoiceSignalingService
         channelId: channelId,
         selfMute: selfMute,
         selfDeaf: selfDeaf,
+        selfVideo: selfVideo,
       );
       return;
     }
@@ -185,6 +205,7 @@ final class DiscordVoiceSignalingService
       connected: channelId != null,
       selfMute: selfMute,
       selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
     );
   }
 
@@ -303,6 +324,27 @@ final class DiscordVoiceSignalingService
     await _audioSubscriptions.remove(key)?.cancel();
     await _clientSubscriptions.remove(key)?.cancel();
     await _clients.remove(key)?.close();
+  }
+
+  /// The video plane of the session currently joined, or null when there is
+  /// none — no session, or a client that cannot carry pictures.
+  VoiceVideoTransport? get activeVideoTransport {
+    final session = _activeSession;
+    final client = session == null ? null : _clients[session];
+    return client is VoiceVideoTransport ? client as VoiceVideoTransport : null;
+  }
+
+  /// Encrypts and sends one video RTP frame on the active session.
+  ///
+  /// The same socket and the same cipher the audio uses: a camera is another
+  /// SSRC on the connection that is already open, not a second connection.
+  int sendVideoFrame(DiscordRtpFrame frame) {
+    final session = _activeSession;
+    final client = session == null ? null : _clients[session];
+    if (client is! DiscordVoiceGatewayClient) {
+      throw StateError('Discord voice transport is not ready');
+    }
+    return client.sendAudioFrame(frame);
   }
 
   @override

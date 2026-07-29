@@ -136,6 +136,7 @@ final class _ParticipantSignalingService implements VoiceSignalingService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) async {}
 
   @override

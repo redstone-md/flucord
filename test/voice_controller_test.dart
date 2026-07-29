@@ -299,6 +299,7 @@ final class _FakeVoiceSignalingService
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) async {
     joins.add((guildId, channelId, selfMute));
   }

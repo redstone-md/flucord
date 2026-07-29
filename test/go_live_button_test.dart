@@ -208,6 +208,10 @@ final class _FakeEncoder implements VideoEncoderService {
   int started = 0;
   int stopped = 0;
   final List<bool> pauses = [];
+  List<String> cameras = const [];
+
+  @override
+  List<String> get cameraNames => cameras;
 
   void emit(EncodedVideoFrame frame) => _frames.add(frame);
 

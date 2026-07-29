@@ -14,6 +14,7 @@
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
+#include <mfreadwrite.h>
 #include <mftransform.h>
 #include <wrl/client.h>
 
@@ -21,6 +22,7 @@
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "mf.lib")
 #pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "wmcodecdspuuid.lib")
 
@@ -92,6 +94,10 @@ struct FlucordVideoEncoder {
   ComPtr<ID3D11Device> device;
   ComPtr<ID3D11DeviceContext> context;
   ComPtr<IDXGIOutputDuplication> duplication;
+  // Set instead of `duplication` when the source is a camera. Which of the two
+  // is held is what the capture thread branches on, so a pipeline can only
+  // ever have one source and cannot silently read from both.
+  ComPtr<IMFSourceReader> reader;
   ComPtr<IMFTransform> encoder;
 
   std::thread worker;
@@ -226,23 +232,17 @@ void DrainEncoder(FlucordVideoEncoder* state) {
   }
 }
 
-void EncodeFrame(FlucordVideoEncoder* state,
-                 const uint8_t* bgra,
-                 int stride,
-                 int64_t timestamp_us) {
-  const size_t nv12_size =
-      static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
-  if (state->nv12.size() != nv12_size) state->nv12.resize(nv12_size);
-  BgraToNv12(bgra, stride, state->config.width, state->config.height,
-             state->nv12.data());
-
+void EncodeNv12(FlucordVideoEncoder* state,
+                const uint8_t* nv12,
+                size_t nv12_size,
+                int64_t timestamp_us) {
   ComPtr<IMFMediaBuffer> buffer;
   if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(nv12_size), &buffer))) {
     return;
   }
   BYTE* target = nullptr;
   if (FAILED(buffer->Lock(&target, nullptr, nullptr))) return;
-  memcpy(target, state->nv12.data(), nv12_size);
+  memcpy(target, nv12, nv12_size);
   buffer->Unlock();
   buffer->SetCurrentLength(static_cast<DWORD>(nv12_size));
 
@@ -260,6 +260,125 @@ void EncodeFrame(FlucordVideoEncoder* state,
   if (SUCCEEDED(state->encoder->ProcessInput(0, sample.Get(), 0))) {
     DrainEncoder(state);
   }
+}
+
+void EncodeFrame(FlucordVideoEncoder* state,
+                 const uint8_t* bgra,
+                 int stride,
+                 int64_t timestamp_us) {
+  const size_t nv12_size =
+      static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
+  if (state->nv12.size() != nv12_size) state->nv12.resize(nv12_size);
+  BgraToNv12(bgra, stride, state->config.width, state->config.height,
+             state->nv12.data());
+  EncodeNv12(state, state->nv12.data(), nv12_size, timestamp_us);
+}
+
+// Enumerates the attached cameras. The caller owns every activate it takes.
+HRESULT EnumerateCameras(IMFActivate*** out_devices, UINT32* out_count) {
+  ComPtr<IMFAttributes> attributes;
+  HRESULT hr = MFCreateAttributes(&attributes, 1);
+  if (FAILED(hr)) return hr;
+  hr = attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
+                           MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+  if (FAILED(hr)) return hr;
+  return MFEnumDeviceSources(attributes.Get(), out_devices, out_count);
+}
+
+HRESULT OpenCameraReader(FlucordVideoEncoder* state) {
+  IMFActivate** devices = nullptr;
+  UINT32 count = 0;
+  HRESULT hr = EnumerateCameras(&devices, &count);
+  if (FAILED(hr)) return hr;
+  if (state->config.display_index < 0 ||
+      static_cast<UINT32>(state->config.display_index) >= count) {
+    for (UINT32 index = 0; index < count; ++index) devices[index]->Release();
+    CoTaskMemFree(devices);
+    return MF_E_NOT_FOUND;
+  }
+
+  ComPtr<IMFMediaSource> source;
+  hr = devices[state->config.display_index]->ActivateObject(
+      IID_PPV_ARGS(&source));
+  for (UINT32 index = 0; index < count; ++index) devices[index]->Release();
+  CoTaskMemFree(devices);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IMFAttributes> attributes;
+  hr = MFCreateAttributes(&attributes, 1);
+  if (FAILED(hr)) return hr;
+  // Without this the reader will only hand back what the camera natively
+  // produces, and a webcam that speaks MJPEG or YUY2 would need a converter
+  // written here for every format it might pick.
+  attributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING,
+                        TRUE);
+  hr = MFCreateSourceReaderFromMediaSource(source.Get(), attributes.Get(),
+                                           &state->reader);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IMFMediaType> type;
+  hr = MFCreateMediaType(&type);
+  if (FAILED(hr)) return hr;
+  type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+  MFSetAttributeSize(type.Get(), MF_MT_FRAME_SIZE,
+                     static_cast<UINT32>(state->config.width),
+                     static_cast<UINT32>(state->config.height));
+  MFSetAttributeRatio(type.Get(), MF_MT_FRAME_RATE,
+                      static_cast<UINT32>(state->config.frames_per_second), 1);
+  hr = state->reader->SetCurrentMediaType(
+      static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr,
+      type.Get());
+  if (FAILED(hr)) {
+    // The camera would not take the exact size asked for. NV12 alone is
+    // enough — the reader scales — so the size is dropped rather than the
+    // whole request.
+    ComPtr<IMFMediaType> fallback;
+    if (FAILED(MFCreateMediaType(&fallback))) return hr;
+    fallback->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+    fallback->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
+    hr = state->reader->SetCurrentMediaType(
+        static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr,
+        fallback.Get());
+    if (FAILED(hr)) return hr;
+  }
+  return state->reader->SetStreamSelection(
+      static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
+}
+
+void CameraLoop(FlucordVideoEncoder* state) {
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  const size_t nv12_size =
+      static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
+  const auto started = GetTickCount64();
+
+  while (state->running.load()) {
+    DWORD stream_index = 0;
+    DWORD flags = 0;
+    LONGLONG timestamp = 0;
+    ComPtr<IMFSample> sample;
+    const HRESULT hr = state->reader->ReadSample(
+        static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0,
+        &stream_index, &flags, &timestamp, &sample);
+    if (FAILED(hr) || (flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0) break;
+    // A read with no sample is the reader saying "nothing yet", not an end:
+    // dropping out here would stop the camera on the first slow frame.
+    if (!sample || state->paused.load()) continue;
+
+    ComPtr<IMFMediaBuffer> buffer;
+    if (FAILED(sample->ConvertToContiguousBuffer(&buffer))) continue;
+    BYTE* data = nullptr;
+    DWORD length = 0;
+    if (FAILED(buffer->Lock(&data, nullptr, &length))) continue;
+    if (length >= nv12_size) {
+      EncodeNv12(state, data, nv12_size,
+                 timestamp != 0
+                     ? timestamp / 10
+                     : static_cast<int64_t>(GetTickCount64() - started) * 1000);
+    }
+    buffer->Unlock();
+  }
+  CoUninitialize();
 }
 
 void CaptureLoop(FlucordVideoEncoder* state) {
@@ -579,6 +698,93 @@ flucord_video_open(const FlucordVideoConfig* config,
 }
 
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open_camera(const FlucordVideoConfig* config,
+                          FlucordVideoFrameCallback callback,
+                          void* user_data,
+                          FlucordVideoEncoder** out_encoder) {
+  if (config == nullptr || callback == nullptr || out_encoder == nullptr) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  if (config->width <= 0 || config->height <= 0 ||
+      config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+
+  auto state = std::make_unique<FlucordVideoEncoder>();
+  state->config = *config;
+  state->callback = callback;
+  state->user_data = user_data;
+
+  // No Direct3D device here: the camera path never touches the desktop, and
+  // demanding a GPU would refuse a machine that can plainly run a webcam.
+  if (FAILED(OpenCameraReader(state.get()))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_NO_CAMERA;
+  }
+  if (FAILED(ConfigureEncoder(state.get()))) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_ENCODER;
+  }
+
+  state->running.store(true);
+  FlucordVideoEncoder* raw = state.release();
+  raw->worker = std::thread(CameraLoop, raw);
+  *out_encoder = raw;
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_count(void) {
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return 0;
+  IMFActivate** devices = nullptr;
+  UINT32 count = 0;
+  const HRESULT hr = EnumerateCameras(&devices, &count);
+  if (SUCCEEDED(hr)) {
+    for (UINT32 index = 0; index < count; ++index) devices[index]->Release();
+    CoTaskMemFree(devices);
+  }
+  MFShutdown();
+  return SUCCEEDED(hr) ? static_cast<int32_t>(count) : 0;
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_name(int32_t index,
+                                                       char* buffer,
+                                                       int32_t capacity) {
+  if (index < 0) return 0;
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return 0;
+  IMFActivate** devices = nullptr;
+  UINT32 count = 0;
+  if (FAILED(EnumerateCameras(&devices, &count))) {
+    MFShutdown();
+    return 0;
+  }
+  int32_t needed = 0;
+  if (static_cast<UINT32>(index) < count) {
+    WCHAR* name = nullptr;
+    UINT32 name_length = 0;
+    if (SUCCEEDED(devices[index]->GetAllocatedString(
+            MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name, &name_length))) {
+      needed = WideCharToMultiByte(CP_UTF8, 0, name, -1, nullptr, 0, nullptr,
+                                   nullptr);
+      if (buffer != nullptr && capacity >= needed) {
+        WideCharToMultiByte(CP_UTF8, 0, name, -1, buffer, capacity, nullptr,
+                            nullptr);
+      }
+      CoTaskMemFree(name);
+    }
+  }
+  for (UINT32 device = 0; device < count; ++device) devices[device]->Release();
+  CoTaskMemFree(devices);
+  MFShutdown();
+  return needed;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_request_keyframe(FlucordVideoEncoder* encoder) {
   if (encoder == nullptr) return FLUCORD_VIDEO_ERROR_STATE;
   encoder->keyframe_requested.store(true);
@@ -603,6 +809,7 @@ FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder) {
     encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
   }
   encoder->duplication.Reset();
+  encoder->reader.Reset();
   encoder->encoder.Reset();
   encoder->context.Reset();
   encoder->device.Reset();

@@ -22,6 +22,10 @@ final class DiscordDesktopVoiceFrames {
   /// renderer omits the keys until a latency test has ranked regions, and
   /// Flucord has never run one.
   ///
+  /// `self_video` is what tells the room a camera is on. It rides the same
+  /// whole-state frame as the mute flags rather than having a frame of its
+  /// own, which is why turning the camera on re-announces the join.
+  ///
   /// [sessionKey] is the guild for guild voice and the channel for a private
   /// call, so a move between two channels of one guild replaces a single
   /// desired state rather than accumulating a second.
@@ -31,13 +35,14 @@ final class DiscordDesktopVoiceFrames {
     required String? channelId,
     required bool selfMute,
     required bool selfDeaf,
+    bool selfVideo = false,
   }) {
     final body = <String, Object?>{
       'guild_id': guildId,
       'channel_id': channelId,
       'self_mute': selfMute,
       'self_deaf': selfDeaf,
-      'self_video': false,
+      'self_video': selfVideo,
       'flags': 0,
     };
     if (channelId == null) {

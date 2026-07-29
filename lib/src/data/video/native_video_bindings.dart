@@ -1,5 +1,7 @@
 import 'dart:ffi';
 
+import 'package:ffi/ffi.dart';
+
 /// `FlucordVideoConfig`, laid out to match the header.
 final class NativeVideoConfig extends Struct {
   @Int32()
@@ -109,7 +111,18 @@ final class NativeVideoBindings {
           >('flucord_video_decoder_close'),
       displayCount = library.lookupFunction<Int32 Function(), int Function()>(
         'flucord_video_display_count',
-      );
+      ),
+      openCamera = library.lookupFunction<VideoOpenNative, VideoOpenDart>(
+        'flucord_video_open_camera',
+      ),
+      cameraCount = library.lookupFunction<Int32 Function(), int Function()>(
+        'flucord_video_camera_count',
+      ),
+      cameraName = library
+          .lookupFunction<
+            Int32 Function(Int32, Pointer<Utf8>, Int32),
+            int Function(int, Pointer<Utf8>, int)
+          >('flucord_video_camera_name');
 
   final VideoOpenDart open;
   final int Function(Pointer<Void>) requestKeyframe;
@@ -126,6 +139,14 @@ final class NativeVideoBindings {
   final VideoDecoderSubmitDart decoderSubmit;
   final void Function(Pointer<Void>) decoderClose;
   final int Function() displayCount;
+
+  /// The same pipeline, reading a camera instead of a display.
+  final VideoOpenDart openCamera;
+  final int Function() cameraCount;
+
+  /// Writes a camera's UTF-8 name into the buffer and answers how many bytes
+  /// it needed; a capacity of zero asks the length without writing.
+  final int Function(int, Pointer<Utf8>, int) cameraName;
 }
 
 /// `FlucordVideoStatus`.
@@ -135,4 +156,5 @@ abstract final class NativeVideoStatus {
   static const noDisplay = 2;
   static const encoder = 3;
   static const state = 4;
+  static const noCamera = 5;
 }

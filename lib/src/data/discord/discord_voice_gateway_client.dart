@@ -21,7 +21,7 @@ abstract interface class DiscordVoiceClient {
 }
 
 final class DiscordVoiceGatewayClient
-    implements DiscordVoiceClient, VoiceAudioTransport {
+    implements DiscordVoiceClient, VoiceAudioTransport, VoiceVideoTransport {
   DiscordVoiceGatewayClient({
     required VoiceServerCredentials credentials,
     required int maxDaveProtocolVersion,
@@ -357,6 +357,41 @@ final class DiscordVoiceGatewayClient
   void setSpeaking(bool enabled) {
     final ssrc = _ssrc;
     if (ssrc != null) _send(_protocol.speaking(ssrc: ssrc, enabled: enabled));
+  }
+
+  /// The SSRC Discord handed this session, or null before the voice `READY`.
+  ///
+  /// A camera sends on the one above it, which is how the desktop client
+  /// derives its own video SSRC rather than being told one.
+  @override
+  int? get audioSsrc => _ssrc;
+
+  /// Declares the camera's SSRCs with opcode 12, or marks them inactive.
+  ///
+  /// Answers whether the frame went out: before the voice `READY` there is no
+  /// audio SSRC to derive the video one from, and announcing a camera the
+  /// server has allocated nothing for would send pictures nobody forwards.
+  @override
+  bool announceVideo({
+    required bool enabled,
+    int width = 1280,
+    int height = 720,
+    int framesPerSecond = 30,
+    int maxBitrate = 1200000,
+  }) {
+    final ssrc = _ssrc;
+    if (ssrc == null) return false;
+    _send(
+      _protocol.video(
+        audioSsrc: ssrc,
+        enabled: enabled,
+        width: width,
+        height: height,
+        framesPerSecond: framesPerSecond,
+        maxBitrate: maxBitrate,
+      ),
+    );
+    return true;
   }
 
   int sendAudioFrame(DiscordRtpFrame frame) {

@@ -25,6 +25,8 @@ import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
 import 'application/expression_favorites_controller.dart';
+import 'application/self_video_controller.dart';
+import 'data/discord/discord_voice_signaling_service.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
 import 'application/stream_viewer_controller.dart';
@@ -222,6 +224,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final MessageComponentController _messageComponentController;
   late final SelfPresenceController _selfPresenceController;
   late final VoiceController _voiceController;
+  late final SelfVideoController _selfVideoController;
   late final DirectCallController _directCallController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -388,6 +391,25 @@ class _FlucordAppState extends State<FlucordApp> {
       serviceProvider: () => _chatController.directCallService,
       voiceController: _voiceController,
     );
+    // The camera reads the live voice session rather than being handed one:
+    // a reconnect replaces the transport, and a controller holding the old one
+    // would encode into a socket that is already closed.
+    _selfVideoController = SelfVideoController(
+      encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
+      transportProvider: () => _chatController.voiceSignalingService
+          is DiscordVoiceSignalingService
+          ? (_chatController.voiceSignalingService
+                    as DiscordVoiceSignalingService)
+                .activeVideoTransport
+          : null,
+      sinkProvider: () {
+        final signaling = _chatController.voiceSignalingService;
+        if (signaling is! DiscordVoiceSignalingService) return null;
+        return signaling.sendVideoFrame;
+      },
+      announceSelfVideo: ({required bool enabled}) =>
+          _voiceController.setCameraAnnounced(enabled: enabled),
+    );
     _chatController.addListener(_syncVoiceSignaling);
     _chatController.addListener(_syncUserSettings);
     _chatController.addListener(_syncSelfPresence);
@@ -461,6 +483,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _workspaceController.dispose();
     _directCallController.dispose();
     _voiceController.dispose();
+    _selfVideoController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
   }
@@ -585,6 +608,8 @@ class _FlucordAppState extends State<FlucordApp> {
                                           soundboardController:
                                               _soundboardController,
                                           goLiveController: _goLiveController,
+                                          selfVideoController:
+                                              _selfVideoController,
                                           streamViewerController:
                                               _streamViewerController,
                                           gifPickerController:

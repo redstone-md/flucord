@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import '../../domain/video_encoder.dart';
+import 'native_camera_names.dart';
 import 'native_video_bindings.dart';
 
 /// Screen capture and H.264 encoding through `flucord_video.dll`.
@@ -65,12 +66,12 @@ final class NativeVideoEncoderService implements VideoEncoderService {
         ..height = settings.height
         ..framesPerSecond = settings.framesPerSecond
         ..bitrate = settings.bitrate;
-      final status = bindings.open(
-        config,
-        callback.nativeFunction,
-        nullptr,
-        out,
-      );
+      // The two openers take the same config and answer on the same callback;
+      // only where the pictures come from differs.
+      final open = settings.source == VideoCaptureSource.camera
+          ? bindings.openCamera
+          : bindings.open;
+      final status = open(config, callback.nativeFunction, nullptr, out);
       if (status != NativeVideoStatus.ok) {
         callback.close();
         throw VideoEncoderException(_failureFor(status));
@@ -131,8 +132,19 @@ final class NativeVideoEncoderService implements VideoEncoderService {
     }
   }
 
+  @override
+  List<String> get cameraNames {
+    final bindings = _bindings;
+    if (bindings == null) return const [];
+    return NativeCameraNames.read(
+      count: bindings.cameraCount(),
+      name: bindings.cameraName,
+    );
+  }
+
   static VideoEncoderFailure _failureFor(int status) => switch (status) {
     NativeVideoStatus.noDisplay => VideoEncoderFailure.noDisplay,
+    NativeVideoStatus.noCamera => VideoEncoderFailure.noCamera,
     NativeVideoStatus.encoder => VideoEncoderFailure.encoder,
     NativeVideoStatus.state => VideoEncoderFailure.state,
     _ => VideoEncoderFailure.unsupported,

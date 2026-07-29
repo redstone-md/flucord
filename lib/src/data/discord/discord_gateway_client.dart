@@ -96,6 +96,9 @@ abstract interface class DiscordVoiceStateGateway {
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    /// Whether the account's camera is on. Part of the same whole-state frame
+    /// as the mute flags, so it cannot be announced on its own.
+    bool selfVideo = false,
   });
 
   /// Opcode 5 `VOICE_SERVER_PING`, whose payload is the literal `null`.
@@ -130,6 +133,7 @@ abstract interface class DiscordCallGateway {
     required bool connected,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   });
 }
 
@@ -315,6 +319,10 @@ final class DiscordGatewayClient implements DiscordChatGateway {
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    // Accepted and not sent. A bot session has no camera to turn on, and the
+    // bot opcode 4 this protocol writes carries the two fields the bot API
+    // documents rather than the six a desktop renderer sends.
+    bool selfVideo = false,
   }) {
     final payload = _protocol.voiceStateUpdate(
       guildId: guildId,

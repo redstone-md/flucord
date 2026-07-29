@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/self_video_controller.dart';
+
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
@@ -19,6 +21,7 @@ class VoiceConnectionBar extends StatelessWidget {
     required this.controller,
     required this.channelNameFor,
     this.onOpenChannel,
+    this.camera,
     super.key,
   });
 
@@ -30,6 +33,9 @@ class VoiceConnectionBar extends StatelessWidget {
 
   /// Returns to the connected room. Null when it cannot be navigated to.
   final void Function(String channelId)? onOpenChannel;
+
+  /// The account's own camera, when this build can send one.
+  final SelfVideoController? camera;
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +103,26 @@ class VoiceConnectionBar extends StatelessWidget {
                   icon: Icons.open_in_full,
                   onPressed: () => onOpenChannel!(channelId),
                 ),
+              if (camera case final SelfVideoController camera)
+                if (camera.isSupported)
+                  _BarButton(
+                    buttonKey: const ValueKey('voice-bar-camera'),
+                    tooltip: camera.cameras.isEmpty
+                        ? 'No camera attached'
+                        : camera.isOn
+                        ? 'Turn camera off'
+                        : 'Turn camera on',
+                    icon: camera.isOn
+                        ? Icons.videocam
+                        : Icons.videocam_off_outlined,
+                    active: camera.isOn,
+                    // A build with no camera keeps the button visible and
+                    // dead: hiding it would leave somebody who unplugged a
+                    // webcam wondering where the control went.
+                    onPressed: camera.cameras.isEmpty || camera.isBusy
+                        ? null
+                        : () => unawaited(camera.toggle()),
+                  ),
               _BarButton(
                 buttonKey: const ValueKey('voice-bar-mute'),
                 tooltip: controller.isMuted ? 'Unmute' : 'Mute',
@@ -145,7 +171,7 @@ class _BarButton extends StatelessWidget {
   final Key buttonKey;
   final String tooltip;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool active;
   final bool danger;
 

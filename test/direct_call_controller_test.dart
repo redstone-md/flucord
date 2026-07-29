@@ -317,6 +317,7 @@ final class _FakeCallService implements DirectCallService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) async => log.add('join:$channelId');
 
   @override

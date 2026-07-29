@@ -267,6 +267,9 @@ abstract interface class VoiceSignalingService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    /// Whether the account's camera is on. Part of the same whole-state frame,
+    /// so a join that forgot it would turn the camera off.
+    bool selfVideo = false,
   });
 
   Future<void> leaveVoiceChannel(String guildId);

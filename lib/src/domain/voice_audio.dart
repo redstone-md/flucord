@@ -37,6 +37,27 @@ abstract interface class VoiceAudioTransport {
   Future<void> finishSpeaking();
 }
 
+/// The video half of a voice connection.
+///
+/// Split from [VoiceAudioTransport] because a transport can carry sound
+/// without ever carrying pictures — a session with no camera, or one whose
+/// build has no encoder — and a single interface would make every such
+/// transport implement methods it would have to refuse.
+abstract interface class VoiceVideoTransport {
+  /// The SSRC Discord handed this session, or null before the voice `READY`.
+  int? get audioSsrc;
+
+  /// Declares the camera's SSRCs, or marks them inactive. Answers whether the
+  /// frame could be sent at all.
+  bool announceVideo({
+    required bool enabled,
+    int width,
+    int height,
+    int framesPerSecond,
+    int maxBitrate,
+  });
+}
+
 abstract interface class VoiceOpusEncoder {
   Uint8List encode(Int16List pcm);
   void dispose();

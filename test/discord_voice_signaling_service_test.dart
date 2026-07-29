@@ -278,6 +278,7 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+    bool selfVideo = false,
   }) {
     updates.add(
       _VoiceUpdate(
