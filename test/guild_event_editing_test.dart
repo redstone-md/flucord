@@ -16,6 +16,7 @@ GuildScheduledEventDraft _draft({
   DateTime? endTime,
   bool withEnd = true,
   String? cover,
+  EventRecurrenceRule? recurrence,
 }) => GuildScheduledEventDraft(
   name: name,
   startTime: _start,
@@ -27,6 +28,7 @@ GuildScheduledEventDraft _draft({
   channelId: channelId,
   location: location,
   coverImage: cover,
+  recurrence: recurrence,
 );
 
 void main() {
@@ -333,6 +335,261 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Cover will be removed'), findsOneWidget);
+    });
+  });
+
+  group('repeating', () {
+    test('a rule reads back everything Discord sent', () {
+      final rule = EventRecurrenceRule.fromJson({
+        'start': '2026-08-01T18:00:00+00:00',
+        'end': '2026-12-01T18:00:00+00:00',
+        'frequency': 2,
+        'interval': 2,
+        'by_weekday': [0, 2, 'nonsense'],
+        'count': 10,
+        'by_n_weekday': [
+          {'n': 2, 'day': 1},
+        ],
+        'by_month': [8],
+      })!;
+
+      expect(rule.frequency, EventRecurrenceFrequency.weekly);
+      expect(rule.interval, 2);
+      expect(rule.byWeekday, [0, 2]);
+      expect(rule.count, 10);
+      expect(rule.end, DateTime.utc(2026, 12, 1, 18));
+      // The parts with no control here are kept exactly as they arrived.
+      expect(rule.unmodelled, {
+        'by_n_weekday': [
+          {'n': 2, 'day': 1},
+        ],
+        'by_month': [8],
+      });
+      expect(rule.summary, 'Repeats every 2 weeks');
+    });
+
+    test('an event that does not repeat has no rule', () {
+      expect(EventRecurrenceRule.fromJson(null), isNull);
+      expect(EventRecurrenceRule.fromJson('nonsense'), isNull);
+      // A frequency Discord does not offer a guild event is not a rule here.
+      expect(
+        EventRecurrenceRule.fromJson(const {
+          'start': '2026-08-01T18:00:00+00:00',
+          'frequency': 5,
+        }),
+        isNull,
+      );
+      expect(EventRecurrenceRule.fromJson(const {'frequency': 3}), isNull);
+      expect(
+        EventRecurrenceRule.fromJson(const {
+          'start': 'not a time',
+          'frequency': 3,
+        }),
+        isNull,
+      );
+    });
+
+    test('an interval Discord would refuse is floored at one', () {
+      final zero = EventRecurrenceRule.fromJson(const {
+        'start': '2026-08-01T18:00:00+00:00',
+        'frequency': 3,
+        'interval': 0,
+      })!;
+
+      expect(zero.interval, 1);
+      expect(zero.summary, 'Repeats every day');
+      expect(zero.toJson()['interval'], 1);
+      expect(zero.toJson()['by_weekday'], isNull);
+    });
+
+    test('every frequency says how it reads', () {
+      String summaryOf(EventRecurrenceFrequency frequency, int interval) =>
+          EventRecurrenceRule(
+            start: DateTime.utc(2026, 8),
+            frequency: frequency,
+            interval: interval,
+          ).summary;
+
+      expect(summaryOf(EventRecurrenceFrequency.daily, 1), 'Repeats every day');
+      expect(
+        summaryOf(EventRecurrenceFrequency.daily, 3),
+        'Repeats every 3 days',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.weekly, 1),
+        'Repeats every week',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.monthly, 2),
+        'Repeats every 2 months',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.monthly, 1),
+        'Repeats every month',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.yearly, 1),
+        'Repeats every year',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.yearly, 5),
+        'Repeats every 5 years',
+      );
+      expect(
+        summaryOf(EventRecurrenceFrequency.weekly, 4),
+        'Repeats every 4 weeks',
+      );
+    });
+
+    test('a rule compares by what it says', () {
+      final rule = EventRecurrenceRule(
+        start: DateTime.utc(2026, 8),
+        frequency: EventRecurrenceFrequency.weekly,
+        byWeekday: const [0],
+      );
+
+      expect(
+        rule,
+        EventRecurrenceRule(
+          start: DateTime.utc(2026, 8),
+          frequency: EventRecurrenceFrequency.weekly,
+          byWeekday: const [0],
+        ),
+      );
+      expect(
+        rule.hashCode,
+        EventRecurrenceRule(
+          start: DateTime.utc(2026, 8),
+          frequency: EventRecurrenceFrequency.weekly,
+          byWeekday: const [0],
+        ).hashCode,
+      );
+      expect(
+        rule ==
+            EventRecurrenceRule(
+              start: DateTime.utc(2026, 8),
+              frequency: EventRecurrenceFrequency.weekly,
+            ),
+        isFalse,
+      );
+      expect(rule == Object(), isFalse);
+      expect(EventRecurrenceFrequency.fromCode('nonsense'), isNull);
+    });
+
+    test('a create carries the rule, and null when there is none', () {
+      final withRule = GuildScheduledEventEdit.encodeDraft(
+        _draft(
+          recurrence: EventRecurrenceRule(
+            start: DateTime.utc(2026, 8),
+            frequency: EventRecurrenceFrequency.daily,
+          ),
+        ),
+      );
+
+      expect((withRule['recurrence_rule']! as Map)['frequency'], 3);
+      expect(
+        GuildScheduledEventEdit.encodeDraft(_draft())['recurrence_rule'],
+        isNull,
+      );
+    });
+
+    test('an edit can stop an event repeating', () {
+      final stopped = GuildScheduledEventEdit()..recurrence = null;
+
+      expect(stopped.keys, ['recurrence_rule']);
+      expect(stopped['recurrence_rule'], isNull);
+    });
+  });
+
+  group('choosing how often', () {
+    testWidgets('a new event can be made to repeat', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(tester, onResult: (value) => result = value);
+
+      await tester.tap(find.byKey(const ValueKey('event-repeat')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Every week').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('event-name')),
+        'Forge night',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('event-location')),
+        'The workshop',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(
+        result?.draft?.recurrence?.frequency,
+        EventRecurrenceFrequency.weekly,
+      );
+    });
+
+    testWidgets('changing how often keeps the parts with no control', (
+      tester,
+    ) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _repeatingEvent,
+        onResult: (value) => result = value,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('event-repeat')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Every month').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      final rule = result!.edit!['recurrence_rule']! as Map;
+      expect(rule['frequency'], 1);
+      // Editing when it repeats must not quietly rewrite the rest of the rule.
+      expect(rule['by_n_weekday'], [
+        {'n': 2, 'day': 1},
+      ]);
+      expect(rule['interval'], 2);
+    });
+
+    testWidgets('an event can be made to stop repeating', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _repeatingEvent,
+        onResult: (value) => result = value,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('event-repeat')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Does not repeat').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(result?.edit?.keys, ['recurrence_rule']);
+      expect(result?.edit?['recurrence_rule'], isNull);
+    });
+
+    testWidgets('leaving the rule alone sends no rule', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _repeatingEvent,
+        onResult: (value) => result = value,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('event-name')),
+        'Renamed',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(result?.edit?.keys, ['name']);
     });
   });
 
@@ -652,6 +909,27 @@ final _channelEvent = GuildScheduledEvent(
   entityType: GuildScheduledEventEntityType.voice,
   status: GuildScheduledEventStatus.scheduled,
   channelId: 'voice-1',
+);
+
+final _repeatingEvent = GuildScheduledEvent(
+  id: '555555555555555555',
+  spaceId: '111111111111111111',
+  name: 'Forge night',
+  scheduledStartTime: _start,
+  scheduledEndTime: _end,
+  entityType: GuildScheduledEventEntityType.external,
+  status: GuildScheduledEventStatus.scheduled,
+  location: 'The workshop',
+  recurrence: EventRecurrenceRule(
+    start: _start,
+    frequency: EventRecurrenceFrequency.weekly,
+    interval: 2,
+    unmodelled: const {
+      'by_n_weekday': [
+        {'n': 2, 'day': 1},
+      ],
+    },
+  ),
 );
 
 final _coveredEvent = GuildScheduledEvent(

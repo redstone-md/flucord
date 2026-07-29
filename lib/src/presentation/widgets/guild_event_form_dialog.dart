@@ -53,6 +53,9 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
   String? _coverImage;
   bool _coverCleared = false;
 
+  late EventRecurrenceFrequency? _repeat = widget.event?.recurrence?.frequency;
+  late final EventRecurrenceRule? _existingRule = widget.event?.recurrence;
+
   bool get _isEditing => widget.event != null;
   bool get _isExternal => _entityType == GuildScheduledEventEntityType.external;
 
@@ -164,6 +167,35 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
               ),
             ],
             const SizedBox(height: 12),
+            DropdownButtonFormField<EventRecurrenceFrequency?>(
+              key: const ValueKey('event-repeat'),
+              initialValue: _repeat,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Repeats',
+              ),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('Does not repeat')),
+                DropdownMenuItem(
+                  value: EventRecurrenceFrequency.daily,
+                  child: Text('Every day'),
+                ),
+                DropdownMenuItem(
+                  value: EventRecurrenceFrequency.weekly,
+                  child: Text('Every week'),
+                ),
+                DropdownMenuItem(
+                  value: EventRecurrenceFrequency.monthly,
+                  child: Text('Every month'),
+                ),
+                DropdownMenuItem(
+                  value: EventRecurrenceFrequency.yearly,
+                  child: Text('Every year'),
+                ),
+              ],
+              onChanged: (value) => setState(() => _repeat = value),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -251,6 +283,30 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
     });
   }
 
+  /// The rule to send, or null for an event that happens once.
+  ///
+  /// Editing an event that already repeats keeps every part of its rule this
+  /// form has no control for — the second Tuesday of the month, and the like —
+  /// because Discord replaces the whole rule and dropping them would quietly
+  /// rewrite when the event happens.
+  EventRecurrenceRule? _recurrence() {
+    final frequency = _repeat;
+    if (frequency == null) return null;
+    final existing = _existingRule;
+    if (existing == null) {
+      return EventRecurrenceRule(start: _start.toUtc(), frequency: frequency);
+    }
+    return EventRecurrenceRule(
+      start: existing.start,
+      frequency: frequency,
+      interval: existing.interval,
+      byWeekday: existing.byWeekday,
+      count: existing.count,
+      end: existing.end,
+      unmodelled: existing.unmodelled,
+    );
+  }
+
   GuildScheduledEventDraft _draft() => GuildScheduledEventDraft(
     name: _name.text,
     description: _description.text,
@@ -262,6 +318,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
     channelId: _isExternal ? null : _channelId,
     location: _location.text,
     coverImage: _coverImage,
+    recurrence: _recurrence(),
   );
 
   void _save() {
@@ -289,6 +346,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
     } else if (draft.channelId != event.channelId) {
       edit.channelId = draft.channelId;
     }
+    if (draft.recurrence != _existingRule) edit.recurrence = draft.recurrence;
     // Absent means untouched; cleared means take the cover off. Collapsing
     // the two would drop somebody's cover every time they renamed an event.
     if (_coverImage != null) {

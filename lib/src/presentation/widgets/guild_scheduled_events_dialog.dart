@@ -253,6 +253,17 @@ class _ScheduledEventRow extends StatelessWidget {
                           color: context.surfaces.muted,
                         ),
                       ),
+                      if (event.recurrence case final rule?) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          rule.summary,
+                          key: ValueKey('guild-event-repeats-${event.id}'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.surfaces.muted,
+                          ),
+                        ),
+                      ],
                       if (attendees.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(

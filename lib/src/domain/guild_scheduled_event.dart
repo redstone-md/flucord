@@ -39,6 +39,7 @@ final class GuildScheduledEvent {
     this.scheduledEndTime,
     this.interestedCount = 0,
     this.coverImageHash,
+    this.recurrence,
   });
 
   final String id;
@@ -56,6 +57,11 @@ final class GuildScheduledEvent {
   /// The cover Discord stores for this event, as a hash. Null when there is
   /// none; the hash names a CDN object rather than carrying the picture.
   final String? coverImageHash;
+
+  /// How it repeats, or null for an event that happens once.
+  final EventRecurrenceRule? recurrence;
+
+  bool get repeats => recurrence != null;
 
   bool get isActive => status == GuildScheduledEventStatus.active;
   bool get isTerminal =>
@@ -83,5 +89,6 @@ final class GuildScheduledEvent {
     status: status,
     interestedCount: interestedCount ?? this.interestedCount,
     coverImageHash: coverImageHash,
+    recurrence: recurrence,
   );
 }

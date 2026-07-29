@@ -15,6 +15,7 @@ part 'guild_emoji.dart';
 part 'guild_sticker.dart';
 part 'guild_scheduled_event.dart';
 part 'guild_scheduled_event_attendee.dart';
+part 'guild_scheduled_event_recurrence.dart';
 part 'guild_scheduled_event_editing.dart';
 part 'user_activity.dart';
 part 'user_presence.dart';

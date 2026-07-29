@@ -14,6 +14,7 @@ final class GuildScheduledEventDraft {
     this.channelId,
     this.location = '',
     this.coverImage,
+    this.recurrence,
   });
 
   final String name;
@@ -36,6 +37,9 @@ final class GuildScheduledEventDraft {
   /// The cover, as a `data:` URI. Null when there is none: Discord tells an
   /// absent cover from a cleared one, and so does this.
   final String? coverImage;
+
+  /// How it repeats, or null for an event that happens once.
+  final EventRecurrenceRule? recurrence;
 
   bool get isExternal => entityType == GuildScheduledEventEntityType.external;
 
@@ -103,6 +107,12 @@ final class GuildScheduledEventEdit {
     _values['image'] = value;
   }
 
+  /// Sets or clears the repetition. Null stops an event repeating, which is
+  /// a different thing from leaving the rule alone — so it is only written
+  /// when somebody asked for one or the other.
+  set recurrence(EventRecurrenceRule? value) =>
+      _values['recurrence_rule'] = value?.toJson();
+
   /// Ending or cancelling an event is a status change, not a delete.
   set status(GuildScheduledEventStatus value) =>
       _values['status'] = value.discordValue;
@@ -124,5 +134,6 @@ final class GuildScheduledEventEdit {
     'channel_id': draft.isExternal ? null : draft.channelId,
     'entity_metadata': draft.isExternal ? {'location': draft.location} : null,
     if (draft.coverImage != null) 'image': draft.coverImage,
+    'recurrence_rule': draft.recurrence?.toJson(),
   };
 }

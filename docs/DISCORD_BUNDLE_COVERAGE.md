@@ -573,14 +573,22 @@ are excluded from the denominator and are never reported as implemented.
   would drop somebody's picture every time they renamed an event — and a CDN
   hash is refused where a picture was asked for, since sending Discord back
   the name it gave us asks it to store its own filename as an image.
+  An event repeats daily, weekly, monthly or yearly, or not at all. Discord
+  replaces the whole rule on every write, so the parts this build shows no
+  control for — the second Tuesday of the month, a list of months, a day of
+  the year — are carried through untouched: editing when an event repeats must
+  not quietly rewrite the rest of when it happens. The three frequencies
+  Discord never offers a guild event are absent rather than listed and
+  refused, because a choice nobody can make is not a choice.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
   `discord_scheduled_event_mapper_test.dart`,
   `scheduled_event_rsvp_test.dart`,
   `scheduled_event_rsvp_repository_test.dart`,
   `guild_event_editing_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: the four recurrence-exception dispatches and recurrence
-  rules themselves.
+- **Blocked by**: the four recurrence-exception dispatches, which move a
+  single occurrence of a repeating event. Nothing else in this domain is
+  outstanding for the desktop-user session.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 

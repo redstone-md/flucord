@@ -38,6 +38,7 @@ extension DiscordScheduledEventMapper on DiscordMapper {
       ),
       interestedCount: payload['user_count'] as int? ?? 0,
       coverImageHash: payload['image'] as String?,
+      recurrence: EventRecurrenceRule.fromJson(payload['recurrence_rule']),
     );
   }
 }
