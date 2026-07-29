@@ -6,7 +6,12 @@ import '../../domain/user_profile.dart';
 abstract interface class DiscordUserProfileTransport {
   Future<Map<String, Object?>> readCurrentUser();
 
-  Future<Map<String, Object?>> patchCurrentUser(Map<String, Object?> body);
+  /// `PATCH /users/@me`.
+  ///
+  /// Answers null when Discord refused the change — a wrong password, or a
+  /// username already taken. Which status codes those are is the transport's
+  /// business, not this layer's.
+  Future<Map<String, Object?>?> patchCurrentUser(Map<String, Object?> body);
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -39,6 +44,10 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
   Future<UserProfile?> apply(UserProfilePatch patch) async {
     if (patch.isEmpty) return _current;
     final payload = await _transport.patchCurrentUser(patch.toJson());
+    // A refusal comes back as no payload rather than as a throw: a wrong
+    // password and a username somebody else already has are both answers
+    // about the request, and reporting either as an outage would be wrong.
+    if (payload == null) return null;
     return _install(payload);
   }
 

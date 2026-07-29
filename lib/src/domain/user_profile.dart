@@ -106,6 +106,9 @@ final class UserProfilePatch {
     this.accentColor = const ProfileValue.untouched(),
     this.avatar = const ProfileImage.untouched(),
     this.banner = const ProfileImage.untouched(),
+    this.username,
+    this.newPassword,
+    this.password,
   });
 
   final String? displayName;
@@ -115,13 +118,33 @@ final class UserProfilePatch {
   final ProfileImage avatar;
   final ProfileImage banner;
 
+  /// The account name, which is not the display name: Discord gates a change
+  /// to it on the password, and refuses one that is already taken.
+  final String? username;
+
+  /// What the password is being changed to.
+  final String? newPassword;
+
+  /// The current password, which Discord requires for either of the two above
+  /// and for nothing else.
+  ///
+  /// Carried through and never held: the patch it belongs to is built for one
+  /// request and dropped after it.
+  final String? password;
+
   bool get isEmpty =>
       displayName == null &&
       bio == null &&
       pronouns == null &&
       accentColor.isUntouched &&
       avatar.isUntouched &&
-      banner.isUntouched;
+      banner.isUntouched &&
+      username == null &&
+      newPassword == null;
+
+  /// Whether this patch changes something Discord will not take without the
+  /// password. Stated here so a caller cannot forget which fields those are.
+  bool get needsPassword => username != null || newPassword != null;
 
   /// The request body. Only touched fields appear.
   Map<String, Object?> toJson() => {
@@ -131,6 +154,11 @@ final class UserProfilePatch {
     if (!accentColor.isUntouched) 'accent_color': accentColor.value,
     if (!avatar.isUntouched) 'avatar': avatar.dataUri,
     if (!banner.isUntouched) 'banner': banner.dataUri,
+    if (username != null) 'username': username,
+    if (newPassword != null) 'new_password': newPassword,
+    // Sent only where Discord asks for it, so an ordinary profile edit does
+    // not carry a password it has no use for.
+    if (needsPassword && password != null) 'password': password,
   };
 }
 

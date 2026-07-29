@@ -13,6 +13,7 @@ import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../theme/flucord_theme.dart';
 import 'user_profile_controls.dart';
+import 'account_credentials_section.dart';
 import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
 import 'user_settings_devices_section.dart';
@@ -375,7 +376,17 @@ class _Body extends StatelessWidget {
       }
       return ListenableBuilder(
         listenable: profile,
-        builder: (_, _) => UserProfileSection(controller: profile),
+        builder: (_, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            UserProfileSection(controller: profile),
+            const SizedBox(height: 28),
+            // Below the profile rather than beside it: these two change what
+            // somebody signs in with, and mixing them into the same form is
+            // how a bio edit ends up asking for a password.
+            AccountCredentialsSection(controller: profile),
+          ],
+        ),
       );
     }
     // The safety hub is its own route too: an account with no settings store

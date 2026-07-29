@@ -27,6 +27,7 @@ final class UserProfileController extends ChangeNotifier {
 
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _credentialRefused = false;
   Object? _error;
   bool _disposed = false;
 
@@ -139,6 +140,56 @@ final class UserProfileController extends ChangeNotifier {
       await repository.apply(patch);
       _clearDrafts();
       return true;
+    } on Object catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _isSaving = false;
+      _notify();
+    }
+  }
+
+  /// Changes the account name, which Discord gates on the password.
+  ///
+  /// Separate from [save] on purpose: an ordinary profile edit must not carry
+  /// a password, and a name change must not be bundled with a bio edit that
+  /// would then need one too.
+  Future<bool> changeUsername({
+    required String username,
+    required String password,
+  }) => _applyCredentialChange(
+    UserProfilePatch(username: username.trim(), password: password),
+  );
+
+  /// Changes the password. Discord reissues the session token when it takes
+  /// one, which the session vault picks up on its own next write.
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) => _applyCredentialChange(
+    UserProfilePatch(newPassword: newPassword, password: currentPassword),
+  );
+
+  /// Whether the last credential change was refused — a wrong password, or a
+  /// name somebody else already has. Not a failure: both are answers.
+  bool get wasCredentialChangeRefused => _credentialRefused;
+
+  Future<bool> _applyCredentialChange(UserProfilePatch patch) async {
+    // Bind first: this can be the first thing a session is asked to do, and
+    // an unbound controller would answer "no transport" for a transport that
+    // is there.
+    _bind();
+    final repository = _repository;
+    if (repository == null || _isSaving) return false;
+    if (patch.isEmpty || (patch.password ?? '').isEmpty) return false;
+    _isSaving = true;
+    _error = null;
+    _credentialRefused = false;
+    _notify();
+    try {
+      final updated = await repository.apply(patch);
+      _credentialRefused = updated == null;
+      return updated != null;
     } on Object catch (error) {
       _error = error;
       return false;

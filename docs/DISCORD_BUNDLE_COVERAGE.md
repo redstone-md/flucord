@@ -222,11 +222,18 @@ are excluded from the denominator and are never reported as implemented.
   `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
   `widget_test.dart`.
 - **Live evidence**: authenticated identity hydrated on Windows `2026-07-25`.
+- **Implemented**: also changing the account name and the password, both of
+  which Discord gates on the current password. The password is typed for the
+  single request that needs it, cleared from the field before that request is
+  sent rather than after it returns, and held nowhere. An ordinary profile
+  edit carries no password even when one was typed, so a bio change never
+  puts a credential on a request that has no use for it. A refusal does not
+  claim to know which it was: Discord answers a wrong password and a name
+  already taken the same way, and guessing between them would be inventing
+  detail.
 - **Blocked by**: `FrecencyUserSettings` (type 2) has no codec; offline-edit
   replay with `required_data_version` is not implemented; keybinds are not in
-  `PreloadedUserSettings` at all and need a different capability; changing a
-  username or password needs a password confirmation this client does not
-  collect, so both are stated read-only rather than offered.
+  `PreloadedUserSettings` at all and need a different capability.
 
 ## FBC-PRESENCE — Presence and typing
 

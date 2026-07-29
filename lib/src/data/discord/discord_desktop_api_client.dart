@@ -586,8 +586,18 @@ final class DiscordDesktopApiClient
       _rest.getObject('/users/@me');
 
   @override
-  Future<Map<String, Object?>> patchCurrentUser(Map<String, Object?> body) =>
-      _rest.requestObject('PATCH', '/users/@me', body: body);
+  Future<Map<String, Object?>?> patchCurrentUser(
+    Map<String, Object?> body,
+  ) async {
+    try {
+      return await _rest.requestObject('PATCH', '/users/@me', body: body);
+    } on DiscordApiException catch (error) {
+      // A wrong password, or a username already taken. Both are answers about
+      // the request rather than a fault in the client.
+      if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
 
   @override
   Future<String?> readSettingsProto(int type) async {

@@ -324,7 +324,7 @@ final class _FakeTransport implements DiscordUserProfileTransport {
   }
 
   @override
-  Future<Map<String, Object?>> patchCurrentUser(
+  Future<Map<String, Object?>?> patchCurrentUser(
     Map<String, Object?> body,
   ) async {
     patches.add(body);
