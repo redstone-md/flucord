@@ -74,6 +74,9 @@ final class _EventRepository implements ChatRepository {
   MultiFactorAuthRepository? get multiFactorAuth => null;
 
   @override
+  AgeVerificationRepository? get ageVerification => null;
+
+  @override
   MessageSearchRepository? get messageSearch => null;
 
   @override

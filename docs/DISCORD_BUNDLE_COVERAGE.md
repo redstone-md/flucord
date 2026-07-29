@@ -142,7 +142,8 @@ are excluded from the denominator and are never reported as implemented.
   `POST /users/@me/mfa/totp/enable`, `POST /users/@me/mfa/totp/disable`,
   `POST /users/@me/mfa/sms/enable`, `POST /users/@me/mfa/sms/disable`,
   `POST /auth/verify/view-backup-codes-challenge`,
-  `POST /users/@me/mfa/codes-verification`.
+  `POST /users/@me/mfa/codes-verification`,
+  `GET /age-verification/methods`, `POST /age-verification/verify`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: RSA-2048 QR remote auth, mandatory hCaptcha through an
@@ -168,16 +169,26 @@ are excluded from the denominator and are never reported as implemented.
   a current authenticator code spends one. The account password is typed for
   the single request that needs it, cleared from the field before that request
   is even sent, and held nowhere.
+  Age verification lists the methods Discord offers the account and starts the
+  one chosen, opening where Discord says it continues in the system browser.
+  Each check is run by the third party Discord names, and the page says so
+  before anything else on it: no document, photograph or wallet credential
+  passes through Flucord, because none of it passes through the client at all.
+  A method the account may not use is named as refused; one that finishes
+  inside a vendor's own app says which vendor rather than leaving a button
+  that appears to do nothing.
 - **Tests**: `discord_remote_auth_gateway_test.dart`,
   `discord_desktop_login_controller_test.dart`, `auth_session_test.dart`,
   `auth_session_widget_test.dart`, `multi_factor_auth_test.dart`,
-  `multi_factor_auth_widget_test.dart`.
+  `multi_factor_auth_widget_test.dart`, `age_verification_test.dart`,
+  `age_verification_widget_test.dart`.
 - **Live evidence**: phone approval, hCaptcha completion, encrypted session
   exchange, and restart restoration validated on Windows `2026-07-25`. The
   Devices page has none: listing another session needs a second one to exist.
-- **Blocked by**: age verification, and WebAuthn as a second factor — the
-  latter needs the platform authenticator API, which is a native surface this
-  build does not yet carry. Account standing shipped under FBC-MODERATION.
+- **Blocked by**: WebAuthn as a second factor, and the vendor-side half of
+  age verification. Both need a native surface this build does not carry — the
+  platform authenticator API for one, the identity vendors' own SDKs for the
+  other. Account standing shipped under FBC-MODERATION.
 
 ## FBC-PROFILE — Current user, other users, user settings
 

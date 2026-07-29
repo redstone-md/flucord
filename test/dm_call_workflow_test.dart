@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
 import 'package:flucord/src/domain/family_centre.dart';
@@ -263,6 +264,9 @@ final class _CallableRepository implements ChatRepository {
 
   @override
   MultiFactorAuthRepository? get multiFactorAuth => null;
+
+  @override
+  AgeVerificationRepository? get ageVerification => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;

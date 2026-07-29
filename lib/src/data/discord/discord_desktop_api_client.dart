@@ -1,6 +1,7 @@
 import '../../domain/chat_models.dart';
 import 'discord_call_api.dart';
 import 'discord_desktop_rest_protocol.dart';
+import 'discord_age_verification_repository.dart';
 import 'discord_auth_session_repository.dart';
 import 'discord_family_centre_repository.dart';
 import 'discord_guild_management_repository.dart';
@@ -68,6 +69,9 @@ final class DiscordDesktopApiClient
       DiscordAuthSessionRepository(_rest);
 
   late final DiscordMfaRepository multiFactorAuth = DiscordMfaRepository(_rest);
+
+  late final DiscordAgeVerificationRepository ageVerification =
+      DiscordAgeVerificationRepository(_rest);
 
   Future<List<Map<String, Object?>>> getChannelMessages(
     String channelId, {

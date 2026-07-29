@@ -10,6 +10,7 @@ import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
 import 'account_standing_scope.dart';
 import 'auth_session_scope.dart';
+import 'age_verification_scope.dart';
 import 'multi_factor_auth_scope.dart';
 import 'family_centre_scope.dart';
 import 'user_profile_scope.dart';
@@ -124,6 +125,7 @@ class ServerRail extends StatelessWidget {
                   familyController: FamilyCentreScope.maybeOf(context),
                   sessionController: AuthSessionScope.maybeOf(context),
                   mfaController: MultiFactorAuthScope.maybeOf(context),
+                  ageController: AgeVerificationScope.maybeOf(context),
                 ),
               ),
               icon: const Icon(Icons.settings_outlined),

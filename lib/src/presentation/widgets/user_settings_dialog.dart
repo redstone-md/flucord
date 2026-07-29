@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/account_standing_controller.dart';
 import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
+import '../../application/age_verification_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -16,6 +17,7 @@ import 'user_profile_section.dart';
 import 'user_settings_account_sections.dart';
 import 'user_settings_devices_section.dart';
 import 'user_settings_family_section.dart';
+import 'user_settings_age_section.dart';
 import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
@@ -31,6 +33,7 @@ enum UserSettingsCategory {
   family('Family Center', Icons.family_restroom_outlined),
   devices('Devices', Icons.devices_outlined),
   security('Two-Factor', Icons.key_outlined),
+  age('Age Verification', Icons.badge_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -49,6 +52,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.familyController,
     this.sessionController,
     this.mfaController,
+    this.ageController,
     super.key,
   });
 
@@ -75,6 +79,9 @@ class UserSettingsDialog extends StatefulWidget {
   /// Answers for two-factor authentication, or null where it cannot be set.
   final MultiFactorAuthController? mfaController;
 
+  /// Answers for age verification, or null where none is offered.
+  final AgeVerificationController? ageController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -83,6 +90,7 @@ class UserSettingsDialog extends StatefulWidget {
     FamilyCentreController? familyController,
     AuthSessionController? sessionController,
     MultiFactorAuthController? mfaController,
+    AgeVerificationController? ageController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -93,6 +101,7 @@ class UserSettingsDialog extends StatefulWidget {
       familyController: familyController,
       sessionController: sessionController,
       mfaController: mfaController,
+      ageController: ageController,
     ),
   );
 
@@ -134,6 +143,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               familyController: widget.familyController,
               sessionController: widget.sessionController,
               mfaController: widget.mfaController,
+              ageController: widget.ageController,
               category: _category,
             );
             return wide
@@ -288,6 +298,7 @@ class _Body extends StatelessWidget {
     required this.familyController,
     required this.sessionController,
     required this.mfaController,
+    required this.ageController,
     required this.category,
   });
 
@@ -297,6 +308,7 @@ class _Body extends StatelessWidget {
   final FamilyCentreController? familyController;
   final AuthSessionController? sessionController;
   final MultiFactorAuthController? mfaController;
+  final AgeVerificationController? ageController;
   final UserSettingsCategory category;
 
   @override
@@ -422,6 +434,19 @@ class _Body extends StatelessWidget {
       }
       return MfaSettingsSection(controller: mfa);
     }
+    if (category == UserSettingsCategory.age) {
+      final age = ageController;
+      if (age == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-age-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to see how it can prove its age. '
+              'The demo and bot transports have no account to verify.',
+        );
+      }
+      return AgeVerificationSection(controller: age);
+    }
     if (!controller.isAvailable) {
       return _Notice(
         key: const ValueKey('user-settings-unavailable'),
@@ -485,6 +510,7 @@ class _Body extends StatelessWidget {
     UserSettingsCategory.family => const SizedBox.shrink(),
     UserSettingsCategory.devices => const SizedBox.shrink(),
     UserSettingsCategory.security => const SizedBox.shrink(),
+    UserSettingsCategory.age => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

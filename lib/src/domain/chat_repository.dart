@@ -1,5 +1,6 @@
 import 'automod_rule.dart';
 import 'account_standing.dart';
+import 'age_verification.dart';
 import 'auth_session.dart';
 import 'chat_models.dart';
 import 'multi_factor_auth.dart';
@@ -294,6 +295,9 @@ abstract interface class ChatRepository {
 
   /// Two-factor authentication, or `null` on a transport that cannot set it.
   MultiFactorAuthRepository? get multiFactorAuth;
+
+  /// Age verification, or `null` on a transport that offers none.
+  AgeVerificationRepository? get ageVerification;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///

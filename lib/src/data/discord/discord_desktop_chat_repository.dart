@@ -1,3 +1,4 @@
+import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
 import '../../domain/family_centre.dart';
@@ -228,6 +229,9 @@ final class DiscordDesktopChatRepository
 
   @override
   MultiFactorAuthRepository? get multiFactorAuth => _api.multiFactorAuth;
+
+  @override
+  AgeVerificationRepository? get ageVerification => _api.ageVerification;
 
   /// The account's own session is what Discord's search routes answer to, so
   /// this is the one transport that can offer them.

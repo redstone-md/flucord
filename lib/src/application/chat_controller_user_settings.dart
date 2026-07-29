@@ -70,4 +70,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// Two-factor authentication, or `null` where it cannot be set.
   MultiFactorAuthRepository? get multiFactorAuth => _repository.multiFactorAuth;
+
+  /// Age verification, or `null` where none is offered.
+  AgeVerificationRepository? get ageVerification => _repository.ageVerification;
 }
