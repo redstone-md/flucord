@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.76% lines | `flutter test --coverage`, 2,728 passing, 6 skipped |
+| Automated test coverage | 89.76% lines | `flutter test --coverage`, 2,735 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -722,12 +722,20 @@ are excluded from the denominator and are never reported as implemented.
   click. Silence still produces blocks, since WASAPI reports the silent flag
   rather than stopping, which is what would otherwise end a share's audio at
   the first quiet moment.
+- **Implemented**: the captured sound is sent on the stream connection's own
+  audio SSRC, encoded as Opus and packetised by the same RTP sender the voice
+  connection uses. Not the voice SSRC: a client that reused that uplink would
+  play the shared application to everybody in the channel whether they opened
+  the stream or not, and would mix it with the microphone where no viewer
+  could turn one down without the other. Blocks are buffered to 960 samples
+  before encoding, because WASAPI hands back whatever the endpoint had rather
+  than 20 ms, and an Opus frame of the wrong length is refused outright. An
+  encoder that refuses a frame is reported rather than thrown: this runs from
+  a capture callback, where an exception would take the whole capture down
+  instead of losing one frame.
 - **Blocked by**: a second Discord account is the only thing that can show the
-  picture arriving over Discord's own servers rather than through a local
-  loop. The captured sound is not yet sent on the stream connection's own
-  audio SSRC: that is the half this cannot verify without somebody listening,
-  and putting it on the voice uplink instead would play the game to everybody
-  in the channel whether they opened the stream or not.
+  picture or the sound arriving over Discord's own servers rather than through
+  a local loop.
 
 ## FBC-STAGE — Stage channels
 
