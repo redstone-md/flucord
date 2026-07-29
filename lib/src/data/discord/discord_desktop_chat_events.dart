@@ -25,6 +25,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // and USER_SETTINGS_PROTO_UPDATE for every later revision, so it also
         // sees every dispatch.
         _userSettings.acceptGatewayDispatch(event.name, event.data);
+        // Favourites are a second settings type on the same dispatch, and
+        // one starred on another device arrives here unasked for.
+        _favorites.acceptGatewayDispatch(event.name, event.data);
         // The member-list handler needs READY and GUILD_CREATE for the channel
         // shape a list id is derived from, so it sees every dispatch rather
         // than only the roster event.

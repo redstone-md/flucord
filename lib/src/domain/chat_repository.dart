@@ -15,6 +15,7 @@ import 'user_settings_repository.dart';
 import 'voice_call.dart';
 import 'application_command.dart';
 import 'message_component.dart';
+import 'expression_favorites.dart';
 import 'gif_picker.dart';
 import 'conversation_summary.dart';
 import 'go_live_stream.dart';
@@ -232,6 +233,10 @@ abstract interface class ChatRepository {
   /// GIFs through Discord's provider proxy, or null on a transport that has
   /// no account to ask on behalf of.
   GifRepository? get gifs;
+
+  /// The starred GIFs, stickers and emoji, or null on a transport with no
+  /// account whose favourites they could be.
+  ExpressionFavoritesRepository? get expressionFavorites;
 
   /// Slash commands in a channel, or null on a transport that cannot run
   /// them.

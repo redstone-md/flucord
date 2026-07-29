@@ -150,6 +150,79 @@ final class ProtoMessage {
     _ => null,
   };
 
+  /// Every occurrence of [number] decoded as a message, in arrival order.
+  ///
+  /// A protobuf map is repeated entries rather than one value, so reading a
+  /// map through [messageAt] would return whichever key happened to be last.
+  List<ProtoMessage> messagesAt(int number) => [
+    for (final field in _fields)
+      if (field.number == number)
+        if (field.value case ProtoBytes(:final value))
+          ProtoMessage.decode(value),
+  ];
+
+  /// Every occurrence of [number] as text.
+  List<String> stringsAt(int number) => [
+    for (final field in _fields)
+      if (field.number == number)
+        if (field.value case ProtoBytes(:final value))
+          utf8.decode(value, allowMalformed: true),
+  ];
+
+  /// A repeated `fixed64` field, however it was written.
+  ///
+  /// Discord packs these, but protobuf lets either side switch between packed
+  /// and unpacked at will and requires a decoder to accept both — so a reader
+  /// that understood only the packed form would lose the list to a writer that
+  /// was within its rights.
+  List<int> fixed64ListAt(int number) {
+    final values = <int>[];
+    for (final field in _fields) {
+      if (field.number != number) continue;
+      switch (field.value) {
+        case ProtoFixed64(:final value):
+          values.add(value);
+        case ProtoBytes(:final value):
+          final reader = ProtoReader(value);
+          while (!reader.isAtEnd) {
+            values.add(reader.readFixed64());
+          }
+        case _:
+          break;
+      }
+    }
+    return values;
+  }
+
+  /// Appends one more occurrence of a message field.
+  void addMessage(int number, ProtoMessage value) =>
+      addField(ProtoField(number, ProtoBytes(value.encode())));
+
+  /// Replaces a repeated string field with [values].
+  void setStrings(int number, Iterable<String> values) {
+    clearField(number);
+    for (final value in values) {
+      addField(
+        ProtoField(number, ProtoBytes(Uint8List.fromList(utf8.encode(value)))),
+      );
+    }
+  }
+
+  /// Replaces a repeated `fixed64` field, written packed.
+  ///
+  /// An empty list clears the field rather than writing a zero-length packed
+  /// buffer: the two decode alike, but only the former matches what Discord
+  /// itself sends for a list nobody has put anything in.
+  void setFixed64List(int number, Iterable<int> values) {
+    clearField(number);
+    if (values.isEmpty) return;
+    final writer = ProtoWriter();
+    for (final value in values) {
+      writer.writeFixed64(value);
+    }
+    setField(number, ProtoBytes(writer.toBytes()));
+  }
+
   /// Reads a `google.protobuf.BoolValue`.
   ///
   /// `null` means the wrapper is absent, which is what the wrappers exist to

@@ -89,6 +89,7 @@ class _ConversationPane extends StatefulWidget {
     required this.goLiveController,
     required this.streamViewerController,
     required this.gifPickerController,
+    required this.expressionFavoritesController,
     required this.slashCommandController,
     required this.messageComponentController,
     required this.voiceMessageRecorder,
@@ -176,6 +177,7 @@ class _ConversationPane extends StatefulWidget {
   final GoLiveController goLiveController;
   final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
+  final ExpressionFavoritesController expressionFavoritesController;
   final SlashCommandController slashCommandController;
   final MessageComponentController messageComponentController;
   final VoiceMessageRecorder? voiceMessageRecorder;
@@ -393,6 +395,7 @@ class _ConversationPaneState extends State<_ConversationPane> {
         else if (showsMessages)
           MessageComposer(
             gifPicker: widget.gifPickerController,
+            expressionFavorites: widget.expressionFavoritesController,
             slashCommands: widget.slashCommandController,
             canAttachFiles: widget.capabilities.attachFiles,
             channelId: widget.channel.id,

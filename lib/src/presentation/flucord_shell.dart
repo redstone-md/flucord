@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
+import '../application/expression_favorites_controller.dart';
 import '../application/friends_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/direct_call_controller.dart';
@@ -93,6 +94,7 @@ class FlucordShell extends StatelessWidget {
     required this.goLiveController,
     required this.streamViewerController,
     required this.gifPickerController,
+    required this.expressionFavoritesController,
     required this.slashCommandController,
     required this.messageComponentController,
     required this.voiceMessageRecorder,
@@ -118,6 +120,7 @@ class FlucordShell extends StatelessWidget {
   final GoLiveController goLiveController;
   final StreamViewerController streamViewerController;
   final GifPickerController gifPickerController;
+  final ExpressionFavoritesController expressionFavoritesController;
   final SlashCommandController slashCommandController;
   final MessageComponentController messageComponentController;
   final VoiceMessageRecorder? voiceMessageRecorder;

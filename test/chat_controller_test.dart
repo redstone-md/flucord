@@ -32,6 +32,7 @@ import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 
 part 'chat_controller_event_repository.dart';
 

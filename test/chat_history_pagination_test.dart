@@ -29,6 +29,7 @@ import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 
 void main() {
   test('merges older pages, removes overlap, and marks exhaustion', () async {
@@ -190,6 +191,10 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   GifRepository? get gifs => _delegate.gifs;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites =>
+      _delegate.expressionFavorites;
 
   @override
   ApplicationCommandRepository? get applicationCommands =>

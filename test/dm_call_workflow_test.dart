@@ -22,6 +22,7 @@ import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
@@ -214,6 +215,10 @@ final class _CallableRepository implements ChatRepository {
 
   @override
   GifRepository? get gifs => _delegate.gifs;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites =>
+      _delegate.expressionFavorites;
 
   @override
   ApplicationCommandRepository? get applicationCommands =>

@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.27% lines | `flutter test --coverage`, 2,168 passing, 6 skipped |
+| Automated test coverage | 89.64% lines | `flutter test --coverage`, 2,565 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -220,6 +220,7 @@ are excluded from the denominator and are never reported as implemented.
   `user_settings_controller_test.dart`, `user_settings_widget_test.dart`,
   `user_settings_display_test.dart`, `user_profile_test.dart`,
   `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
+  `account_credentials_test.dart`, `expression_favorites_test.dart`,
   `widget_test.dart`.
 - **Live evidence**: authenticated identity hydrated on Windows `2026-07-25`.
 - **Implemented**: also changing the account name and the password, both of
@@ -231,9 +232,21 @@ are excluded from the denominator and are never reported as implemented.
   claim to know which it was: Discord answers a wrong password and a name
   already taken the same way, and guessing between them would be inventing
   detail.
-- **Blocked by**: `FrecencyUserSettings` (type 2) has no codec; offline-edit
-  replay with `required_data_version` is not implemented; keybinds are not in
-  `PreloadedUserSettings` at all and need a different capability.
+- **Implemented**: also `FrecencyUserSettings`, the second settings type.
+  `GET`/`PATCH /users/@me/settings-proto/2` is read and written over the same
+  hand-written codec, and `USER_SETTINGS_PROTO_UPDATE` naming type 2 is applied
+  where before it was dropped for want of one. Three groups are modelled — the
+  starred GIFs (a `map<string, FavoriteGIF>`), stickers (packed `fixed64`
+  snowflakes) and emoji (custom ones by id, unicode ones by name, which is what
+  Discord stores rather than the surrogates). Everything else in the blob — the
+  frecency tables, the soundboard sounds, the command histories — is kept in
+  the buffer field for field and written back untouched, because a write
+  replaces the whole blob and a codec that dropped what it did not model would
+  erase those groups on the first starred GIF.
+- **Blocked by**: offline-edit replay with `required_data_version` is not
+  implemented; keybinds are not in `PreloadedUserSettings` at all and need a
+  different capability. The frecency tables inside type 2 are round-tripped but
+  not read: nothing in Flucord sorts by how often an expression was used yet.
 
 ## FBC-PRESENCE — Presence and typing
 
@@ -472,18 +485,32 @@ are excluded from the denominator and are never reported as implemented.
   defaults and strings for guild sounds; both are read.
 - **Tests**: `discord_chat_repository_emojis_test.dart`,
   `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
-  `soundboard_widget_test.dart`.
+  `soundboard_widget_test.dart`, `expression_favorites_test.dart`,
+  `expression_favorites_ui_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
   An incoming effect is played: Discord never mixes a soundboard sound into
   the RTP stream, it tells every client which sound was played and each one
   fetches the CDN object itself, so the effect is played through the same
   engine the voice-message player uses and only for the channel this client is
   actually sitting in.
+- **Implemented**: favourites, held in the type 2 settings blob rather than
+  locally, so a star made here shows up on the account's other clients and one
+  made there arrives as a dispatch. A star sits on the tile in both pickers;
+  starred GIFs lead the idle GIF grid and starred stickers sort to the front of
+  the sticker grid, but neither reorders a search — a search is a question
+  about names, and answering it with last week's favourites buries the match.
+  The limits are the desktop client's own and are enforced before a request
+  goes out: 250 stickers, 250 emoji, and for GIFs a measured ceiling on the
+  encoded group rather than a count, because each entry carries a URL of no
+  fixed length. A refusal is said out loud instead of leaving the star
+  unchanged with no explanation.
 - **Blocked by**: GIF
   providers are done: trending, search and suggestions go through Discord's
   own `/gifs/*` proxy — the desktop client never talks to Tenor or Giphy
   directly and neither does this — and a pick is sent as the `gif_src` link
-  rather than the `src` preview.
+  rather than the `src` preview. Favourite emoji are stored but have no picker
+  row yet: Flucord's emoji picker is built from the guild catalogue and has no
+  place to hang a starred unicode name.
 
 ## FBC-VOICE — Voice, video, screen share, calls
 

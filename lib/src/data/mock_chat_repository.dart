@@ -17,6 +17,7 @@ import '../domain/thread_membership.dart';
 import '../domain/user_profile.dart';
 
 import '../domain/chat_models.dart';
+import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_management_repository.dart';
@@ -106,6 +107,9 @@ final class MockChatRepository
 
   @override
   GifRepository? get gifs => null;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites => null;
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;

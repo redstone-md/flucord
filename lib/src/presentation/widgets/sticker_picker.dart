@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'expression_favorite_star.dart';
 import 'message_sticker_view.dart';
 
 typedef SendStickersCallback = Future<bool> Function(List<String> stickerIds);
@@ -12,6 +16,7 @@ class StickerPickerButton extends StatefulWidget {
     required this.isSending,
     required this.onSend,
     this.assetBuilder = buildStickerAsset,
+    this.favorites,
     super.key,
   });
 
@@ -19,6 +24,9 @@ class StickerPickerButton extends StatefulWidget {
   final bool isSending;
   final SendStickersCallback onSend;
   final StickerAssetBuilder assetBuilder;
+
+  /// The favourites store, when the transport has one.
+  final ExpressionFavoritesController? favorites;
 
   @override
   State<StickerPickerButton> createState() => _StickerPickerButtonState();
@@ -49,6 +57,9 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       _menuController.close();
     } else {
       _menuController.open();
+      // Read on opening rather than on build: the blob costs a request, and a
+      // composer that never opens the picker should not spend one.
+      unawaited(widget.favorites?.load());
     }
   }
 
@@ -105,16 +116,20 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
         key: const ValueKey('sticker-picker'),
         width: 336,
         height: 380,
-        child: _StickerPickerPanel(
-          stickers: widget.stickers,
-          queryController: _queryController,
-          selectedIds: _selectedIds,
-          isSending: widget.isSending || _isSubmitting,
-          sendFailed: _sendFailed,
-          assetBuilder: widget.assetBuilder,
-          onQueryChanged: (_) => setState(() {}),
-          onToggle: _toggleSticker,
-          onSend: _send,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([widget.favorites]),
+          builder: (context, _) => _StickerPickerPanel(
+            stickers: widget.stickers,
+            queryController: _queryController,
+            selectedIds: _selectedIds,
+            isSending: widget.isSending || _isSubmitting,
+            sendFailed: _sendFailed,
+            assetBuilder: widget.assetBuilder,
+            favorites: widget.favorites,
+            onQueryChanged: (_) => setState(() {}),
+            onToggle: _toggleSticker,
+            onSend: _send,
+          ),
         ),
       ),
     ],
@@ -139,6 +154,7 @@ class _StickerPickerPanel extends StatelessWidget {
     required this.isSending,
     required this.sendFailed,
     required this.assetBuilder,
+    required this.favorites,
     required this.onQueryChanged,
     required this.onToggle,
     required this.onSend,
@@ -150,6 +166,7 @@ class _StickerPickerPanel extends StatelessWidget {
   final bool isSending;
   final bool sendFailed;
   final StickerAssetBuilder assetBuilder;
+  final ExpressionFavoritesController? favorites;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<String> onToggle;
   final VoidCallback onSend;
@@ -163,7 +180,17 @@ class _StickerPickerPanel extends StatelessWidget {
           return sticker.name.toLowerCase().contains(query) ||
               sticker.tags.any((tag) => tag.toLowerCase().contains(query));
         })
-        .toList(growable: false);
+        .toList();
+    final starred = favorites;
+    if (starred != null && query.isEmpty) {
+      // Starred first while browsing, but not while searching: a search is a
+      // question about names, and reordering its answers hides the match.
+      visible.sort((a, b) {
+        final left = starred.isFavoriteSticker(a.id) ? 0 : 1;
+        final right = starred.isFavoriteSticker(b.id) ? 0 : 1;
+        return left.compareTo(right);
+      });
+    }
     return Column(
       children: [
         Padding(
@@ -209,25 +236,44 @@ class _StickerPickerPanel extends StatelessWidget {
                       selected: selected,
                       onTap: () => onToggle(sticker.id),
                       excludeSemantics: true,
-                      child: InkWell(
-                        key: ValueKey('sticker-option-${sticker.id}'),
-                        onTap: () => onToggle(sticker.id),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? FlucordColors.brand.withValues(alpha: 0.14)
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: selected
-                                  ? FlucordColors.brand
-                                  : Colors.transparent,
-                            ),
+                      child: Stack(
+                        children: [
+                          InkWell(
+                            key: ValueKey('sticker-option-${sticker.id}'),
+                            onTap: () => onToggle(sticker.id),
                             borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? FlucordColors.brand.withValues(alpha: 0.14)
+                                    : Colors.transparent,
+                                border: Border.all(
+                                  color: selected
+                                      ? FlucordColors.brand
+                                      : Colors.transparent,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: assetBuilder(context, sticker.item),
+                            ),
                           ),
-                          child: assetBuilder(context, sticker.item),
-                        ),
+                          if (favorites case final ExpressionFavoritesController
+                              controller)
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: ExpressionFavoriteStar(
+                                key: ValueKey('sticker-star-${sticker.id}'),
+                                controller: controller,
+                                isFavorite: controller.isFavoriteSticker(
+                                  sticker.id,
+                                ),
+                                onPressed: () =>
+                                    controller.toggleSticker(sticker.id),
+                              ),
+                            ),
+                        ],
                       ),
                     );
                   },

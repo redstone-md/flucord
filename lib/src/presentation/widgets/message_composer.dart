@@ -9,6 +9,7 @@ import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_theme.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
+import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../application/slash_command_controller.dart';
 import 'emoji_picker.dart';
@@ -47,6 +48,7 @@ class MessageComposer extends StatefulWidget {
     required this.onCancelReply,
     required this.onTyping,
     this.gifPicker,
+    this.expressionFavorites,
     this.slashCommands,
     this.canAttachFiles = true,
     this.autocompleteCatalog = const ComposerAutocompleteCatalog.empty(),
@@ -83,6 +85,9 @@ class MessageComposer extends StatefulWidget {
 
   /// The GIF picker, or null on a transport that has no provider proxy.
   final GifPickerController? gifPicker;
+
+  /// The starred GIFs, stickers and emoji, when the transport holds any.
+  final ExpressionFavoritesController? expressionFavorites;
 
   /// Slash commands, or null where they cannot be run.
   final SlashCommandController? slashCommands;
@@ -347,6 +352,7 @@ class _MessageComposerState extends State<MessageComposer>
                             listenable: picker,
                             builder: (_, _) => GifPickerButton(
                               controller: picker,
+                              favorites: widget.expressionFavorites,
                               // A GIF is sent as its link, which is what
                               // Discord's own client posts: the embed comes
                               // from the url, not from an upload.
@@ -357,6 +363,7 @@ class _MessageComposerState extends State<MessageComposer>
                           stickers: widget.guildStickers,
                           isSending: widget.isSending,
                           onSend: widget.onSendStickers,
+                          favorites: widget.expressionFavorites,
                         ),
                         IconButton(
                           key: const ValueKey('create-poll'),

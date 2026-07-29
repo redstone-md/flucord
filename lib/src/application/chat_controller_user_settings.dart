@@ -26,6 +26,10 @@ extension ChatControllerUserSettings on ChatController {
   /// The GIF proxy of the connected transport, or `null`.
   GifRepository? get gifs => _repository.gifs;
 
+  /// The starred GIFs, stickers and emoji of the connected transport.
+  ExpressionFavoritesRepository? get expressionFavorites =>
+      _repository.expressionFavorites;
+
   /// The slash-command plane of the connected transport, or `null`.
   ApplicationCommandRepository? get applicationCommands =>
       _repository.applicationCommands;

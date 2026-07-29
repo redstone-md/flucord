@@ -29,9 +29,10 @@ do not count as desktop-user chat parity.
 | Stage channels | Ready | Type 13 recognised, live instance and topic; audience may request to speak, withdraw, accept an invitation and step down; a moderator may start, rename and end a stage and move anybody on or off it |
 | Slash commands and components | Ready | Chat-input commands from the channel index, context-menu commands on a message or member, buttons and every select kind, and modals — interaction types 2, 3 and 5 |
 | GIF picker | Ready | Trending categories, search with suggestions, sent as a link through Discord's own provider proxy |
+| Favourite GIFs, stickers, emoji | Partial | Starred in the account's `FrecencyUserSettings` blob, so they follow the account; no picker row for starred emoji yet |
 | Soundboard | Ready | Server and default sounds sent into a voice channel, and incoming `VOICE_CHANNEL_EFFECT_SEND` fetched from the CDN and played locally — which is how Discord itself does it, since the sound is never mixed into the RTP stream |
 | Video and screen share | Built, wired both ways and self-verified | Share, stop, pause and a viewer count from the voice room; watch somebody else's stream in place of the participant grid. 544 real frames became 2151 encrypted packets and came back as 516 pictures at 1280x720; a second Discord account is the only thing left that can confirm delivery over Discord's own servers |
-| User settings | Partial | `settings-proto` read, write and live update; groups Flucord cannot apply are shown unavailable |
+| User settings | Partial | Both `settings-proto` types read, written and live-updated; groups Flucord cannot apply are shown unavailable |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store; Discord decides per account whether it sends any |
 | Embedded activities, store and Nitro | Not ready | Activities are a separate transport; commerce is outside a chat client's remit |

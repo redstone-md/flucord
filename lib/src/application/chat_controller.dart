@@ -11,6 +11,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 import '../domain/chat_models.dart';
+import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/discord_snowflake.dart';

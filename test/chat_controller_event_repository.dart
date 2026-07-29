@@ -22,6 +22,10 @@ final class _EventRepository
   GifRepository? get gifs => _delegate.gifs;
 
   @override
+  ExpressionFavoritesRepository? get expressionFavorites =>
+      _delegate.expressionFavorites;
+
+  @override
   ApplicationCommandRepository? get applicationCommands =>
       _delegate.applicationCommands;
 

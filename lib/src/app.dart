@@ -24,6 +24,7 @@ import 'application/discord_social_sdk_controller.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/message_search_controller.dart';
 import 'application/self_presence_controller.dart';
+import 'application/expression_favorites_controller.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
 import 'application/stream_viewer_controller.dart';
@@ -213,6 +214,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final StageController _stageController;
   late final SoundboardController _soundboardController;
   late final GifPickerController _gifPickerController;
+  late final ExpressionFavoritesController _expressionFavoritesController;
   late final SoundboardPlaybackController _soundboardPlaybackController;
   late final GoLiveController _goLiveController;
   late final StreamViewerController _streamViewerController;
@@ -332,6 +334,11 @@ class _FlucordAppState extends State<FlucordApp> {
       () => _chatController.soundboard,
     );
     _gifPickerController = GifPickerController(() => _chatController.gifs);
+    // Favourites are account state rather than a picker's own, so the
+    // controller follows the session the same way the settings store does.
+    _expressionFavoritesController = ExpressionFavoritesController(
+      () => _chatController.expressionFavorites,
+    );
     // Go Live: the stream plane, the display encoder behind it, and the
     // capture the local preview draws.
     _goLiveController = GoLiveController(
@@ -444,6 +451,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _stageController.dispose();
     _soundboardController.dispose();
     _gifPickerController.dispose();
+    _expressionFavoritesController.dispose();
     _slashCommandController.dispose();
     _messageComponentController.dispose();
     _soundboardPlaybackController.dispose();
@@ -581,6 +589,8 @@ class _FlucordAppState extends State<FlucordApp> {
                                               _streamViewerController,
                                           gifPickerController:
                                               _gifPickerController,
+                                          expressionFavoritesController:
+                                              _expressionFavoritesController,
                                           slashCommandController:
                                               _slashCommandController,
                                           messageComponentController:

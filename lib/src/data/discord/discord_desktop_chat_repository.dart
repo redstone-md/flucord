@@ -13,6 +13,7 @@ import 'dart:developer' as developer;
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/expression_favorites.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
@@ -52,6 +53,7 @@ import 'discord_conversation_summary_service.dart';
 import 'discord_relationship_service.dart';
 import 'discord_go_live_service.dart';
 import 'discord_message_component_service.dart';
+import 'discord_expression_favorites_repository.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
@@ -81,6 +83,7 @@ final class DiscordDesktopChatRepository
        _stages = DiscordStageService(_api),
        _soundboard = DiscordSoundboardService(_api),
        _gifs = DiscordGifService(_api),
+       _favorites = DiscordExpressionFavoritesRepository(_api),
        _applicationCommands = DiscordApplicationCommandService(
          _api,
          sessionId: () => _gateway.sessionId,
@@ -137,6 +140,7 @@ final class DiscordDesktopChatRepository
   final DiscordThreadMembershipService _threadMembership;
   final DiscordStageService _stages;
   final DiscordSoundboardService _soundboard;
+  final DiscordExpressionFavoritesRepository _favorites;
   final DiscordGifService _gifs;
   final DiscordApplicationCommandService _applicationCommands;
   final DiscordMessageComponentService _messageComponents;
@@ -188,6 +192,9 @@ final class DiscordDesktopChatRepository
 
   @override
   GifRepository? get gifs => _gifs;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites => _favorites;
 
   @override
   @override
@@ -703,6 +710,7 @@ final class DiscordDesktopChatRepository
     await _threadMembership.close();
     await _stages.close();
     await _soundboard.close();
+    await _favorites.close();
     await _messageComponents.close();
     await _goLive.close();
     await _summaries.close();

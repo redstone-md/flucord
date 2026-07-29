@@ -18,6 +18,7 @@ import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
@@ -154,6 +155,9 @@ final class _Repository implements ChatRepository {
 
   @override
   GifRepository? get gifs => null;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites => null;
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;

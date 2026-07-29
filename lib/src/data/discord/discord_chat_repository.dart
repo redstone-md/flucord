@@ -18,6 +18,7 @@ import '../../domain/user_profile.dart';
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/expression_favorites.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
 import '../../domain/guild_management_repository.dart';
@@ -327,6 +328,9 @@ final class DiscordChatRepository
 
   @override
   GifRepository? get gifs => null;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites => null;
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;

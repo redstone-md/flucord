@@ -15,6 +15,7 @@ import '../domain/soundboard.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/user_profile.dart';
+import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/message_search_repository.dart';
@@ -56,6 +57,9 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   GifRepository? get gifs => null;
+
+  @override
+  ExpressionFavoritesRepository? get expressionFavorites => null;
 
   @override
   ApplicationCommandRepository? get applicationCommands => null;
