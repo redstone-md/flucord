@@ -41,6 +41,35 @@ extension VoiceControllerDevices on VoiceController {
     });
   }
 
+  /// Silences the uplink for as long as the key is held.
+  ///
+  /// Separate from [toggleMute] because push to talk is not a toggle: two
+  /// quick presses must not leave the microphone in the state the first one
+  /// put it in.
+  Future<void> setMuted({required bool muted}) async {
+    if (!isConnected || _isMuted == muted) return;
+    await _run(() async {
+      _isMuted = muted;
+      await _mediaService.setMicrophoneEnabled(!_isMuted);
+      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
+      await _sendJoin();
+    });
+  }
+
+  /// Deafening also mutes, which is what Discord does: somebody who cannot
+  /// hear the room should not still be speaking into it.
+  Future<void> toggleDeafen() async {
+    if (!isConnected) return;
+    await _run(() async {
+      _isDeafened = !_isDeafened;
+      if (_isDeafened) _isMuted = true;
+      await _mediaService.setMicrophoneEnabled(!_isMuted);
+      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
+      await _setPlaybackEnabled(!_isDeafened && isTransportReady);
+      await _sendJoin();
+    });
+  }
+
   Future<void> loadCaptureSources() async {
     await _run(() async {
       _captureSources = await _mediaService.enumerateCaptureSources();

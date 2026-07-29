@@ -8,6 +8,53 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 
 void main() {
+  test('push to talk sets the mute flag rather than toggling it', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    // Nothing is connected, so there is nothing to unmute into.
+    await controller.setMuted(muted: true);
+    expect(controller.isMuted, isFalse);
+
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+    await controller.setMuted(muted: true);
+    expect(controller.isMuted, isTrue);
+    expect(media.microphoneEnabled, isFalse);
+
+    // Asked for what it already is: nothing further is sent.
+    await controller.setMuted(muted: true);
+    expect(controller.isMuted, isTrue);
+
+    await controller.setMuted(muted: false);
+    expect(controller.isMuted, isFalse);
+    expect(media.microphoneEnabled, isTrue);
+  });
+
+  test('deafening also mutes, and undeafening leaves the mute alone', () async {
+    final media = _FakeVoiceMediaService();
+    final controller = VoiceController(media);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    // Not connected: nothing to deafen.
+    await controller.toggleDeafen();
+    expect(controller.isDeafened, isFalse);
+
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+    await controller.toggleDeafen();
+
+    expect(controller.isDeafened, isTrue);
+    // Somebody who cannot hear the room should not still be speaking into it.
+    expect(controller.isMuted, isTrue);
+    expect(media.microphoneEnabled, isFalse);
+
+    await controller.toggleDeafen();
+    expect(controller.isDeafened, isFalse);
+    expect(controller.isMuted, isTrue);
+  });
+
   test('controls media devices, microphone, and screen lifecycle', () async {
     final media = _FakeVoiceMediaService();
     final controller = VoiceController(media);

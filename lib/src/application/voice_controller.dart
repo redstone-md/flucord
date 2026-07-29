@@ -78,6 +78,7 @@ final class VoiceController extends ChangeNotifier {
   Object? _error;
   Object? _microphoneError;
   bool _isMuted = false;
+  bool _isDeafened = false;
   bool _isCameraOn = false;
   bool _isScreenSharing = false;
   bool _isAudioPlaybackActive = false;
@@ -141,6 +142,9 @@ final class VoiceController extends ChangeNotifier {
   bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
   bool get isAudioPlaybackActive => _isAudioPlaybackActive;
   bool get isMuted => _isMuted;
+
+  /// Whether this account has silenced the room for itself.
+  bool get isDeafened => _isDeafened;
 
   /// Whether this account's camera is announced to the room.
   ///
@@ -280,6 +284,7 @@ final class VoiceController extends ChangeNotifier {
       await callService.joinCall(
         channelId: channelId,
         selfMute: _isMuted,
+        selfDeaf: _isDeafened,
         selfVideo: _isCameraOn,
       );
       return true;
@@ -291,6 +296,7 @@ final class VoiceController extends ChangeNotifier {
       guildId: guildId,
       channelId: channelId,
       selfMute: _isMuted,
+      selfDeaf: _isDeafened,
       selfVideo: _isCameraOn,
     );
     return true;
@@ -333,6 +339,7 @@ final class VoiceController extends ChangeNotifier {
       _participants.clear();
       _isScreenSharing = false;
       _isMuted = false;
+      _isDeafened = false;
       _isCameraOn = false;
     });
   }

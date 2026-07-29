@@ -34,6 +34,7 @@ do not count as desktop-user chat parity.
 | Video and screen share | Built, wired both ways and self-verified | Share, stop, pause and a viewer count from the voice room; watch somebody else's stream in place of the participant grid. 544 real frames became 2151 encrypted packets and came back as 516 pictures at 1280x720; a second Discord account is the only thing left that can confirm delivery over Discord's own servers |
 | Camera in a voice channel | Built both ways, unverified over Discord | Media Foundation capture through the same encoder and voice socket as the share; opcode 12 declares the SSRCs and opcode 4 sets `self_video`. Incoming cameras are split off by payload type, attributed by announced SSRC, decoded per sender and drawn in the participant tile |
 | User settings | Partial | Both `settings-proto` types read, written and live-updated; groups Flucord cannot apply are shown unavailable |
+| Keybinds | Partial | Seven actions bound and carried out from the settings page, stored locally as the desktop client does; only while the window has focus, since a system-wide hook is not installed |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store; Discord decides per account whether it sends any |
 | Embedded activities, store and Nitro | Not ready | Activities are a separate transport; commerce is outside a chat client's remit |

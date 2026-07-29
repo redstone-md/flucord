@@ -6,6 +6,7 @@ import '../../application/account_standing_controller.dart';
 import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
 import '../../application/age_verification_controller.dart';
+import '../../application/keybind_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -22,6 +23,7 @@ import 'user_settings_age_section.dart';
 import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
+import 'keybind_section.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -35,6 +37,7 @@ enum UserSettingsCategory {
   devices('Devices', Icons.devices_outlined),
   security('Two-Factor', Icons.key_outlined),
   age('Age Verification', Icons.badge_outlined),
+  keybinds('Keybinds', Icons.keyboard_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
 
@@ -54,6 +57,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.sessionController,
     this.mfaController,
     this.ageController,
+    this.keybindController,
     super.key,
   });
 
@@ -83,6 +87,10 @@ class UserSettingsDialog extends StatefulWidget {
   /// Answers for age verification, or null where none is offered.
   final AgeVerificationController? ageController;
 
+  /// The keyboard shortcuts. Local to the machine, so it is present whatever
+  /// the session is — including the demo one.
+  final KeybindController? keybindController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -92,6 +100,7 @@ class UserSettingsDialog extends StatefulWidget {
     AuthSessionController? sessionController,
     MultiFactorAuthController? mfaController,
     AgeVerificationController? ageController,
+    KeybindController? keybindController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -103,6 +112,7 @@ class UserSettingsDialog extends StatefulWidget {
       sessionController: sessionController,
       mfaController: mfaController,
       ageController: ageController,
+      keybindController: keybindController,
     ),
   );
 
@@ -145,6 +155,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               sessionController: widget.sessionController,
               mfaController: widget.mfaController,
               ageController: widget.ageController,
+              keybindController: widget.keybindController,
               category: _category,
             );
             return wide
@@ -300,6 +311,7 @@ class _Body extends StatelessWidget {
     required this.sessionController,
     required this.mfaController,
     required this.ageController,
+    required this.keybindController,
     required this.category,
   });
 
@@ -310,6 +322,7 @@ class _Body extends StatelessWidget {
   final AuthSessionController? sessionController;
   final MultiFactorAuthController? mfaController;
   final AgeVerificationController? ageController;
+  final KeybindController? keybindController;
   final UserSettingsCategory category;
 
   @override
@@ -388,6 +401,19 @@ class _Body extends StatelessWidget {
           ],
         ),
       );
+    }
+    // Keybinds are the machine's, not the account's: no settings store is
+    // involved and none is waited for.
+    if (category == UserSettingsCategory.keybinds) {
+      final keybinds = keybindController;
+      if (keybinds == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-keybinds-unavailable'),
+          icon: Icons.keyboard_outlined,
+          message: 'Keybinds are unavailable in this build.',
+        );
+      }
+      return KeybindSection(controller: keybinds);
     }
     // The safety hub is its own route too: an account with no settings store
     // still has a record, and gating this on settings would hide it.
@@ -499,7 +525,8 @@ class _Body extends StatelessWidget {
 
   Widget _section(UserSettings settings) => switch (category) {
     // Handled before the settings store is consulted.
-    UserSettingsCategory.profile => const SizedBox.shrink(),
+    UserSettingsCategory.profile ||
+    UserSettingsCategory.keybinds => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
       settings: settings,
       onEdit: _edit,

@@ -118,6 +118,28 @@ final class WorkspaceController extends ChangeNotifier {
     if (_voiceSurfaces.select(channelId, surface)) notifyListeners();
   }
 
+  /// Flips the open voice channel between its room and its timeline.
+  ///
+  /// Answers whether anything moved: with no voice channel open there is
+  /// nothing to flip, and a keybind that silently did nothing should be able
+  /// to say so.
+  bool toggleVoiceChannelChat() {
+    final channelId = _selectedChannelId;
+    if (channelId == null) return false;
+    return _voiceSurfaces.select(
+      channelId,
+      _voiceSurfaces.of(channelId) == VoiceChannelSurface.chat
+          ? VoiceChannelSurface.room
+          : VoiceChannelSurface.chat,
+    ) &&
+        _notified();
+  }
+
+  bool _notified() {
+    notifyListeners();
+    return true;
+  }
+
   /// Jumping to a message is the most message-shaped route there is, so a voice
   /// channel opens on its timeline rather than on the room the anchor is not in.
   void selectMessage(String channelId, String messageId) {

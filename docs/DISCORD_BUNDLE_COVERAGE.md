@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.67% lines | `flutter test --coverage`, 2,606 passing, 6 skipped |
+| Automated test coverage | 89.69% lines | `flutter test --coverage`, 2,623 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -243,10 +243,24 @@ are excluded from the denominator and are never reported as implemented.
   the buffer field for field and written back untouched, because a write
   replaces the whole blob and a codec that dropped what it did not model would
   erase those groups on the first starred GIF.
+- **Implemented**: also the keybinds. They are not in `PreloadedUserSettings`
+  and never were — the desktop client keeps them on the machine — so they are
+  stored in a file beside the client's other local state rather than invented
+  into the settings blob. The action names are Discord's own, read out of the
+  bundle, and only the seven Flucord can carry out are offered: push to talk,
+  push to mute, toggle mute, toggle deafen, toggle camera, disconnect, and
+  flipping a voice channel between its room and its timeline. The overlay,
+  streamer-mode, clip and screenshot actions in the same table are left out
+  rather than drawn as rows that would do nothing. The handler is installed on
+  the keyboard itself, not in a `Shortcuts` widget, because a binding has to
+  fire wherever the focus is — including mid-message — and a bound chord is
+  swallowed so it does not also type its letter into the composer.
 - **Blocked by**: offline-edit replay with `required_data_version` is not
-  implemented; keybinds are not in `PreloadedUserSettings` at all and need a
-  different capability. The frecency tables inside type 2 are round-tripped but
-  not read: nothing in Flucord sorts by how often an expression was used yet.
+  implemented. The frecency tables inside type 2 are round-tripped but not
+  read: nothing in Flucord sorts by how often an expression was used yet. A
+  keybind only fires while this window has focus; a system-wide hotkey needs a
+  native hook this build does not install, and the settings page says so
+  rather than implying one.
 
 ## FBC-PRESENCE — Presence and typing
 

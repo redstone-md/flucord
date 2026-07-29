@@ -27,8 +27,10 @@ import 'application/self_presence_controller.dart';
 import 'application/expression_favorites_controller.dart';
 import 'application/self_video_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
+import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
+import 'data/file_keybind_repository.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
 import 'application/stream_viewer_controller.dart';
@@ -53,6 +55,7 @@ import 'data/discord/discord_oauth_account_service.dart';
 import 'data/discord/discord_remote_auth_gateway.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
+import 'domain/keybind.dart';
 import 'domain/chat_repository_factory.dart';
 import 'domain/credential_vault.dart';
 import 'domain/discord_oauth.dart';
@@ -91,6 +94,7 @@ import 'presentation/widgets/account_standing_scope.dart';
 import 'presentation/widgets/auth_session_scope.dart';
 import 'presentation/widgets/age_verification_scope.dart';
 import 'presentation/widgets/multi_factor_auth_scope.dart';
+import 'presentation/widgets/keybind_scope.dart';
 import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
@@ -114,6 +118,7 @@ class FlucordApp extends StatefulWidget {
     this.soundboardAudioPlayer,
     this.videoEncoderService,
     this.videoDecoderService,
+    this.keybindRepository,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -178,6 +183,10 @@ class FlucordApp extends StatefulWidget {
 
   /// Overridden in tests, which have no decoder to open.
   final VideoDecoderService? videoDecoderService;
+
+  /// Where the keybinds are kept. Injected so a test does not write into
+  /// the real support directory.
+  final KeybindRepository? keybindRepository;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -229,6 +238,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final VoiceController _voiceController;
   late final SelfVideoController _selfVideoController;
   late final RemoteCameraController _remoteCameraController;
+  late final KeybindController _keybindController;
   late final DirectCallController _directCallController;
   late final AttachmentDownloadService _attachmentDownloadService;
   late final ExternalLinkLauncher _externalLinkLauncher;
@@ -427,6 +437,11 @@ class _FlucordAppState extends State<FlucordApp> {
       decoderFactory: () =>
           widget.videoDecoderService ?? NativeVideoDecoderService(),
     );
+    _keybindController = KeybindController(
+      repository: widget.keybindRepository ?? FileKeybindRepository(),
+      onTriggered: _runKeybind,
+    );
+    unawaited(_keybindController.load());
     _chatController.addListener(_syncVoiceSignaling);
     _voiceController.addListener(_syncRemoteCameras);
     _chatController.addListener(_syncUserSettings);
@@ -435,6 +450,11 @@ class _FlucordAppState extends State<FlucordApp> {
     // The handler always answers false so that every key still reaches the
     // widget that was going to receive it.
     ServicesBinding.instance.keyboard.addHandler(_markActiveOnKey);
+    // Installed on the keyboard rather than in a Shortcuts widget: a
+    // binding has to fire wherever the focus is, including the composer.
+    ServicesBinding.instance.keyboard.addHandler(
+      _keybindController.handleKeyEvent,
+    );
     _discordOAuthController.addListener(_syncOAuthAccount);
     _discordSocialSdkController.addListener(_syncSocialSdkAvailability);
     _discordAccountConnectionController.addListener(_syncSocialSdkAvailability);
@@ -456,6 +476,9 @@ class _FlucordAppState extends State<FlucordApp> {
   void dispose() {
     unawaited(widget.desktopIntegration?.dispose());
     ServicesBinding.instance.keyboard.removeHandler(_markActiveOnKey);
+    ServicesBinding.instance.keyboard.removeHandler(
+      _keybindController.handleKeyEvent,
+    );
     _chatController.removeListener(_syncVoiceSignaling);
     _voiceController.removeListener(_syncRemoteCameras);
     _chatController.removeListener(_syncUserSettings);
@@ -504,6 +527,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _voiceController.dispose();
     _selfVideoController.dispose();
     _remoteCameraController.dispose();
+    _keybindController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
     super.dispose();
   }
@@ -539,6 +563,30 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
+
+  /// Carries out one bound action.
+  ///
+  /// Push to talk and push to mute are opposites of each other rather than two
+  /// separate mechanisms: both set the mute flag, one on press and one on
+  /// release.
+  void _runKeybind(KeybindAction action, {required bool pressed}) {
+    switch (action) {
+      case KeybindAction.pushToTalk:
+        unawaited(_voiceController.setMuted(muted: !pressed));
+      case KeybindAction.pushToMute:
+        unawaited(_voiceController.setMuted(muted: pressed));
+      case KeybindAction.toggleMute:
+        if (pressed) unawaited(_voiceController.toggleMute());
+      case KeybindAction.toggleDeafen:
+        if (pressed) unawaited(_voiceController.toggleDeafen());
+      case KeybindAction.toggleCamera:
+        if (pressed) unawaited(_selfVideoController.toggle());
+      case KeybindAction.disconnectFromVoiceChannel:
+        if (pressed) unawaited(_voiceController.disconnect());
+      case KeybindAction.toggleVoiceChannelChat:
+        if (pressed) _workspaceController.toggleVoiceChannelChat();
+    }
+  }
 
   bool _markActiveOnKey(KeyEvent event) {
     _selfPresenceController.markActive();
@@ -602,7 +650,9 @@ class _FlucordAppState extends State<FlucordApp> {
                     controller: _multiFactorAuthController,
                     child: AgeVerificationScope(
                       controller: _ageVerificationController,
-                      child: UserSettingsScope(
+                      child: KeybindScope(
+                        controller: _keybindController,
+                        child: UserSettingsScope(
                         controller: _userSettingsController,
                         child: DiscordDesktopLoginScope(
                           controller: _discordDesktopLoginController,
@@ -683,6 +733,7 @@ class _FlucordAppState extends State<FlucordApp> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
