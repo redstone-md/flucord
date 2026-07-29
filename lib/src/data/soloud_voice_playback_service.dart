@@ -10,7 +10,10 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
   static const int _channels = 2;
   static const double _bufferingSeconds = 0.06;
 
-  final SoLoud _player = SoLoud.instance;
+  /// Resolved on first use, not on construction: touching the singleton loads
+  /// the native library, and a service that is only ever asked to stay quiet
+  /// — a build with no audio module, a test — should not need it present.
+  late final SoLoud _player = SoLoud.instance;
   final Map<String, AudioSource> _sources = {};
   bool _initialized = false;
   bool _enabled = false;
@@ -64,6 +67,11 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
 
   @override
   Future<void> setEnabled(bool enabled) async {
+    // Turning off something that was never turned on is not a failure. The
+    // room disables playback on every bind, long before a device has been
+    // opened, and throwing there surfaced "voice playback is not initialized"
+    // as though the call had a problem.
+    if (!_initialized && !enabled) return;
     _requireInitialized();
     if (_enabled == enabled) return;
     _enabled = enabled;

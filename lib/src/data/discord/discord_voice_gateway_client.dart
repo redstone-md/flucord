@@ -535,10 +535,17 @@ final class DiscordVoiceGatewayClient
       _consecutiveAuthFailures++;
       if (!_hasDecryptedAnyPacket &&
           _consecutiveAuthFailures == _authFailureLimit) {
+        // A key that decrypts nothing at all is a key from a session that has
+        // been replaced — the main gateway reconnected, Discord issued new
+        // credentials, and this socket is still holding the old secret. That
+        // is asked to be re-issued, not reported as a broken call: failing
+        // here dropped somebody out of a channel Discord still had them in.
+        _canResume = false;
+        _diagnose('nothing decrypts, asking for a new session', error);
         if (!_events.isClosed) {
           _events.add(
             VoiceSignalingStatusEvent(
-              VoiceConnectionStatus.failure,
+              VoiceConnectionStatus.reconnecting,
               error: StateError(
                 'Voice packets from Discord could not be decrypted '
                 '($_authFailureLimit in a row, none succeeded): $error',

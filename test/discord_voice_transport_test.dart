@@ -283,11 +283,17 @@ void main() {
         }
         await _flushEvents();
 
+        // Asked to be re-issued rather than declared broken: a key that
+        // decrypts nothing is a key from a session Discord has replaced, and
+        // failing here dropped somebody out of a channel Discord still had
+        // them in.
         expect(
-          events.whereType<VoiceSignalingStatusEvent>().any(
-            (event) => event.status == VoiceConnectionStatus.failure,
-          ),
-          isTrue,
+          events.whereType<VoiceSignalingStatusEvent>().last.status,
+          VoiceConnectionStatus.reconnecting,
+        );
+        expect(
+          events.whereType<VoiceSignalingStatusEvent>().last.error.toString(),
+          contains('none succeeded'),
         );
       },
     );
@@ -432,14 +438,14 @@ void main() {
       await client.connect();
       socket.addJson({
         'op': 8,
-        'd': {'heartbeat_interval': 20},
+        'd': {'heartbeat_interval': 60},
       });
       await _flushEvents();
       // Two intervals with nothing coming back. An acknowledgement that lands
       // a moment after the next one is a slow network, not a dead socket —
       // and tearing the connection down for it was the first link in a chain
       // that had the call reconnecting for its whole life.
-      await Future<void>.delayed(const Duration(milliseconds: 45));
+      await Future<void>.delayed(const Duration(milliseconds: 130));
 
       expect(
         statuses.where(
@@ -448,7 +454,7 @@ void main() {
         isEmpty,
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 45));
+      await Future<void>.delayed(const Duration(milliseconds: 130));
 
       expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
       expect(statuses.last.error.toString(), contains('heartbeat'));

@@ -206,9 +206,18 @@ HRESULT FindOutput(int index, ComPtr<IDXGIAdapter1>* out_adapter,
 std::atomic<int32_t> g_last_error{0};
 std::atomic<int32_t> g_last_error_stage{0};
 
+// The *first* refusal in an attempt, not the last. The fallback path refuses
+// on the machines the fallback exists for, so recording every step meant the
+// only one ever reported was the one that says the least.
 void RecordFailure(int32_t stage, HRESULT hr) {
-  g_last_error_stage.store(stage);
+  int32_t expected = 0;
+  if (!g_last_error_stage.compare_exchange_strong(expected, stage)) return;
   g_last_error.store(static_cast<int32_t>(hr));
+}
+
+void ClearFailure() {
+  g_last_error_stage.store(0);
+  g_last_error.store(0);
 }
 
 // Which call refused, reported alongside its HRESULT.
@@ -220,6 +229,7 @@ enum DuplicationStage {
 };
 
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
+  ClearFailure();
   ComPtr<IDXGIAdapter1> adapter;
   ComPtr<IDXGIOutput1> output;
   HRESULT hr = FindOutput(state->config.display_index, &adapter, &output);
