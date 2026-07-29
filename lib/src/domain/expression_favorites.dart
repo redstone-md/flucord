@@ -102,6 +102,54 @@ final class FavoriteGif {
   int get hashCode => Object.hash(url, src, format, width, height, order);
 }
 
+/// How often one expression has been used.
+final class FrecencyScore {
+  const FrecencyScore({
+    this.totalUses = 0,
+    this.score = 0,
+    this.recentUses = 0,
+  });
+
+  /// Every use ever counted.
+  final int totalUses;
+
+  /// What Discord ranks by: uses weighted so that recent ones count for more,
+  /// which is why a sticker used twice today outranks one used ten times last
+  /// year.
+  final int score;
+
+  /// How many timestamps the table still holds. Discord keeps a bounded
+  /// window of them, so this is a recency signal rather than a total.
+  final int recentUses;
+}
+
+/// The frecency table for one kind of expression.
+final class ExpressionFrecency {
+  const ExpressionFrecency(this._scores);
+
+  final Map<String, FrecencyScore> _scores;
+
+  static const empty = ExpressionFrecency({});
+
+  bool get isEmpty => _scores.isEmpty;
+
+  FrecencyScore? scoreFor(String key) => _scores[key];
+
+  /// [keys] ordered by how often they were used, most first.
+  ///
+  /// A stable sort, so anything the table says nothing about keeps the order
+  /// it arrived in rather than being shuffled by ties.
+  List<String> rank(Iterable<String> keys) {
+    final ranked = keys.toList();
+    ranked.sort((a, b) {
+      final left = _scores[a]?.score ?? 0;
+      final right = _scores[b]?.score ?? 0;
+      return right.compareTo(left);
+    });
+    return ranked;
+  }
+}
+
 /// Everything the favourites blob says, as the pickers need it.
 final class ExpressionFavorites {
   const ExpressionFavorites({
@@ -109,6 +157,8 @@ final class ExpressionFavorites {
     this.stickerIds = const [],
     this.emojis = const [],
     this.hideGifTooltip = false,
+    this.stickerFrecency = ExpressionFrecency.empty,
+    this.emojiFrecency = ExpressionFrecency.empty,
   });
 
   /// Newest first, which is the order the picker shows them in.
@@ -125,6 +175,13 @@ final class ExpressionFavorites {
   /// Whether the "you can favourite GIFs" hint has been shown its last time.
   /// Discord sets it once three GIFs are starred.
   final bool hideGifTooltip;
+
+  /// How often each sticker has been used, keyed by id.
+  final ExpressionFrecency stickerFrecency;
+
+  /// The same for emoji, keyed the way the favourites are: custom ones by id,
+  /// unicode ones by name.
+  final ExpressionFrecency emojiFrecency;
 
   static const empty = ExpressionFavorites();
 
@@ -151,6 +208,8 @@ final class ExpressionFavorites {
     List<String>? emojis,
     bool? hideGifTooltip,
   }) => ExpressionFavorites(
+    stickerFrecency: stickerFrecency,
+    emojiFrecency: emojiFrecency,
     gifs: gifs ?? this.gifs,
     stickerIds: stickerIds ?? this.stickerIds,
     emojis: emojis ?? this.emojis,

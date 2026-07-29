@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.72% lines | `flutter test --coverage`, 2,694 passing, 6 skipped |
+| Automated test coverage | 89.73% lines | `flutter test --coverage`, 2,699 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -317,8 +317,15 @@ are excluded from the denominator and are never reported as implemented.
   change and re-reads, which is what the desktop client does with the same
   answer: the edit was a decision about a state that no longer exists, and
   replaying it would reapply that decision to a different one.
-- **Blocked by**: the frecency tables inside type 2 are round-tripped but not
-  read: nothing in Flucord sorts by how often an expression was used yet. A
+- **Implemented**: also the frecency tables inside type 2. Both are read —
+  `sticker_frecency` keyed by snowflake, `emoji_frecency` by the same string
+  the favourites use — and the sticker picker orders by what the account
+  actually reaches for, which is the order Discord's own client shows. They
+  are read and never written: counting a use is the server's job, and a client
+  writing its own figures would fight whatever the other sessions counted. An
+  entry naming something with no score sorts as zero rather than being
+  dropped, so an expression never used is still in the picker.
+- **Blocked by**: a
   keybind is matched by virtual-key code from the hook, and only the codes
   somebody would bind are mapped — an unmapped one is dropped rather than
   guessed at.

@@ -36,6 +36,14 @@ abstract final class FavoriteEmojisField {
   static const emojis = 1;
 }
 
+/// Field numbers inside `FrecencyItem`, which every frecency table holds.
+abstract final class FrecencyItemField {
+  static const totalUses = 1;
+  static const recentUses = 2;
+  static const frecency = 3;
+  static const score = 4;
+}
+
 /// The two halves of a protobuf map entry.
 abstract final class ProtoMapEntryField {
   static const key = 1;
@@ -44,11 +52,13 @@ abstract final class ProtoMapEntryField {
 
 /// Reads and writes the favourites held in `FrecencyUserSettings`.
 ///
-/// Only the three groups the pickers draw are modelled. Everything else — the
-/// frecency tables, soundboard sounds, the command histories — is left in the
-/// buffer untouched, because a write replaces the whole blob and a codec that
-/// dropped what it did not understand would wipe those groups off the account
-/// on the first starred GIF.
+/// The three favourite groups are read and written; the two frecency tables
+/// are read but never written, because counting a use is the server's job and
+/// a client that wrote its own figures would fight whatever the other sessions
+/// had counted. Everything else — soundboard sounds, the command histories —
+/// is left in the buffer untouched, because a write replaces the whole blob
+/// and a codec that dropped what it did not understand would wipe those groups
+/// off the account on the first starred GIF.
 abstract final class DiscordFrecencyProtoCodec {
   static ExpressionFavorites decode(Uint8List bytes) =>
       decodeMessage(ProtoMessage.decode(bytes));
@@ -70,6 +80,14 @@ abstract final class DiscordFrecencyProtoCodec {
           _snowflakeOf(id),
       ],
       emojis: emojis?.stringsAt(FavoriteEmojisField.emojis) ?? const [],
+      stickerFrecency: _decodeFrecency(
+        root.messageAt(FrecencyUserSettingsField.stickerFrecency),
+        keyed: _snowflakeKey,
+      ),
+      emojiFrecency: _decodeFrecency(
+        root.messageAt(FrecencyUserSettingsField.emojiFrecency),
+        keyed: _stringKey,
+      ),
     );
   }
 
@@ -103,6 +121,44 @@ abstract final class DiscordFrecencyProtoCodec {
   /// way to answer is to encode it.
   static bool fitsGifBudget(ExpressionFavorites favorites) =>
       _encodeGifs(favorites).encode().length <= favoriteGifsMaxBytes;
+
+  /// Reads one `map<key, FrecencyItem>` table.
+  ///
+  /// The two differ only in how the key is written — a snowflake as fixed64
+  /// for stickers, text for emoji — so the reading is shared and the key is
+  /// passed in.
+  static ExpressionFrecency _decodeFrecency(
+    ProtoMessage? group, {
+    required String? Function(ProtoMessage entry) keyed,
+  }) {
+    if (group == null) return ExpressionFrecency.empty;
+    final scores = <String, FrecencyScore>{};
+    for (final entry in group.messagesAt(1)) {
+      final key = keyed(entry);
+      final value = entry.messageAt(ProtoMapEntryField.value);
+      if (key == null || value == null) continue;
+      scores[key] = FrecencyScore(
+        totalUses: value.varintAt(FrecencyItemField.totalUses) ?? 0,
+        // `score` is what Discord ranks by; `frecency` is the decayed figure
+        // it was computed from, kept because a table written by another
+        // client may fill only one of the two.
+        score:
+            value.varintAt(FrecencyItemField.score) ??
+            value.varintAt(FrecencyItemField.frecency) ??
+            0,
+        recentUses: value.fixed64ListAt(FrecencyItemField.recentUses).length,
+      );
+    }
+    return ExpressionFrecency(scores);
+  }
+
+  static String? _stringKey(ProtoMessage entry) =>
+      entry.stringAt(ProtoMapEntryField.key);
+
+  static String? _snowflakeKey(ProtoMessage entry) {
+    final ids = entry.fixed64ListAt(ProtoMapEntryField.key);
+    return ids.isEmpty ? null : _snowflakeOf(ids.first);
+  }
 
   static List<FavoriteGif> _decodeGifs(ProtoMessage? group) {
     if (group == null) return const [];

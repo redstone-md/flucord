@@ -185,10 +185,17 @@ class _StickerPickerPanel extends StatelessWidget {
     if (starred != null && query.isEmpty) {
       // Starred first while browsing, but not while searching: a search is a
       // question about names, and reordering its answers hides the match.
+      final frecency = starred.favorites.stickerFrecency;
       visible.sort((a, b) {
         final left = starred.isFavoriteSticker(a.id) ? 0 : 1;
         final right = starred.isFavoriteSticker(b.id) ? 0 : 1;
-        return left.compareTo(right);
+        if (left != right) return left.compareTo(right);
+        // Within each half, what the account actually reaches for. The table
+        // is the server's count, so this matches the order Discord's own
+        // client shows.
+        return (frecency.scoreFor(b.id)?.score ?? 0).compareTo(
+          frecency.scoreFor(a.id)?.score ?? 0,
+        );
       });
     }
     return Column(

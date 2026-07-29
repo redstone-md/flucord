@@ -142,6 +142,125 @@ void main() {
     });
   });
 
+
+
+  group('how often each was used', () {
+    test('the frecency tables are read, keyed the way each one writes it', () {
+      final root = ProtoMessage()
+        ..setMessage(
+          FrecencyUserSettingsField.stickerFrecency,
+          ProtoMessage()
+            ..addMessage(
+              1,
+              ProtoMessage()
+                ..setFixed64(ProtoMapEntryField.key, 55)
+                ..setMessage(
+                  ProtoMapEntryField.value,
+                  ProtoMessage()
+                    ..setVarint(FrecencyItemField.totalUses, 9)
+                    ..setVarint(FrecencyItemField.score, 40)
+                    ..setFixed64List(FrecencyItemField.recentUses, [1, 2, 3]),
+                ),
+            ),
+        )
+        ..setMessage(
+          FrecencyUserSettingsField.emojiFrecency,
+          ProtoMessage()
+            ..addMessage(
+              1,
+              ProtoMessage()
+                ..setString(ProtoMapEntryField.key, 'grinning')
+                // Only `frecency` filled: another client may write one of the
+                // two and not the other.
+                ..setMessage(
+                  ProtoMapEntryField.value,
+                  ProtoMessage()..setVarint(FrecencyItemField.frecency, 7),
+                ),
+            ),
+        );
+
+      final read = DiscordFrecencyProtoCodec.decodeMessage(root);
+
+      final sticker = read.stickerFrecency.scoreFor('55')!;
+      expect(sticker.totalUses, 9);
+      expect(sticker.score, 40);
+      expect(sticker.recentUses, 3);
+      expect(read.emojiFrecency.scoreFor('grinning')!.score, 7);
+      expect(read.emojiFrecency.scoreFor('missing'), isNull);
+    });
+
+    test('a half-written frecency entry is skipped', () {
+      final root = ProtoMessage()
+        ..setMessage(
+          FrecencyUserSettingsField.emojiFrecency,
+          ProtoMessage()
+            ..addMessage(1, ProtoMessage()..setString(ProtoMapEntryField.key, 'a'))
+            ..addMessage(
+              1,
+              ProtoMessage()..setMessage(ProtoMapEntryField.value, ProtoMessage()),
+            ),
+        );
+
+      expect(
+        DiscordFrecencyProtoCodec.decodeMessage(root).emojiFrecency.isEmpty,
+        isTrue,
+      );
+    });
+
+    test('a blob with no tables ranks nothing and keeps the order given', () {
+      const frecency = ExpressionFrecency.empty;
+
+      expect(frecency.isEmpty, isTrue);
+      expect(frecency.rank(['a', 'b', 'c']), ['a', 'b', 'c']);
+    });
+
+    test('ranking puts what was used most first', () {
+      const frecency = ExpressionFrecency({
+        'rare': FrecencyScore(score: 1),
+        'often': FrecencyScore(score: 90),
+      });
+
+      // Anything the table says nothing about sorts as zero rather than
+      // being dropped: an emoji never used is still in the picker.
+      expect(frecency.rank(['rare', 'unknown', 'often']), [
+        'often',
+        'rare',
+        'unknown',
+      ]);
+    });
+
+    test('the tables survive a write untouched', () {
+      final root = ProtoMessage()
+        ..setMessage(
+          FrecencyUserSettingsField.emojiFrecency,
+          ProtoMessage()
+            ..addMessage(
+              1,
+              ProtoMessage()
+                ..setString(ProtoMapEntryField.key, 'grinning')
+                ..setMessage(
+                  ProtoMapEntryField.value,
+                  ProtoMessage()..setVarint(FrecencyItemField.score, 5),
+                ),
+            ),
+        );
+
+      final written = DiscordFrecencyProtoCodec.apply(
+        root,
+        const ExpressionFavorites(emojis: ['smile']),
+      );
+
+      // Counting a use is the server's job; a client writing its own figures
+      // would fight what the other sessions counted.
+      expect(
+        DiscordFrecencyProtoCodec.decodeMessage(
+          written,
+        ).emojiFrecency.scoreFor('grinning')?.score,
+        5,
+      );
+    });
+  });
+
   group('what a write puts back', () {
     test('the groups nobody models survive it', () {
       final root = ProtoMessage()
