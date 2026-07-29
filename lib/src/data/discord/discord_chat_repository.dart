@@ -1,3 +1,4 @@
+import '../../domain/desktop_relationship_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
@@ -376,6 +377,9 @@ final class DiscordChatRepository
 
   @override
   AgeVerificationRepository? get ageVerification => null;
+
+  @override
+  DesktopRelationshipRepository? get relationships => null;
 
   /// The search routes are scoped to a signed-in user's own session; a
   /// bot token is rejected by them, so this transport has no search plane

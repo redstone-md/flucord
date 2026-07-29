@@ -55,6 +55,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         _messageComponents.accept(event.name, event.data);
         _goLive.accept(event.name, event.data);
         _summaries.accept(event.name, event.data);
+        // READY carries the whole friend graph, and three dispatches keep it
+        // current. There is no route to re-read it, so missing one means
+        // showing a friend list that is quietly wrong.
+        _relationships.accept(event.name, event.data);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {

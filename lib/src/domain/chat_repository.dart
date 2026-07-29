@@ -3,6 +3,7 @@ import 'account_standing.dart';
 import 'age_verification.dart';
 import 'auth_session.dart';
 import 'chat_models.dart';
+import 'desktop_relationship_repository.dart';
 import 'multi_factor_auth.dart';
 import 'family_centre.dart';
 import 'guild_management_repository.dart';
@@ -298,6 +299,10 @@ abstract interface class ChatRepository {
 
   /// Age verification, or `null` on a transport that offers none.
   AgeVerificationRepository? get ageVerification;
+
+  /// The account's friend graph as this session knows it, or `null` on a
+  /// transport that is never told one.
+  DesktopRelationshipRepository? get relationships;
 
   /// The server-side search plane this transport can reach, or `null`.
   ///

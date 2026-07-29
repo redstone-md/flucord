@@ -81,6 +81,9 @@ final class _EventRepository
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  DesktopRelationshipRepository? get relationships => null;
+
+  @override
   MessageSearchRepository? get messageSearch => null;
 
   @override

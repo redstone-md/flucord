@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -218,6 +219,9 @@ final class _Repository implements ChatRepository {
 
   @override
   AgeVerificationRepository? get ageVerification => null;
+
+  @override
+  DesktopRelationshipRepository? get relationships => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;

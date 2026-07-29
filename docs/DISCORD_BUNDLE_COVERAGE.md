@@ -270,12 +270,22 @@ are excluded from the denominator and are never reported as implemented.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: the full Discord Social SDK relationship path — list,
-  add, accept, reject, cancel, remove, block, presence, and DMs.
-- **Tests**: `social_sdk_*_test.dart` suite.
+  add, accept, reject, cancel, remove, block, presence, and DMs. The
+  desktop-user session now also holds its own friend graph: `READY` carries
+  the whole of it and three dispatches keep it current, which is the only way
+  a client learns it — there is no route to re-read one. A fresh `READY`
+  replaces rather than merges, since anything held from a previous session may
+  have been undone on another device. The nickname this account gave somebody
+  wins over Discord's own name for them, because it is the name whoever set it
+  will recognise, and a relationship kind newer than this build reads as
+  unknown rather than being guessed at.
+- **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`.
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
-- **Blocked by**: the desktop-user transport does not yet project
-  `READY.relationships`; Friends is served by the separate Social SDK session.
+- **Blocked by**: the desktop session reads its friend graph but has no
+  surface of its own for it yet, and no writes: adding, accepting and blocking
+  still go through the Social SDK session. Friend suggestions and game
+  relationships are untouched.
 
 ## FBC-GUILD — Servers, members, roles, discovery
 

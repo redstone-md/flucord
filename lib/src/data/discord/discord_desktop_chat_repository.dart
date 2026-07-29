@@ -1,3 +1,5 @@
+import '../../domain/desktop_relationship_repository.dart';
+import '../../domain/discord_relationship.dart';
 import '../../domain/scheduled_event_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
@@ -46,6 +48,7 @@ import 'discord_rest_client.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
 import 'discord_conversation_summary_service.dart';
+import 'discord_relationship_service.dart';
 import 'discord_go_live_service.dart';
 import 'discord_message_component_service.dart';
 import 'discord_gif_service.dart';
@@ -138,6 +141,8 @@ final class DiscordDesktopChatRepository
   final DiscordMessageComponentService _messageComponents;
   // Built after construction because the adapter reads the signed-in account
   // off this repository, which does not exist yet in the initialiser list.
+  final DiscordRelationshipService _relationships =
+      DiscordRelationshipService();
   final DiscordConversationSummaryService _summaries =
       DiscordConversationSummaryService();
   late final DiscordGoLiveService _goLive = DiscordGoLiveService(
@@ -236,6 +241,12 @@ final class DiscordDesktopChatRepository
 
   @override
   AgeVerificationRepository? get ageVerification => _api.ageVerification;
+
+  @override
+  DesktopRelationshipRepository? get relationships => _relationshipView;
+
+  late final _DesktopRelationshipView _relationshipView =
+      _DesktopRelationshipView(_relationships);
 
   /// The account's own session is what Discord's search routes answer to, so
   /// this is the one transport that can offer them.
@@ -694,6 +705,7 @@ final class DiscordDesktopChatRepository
     await _messageComponents.close();
     await _goLive.close();
     await _summaries.close();
+    await _relationships.close();
     await _memberLists.close();
     await _gateway.close();
     _api.close();
@@ -741,4 +753,20 @@ final class _DesktopGoLiveGateway implements DiscordGoLiveGateway {
   @override
   void sendStreamSetPaused(String streamKey, {required bool paused}) =>
       _gateway.sendStreamSetPaused(streamKey, paused: paused);
+}
+
+/// The read-only face the surfaces see.
+///
+/// The service itself also folds dispatches in, which is not something a
+/// surface should be able to do by holding the same object.
+final class _DesktopRelationshipView implements DesktopRelationshipRepository {
+  const _DesktopRelationshipView(this._service);
+
+  final DiscordRelationshipService _service;
+
+  @override
+  List<DiscordRelationship> get relationships => _service.relationships;
+
+  @override
+  Stream<List<DiscordRelationship>> get relationshipUpdates => _service.updates;
 }

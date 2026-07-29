@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/scheduled_event_repository.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
