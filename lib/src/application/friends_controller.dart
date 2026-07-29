@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/desktop_relationship_repository.dart';
 import '../domain/discord_relationship.dart';
+import '../domain/friend_suggestion.dart';
 
 /// Drives the friends surface.
 ///
@@ -45,6 +46,42 @@ final class FriendsController extends ChangeNotifier {
   bool get lastRequestRefused => _refused;
 
   List<DiscordRelationship> get all => _bind()?.relationships ?? const [];
+
+  /// People Discord thinks the account may know.
+  ///
+  /// Anybody already in the graph is filtered out here rather than trusted to
+  /// be absent: a suggestion that arrived before a friendship was made would
+  /// otherwise sit there offering to introduce two people who already know
+  /// each other.
+  List<FriendSuggestion> get suggestions {
+    final known = {for (final entry in all) entry.user.id};
+    return [
+      for (final entry
+          in _bind()?.friendSuggestions ?? const <FriendSuggestion>[])
+        if (!known.contains(entry.userId)) entry,
+    ];
+  }
+
+  /// Reads the suggestions again. Unlike the graph, Discord serves a route.
+  Future<void> loadSuggestions() async {
+    final repository = _bind();
+    if (repository == null || _busy) return;
+    _busy = true;
+    _notify();
+    try {
+      await repository.loadFriendSuggestions();
+    } on Object catch (error) {
+      _error = error;
+    } finally {
+      _busy = false;
+      _notify();
+    }
+  }
+
+  /// Says no to a suggestion. There is no relationship to undo: dismissing is
+  /// the whole of saying no.
+  Future<bool> dismissSuggestion(FriendSuggestion suggestion) =>
+      _run((repository) => repository.dismissSuggestion(suggestion.userId));
 
   List<DiscordRelationship> get requests => [
     for (final entry in all)

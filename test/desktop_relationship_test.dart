@@ -1,5 +1,6 @@
 import 'package:flucord/src/data/discord/discord_relationship_service.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/friend_suggestion.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, Object?> _ready() => {
@@ -169,6 +170,149 @@ void main() {
 
     // Anything held from before may have been undone on another device.
     expect(service.relationships.map((r) => r.user.id), ['user-7']);
+  });
+
+  test('a suggestion says who and why', () {
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+
+    expect(
+      service.accept('FRIEND_SUGGESTION_CREATE', {
+        'suggestion': {
+          'suggested_user': {
+            'id': 'user-9',
+            'username': 'mira',
+            'global_name': 'Mira',
+          },
+          'reasons': [
+            {'type': 1, 'name': 'You have mutual friends'},
+          ],
+          'mutual_friends_count': 3,
+        },
+      }),
+      isTrue,
+    );
+
+    final suggestion = service.suggestions.single;
+    expect(suggestion.userId, 'user-9');
+    expect(suggestion.label, 'Mira');
+    expect(suggestion.mutualFriendCount, 3);
+    expect(suggestion.describeReason(), '3 mutual friends');
+  });
+
+  test('contact names are only shown when two hide each other', () {
+    // Discord sends them at two or more so a single contact cannot be
+    // singled out; anything shorter is dropped rather than shown alone.
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+
+    service.accept('FRIEND_SUGGESTION_CREATE', {
+      'suggestion': {
+        'suggested_user': {'id': 'user-1', 'username': 'one'},
+        'contact_names': ['Mira'],
+      },
+    });
+    service.accept('FRIEND_SUGGESTION_CREATE', {
+      'suggestion': {
+        'suggested_user': {'id': 'user-2', 'username': 'two'},
+        'contact_names': ['Mira', 'M. Chen', 'Third'],
+      },
+    });
+
+    expect(service.suggestions.first.contactNames, isEmpty);
+    expect(service.suggestions.first.describeReason(), isEmpty);
+    // Only the first two are kept, which is what Discord's own client shows.
+    expect(service.suggestions.last.contactNames, ['Mira', 'M. Chen']);
+    expect(
+      service.suggestions.last.describeReason(),
+      'In your contacts as Mira and M. Chen',
+    );
+  });
+
+  test('a suggestion repeated is not a second suggestion', () {
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+    final payload = {
+      'suggestion': {
+        'suggested_user': {'id': 'user-9', 'username': 'mira'},
+      },
+    };
+
+    expect(service.accept('FRIEND_SUGGESTION_CREATE', payload), isTrue);
+    expect(service.accept('FRIEND_SUGGESTION_CREATE', payload), isFalse);
+    expect(service.suggestions, hasLength(1));
+    // Somebody Discord named nothing for still reads as a person, by id.
+    expect(service.suggestions.single.label, 'mira');
+  });
+
+  test('a withdrawn suggestion leaves', () {
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+    service.accept('FRIEND_SUGGESTION_CREATE', {
+      'suggestion': {
+        'suggested_user': {'id': 'user-9', 'username': 'mira'},
+      },
+    });
+
+    expect(
+      service.accept('FRIEND_SUGGESTION_DELETE', {
+        'suggested_user_id': 'user-9',
+      }),
+      isTrue,
+    );
+    expect(service.suggestions, isEmpty);
+    // Withdrawing one that is not held changes nothing.
+    expect(
+      service.accept('FRIEND_SUGGESTION_DELETE', {
+        'suggested_user_id': 'user-9',
+      }),
+      isFalse,
+    );
+  });
+
+  test('a suggestion naming nobody is not one', () {
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+
+    expect(
+      service.accept('FRIEND_SUGGESTION_CREATE', const {
+        'suggestion': 'nonsense',
+      }),
+      isFalse,
+    );
+    expect(
+      service.accept('FRIEND_SUGGESTION_CREATE', const {
+        'suggestion': {'suggested_user': 'nonsense'},
+      }),
+      isFalse,
+    );
+    expect(
+      service.accept('FRIEND_SUGGESTION_CREATE', const {
+        'suggestion': {
+          'suggested_user': {'username': 'no id'},
+        },
+      }),
+      isFalse,
+    );
+    expect(service.suggestions, isEmpty);
+  });
+
+  test('the route replaces what is held', () {
+    final service = DiscordRelationshipService();
+    addTearDown(service.close);
+    service.accept('FRIEND_SUGGESTION_CREATE', {
+      'suggestion': {
+        'suggested_user': {'id': 'user-1', 'username': 'one'},
+      },
+    });
+
+    service.replaceSuggestions([
+      const FriendSuggestion(userId: 'user-2', displayName: 'Two'),
+    ]);
+
+    expect(service.suggestions.single.userId, 'user-2');
+    service.forgetSuggestion('user-2');
+    expect(service.suggestions, isEmpty);
   });
 
   test('anything else changes nothing', () {

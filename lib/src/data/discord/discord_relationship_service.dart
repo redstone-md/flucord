@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../domain/discord_relationship.dart';
+import '../../domain/friend_suggestion.dart';
 
 /// The account's friend graph, as the desktop-user session is told it.
 ///
@@ -12,6 +13,7 @@ final class DiscordRelationshipService {
   final StreamController<List<DiscordRelationship>> _updates =
       StreamController.broadcast();
   final Map<String, DiscordRelationship> _byUserId = {};
+  final Map<String, FriendSuggestion> _suggestions = {};
 
   /// Everybody the account has a relationship with, in a stable order:
   /// requests that want an answer first, then friends, then the rest.
@@ -28,6 +30,21 @@ final class DiscordRelationshipService {
   }
 
   Stream<List<DiscordRelationship>> get updates => _updates.stream;
+
+  /// People Discord thinks the account may know, most recently offered first
+  /// as Discord orders them.
+  List<FriendSuggestion> get suggestions =>
+      List.unmodifiable(_suggestions.values);
+
+  /// Replaces the held suggestions with what the route answered.
+  void replaceSuggestions(Iterable<FriendSuggestion> next) {
+    _suggestions
+      ..clear()
+      ..addEntries(next.map((entry) => MapEntry(entry.userId, entry)));
+  }
+
+  /// Drops one, which is what dismissing does locally.
+  void forgetSuggestion(String userId) => _suggestions.remove(userId);
 
   /// Folds a dispatch in, returning whether anything changed.
   bool accept(String eventName, Map<String, Object?> data) {
@@ -53,6 +70,15 @@ final class DiscordRelationshipService {
         );
         if (relationship == null) return false;
         _byUserId[relationship.user.id] = relationship;
+      case 'FRIEND_SUGGESTION_CREATE':
+        final suggestion = readSuggestion(data['suggestion'] ?? data);
+        if (suggestion == null) return false;
+        // A suggestion Discord repeats is not a second suggestion.
+        if (_suggestions.containsKey(suggestion.userId)) return false;
+        _suggestions[suggestion.userId] = suggestion;
+      case 'FRIEND_SUGGESTION_DELETE':
+        final id = data['suggested_user_id'] ?? data['user_id'];
+        if (id is! String || _suggestions.remove(id) == null) return false;
       case 'RELATIONSHIP_REMOVE':
         final payload = data['relationship'] ?? data;
         final id = payload is Map ? payload['id'] : null;
@@ -66,6 +92,42 @@ final class DiscordRelationshipService {
 
   Future<void> close() async {
     if (!_updates.isClosed) await _updates.close();
+  }
+
+  /// Maps one suggestion, or null when it names nobody.
+  ///
+  /// Discord sends contact names only when there are at least two, so that a
+  /// single contact cannot be singled out; that rule is kept here rather than
+  /// re-derived, and anything shorter is dropped.
+  static FriendSuggestion? readSuggestion(Object? raw) {
+    if (raw is! Map) return null;
+    final payload = raw.cast<String, Object?>();
+    final user = payload['suggested_user'];
+    if (user is! Map) return null;
+    final fields = user.cast<String, Object?>();
+    final id = fields['id'];
+    if (id is! String || id.isEmpty) return null;
+    final global = _text(fields['global_name']);
+    final contacts = [
+      for (final name in _list(payload['contact_names']))
+        if (name is String && name.isNotEmpty) name,
+    ];
+    return FriendSuggestion(
+      userId: id,
+      displayName: global.isNotEmpty ? global : _text(fields['username']),
+      reason: _reason(payload['reasons']),
+      mutualFriendCount: payload['mutual_friends_count'] is int
+          ? payload['mutual_friends_count']! as int
+          : 0,
+      contactNames: contacts.length >= 2 ? contacts.sublist(0, 2) : const [],
+    );
+  }
+
+  static String _reason(Object? reasons) {
+    for (final raw in _list(reasons)) {
+      if (raw is Map && raw['name'] is String) return raw['name']! as String;
+    }
+    return '';
   }
 
   /// Maps one relationship, or null when it names nobody.

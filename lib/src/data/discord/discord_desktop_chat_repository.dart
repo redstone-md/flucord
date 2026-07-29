@@ -1,5 +1,6 @@
 import '../../domain/desktop_relationship_repository.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/friend_suggestion.dart';
 import '../../domain/scheduled_event_repository.dart';
 import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
@@ -785,6 +786,27 @@ final class _DesktopRelationshipView implements DesktopRelationshipRepository {
   @override
   Future<bool> blockUser(String userId) =>
       _write(() => _api.putRelationship(userId, type: _blocked));
+
+  @override
+  List<FriendSuggestion> get friendSuggestions => _service.suggestions;
+
+  @override
+  Future<void> loadFriendSuggestions() async {
+    final payloads = await _api.getFriendSuggestions();
+    _service.replaceSuggestions([
+      for (final payload in payloads)
+        ?DiscordRelationshipService.readSuggestion(payload),
+    ]);
+  }
+
+  @override
+  Future<bool> dismissSuggestion(String userId) async {
+    final accepted = await _write(() => _api.deleteFriendSuggestion(userId));
+    // Dropped locally as well: unlike a relationship, Discord sends no
+    // dispatch back for a suggestion the account itself dismissed.
+    if (accepted) _service.forgetSuggestion(userId);
+    return accepted;
+  }
 
   /// Runs one relationship write.
   ///

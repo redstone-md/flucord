@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
+import '../../domain/friend_suggestion.dart';
 import '../../theme/flucord_theme.dart';
 import 'presence_indicator.dart';
 
@@ -35,6 +36,9 @@ class _FriendsPanelState extends State<FriendsPanel> {
   void initState() {
     super.initState();
     _username.addListener(_onTyped);
+    // Read once when the panel opens. Discord serves a route for these, but
+    // it is not something to poll: a suggestion is not urgent.
+    unawaited(widget.controller.loadSuggestions());
   }
 
   void _onTyped() {
@@ -58,6 +62,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
       final friends = controller.friends;
       final blocked = controller.blocked;
       final others = controller.others;
+      final suggestions = controller.suggestions;
       return Column(
         key: const ValueKey('friends-panel'),
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,10 +137,29 @@ class _FriendsPanelState extends State<FriendsPanel> {
                     entries: others,
                     controller: controller,
                   ),
+                if (suggestions.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
+                    child: Text(
+                      'You may know — ${suggestions.length}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: context.surfaces.muted,
+                      ),
+                    ),
+                  ),
+                  for (final suggestion in suggestions)
+                    _SuggestionRow(
+                      suggestion: suggestion,
+                      controller: controller,
+                    ),
+                ],
                 if (requests.isEmpty &&
                     friends.isEmpty &&
                     blocked.isEmpty &&
-                    others.isEmpty)
+                    others.isEmpty &&
+                    suggestions.isEmpty)
                   Padding(
                     key: const ValueKey('friends-empty'),
                     padding: const EdgeInsets.all(12),
@@ -281,4 +305,67 @@ class _RelationshipRow extends StatelessWidget {
     DiscordRelationshipKind.blocked => 'Unblock',
     _ => 'Remove',
   };
+}
+
+/// One person Discord thinks the account may know.
+///
+/// Two answers only: ask them, or say no. There is no relationship yet, so
+/// there is nothing else that could be done to one.
+class _SuggestionRow extends StatelessWidget {
+  const _SuggestionRow({required this.suggestion, required this.controller});
+
+  final FriendSuggestion suggestion;
+  final FriendsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = suggestion.describeReason();
+    return Container(
+      key: ValueKey('suggestion-${suggestion.userId}'),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.surfaces.raised,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  suggestion.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (reason.isNotEmpty)
+                  Text(
+                    reason,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.surfaces.muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          TextButton(
+            key: ValueKey('suggestion-add-${suggestion.userId}'),
+            onPressed: controller.isBusy
+                ? null
+                : () => unawaited(controller.addFriend(suggestion.userId)),
+            child: const Text('Add'),
+          ),
+          TextButton(
+            key: ValueKey('suggestion-dismiss-${suggestion.userId}'),
+            onPressed: controller.isBusy
+                ? null
+                : () => unawaited(controller.dismissSuggestion(suggestion)),
+            child: const Text('No'),
+          ),
+        ],
+      ),
+    );
+  }
 }

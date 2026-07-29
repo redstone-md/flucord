@@ -1,4 +1,5 @@
 import 'discord_relationship.dart';
+import 'friend_suggestion.dart';
 
 /// The friend graph a signed-in desktop session is told about.
 ///
@@ -27,4 +28,14 @@ abstract interface class DesktopRelationshipRepository {
 
   /// Blocks somebody, replacing whatever the relationship was.
   Future<bool> blockUser(String userId);
+
+  /// People Discord thinks the account may know, as this session was told.
+  List<FriendSuggestion> get friendSuggestions;
+
+  /// Reads them again. Unlike the graph, Discord serves a route for these.
+  Future<void> loadFriendSuggestions();
+
+  /// Says no to one. Dismissing is the whole of saying no to a suggestion:
+  /// there is no relationship to undo, because none was ever made.
+  Future<bool> dismissSuggestion(String userId);
 }

@@ -293,11 +293,20 @@ are excluded from the denominator and are never reported as implemented.
   dot — the shape is what keeps the four statuses apart for somebody who cannot
   separate green from red. Somebody the session has no presence for gets no
   indicator at all, rather than a grey one claiming they are offline.
+  Friend suggestions are read from `/friend-suggestions`, kept current by the
+  two dispatches, and answered either way — ask them, or say no, which is the
+  whole of what a suggestion can be answered with since no relationship exists
+  to undo. Anybody already in the graph is filtered out rather than trusted to
+  be absent: a suggestion that arrived before a friendship was made would
+  otherwise offer to introduce two people who already know each other. Contact
+  names are shown only when Discord sends two, which is the rule that stops a
+  single contact being singled out.
 - **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`,
   `friends_panel_test.dart`.
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
-- **Blocked by**: friend suggestions and game relationships are untouched.
+- **Blocked by**: game relationships, which belong to the Social SDK's own
+  session rather than to this one.
 
 ## FBC-GUILD — Servers, members, roles, discovery
 

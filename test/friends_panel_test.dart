@@ -4,6 +4,7 @@ import 'package:flucord/src/application/friends_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/friend_suggestion.dart';
 import 'package:flucord/src/presentation/widgets/friends_panel.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,60 @@ final _graph = [
 ];
 
 void main() {
+  group('a suggestion', () {
+    test('names somebody, and says why where there is a why', () {
+      const named = FriendSuggestion(
+        userId: 'user-1',
+        displayName: 'Mira',
+        reason: 'You have mutual friends',
+      );
+
+      expect(named.label, 'Mira');
+      expect(const FriendSuggestion(userId: 'user-2').label, 'user-2');
+      // Discord's own wording, where it gave one and there is nothing better.
+      expect(named.describeReason(), 'You have mutual friends');
+      expect(
+        const FriendSuggestion(
+          userId: 'u',
+          mutualFriendCount: 1,
+        ).describeReason(),
+        '1 mutual friend',
+      );
+      expect(const FriendSuggestion(userId: 'u').describeReason(), isEmpty);
+    });
+
+    test('compares by what it says', () {
+      const suggestion = FriendSuggestion(
+        userId: 'user-1',
+        displayName: 'Mira',
+        contactNames: ['a', 'b'],
+      );
+
+      expect(
+        suggestion,
+        const FriendSuggestion(
+          userId: 'user-1',
+          displayName: 'Mira',
+          contactNames: ['a', 'b'],
+        ),
+      );
+      expect(
+        suggestion.hashCode,
+        const FriendSuggestion(
+          userId: 'user-1',
+          displayName: 'Mira',
+          contactNames: ['a', 'b'],
+        ).hashCode,
+      );
+      expect(
+        suggestion ==
+            const FriendSuggestion(userId: 'user-1', displayName: 'Mira'),
+        isFalse,
+      );
+      expect(suggestion == Object(), isFalse);
+    });
+  });
+
   group('the controller', () {
     test('splits the graph into what each part is for', () {
       final controller = FriendsController(() => _FakeGraph(_graph));
@@ -127,6 +182,17 @@ void main() {
       // A sign-out must not leave the last account's friends on screen.
       current = second;
       expect(controller.friends.single.user.id, 'other');
+    });
+
+    test('a failed read of suggestions is reported, not thrown', () async {
+      final graph = _FakeGraph(_graph)..failSuggestions = true;
+      final controller = FriendsController(() => graph);
+      addTearDown(controller.dispose);
+
+      await controller.loadSuggestions();
+
+      expect(controller.error, isA<StateError>());
+      expect(controller.isBusy, isFalse);
     });
 
     test('the panel flag survives a rebuild, because it lives here', () {
@@ -265,6 +331,55 @@ void main() {
       );
     });
 
+    testWidgets('suggestions are offered, and can be answered either way', (
+      tester,
+    ) async {
+      final graph = _FakeGraph(_graph)
+        ..suggestions = const [
+          FriendSuggestion(
+            userId: 'maybe',
+            displayName: 'Maybe',
+            mutualFriendCount: 2,
+          ),
+        ];
+      await _pump(tester, graph);
+
+      expect(find.text('You may know — 1'), findsOneWidget);
+      expect(find.text('2 mutual friends'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('suggestion-add-maybe')));
+      await tester.pumpAndSettle();
+      expect(graph.added, ['maybe']);
+
+      await tester.tap(find.byKey(const ValueKey('suggestion-dismiss-maybe')));
+      await tester.pumpAndSettle();
+      expect(graph.dismissed, ['maybe']);
+      expect(find.byKey(const ValueKey('suggestion-maybe')), findsNothing);
+    });
+
+    testWidgets('the panel asks for suggestions when it opens', (tester) async {
+      final graph = _FakeGraph(_graph);
+      await _pump(tester, graph);
+
+      expect(graph.suggestionLoads, 1);
+    });
+
+    testWidgets('somebody already in the graph is not suggested', (
+      tester,
+    ) async {
+      // A suggestion that arrived before the friendship was made would
+      // otherwise offer to introduce two people who already know each other.
+      await _pump(
+        tester,
+        _FakeGraph(_graph)
+          ..suggestions = const [
+            FriendSuggestion(userId: 'friend', displayName: 'Friend'),
+          ],
+      );
+
+      expect(find.byKey(const ValueKey('suggestion-friend')), findsNothing);
+    });
+
     testWidgets('an account with nobody says so', (tester) async {
       await _pump(tester, _FakeGraph(const []));
 
@@ -331,6 +446,35 @@ final class _FakeGraph implements DesktopRelationshipRepository {
   Future<bool> removeRelationship(String userId) async {
     if (!accept) return false;
     removed.add(userId);
+    return true;
+  }
+
+  List<FriendSuggestion> suggestions = const [];
+  final List<String> dismissed = [];
+  int suggestionLoads = 0;
+
+  @override
+  List<FriendSuggestion> get friendSuggestions => suggestions;
+
+  bool failSuggestions = false;
+
+  @override
+  Future<void> loadFriendSuggestions() async {
+    if (failSuggestions) {
+      failSuggestions = false;
+      throw StateError('suggestions failed');
+    }
+    suggestionLoads++;
+  }
+
+  @override
+  Future<bool> dismissSuggestion(String userId) async {
+    if (!accept) return false;
+    dismissed.add(userId);
+    suggestions = [
+      for (final entry in suggestions)
+        if (entry.userId != userId) entry,
+    ];
     return true;
   }
 

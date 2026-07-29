@@ -73,6 +73,16 @@ final class DiscordDesktopApiClient
   late final DiscordAgeVerificationRepository ageVerification =
       DiscordAgeVerificationRepository(_rest);
 
+  /// `GET /friend-suggestions`.
+  Future<List<Map<String, Object?>>> getFriendSuggestions() =>
+      _rest.getList('/friend-suggestions');
+
+  /// `DELETE /friend-suggestions/{id}` — says no to one.
+  Future<void> deleteFriendSuggestion(String userId) => _rest.requestEmpty(
+    'DELETE',
+    '/friend-suggestions/${Uri.encodeComponent(userId)}',
+  );
+
   /// `PUT /users/@me/relationships/{id}`.
   ///
   /// With no type, this is a friend request — or its acceptance, which Discord
