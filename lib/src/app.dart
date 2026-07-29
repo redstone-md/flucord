@@ -104,6 +104,7 @@ import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'platform/desktop_integration.dart';
+import 'platform/global_keyboard_hook.dart';
 import 'platform/window_capture_shield.dart';
 import 'theme/flucord_theme.dart';
 
@@ -127,6 +128,7 @@ class FlucordApp extends StatefulWidget {
     this.keybindRepository,
     this.streamerModeRepository,
     this.windowCaptureShield,
+    this.globalKeyboardHook,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -202,6 +204,10 @@ class FlucordApp extends StatefulWidget {
   /// Keeps the window out of screen recordings. Injected so a test does not
   /// reach for the real window list.
   final WindowCaptureShield? windowCaptureShield;
+
+  /// Keys from outside this window. Injected so a test does not install a
+  /// system-wide hook on the machine running it.
+  final GlobalKeyboardHook? globalKeyboardHook;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -456,6 +462,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _keybindController = KeybindController(
       repository: widget.keybindRepository ?? FileKeybindRepository(),
       onTriggered: _runKeybind,
+      hook: widget.globalKeyboardHook ?? _defaultKeyboardHook(),
     );
     unawaited(_keybindController.load());
     _streamerModeController = StreamerModeController(
@@ -589,6 +596,11 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
+
+  /// The hook this platform has, or one that plainly says it has none.
+  static GlobalKeyboardHook _defaultKeyboardHook() => Platform.isWindows
+      ? WindowsGlobalKeyboardHook()
+      : const UnavailableGlobalKeyboardHook();
 
   /// The shield this platform has, or one that plainly says it has none.
   static WindowCaptureShield _defaultCaptureShield() => Platform.isWindows

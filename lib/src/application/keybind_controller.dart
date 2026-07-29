@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/keybind.dart';
+import '../platform/global_keyboard_hook.dart';
 
 /// Runs one bound action. [pressed] is false on release, which is what tells a
 /// hold action — push to talk — when to stop.
@@ -18,22 +19,31 @@ typedef KeybindHandler =
 /// installed on the keyboard itself for the same reason Discord's is installed
 /// on the window.
 ///
-/// Only while this window has focus. A binding that worked with the client in
-/// the background needs a system-wide hook, which is a native capability this
-/// build does not have — so the surface says so rather than implying a
-/// global hotkey that would silently do nothing behind another window.
+/// A binding fires from behind another window too, through the system-wide
+/// hook. Where the hook cannot be installed — another platform, or a build
+/// without the native module — the bindings still work while this window has
+/// focus, and the settings page says which of the two is happening rather
+/// than implying a global key that would quietly do nothing.
 final class KeybindController extends ChangeNotifier {
   KeybindController({
     required KeybindRepository repository,
     required KeybindHandler onTriggered,
+    GlobalKeyboardHook? hook,
   }) : _repository = repository,
-       _onTriggered = onTriggered;
+       _onTriggered = onTriggered,
+       _hook = hook ?? const UnavailableGlobalKeyboardHook();
 
   final KeybindRepository _repository;
   final KeybindHandler _onTriggered;
+  final GlobalKeyboardHook _hook;
+  StreamSubscription<GlobalKeyEvent>? _globalKeys;
 
   final Map<KeybindAction, Keybind> _bindings = {};
   final Set<KeybindAction> _held = {};
+
+  /// Keys down right now, so a chord reported by both the hook and the focused
+  /// keyboard runs its action once.
+  final Set<int> _pressed = {};
   KeybindAction? _recording;
   bool _loaded = false;
   bool _disposed = false;
@@ -47,14 +57,57 @@ final class KeybindController extends ChangeNotifier {
 
   Keybind? bindingFor(KeybindAction action) => _bindings[action];
 
+  /// Whether bindings reach the client from behind another window.
+  bool get isGlobal => _hook.isRunning;
+
+  /// Whether this build could install a system-wide hook at all.
+  bool get supportsGlobal => _hook.isSupported;
+
   Future<void> load() async {
     if (_loaded) return;
     _bindings
       ..clear()
       ..addAll(await _repository.load());
     _loaded = true;
+    // Started after the bindings are read: a key arriving before them would
+    // match nothing and be dropped, which is harmless but pointless work.
+    await _startHook();
     _notify();
   }
+
+  Future<void> _startHook() async {
+    if (!_hook.isSupported || _hook.isRunning) return;
+    if (!await _hook.start()) return;
+    _globalKeys = _hook.events.listen(_acceptGlobalKey);
+  }
+
+  /// A key seen anywhere on the machine.
+  ///
+  /// Fed through the same matching as a focused key, minus the swallowing:
+  /// the hook reports and never consumes, so a global binding cannot take a
+  /// keystroke away from whatever the user was typing into.
+  void _acceptGlobalKey(GlobalKeyEvent event) {
+    final keyId = event.key.keyId;
+    final modifiers = _modifiersOfBits(event.modifiers);
+    if (_recording != null) {
+      // Recording reads the focused keyboard, which is where somebody setting
+      // a binding is actually looking. Assigning from the hook as well would
+      // record the chord twice.
+      return;
+    }
+    if (event.isDown) {
+      _onDown(keyId, modifiers);
+      return;
+    }
+    _onUp(keyId);
+  }
+
+  static Set<KeybindModifier> _modifiersOfBits(int bits) => {
+    if (bits & 1 != 0) KeybindModifier.control,
+    if (bits & 2 != 0) KeybindModifier.shift,
+    if (bits & 4 != 0) KeybindModifier.alt,
+    if (bits & 8 != 0) KeybindModifier.meta,
+  };
 
   /// Starts listening for the next chord, which will be assigned to [action].
   void record(KeybindAction action) {
@@ -79,6 +132,13 @@ final class KeybindController extends ChangeNotifier {
   ///
   /// Consumed means the key does not reach whatever had focus: a bound chord
   /// must not also type its letter into the composer.
+  /// Feeds one focused key event in, answering whether it was consumed.
+  ///
+  /// A chord that the hook already reported is still matched here so that it
+  /// can be swallowed: the hook cannot stop the key reaching the composer, and
+  /// only this can. The action does not run twice — [_onDown] refuses a hold
+  /// that is already held, and a toggle is only run from whichever of the two
+  /// arrives first.
   bool handleKeyEvent(KeyEvent event) {
     final modifiers = _modifiersOf(HardwareKeyboard.instance.logicalKeysPressed);
     final keyId = event.logicalKey.keyId;
@@ -106,6 +166,10 @@ final class KeybindController extends ChangeNotifier {
       _onTriggered(action, pressed: true);
       return true;
     }
+    // A toggle arrives twice when the hook is running — once from the system
+    // and once from the focused keyboard — and firing both would leave it
+    // where it started.
+    if (!_pressed.add(keyId)) return true;
     _onTriggered(action, pressed: true);
     return true;
   }
@@ -115,6 +179,7 @@ final class KeybindController extends ChangeNotifier {
   /// Somebody who lets go of shift before the key would otherwise leave the
   /// microphone open: the release no longer matches the chord that opened it.
   bool _onUp(int keyId) {
+    _pressed.remove(keyId);
     for (final action in _held.toList(growable: false)) {
       if (_bindings[action]?.keyId != keyId) continue;
       _held.remove(action);
@@ -183,6 +248,9 @@ final class KeybindController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_globalKeys?.cancel());
+    _globalKeys = null;
+    unawaited(_hook.stop());
     super.dispose();
   }
 }

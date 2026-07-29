@@ -154,6 +154,14 @@ add_dependencies(${BINARY_NAME} flucord_video)
 install(FILES "$<TARGET_FILE:flucord_video>"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 
+# The keyboard hook, so a keybind reaches the client from behind another
+# window. Separate from the video module: it shares nothing with it but the
+# reason for being native.
+add_subdirectory("flucord_hotkeys")
+add_dependencies(${BINARY_NAME} flucord_hotkeys)
+install(FILES "$<TARGET_FILE:flucord_hotkeys>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 set(LIBDAVE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdave/libdave.dll")
 if(NOT EXISTS "${LIBDAVE_DLL}")
   message(FATAL_ERROR "Missing ${LIBDAVE_DLL}; run tool/build_libdave.ps1")

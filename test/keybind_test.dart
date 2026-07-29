@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ffi' show DynamicLibrary;
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +8,7 @@ import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/application/voice_channel_surface.dart';
 import 'package:flucord/src/data/file_keybind_repository.dart';
 import 'package:flucord/src/domain/keybind.dart';
+import 'package:flucord/src/platform/global_keyboard_hook.dart';
 import 'package:flucord/src/presentation/widgets/keybind_section.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
@@ -369,6 +372,204 @@ void main() {
     });
   });
 
+  group('keys from outside the window', () {
+    test('a virtual key becomes the logical key Flutter would report', () {
+      expect(virtualKeyToLogicalKey(0x41), LogicalKeyboardKey.keyA);
+      expect(virtualKeyToLogicalKey(0x5a), LogicalKeyboardKey.keyZ);
+      expect(virtualKeyToLogicalKey(0x30), LogicalKeyboardKey.digit0);
+      expect(virtualKeyToLogicalKey(0x70), LogicalKeyboardKey.f1);
+      expect(virtualKeyToLogicalKey(0x87), LogicalKeyboardKey.f24);
+      expect(virtualKeyToLogicalKey(0x20), LogicalKeyboardKey.space);
+      expect(virtualKeyToLogicalKey(0xa2), LogicalKeyboardKey.controlLeft);
+      // A key nobody can bind is dropped rather than mapped to something
+      // that would then match by accident.
+      expect(virtualKeyToLogicalKey(0x5f), isNull);
+    });
+
+    testWidgets('a global key runs the action without swallowing it', (
+      tester,
+    ) async {
+      final hook = _FakeHook();
+      final fired = <(KeybindAction, bool)>[];
+      final controller = KeybindController(
+        repository: _MemoryKeybinds()
+          ..stored = {
+            KeybindAction.pushToTalk: Keybind(
+              keyId: LogicalKeyboardKey.f9.keyId,
+            ),
+          },
+        onTriggered: (action, {required pressed}) =>
+            fired.add((action, pressed)),
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(hook.starts, 1);
+      expect(controller.isGlobal, isTrue);
+      expect(controller.supportsGlobal, isTrue);
+
+      hook.send(LogicalKeyboardKey.f9, isDown: true);
+      hook.send(LogicalKeyboardKey.f9, isDown: false);
+      await tester.pump();
+
+      expect(fired, [
+        (KeybindAction.pushToTalk, true),
+        (KeybindAction.pushToTalk, false),
+      ]);
+    });
+
+    testWidgets('the modifiers the system reported are the ones matched', (
+      tester,
+    ) async {
+      final hook = _FakeHook();
+      final fired = <KeybindAction>[];
+      final controller = KeybindController(
+        repository: _MemoryKeybinds()
+          ..stored = {
+            KeybindAction.toggleMute: Keybind(
+              keyId: LogicalKeyboardKey.keyM.keyId,
+              modifiers: const {KeybindModifier.control, KeybindModifier.alt},
+            ),
+          },
+        onTriggered: (action, {required pressed}) => fired.add(action),
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      // Control alone: not the chord.
+      hook.send(LogicalKeyboardKey.keyM, isDown: true, modifiers: 1);
+      hook.send(LogicalKeyboardKey.keyM, isDown: false);
+      expect(fired, isEmpty);
+
+      // Control and alt, which is what was bound.
+      hook.send(LogicalKeyboardKey.keyM, isDown: true, modifiers: 1 | 4);
+      await tester.pump();
+      expect(fired, [KeybindAction.toggleMute]);
+    });
+
+    testWidgets('a chord seen by both the hook and the keyboard fires once', (
+      tester,
+    ) async {
+      final hook = _FakeHook();
+      final fired = <KeybindAction>[];
+      final controller = KeybindController(
+        repository: _MemoryKeybinds()
+          ..stored = {
+            KeybindAction.toggleMute: Keybind(
+              keyId: LogicalKeyboardKey.f10.keyId,
+            ),
+          },
+        onTriggered: (action, {required pressed}) => fired.add(action),
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+      _install(controller);
+
+      // The system sees it first, then the focused keyboard delivers the same
+      // press — which still has to be swallowed so it does not reach the
+      // composer, but must not run the action a second time.
+      hook.send(LogicalKeyboardKey.f10, isDown: true);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.f10);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.f10);
+      hook.send(LogicalKeyboardKey.f10, isDown: false);
+      await tester.pump();
+
+      expect(fired, [KeybindAction.toggleMute]);
+    });
+
+    testWidgets('a key arriving while recording is left to the keyboard', (
+      tester,
+    ) async {
+      final hook = _FakeHook();
+      final controller = KeybindController(
+        repository: _MemoryKeybinds(),
+        onTriggered: (_, {required pressed}) {},
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      controller.record(KeybindAction.toggleMute);
+      hook.send(LogicalKeyboardKey.f11, isDown: true);
+      await tester.pump();
+
+      // Recording reads the focused keyboard, where somebody setting a
+      // binding is actually looking; taking it from the hook as well would
+      // record the chord twice.
+      expect(controller.bindings, isEmpty);
+      expect(controller.recording, KeybindAction.toggleMute);
+    });
+
+    test('a hook the system refuses leaves the bindings local', () async {
+      final hook = _FakeHook()..accept = false;
+      final controller = KeybindController(
+        repository: _MemoryKeybinds(),
+        onTriggered: (_, {required pressed}) {},
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(controller.supportsGlobal, isTrue);
+      expect(controller.isGlobal, isFalse);
+    });
+
+    test('a platform with no hook says so rather than pretending', () async {
+      const hook = UnavailableGlobalKeyboardHook();
+      final controller = KeybindController(
+        repository: _MemoryKeybinds(),
+        onTriggered: (_, {required pressed}) {},
+        hook: hook,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(controller.supportsGlobal, isFalse);
+      expect(controller.isGlobal, isFalse);
+      expect(await hook.start(), isFalse);
+      expect(hook.events, emitsDone);
+      await hook.stop();
+    });
+
+
+    test('the real hook installs against the built module and comes back out',
+        () async {
+      // The module the client ships. Skipped where it has not been built, so
+      // a checkout that has only run `flutter test` still passes.
+      const path = 'build/windows/x64/runner/Release/flucord_hotkeys.dll';
+      if (!Platform.isWindows || !File(path).existsSync()) return;
+      final hook = WindowsGlobalKeyboardHook.withLibrary(
+        DynamicLibrary.open(path),
+      );
+      addTearDown(hook.close);
+
+      expect(hook.isSupported, isTrue);
+      expect(await hook.start(), isTrue);
+      expect(hook.isRunning, isTrue);
+      // Asked twice: the second is the same answer, not a second hook.
+      expect(await hook.start(), isTrue);
+
+      await hook.stop();
+      expect(hook.isRunning, isFalse);
+      // And stopping what is already stopped does nothing.
+      await hook.stop();
+    });
+
+    test('a build without the native module reports no hook', () async {
+      final hook = WindowsGlobalKeyboardHook.withLibrary(null);
+
+      // What a stripped build and every non-Windows host actually see.
+      expect(hook.isSupported, isFalse);
+      expect(await hook.start(), isFalse);
+      expect(hook.isRunning, isFalse);
+      await hook.stop();
+      await hook.close();
+    });
+  });
+
   group('the settings window', () {
     testWidgets('the keybind page is reachable, with and without a controller',
         (tester) async {
@@ -528,4 +729,40 @@ final class _NoStreamerSettings implements StreamerModeRepository {
 
   @override
   Future<void> save(StreamerModeSettings settings) async {}
+}
+
+
+final class _FakeHook implements GlobalKeyboardHook {
+  final StreamController<GlobalKeyEvent> _events =
+      StreamController.broadcast();
+  int starts = 0;
+  bool accept = true;
+  bool _running = false;
+
+  void send(
+    LogicalKeyboardKey key, {
+    required bool isDown,
+    int modifiers = 0,
+  }) => _events.add(
+    GlobalKeyEvent(key: key, modifiers: modifiers, isDown: isDown),
+  );
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  bool get isRunning => _running;
+
+  @override
+  Stream<GlobalKeyEvent> get events => _events.stream;
+
+  @override
+  Future<bool> start() async {
+    starts++;
+    _running = accept;
+    return accept;
+  }
+
+  @override
+  Future<void> stop() async => _running = false;
 }

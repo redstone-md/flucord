@@ -24,12 +24,21 @@ class KeybindSection extends StatelessWidget {
         Text('Keybinds', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          // Said plainly rather than implied: a binding that looked global and
-          // was not would read as broken the first time it was tried behind
-          // another window.
-          'These work while Flucord has focus. A shortcut that reaches the '
-          'client while another window is in front needs a system-wide hook, '
-          'which this build does not install.',
+          // Which of the two is happening is said plainly: a binding believed
+          // global that is not would read as broken the first time it was
+          // tried behind another window.
+          controller.isGlobal
+              ? 'These work anywhere, including while another window is in '
+                    'front. The hook reports keys and never swallows them, so '
+                    'a binding does not take the key from what you were '
+                    'typing into.'
+              : controller.supportsGlobal
+              ? 'Windows would not install the system-wide hook, so these '
+                    'work only while Flucord has focus.'
+              : 'These work while Flucord has focus. Reaching the client from '
+                    'behind another window needs a system-wide hook, which '
+                    'this build has no module for.',
+          key: const ValueKey('keybind-scope-note'),
           style: TextStyle(fontSize: 12, color: context.surfaces.muted),
         ),
         const SizedBox(height: 12),

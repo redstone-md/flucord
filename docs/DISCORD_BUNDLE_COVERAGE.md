@@ -63,7 +63,7 @@ extraction, stated rather than papered over.
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
 | Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
 | Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.74% lines | `flutter test --coverage`, 2,649 passing, 6 skipped |
+| Automated test coverage | 89.74% lines | `flutter test --coverage`, 2,658 passing, 6 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -254,7 +254,17 @@ are excluded from the denominator and are never reported as implemented.
   rather than drawn as rows that would do nothing. The handler is installed on
   the keyboard itself, not in a `Shortcuts` widget, because a binding has to
   fire wherever the focus is — including mid-message — and a bound chord is
-  swallowed so it does not also type its letter into the composer.
+  swallowed so it does not also type its letter into the composer. They also
+  fire from behind another window: `windows/flucord_hotkeys` installs a
+  `WH_KEYBOARD_LL` hook on a thread of its own, because the hook needs a
+  message loop and the Dart isolate has none — `RegisterHotKey` was not an
+  option for the same reason. The hook reports and never swallows, so a global
+  binding cannot take a keystroke from whatever the user was typing into, and
+  injected events are ignored so that another program's synthetic keystroke
+  cannot work this client's microphone. A chord seen by both the hook and the
+  focused keyboard runs its action once. Where the hook cannot be installed the
+  bindings still work in-focus, and the page says which of the two is
+  happening.
 - **Implemented**: streamer mode, kept locally for the same reason as the
   keybinds. Five of Discord's six switches; hiding overlay widgets is the one
   left out, because this build has no overlay to hide, and offering it as a
@@ -283,9 +293,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Blocked by**: offline-edit replay with `required_data_version` is not
   implemented. The frecency tables inside type 2 are round-tripped but not
   read: nothing in Flucord sorts by how often an expression was used yet. A
-  keybind only fires while this window has focus; a system-wide hotkey needs a
-  native hook this build does not install, and the settings page says so
-  rather than implying one.
+  keybind is matched by virtual-key code from the hook, and only the codes
+  somebody would bind are mapped — an unmapped one is dropped rather than
+  guessed at.
 
 ## FBC-PRESENCE — Presence and typing
 
