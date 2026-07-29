@@ -13,6 +13,7 @@ final class GuildScheduledEventDraft {
     this.endTime,
     this.channelId,
     this.location = '',
+    this.coverImage,
   });
 
   final String name;
@@ -31,6 +32,10 @@ final class GuildScheduledEventDraft {
 
   /// Where an external event happens, in words.
   final String location;
+
+  /// The cover, as a `data:` URI. Null when there is none: Discord tells an
+  /// absent cover from a cleared one, and so does this.
+  final String? coverImage;
 
   bool get isExternal => entityType == GuildScheduledEventEntityType.external;
 
@@ -84,6 +89,20 @@ final class GuildScheduledEventEdit {
   set location(String value) =>
       _values['entity_metadata'] = {'location': value};
 
+  /// A `data:` URI, or null to take the cover off. A CDN hash is refused for
+  /// the reason the profile refuses one: the server has no use for the name it
+  /// gave us, and sending it back would ask it to store its own filename.
+  set coverImage(String? value) {
+    if (value != null && !value.startsWith('data:')) {
+      throw ArgumentError.value(
+        value,
+        'coverImage',
+        'A cover is a data: URI or null',
+      );
+    }
+    _values['image'] = value;
+  }
+
   /// Ending or cancelling an event is a status change, not a delete.
   set status(GuildScheduledEventStatus value) =>
       _values['status'] = value.discordValue;
@@ -104,5 +123,6 @@ final class GuildScheduledEventEdit {
     'entity_type': draft.entityType.discordValue,
     'channel_id': draft.isExternal ? null : draft.channelId,
     'entity_metadata': draft.isExternal ? {'location': draft.location} : null,
+    if (draft.coverImage != null) 'image': draft.coverImage,
   };
 }

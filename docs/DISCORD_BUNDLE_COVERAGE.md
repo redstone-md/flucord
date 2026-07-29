@@ -568,14 +568,19 @@ are excluded from the denominator and are never reported as implemented.
   with twenty events would otherwise make twenty requests to draw a panel
   nobody has asked anything of yet — and names people by the nickname their
   server knows them by, because that is the name everybody else there sees.
+  An event carries a cover, chosen through the same picker the profile uses.
+  The edit tells an untouched cover from a cleared one — collapsing the two
+  would drop somebody's picture every time they renamed an event — and a CDN
+  hash is refused where a picture was asked for, since sending Discord back
+  the name it gave us asks it to store its own filename as an image.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
   `discord_scheduled_event_mapper_test.dart`,
   `scheduled_event_rsvp_test.dart`,
   `scheduled_event_rsvp_repository_test.dart`,
   `guild_event_editing_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
-- **Blocked by**: the four recurrence-exception dispatches, recurrence rules
-  themselves, and the cover image.
+- **Blocked by**: the four recurrence-exception dispatches and recurrence
+  rules themselves.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 

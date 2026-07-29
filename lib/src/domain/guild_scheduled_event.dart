@@ -38,6 +38,7 @@ final class GuildScheduledEvent {
     this.location,
     this.scheduledEndTime,
     this.interestedCount = 0,
+    this.coverImageHash,
   });
 
   final String id;
@@ -51,6 +52,10 @@ final class GuildScheduledEvent {
   final GuildScheduledEventEntityType entityType;
   final GuildScheduledEventStatus status;
   final int interestedCount;
+
+  /// The cover Discord stores for this event, as a hash. Null when there is
+  /// none; the hash names a CDN object rather than carrying the picture.
+  final String? coverImageHash;
 
   bool get isActive => status == GuildScheduledEventStatus.active;
   bool get isTerminal =>
@@ -77,5 +82,6 @@ final class GuildScheduledEvent {
     entityType: entityType,
     status: status,
     interestedCount: interestedCount ?? this.interestedCount,
+    coverImageHash: coverImageHash,
   );
 }

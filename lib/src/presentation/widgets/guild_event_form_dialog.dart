@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../profile_image_picker.dart';
 
 /// Creates or edits one server event.
 ///
@@ -8,12 +9,21 @@ import '../../domain/chat_models.dart';
 /// never both: which it is follows from whether the dialog was opened on an
 /// event, the same way the AutoMod form works.
 class GuildEventFormDialog extends StatefulWidget {
-  const GuildEventFormDialog({required this.channels, this.event, super.key});
+  const GuildEventFormDialog({
+    required this.channels,
+    this.event,
+    this.imagePicker = const NativeProfileImagePicker(),
+    super.key,
+  });
 
   /// The voice and stage channels an event can be held in.
   final List<ConversationChannel> channels;
 
   final GuildScheduledEvent? event;
+
+  /// Chooses the cover. Injected so a test can answer without a file dialog,
+  /// and shared with the profile page rather than picked twice.
+  final ProfileImagePicker imagePicker;
 
   @override
   State<GuildEventFormDialog> createState() => _GuildEventFormDialogState();
@@ -37,6 +47,11 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
       widget.event?.scheduledStartTime.toLocal() ??
       DateTime.now().add(const Duration(hours: 1));
   late DateTime? _end = widget.event?.scheduledEndTime?.toLocal();
+
+  /// The cover as chosen in this sitting. Absent means untouched, which is
+  /// not the same as cleared — an edit has to tell Discord which it is.
+  String? _coverImage;
+  bool _coverCleared = false;
 
   bool get _isEditing => widget.event != null;
   bool get _isExternal => _entityType == GuildScheduledEventEntityType.external;
@@ -149,6 +164,34 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
               ),
             ],
             const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _coverLabel,
+                    key: const ValueKey('event-cover-label'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                TextButton(
+                  key: const ValueKey('event-cover-pick'),
+                  onPressed: _pickCover,
+                  child: const Text('Choose cover'),
+                ),
+                if (_coverImage != null ||
+                    (_hasExistingCover && !_coverCleared))
+                  IconButton(
+                    key: const ValueKey('event-cover-clear'),
+                    tooltip: 'Remove cover',
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => setState(() {
+                      _coverImage = null;
+                      _coverCleared = true;
+                    }),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _WhenRow(
               label: 'Starts',
               fieldKey: const ValueKey('event-start'),
@@ -191,6 +234,23 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
         channel,
   ];
 
+  bool get _hasExistingCover => widget.event?.coverImageHash != null;
+
+  String get _coverLabel {
+    if (_coverImage != null) return 'Cover chosen';
+    if (_coverCleared) return 'Cover will be removed';
+    return _hasExistingCover ? 'Cover set' : 'No cover';
+  }
+
+  Future<void> _pickCover() async {
+    final selection = await widget.imagePicker.pick();
+    if (selection == null || !mounted) return;
+    setState(() {
+      _coverImage = selection.dataUri;
+      _coverCleared = false;
+    });
+  }
+
   GuildScheduledEventDraft _draft() => GuildScheduledEventDraft(
     name: _name.text,
     description: _description.text,
@@ -201,6 +261,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
     entityType: _entityType,
     channelId: _isExternal ? null : _channelId,
     location: _location.text,
+    coverImage: _coverImage,
   );
 
   void _save() {
@@ -227,6 +288,13 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
       }
     } else if (draft.channelId != event.channelId) {
       edit.channelId = draft.channelId;
+    }
+    // Absent means untouched; cleared means take the cover off. Collapsing
+    // the two would drop somebody's cover every time they renamed an event.
+    if (_coverImage != null) {
+      edit.coverImage = _coverImage;
+    } else if (_coverCleared && _hasExistingCover) {
+      edit.coverImage = null;
     }
     // An edit that changed nothing closes rather than being sent: the server
     // would take it and record a change nobody made.

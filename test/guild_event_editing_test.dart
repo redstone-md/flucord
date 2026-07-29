@@ -1,4 +1,5 @@
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/presentation/profile_image_picker.dart';
 import 'package:flucord/src/presentation/widgets/guild_event_form_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ GuildScheduledEventDraft _draft({
   String? channelId,
   DateTime? endTime,
   bool withEnd = true,
+  String? cover,
 }) => GuildScheduledEventDraft(
   name: name,
   startTime: _start,
@@ -24,6 +26,7 @@ GuildScheduledEventDraft _draft({
   entityType: type,
   channelId: channelId,
   location: location,
+  coverImage: cover,
 );
 
 void main() {
@@ -166,6 +169,170 @@ void main() {
 
       expect(edit.keys, ['scheduled_end_time']);
       expect(edit['scheduled_end_time'], isNull);
+    });
+  });
+
+  group('the cover', () {
+    test('a create carries one only when there is one', () {
+      expect(
+        GuildScheduledEventEdit.encodeDraft(_draft()).containsKey('image'),
+        isFalse,
+      );
+      expect(
+        GuildScheduledEventEdit.encodeDraft(
+          _draft(cover: 'data:image/png;base64,AAAA'),
+        )['image'],
+        'data:image/png;base64,AAAA',
+      );
+    });
+
+    test('an edit tells an absent cover from a cleared one', () {
+      final cleared = GuildScheduledEventEdit()..coverImage = null;
+      expect(cleared.keys, ['image']);
+      expect(cleared['image'], isNull);
+
+      final replaced = GuildScheduledEventEdit()
+        ..coverImage = 'data:image/png;base64,AAAA';
+      expect(replaced['image'], 'data:image/png;base64,AAAA');
+    });
+
+    test('a CDN hash is refused where a picture was asked for', () {
+      // The server has no use for the name it gave us; sending it back would
+      // ask Discord to store its own filename as an image.
+      expect(
+        () => GuildScheduledEventEdit()..coverImage = 'a1b2c3',
+        throwsArgumentError,
+      );
+    });
+
+    test('an event keeps its cover through a count change', () {
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: _start,
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+        coverImageHash: 'a1b2c3',
+      );
+
+      // The RSVP dispatch moves the count through copyWith; a cover dropped
+      // there would vanish the moment anybody said they were interested.
+      expect(event.copyWith(interestedCount: 5).coverImageHash, 'a1b2c3');
+    });
+  });
+
+  group('choosing a cover', () {
+    testWidgets('a chosen cover reaches the draft', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        picker: _FakePicker('data:image/png;base64,AAAA'),
+        onResult: (value) => result = value,
+      );
+
+      expect(find.text('No cover'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('event-cover-pick')));
+      await tester.pumpAndSettle();
+      expect(find.text('Cover chosen'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('event-name')),
+        'Forge night',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('event-location')),
+        'The workshop',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(result?.draft?.coverImage, 'data:image/png;base64,AAAA');
+    });
+
+    testWidgets('cancelling the picker leaves the cover alone', (tester) async {
+      await _pumpForm(tester, picker: _FakePicker(null));
+
+      await tester.tap(find.byKey(const ValueKey('event-cover-pick')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No cover'), findsOneWidget);
+    });
+
+    testWidgets('an event with a cover says so, and can drop it', (
+      tester,
+    ) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _coveredEvent,
+        onResult: (value) => result = value,
+      );
+
+      expect(find.text('Cover set'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('event-cover-clear')));
+      await tester.pumpAndSettle();
+      expect(find.text('Cover will be removed'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(result?.edit?.keys, ['image']);
+      expect(result?.edit?['image'], isNull);
+    });
+
+    testWidgets('a replaced cover is sent as the new picture', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _coveredEvent,
+        picker: _FakePicker('data:image/png;base64,BBBB'),
+        onResult: (value) => result = value,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('event-cover-pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      expect(result?.edit?.keys, ['image']);
+      expect(result?.edit?['image'], 'data:image/png;base64,BBBB');
+    });
+
+    testWidgets('an edit that touched no cover sends no image', (tester) async {
+      GuildEventFormResult? result;
+      await _pumpForm(
+        tester,
+        event: _coveredEvent,
+        onResult: (value) => result = value,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('event-name')),
+        'Renamed',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-save')));
+      await tester.pumpAndSettle();
+
+      // Absent means untouched; collapsing it into "cleared" would drop
+      // somebody's cover every time they renamed an event.
+      expect(result?.edit?.keys, ['name']);
+    });
+
+    testWidgets('a new event can drop a cover it just chose', (tester) async {
+      await _pumpForm(
+        tester,
+        picker: _FakePicker('data:image/png;base64,AAAA'),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('event-cover-pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('event-cover-clear')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cover will be removed'), findsOneWidget);
     });
   });
 
@@ -487,10 +654,39 @@ final _channelEvent = GuildScheduledEvent(
   channelId: 'voice-1',
 );
 
+final _coveredEvent = GuildScheduledEvent(
+  id: '444444444444444444',
+  spaceId: '111111111111111111',
+  name: 'Forge night',
+  scheduledStartTime: _start,
+  scheduledEndTime: _end,
+  entityType: GuildScheduledEventEntityType.external,
+  status: GuildScheduledEventStatus.scheduled,
+  location: 'The workshop',
+  coverImageHash: 'a1b2c3',
+);
+
+/// Answers the picker without a file dialog.
+final class _FakePicker implements ProfileImagePicker {
+  const _FakePicker(this._dataUri);
+
+  final String? _dataUri;
+
+  @override
+  Future<ProfileImageSelection?> pick() async => _dataUri == null
+      ? null
+      : ProfileImageSelection(
+          dataUri: _dataUri,
+          name: 'cover.png',
+          byteCount: 4,
+        );
+}
+
 Future<void> _pumpForm(
   WidgetTester tester, {
   GuildScheduledEvent? event,
   ValueChanged<GuildEventFormResult?>? onResult,
+  ProfileImagePicker? picker,
 }) async {
   await tester.binding.setSurfaceSize(const Size(900, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -523,6 +719,7 @@ Future<void> _pumpForm(
                     ),
                   ],
                   event: event,
+                  imagePicker: picker ?? _FakePicker(null),
                 ),
               );
               onResult?.call(result);

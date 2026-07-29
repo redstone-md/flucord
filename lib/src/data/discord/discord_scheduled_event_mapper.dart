@@ -37,6 +37,7 @@ extension DiscordScheduledEventMapper on DiscordMapper {
         orElse: () => GuildScheduledEventStatus.unknown,
       ),
       interestedCount: payload['user_count'] as int? ?? 0,
+      coverImageHash: payload['image'] as String?,
     );
   }
 }
