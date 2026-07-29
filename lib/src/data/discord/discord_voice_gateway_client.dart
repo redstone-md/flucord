@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:typed_data';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
@@ -74,6 +76,7 @@ final class DiscordVoiceGatewayClient
   int _generation = 0;
   int? _ssrc;
   final Map<int, String> _userIdsBySsrc = {};
+
   /// Video SSRC to whoever announced it, from opcode 12.
   final Map<int, String> _videoSsrcOwners = {};
   String? _mode;
@@ -83,6 +86,7 @@ final class DiscordVoiceGatewayClient
 
   @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
+
   /// Every packet the socket produced, decrypted once.
   ///
   /// One subscription behind both planes: decrypting per listener would do the
@@ -104,7 +108,9 @@ final class DiscordVoiceGatewayClient
   /// decoder is noise, and one arriving before its opcode 12 would otherwise
   /// be exactly that.
   Stream<DiscordRtpFrame> get audioPackets => _decryptedPackets.where(
-    (frame) => frame.header.payloadType != DiscordVideoStreamTransport.videoPayloadType,
+    (frame) =>
+        frame.header.payloadType !=
+        DiscordVideoStreamTransport.videoPayloadType,
   );
 
   /// Somebody else's camera, paired with whoever is sending it.
@@ -547,6 +553,7 @@ final class DiscordVoiceGatewayClient
   void _onDone(DiscordVoiceWebSocket socket, int generation) {
     if (_closing || _failed || generation != _generation) return;
     final code = socket.closeCode;
+    _diagnose('socket closed', 'code $code');
     if ({4004, 4006, 4009, 4011, 4014, 4017, 4020, 4021, 4022}.contains(code)) {
       _fail(StateError('Discord voice connection closed with code $code'));
       return;
@@ -554,8 +561,22 @@ final class DiscordVoiceGatewayClient
     _scheduleReconnect();
   }
 
+  /// Says what the transport just did, where it can actually be read.
+  ///
+  /// `dart:developer` alone goes to the VM service, which a desktop build's
+  /// console never shows — and a reconnect nobody can see the reason for is
+  /// the difference between a fix and a guess.
+  void _diagnose(String what, [Object? detail]) {
+    final line =
+        'flucord.voice.transport $what'
+        '${detail == null ? '' : ': $detail'}';
+    developer.log(line, name: 'flucord.discord.voice', level: 900);
+    if (kDebugMode) stdout.writeln(line);
+  }
+
   void _scheduleReconnect({Object? error}) {
     if (_closing || _failed || _reconnectTimer?.isActive == true) return;
+    _diagnose('reconnecting', error);
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
@@ -572,6 +593,7 @@ final class DiscordVoiceGatewayClient
 
   void _fail(Object error) {
     if (_closing || _failed) return;
+    _diagnose('failed', error);
     _failed = true;
     _generation++;
     _heartbeatTimer?.cancel();
@@ -601,11 +623,7 @@ final class DiscordVoiceGatewayClient
     try {
       socket.send(jsonEncode(payload));
     } on Object catch (error) {
-      developer.log(
-        'Voice send failed, reconnecting: $error',
-        name: 'flucord.discord.voice',
-        level: 900,
-      );
+      _diagnose('send failed', error);
       _scheduleReconnect(error: error);
     }
   }

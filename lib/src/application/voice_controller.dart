@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -286,6 +287,7 @@ final class VoiceController extends ChangeNotifier {
       }
       if (!await _sendJoin()) {
         _connectionStatus = VoiceConnectionStatus.disconnected;
+        _logStatus('join not sent', _connectionStatus);
       }
     });
   }
@@ -383,14 +385,28 @@ final class VoiceController extends ChangeNotifier {
   }
 
   Future<void> _bindSignaling(VoiceSignalingService? service) async {
-    if (identical(service, _signalingService)) return;
+    // A service that is already bound *and listened to* is left alone. The
+    // second half of that matters: a bind that failed part way used to leave
+    // the service set with no subscription behind it, and every bind after it
+    // took this early exit — so the transport ran, carried audio, and the
+    // controller never heard a word of it. The room said "joining" for the
+    // whole call.
+    if (identical(service, _signalingService) &&
+        (service == null || _signalingSubscription != null)) {
+      return;
+    }
     await _signalingSubscription?.cancel();
     _signalingService = service;
-    final audioTransport = service is VoiceAudioTransport
-        ? service as VoiceAudioTransport
-        : null;
-    await _audioPipeline?.bindTransport(audioTransport);
-    await _setPlaybackEnabled(false);
+    // Subscribed before anything that can throw. Sound is what a room can
+    // survive losing; hearing the transport is not.
+    unawaited(_seatedSubscription?.cancel());
+    _seatedSubscription = service?.seatedChanges.listen((_) {
+      if (!_disposed) notifyListeners();
+    });
+    _signalingSubscription = service?.voiceEvents.listen(
+      _handleSignalingEvent,
+      onDone: _handleSignalingDone,
+    );
     // Read rather than waited for. Binding to a service that is already
     // connected used to reset the status to disconnected and then sit there:
     // the `ready` it was waiting for had already been announced, and nothing
@@ -400,17 +416,18 @@ final class VoiceController extends ChangeNotifier {
     _logStatus('bound', _connectionStatus);
     _transportSession = service?.currentSession;
     _participants.clear();
-    // The sidebar renders seats for channels this client is not in, so it has
-    // to rebuild on any voice state the transport sees, not only on the events
-    // that belong to the room we joined.
-    unawaited(_seatedSubscription?.cancel());
-    _seatedSubscription = service?.seatedChanges.listen((_) {
-      if (!_disposed) notifyListeners();
-    });
-    _signalingSubscription = service?.voiceEvents.listen(
-      _handleSignalingEvent,
-      onDone: _handleSignalingDone,
-    );
+    final audioTransport = service is VoiceAudioTransport
+        ? service as VoiceAudioTransport
+        : null;
+    try {
+      await _audioPipeline?.bindTransport(audioTransport);
+      await _setPlaybackEnabled(false);
+    } on Object catch (error) {
+      // A playback device that will not open is worth reporting and worth
+      // surviving: the room is still joined and everything else still works.
+      _error = error;
+      _logStatus('audio bind failed', _connectionStatus, error: error);
+    }
   }
 
   void _handleSignalingEvent(VoiceSignalingEvent event) {
@@ -462,13 +479,15 @@ final class VoiceController extends ChangeNotifier {
         'flucord.voice.status $what: ${status.name}'
         '${error == null ? '' : ' ($error)'}';
     developer.log(line, name: 'flucord.voice.status');
-    // Also on stdout: `dart:developer` writes to the VM service, which a
-    // desktop build's console never shows, and a status nobody can read is
-    // not a diagnostic. Debug builds only.
-    if (kDebugMode) debugPrint(line);
+    // Straight to stdout, not `debugPrint`: `dart:developer` writes to the VM
+    // service, which a desktop build's console never shows, and debugPrint
+    // throttles — under the native logging this client emits, the lines that
+    // mattered were the ones that went missing. Debug builds only.
+    if (kDebugMode) stdout.writeln(line);
   }
 
   void _handleSignalingDone() {
+    _logStatus('event stream closed', _connectionStatus);
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;

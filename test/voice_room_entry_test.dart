@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/presentation/widgets/voice_room_status.dart';
@@ -29,17 +30,19 @@ void main() {
       expect(media.initialisations, 2);
     });
 
-    test('a second initialise on a working session asks nothing again',
-        () async {
-      final media = _FakeMedia();
-      final controller = VoiceController(media);
-      addTearDown(controller.dispose);
+    test(
+      'a second initialise on a working session asks nothing again',
+      () async {
+        final media = _FakeMedia();
+        final controller = VoiceController(media);
+        addTearDown(controller.dispose);
 
-      await controller.initialize();
-      await controller.initialize();
+        await controller.initialize();
+        await controller.initialize();
 
-      expect(media.initialisations, 1);
-    });
+        expect(media.initialisations, 1);
+      },
+    );
 
     test('a retry while one is running does not start a second', () async {
       final media = _FakeMedia()..hold = true;
@@ -54,7 +57,6 @@ void main() {
       expect(media.initialisations, 1);
     });
   });
-
 
   group('binding to a connection that is already up', () {
     test('a rebind keeps the connection it found', () async {
@@ -72,27 +74,52 @@ void main() {
       // had already been announced and nothing announces it twice, so a
       // controller that waited for one showed a working call as joining
       // forever.
-      signaling = _FakeSignaling()
-        ..currentStatus = VoiceConnectionStatus.ready;
+      signaling = _FakeSignaling()..currentStatus = VoiceConnectionStatus.ready;
       await controller.refreshSignalingService();
 
       expect(controller.connectionStatus, VoiceConnectionStatus.ready);
     });
 
-    test('a rebind onto a service that is not connected still says joining',
-        () async {
-      var signaling = _FakeSignaling();
+    test(
+      'a rebind onto a service that is not connected still says joining',
+      () async {
+        var signaling = _FakeSignaling();
+        final controller = VoiceController(
+          _FakeMedia(),
+          signalingServiceProvider: () => signaling,
+        );
+        addTearDown(controller.dispose);
+        await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+
+        signaling = _FakeSignaling();
+        await controller.refreshSignalingService();
+
+        expect(controller.connectionStatus, VoiceConnectionStatus.joining);
+      },
+    );
+  });
+
+  group('a bind whose audio will not start', () {
+    test('still hears the transport it bound to', () async {
+      final signaling = _FakeSignaling();
       final controller = VoiceController(
         _FakeMedia(),
         signalingServiceProvider: () => signaling,
+        playbackService: _RefusingPlayback(),
       );
       addTearDown(controller.dispose);
+
       await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.announce(
+        const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-      signaling = _FakeSignaling();
-      await controller.refreshSignalingService();
-
-      expect(controller.connectionStatus, VoiceConnectionStatus.joining);
+      // The bind used to set the service and then throw on its way to the
+      // subscription, so every later bind took the "already bound" exit and
+      // the controller never heard another word from a transport that was
+      // carrying audio the whole time.
+      expect(controller.connectionStatus, VoiceConnectionStatus.ready);
     });
   });
 
@@ -134,9 +161,7 @@ void main() {
       final controller = VoiceController(
         _FakeMedia()
           ..failNext = true
-          ..failure = StateError(
-            'first line\nsecond line\nthird line',
-          ),
+          ..failure = StateError('first line\nsecond line\nthird line'),
         signalingServiceProvider: () => signaling,
       );
       addTearDown(controller.dispose);
@@ -165,6 +190,27 @@ void main() {
       expect(voiceRoomWarning(controller)!.length, lessThan(220));
     });
   });
+}
+
+final class _RefusingPlayback implements VoiceAudioPlaybackService {
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<List<VoiceDevice>> enumerateOutputDevices() async => const [];
+
+  @override
+  Future<void> selectOutput(String deviceId) async {}
+
+  @override
+  Future<void> setEnabled(bool enabled) async =>
+      throw StateError('no playback device');
+
+  @override
+  void addPcmFrame(VoiceRemotePcmFrame frame) {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 final class _FakeMedia implements VoiceMediaService {
@@ -246,6 +292,8 @@ final class _FakeSignaling implements VoiceSignalingService {
   // transport having gone away.
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+
+  void announce(VoiceSignalingEvent event) => _events.add(event);
   final StreamController<void> _seated = StreamController.broadcast();
 
   @override
