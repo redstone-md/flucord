@@ -35,10 +35,38 @@ extension VoiceControllerDevices on VoiceController {
     if (!isConnected) return;
     await _run(() async {
       _isMuted = !_isMuted;
-      await _mediaService.setMicrophoneEnabled(!_isMuted);
-      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
+      await _applyMuteState();
       await _sendJoin();
     });
+  }
+
+  /// Silences, or unsilences, every path a voice can leave by.
+  ///
+  /// Each step is isolated. A single `await` chain here meant one failing
+  /// call — a speaking frame that could not go out on a socket Discord had
+  /// just closed — skipped the steps after it, and the one that actually stops
+  /// the uplink was last: the button showed muted and the room still heard
+  /// everything. Muting must not depend on anything succeeding.
+  Future<void> _applyMuteState() async {
+    final wantsUplink = !_isMuted && isTransportReady;
+    // The pipeline first when going quiet: it is the one that puts packets on
+    // the wire, so it is the one whose failure would be heard.
+    if (!wantsUplink) {
+      await _silence(() async => _audioPipeline?.setEnabled(false));
+    }
+    await _silence(() => _mediaService.setMicrophoneEnabled(!_isMuted));
+    if (wantsUplink) {
+      await _silence(() async => _audioPipeline?.setEnabled(true));
+    }
+  }
+
+  Future<void> _silence(Future<void> Function() step) async {
+    try {
+      await step();
+    } on Object catch (error) {
+      // Reported, not rethrown: the remaining steps still have to run.
+      _error = error;
+    }
   }
 
   /// Silences the uplink for as long as the key is held.
@@ -50,8 +78,7 @@ extension VoiceControllerDevices on VoiceController {
     if (!isConnected || _isMuted == muted) return;
     await _run(() async {
       _isMuted = muted;
-      await _mediaService.setMicrophoneEnabled(!_isMuted);
-      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
+      await _applyMuteState();
       await _sendJoin();
     });
   }
@@ -63,9 +90,10 @@ extension VoiceControllerDevices on VoiceController {
     await _run(() async {
       _isDeafened = !_isDeafened;
       if (_isDeafened) _isMuted = true;
-      await _mediaService.setMicrophoneEnabled(!_isMuted);
-      await _audioPipeline?.setEnabled(!_isMuted && isTransportReady);
-      await _setPlaybackEnabled(!_isDeafened && isTransportReady);
+      await _applyMuteState();
+      await _silence(
+        () => _setPlaybackEnabled(!_isDeafened && isTransportReady),
+      );
       await _sendJoin();
     });
   }

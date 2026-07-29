@@ -163,6 +163,34 @@ void main() {
     expect(controller.hasDiscordSignaling, isTrue);
   });
 
+  test('muting silences the uplink even when the microphone refuses', () async {
+    final media = _FakeVoiceMediaService()..failMicrophoneToggle = true;
+    final signaling = _FakeVoiceSignalingService();
+    final controller = VoiceController(
+      media,
+      signalingServiceProvider: () => signaling,
+      audioCodecFactory: _FakeCodecFactory(),
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+    await _flushEvents();
+    expect(controller.isAudioUplinkActive, isTrue);
+
+    await controller.toggleMute();
+
+    // One failing step used to skip every step after it, and the one that
+    // stops the uplink was last: the button showed muted and the room heard
+    // everything said into it.
+    expect(controller.isMuted, isTrue);
+    expect(controller.isAudioUplinkActive, isFalse);
+    media.addPcm(Uint8List(3840));
+    await _flushEvents();
+    expect(signaling.sentFrames, isEmpty);
+  });
+
   test(
     'gates Opus uplink on transport readiness and ends speech first',
     () async {
@@ -191,7 +219,9 @@ void main() {
 
       operations.clear();
       await controller.toggleMute();
-      expect(operations, ['microphone:false', 'finish']);
+      // The uplink stops first. It is the one putting packets on the wire, so
+      // it is the one whose failure would be heard.
+      expect(operations, ['finish', 'microphone:false']);
       expect(controller.isAudioUplinkActive, isFalse);
 
       await controller.toggleMute();
@@ -387,6 +417,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   final List<String>? _operations;
   final List<String?> startedInputs = [];
   bool failMicrophone = false;
+  bool failMicrophoneToggle = false;
   bool microphoneEnabled = true;
   bool microphoneStopped = false;
   bool screenStopped = false;
@@ -452,6 +483,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {
+    if (failMicrophoneToggle) throw StateError('device is gone');
     microphoneEnabled = enabled;
     _operations?.add('microphone:$enabled');
   }
@@ -463,7 +495,7 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   }
 
   @override
-  Future<void> startScreenShare(String sourceId) async {
+  Future<void> startScreenShare(String? sourceId) async {
     sharedSource = sourceId;
   }
 

@@ -521,7 +521,7 @@ final class _SilentMedia implements VoiceMediaService {
   Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
 
   @override
-  Future<void> startScreenShare(String sourceId) async {}
+  Future<void> startScreenShare(String? sourceId) async {}
 
   @override
   Future<void> stopScreenShare() async {}

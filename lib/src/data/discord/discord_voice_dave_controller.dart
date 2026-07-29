@@ -41,6 +41,17 @@ final class DiscordVoiceDaveController {
   List<int>? _externalSender;
   int? _audioSsrc;
   int _protocolVersion = 0;
+
+  /// Whether this client holds the group key it would encrypt with.
+  ///
+  /// The protocol version and the key arrive minutes apart in the worst case:
+  /// Discord announces v1 on the session description, and the MLS group is
+  /// only joined once the external sender, the key packages and a commit have
+  /// been through. Encrypting in between fails with `missingKeyRatchet`, which
+  /// the room reported as "voice ran into a problem" on every frame — so the
+  /// transport cipher carries the audio until the group key exists, which is
+  /// what passthrough means.
+  bool _hasKeyRatchet = false;
   int? _pendingTransitionId;
   int? _pendingProtocolVersion;
 
@@ -282,6 +293,7 @@ final class DiscordVoiceDaveController {
     final session = _requiredSession();
     final encryptor = _ensureEncryptor();
     _withRatchet(session.getKeyRatchet(selfUserId), encryptor.setKeyRatchet);
+    _hasKeyRatchet = true;
     encryptor.setPassthrough(false);
 
     final remoteUsers = roster.where((userId) => userId != selfUserId).toSet();
@@ -307,15 +319,17 @@ final class DiscordVoiceDaveController {
   VoiceDaveEncryptor _ensureEncryptor() {
     final existing = _encryptor;
     if (existing != null) return existing;
-    final created = _service.createEncryptor()
-      ..setPassthrough(_protocolVersion == 0);
+    final created = _service.createEncryptor()..setPassthrough(!_canEncrypt);
     final ssrc = _audioSsrc;
     if (ssrc != null) created.assignSsrcToCodec(ssrc, DaveMediaCodec.opus);
     return _encryptor = created;
   }
 
+  /// Whether frames can be encrypted rather than passed through.
+  bool get _canEncrypt => _protocolVersion > 0 && _hasKeyRatchet;
+
   void _transitionMediaProtocol(int protocolVersion) {
-    _encryptor?.setPassthrough(protocolVersion == 0);
+    _encryptor?.setPassthrough(!_canEncrypt);
     for (final decryptor in _decryptors.values) {
       decryptor.transitionToPassthrough(protocolVersion == 0);
     }
@@ -333,6 +347,10 @@ final class DiscordVoiceDaveController {
   }
 
   void _clearMediaCryptors() {
+    // The key goes with the cryptors. A rebuilt session starts outside the
+    // group again, and a client that still believed it held a ratchet would
+    // encrypt to a key nobody in the room has.
+    _hasKeyRatchet = false;
     _encryptor?.dispose();
     _encryptor = null;
     for (final decryptor in _decryptors.values) {

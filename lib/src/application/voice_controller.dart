@@ -105,8 +105,43 @@ final class VoiceController extends ChangeNotifier {
   String? get connectedGuildId => _connectedGuildId;
   String? get connectedChannelId => _connectedChannelId;
   VoiceTransportSession? get transportSession => _transportSession;
-  List<VoiceParticipant> get participants =>
-      List.unmodifiable(_participants.values);
+
+  /// Who is in the room on screen.
+  ///
+  /// Built from the roster of who is seated rather than from the events this
+  /// connection happened to see. The events are announcements — somebody
+  /// arrived, somebody spoke — and a client that has just reconnected, or
+  /// re-entered a channel it was already in, is sent none of them for the
+  /// people who were already there. The room rendered empty while four people
+  /// were plainly listed in the sidebar.
+  ///
+  /// What the connection knows is still layered on top: speaking flags and
+  /// SSRCs only ever come from the transport.
+  List<VoiceParticipant> get participants {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return List.unmodifiable(_participants.values);
+    final seated = _signalingService?.seatedByChannel[channelId] ?? const [];
+    final byUser = <String, VoiceParticipant>{};
+    for (final state in seated) {
+      final known = _participants[state.userId];
+      byUser[state.userId] = (known ?? VoiceParticipant(userId: state.userId))
+          .copyWith(
+            selfMuted: state.selfMuted,
+            selfDeafened: state.selfDeafened,
+            serverMuted: state.serverMuted,
+            serverDeafened: state.serverDeafened,
+            isStreaming: state.isStreaming,
+            isVideoEnabled: state.isVideoEnabled,
+          );
+    }
+    // Anybody the transport knows about but the roster has not caught up on
+    // yet — a join announced on the voice socket first — is still shown.
+    for (final entry in _participants.entries) {
+      byUser.putIfAbsent(entry.key, () => entry.value);
+    }
+    return List.unmodifiable(byUser.values);
+  }
+
   Object? get error => _error;
 
   /// Why the microphone could not be opened, or `null` when it is running.
@@ -440,6 +475,10 @@ final class VoiceController extends ChangeNotifier {
         _logStatus('signalled', event.status, error: event.error);
         _connectionStatus = event.status;
         if (event.error != null) _error = event.error;
+        // A connection that came back clears what killed the last one. The
+        // room used to keep showing "closed with code 4014" in red over a
+        // working call, because nothing ever took the message down.
+        if (event.status == VoiceConnectionStatus.ready) _error = null;
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;

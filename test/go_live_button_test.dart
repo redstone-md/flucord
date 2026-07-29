@@ -65,8 +65,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    // The screen the platform named, not an id the room made up.
-    expect(media.shared, ['screen:0:0']);
+    // The platform's own primary screen, resolved at capture time.
+    expect(media.shared, ['<primary screen>']);
     expect(encoder.started, 1);
     expect(repository.started, ['voice-1']);
 
@@ -284,7 +284,8 @@ final class _FakeMedia implements VoiceMediaService {
   Future<void> selectAudioOutput(String deviceId) async {}
 
   @override
-  Future<void> startScreenShare(String sourceId) async => shared.add(sourceId);
+  Future<void> startScreenShare(String? sourceId) async =>
+      shared.add(sourceId ?? '<primary screen>');
 
   @override
   Future<void> stopScreenShare() async => stopped++;

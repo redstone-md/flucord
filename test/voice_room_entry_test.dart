@@ -123,6 +123,70 @@ void main() {
     });
   });
 
+  group('who the room shows', () {
+    test('renders the people seated in it, announced or not', () async {
+      final signaling = _FakeSignaling()
+        ..seated = {
+          'voice-1': const [
+            VoiceParticipantStateEvent(
+              userId: 'user-1',
+              guildId: 'guild-1',
+              channelId: 'voice-1',
+              selfMuted: true,
+              selfDeafened: false,
+              serverMuted: false,
+              serverDeafened: false,
+              isStreaming: true,
+              isVideoEnabled: false,
+            ),
+          ],
+        };
+      final controller = VoiceController(
+        _FakeMedia(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+
+      // Nobody announced them: arrivals are announcements, and a client that
+      // reconnected — or re-entered a channel it was already in — is sent none
+      // for the people who were already there. The room rendered empty while
+      // the sidebar plainly listed four people in it.
+      expect(controller.participants, hasLength(1));
+      expect(controller.participants.single.userId, 'user-1');
+      expect(controller.participants.single.isMuted, isTrue);
+      expect(controller.participants.single.isStreaming, isTrue);
+    });
+
+    test('keeps somebody the transport saw before the roster did', () async {
+      final signaling = _FakeSignaling();
+      final controller = VoiceController(
+        _FakeMedia(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+
+      signaling.announce(
+        const VoiceParticipantStateEvent(
+          userId: 'user-2',
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          selfMuted: false,
+          selfDeafened: false,
+          serverMuted: false,
+          serverDeafened: false,
+          isStreaming: false,
+          isVideoEnabled: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.participants.single.userId, 'user-2');
+    });
+  });
+
   group('what the room says is wrong', () {
     test('a device failure says so, and carries the reason', () async {
       final signaling = _FakeSignaling();
@@ -268,7 +332,7 @@ final class _FakeMedia implements VoiceMediaService {
   Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
 
   @override
-  Future<void> startScreenShare(String sourceId) async {}
+  Future<void> startScreenShare(String? sourceId) async {}
 
   @override
   Future<void> stopScreenShare() async {}
@@ -299,8 +363,10 @@ final class _FakeSignaling implements VoiceSignalingService {
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
 
+  Map<String, List<VoiceParticipantStateEvent>> seated = const {};
+
   @override
-  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => seated;
 
   @override
   Stream<void> get seatedChanges => _seated.stream;

@@ -353,13 +353,16 @@ void main() {
 
       expect(await controller.start(channelId: 'voice-1'), isTrue);
 
-      // The capturer hands out opaque handles. The room used to pass "0",
-      // which matched nothing, and every share failed with "source not found".
-      expect(media.shared, ['screen:0:0']);
+      // Nothing is named. A capture source id is a handle into a list that
+      // changes when a display sleeps or is unplugged: the invented "0" failed
+      // with "source not found", and a real id read moments earlier failed
+      // with "that display is no longer attached".
+      expect(media.shared, ['<primary screen>']);
     });
 
-    test('a machine with no screen says so', () async {
-      final media = _FakeMedia()..sources = const [];
+    test('a machine with no display to capture reports what it was told',
+        () async {
+      final media = _FakeMedia(failShare: true);
       final controller = GoLiveController(
         repositoryProvider: () => _FakeRepository(),
         mediaService: media,
@@ -369,8 +372,7 @@ void main() {
       expect(await controller.start(channelId: 'voice-1'), isFalse);
 
       expect(controller.status, GoLiveStatus.failure);
-      expect(controller.error.toString(), contains('no screen to capture'));
-      expect(media.shared, isEmpty);
+      expect(controller.error.toString(), contains('no display'));
     });
   });
 }
@@ -431,9 +433,9 @@ final class _FakeMedia implements VoiceMediaService {
   Future<void> selectAudioOutput(String deviceId) async {}
 
   @override
-  Future<void> startScreenShare(String sourceId) async {
+  Future<void> startScreenShare(String? sourceId) async {
     if (failShare) throw StateError('no display');
-    shared.add(sourceId);
+    shared.add(sourceId ?? '<primary screen>');
   }
 
   @override

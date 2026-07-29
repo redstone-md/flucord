@@ -31,7 +31,7 @@ final class NoopVoiceMediaService implements VoiceMediaService {
   Future<void> startMicrophone(String? deviceId) async {}
 
   @override
-  Future<void> startScreenShare(String sourceId) async {}
+  Future<void> startScreenShare(String? sourceId) async {}
 
   @override
   Future<void> stopMicrophone() async {}

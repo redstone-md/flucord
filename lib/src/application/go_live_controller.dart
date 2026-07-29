@@ -98,9 +98,10 @@ final class GoLiveController extends ChangeNotifier {
   /// Starts sharing [sourceId] into the voice channel on screen.
   ///
   /// A null [sourceId] shares the primary screen, which is what the button in
-  /// the room does. The id is asked of the platform rather than assumed: the
-  /// capturer hands out opaque handles, and the invented "0" the room used to
-  /// pass matched nothing, so every share failed with "source not found".
+  /// the room does — and what the platform resolves for itself. Naming a
+  /// screen from a list read earlier is what failed with "that display is no
+  /// longer attached"; the invented "0" before it failed with "source not
+  /// found".
   Future<bool> start({
     required String channelId,
     String? sourceId,
@@ -113,10 +114,10 @@ final class GoLiveController extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      final source = sourceId ?? await _primaryScreenId();
       // Capture first: a stream Discord has announced with nothing behind it
-      // shows every viewer a black rectangle.
-      await _mediaService.startScreenShare(source);
+      // shows every viewer a black rectangle. A null source is the primary
+      // screen, which the platform picks at the moment of capture.
+      await _mediaService.startScreenShare(sourceId);
       // The encoder is what actually produces the picture; the media service's
       // capture is what the local preview draws.
       await _encoder?.start(_settings);
@@ -134,21 +135,6 @@ final class GoLiveController extends ChangeNotifier {
     } finally {
       _notify();
     }
-  }
-
-  /// The screen to share when nobody picked one.
-  ///
-  /// Windows are deliberately not a fallback: sharing whatever window happened
-  /// to be enumerated first is worse than saying there is nothing to share.
-  Future<String> _primaryScreenId() async {
-    final sources = await _mediaService.enumerateCaptureSources();
-    final screen = sources
-        .where((source) => source.kind == VoiceCaptureKind.screen)
-        .firstOrNull;
-    if (screen == null) {
-      throw StateError('This machine reported no screen to capture');
-    }
-    return screen.id;
   }
 
   /// Holds frames back without tearing the stream down.

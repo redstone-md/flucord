@@ -63,7 +63,14 @@ abstract interface class VoiceMediaService {
   Future<void> setMicrophoneEnabled(bool enabled);
   Future<void> selectAudioOutput(String deviceId);
   Future<List<VoiceCaptureSource>> enumerateCaptureSources();
-  Future<void> startScreenShare(String sourceId);
+  /// Starts capturing [sourceId], or the primary screen when it is null.
+  ///
+  /// Null is not a convenience: the platform's own default screen is more
+  /// reliable than naming one. A capture source id is a handle into a list
+  /// that changes when a display sleeps or is unplugged, and passing a stale
+  /// one fails with "that display is no longer attached" — which is what a
+  /// share of the main screen did every time.
+  Future<void> startScreenShare(String? sourceId);
   Future<void> stopScreenShare();
   Future<void> stopMicrophone();
   Future<void> dispose();

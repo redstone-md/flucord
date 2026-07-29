@@ -16,6 +16,41 @@ void main() {
     expect(keyPackage.payload, [9, 8, 7]);
   });
 
+  test('passes audio through until the group key exists', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+
+    // Discord announces v1 on the session description; the MLS group is only
+    // joined once the external sender, the key packages and a commit have been
+    // through. Encrypting in between fails with missingKeyRatchet, which the
+    // room reported as "voice ran into a problem" on every single frame.
+    expect(service.encryptors.single.isPassthrough, isTrue);
+
+    controller.acceptBinary(opcode: 29, payload: [0, 42, 7, 8]);
+
+    expect(service.encryptors.single.isPassthrough, isFalse);
+  });
+
+  test('a rebuilt session goes back to passing through', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+    controller.acceptBinary(opcode: 29, payload: [0, 42, 7, 8]);
+    expect(service.encryptors.single.isPassthrough, isFalse);
+
+    // A failed commit rebuilds the session: this client is outside the group
+    // again, and a key it still believed in is one nobody in the room has.
+    service.sessions.single.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.failed,
+      rosterUserIds: [],
+    );
+    controller.acceptBinary(opcode: 29, payload: [0, 43, 1, 2]);
+    controller.assignAudioSsrc(42);
+
+    expect(service.encryptors.last.isPassthrough, isTrue);
+  });
+
   test('processes proposals using only connected recognized users', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);

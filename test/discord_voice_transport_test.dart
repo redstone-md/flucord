@@ -414,6 +414,34 @@ void main() {
       expect(statuses.last.error.toString(), contains('4017'));
     });
 
+    test('a session Discord ended waits to be handed a new one', () async {
+      final socket = _FakeVoiceWebSocket();
+      final connector = _FakeVoiceSocketConnector(socket);
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: connector,
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      final statuses = <VoiceSignalingStatusEvent>[];
+      final subscription = client.events.listen((event) {
+        if (event is VoiceSignalingStatusEvent) statuses.add(event);
+      });
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
+
+      await client.connect();
+      await socket.closeFromServer(4014);
+      await _flushEvents();
+
+      // 4014 is the voice server moving, not a failure to show somebody. The
+      // token that endpoint was reached with is dead, so redialling it would
+      // fail; the main gateway answers a ping with a fresh
+      // VOICE_SERVER_UPDATE and the connection is rebuilt from that.
+      expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
+      expect(connector.connectCount, 1);
+    });
+
     test(
       'a socket that died under a send reconnects instead of throwing',
       () async {

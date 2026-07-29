@@ -554,7 +554,21 @@ final class DiscordVoiceGatewayClient
     if (_closing || _failed || generation != _generation) return;
     final code = socket.closeCode;
     _diagnose('socket closed', 'code $code');
-    if ({4004, 4006, 4009, 4011, 4014, 4017, 4020, 4021, 4022}.contains(code)) {
+    // A session Discord ended but will re-issue. 4014 is "the voice server
+    // moved, or you were moved"; 4022 is "this session expired"; 4006 is "that
+    // session id is no longer valid". None of them is an error to show
+    // somebody: the main gateway answers a ping with a fresh
+    // VOICE_SERVER_UPDATE and the connection is rebuilt from it. Redialling
+    // this endpoint would only reuse a token that is already dead, so this
+    // reports the state and waits to be handed a new one.
+    if ({4006, 4014, 4022}.contains(code)) {
+      _emitStatus(
+        VoiceConnectionStatus.reconnecting,
+        error: StateError('Discord ended the voice session (code $code)'),
+      );
+      return;
+    }
+    if ({4004, 4009, 4011, 4017, 4020, 4021}.contains(code)) {
       _fail(StateError('Discord voice connection closed with code $code'));
       return;
     }

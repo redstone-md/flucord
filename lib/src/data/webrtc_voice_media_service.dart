@@ -126,12 +126,14 @@ final class WebRtcVoiceMediaService implements VoiceMediaService {
   }
 
   @override
-  Future<void> startScreenShare(String sourceId) async {
+  Future<void> startScreenShare(String? sourceId) async {
     await stopScreenShare();
     final stream = await navigator.mediaDevices.getDisplayMedia({
       'audio': false,
       'video': {
-        'deviceId': {'exact': sourceId},
+        // No `deviceId` means the primary screen, chosen by the platform at
+        // the moment of capture rather than from a list read earlier.
+        if (sourceId != null) 'deviceId': {'exact': sourceId},
         'mandatory': {'frameRate': 30.0},
       },
     });
