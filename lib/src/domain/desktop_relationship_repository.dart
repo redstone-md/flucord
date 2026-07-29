@@ -12,4 +12,19 @@ abstract interface class DesktopRelationshipRepository {
 
   /// Fires with the whole list whenever any of it changes.
   Stream<List<DiscordRelationship>> get relationshipUpdates;
+
+  /// Sends a friend request, or accepts one already waiting.
+  ///
+  /// Discord spells both the same way: a request to somebody who has already
+  /// asked is the acceptance. Returns whether it was taken — a request to
+  /// somebody not accepting them is refused, which is an answer.
+  Future<bool> addFriend(String userId);
+
+  /// Removes a friend, declines a request, cancels one this account sent, or
+  /// unblocks somebody. Discord has one route for "whatever this was, undo
+  /// it", and which of the four it is depends only on what was on screen.
+  Future<bool> removeRelationship(String userId);
+
+  /// Blocks somebody, replacing whatever the relationship was.
+  Future<bool> blockUser(String userId);
 }

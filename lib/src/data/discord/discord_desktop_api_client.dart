@@ -73,6 +73,24 @@ final class DiscordDesktopApiClient
   late final DiscordAgeVerificationRepository ageVerification =
       DiscordAgeVerificationRepository(_rest);
 
+  /// `PUT /users/@me/relationships/{id}`.
+  ///
+  /// With no type, this is a friend request — or its acceptance, which Discord
+  /// does not distinguish. With a type it sets the relationship outright,
+  /// which is how blocking works.
+  Future<void> putRelationship(String userId, {int? type}) =>
+      _rest.requestEmpty(
+        'PUT',
+        '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+        body: type == null ? const <String, Object?>{} : {'type': type},
+      );
+
+  /// `DELETE /users/@me/relationships/{id}` — undoes whatever it was.
+  Future<void> deleteRelationship(String userId) => _rest.requestEmpty(
+    'DELETE',
+    '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+  );
+
   /// The guild's scheduled events, with the interested counts Discord's own
   /// client asks for.
   Future<List<Map<String, Object?>>> getGuildScheduledEvents(String guildId) =>

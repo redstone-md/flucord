@@ -73,4 +73,7 @@ extension ChatControllerUserSettings on ChatController {
 
   /// Age verification, or `null` where none is offered.
   AgeVerificationRepository? get ageVerification => _repository.ageVerification;
+
+  /// The account's friend graph, or `null` where the session is told none.
+  DesktopRelationshipRepository? get relationships => _repository.relationships;
 }

@@ -278,14 +278,24 @@ are excluded from the denominator and are never reported as implemented.
   have been undone on another device. The nickname this account gave somebody
   wins over Discord's own name for them, because it is the name whoever set it
   will recognise, and a relationship kind newer than this build reads as
-  unknown rather than being guessed at.
-- **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`.
+  unknown rather than being guessed at. The graph has its own surface in the
+  direct-messages sidebar — requests first, since they are the entries that
+  want an answer — and its own writes: sending a request, accepting one,
+  declining, cancelling, removing and blocking, all over
+  `PUT`/`DELETE /users/@me/relationships/{id}`. Accepting is the same call as
+  asking, which is how Discord spells it. Nothing is patched locally on a
+  write: Discord echoes every change back as a dispatch, and a list edited in
+  two places would disagree with itself. A relationship the account never
+  asked for — somebody it plays with, or a kind newer than this build — is
+  shown under its own heading rather than dropped, because one that exists and
+  appears nowhere is one nobody can act on.
+- **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`,
+  `friends_panel_test.dart`.
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
-- **Blocked by**: the desktop session reads its friend graph but has no
-  surface of its own for it yet, and no writes: adding, accepting and blocking
-  still go through the Social SDK session. Friend suggestions and game
-  relationships are untouched.
+- **Blocked by**: friend suggestions and game relationships are untouched, and
+  the desktop surface has no presence beside each name yet — the presence
+  service knows it, but the two are not joined up.
 
 ## FBC-GUILD — Servers, members, roles, discovery
 

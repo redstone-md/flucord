@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
+import '../application/friends_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/direct_call_controller.dart';
 import '../application/discord_oauth_controller.dart';
@@ -98,6 +99,7 @@ class FlucordShell extends StatelessWidget {
     required this.attachmentDownloadService,
     required this.externalLinkLauncher,
     this.memberListController,
+    this.friendsController,
     this.messageSearchController,
     this.directCallController,
     super.key,
@@ -125,6 +127,10 @@ class FlucordShell extends StatelessWidget {
   /// Owns the member panel's roster subscription. Absent in hosts that never
   /// show the panel, such as the widget tests for a single pane.
   final GuildMemberListController? memberListController;
+
+  /// The account's friend graph, or null on a transport that is never told
+  /// one — the demo workspace and the bot session.
+  final FriendsController? friendsController;
 
   /// Owns the server-side search and the page the results panel is showing.
   /// Absent in hosts that never offer it, such as the widget tests for a
@@ -263,6 +269,7 @@ class FlucordShell extends StatelessWidget {
                         if (showChannels)
                           ChannelSidebar(
                             space: space,
+                            friends: friendsController,
                             seatedByChannel: voiceController.seatedByChannel,
                             // A voice connection outlives the room view, so
                             // leaving it has to stay reachable from wherever

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/read_state.dart';
@@ -7,6 +8,7 @@ import '../../domain/voice_connection.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'account_panel.dart';
+import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'notification_settings_menu.dart';
@@ -43,6 +45,7 @@ class ChannelSidebar extends StatelessWidget {
     this.onOpenEvents,
     this.onOpenServerSettings,
     this.onReportServer,
+    this.friends,
     this.seatedByChannel = const {},
     this.voiceConnectionBar,
     super.key,
@@ -92,6 +95,10 @@ class ChannelSidebar extends StatelessWidget {
   /// Reports the server to Discord, or null on a transport with no report
   /// flow and in the direct-messages space, which is nobody's server.
   final VoidCallback? onReportServer;
+
+  /// The friend graph, shown in place of the conversation list in direct
+  /// messages. Null on a transport that is never told one.
+  final FriendsController? friends;
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +156,18 @@ class ChannelSidebar extends StatelessWidget {
                       color: context.surfaces.muted,
                     ),
                   ),
+                if (isDirect && friends != null)
+                  IconButton(
+                    key: const ValueKey('toggle-friends'),
+                    onPressed: friends!.togglePanel,
+                    icon: Icon(
+                      friends!.isPanelOpen
+                          ? Icons.forum_outlined
+                          : Icons.people_alt_outlined,
+                      size: 18,
+                    ),
+                    tooltip: friends!.isPanelOpen ? 'Conversations' : 'Friends',
+                  ),
                 if (isDirect)
                   IconButton(
                     key: const ValueKey('new-direct-message'),
@@ -190,14 +209,19 @@ class ChannelSidebar extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-              children: _navigationEntries(
-                isDirect: isDirect,
-                regularChannels: regularChannels,
-                threads: threads,
-              ),
-            ),
+            child: isDirect && (friends?.isPanelOpen ?? false)
+                // The friend graph takes the whole pane rather than sitting
+                // above the conversations: both are long lists, and stacking
+                // them means neither can be read.
+                ? FriendsPanel(controller: friends!)
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
+                    children: _navigationEntries(
+                      isDirect: isDirect,
+                      regularChannels: regularChannels,
+                      threads: threads,
+                    ),
+                  ),
           ),
           ?voiceConnectionBar,
           AccountPanel(

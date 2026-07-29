@@ -246,7 +246,7 @@ final class DiscordDesktopChatRepository
   DesktopRelationshipRepository? get relationships => _relationshipView;
 
   late final _DesktopRelationshipView _relationshipView =
-      _DesktopRelationshipView(_relationships);
+      _DesktopRelationshipView(_relationships, _api);
 
   /// The account's own session is what Discord's search routes answer to, so
   /// this is the one transport that can offer them.
@@ -760,13 +760,46 @@ final class _DesktopGoLiveGateway implements DiscordGoLiveGateway {
 /// The service itself also folds dispatches in, which is not something a
 /// surface should be able to do by holding the same object.
 final class _DesktopRelationshipView implements DesktopRelationshipRepository {
-  const _DesktopRelationshipView(this._service);
+  const _DesktopRelationshipView(this._service, this._api);
 
   final DiscordRelationshipService _service;
+  final DiscordDesktopApiClient _api;
+
+  /// Discord's own code for a block.
+  static const _blocked = 2;
 
   @override
   List<DiscordRelationship> get relationships => _service.relationships;
 
   @override
   Stream<List<DiscordRelationship>> get relationshipUpdates => _service.updates;
+
+  @override
+  Future<bool> addFriend(String userId) =>
+      _write(() => _api.putRelationship(userId));
+
+  @override
+  Future<bool> removeRelationship(String userId) =>
+      _write(() => _api.deleteRelationship(userId));
+
+  @override
+  Future<bool> blockUser(String userId) =>
+      _write(() => _api.putRelationship(userId, type: _blocked));
+
+  /// Runs one relationship write.
+  ///
+  /// Nothing is patched locally on success: Discord echoes every change back
+  /// as RELATIONSHIP_ADD, UPDATE or REMOVE, and a list edited here as well
+  /// would disagree with the one the next dispatch installs.
+  Future<bool> _write(Future<void> Function() action) async {
+    try {
+      await action();
+      return true;
+    } on DiscordApiException catch (error) {
+      // Somebody not accepting requests, or a stranger with requests off,
+      // is refused. That is an answer about them rather than a fault here.
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
+      rethrow;
+    }
+  }
 }

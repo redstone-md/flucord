@@ -8,6 +8,7 @@ import 'application/auth_session_controller.dart';
 import 'application/age_verification_controller.dart';
 import 'application/multi_factor_auth_controller.dart';
 import 'application/family_centre_controller.dart';
+import 'application/friends_controller.dart';
 import 'application/chat_controller.dart';
 import 'application/connection_controller.dart';
 import 'application/direct_call_controller.dart';
@@ -207,6 +208,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final AuthSessionController _authSessionController;
   late final MultiFactorAuthController _multiFactorAuthController;
   late final AgeVerificationController _ageVerificationController;
+  late final FriendsController _friendsController;
   late final ThreadMembershipController _threadMembershipController;
   late final StageController _stageController;
   late final SoundboardController _soundboardController;
@@ -311,6 +313,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _multiFactorAuthController = MultiFactorAuthController(
       () => _chatController.multiFactorAuth,
     );
+    // The friend graph belongs to the signed-in session, and is replaced
+    // with it: a sign-out must not leave the last account's friends on screen.
+    _friendsController = FriendsController(() => _chatController.relationships);
     _ageVerificationController = AgeVerificationController(
       () => _chatController.ageVerification,
       launcher: _externalLinkLauncher,
@@ -434,6 +439,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _authSessionController.dispose();
     _multiFactorAuthController.dispose();
     _ageVerificationController.dispose();
+    _friendsController.dispose();
     _threadMembershipController.dispose();
     _stageController.dispose();
     _soundboardController.dispose();
