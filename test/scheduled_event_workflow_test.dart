@@ -20,6 +20,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('guild-event-forge-review')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('guild-events-dialog')), findsNothing);
+    // Opening a voice channel shows the room; joining it is a button, which
+    // is what Discord does.
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -11,6 +11,8 @@ import '../../domain/video_decoder.dart';
 import 'voice_capture_source_dialog.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
+import '../../domain/voice_connection.dart';
+import 'member_avatar.dart';
 
 class VoiceRoomView extends StatefulWidget {
   const VoiceRoomView({
@@ -68,20 +70,14 @@ class VoiceRoomView extends StatefulWidget {
 }
 
 class _VoiceRoomViewState extends State<VoiceRoomView> {
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_connect());
-  }
-
-  @override
-  void didUpdateWidget(covariant VoiceRoomView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.guildId != widget.guildId ||
-        oldWidget.channelId != widget.channelId) {
-      unawaited(_connect());
-    }
-  }
+  /// Whether this account is in the channel the view is showing.
+  ///
+  /// Opening a voice channel does not join it, which is what Discord does:
+  /// clicking one shows who is inside and offers a button. Joining on sight
+  /// meant walking past a channel opened the microphone and announced the
+  /// account to everybody in it.
+  bool get _isInThisChannel =>
+      widget.controller.connectedChannelId == widget.channelId;
 
   Future<void> _connect() {
     final guildId = widget.guildId;
@@ -97,7 +93,19 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.controller,
-      builder: (context, _) => LayoutBuilder(
+      builder: (context, _) {
+        if (!_isInThisChannel) {
+          return _VoiceChannelPreview(
+            channelName: widget.channelName,
+            seated:
+                widget.controller.seatedByChannel[widget.channelId] ?? const [],
+            members: widget.members,
+            spaceId: widget.spaceId,
+            isBusy: widget.controller.isBusy,
+            onJoin: () => unawaited(_connect()),
+          );
+        }
+        return LayoutBuilder(
         builder: (context, constraints) {
           final horizontal = constraints.maxWidth >= 720;
           final stage = Expanded(
@@ -148,6 +156,84 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             ],
           );
         },
+        );
+      },
+    );
+  }
+}
+
+/// A voice channel that has been opened but not joined.
+///
+/// What Discord shows: who is inside, and a button. The client is not in the
+/// channel until it is pressed — nobody is announced, and no microphone is
+/// opened, by looking.
+class _VoiceChannelPreview extends StatelessWidget {
+  const _VoiceChannelPreview({
+    required this.channelName,
+    required this.seated,
+    required this.members,
+    required this.spaceId,
+    required this.isBusy,
+    required this.onJoin,
+  });
+
+  final String channelName;
+  final List<VoiceParticipantStateEvent> seated;
+  final List<Member> members;
+  final String spaceId;
+  final bool isBusy;
+  final VoidCallback onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final memberById = {for (final member in members) member.id: member};
+    return Center(
+      key: const ValueKey('voice-channel-preview'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.podcasts, size: 30, color: context.surfaces.muted),
+          const SizedBox(height: 10),
+          Text(
+            channelName,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            seated.isEmpty
+                ? 'No one is in the voice channel right now'
+                : '${seated.length} in the channel',
+            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          ),
+          if (seated.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            // Who is inside, before deciding to walk in — which is the reason
+            // Discord shows this screen rather than joining on sight.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                for (final participant in seated.take(12))
+                  if (memberById[participant.userId] case final member?)
+                    MemberAvatar(
+                      key: ValueKey('voice-preview-${participant.userId}'),
+                      member: member,
+                      size: 34,
+                      showPresence: false,
+                      spaceId: spaceId,
+                    ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            key: const ValueKey('voice-channel-join'),
+            onPressed: isBusy ? null : onJoin,
+            icon: const Icon(Icons.call, size: 16),
+            label: const Text('Join voice channel'),
+          ),
+        ],
       ),
     );
   }
@@ -252,13 +338,29 @@ class _VoiceStage extends StatelessWidget {
         if (voiceRoomWarning(controller) case final warning?)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Text(
-              warning,
-              key: const ValueKey('voice-room-warning'),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 11,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    warning,
+                    key: const ValueKey('voice-room-warning'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                // Offered here because the alternative was leaving the channel
+                // and coming back, which is not an obvious way to ask a client
+                // to look for a headset again.
+                if (voiceRoomOffersDeviceRetry(controller))
+                  TextButton(
+                    key: const ValueKey('voice-room-retry-devices'),
+                    onPressed: () => unawaited(controller.retryDevices()),
+                    child: const Text('Try devices again'),
+                  ),
+              ],
             ),
           ),
         ?stageControls,

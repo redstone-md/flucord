@@ -105,6 +105,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Opening a call channel does not dial it, the same way opening a voice
+    // channel does not join one.
+    expect(harness.service.log, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pumpAndSettle();
+
     // The same room, the same grid: a call reuses them rather than forking.
     expect(harness.service.log, ['join:dm-1']);
     expect(harness.voice.isCallSession, isTrue);

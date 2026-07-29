@@ -76,6 +76,10 @@ final class VoiceController extends ChangeNotifier {
   VoiceTransportSession? _transportSession;
   final Map<String, VoiceParticipant> _participants = {};
   Object? _error;
+
+  /// Why the audio devices could not be opened, kept apart from [_error] so a
+  /// transport failure is not reported as a missing microphone.
+  Object? _deviceError;
   Object? _microphoneError;
   bool _isMuted = false;
   bool _isDeafened = false;
@@ -108,6 +112,9 @@ final class VoiceController extends ChangeNotifier {
   /// Separate from [error] because it is not a failure to join: the room is
   /// connected and audible, the uplink simply has nothing to send.
   Object? get microphoneError => _microphoneError;
+
+  /// Why the audio devices could not be opened, or null.
+  Object? get deviceError => _deviceError;
 
   /// Why joining a voice channel is not possible at all, or `null`.
   ///
@@ -157,8 +164,14 @@ final class VoiceController extends ChangeNotifier {
   Object? get previewRenderer => _mediaService.previewRenderer;
 
   Future<void> initialize() async {
-    if (_state != VoiceState.idle) return;
+    // A previous failure is tried again rather than remembered forever. Audio
+    // devices come and go — a headset is plugged in, an exclusive-mode
+    // application lets go — and the old behaviour left a client that failed
+    // once with no devices for the rest of the session, showing the first
+    // error over every later attempt.
+    if (_state == VoiceState.loading || _state == VoiceState.ready) return;
     _state = VoiceState.loading;
+    _error = null;
     notifyListeners();
     try {
       await _mediaService.initialize();
@@ -178,9 +191,22 @@ final class VoiceController extends ChangeNotifier {
       _state = VoiceState.ready;
     } catch (error) {
       _error = error;
+      _deviceError = error;
       _state = VoiceState.failure;
     }
     if (!_disposed) notifyListeners();
+  }
+
+  /// Opens the audio devices again after a failure.
+  ///
+  /// Its own entry point so a surface can offer the retry: walking out of the
+  /// channel and back in is not an obvious way to ask for one, and it is what
+  /// somebody had to do before.
+  Future<void> retryDevices() async {
+    if (_state == VoiceState.loading) return;
+    _state = VoiceState.idle;
+    _deviceError = null;
+    await initialize();
   }
 
   String? _firstDeviceId(VoiceDeviceKind kind) {

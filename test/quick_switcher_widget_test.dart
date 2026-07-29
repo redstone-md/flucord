@@ -27,7 +27,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('quick-switcher')), findsNothing);
-    expect(find.text('Local media ready'), findsOneWidget);
+    // Opening a voice channel shows the room; joining it is a button, which
+    // is what Discord does.
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pumpAndSettle();
+    // Both the room and the connection strip say it, now that the strip
+    // redraws when the connection changes.
+    expect(find.text('Local media ready'), findsNWidgets(2));
   });
 
   testWidgets('moves the active destination with both arrow keys', (

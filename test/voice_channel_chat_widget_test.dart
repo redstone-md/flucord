@@ -21,6 +21,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
+    // Opening a voice channel shows the room; joining it is a button, which
+    // is what Discord does.
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
     expect(find.byKey(const ValueKey('message-composer')), findsNothing);
     expect(find.byKey(const ValueKey('toggle-pins')), findsNothing);

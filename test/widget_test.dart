@@ -291,9 +291,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('channel-forge-voice')));
     await tester.pumpAndSettle();
 
+    // Opening the channel shows the room rather than walking into it: the
+    // microphone stays shut and nobody is announced until the button.
+    expect(find.byKey(const ValueKey('voice-channel-preview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-connection-bar')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
     // Twice over: the room says it, and so does the strip that keeps the
     // connection reachable after navigating away from the room.
-    expect(find.text('Local media ready'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('voice-channel-preview')), findsNothing);
+    expect(find.text('Local media ready'), findsWidgets);
     expect(find.byKey(const ValueKey('voice-connection-bar')), findsOneWidget);
     expect(find.text('Input device'), findsOneWidget);
     expect(find.text('Output device'), findsOneWidget);
@@ -301,7 +311,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('voice-mute')));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Unmute'), findsOneWidget);
+    // Both places agree: the room and the strip that stays reachable after
+    // navigating away. The strip used not to redraw, so it kept saying Mute
+    // while the room said Unmute.
+    expect(find.byTooltip('Unmute'), findsNWidgets(2));
 
     await tester.tap(find.byKey(const ValueKey('voice-share-screen')));
     await tester.pumpAndSettle();
@@ -312,7 +325,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('voice-disconnect')));
     await tester.pumpAndSettle();
-    expect(find.text('Disconnected'), findsOneWidget);
+    // Leaving puts the channel back to what it looks like before joining:
+    // the room with a button, not a room saying it is disconnected.
+    expect(find.byKey(const ValueKey('voice-channel-preview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-connection-bar')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
