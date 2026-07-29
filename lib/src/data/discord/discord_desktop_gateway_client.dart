@@ -50,6 +50,7 @@ final class DiscordDesktopGatewayClient
   Timer? _heartbeatTimer;
   Timer? _initialHeartbeatTimer;
   Timer? _reconnectTimer;
+  DateTime? _lastHeartbeatSentAt;
   Timer? _bootstrapTimer;
   Completer<DiscordDesktopWorkspaceSnapshot>? _bootstrapCompleter;
   Uri? _gatewayUri;
@@ -391,7 +392,12 @@ final class DiscordDesktopGatewayClient
   }
 
   void _heartbeat() {
+    _lastHeartbeatSentAt = DateTime.now();
     final action = _protocol.heartbeatDue();
+    _diagnose(
+      'heartbeat',
+      action is DiscordDesktopGatewayReconnect ? 'unanswered' : 'sent',
+    );
     _apply(action);
   }
 
@@ -445,7 +451,20 @@ final class DiscordDesktopGatewayClient
       }
       return;
     }
-    _scheduleReconnect(reason: 'socket closed (code ${_socket?.closeCode})');
+    // The code the *closing* socket carried, read before anything replaces
+    // it, and how long since a heartbeat went out — a socket that dies a
+    // moment after one usually died because of it.
+    _scheduleReconnect(
+      reason:
+          'socket closed (code ${code ?? 'none'}, '
+          '${_sinceLastHeartbeat()} since heartbeat)',
+    );
+  }
+
+  String _sinceLastHeartbeat() {
+    final sent = _lastHeartbeatSentAt;
+    if (sent == null) return 'no heartbeat yet';
+    return '${DateTime.now().difference(sent).inSeconds}s';
   }
 
   void _onSocketError(Object error, StackTrace stackTrace) {

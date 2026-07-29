@@ -96,9 +96,15 @@ enum VideoEncoderFailure {
 }
 
 final class VideoEncoderException implements Exception {
-  const VideoEncoderException(this.failure);
+  const VideoEncoderException(this.failure, {this.platformCode});
 
   final VideoEncoderFailure failure;
+
+  /// What the platform itself said, where it says anything — an HRESULT on
+  /// Windows. "No display" covers a machine with no output, an index that has
+  /// gone, and a duplication another process is holding, and only this
+  /// separates them.
+  final int? platformCode;
 
   String get message => switch (failure) {
     VideoEncoderFailure.unsupported =>
@@ -110,8 +116,12 @@ final class VideoEncoderException implements Exception {
     VideoEncoderFailure.state => 'The encoder is already running.',
   };
 
+  String get _platformSuffix => platformCode == null || platformCode == 0
+      ? ''
+      : ' (0x${platformCode!.toUnsigned(32).toRadixString(16)})';
+
   @override
-  String toString() => message;
+  String toString() => '$message$_platformSuffix';
 }
 
 /// Turns a display into encoded frames.

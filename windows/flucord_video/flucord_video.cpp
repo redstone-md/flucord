@@ -200,6 +200,9 @@ HRESULT FindOutput(int index, ComPtr<IDXGIAdapter1>* out_adapter,
   return DXGI_ERROR_NOT_FOUND;
 }
 
+// The platform's own answer to whatever failed last, for diagnostics only.
+std::atomic<int32_t> g_last_error{0};
+
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
   ComPtr<IDXGIAdapter1> adapter;
   ComPtr<IDXGIOutput1> output;
@@ -735,6 +738,7 @@ flucord_video_open(const FlucordVideoConfig* config,
 
   hr = OpenDuplication(state.get());
   if (FAILED(hr)) {
+    g_last_error.store(static_cast<int32_t>(hr));
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_NO_DISPLAY;
   }
@@ -976,6 +980,10 @@ flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
 
   MFShutdown();
   return decoded;
+}
+
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void) {
+  return g_last_error.load();
 }
 
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data) {

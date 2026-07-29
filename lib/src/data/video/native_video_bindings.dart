@@ -124,7 +124,20 @@ final class NativeVideoBindings {
             int Function(int, Pointer<Utf8>, int)
           >('flucord_video_camera_name'),
       captureScreen = _lookUpCaptureScreen(library),
+      lastError = _lookUpLastError(library),
       clip = ClipWriterBindings.lookUp(library);
+
+  /// The platform's own answer behind the last failure, where the module
+  /// reports one. Absent in a module built before it did.
+  static int Function()? _lookUpLastError(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<Int32 Function(), int Function()>(
+        'flucord_video_last_error',
+      );
+    } on Object {
+      return null;
+    }
+  }
 
   /// Absent in a module built before screenshots existed, which is a build
   /// that must still run rather than fail to load.
@@ -165,6 +178,9 @@ final class NativeVideoBindings {
 
   /// One BGRA frame from a display, or null in a module without it.
   final ScreenshotCaptureDart? captureScreen;
+
+  /// Reads the HRESULT behind the last failure, when the module reports one.
+  final int Function()? lastError;
 
   /// The MP4 writer, or null in a module built before clips existed.
   final ClipWriterBindings? clip;
@@ -216,14 +232,7 @@ typedef ClipOpenNative =
     );
 
 typedef ClipOpenDart =
-    int Function(
-      Pointer<Utf8>,
-      int,
-      int,
-      int,
-      int,
-      Pointer<Pointer<Void>>,
-    );
+    int Function(Pointer<Utf8>, int, int, int, int, Pointer<Pointer<Void>>);
 
 typedef ClipWriteNative =
     Int32 Function(Pointer<Void>, Pointer<Uint8>, Int32, Int64, Int32);

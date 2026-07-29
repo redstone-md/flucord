@@ -33,6 +33,25 @@ void main() {
         expect(exception.toString(), exception.message);
       }
     });
+
+    test('carries what the platform said, when it said anything', () {
+      // "No display" covers a machine with no output at all, an index that
+      // has gone, and a duplication another process is holding. Only the
+      // HRESULT separates them, and without it a report says nothing usable.
+      const refused = VideoEncoderException(
+        VideoEncoderFailure.noDisplay,
+        platformCode: -2005270490,
+      );
+
+      expect(refused.toString(), contains('0x887a0026'));
+
+      const quiet = VideoEncoderException(
+        VideoEncoderFailure.noDisplay,
+        platformCode: 0,
+      );
+
+      expect(quiet.toString(), quiet.message);
+    });
   });
 
   group('frame', () {

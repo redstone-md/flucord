@@ -74,7 +74,10 @@ final class NativeVideoEncoderService implements VideoEncoderService {
       final status = open(config, callback.nativeFunction, nullptr, out);
       if (status != NativeVideoStatus.ok) {
         callback.close();
-        throw VideoEncoderException(_failureFor(status));
+        throw VideoEncoderException(
+          _failureFor(status),
+          platformCode: _bindings?.lastError?.call(),
+        );
       }
       _handle = out.value;
       _callback = callback;

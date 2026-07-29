@@ -113,6 +113,14 @@ FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
 // Releases a buffer handed out by the frame callback.
 FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data);
 
+// The HRESULT behind the last failure, or 0.
+//
+// A status code says which stage refused; this says why the platform did.
+// "No display" covers a machine with no output at all, an index that no
+// longer exists, and a duplication another process is already holding, and
+// only the HRESULT separates them.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
+
 typedef struct FlucordVideoDecoder FlucordVideoDecoder;
 
 // One decoded picture, as BGRA ready for a texture. Valid for the duration of
