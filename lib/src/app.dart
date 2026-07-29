@@ -28,6 +28,8 @@ import 'application/self_presence_controller.dart';
 import 'application/expression_favorites_controller.dart';
 import 'application/self_video_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
+import 'data/discord/discord_stream_rtc_service.dart';
+import 'data/discord/discord_stream_rtc_session.dart';
 import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/streamer_mode_controller.dart';
@@ -279,6 +281,8 @@ class _FlucordAppState extends State<FlucordApp> {
   late final SoundboardPlaybackController _soundboardPlaybackController;
   late final GoLiveController _goLiveController;
   late final StreamViewerController _streamViewerController;
+  late final DiscordStreamRtcService _streamRtcService;
+  StreamSubscription<DiscordStreamRtcSession>? _streamConnections;
   late final SlashCommandController _slashCommandController;
   late final MessageComponentController _messageComponentController;
   late final SelfPresenceController _selfPresenceController;
@@ -423,6 +427,20 @@ class _FlucordAppState extends State<FlucordApp> {
       repositoryProvider: () => _chatController.goLive,
       decoder: widget.videoDecoderService ?? NativeVideoDecoderService(),
     );
+    // The second RTC connection a stream lives on. Discord does not carry Go
+    // Live over the call's socket: it answers create and watch with an
+    // endpoint of their own, and until something dialled it a stream opened,
+    // announced itself, and sent nothing.
+    _streamRtcService = DiscordStreamRtcService(
+      repositoryProvider: () => _chatController.goLive,
+      identityProvider: () {
+        final signaling = _chatController.voiceSignalingService;
+        return signaling is DiscordVoiceSignalingService
+            ? signaling.streamIdentity
+            : null;
+      },
+    );
+    _streamConnections = _streamRtcService.opened.listen(_acceptStreamSession);
     _messageComponentController = MessageComponentController(
       () => _chatController.messageComponents,
     );
@@ -625,6 +643,8 @@ class _FlucordAppState extends State<FlucordApp> {
     _soundboardPlaybackController.dispose();
     _goLiveController.dispose();
     _streamViewerController.dispose();
+    unawaited(_streamConnections?.cancel());
+    unawaited(_streamRtcService.close());
     _selfPresenceController.dispose();
     _workspaceController.dispose();
     _directCallController.dispose();
@@ -646,7 +666,40 @@ class _FlucordAppState extends State<FlucordApp> {
     if (_chatController.state == ChatLoadState.ready) {
       unawaited(_voiceController.refreshSignalingService());
       _directCallController.reconcileService();
+      _streamRtcService.reconcile();
     }
+  }
+
+  /// Wires a stream connection to whichever end of it this client is.
+  ///
+  /// Our own stream gets the encoder pointed at it; anybody else's gets its
+  /// pictures handed to the viewer. The SSRC only exists once the connection
+  /// is ready, so this waits for that rather than reading it here.
+  void _acceptStreamSession(DiscordStreamRtcSession session) {
+    late final StreamSubscription<VoiceSignalingEvent> events;
+    events = session.events.listen((event) {
+      if (event is! VoiceTransportReadyEvent) return;
+      unawaited(events.cancel());
+      if (session.key == _goLiveController.streamKey) {
+        session.announceVideo(enabled: true);
+        _goLiveController.bindTransport(
+          ssrc: event.session.ssrc,
+          sink: session.sendVideoFrame,
+        );
+        return;
+      }
+      unawaited(
+        _streamViewerController.attach(
+          session.key,
+          packets: session.video.map(
+            (packet) => IncomingVideoPacket(
+              payload: Uint8List.fromList(packet.$2.payload),
+              marker: packet.$2.header.marker,
+            ),
+          ),
+        ),
+      );
+    });
   }
 
   /// Reads everybody else's cameras only while a room is actually connected.

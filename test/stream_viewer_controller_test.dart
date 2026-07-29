@@ -253,6 +253,115 @@ void main() {
 
     expect(seen.single.width, 2);
   });
+
+  group('asking first, decoding later', () {
+    test('the ask goes out before any endpoint exists', () async {
+      final repository = _FakeRepository();
+      final decoder = _FakeDecoder();
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoder: decoder,
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.requestWatch(_key), isTrue);
+
+      // Discord answers with an endpoint seconds later, and only the
+      // connection that answer opens carries pictures. Nothing is decoded yet.
+      expect(repository.watched, [_key]);
+      expect(controller.requested, _key);
+      expect(controller.watching, isNull);
+      expect(decoder.started, 0);
+    });
+
+    test('attaching decodes without asking a second time', () async {
+      final repository = _FakeRepository();
+      final decoder = _FakeDecoder();
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoder: decoder,
+      );
+      addTearDown(controller.dispose);
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+
+      await controller.requestWatch(_key);
+      expect(await controller.attach(_key, packets: packets.stream), isTrue);
+
+      // A second ask would open a second connection for one stream.
+      expect(repository.watched, [_key]);
+      expect(controller.watching, _key);
+      expect(controller.requested, isNull);
+
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnits, greaterThan(0));
+    });
+
+    test('an ask Discord refuses stops claiming to be waiting', () async {
+      final repository = _FakeRepository(failWatch: true);
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoder: _FakeDecoder(),
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.requestWatch(_key), isFalse);
+
+      expect(controller.requested, isNull);
+      expect(controller.error, isNotNull);
+    });
+
+    test('a build that cannot decode neither asks nor attaches', () async {
+      final repository = _FakeRepository();
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoder: _FakeDecoder(supported: false),
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.requestWatch(_key), isFalse);
+      expect(
+        await controller.attach(_key, packets: const Stream.empty()),
+        isFalse,
+      );
+      expect(repository.watched, isEmpty);
+    });
+
+    test('stopping forgets a stream that was only asked for', () async {
+      final repository = _FakeRepository();
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoder: _FakeDecoder(),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      await controller.stop();
+
+      expect(controller.requested, isNull);
+    });
+
+    test(
+      'a decoder that will not start reports rather than half-attaches',
+      () async {
+        final controller = StreamViewerController(
+          repositoryProvider: () => _FakeRepository(),
+          decoder: _FakeDecoder(failStart: true),
+        );
+        addTearDown(controller.dispose);
+
+        expect(
+          await controller.attach(_key, packets: const Stream.empty()),
+          isFalse,
+        );
+        expect(controller.watching, isNull);
+        expect(controller.error, isNotNull);
+      },
+    );
+  });
 }
 
 final class _FakeDecoder implements VideoDecoderService {

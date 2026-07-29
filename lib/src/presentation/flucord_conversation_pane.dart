@@ -268,6 +268,26 @@ class _ConversationPaneState extends State<_ConversationPane> {
 
   /// The call state is read on every build, so the pane has to be rebuilt when
   /// it moves — joining a call is what swaps the timeline for the room.
+  /// Opens somebody's screen share, or closes the one already on screen.
+  void _toggleWatch(String userId) {
+    final viewer = widget.streamViewerController;
+    if (viewer.watching?.userId == userId) {
+      unawaited(viewer.stop());
+      return;
+    }
+    final spaceId = widget.channel.spaceId;
+    final key = spaceId.isEmpty
+        ? GoLiveStreamKey.call(channelId: widget.channel.id, userId: userId)
+        : GoLiveStreamKey.guild(
+            guildId: spaceId,
+            channelId: widget.channel.id,
+            userId: userId,
+          );
+    // Only the ask goes out here. Discord answers with an endpoint, and the
+    // connection that answer opens is what feeds the viewer.
+    unawaited(viewer.requestWatch(key));
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = widget.directCallController;
@@ -309,6 +329,14 @@ class _ConversationPaneState extends State<_ConversationPane> {
           )
         : switch (widget.channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
+              // Watching is asked for, never assumed: the pictures cross a
+              // second connection Discord only opens when told to, and a room
+              // that dialled every share in it would be paying for streams
+              // nobody is looking at.
+              onWatchStream: _toggleWatch,
+              watchedUserId:
+                  widget.streamViewerController.watching?.userId ??
+                  widget.streamViewerController.requested?.userId,
               // Whoever is being watched takes the stage; the participant grid
               // is what the room shows when nobody is.
               streamViewer: ListenableBuilder(

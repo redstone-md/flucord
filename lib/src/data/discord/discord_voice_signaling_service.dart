@@ -59,6 +59,7 @@ final class DiscordVoiceSignalingService
   _audioSubscriptions = {};
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   String? _currentUserId;
+  String? _currentSessionId;
   VoiceSessionKey? _activeSession;
   bool _closed = false;
 
@@ -70,6 +71,18 @@ final class DiscordVoiceSignalingService
 
   void setCurrentUserId(String userId) {
     _currentUserId = userId;
+  }
+
+  /// What a second connection of this session identifies with.
+  ///
+  /// Go Live runs on its own socket but not on its own session: it identifies
+  /// with the same session id voice did. That id only ever arrives on the self
+  /// voice state, so it is kept here rather than asked for again.
+  ({String sessionId, String userId})? get streamIdentity {
+    final sessionId = _currentSessionId;
+    final userId = _currentUserId;
+    if (sessionId == null || userId == null) return null;
+    return (sessionId: sessionId, userId: userId);
   }
 
   @override
@@ -258,6 +271,7 @@ final class DiscordVoiceSignalingService
       currentUserId: currentUserId,
     );
     if (credentials == null) return;
+    _currentSessionId = credentials.sessionId;
     final key = credentials.sessionKey;
     if (_desiredChannels[key] != credentials.channelId) return;
     unawaited(_startVoiceClient(credentials, _generations[key] ?? 0));

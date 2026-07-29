@@ -26,6 +26,8 @@ class VoiceRoomView extends StatefulWidget {
     this.soundboard,
     this.goLive,
     this.streamViewer,
+    this.onWatchStream,
+    this.watchedUserId,
     this.cameraFrameFor,
     this._spaceId,
     super.key,
@@ -57,6 +59,12 @@ class VoiceRoomView extends StatefulWidget {
   /// Somebody else's stream, drawn in place of the participant grid while it
   /// is being watched.
   final Widget? streamViewer;
+
+  /// Opens or closes somebody else's screen share.
+  final void Function(String userId)? onWatchStream;
+
+  /// Whose share is on screen, so the tile offers to leave it.
+  final String? watchedUserId;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -114,6 +122,8 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             Expanded(
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
+                onWatchStream: widget.onWatchStream,
+                watchedUserId: widget.watchedUserId,
                 goLive: widget.goLive,
                 soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
@@ -213,6 +223,8 @@ class _VoiceChannelPreview extends StatelessWidget {
 class _VoiceStage extends StatelessWidget {
   const _VoiceStage({
     required this.streamViewer,
+    required this.onWatchStream,
+    required this.watchedUserId,
     required this.goLive,
     required this.soundboard,
     required this.stageControls,
@@ -237,6 +249,8 @@ class _VoiceStage extends StatelessWidget {
   final Widget? soundboard;
   final Widget? goLive;
   final Widget? streamViewer;
+  final void Function(String userId)? onWatchStream;
+  final String? watchedUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +358,8 @@ class _VoiceStage extends StatelessWidget {
                 currentMemberId: currentMemberId,
                 spaceId: spaceId,
                 cameraFrameFor: cameraFrameFor,
+                onWatchStream: onWatchStream,
+                watchedUserId: watchedUserId,
               ),
         ),
       ],

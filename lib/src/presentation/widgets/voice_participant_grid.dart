@@ -14,6 +14,8 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
+    this.onWatchStream,
+    this.watchedUserId,
     super.key,
   });
 
@@ -24,6 +26,13 @@ class VoiceParticipantGrid extends StatelessWidget {
 
   /// The latest picture from a participant's camera, when one is arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+
+  /// Opens somebody's screen share, or closes the one being watched. Null on a
+  /// surface that cannot watch — a build with no decoder, or a call.
+  final void Function(String userId)? onWatchStream;
+
+  /// Whose share is on screen, so the tile offers to leave rather than join.
+  final String? watchedUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +77,8 @@ class VoiceParticipantGrid extends StatelessWidget {
               _unknownMember(participant.userId),
           isCurrentUser: participant.userId == currentMemberId,
           spaceId: spaceId,
+          onWatchStream: onWatchStream,
+          isWatched: participant.userId == watchedUserId,
         );
       },
     );
@@ -95,6 +106,8 @@ class _ParticipantTile extends StatelessWidget {
     required this.isCurrentUser,
     required this.spaceId,
     this.cameraFrame,
+    this.onWatchStream,
+    this.isWatched = false,
   });
 
   final DecodedVideoFrame? cameraFrame;
@@ -102,6 +115,8 @@ class _ParticipantTile extends StatelessWidget {
   final Member member;
   final bool isCurrentUser;
   final String spaceId;
+  final void Function(String userId)? onWatchStream;
+  final bool isWatched;
 
   @override
   Widget build(BuildContext context) {
@@ -174,11 +189,36 @@ class _ParticipantTile extends StatelessWidget {
                       ),
                     ),
                   ],
+                  // A share nobody can open is only an icon. Discord puts a
+                  // button on the tile, and so does this: the stream is a
+                  // separate connection that is only dialled when asked for.
                   if (participant.isStreaming)
-                    const _StateIcon(
-                      icon: Icons.screen_share_outlined,
-                      label: 'Streaming',
-                    ),
+                    if (onWatchStream case final watch? when !isCurrentUser)
+                      IconButton(
+                        key: ValueKey('voice-watch-${participant.userId}'),
+                        tooltip: isWatched
+                            ? 'Stop watching'
+                            : 'Watch ${member.displayName}',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 26,
+                          minHeight: 26,
+                        ),
+                        onPressed: () => watch(participant.userId),
+                        icon: Icon(
+                          isWatched
+                              ? Icons.stop_screen_share
+                              : Icons.screen_share_outlined,
+                          size: 15,
+                          color: isWatched ? FlucordColors.danger : null,
+                        ),
+                      )
+                    else
+                      const _StateIcon(
+                        icon: Icons.screen_share_outlined,
+                        label: 'Streaming',
+                      ),
                   if (participant.isDeafened)
                     const _StateIcon(
                       icon: Icons.headset_off_outlined,

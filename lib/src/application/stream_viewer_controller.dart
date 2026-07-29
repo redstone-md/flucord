@@ -35,6 +35,7 @@ final class StreamViewerController extends ChangeNotifier {
 
   StreamSubscription<IncomingVideoPacket>? _packets;
   GoLiveStreamKey? _watching;
+  GoLiveStreamKey? _requested;
   int _receivedPackets = 0;
   int _decodedUnits = 0;
   Object? _error;
@@ -46,6 +47,14 @@ final class StreamViewerController extends ChangeNotifier {
   /// Whose stream is being watched, or `null`.
   GoLiveStreamKey? get watching => _watching;
 
+  /// Whose stream has been asked for but has not started arriving yet.
+  ///
+  /// Separate from [watching] because the two are seconds apart: the ask goes
+  /// out on the main gateway, Discord answers with an endpoint, and only the
+  /// connection that answer opens produces pictures. A button that waited for
+  /// [watching] would look dead for the whole handshake.
+  GoLiveStreamKey? get requested => _requested;
+
   /// Pictures for the viewer widget.
   Stream<DecodedVideoFrame> get frames => _decoder.frames;
 
@@ -56,6 +65,54 @@ final class StreamViewerController extends ChangeNotifier {
   int get decodedUnits => _decodedUnits;
 
   Object? get error => _error;
+
+  /// Asks Discord to send [key]'s stream to this client.
+  ///
+  /// Nothing is decoded yet: this is the ask, and the endpoint it is answered
+  /// with is what opens the connection the pictures cross.
+  Future<bool> requestWatch(GoLiveStreamKey key) async {
+    final repository = _repositoryProvider();
+    if (repository == null || !_decoder.isSupported) return false;
+    await stop();
+    _error = null;
+    _requested = key;
+    _notify();
+    try {
+      await repository.watchStream(key);
+      return true;
+    } on Object catch (error) {
+      _error = error;
+      _requested = null;
+      _notify();
+      return false;
+    }
+  }
+
+  /// Starts decoding [packets] as [key], without asking Discord again.
+  ///
+  /// Used once the stream connection is up: the ask already went out, and
+  /// repeating it would open a second one.
+  Future<bool> attach(
+    GoLiveStreamKey key, {
+    required Stream<IncomingVideoPacket> packets,
+  }) async {
+    if (!_decoder.isSupported) return false;
+    _error = null;
+    try {
+      await _decoder.start();
+    } on Object catch (error) {
+      _error = error;
+      _notify();
+      return false;
+    }
+    _watching = key;
+    _requested = null;
+    _depacketizer.reset();
+    await _packets?.cancel();
+    _packets = packets.listen(_accept, onError: _acceptError);
+    _notify();
+    return true;
+  }
 
   /// Starts watching [key], reading packets from [packets].
   Future<bool> watch(
@@ -87,6 +144,7 @@ final class StreamViewerController extends ChangeNotifier {
   Future<void> stop() async {
     final packets = _packets;
     _packets = null;
+    _requested = null;
     await packets?.cancel();
     if (_watching == null) return;
     await _decoder.stop();

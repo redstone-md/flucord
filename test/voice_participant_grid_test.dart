@@ -56,12 +56,58 @@ void main() {
     expect(find.byTooltip('Deafened'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a share can be opened and closed from the tile', (tester) async {
+    final watched = <String>[];
+    const participant = VoiceParticipant(userId: 'member-2', isStreaming: true);
+    await tester.pumpWidget(
+      _TestApp(participants: const [participant], onWatchStream: watched.add),
+    );
+
+    // The icon alone was all there was: the pictures cross a connection
+    // Discord only opens when asked, so there has to be something to ask with.
+    await tester.tap(find.byKey(const ValueKey('voice-watch-member-2')));
+    await tester.pumpAndSettle();
+
+    expect(watched, ['member-2']);
+
+    await tester.pumpWidget(
+      _TestApp(
+        participants: const [participant],
+        onWatchStream: watched.add,
+        watchedUserId: 'member-2',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Stop watching'), findsOneWidget);
+  });
+
+  testWidgets('this account is not offered its own share', (tester) async {
+    await tester.pumpWidget(
+      _TestApp(
+        participants: const [
+          VoiceParticipant(userId: 'member-1', isStreaming: true),
+        ],
+        onWatchStream: (_) {},
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('voice-watch-member-1')), findsNothing);
+    expect(find.byTooltip('Streaming'), findsOneWidget);
+  });
 }
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({required this.participants});
+  const _TestApp({
+    required this.participants,
+    this.onWatchStream,
+    this.watchedUserId,
+  });
 
   final List<VoiceParticipant> participants;
+  final void Function(String userId)? onWatchStream;
+  final String? watchedUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +128,8 @@ class _TestApp extends StatelessWidget {
           ],
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
+          onWatchStream: onWatchStream,
+          watchedUserId: watchedUserId,
         ),
       ),
     );
