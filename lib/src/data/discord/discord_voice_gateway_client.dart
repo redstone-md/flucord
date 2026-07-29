@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import '../../domain/voice_audio.dart';
@@ -587,8 +588,26 @@ final class DiscordVoiceGatewayClient
     _emitStatus(VoiceConnectionStatus.failure, error: error);
   }
 
+  /// Writes to the voice socket, or gives up on it.
+  ///
+  /// A socket can close between the last thing read from it and the next
+  /// write, and the write then throws from wherever the caller happened to be
+  /// — turning on a camera, in the crash this was found in, which took the
+  /// whole client down. A dead socket is a reconnect, not an exception for the
+  /// caller to have anticipated.
   void _send(Map<String, Object?> payload) {
-    _socket?.send(jsonEncode(payload));
+    final socket = _socket;
+    if (socket == null) return;
+    try {
+      socket.send(jsonEncode(payload));
+    } on Object catch (error) {
+      developer.log(
+        'Voice send failed, reconnecting: $error',
+        name: 'flucord.discord.voice',
+        level: 900,
+      );
+      _scheduleReconnect(error: error);
+    }
   }
 
   void _replaceTransportCipher(DiscordVoiceTransportCipher? cipher) {

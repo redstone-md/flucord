@@ -106,6 +106,7 @@ import 'presentation/widgets/multi_factor_auth_scope.dart';
 import 'presentation/widgets/keybind_scope.dart';
 import 'presentation/widgets/streamer_mode_scope.dart';
 import 'presentation/widgets/theme_scope.dart';
+import 'presentation/widgets/voice_scope.dart';
 import 'presentation/widgets/family_centre_scope.dart';
 import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
@@ -463,8 +464,8 @@ class _FlucordAppState extends State<FlucordApp> {
     // would encode into a socket that is already closed.
     _selfVideoController = SelfVideoController(
       encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
-      transportProvider: () => _chatController.voiceSignalingService
-          is DiscordVoiceSignalingService
+      transportProvider: () =>
+          _chatController.voiceSignalingService is DiscordVoiceSignalingService
           ? (_chatController.voiceSignalingService
                     as DiscordVoiceSignalingService)
                 .activeVideoTransport
@@ -496,9 +497,7 @@ class _FlucordAppState extends State<FlucordApp> {
       hook: widget.globalKeyboardHook ?? _defaultKeyboardHook(),
     );
     unawaited(_keybindController.load());
-    _themeController = ThemeController(
-      widget.themeStore ?? FileThemeStore(),
-    );
+    _themeController = ThemeController(widget.themeStore ?? FileThemeStore());
     unawaited(_themeController.load());
     _streamerModeController = StreamerModeController(
       widget.streamerModeRepository ?? FileStreamerModeRepository(),
@@ -656,9 +655,8 @@ class _FlucordAppState extends State<FlucordApp> {
   /// against is filled from the voice socket, and a listener attached before
   /// it would be reading a socket that has not finished opening.
   /// The theme to draw with, built from whichever palette is in force.
-  ThemeData _installedTheme({required bool dark}) => FlucordTheme.fromPalette(
-    _themeController.paletteFor(systemIsDark: dark),
-  );
+  ThemeData _installedTheme({required bool dark}) =>
+      FlucordTheme.fromPalette(_themeController.paletteFor(systemIsDark: dark));
 
   void _syncRemoteCameras() {
     final connected =
@@ -846,74 +844,89 @@ class _FlucordAppState extends State<FlucordApp> {
                       controller: _ageVerificationController,
                       child: ThemeScope(
                         controller: _themeController,
-                        child: StreamerModeScope(
-                        controller: _streamerModeController,
-                        child: KeybindScope(
-                        controller: _keybindController,
-                        child: UserSettingsScope(
-                        controller: _userSettingsController,
-                        child: DiscordDesktopLoginScope(
-                          controller: _discordDesktopLoginController,
-                          child: DiscordAccountConnectionScope(
-                            controller: _discordAccountConnectionController,
-                            child: DiscordSocialSdkScope(
-                              controller: _discordSocialSdkController,
-                              child: DiscordSocialActivityScope(
-                                controller: _discordSocialActivityController,
-                                child: DiscordSocialPresenceScope(
-                                  controller: _discordSocialPresenceController,
-                                  child: DiscordSocialDmNavigationScope(
+                        child: VoiceScope(
+                          controller: _voiceController,
+                          child: StreamerModeScope(
+                            controller: _streamerModeController,
+                            child: KeybindScope(
+                              controller: _keybindController,
+                              child: UserSettingsScope(
+                                controller: _userSettingsController,
+                                child: DiscordDesktopLoginScope(
+                                  controller: _discordDesktopLoginController,
+                                  child: DiscordAccountConnectionScope(
                                     controller:
-                                        _discordSocialDmNavigationController,
-                                    child: DiscordSocialDmScope(
-                                      controller: _discordSocialDmController,
-                                      child: DiscordFriendsScope(
-                                        controller: _discordFriendsController,
-                                        child: FlucordShell(
-                                          chatController: _chatController,
-                                          connectionController:
-                                              _connectionController,
-                                          discordOAuthController:
-                                              _discordOAuthController,
-                                          oauthGuildDirectoryController:
-                                              _oauthGuildDirectoryController,
-                                          oauthGuildMembershipController:
-                                              _oauthGuildMembershipController,
-                                          workspaceController:
-                                              _workspaceController,
-                                          memberListController:
-                                              _memberListController,
-                                          messageSearchController:
-                                              _messageSearchController,
-                                          voiceController: _voiceController,
-                                          threadMembershipController:
-                                              _threadMembershipController,
-                                          stageController: _stageController,
-                                          soundboardController:
-                                              _soundboardController,
-                                          goLiveController: _goLiveController,
-                                          selfVideoController:
-                                              _selfVideoController,
-                                          remoteCameraController:
-                                              _remoteCameraController,
-                                          streamViewerController:
-                                              _streamViewerController,
-                                          gifPickerController:
-                                              _gifPickerController,
-                                          expressionFavoritesController:
-                                              _expressionFavoritesController,
-                                          slashCommandController:
-                                              _slashCommandController,
-                                          messageComponentController:
-                                              _messageComponentController,
-                                          directCallController:
-                                              _directCallController,
-                                          voiceMessageRecorder:
-                                              widget.voiceMessageRecorder,
-                                          attachmentDownloadService:
-                                              _attachmentDownloadService,
-                                          externalLinkLauncher:
-                                              _externalLinkLauncher,
+                                        _discordAccountConnectionController,
+                                    child: DiscordSocialSdkScope(
+                                      controller: _discordSocialSdkController,
+                                      child: DiscordSocialActivityScope(
+                                        controller:
+                                            _discordSocialActivityController,
+                                        child: DiscordSocialPresenceScope(
+                                          controller:
+                                              _discordSocialPresenceController,
+                                          child: DiscordSocialDmNavigationScope(
+                                            controller:
+                                                _discordSocialDmNavigationController,
+                                            child: DiscordSocialDmScope(
+                                              controller:
+                                                  _discordSocialDmController,
+                                              child: DiscordFriendsScope(
+                                                controller:
+                                                    _discordFriendsController,
+                                                child: FlucordShell(
+                                                  chatController:
+                                                      _chatController,
+                                                  connectionController:
+                                                      _connectionController,
+                                                  discordOAuthController:
+                                                      _discordOAuthController,
+                                                  oauthGuildDirectoryController:
+                                                      _oauthGuildDirectoryController,
+                                                  oauthGuildMembershipController:
+                                                      _oauthGuildMembershipController,
+                                                  workspaceController:
+                                                      _workspaceController,
+                                                  memberListController:
+                                                      _memberListController,
+                                                  messageSearchController:
+                                                      _messageSearchController,
+                                                  voiceController:
+                                                      _voiceController,
+                                                  threadMembershipController:
+                                                      _threadMembershipController,
+                                                  stageController:
+                                                      _stageController,
+                                                  soundboardController:
+                                                      _soundboardController,
+                                                  goLiveController:
+                                                      _goLiveController,
+                                                  selfVideoController:
+                                                      _selfVideoController,
+                                                  remoteCameraController:
+                                                      _remoteCameraController,
+                                                  streamViewerController:
+                                                      _streamViewerController,
+                                                  gifPickerController:
+                                                      _gifPickerController,
+                                                  expressionFavoritesController:
+                                                      _expressionFavoritesController,
+                                                  slashCommandController:
+                                                      _slashCommandController,
+                                                  messageComponentController:
+                                                      _messageComponentController,
+                                                  directCallController:
+                                                      _directCallController,
+                                                  voiceMessageRecorder: widget
+                                                      .voiceMessageRecorder,
+                                                  attachmentDownloadService:
+                                                      _attachmentDownloadService,
+                                                  externalLinkLauncher:
+                                                      _externalLinkLauncher,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -931,9 +944,6 @@ class _FlucordAppState extends State<FlucordApp> {
             ),
           ),
         ),
-      ),
-      ),
-      ),
       ),
     );
   }

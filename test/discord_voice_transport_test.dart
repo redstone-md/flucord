@@ -170,7 +170,6 @@ void main() {
       expect(socket.sent.last, [26, 3, 2, 1]);
     });
 
-
     test('a packet that will not authenticate is dropped, not fatal', () async {
       final socket = _FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
@@ -236,60 +235,62 @@ void main() {
       expect(received.single.payload, [3, 4, 5]);
     });
 
-    test('nothing decrypting at all is reported rather than passed over',
-        () async {
-      final socket = _FakeVoiceWebSocket();
-      final udp = _FakeVoiceUdpTransport();
-      final client = DiscordVoiceGatewayClient(
-        credentials: _credentials,
-        maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
-        udpTransport: udp,
-      );
-      final events = <VoiceSignalingEvent>[];
-      final subscription = client.events.listen(events.add);
-      addTearDown(subscription.cancel);
-      addTearDown(client.close);
-      await client.connect();
-      socket.addJson({
-        'op': 2,
-        'seq': 1,
-        'd': {
-          'ssrc': 42,
-          'ip': '198.51.100.4',
-          'port': 50001,
-          'modes': ['aead_aes256_gcm_rtpsize'],
-        },
-      });
-      await _flushEvents();
-      socket.addJson({
-        'op': 4,
-        'seq': 2,
-        'd': {
-          'mode': 'aead_aes256_gcm_rtpsize',
-          'secret_key': List<int>.generate(32, (index) => index),
-          'dave_protocol_version': 0,
-        },
-      });
-      await _flushEvents();
-      final packets = client.audioPackets.listen((_) {});
-      addTearDown(packets.cancel);
+    test(
+      'nothing decrypting at all is reported rather than passed over',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final udp = _FakeVoiceUdpTransport();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: udp,
+        );
+        final events = <VoiceSignalingEvent>[];
+        final subscription = client.events.listen(events.add);
+        addTearDown(subscription.cancel);
+        addTearDown(client.close);
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'seq': 1,
+          'd': {
+            'ssrc': 42,
+            'ip': '198.51.100.4',
+            'port': 50001,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        await _flushEvents();
+        socket.addJson({
+          'op': 4,
+          'seq': 2,
+          'd': {
+            'mode': 'aead_aes256_gcm_rtpsize',
+            'secret_key': List<int>.generate(32, (index) => index),
+            'dave_protocol_version': 0,
+          },
+        });
+        await _flushEvents();
+        final packets = client.audioPackets.listen((_) {});
+        addTearDown(packets.cancel);
 
-      // Fifty in a row with none succeeding is the key or the mode, not a
-      // stray packet, and staying quiet about it would leave a silent call
-      // looking healthy.
-      for (var index = 0; index < 50; index++) {
-        udp.addPacket(Uint8List.fromList(List<int>.filled(40, 7)));
-      }
-      await _flushEvents();
+        // Fifty in a row with none succeeding is the key or the mode, not a
+        // stray packet, and staying quiet about it would leave a silent call
+        // looking healthy.
+        for (var index = 0; index < 50; index++) {
+          udp.addPacket(Uint8List.fromList(List<int>.filled(40, 7)));
+        }
+        await _flushEvents();
 
-      expect(
-        events.whereType<VoiceSignalingStatusEvent>().any(
-          (event) => event.status == VoiceConnectionStatus.failure,
-        ),
-        isTrue,
-      );
-    });
+        expect(
+          events.whereType<VoiceSignalingStatusEvent>().any(
+            (event) => event.status == VoiceConnectionStatus.failure,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('splits cameras from audio and attributes them by SSRC', () async {
       final socket = _FakeVoiceWebSocket();
@@ -413,6 +414,50 @@ void main() {
       expect(statuses.last.error.toString(), contains('4017'));
     });
 
+    test(
+      'a socket that died under a send reconnects instead of throwing',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: _FakeVoiceUdpTransport(),
+        );
+        final statuses = <VoiceSignalingStatusEvent>[];
+        final subscription = client.events.listen((event) {
+          if (event is VoiceSignalingStatusEvent) statuses.add(event);
+        });
+        addTearDown(subscription.cancel);
+        addTearDown(client.close);
+
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'd': {
+            'ssrc': 42,
+            'ip': '127.0.0.1',
+            'port': 5000,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        await _flushEvents();
+        socket.failSends = true;
+
+        // The crash this was found in: a socket closes between the last thing
+        // read from it and the next write, and turning a camera on threw from
+        // inside the button's callback and took the client down.
+        expect(client.announceVideo(enabled: true), isTrue);
+        await _flushEvents();
+
+        expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
+        expect(
+          statuses.last.error.toString(),
+          contains('StreamSink is closed'),
+        );
+      },
+    );
+
     test('routes DAVE gateway frames through the native boundary', () async {
       final socket = _FakeVoiceWebSocket();
       final daveService = _GatewayFakeDaveService();
@@ -514,8 +559,15 @@ final class _FakeVoiceWebSocket implements DiscordVoiceWebSocket {
     await _closeMessages();
   }
 
+  /// Set when the socket should behave like one that has closed underneath
+  /// the client: `dart:io` throws "StreamSink is closed" on a write.
+  bool failSends = false;
+
   @override
-  void send(Object data) => sent.add(data);
+  void send(Object data) {
+    if (failSends) throw StateError('StreamSink is closed');
+    sent.add(data);
+  }
 
   @override
   Future<void> close([int? code, String? reason]) async {

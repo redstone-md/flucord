@@ -329,11 +329,17 @@ class ChannelSidebar extends StatelessWidget {
             collapsed: collapsedCategoryIds.contains(category.id),
             onToggle: () => onToggleCategory(category.id),
             children: [
+              // Voice channels carry their occupants here too. They only did
+              // outside categories, which is where almost no server puts
+              // them, so every seat was invisible in practice.
               for (final channel in _visibleCategoryChannels(
                 category,
                 regularChannels,
               ))
-                _rowFor(channel),
+                if (channel.kind == ChannelKind.voice)
+                  ..._voiceEntry(channel)
+                else
+                  _rowFor(channel),
             ],
           ),
       if (threads.isNotEmpty) ...[

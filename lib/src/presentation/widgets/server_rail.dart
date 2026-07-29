@@ -14,6 +14,7 @@ import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
 import 'streamer_mode_scope.dart';
 import 'theme_scope.dart';
+import 'voice_scope.dart';
 import 'multi_factor_auth_scope.dart';
 import 'family_centre_scope.dart';
 import 'user_profile_scope.dart';
@@ -130,10 +131,9 @@ class ServerRail extends StatelessWidget {
                   mfaController: MultiFactorAuthScope.maybeOf(context),
                   ageController: AgeVerificationScope.maybeOf(context),
                   keybindController: KeybindScope.maybeOf(context),
-                  streamerModeController: StreamerModeScope.maybeOf(
-                    context,
-                  ),
+                  streamerModeController: StreamerModeScope.maybeOf(context),
                   themeController: ThemeScope.maybeOf(context),
+                  voiceController: VoiceScope.maybeOf(context),
                 ),
               ),
               icon: const Icon(Icons.settings_outlined),

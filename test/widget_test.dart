@@ -305,8 +305,9 @@ void main() {
     expect(find.byKey(const ValueKey('voice-channel-preview')), findsNothing);
     expect(find.text('Local media ready'), findsWidgets);
     expect(find.byKey(const ValueKey('voice-connection-bar')), findsOneWidget);
-    expect(find.text('Input device'), findsOneWidget);
-    expect(find.text('Output device'), findsOneWidget);
+    // Not in the room: which microphone to use belongs to the machine, and
+    // lives in settings under Voice & Video.
+    expect(find.text('Input device'), findsNothing);
     expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('voice-mute')));

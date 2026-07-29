@@ -76,7 +76,8 @@ class GoLiveButton extends StatelessWidget {
             // room used to show for every refusal. "Missing permissions" and
             // "no encoder on this machine" need different things done about
             // them, and only the answer says which happened.
-            message: 'Discord did not accept the stream: '
+            message:
+                'Discord did not accept the stream: '
                 '${_describe(error)}',
             child: Icon(
               Icons.error_outline,
@@ -95,12 +96,9 @@ class GoLiveButton extends StatelessWidget {
       return;
     }
     // The primary display, which is what Discord's own share defaults to; the
-    // picker for the rest is a separate surface.
-    await controller.start(
-      sourceId: '0',
-      channelId: channelId,
-      guildId: guildId,
-    );
+    // picker for the rest is a separate surface. Which display that is comes
+    // from the platform — the id cannot be guessed.
+    await controller.start(channelId: channelId, guildId: guildId);
   }
 }
 

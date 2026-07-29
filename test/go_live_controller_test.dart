@@ -342,6 +342,37 @@ void main() {
 
     expect(controller.isSupported, isTrue);
   });
+  group('sharing without picking a source', () {
+    test('shares the screen the platform reports, not an invented id', () async {
+      final media = _FakeMedia();
+      final controller = GoLiveController(
+        repositoryProvider: () => _FakeRepository(),
+        mediaService: media,
+      )..reconcile();
+      addTearDown(controller.dispose);
+
+      expect(await controller.start(channelId: 'voice-1'), isTrue);
+
+      // The capturer hands out opaque handles. The room used to pass "0",
+      // which matched nothing, and every share failed with "source not found".
+      expect(media.shared, ['screen:0:0']);
+    });
+
+    test('a machine with no screen says so', () async {
+      final media = _FakeMedia()..sources = const [];
+      final controller = GoLiveController(
+        repositoryProvider: () => _FakeRepository(),
+        mediaService: media,
+      )..reconcile();
+      addTearDown(controller.dispose);
+
+      expect(await controller.start(channelId: 'voice-1'), isFalse);
+
+      expect(controller.status, GoLiveStatus.failure);
+      expect(controller.error.toString(), contains('no screen to capture'));
+      expect(media.shared, isEmpty);
+    });
+  });
 }
 
 final class _FakeMedia implements VoiceMediaService {
@@ -371,8 +402,21 @@ final class _FakeMedia implements VoiceMediaService {
   @override
   Future<List<VoiceDevice>> enumerateDevices() async => const [];
 
+  List<VoiceCaptureSource> sources = const [
+    VoiceCaptureSource(
+      id: 'window:7',
+      name: 'A window',
+      kind: VoiceCaptureKind.window,
+    ),
+    VoiceCaptureSource(
+      id: 'screen:0:0',
+      name: 'Primary screen',
+      kind: VoiceCaptureKind.screen,
+    ),
+  ];
+
   @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
+  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => sources;
 
   @override
   Future<void> startMicrophone(String? deviceId) async {}

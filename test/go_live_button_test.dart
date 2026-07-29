@@ -65,7 +65,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    expect(media.shared, ['0']);
+    // The screen the platform named, not an id the room made up.
+    expect(media.shared, ['screen:0:0']);
     expect(encoder.started, 1);
     expect(repository.started, ['voice-1']);
 
@@ -262,7 +263,13 @@ final class _FakeMedia implements VoiceMediaService {
   Future<List<VoiceDevice>> enumerateDevices() async => const [];
 
   @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
+  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [
+    VoiceCaptureSource(
+      id: 'screen:0:0',
+      name: 'Primary screen',
+      kind: VoiceCaptureKind.screen,
+    ),
+  ];
 
   @override
   Future<void> startMicrophone(String? deviceId) async {}

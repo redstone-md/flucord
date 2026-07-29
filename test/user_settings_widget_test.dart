@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
+import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/user_settings.dart';
+import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
@@ -60,23 +62,19 @@ void main() {
     final repository = _Repository();
     await _pumpDialog(tester, repository);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nav-chat')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'chat');
     await _tapSetting(tester, 'setting-render-reactions');
     expect(repository.applied.last.renderReactions, isFalse);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nav-notifications')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'notifications');
     await _tapSetting(tester, 'setting-quiet-mode');
     expect(repository.applied.last.quietMode, isTrue);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nav-privacy')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'privacy');
     await _tapSetting(tester, 'setting-show-local-time');
     expect(repository.applied.last.showLocalTime, isTrue);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nav-language')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'language');
     expect(find.text('en-GB'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -259,8 +257,7 @@ void main() {
       find.byKey(const ValueKey('settings-nav-privacy')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-nav-privacy')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'privacy');
     expect(
       find.byKey(const ValueKey('settings-section-privacy')),
       findsOneWidget,
@@ -285,8 +282,7 @@ void main() {
       find.byKey(const ValueKey('user-profile-unavailable')),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('settings-nav-appearance')));
-    await tester.pumpAndSettle();
+    await _openSection(tester, 'appearance');
     // The demo transport has no account, and the surface says so instead of
     // offering controls that could never be saved.
     expect(
@@ -321,6 +317,34 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('user-settings-close')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('user-settings-dialog')), findsNothing);
+  });
+
+  testWidgets('the audio devices are in settings, not in the room', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final voice = VoiceController(_SilentMedia());
+    addTearDown(voice.dispose);
+    await voice.initialize();
+
+    await _pumpVoiceDialog(tester, voice: voice);
+
+    expect(find.byKey(const ValueKey('voice-devices-section')), findsOneWidget);
+  });
+
+  testWidgets('a build without voice says so rather than showing nothing', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpVoiceDialog(tester);
+
+    expect(
+      find.byKey(const ValueKey('user-voice-unavailable')),
+      findsOneWidget,
+    );
   });
 }
 
@@ -359,6 +383,27 @@ Future<void> _tapChoice(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _pumpVoiceDialog(
+  WidgetTester tester, {
+  VoiceController? voice,
+}) async {
+  final controller = UserSettingsController(() => _Repository());
+  addTearDown(controller.dispose);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: UserSettingsDialog(
+          controller: controller,
+          voiceController: voice,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await _openSection(tester, 'voice');
+}
+
 Future<UserSettingsController> _pumpDialog(
   WidgetTester tester,
   _Repository repository,
@@ -382,8 +427,7 @@ Future<void> _pumpApp(
   await tester.pumpAndSettle();
   // The dialog opens on the profile, which is a different store; these tests
   // are about the settings ones, so they start where they used to.
-  await tester.tap(find.byKey(const ValueKey('settings-nav-appearance')));
-  await tester.pumpAndSettle();
+  await _openSection(tester, 'appearance');
 }
 
 final class _Repository implements UserSettingsRepository {
@@ -445,3 +489,46 @@ const _settings = UserSettings(
     statusExpiresAtMs: 1800000000000,
   ),
 );
+
+final class _SilentMedia implements VoiceMediaService {
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<List<VoiceDevice>> enumerateDevices() async => const [
+    VoiceDevice(id: 'mic-1', label: 'Mic', kind: VoiceDeviceKind.audioInput),
+  ];
+
+  @override
+  Object? get previewRenderer => null;
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
+
+  @override
+  Stream<void> get screenShareEnded => const Stream.empty();
+
+  @override
+  Future<void> startMicrophone(String? deviceId) async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {}
+
+  @override
+  Future<void> selectAudioOutput(String deviceId) async {}
+
+  @override
+  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
+
+  @override
+  Future<void> startScreenShare(String sourceId) async {}
+
+  @override
+  Future<void> stopScreenShare() async {}
+
+  @override
+  Future<void> stopMicrophone() async {}
+
+  @override
+  Future<void> dispose() async {}
+}

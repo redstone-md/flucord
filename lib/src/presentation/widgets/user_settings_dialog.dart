@@ -9,6 +9,7 @@ import '../../application/age_verification_controller.dart';
 import '../../application/keybind_controller.dart';
 import '../../application/streamer_mode_controller.dart';
 import '../../application/theme_controller.dart';
+import '../../application/voice_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
@@ -28,6 +29,7 @@ import 'user_settings_sections.dart';
 import 'keybind_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
+import 'voice_devices_section.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -43,6 +45,7 @@ enum UserSettingsCategory {
   age('Age Verification', Icons.badge_outlined),
   keybinds('Keybinds', Icons.keyboard_outlined),
   streamer('Streamer Mode', Icons.videocam_outlined),
+  voice('Voice & Video', Icons.mic_none),
   themes('Themes', Icons.brush_outlined),
   language('Language', Icons.translate),
   status('Status', Icons.mood_outlined);
@@ -66,6 +69,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.keybindController,
     this.streamerModeController,
     this.themeController,
+    this.voiceController,
     super.key,
   });
 
@@ -106,6 +110,9 @@ class UserSettingsDialog extends StatefulWidget {
   /// account and so are there whatever the session is.
   final ThemeController? themeController;
 
+  /// The audio devices, which belong to the machine like the themes do.
+  final VoiceController? voiceController;
+
   static Future<void> show(
     BuildContext context, {
     required UserSettingsController controller,
@@ -118,6 +125,7 @@ class UserSettingsDialog extends StatefulWidget {
     KeybindController? keybindController,
     StreamerModeController? streamerModeController,
     ThemeController? themeController,
+    VoiceController? voiceController,
   }) => showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -132,6 +140,7 @@ class UserSettingsDialog extends StatefulWidget {
       keybindController: keybindController,
       streamerModeController: streamerModeController,
       themeController: themeController,
+      voiceController: voiceController,
     ),
   );
 
@@ -177,6 +186,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               keybindController: widget.keybindController,
               streamerModeController: widget.streamerModeController,
               themeController: widget.themeController,
+              voiceController: widget.voiceController,
               category: _category,
             );
             return wide
@@ -335,6 +345,7 @@ class _Body extends StatelessWidget {
     required this.keybindController,
     required this.streamerModeController,
     required this.themeController,
+    required this.voiceController,
     required this.category,
   });
 
@@ -348,6 +359,7 @@ class _Body extends StatelessWidget {
   final KeybindController? keybindController;
   final StreamerModeController? streamerModeController;
   final ThemeController? themeController;
+  final VoiceController? voiceController;
   final UserSettingsCategory category;
 
   @override
@@ -450,6 +462,17 @@ class _Body extends StatelessWidget {
         );
       }
       return StreamerModeSection(controller: streamer);
+    }
+    if (category == UserSettingsCategory.voice) {
+      final voice = voiceController;
+      if (voice == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-voice-unavailable'),
+          icon: Icons.mic_off_outlined,
+          message: 'Voice is unavailable in this build.',
+        );
+      }
+      return VoiceDevicesSection(controller: voice);
     }
     if (category == UserSettingsCategory.themes) {
       final themes = themeController;
@@ -575,7 +598,8 @@ class _Body extends StatelessWidget {
     UserSettingsCategory.profile ||
     UserSettingsCategory.keybinds ||
     UserSettingsCategory.streamer ||
-    UserSettingsCategory.themes => const SizedBox.shrink(),
+    UserSettingsCategory.themes ||
+    UserSettingsCategory.voice => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
       settings: settings,
       onEdit: _edit,

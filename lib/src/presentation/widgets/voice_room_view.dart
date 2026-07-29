@@ -105,57 +105,28 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             onJoin: () => unawaited(_connect()),
           );
         }
-        return LayoutBuilder(
-        builder: (context, constraints) {
-          final horizontal = constraints.maxWidth >= 720;
-          final stage = Expanded(
-            child: _VoiceStage(
-              streamViewer: widget.streamViewer,
-              goLive: widget.goLive,
-              soundboard: widget.soundboard,
-              stageControls: widget.stageControls,
-              channelName: widget.channelName,
-              controller: widget.controller,
-              members: widget.members,
-              currentMemberId: widget.currentMemberId,
-              spaceId: widget.spaceId,
-              cameraFrameFor: widget.cameraFrameFor,
-            ),
-          );
-          return Column(
-            children: [
-              Expanded(
-                child: horizontal
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          stage,
-                          SizedBox(
-                            width: 276,
-                            child: _DevicePanel(
-                              controller: widget.controller,
-                              border: const Border(left: BorderSide()),
-                            ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          stage,
-                          SizedBox(
-                            height: 170,
-                            child: _DevicePanel(
-                              controller: widget.controller,
-                              border: const Border(top: BorderSide()),
-                            ),
-                          ),
-                        ],
-                      ),
+        // No device panel: which microphone to use is a property of the
+        // machine, and a permanent quarter of the room spent on two dropdowns
+        // was width taken from the people in the channel. It lives in
+        // settings, under Voice & Video.
+        return Column(
+          children: [
+            Expanded(
+              child: _VoiceStage(
+                streamViewer: widget.streamViewer,
+                goLive: widget.goLive,
+                soundboard: widget.soundboard,
+                stageControls: widget.stageControls,
+                channelName: widget.channelName,
+                controller: widget.controller,
+                members: widget.members,
+                currentMemberId: widget.currentMemberId,
+                spaceId: widget.spaceId,
+                cameraFrameFor: widget.cameraFrameFor,
               ),
-              _VoiceToolbar(controller: widget.controller),
-            ],
-          );
-        },
+            ),
+            _VoiceToolbar(controller: widget.controller),
+          ],
         );
       },
     );
@@ -405,91 +376,6 @@ class _StatusLabel extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DevicePanel extends StatelessWidget {
-  const _DevicePanel({required this.controller, required this.border});
-
-  final VoiceController controller;
-  final Border border;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.surfaces.surface,
-        border: Border(
-          left: border.left.copyWith(color: context.surfaces.border),
-          top: border.top.copyWith(color: context.surfaces.border),
-        ),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'VOICE DEVICES',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            _DeviceSelect(
-              label: 'Input device',
-              devices: controller.inputDevices,
-              selectedId: controller.selectedInputId,
-              onChanged: controller.selectInput,
-            ),
-            const SizedBox(height: 12),
-            _DeviceSelect(
-              label: 'Output device',
-              devices: controller.outputDevices,
-              selectedId: controller.selectedOutputId,
-              onChanged: controller.selectOutput,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DeviceSelect extends StatelessWidget {
-  const _DeviceSelect({
-    required this.label,
-    required this.devices,
-    required this.selectedId,
-    required this.onChanged,
-  });
-
-  final String label;
-  final List<VoiceDevice> devices;
-  final String? selectedId;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      initialValue: devices.any((device) => device.id == selectedId)
-          ? selectedId
-          : null,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      ),
-      hint: const Text('System default'),
-      items: [
-        for (final device in devices)
-          DropdownMenuItem(
-            value: device.id,
-            child: Text(device.label, overflow: TextOverflow.ellipsis),
-          ),
-      ],
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -58,6 +59,65 @@ void main() {
     expect(find.byKey(const ValueKey('channel-random')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a voice channel inside a category shows who is in it', (
+    tester,
+  ) async {
+    final controller = WorkspaceController()..reconcile(_workspace);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: AnimatedBuilder(
+            animation: controller,
+            builder: (context, _) => ChannelSidebar(
+              space: _workspace.spaces.single,
+              channels: _workspace.channels,
+              selectedChannelId: controller.selectedChannelId,
+              onSelectChannel: controller.selectChannel,
+              sessionMode: SessionMode.demo,
+              connectionStatus: RepositoryConnectionStatus.connected,
+              workspace: _workspace,
+              collapsedCategoryIds: controller.collapsedCategoryIds,
+              onToggleCategory: controller.toggleCategory,
+              onNewDirectMessage: () {},
+              seatedByChannel: const {
+                'the-lodge': [
+                  VoiceParticipantStateEvent(
+                    userId: 'bot-1',
+                    channelId: 'the-lodge',
+                    guildId: 'guild-1',
+                    selfMuted: false,
+                    selfDeafened: false,
+                    serverMuted: false,
+                    serverDeafened: false,
+                    isStreaming: false,
+                    isVideoEnabled: false,
+                  ),
+                ],
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Seats only rendered for channels outside a category, which is where
+    // almost no server puts its voice channels, so nobody ever appeared.
+    expect(
+      find.byKey(const ValueKey('voice-seat-the-lodge-bot-1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-category-1')));
+    await tester.pump();
+
+    // A collapsed category hides the occupants with the channel.
+    expect(
+      find.byKey(const ValueKey('voice-seat-the-lodge-bot-1')),
+      findsNothing,
+    );
+  });
 }
 
 final _workspace = ChatWorkspace(
@@ -97,6 +157,15 @@ final _workspace = ChatWorkspace(
       parentId: 'category-1',
       unread: true,
       mentionCount: 2,
+    ),
+    ConversationChannel(
+      id: 'the-lodge',
+      spaceId: 'guild-1',
+      name: 'The Lodge',
+      topic: '',
+      kind: ChannelKind.voice,
+      position: 4,
+      parentId: 'category-1',
     ),
     ConversationChannel(
       id: 'random',

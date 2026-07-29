@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
@@ -281,6 +282,7 @@ final class VoiceController extends ChangeNotifier {
       if (movedSession ||
           signalingService?.currentStatus != VoiceConnectionStatus.ready) {
         _connectionStatus = VoiceConnectionStatus.joining;
+        _logStatus('joining', _connectionStatus);
       }
       if (!await _sendJoin()) {
         _connectionStatus = VoiceConnectionStatus.disconnected;
@@ -354,6 +356,7 @@ final class VoiceController extends ChangeNotifier {
       if (service == null || _connectedChannelId == null) return;
       if (service.currentStatus != VoiceConnectionStatus.ready) {
         _connectionStatus = VoiceConnectionStatus.joining;
+        _logStatus('joining', _connectionStatus);
       }
       await _sendJoin();
     });
@@ -392,8 +395,9 @@ final class VoiceController extends ChangeNotifier {
     // connected used to reset the status to disconnected and then sit there:
     // the `ready` it was waiting for had already been announced, and nothing
     // announces it twice, so a working call showed as joining forever.
-    _connectionStatus = service?.currentStatus ??
-        VoiceConnectionStatus.disconnected;
+    _connectionStatus =
+        service?.currentStatus ?? VoiceConnectionStatus.disconnected;
+    _logStatus('bound', _connectionStatus);
     _transportSession = service?.currentSession;
     _participants.clear();
     // The sidebar renders seats for channels this client is not in, so it has
@@ -412,6 +416,11 @@ final class VoiceController extends ChangeNotifier {
   void _handleSignalingEvent(VoiceSignalingEvent event) {
     switch (event) {
       case VoiceSignalingStatusEvent():
+        // A room that shows the wrong status is unfalsifiable without this:
+        // the transport can be carrying audio while the label says joining,
+        // and nothing else records which side lost the transition. Statuses
+        // only — no channel, no session, nothing about who is in the room.
+        _logStatus('signalled', event.status, error: event.error);
         _connectionStatus = event.status;
         if (event.error != null) _error = event.error;
         if (event.status == VoiceConnectionStatus.disconnected ||
@@ -446,6 +455,17 @@ final class VoiceController extends ChangeNotifier {
         break;
     }
     if (!_disposed) notifyListeners();
+  }
+
+  void _logStatus(String what, VoiceConnectionStatus status, {Object? error}) {
+    final line =
+        'flucord.voice.status $what: ${status.name}'
+        '${error == null ? '' : ' ($error)'}';
+    developer.log(line, name: 'flucord.voice.status');
+    // Also on stdout: `dart:developer` writes to the VM service, which a
+    // desktop build's console never shows, and a status nobody can read is
+    // not a diagnostic. Debug builds only.
+    if (kDebugMode) debugPrint(line);
   }
 
   void _handleSignalingDone() {
