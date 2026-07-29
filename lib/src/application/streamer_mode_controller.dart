@@ -99,6 +99,12 @@ final class StreamerModeController extends ChangeNotifier {
   Future<void> setHideFromCapture({required bool hide}) =>
       _persist(_settings.copyWith(hideFromCapture: hide));
 
+  Future<void> setHideOverlayWidgets({required bool hide}) =>
+      _persist(_settings.copyWith(hideOverlayWidgets: hide));
+
+  /// Whether the in-game overlay should be off screen right now.
+  bool get hidesOverlay => _settings.hidesOverlay;
+
   /// Hides invite links in [text] when the mode is on, and leaves it alone
   /// otherwise.
   String redact(String text) =>

@@ -162,6 +162,12 @@ add_dependencies(${BINARY_NAME} flucord_hotkeys)
 install(FILES "$<TARGET_FILE:flucord_hotkeys>"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 
+# The overlay window: layered, click-through, above everything else.
+add_subdirectory("flucord_overlay")
+add_dependencies(${BINARY_NAME} flucord_overlay)
+install(FILES "$<TARGET_FILE:flucord_overlay>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 set(LIBDAVE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdave/libdave.dll")
 if(NOT EXISTS "${LIBDAVE_DLL}")
   message(FATAL_ERROR "Missing ${LIBDAVE_DLL}; run tool/build_libdave.ps1")

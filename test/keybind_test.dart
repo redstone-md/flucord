@@ -52,7 +52,7 @@ void main() {
         '${directory.path}${Platform.pathSeparator}${FileKeybindRepository.fileName}',
       ).writeAsString(
         jsonEncode({
-          'TOGGLE_OVERLAY': {'key': 1},
+          'OVERLAY_ACTIVATE_REGION_TEXT_WIDGET': {'key': 1},
           'TOGGLE_MUTE': {'key': 2, 'modifiers': ['control', 'nonsense']},
           'TOGGLE_DEAFEN': 'not a binding',
         }),

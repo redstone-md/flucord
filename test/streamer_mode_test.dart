@@ -113,6 +113,9 @@ void main() {
       expect(controller.hidesInviteLinks, isTrue);
       expect(controller.silencesSounds, isTrue);
       expect(controller.silencesNotifications, isTrue);
+      // The overlay is drawn over whatever is being captured, so hiding the
+      // client's own window does not deal with it.
+      expect(controller.hidesOverlay, isTrue);
 
       controller.reconcileStreaming(isStreaming: false);
       expect(controller.isEnabled, isFalse);

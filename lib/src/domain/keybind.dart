@@ -21,7 +21,8 @@ enum KeybindAction {
   ),
   toggleStreamerMode('TOGGLE_STREAMER_MODE', 'Toggle streamer mode'),
   saveScreenshot('SAVE_SCREENSHOT', 'Save a screenshot'),
-  saveClip('SAVE_CLIP', 'Save the last few seconds');
+  saveClip('SAVE_CLIP', 'Save the last few seconds'),
+  toggleOverlay('TOGGLE_OVERLAY', 'Toggle the in-game overlay');
 
   const KeybindAction(this.code, this.label, {this.holdToUse = false});
 

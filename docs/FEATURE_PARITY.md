@@ -34,10 +34,11 @@ do not count as desktop-user chat parity.
 | Video and screen share | Built, wired both ways and self-verified | Share, stop, pause and a viewer count from the voice room; watch somebody else's stream in place of the participant grid. 544 real frames became 2151 encrypted packets and came back as 516 pictures at 1280x720; a second Discord account is the only thing left that can confirm delivery over Discord's own servers |
 | Camera in a voice channel | Built both ways, unverified over Discord | Media Foundation capture through the same encoder and voice socket as the share; opcode 12 declares the SSRCs and opcode 4 sets `self_video`. Incoming cameras are split off by payload type, attributed by announced SSRC, decoded per sender and drawn in the participant tile |
 | User settings | Partial | Both `settings-proto` types read, written and live-updated, every write guarded by `required_data_version`; groups Flucord cannot apply are shown unavailable |
-| Keybinds | Ready | Ten actions bound and carried out from the settings page, stored locally as the desktop client does, and fired system-wide through a low-level keyboard hook that reports without swallowing |
+| Keybinds | Ready | Eleven actions bound and carried out from the settings page, stored locally as the desktop client does, and fired system-wide through a low-level keyboard hook that reports without swallowing |
 | Screenshots | Ready | Saved as PNG from the same capture path the screen share uses, under a sortable name, with the location reported |
 | Clips | Ready | The last thirty seconds of whatever the encoder is producing, muxed to MP4 without re-encoding, saved from a keybind |
-| Streamer mode | Partial | Hides invite links and the account name, silences sounds and notifications, keeps the window out of screen recordings, and follows Go Live automatically; hiding overlay widgets is not implemented, since there is no overlay |
+| Streamer mode | Ready | All six switches: invite links, the account name, sounds, notifications, the window's presence in a recording, and the overlay; follows Go Live automatically |
+| In-game overlay | Partial | A layered click-through window showing who is in the room, over any windowed or borderless-fullscreen game; exclusive fullscreen needs an injected overlay, which this client does not do |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Conversation summaries | Ready to receive | `CONVERSATION_SUMMARY_UPDATE` folded into a per-channel store; Discord decides per account whether it sends any |
 | Embedded activities, store and Nitro | Not ready | Activities are a separate transport; commerce is outside a chat client's remit |

@@ -31,6 +31,7 @@ import 'data/discord/discord_rtp_packet.dart';
 import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/streamer_mode_controller.dart';
+import 'application/voice_overlay_controller.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/file_keybind_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
@@ -107,6 +108,7 @@ import 'presentation/widgets/user_profile_scope.dart';
 import 'presentation/widgets/user_settings_scope.dart';
 import 'platform/desktop_integration.dart';
 import 'platform/global_keyboard_hook.dart';
+import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
 import 'theme/flucord_theme.dart';
 
@@ -133,6 +135,7 @@ class FlucordApp extends StatefulWidget {
     this.globalKeyboardHook,
     this.screenshotService,
     this.clipRecorder,
+    this.voiceOverlay,
     this.discordOAuthAccountGateway,
     this.discordSocialSdkGateway,
     this.discordSocialDmGateway,
@@ -219,6 +222,10 @@ class FlucordApp extends StatefulWidget {
 
   /// Keeps the last few seconds of encoded video, for the clip keybind.
   final ClipRecorder? clipRecorder;
+
+  /// The in-game overlay window. Injected so a test does not put one on the
+  /// screen of whoever is running it.
+  final VoiceOverlay? voiceOverlay;
   final DiscordOAuthAccountGateway? discordOAuthAccountGateway;
   final DiscordSocialSdkGateway? discordSocialSdkGateway;
   final DiscordSocialDmGateway? discordSocialDmGateway;
@@ -274,6 +281,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final StreamerModeController _streamerModeController;
   late final ScreenshotService _screenshotService;
   late final ClipRecorder _clipRecorder;
+  late final VoiceOverlayController _voiceOverlayController;
   final GlobalKey<ScaffoldMessengerState> _messengerKey =
       GlobalKey<ScaffoldMessengerState>();
   late final DirectCallController _directCallController;
@@ -490,6 +498,31 @@ class _FlucordAppState extends State<FlucordApp> {
         (Platform.isWindows
             ? NativeScreenshotService()
             : const UnavailableScreenshotService());
+    _voiceOverlayController = VoiceOverlayController(
+      overlay:
+          widget.voiceOverlay ??
+          (Platform.isWindows
+              ? WindowsVoiceOverlay()
+              : const UnavailableVoiceOverlay()),
+      // Read on demand rather than captured: the overlay is on screen while
+      // Flucord is not, so what it says has to come from the live room.
+      roster: () => [
+        for (final participant in _voiceController.participants)
+          OverlaySpeaker(
+            name:
+                _chatController.workspace
+                    ?.memberById(participant.userId)
+                    .displayName ??
+                participant.userId,
+            isSpeaking: participant.isSpeaking,
+          ),
+      ],
+      isHiddenByStreamerMode: () => _streamerModeController.hidesOverlay,
+    );
+    // Redrawn on every roster change and whenever streamer mode moves: an
+    // overlay showing who was in the room a minute ago is worse than none.
+    _voiceController.addListener(_refreshOverlay);
+    _streamerModeController.addListener(_refreshOverlay);
     _clipRecorder =
         widget.clipRecorder ??
         (Platform.isWindows
@@ -588,6 +621,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _selfVideoController.dispose();
     _remoteCameraController.dispose();
     _goLiveController.removeListener(_syncStreamerMode);
+    _voiceController.removeListener(_refreshOverlay);
+    _streamerModeController.removeListener(_refreshOverlay);
+    _voiceOverlayController.dispose();
     _keybindController.dispose();
     _streamerModeController.dispose();
     unawaited(widget.voiceMessageRecorder?.dispose());
@@ -625,6 +661,8 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   void _syncSelfPresence() => _selfPresenceController.reconcile();
+
+  void _refreshOverlay() => unawaited(_voiceOverlayController.refresh());
 
   /// Writes the last few seconds of what was being encoded.
   ///
@@ -713,6 +751,8 @@ class _FlucordAppState extends State<FlucordApp> {
         if (pressed) unawaited(_saveScreenshot());
       case KeybindAction.saveClip:
         if (pressed) unawaited(_saveClip());
+      case KeybindAction.toggleOverlay:
+        if (pressed) unawaited(_voiceOverlayController.toggle());
     }
   }
 

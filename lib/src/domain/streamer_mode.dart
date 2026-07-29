@@ -1,9 +1,7 @@
 /// What streamer mode hides while it is on.
 ///
 /// The switches are Discord's own, read out of the desktop bundle's settings
-/// ids rather than invented. Five of its six are here; hiding overlay widgets
-/// is the one left out, because this build has no overlay to hide and a
-/// toggle that changed nothing would be worse here than anywhere else.
+/// ids rather than invented. All six are here.
 final class StreamerModeSettings {
   const StreamerModeSettings({
     this.enabled = false,
@@ -13,6 +11,7 @@ final class StreamerModeSettings {
     this.disableSounds = true,
     this.disableNotifications = true,
     this.hideFromCapture = false,
+    this.hideOverlayWidgets = true,
   });
 
   /// Whether it is on right now.
@@ -35,6 +34,11 @@ final class StreamerModeSettings {
   /// telling why it had gone.
   final bool hideFromCapture;
 
+  /// Whether the in-game overlay is taken off screen while the mode is on.
+  /// It is drawn over whatever is being captured, so it is the one thing that
+  /// hiding the client's own window does not deal with.
+  final bool hideOverlayWidgets;
+
   static const off = StreamerModeSettings();
 
   bool get hidesPersonalInformation => enabled && hidePersonalInformation;
@@ -42,6 +46,7 @@ final class StreamerModeSettings {
   bool get silencesSounds => enabled && disableSounds;
   bool get silencesNotifications => enabled && disableNotifications;
   bool get hidesWindowFromCapture => enabled && hideFromCapture;
+  bool get hidesOverlay => enabled && hideOverlayWidgets;
 
   StreamerModeSettings copyWith({
     bool? enabled,
@@ -51,6 +56,7 @@ final class StreamerModeSettings {
     bool? disableSounds,
     bool? disableNotifications,
     bool? hideFromCapture,
+    bool? hideOverlayWidgets,
   }) => StreamerModeSettings(
     enabled: enabled ?? this.enabled,
     automatic: automatic ?? this.automatic,
@@ -60,6 +66,7 @@ final class StreamerModeSettings {
     disableSounds: disableSounds ?? this.disableSounds,
     disableNotifications: disableNotifications ?? this.disableNotifications,
     hideFromCapture: hideFromCapture ?? this.hideFromCapture,
+    hideOverlayWidgets: hideOverlayWidgets ?? this.hideOverlayWidgets,
   );
 
   Map<String, Object?> toJson() => {
@@ -72,6 +79,7 @@ final class StreamerModeSettings {
     'disable_sounds': disableSounds,
     'disable_notifications': disableNotifications,
     'hide_from_capture': hideFromCapture,
+    'hide_overlay_widgets': hideOverlayWidgets,
   };
 
   /// Reads stored settings, falling back per field.
@@ -95,6 +103,7 @@ final class StreamerModeSettings {
       disableSounds: read('disable_sounds', fallback: true),
       disableNotifications: read('disable_notifications', fallback: true),
       hideFromCapture: read('hide_from_capture', fallback: false),
+      hideOverlayWidgets: read('hide_overlay_widgets', fallback: true),
     );
   }
 }

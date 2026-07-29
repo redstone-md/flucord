@@ -7,9 +7,9 @@ import '../../theme/flucord_theme.dart';
 
 /// Streamer mode's switches.
 ///
-/// Five of Discord's six. Hiding overlay widgets is the one left out, because
-/// this build has no overlay — and a switch that changes nothing is worse than
-/// an absent one here, where believing something is hidden is the whole point.
+/// All six of Discord's, and each one does something: a switch that changed
+/// nothing would be worse here than anywhere else in the client, because
+/// believing something is hidden is the whole point.
 class StreamerModeSection extends StatelessWidget {
   const StreamerModeSection({required this.controller, super.key});
 
@@ -83,6 +83,15 @@ class StreamerModeSection extends StatelessWidget {
             value: settings.disableNotifications,
             onChanged: (value) =>
                 controller.setDisableNotifications(disable: value),
+          ),
+          _Switch(
+            switchKey: const ValueKey('streamer-mode-overlay'),
+            title: 'Hide the in-game overlay',
+            subtitle: 'It is drawn over whatever is being captured, so '
+                'hiding the client window does not cover it.',
+            value: settings.hideOverlayWidgets,
+            onChanged: (value) =>
+                controller.setHideOverlayWidgets(hide: value),
           ),
           _Switch(
             switchKey: const ValueKey('streamer-mode-capture'),
