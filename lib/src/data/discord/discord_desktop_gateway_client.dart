@@ -137,7 +137,7 @@ final class DiscordDesktopGatewayClient
     } on Object catch (error, stackTrace) {
       _lastBootstrapError = error;
       _logBootstrapFailure('websocket-upgrade', error, stackTrace);
-      _scheduleReconnect();
+      _scheduleReconnect(reason: 'websocket upgrade failed: $error');
     }
   }
 
@@ -165,7 +165,10 @@ final class DiscordDesktopGatewayClient
       // Reconnecting is the only correct response; _open resets the decoder.
       _lastBootstrapError = error;
       _logBootstrapFailure('transport-compression', error, stackTrace);
-      _scheduleReconnect(immediate: true);
+      _scheduleReconnect(
+        immediate: true,
+        reason: 'transport compression failed: $error',
+      );
       return;
     } on FormatException catch (error, stackTrace) {
       _lastBootstrapError = error;
@@ -253,7 +256,10 @@ final class DiscordDesktopGatewayClient
       case DiscordDesktopGatewayScheduleHeartbeat():
         _startHeartbeat(action.interval);
       case DiscordDesktopGatewayReconnect():
-        _scheduleReconnect(immediate: action.immediate);
+        _scheduleReconnect(
+          immediate: action.immediate,
+          reason: 'the protocol asked for one',
+        );
       case DiscordDesktopGatewayDispatch():
         _captureBootstrap(action);
         if (action.name == 'READY' || action.name == 'RESUMED') {
@@ -412,7 +418,7 @@ final class DiscordDesktopGatewayClient
       );
       unawaited(socket.close());
       _socket = null;
-      _scheduleReconnect(immediate: true);
+      _scheduleReconnect(immediate: true, reason: 'send failed');
     }
   }
 
@@ -439,13 +445,13 @@ final class DiscordDesktopGatewayClient
       }
       return;
     }
-    _scheduleReconnect();
+    _scheduleReconnect(reason: 'socket closed (code ${_socket?.closeCode})');
   }
 
   void _onSocketError(Object error, StackTrace stackTrace) {
     _lastBootstrapError = error;
     _logBootstrapFailure('websocket-stream', error, stackTrace);
-    _scheduleReconnect();
+    _scheduleReconnect(reason: 'socket error: $error');
   }
 
   void _logBootstrapFailure(String stage, Object error, StackTrace stackTrace) {
@@ -474,9 +480,9 @@ final class DiscordDesktopGatewayClient
     if (kDebugMode) stdout.writeln(line);
   }
 
-  void _scheduleReconnect({bool immediate = false}) {
+  void _scheduleReconnect({bool immediate = false, String reason = 'unknown'}) {
     if (_closing || _reconnectTimer?.isActive == true) return;
-    _diagnose('reconnecting', immediate ? 'immediate' : 'in 2s');
+    _diagnose('reconnecting', reason);
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     _emitStatus(DiscordGatewayStatus.reconnecting);

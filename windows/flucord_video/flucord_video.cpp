@@ -159,25 +159,74 @@ HRESULT ConfigureEncoder(FlucordVideoEncoder* state) {
   return S_OK;
 }
 
+// Finds the display at `index` across every adapter, and the adapter it
+// hangs off.
+//
+// Not `device->GetAdapter()->EnumOutputs(index)`, which is what this used to
+// do: on a laptop with switchable graphics the D3D device lands on the
+// discrete GPU while the panel is wired to the integrated one, and that
+// adapter reports no outputs at all. Every share failed with "that display is
+// no longer attached" on exactly the machines that have two GPUs.
+HRESULT FindOutput(int index, ComPtr<IDXGIAdapter1>* out_adapter,
+                   ComPtr<IDXGIOutput1>* out_output) {
+  ComPtr<IDXGIFactory1> factory;
+  HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+  if (FAILED(hr)) return hr;
+
+  int seen = 0;
+  for (UINT adapter_index = 0;; ++adapter_index) {
+    ComPtr<IDXGIAdapter1> adapter;
+    if (factory->EnumAdapters1(adapter_index, &adapter) ==
+        DXGI_ERROR_NOT_FOUND) {
+      break;
+    }
+    for (UINT output_index = 0;; ++output_index) {
+      ComPtr<IDXGIOutput> output;
+      if (adapter->EnumOutputs(output_index, &output) ==
+          DXGI_ERROR_NOT_FOUND) {
+        break;
+      }
+      DXGI_OUTPUT_DESC desc{};
+      if (FAILED(output->GetDesc(&desc)) || !desc.AttachedToDesktop) continue;
+      if (seen++ != index) continue;
+      ComPtr<IDXGIOutput1> output1;
+      hr = output.As(&output1);
+      if (FAILED(hr)) return hr;
+      *out_adapter = adapter;
+      *out_output = output1;
+      return S_OK;
+    }
+  }
+  return DXGI_ERROR_NOT_FOUND;
+}
+
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
-  ComPtr<IDXGIDevice> dxgi_device;
-  HRESULT hr = state->device.As(&dxgi_device);
+  ComPtr<IDXGIAdapter1> adapter;
+  ComPtr<IDXGIOutput1> output;
+  HRESULT hr = FindOutput(state->config.display_index, &adapter, &output);
+  // A display index that is no longer there — a monitor unplugged between the
+  // picker and the share — falls back to the primary rather than refusing.
+  if (FAILED(hr) && state->config.display_index != 0) {
+    hr = FindOutput(0, &adapter, &output);
+  }
   if (FAILED(hr)) return hr;
 
-  ComPtr<IDXGIAdapter> adapter;
-  hr = dxgi_device->GetAdapter(&adapter);
+  // The device is rebuilt on the adapter that actually owns the display:
+  // DuplicateOutput refuses a device from any other one.
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  ComPtr<ID3D11Device> device;
+  ComPtr<ID3D11DeviceContext> context;
+  hr = D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
+                         levels, ARRAYSIZE(levels), D3D11_SDK_VERSION, &device,
+                         nullptr, &context);
   if (FAILED(hr)) return hr;
 
-  ComPtr<IDXGIOutput> output;
-  hr = adapter->EnumOutputs(static_cast<UINT>(state->config.display_index),
-                            &output);
+  hr = output->DuplicateOutput(device.Get(), &state->duplication);
   if (FAILED(hr)) return hr;
-
-  ComPtr<IDXGIOutput1> output1;
-  hr = output.As(&output1);
-  if (FAILED(hr)) return hr;
-
-  return output1->DuplicateOutput(state->device.Get(), &state->duplication);
+  state->device = device;
+  state->context = context;
+  return S_OK;
 }
 
 void DrainEncoder(FlucordVideoEncoder* state) {
