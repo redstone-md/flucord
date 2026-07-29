@@ -37,6 +37,13 @@ mixin _MockChatRepositoryScheduledEvents implements ScheduledEventRepository {
   }
 
   @override
+  Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
+    required String spaceId,
+    required String eventId,
+    int limit = 100,
+  }) async => const [];
+
+  @override
   Future<GuildScheduledEvent?> createScheduledEvent({
     required String spaceId,
     required GuildScheduledEventDraft draft,

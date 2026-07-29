@@ -88,6 +88,8 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
   final Map<String, List<GuildScheduledEvent>> _scheduledEventsBySpace = {};
+  final Map<String, List<GuildScheduledEventAttendee>> _eventAttendees = {};
+  final Set<String> _loadingEventAttendees = {};
   final Set<String> _loadingScheduledEventSpaces = {};
   final Map<String, Object> _scheduledEventErrors = {};
   final Map<String, Set<String>> _typingMembers = {};
@@ -183,6 +185,8 @@ final class ChatController extends ChangeNotifier {
     _loadingPins.clear();
     _pinErrors.clear();
     _scheduledEventsBySpace.clear();
+    _eventAttendees.clear();
+    _loadingEventAttendees.clear();
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
     _archivedThreadState.clear();

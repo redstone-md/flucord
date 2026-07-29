@@ -543,7 +543,8 @@ are excluded from the denominator and are never reported as implemented.
 - **Contract**: `GET /guilds/{id}/scheduled-events?with_user_count=true`,
   `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`,
   `POST /guilds/{id}/scheduled-events`,
-  `PATCH`/`DELETE /guilds/{id}/scheduled-events/{event}`.
+  `PATCH`/`DELETE /guilds/{id}/scheduled-events/{event}`,
+  `GET /guilds/{id}/scheduled-events/{event}/users?with_member=true`.
 - **Dependencies**: FBC-GUILD.
 - **Status**: **Partial**.
 - **Implemented**: event loading, SQLite v16 persistence, live create/update/
@@ -563,6 +564,10 @@ are excluded from the denominator and are never reported as implemented.
   moved nothing closes instead of recording a change nobody made. Deleting
   asks first, since it cannot be undone from here, and cancelling an event is
   deliberately a different call: a status change, not a delete.
+  Who is interested is read on demand rather than with the list — a server
+  with twenty events would otherwise make twenty requests to draw a panel
+  nobody has asked anything of yet — and names people by the nickname their
+  server knows them by, because that is the name everybody else there sees.
 - **Tests**: `discord_chat_repository_scheduled_events_test.dart`,
   `discord_scheduled_event_mapper_test.dart`,
   `scheduled_event_rsvp_test.dart`,
@@ -570,7 +575,7 @@ are excluded from the denominator and are never reported as implemented.
   `guild_event_editing_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
 - **Blocked by**: the four recurrence-exception dispatches, recurrence rules
-  themselves, the cover image, and the list of who else is going.
+  themselves, and the cover image.
 
 ## FBC-APPLICATION — Bots, commands, interactions, activities
 

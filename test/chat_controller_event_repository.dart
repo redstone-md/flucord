@@ -172,6 +172,26 @@ final class _EventRepository
   bool failNextEventWrite = false;
   bool acceptEventWrite = true;
 
+  /// Who to answer the interested list with, and what was asked for.
+  final List<String> attendeeRequests = [];
+  bool failNextAttendees = false;
+
+  @override
+  Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
+    required String spaceId,
+    required String eventId,
+    int limit = 100,
+  }) async {
+    if (failNextAttendees) {
+      failNextAttendees = false;
+      throw StateError('attendees failed');
+    }
+    attendeeRequests.add(eventId);
+    return const [
+      GuildScheduledEventAttendee(userId: 'user-1', displayName: 'Mira'),
+    ];
+  }
+
   @override
   Future<GuildScheduledEvent?> createScheduledEvent({
     required String spaceId,

@@ -98,6 +98,40 @@ void main() {
     });
   });
 
+  group('who is coming', () {
+    test('somebody is named, or named by their id', () {
+      const named = GuildScheduledEventAttendee(
+        userId: 'user-1',
+        displayName: 'Mira',
+      );
+
+      expect(named.label, 'Mira');
+      expect(
+        const GuildScheduledEventAttendee(userId: 'user-2').label,
+        'user-2',
+      );
+      expect(
+        named,
+        const GuildScheduledEventAttendee(
+          userId: 'user-1',
+          displayName: 'Mira',
+        ),
+      );
+      expect(
+        named.hashCode,
+        const GuildScheduledEventAttendee(
+          userId: 'user-1',
+          displayName: 'Mira',
+        ).hashCode,
+      );
+      expect(
+        named == const GuildScheduledEventAttendee(userId: 'user-1'),
+        isFalse,
+      );
+      expect(named == Object(), isFalse);
+    });
+  });
+
   group('a partial edit', () {
     test('carries only what was touched', () {
       final edit = GuildScheduledEventEdit();

@@ -33,6 +33,16 @@ abstract interface class ScheduledEventRepository {
     required GuildScheduledEventEdit edit,
   });
 
+  /// Who said they are interested, newest first as Discord returns them.
+  ///
+  /// Capped rather than paged: the surface shows who is coming, and a list
+  /// long enough to need paging is a list nobody reads to the end of.
+  Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
+    required String spaceId,
+    required String eventId,
+    int limit = 100,
+  });
+
   /// Deletes an event outright. Cancelling one is an edit of its status, and
   /// the two are deliberately not the same call.
   Future<bool> deleteScheduledEvent({

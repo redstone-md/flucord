@@ -81,6 +81,19 @@ final class DiscordDesktopApiClient
         query: const {'with_user_count': 'true'},
       );
 
+  /// The people interested in an event.
+  ///
+  /// `with_member` is what brings the guild nickname back with each user, so
+  /// somebody appears under the name that server knows them by.
+  Future<List<Map<String, Object?>>> getGuildScheduledEventUsers({
+    required String guildId,
+    required String eventId,
+    int limit = 100,
+  }) => _rest.getList(
+    '/guilds/$guildId/scheduled-events/$eventId/users',
+    query: {'limit': '${limit.clamp(1, 100)}', 'with_member': 'true'},
+  );
+
   Future<Map<String, Object?>> createGuildScheduledEvent({
     required String guildId,
     required Map<String, Object?> body,

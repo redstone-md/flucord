@@ -182,6 +182,72 @@ void main() {
   });
 
   group('managing events', () {
+    test('the interested list names people as the server knows them', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode([
+            {
+              'user': {
+                'id': 'user-1',
+                'username': 'mira',
+                'global_name': 'Mira',
+              },
+              'member': {'nick': 'Forge Mira'},
+            },
+            {
+              'user': {'id': 'user-2', 'global_name': 'Ada'},
+            },
+            {
+              'user': {'id': 'user-3', 'username': 'lena'},
+            },
+            {
+              'user': {'id': 'user-4'},
+            },
+            {'no': 'user'},
+            'nonsense',
+          ]),
+        ),
+      ]);
+
+      final attendees = await (await _repository(
+        transport,
+      )).loadEventAttendees(spaceId: _guild, eventId: _event);
+
+      // The server nickname wins: it is the name everybody else there sees.
+      expect(attendees.map((who) => who.label), [
+        'Forge Mira',
+        'Ada',
+        'lena',
+        'user-4',
+      ]);
+      final request = transport.requests.single;
+      expect(
+        request.uri.path,
+        endsWith('/guilds/$_guild/scheduled-events/$_event/users'),
+      );
+      // with_member is what brings the nickname back at all.
+      expect(request.uri.queryParameters['with_member'], 'true');
+      expect(request.uri.queryParameters['limit'], '100');
+    });
+
+    test('the limit is clamped to what Discord will serve', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode(const <Object?>[]),
+        ),
+      ]);
+
+      await (await _repository(
+        transport,
+      )).loadEventAttendees(spaceId: _guild, eventId: _event, limit: 500);
+
+      expect(transport.requests.single.uri.queryParameters['limit'], '100');
+    });
+
     test(
       'a create sends the whole event and reads back what was stored',
       () async {

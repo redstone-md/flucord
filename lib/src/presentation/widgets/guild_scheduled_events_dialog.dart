@@ -15,6 +15,8 @@ class GuildScheduledEventsDialog extends StatelessWidget {
     this.onCreate,
     this.onEdit,
     this.onDelete,
+    this.attendeesFor,
+    this.onShowAttendees,
     super.key,
   });
 
@@ -36,6 +38,12 @@ class GuildScheduledEventsDialog extends StatelessWidget {
   final VoidCallback? onCreate;
   final void Function(GuildScheduledEvent)? onEdit;
   final void Function(GuildScheduledEvent)? onDelete;
+
+  /// Who is interested, as far as this session has been told, and the way to
+  /// go and ask. Null on a transport that cannot answer.
+  final List<GuildScheduledEventAttendee> Function(String eventId)?
+  attendeesFor;
+  final void Function(GuildScheduledEvent)? onShowAttendees;
 
   @override
   Widget build(BuildContext context) => Dialog(
@@ -102,6 +110,8 @@ class GuildScheduledEventsDialog extends StatelessWidget {
       onSetInterest: onSetInterest,
       onEdit: onEdit,
       onDelete: onDelete,
+      attendees: attendeesFor?.call(event.id) ?? const [],
+      onShowAttendees: onShowAttendees,
     );
   }
 }
@@ -173,6 +183,8 @@ class _ScheduledEventRow extends StatelessWidget {
     this.onSetInterest,
     this.onEdit,
     this.onDelete,
+    this.attendees = const [],
+    this.onShowAttendees,
   });
 
   final GuildScheduledEvent event;
@@ -185,6 +197,8 @@ class _ScheduledEventRow extends StatelessWidget {
   onSetInterest;
   final void Function(GuildScheduledEvent)? onEdit;
   final void Function(GuildScheduledEvent)? onDelete;
+  final List<GuildScheduledEventAttendee> attendees;
+  final void Function(GuildScheduledEvent)? onShowAttendees;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +253,19 @@ class _ScheduledEventRow extends StatelessWidget {
                           color: context.surfaces.muted,
                         ),
                       ),
+                      if (attendees.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          key: ValueKey('guild-event-attendees-${event.id}'),
+                          attendees.map((who) => who.label).join(', '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.surfaces.muted,
+                          ),
+                        ),
+                      ],
                       if (event.description?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 6),
                         Text(
@@ -251,13 +278,30 @@ class _ScheduledEventRow extends StatelessWidget {
                       const SizedBox(height: 7),
                       Row(
                         children: [
-                          Text(
-                            '${event.interestedCount} interested',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.surfaces.muted,
+                          if (onShowAttendees == null)
+                            Text(
+                              '${event.interestedCount} interested',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.surfaces.muted,
+                              ),
+                            )
+                          else
+                            // The count is the way in to the names, because
+                            // that is what somebody clicking it wants.
+                            TextButton(
+                              key: ValueKey('guild-event-who-${event.id}'),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                textStyle: const TextStyle(fontSize: 11),
+                              ),
+                              onPressed: () => onShowAttendees!(event),
+                              child: Text(
+                                '${event.interestedCount} interested',
+                              ),
                             ),
-                          ),
                           if (onSetInterest != null) ...[
                             const SizedBox(width: 10),
                             _InterestButton(

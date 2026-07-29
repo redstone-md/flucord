@@ -255,6 +255,83 @@ void main() {
       expect(controller.scheduledEventsError('forge'), isA<StateError>());
     });
 
+    test('who is coming is read on demand, and only once at a time', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      expect(controller.eventAttendeesFor('event-1'), isEmpty);
+      expect(controller.isLoadingEventAttendees('event-1'), isFalse);
+
+      await Future.wait([
+        controller.loadEventAttendees(event),
+        // A second ask while the first is in flight is not a second request.
+        controller.loadEventAttendees(event),
+      ]);
+
+      expect(repository.attendeeRequests, ['event-1']);
+      expect(controller.eventAttendeesFor('event-1').single.label, 'Mira');
+      expect(controller.isLoadingEventAttendees('event-1'), isFalse);
+    });
+
+    test('a failed read of who is coming is recorded, not thrown', () async {
+      final repository = _EventRepository()..failNextAttendees = true;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      await controller.loadEventAttendees(event);
+
+      expect(controller.scheduledEventsError('forge'), isA<StateError>());
+      expect(controller.eventAttendeesFor('event-1'), isEmpty);
+    });
+
+    test('an edit or a delete that failed is recorded, not thrown', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final event = GuildScheduledEvent(
+        id: 'event-1',
+        spaceId: 'forge',
+        name: 'Forge night',
+        scheduledStartTime: DateTime.utc(2026, 8),
+        entityType: GuildScheduledEventEntityType.external,
+        status: GuildScheduledEventStatus.scheduled,
+      );
+
+      repository.failNextEventWrite = true;
+      expect(
+        await controller.editScheduledEvent(
+          event,
+          GuildScheduledEventEdit()..name = 'Renamed',
+        ),
+        isNull,
+      );
+      expect(controller.scheduledEventsError('forge'), isA<StateError>());
+
+      repository.failNextEventWrite = true;
+      expect(await controller.deleteScheduledEvent(event), isFalse);
+      expect(controller.scheduledEventsError('forge'), isA<StateError>());
+    });
+
     test('an event RSVP names the guild it belongs to', () async {
       final repository = _EventRepository();
       final controller = ChatController(repository);

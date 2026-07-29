@@ -158,6 +158,9 @@ extension _FlucordShellNavigation on FlucordShell {
           error: chatController.scheduledEventsError(space.id),
           onRefresh: () => chatController.loadScheduledEvents(space.id),
           onSetInterest: chatController.setEventInterest,
+          attendeesFor: chatController.eventAttendeesFor,
+          onShowAttendees: (event) =>
+              unawaited(chatController.loadEventAttendees(event)),
           onCreate: canManage
               ? () => unawaited(_openEventForm(context, space))
               : null,

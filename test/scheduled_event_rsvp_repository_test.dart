@@ -80,6 +80,49 @@ void main() {
       expect(find.text('3 interested'), findsOneWidget);
     });
 
+    testWidgets('the count opens the list of who is coming', (tester) async {
+      final asked = <String>[];
+      await _pumpDialog(
+        tester,
+        onShowAttendees: (event) => asked.add(event.id),
+      );
+
+      await tester.tap(find.byKey(ValueKey('guild-event-who-${_event.id}')));
+      await tester.pumpAndSettle();
+
+      expect(asked, [_event.id]);
+    });
+
+    testWidgets('the names appear once they have arrived', (tester) async {
+      await _pumpDialog(
+        tester,
+        onShowAttendees: (_) {},
+        attendees: const [
+          GuildScheduledEventAttendee(userId: 'user-1', displayName: 'Mira'),
+          GuildScheduledEventAttendee(userId: 'user-2'),
+        ],
+      );
+
+      expect(
+        find.byKey(ValueKey('guild-event-attendees-${_event.id}')),
+        findsOneWidget,
+      );
+      // Somebody Discord named nothing for still reads as a person, by id.
+      expect(find.text('Mira, user-2'), findsOneWidget);
+    });
+
+    testWidgets('a transport that cannot answer shows a plain count', (
+      tester,
+    ) async {
+      await _pumpDialog(tester);
+
+      expect(
+        find.byKey(ValueKey('guild-event-who-${_event.id}')),
+        findsNothing,
+      );
+      expect(find.text('3 interested'), findsOneWidget);
+    });
+
     testWidgets('a transport that cannot say offers no control', (
       tester,
     ) async {
@@ -98,6 +141,8 @@ Future<void> _pumpDialog(
   WidgetTester tester, {
   Future<bool> Function(GuildScheduledEvent, {required bool interested})?
   onSetInterest,
+  void Function(GuildScheduledEvent)? onShowAttendees,
+  List<GuildScheduledEventAttendee> attendees = const [],
 }) async {
   await tester.binding.setSurfaceSize(const Size(900, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -118,6 +163,8 @@ Future<void> _pumpDialog(
           error: null,
           onRefresh: () {},
           onSetInterest: onSetInterest,
+          onShowAttendees: onShowAttendees,
+          attendeesFor: (_) => attendees,
         ),
       ),
     ),

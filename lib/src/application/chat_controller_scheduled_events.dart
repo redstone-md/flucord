@@ -68,6 +68,35 @@ extension ChatControllerScheduledEvents on ChatController {
     }
   }
 
+  /// Who is interested in [eventId], as far as this session has been told.
+  List<GuildScheduledEventAttendee> eventAttendeesFor(String eventId) =>
+      List.unmodifiable(_eventAttendees[eventId] ?? const []);
+
+  /// Reads who is interested. Loaded on demand rather than with the list: a
+  /// server with twenty events would otherwise make twenty requests to draw a
+  /// panel where nobody has asked about anybody yet.
+  Future<void> loadEventAttendees(GuildScheduledEvent event) async {
+    final repository = _repository;
+    if (repository is! ScheduledEventRepository) return;
+    if (!_loadingEventAttendees.add(event.id)) return;
+    _notify();
+    try {
+      final scheduledRepository = repository as ScheduledEventRepository;
+      _eventAttendees[event.id] = await scheduledRepository.loadEventAttendees(
+        spaceId: event.spaceId,
+        eventId: event.id,
+      );
+    } catch (error) {
+      _scheduledEventErrors[event.spaceId] = error;
+    } finally {
+      _loadingEventAttendees.remove(event.id);
+      _notify();
+    }
+  }
+
+  bool isLoadingEventAttendees(String eventId) =>
+      _loadingEventAttendees.contains(eventId);
+
   /// Creates an event and shows it without waiting for the dispatch.
   ///
   /// Unlike the RSVP count, this is the whole object as the server stored it,

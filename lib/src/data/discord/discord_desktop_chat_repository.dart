@@ -480,6 +480,49 @@ final class DiscordDesktopChatRepository
   }
 
   @override
+  Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
+    required String spaceId,
+    required String eventId,
+    int limit = 100,
+  }) async {
+    final payloads = await _api.getGuildScheduledEventUsers(
+      guildId: spaceId,
+      eventId: eventId,
+      limit: limit,
+    );
+    return [for (final payload in payloads) ?_readAttendee(payload)];
+  }
+
+  /// Reads one row of the interested list.
+  ///
+  /// The nickname a server knows somebody by wins over their global name,
+  /// because that is the name everybody else in that server sees them under.
+  static GuildScheduledEventAttendee? _readAttendee(
+    Map<String, Object?> payload,
+  ) {
+    final user = payload['user'];
+    if (user is! Map) return null;
+    final fields = user.cast<String, Object?>();
+    final id = fields['id'];
+    if (id is! String || id.isEmpty) return null;
+    final member = payload['member'] is Map
+        ? (payload['member']! as Map).cast<String, Object?>()
+        : const <String, Object?>{};
+    final nickname = member['nick'];
+    final global = fields['global_name'];
+    final username = fields['username'];
+    return GuildScheduledEventAttendee(
+      userId: id,
+      displayName: switch ((nickname, global, username)) {
+        (final String nick, _, _) when nick.isNotEmpty => nick,
+        (_, final String name, _) when name.isNotEmpty => name,
+        (_, _, final String name) when name.isNotEmpty => name,
+        _ => '',
+      },
+    );
+  }
+
+  @override
   Future<GuildScheduledEvent?> createScheduledEvent({
     required String spaceId,
     required GuildScheduledEventDraft draft,
