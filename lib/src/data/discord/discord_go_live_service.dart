@@ -168,7 +168,19 @@ final class DiscordGoLiveService implements GoLiveRepository {
     final token = _text(data['token']);
     if (endpoint.isEmpty || token.isEmpty) return null;
     if (!_servers.isClosed) {
-      _servers.add(GoLiveServer(key: key, endpoint: endpoint, token: token));
+      _servers.add(
+        GoLiveServer(
+          key: key,
+          endpoint: endpoint,
+          token: token,
+          // From the STREAM_CREATE that came before it. Discord gives a
+          // stream its own RTC server, and a connection identifying with the
+          // guild instead is closed with 4006.
+          rtcServerId: _text(data['rtc_server_id']).isNotEmpty
+              ? _text(data['rtc_server_id'])
+              : _streams[key.value]?.rtcServerId ?? '',
+        ),
+      );
     }
     return _streams[key.value];
   }

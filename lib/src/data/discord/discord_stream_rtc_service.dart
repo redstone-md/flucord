@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
@@ -84,11 +88,21 @@ final class DiscordStreamRtcService {
   void _acceptServer(GoLiveServer server) {
     if (_closed) return;
     final identity = _identityProvider();
+    _diagnose(
+      'endpoint for ${server.key.userId}',
+      identity == null ? 'no session to identify with' : 'opening',
+    );
     // Without the session id there is nothing to identify with. Dropping the
     // endpoint is right: it is short-lived, and Discord reissues one on the
     // next watch or create rather than expecting the client to hold it.
     if (identity == null) return;
     unawaited(_open(server, identity));
+  }
+
+  void _diagnose(String what, [Object? detail]) {
+    final line = 'flucord.stream $what${detail == null ? '' : ': $detail'}';
+    developer.log(line, name: 'flucord.stream', level: 900);
+    if (kDebugMode) stdout.writeln(line);
   }
 
   Future<void> _open(
@@ -102,7 +116,12 @@ final class DiscordStreamRtcService {
     final session = DiscordStreamRtcSession(
       key: server.key,
       credentials: VoiceServerCredentials(
-        guildId: server.key.guildId,
+        // The RTC server Discord named for this stream, falling back to the
+        // guild when the create was not seen. `serverId` is what identify
+        // carries, and the wrong one is answered with 4006.
+        guildId: server.rtcServerId.isNotEmpty
+            ? server.rtcServerId
+            : server.key.guildId,
         channelId: server.key.channelId,
         userId: identity.userId,
         sessionId: identity.sessionId,

@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
@@ -54,6 +58,7 @@ final class DiscordStreamRtcSession {
 
   Future<void> connect() async {
     if (_closed || _client != null) return;
+    _diagnose('dialling');
     final client = _clientFactory(_credentials);
     _client = client;
     _clientEvents = client.events.listen(_onEvent);
@@ -111,8 +116,28 @@ final class DiscordStreamRtcSession {
   }
 
   void _onEvent(VoiceSignalingEvent event) {
-    if (event is VoiceTransportReadyEvent) _ssrc = event.session.ssrc;
+    if (event is VoiceTransportReadyEvent) {
+      _ssrc = event.session.ssrc;
+      _diagnose('ready', 'ssrc ${event.session.ssrc}');
+    }
+    if (event is VoiceSignalingStatusEvent) {
+      _diagnose(event.status.name, event.error);
+    }
     if (!_events.isClosed) _events.add(event);
+  }
+
+  /// Says what this connection is doing, apart from the call's.
+  ///
+  /// The two look identical in a log otherwise — same client, same statuses —
+  /// and a stream that never opens is indistinguishable from a call that
+  /// reconnected. No token, and no endpoint host: this is a diagnostic, not a
+  /// record of where somebody's stream lives.
+  void _diagnose(String what, [Object? detail]) {
+    final line =
+        'flucord.stream[${key.userId}] $what'
+        '${detail == null ? '' : ': $detail'}';
+    developer.log(line, name: 'flucord.stream', level: 900);
+    if (kDebugMode) stdout.writeln(line);
   }
 
   static DiscordVoiceClient _createClient(VoiceServerCredentials credentials) =>

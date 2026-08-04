@@ -66,10 +66,7 @@ void main() {
 
       // Silently dropping the frame would look like a stream that opened and
       // showed a black rectangle.
-      expect(
-        () => session.sendVideoFrame(_frame),
-        throwsA(isA<StateError>()),
-      );
+      expect(() => session.sendVideoFrame(_frame), throwsA(isA<StateError>()));
       expect(session.announceVideo(enabled: true), isFalse);
     });
 
@@ -120,6 +117,64 @@ void main() {
       expect(service.sessionFor(_key), isNotNull);
     });
 
+    test(
+      'identifies with the RTC server Discord named for the stream',
+      () async {
+        final repository = _FakeRepository();
+        late VoiceServerCredentials seen;
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          clientFactory: (credentials) {
+            seen = credentials;
+            return _FakeClient();
+          },
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'stream-token',
+            rtcServerId: 'rtc-77',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Not the guild. Discord gives a stream its own RTC server, and a
+        // connection identifying with the guild is closed with 4006.
+        expect(seen.serverId, 'rtc-77');
+      },
+    );
+
+    test('falls back to the guild when no RTC server was named', () async {
+      final repository = _FakeRepository();
+      late VoiceServerCredentials seen;
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        clientFactory: (credentials) {
+          seen = credentials;
+          return _FakeClient();
+        },
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(seen.serverId, 'guild-1');
+    });
+
     test('an endpoint with no session behind it is dropped', () async {
       final repository = _FakeRepository();
       var made = 0;
@@ -166,11 +221,7 @@ void main() {
 
       for (final token in ['first', 'second']) {
         repository.announceServer(
-          GoLiveServer(
-            key: _key,
-            endpoint: 'stream.discord.gg',
-            token: token,
-          ),
+          GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: token),
         );
         await Future<void>.delayed(Duration.zero);
       }
@@ -197,11 +248,7 @@ void main() {
       );
       for (final key in [_key, other]) {
         repository.announceServer(
-          GoLiveServer(
-            key: key,
-            endpoint: 'stream.discord.gg',
-            token: 'token',
-          ),
+          GoLiveServer(key: key, endpoint: 'stream.discord.gg', token: 'token'),
         );
       }
       await Future<void>.delayed(Duration.zero);

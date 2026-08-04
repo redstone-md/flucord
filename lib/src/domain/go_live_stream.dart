@@ -87,11 +87,20 @@ final class GoLiveServer {
     required this.key,
     required this.endpoint,
     required this.token,
+    this.rtcServerId = '',
   });
 
   final GoLiveStreamKey key;
   final String endpoint;
   final String token;
+
+  /// What the connection identifies against.
+  ///
+  /// Discord assigns a stream its own RTC server and names it in
+  /// `STREAM_CREATE`; it is not the guild id, and identifying with the guild
+  /// is answered with 4006 — "that session is no longer valid". Empty when
+  /// the create has not been seen, where the guild is the best guess left.
+  final String rtcServerId;
 }
 
 /// One stream, ours or somebody else's.

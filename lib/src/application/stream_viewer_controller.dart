@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -79,6 +81,7 @@ final class StreamViewerController extends ChangeNotifier {
     _notify();
     try {
       await repository.watchStream(key);
+      _diagnose('asked to watch ${key.userId}');
       return true;
     } on Object catch (error) {
       _error = error;
@@ -164,7 +167,17 @@ final class StreamViewerController extends ChangeNotifier {
     super.dispose();
   }
 
+  void _diagnose(String what) {
+    developer.log('flucord.stream $what', name: 'flucord.stream', level: 900);
+    if (kDebugMode) stdout.writeln('flucord.stream $what');
+  }
+
   void _accept(IncomingVideoPacket packet) {
+    // The first one is worth saying: it is the difference between a stream
+    // that was asked for and one that is arriving.
+    if (_receivedPackets == 0) {
+      _diagnose('first packet from ${_watching?.userId}');
+    }
     _receivedPackets++;
     final unit = _depacketizer.accept(packet.payload, marker: packet.marker);
     if (unit == null) return;
