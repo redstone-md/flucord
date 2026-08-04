@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/data/discord/discord_voice_media_transport.dart';
 
 void main() {
@@ -86,6 +87,35 @@ void main() {
       () => transport.sendOpusFrame(Uint8List.fromList([1])),
       throwsStateError,
     );
+  });
+
+  test('a packet the group key cannot open is dropped, not decoded', () async {
+    final incoming = StreamController<DiscordRtpFrame>.broadcast();
+    addTearDown(incoming.close);
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: incoming.stream,
+      encryptDave: (opus) => opus,
+      decryptDave: (_, _) => throw StateError('no key for that sender yet'),
+      sendFrame: (frame) => frame.payload.length,
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => 'them',
+    )..configure(ssrc: 42, daveEnabled: true);
+    final received = <VoiceRemoteOpusFrame>[];
+    final subscription = transport.remoteAudio.listen(received.add);
+    addTearDown(subscription.cancel);
+
+    incoming.add(
+      DiscordRtpFrame(
+        header: DiscordRtpHeader(sequence: 1, timestamp: 1, ssrc: 7),
+        payload: const [1, 2, 3],
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    // Carried on, the Opus decoder answers an empty buffer with "invalid
+    // argument" and the room reports a broken call. A sender's key arrives
+    // after their first packets do, so this is ordinary.
+    expect(received, isEmpty);
   });
 
   test('maps SSRC, decrypts DAVE, and drops unknown senders', () async {

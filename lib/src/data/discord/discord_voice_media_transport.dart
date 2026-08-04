@@ -142,22 +142,42 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
         : currentState;
     return [
       for (final ordered in state.reorderBuffer.add(frame))
-        _decodeRemoteFrame(userId, ordered),
+        ..._decodeRemoteFrame(userId, ordered),
     ];
   }
 
-  VoiceRemoteOpusFrame _decodeRemoteFrame(
+  /// One frame, or none when there is nothing decodable in it.
+  ///
+  /// A packet whose group decryption fails, or that decrypts to nothing, is
+  /// dropped here rather than carried on to the Opus decoder — which answers
+  /// an empty buffer with "invalid argument" and takes the call's error
+  /// banner with it. The key for a sender arrives after their first packets
+  /// do, so this is ordinary rather than exceptional.
+  Iterable<VoiceRemoteOpusFrame> _decodeRemoteFrame(
     String userId,
     DiscordOrderedRtpFrame ordered,
   ) {
     final frame = ordered.frame;
     final encrypted = Uint8List.fromList(frame.payload);
-    final opus = _daveEnabled ? _decryptDave(userId, encrypted) : encrypted;
-    return VoiceRemoteOpusFrame(
-      userId: userId,
-      opus: opus,
-      missingFramesBefore: ordered.missingFramesBefore,
-    );
+    if (encrypted.isEmpty) return const [];
+    final Uint8List opus;
+    if (_daveEnabled) {
+      try {
+        opus = _decryptDave(userId, encrypted);
+      } on Object {
+        return const [];
+      }
+    } else {
+      opus = encrypted;
+    }
+    if (opus.isEmpty) return const [];
+    return [
+      VoiceRemoteOpusFrame(
+        userId: userId,
+        opus: opus,
+        missingFramesBefore: ordered.missingFramesBefore,
+      ),
+    ];
   }
 }
 
