@@ -409,10 +409,16 @@ class _WhenRow extends StatelessWidget {
 
   Future<void> _pick(BuildContext context) async {
     final now = DateTime.now();
+    final current = value ?? now;
+    // The window starts at whichever is earlier. An event that has already
+    // begun still has to be editable — moving its end, fixing its
+    // description — and a picker whose range excludes the value it was handed
+    // does not open at all: it asserts and takes the dialog down with it.
+    final earliest = current.isBefore(now) ? current : now;
     final date = await showDatePicker(
       context: context,
-      initialDate: value ?? now,
-      firstDate: now.subtract(const Duration(days: 1)),
+      initialDate: current,
+      firstDate: earliest.subtract(const Duration(days: 1)),
       lastDate: now.add(const Duration(days: 365 * 2)),
     );
     if (date == null || !context.mounted) return;

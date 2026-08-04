@@ -327,6 +327,9 @@ class _MemberRow extends StatelessWidget {
             child: InkWell(
               key: ValueKey('member-row-${member.id}'),
               onTap: () => onPressed(context),
+              // Discord opens the same card from the right button. A row that
+              // ignores it is a place where the mouse stops working.
+              onSecondaryTap: () => onPressed(context),
               borderRadius: BorderRadius.circular(4),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),

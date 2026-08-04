@@ -1,6 +1,8 @@
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
+
+import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
 import '../../application/message_component_controller.dart';
@@ -162,48 +164,56 @@ class _MessageItemState extends State<MessageItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? context.surfaces.raised.withValues(alpha: 0.45)
-                  : Colors.transparent,
-            ),
-            padding: EdgeInsets.fromLTRB(20, widget.grouped ? 3 : 9, 20, 5),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 38,
-                  child: widget.grouped
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            time,
-                            style: TextStyle(
-                              color: context.surfaces.muted,
-                              fontSize: 9,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        // The right button reaches the same actions the hover bar carries.
+        // Without it half of them were only discoverable by hovering the
+        // exact right pixels, and copying an id or a link had nowhere to live.
+        onSecondaryTapDown: (details) =>
+            unawaited(_openContextMenu(context, details.globalPosition)),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: _hovered
+                    ? context.surfaces.raised.withValues(alpha: 0.45)
+                    : Colors.transparent,
+              ),
+              padding: EdgeInsets.fromLTRB(20, widget.grouped ? 3 : 9, 20, 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 38,
+                    child: widget.grouped
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              time,
+                              style: TextStyle(
+                                color: context.surfaces.muted,
+                                fontSize: 9,
+                              ),
                             ),
+                          )
+                        : MemberAvatar(
+                            member: widget.member,
+                            size: 34,
+                            spaceId: widget.workspace
+                                .channelById(widget.message.channelId)
+                                .spaceId,
                           ),
-                        )
-                      : MemberAvatar(
-                          member: widget.member,
-                          size: 34,
-                          spaceId: widget.workspace
-                              .channelById(widget.message.channelId)
-                              .spaceId,
-                        ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: _content(context, time)),
-              ],
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: _content(context, time)),
+                ],
+              ),
             ),
-          ),
-          if ((_hovered || _reactionPickerOpen) && !_editing)
-            Positioned(right: 18, top: -12, child: _actionBar(context)),
-        ],
+            if ((_hovered || _reactionPickerOpen) && !_editing)
+              Positioned(right: 18, top: -12, child: _actionBar(context)),
+          ],
+        ),
       ),
     );
   }
@@ -384,6 +394,48 @@ class _MessageItemState extends State<MessageItem> {
       ),
     ],
   );
+
+  Future<void> _openContextMenu(BuildContext context, Offset position) async {
+    final action = await showMessageContextMenu(
+      context: context,
+      position: position,
+      message: widget.message,
+      capabilities: widget.capabilities,
+      isCurrentUser: widget.isCurrentUser,
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case MessageMenuAction.reply:
+        widget.onReply(widget.message);
+      case MessageMenuAction.edit:
+        setState(() => _editing = true);
+        _editFocus.requestFocus();
+      case MessageMenuAction.pin:
+        await widget.onTogglePin(widget.message);
+      case MessageMenuAction.forward:
+        _showForwardDialog();
+      case MessageMenuAction.createThread:
+        _showCreateThreadDialog();
+      case MessageMenuAction.copyText:
+        await copyToClipboard(widget.message.body);
+      case MessageMenuAction.copyLink:
+        await copyToClipboard(
+          messageLink(
+            spaceId:
+                widget.workspace
+                    .channelOrNull(widget.message.channelId)
+                    ?.spaceId ??
+                '',
+            channelId: widget.message.channelId,
+            messageId: widget.message.id,
+          ),
+        );
+      case MessageMenuAction.copyId:
+        await copyToClipboard(widget.message.id);
+      case MessageMenuAction.delete:
+        await _confirmDelete();
+    }
+  }
 
   Widget _actionBar(BuildContext context) => MessageActionBar(
     expressionFavorites: widget.expressionFavorites,
