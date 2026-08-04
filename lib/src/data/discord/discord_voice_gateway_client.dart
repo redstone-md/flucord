@@ -32,10 +32,12 @@ final class DiscordVoiceGatewayClient
     DiscordVoiceSocketConnector? socketConnector,
     DiscordVoiceUdpTransport? udpTransport,
     bool carriesVideo = false,
+    String? streamKey,
   }) : _protocol = DiscordVoiceGatewayProtocol(
          credentials: credentials,
          maxDaveProtocolVersion: maxDaveProtocolVersion,
          carriesVideo: carriesVideo,
+         streamKey: streamKey,
        ),
        _daveController = daveService == null
            ? null
@@ -74,7 +76,6 @@ final class DiscordVoiceGatewayClient
   Timer? _reconnectTimer;
   int _unacknowledgedHeartbeats = 0;
   bool _canResume = false;
-  bool _identified = false;
   bool _closing = false;
   bool _failed = false;
   int _generation = 0;
@@ -171,28 +172,28 @@ final class DiscordVoiceGatewayClient
         onError: (Object error) => _onSocketError(error, generation),
         cancelOnError: true,
       );
-      // A stream socket waits for HELLO. The call's does not have to —
-      // Discord accepts an identify that arrives first — but the stream
-      // server closes with 4017 when it is the one being raced, which is the
-      // only difference between the two handshakes that this end controls.
-      if (!_protocol.carriesVideo) {
-        _send(_canResume ? _protocol.resume() : _protocol.identify());
-      }
+      _send(_canResume ? _protocol.resume() : _protocol.identify());
     } catch (error) {
       _scheduleReconnect(error: error);
     }
   }
 
   Uri _voiceUri() {
-    final endpoint = _protocol.credentials.endpoint.trim();
+    // The port Discord names is the UDP one — the media path — and dialling
+    // the websocket on it is answered with 4017 once the handshake finishes.
+    // The socket belongs on 443, which is what dropping the port leaves.
+    final endpoint = _protocol.credentials.endpoint.trim().split(':').first;
     final base = Uri.parse(
       endpoint.contains('://') ? endpoint : 'wss://$endpoint',
     );
     // A stream endpoint is dialled without a version: it is not the voice
     // gateway, and pinning v8 on it is refused.
     if (_protocol.carriesVideo) return base.replace(scheme: 'wss');
+    // Explicitly 443: a URI parsed from a bare host has no port at all, and
+    // `replace` keeps that — which dialled port 0 and was answered with a 522.
     return base.replace(
       scheme: 'wss',
+      port: base.hasPort && base.port != 0 ? base.port : 443,
       queryParameters: {...base.queryParameters, 'v': '8'},
     );
   }
@@ -280,10 +281,6 @@ final class DiscordVoiceGatewayClient
   }
 
   void _handleHello(Map<String, Object?> data) {
-    if (_protocol.carriesVideo && !_identified) {
-      _identified = true;
-      _send(_canResume ? _protocol.resume() : _protocol.identify());
-    }
     final rawInterval = data['heartbeat_interval'];
     if (rawInterval is! num || rawInterval <= 0) return;
     _heartbeatTimer?.cancel();
@@ -724,7 +721,6 @@ final class DiscordVoiceGatewayClient
   void _scheduleReconnect({Object? error}) {
     if (_closing || _failed || _reconnectTimer?.isActive == true) return;
     _diagnose('reconnecting', error);
-    _identified = false;
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
@@ -786,6 +782,7 @@ final class DiscordVoiceGatewayClient
             // The last few characters only: enough to tell two sessions
             // apart, not enough to be one.
             'session=…${_tail(d['session_id'])} '
+            'key=${d['stream_key'] != null} '
             // The host, which is Discord's own address for the region — not
             // anything about who is on it.
             'host=${_protocol.credentials.endpoint}',

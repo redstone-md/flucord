@@ -33,8 +33,10 @@ void main() {
       // 4017, the moment it finishes connecting — which is what every share
       // and every attempt to watch somebody was doing.
       expect(identify['video'], isTrue);
+      // A screen, not a camera. Discord closes a Go Live socket that says
+      // "video" with 4017 the moment the handshake finishes.
       expect(identify['streams'], [
-        {'type': 'video', 'rid': '100', 'quality': 100},
+        {'type': 'screen', 'rid': '100', 'quality': 100},
       ]);
     });
 
@@ -113,7 +115,9 @@ void main() {
       addTearDown(client.close);
 
       await client.connect();
-      expect(connector.lastUri.toString(), 'wss://voice.example.test?v=8');
+      // Port 443 explicitly: the port Discord names in the endpoint is the
+      // UDP one, and dialling the websocket on it is answered with 4017.
+      expect(connector.lastUri.toString(), 'wss://voice.example.test:443?v=8');
       expect(_jsonAt(socket.sent, 0)['op'], 0);
 
       socket.addJson({

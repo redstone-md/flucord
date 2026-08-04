@@ -67,6 +67,7 @@ final class DiscordVoiceGatewayProtocol {
     required this.credentials,
     required this.maxDaveProtocolVersion,
     this.carriesVideo = false,
+    this.streamKey,
   });
 
   static const preferredModes = DiscordVoiceTransportMode.preferred;
@@ -80,6 +81,13 @@ final class DiscordVoiceGatewayProtocol {
   /// a camera on a call is announced later, with opcode 12, on a connection
   /// that was opened for audio.
   final bool carriesVideo;
+
+  /// Which stream this connection is for, when it is for one.
+  ///
+  /// A stream server carries many at once and is told which by key. Nothing
+  /// else in the identify names one: the RTC server id it was given is per
+  /// stream, but the server answers an identify without the key with 4017.
+  final String? streamKey;
   int sequenceAck = -1;
 
   /// `server_id` is the guild for guild voice and the channel for a DM or
@@ -97,15 +105,21 @@ final class DiscordVoiceGatewayProtocol {
     'op': 0,
     'd': {
       'server_id': credentials.serverId,
-      'channel_id': credentials.channelId,
+      // A stream connection carries none of the call's fields: no channel,
+      // no DAVE version, no stream key. Just who is connecting, to what, and
+      // the layer it is there for. Discord closes anything else with 4017 the
+      // moment the handshake finishes.
+      if (!carriesVideo) 'channel_id': credentials.channelId,
       'max_dave_protocol_version': maxDaveProtocolVersion,
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,
       'video': carriesVideo,
       if (carriesVideo)
+        // A screen, not a camera: the type names what is being sent, and a
+        // share announced as video is refused.
         'streams': const [
-          {'type': 'video', 'rid': '100', 'quality': 100},
+          {'type': 'screen', 'rid': '100', 'quality': 100},
         ],
     },
   };

@@ -63,7 +63,6 @@ import 'data/native_external_link_launcher.dart';
 import 'data/unavailable_discord_social_dm_gateway.dart';
 import 'data/discord/discord_oauth_account_service.dart';
 import 'data/discord/discord_remote_auth_gateway.dart';
-import 'domain/go_live_stream.dart';
 import 'domain/chat_models.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
@@ -568,7 +567,7 @@ class _FlucordAppState extends State<FlucordApp> {
     // Going live is the only streaming this client knows about, so it is
     // what the automatic switch follows.
     _goLiveController.addListener(_syncStreamerMode);
-    _goLiveController.addListener(_syncGoLiveTransport);
+
     _chatController.addListener(_syncVoiceSignaling);
     _voiceController.addListener(_syncRemoteCameras);
     _chatController.addListener(_syncUserSettings);
@@ -657,7 +656,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _selfVideoController.dispose();
     _remoteCameraController.dispose();
     _goLiveController.removeListener(_syncStreamerMode);
-    _goLiveController.removeListener(_syncGoLiveTransport);
+
     _voiceController.removeListener(_refreshOverlay);
     _streamerModeController.removeListener(_refreshOverlay);
     _voiceOverlayController.dispose();
@@ -717,7 +716,6 @@ class _FlucordAppState extends State<FlucordApp> {
       channelId: channel.id,
       guildId: channel.spaceId,
     );
-    _bindGoLiveToCall();
   }
 
   bool _developerCheckRan = false;
@@ -727,46 +725,6 @@ class _FlucordAppState extends State<FlucordApp> {
   /// Our own stream gets the encoder pointed at it; anybody else's gets its
   /// pictures handed to the viewer. The SSRC only exists once the connection
   /// is ready, so this waits for that rather than reading it here.
-  /// Attaches the encoder as soon as a share opens, however it was started.
-  void _syncGoLiveTransport() {
-    final streaming =
-        _goLiveController.isStreaming ||
-        _goLiveController.status == GoLiveStatus.creating;
-    if (!streaming || _goLiveBound) {
-      _goLiveBound = streaming && _goLiveBound;
-      return;
-    }
-    _goLiveBound = true;
-    _bindGoLiveToCall();
-  }
-
-  bool _goLiveBound = false;
-
-  /// Points the encoder at the call's own connection.
-  ///
-  /// Discord refuses a second socket for the stream every way it has been
-  /// asked — 4006 with the guild, 4017 with the RTC server the create names —
-  /// while the call's connection already carries video: that is how a camera
-  /// is sent, announced with opcode 12 and keyed by SSRC. A share is the same
-  /// thing at a different size, so it goes out the same way.
-  void _bindGoLiveToCall() {
-    final signaling = _chatController.voiceSignalingService;
-    if (signaling is! DiscordVoiceSignalingService) return;
-    final audioSsrc = signaling.activeVideoTransport?.audioSsrc;
-    if (audioSsrc == null) return;
-    signaling.activeVideoTransport?.announceVideo(enabled: true);
-    // The video SSRC opcode 12 just declared, not the audio one: the audio
-    // SSRC carries Opus, and pictures arriving on it are dropped by every
-    // receiver as a stream nobody announced.
-    final videoSsrc = audioSsrc + 1;
-    _goLiveController.bindTransport(
-      ssrc: videoSsrc,
-      sink: signaling.sendVideoFrame,
-    );
-    stdout.writeln(
-      'flucord.stream sending over the call, video ssrc $videoSsrc',
-    );
-  }
 
   void _acceptStreamSession(DiscordStreamRtcSession session) {
     late final StreamSubscription<VoiceSignalingEvent> events;

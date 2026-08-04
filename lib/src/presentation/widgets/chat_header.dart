@@ -169,57 +169,80 @@ class ChatHeader extends StatelessWidget {
                   onChanged: onSelectVoiceSurface,
                 ),
               ],
-              if (showsMessages && showSearch)
-                SizedBox(
-                  width: 190,
-                  child: _SearchField(
-                    query: query,
-                    onChanged: onQueryChanged,
-                    onSubmitted: onSubmitQuery,
+              // Everything past here scrolls rather than overflows.
+              // There are up to five more controls and a search field,
+              // and a narrow window — or an open members panel — used
+              // to push the last one past the edge and stripe it
+              // yellow. The room's own switch stays out of it: a
+              // control that has to be scrolled to is one people do
+              // not find.
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(
+                    children: [
+                      if (showsMessages && showSearch)
+                        SizedBox(
+                          width: 190,
+                          child: _SearchField(
+                            query: query,
+                            onChanged: onQueryChanged,
+                            onSubmitted: onSubmitQuery,
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      InboxActivityButton(
+                        summary: inboxSummary,
+                        onPressed: onOpenInbox,
+                      ),
+                      if (allowThreadPanel) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          key: const ValueKey('toggle-threads'),
+                          onPressed: onToggleThreads,
+                          icon: Icon(
+                            showThreads ? Icons.forum : Icons.forum_outlined,
+                            size: 19,
+                          ),
+                          tooltip: showThreads ? 'Close threads' : 'Threads',
+                        ),
+                      ],
+                      // Pinning is absent from the voice text-chat permission set, so
+                      // the panel and its toggle stay out of a voice channel's chat.
+                      if (showsMessages &&
+                          channel.kind != ChannelKind.voice) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          key: const ValueKey('toggle-pins'),
+                          onPressed: onTogglePins,
+                          icon: Icon(
+                            showPins ? Icons.push_pin : Icons.push_pin_outlined,
+                            size: 19,
+                          ),
+                          tooltip: showPins
+                              ? 'Close pinned messages'
+                              : 'Pinned messages',
+                        ),
+                      ],
+                      if (allowMemberPanel) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          key: const ValueKey('toggle-members'),
+                          onPressed: onToggleMembers,
+                          icon: Icon(
+                            showMembers ? Icons.group : Icons.group_outlined,
+                          ),
+                          tooltip: showMembers
+                              ? 'Hide members'
+                              : 'Show members',
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              const SizedBox(width: 4),
-              InboxActivityButton(
-                summary: inboxSummary,
-                onPressed: onOpenInbox,
               ),
-              if (allowThreadPanel) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('toggle-threads'),
-                  onPressed: onToggleThreads,
-                  icon: Icon(
-                    showThreads ? Icons.forum : Icons.forum_outlined,
-                    size: 19,
-                  ),
-                  tooltip: showThreads ? 'Close threads' : 'Threads',
-                ),
-              ],
-              // Pinning is absent from the voice text-chat permission set, so
-              // the panel and its toggle stay out of a voice channel's chat.
-              if (showsMessages && channel.kind != ChannelKind.voice) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('toggle-pins'),
-                  onPressed: onTogglePins,
-                  icon: Icon(
-                    showPins ? Icons.push_pin : Icons.push_pin_outlined,
-                    size: 19,
-                  ),
-                  tooltip: showPins
-                      ? 'Close pinned messages'
-                      : 'Pinned messages',
-                ),
-              ],
-              if (allowMemberPanel) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('toggle-members'),
-                  onPressed: onToggleMembers,
-                  icon: Icon(showMembers ? Icons.group : Icons.group_outlined),
-                  tooltip: showMembers ? 'Hide members' : 'Show members',
-                ),
-              ],
             ],
           );
         },

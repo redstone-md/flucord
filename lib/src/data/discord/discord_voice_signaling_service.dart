@@ -1,5 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
@@ -88,12 +91,20 @@ final class DiscordVoiceSignalingService
   /// with the same session id voice did. That id only ever arrives on the self
   /// voice state, so it is kept here rather than asked for again.
   ({String sessionId, String userId})? get streamIdentity {
-    // The gateway's own, not the one a voice state carried: that one is a
-    // snapshot, and the socket is replaced often enough that a stream opened
-    // afterwards identified with a session Discord had already dropped.
-    final sessionId = _gateway.sessionId ?? _currentSessionId;
+    // The one the voice state carried, which is the session the call itself
+    // identified with. The gateway's own is a different value on a desktop
+    // session, and a stream connection offering it is closed with 4006.
+    final sessionId = _currentSessionId ?? _gateway.sessionId;
     final userId = _currentUserId;
     if (sessionId == null || userId == null) return null;
+    // The two sources, by their last four characters: if they differ, which
+    // one a stream connection is given is the difference between a stream
+    // that opens and 4006.
+    final line =
+        'flucord.stream identity voice=…${_tail(_currentSessionId)} '
+        'gateway=…${_tail(_gateway.sessionId)}';
+    developer.log(line, name: 'flucord.stream', level: 900);
+    if (kDebugMode) stdout.writeln(line);
     return (sessionId: sessionId, userId: userId);
   }
 
@@ -310,6 +321,10 @@ final class DiscordVoiceSignalingService
 
   @override
   VoiceTransportSession? get currentSession => _currentSession;
+
+  static String _tail(String? value) => value == null || value.length <= 4
+      ? '?'
+      : value.substring(value.length - 4);
 
   void _onClientEvent(VoiceSessionKey key, VoiceSignalingEvent event) {
     // Only the session being listened to speaks for the client's state: a

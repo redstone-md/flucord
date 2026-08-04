@@ -30,11 +30,15 @@ final class DiscordStreamRtcSession {
     required VoiceServerCredentials credentials,
     DiscordStreamClientFactory? clientFactory,
   }) : _credentials = credentials,
-       _clientFactory = clientFactory ?? _createClient;
+       _clientFactory = clientFactory {
+    _fallbackFactory = _createClient;
+  }
+
+  late final DiscordStreamClientFactory _fallbackFactory;
 
   final GoLiveStreamKey key;
   final VoiceServerCredentials _credentials;
-  final DiscordStreamClientFactory _clientFactory;
+  final DiscordStreamClientFactory? _clientFactory;
 
   final StreamController<(String, DiscordRtpFrame)> _video =
       StreamController.broadcast();
@@ -59,7 +63,7 @@ final class DiscordStreamRtcSession {
   Future<void> connect() async {
     if (_closed || _client != null) return;
     _diagnose('dialling');
-    final client = _clientFactory(_credentials);
+    final client = (_clientFactory ?? _fallbackFactory)(_credentials);
     _client = client;
     _clientEvents = client.events.listen(_onEvent);
     if (client case final DiscordVoiceGatewayClient gateway) {
@@ -140,10 +144,11 @@ final class DiscordStreamRtcSession {
     if (kDebugMode) stdout.writeln(line);
   }
 
-  static DiscordVoiceClient _createClient(VoiceServerCredentials credentials) =>
+  DiscordVoiceClient _createClient(VoiceServerCredentials credentials) =>
       DiscordVoiceGatewayClient(
         credentials: credentials,
         maxDaveProtocolVersion: 0,
+        streamKey: key.value,
         // This socket exists to carry a screen share, and Discord wants that
         // said at identify: one that does not say it is closed with 4017 as
         // soon as it finishes connecting.
