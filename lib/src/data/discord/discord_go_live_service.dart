@@ -197,10 +197,14 @@ final class DiscordGoLiveService implements GoLiveRepository {
     if (endpoint.isEmpty || token.isEmpty) return null;
     if (!_servers.isClosed) {
       final created = _streams[key.value];
+      final tokenTail = token.length <= 4
+          ? '?'
+          : token.substring(token.length - 4);
       final line =
           'flucord.stream server update: create seen=${created != null} '
           'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
-          'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false}';
+          'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false} '
+          'token=…$tokenTail';
       developer.log(line, name: 'flucord.stream', level: 900);
       if (kDebugMode) stdout.writeln(line);
       _servers.add(

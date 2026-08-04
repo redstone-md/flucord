@@ -175,7 +175,10 @@ void main() {
     expect(controller.status, GoLiveStatus.paused);
     expect(await controller.setPaused(paused: false), isTrue);
     expect(controller.status, GoLiveStatus.live);
-    expect(repository.pauses, [true, false]);
+    // The unpause the create is followed by comes first: Discord's own
+    // clients send one, and a stream that never does has its RTC session
+    // refused.
+    expect(repository.pauses, [false, true, false]);
   });
 
   test('a pause somebody else applied is followed', () async {

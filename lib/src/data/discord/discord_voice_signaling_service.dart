@@ -293,6 +293,18 @@ final class DiscordVoiceSignalingService
     }
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
+    // Every self voice state carries the session a stream connection has to
+    // identify with, and it is reissued more often than credentials are
+    // rebuilt — the assembler only produces those when a server update
+    // arrives too. Holding the one from the first join is how a stream
+    // ended up offering a session Discord had already replaced.
+    if (event.name == 'VOICE_STATE_UPDATE' &&
+        event.data['user_id'] == currentUserId) {
+      final sessionId = event.data['session_id'];
+      if (sessionId is String && sessionId.isNotEmpty) {
+        _currentSessionId = sessionId;
+      }
+    }
     final credentials = _assembler.accept(
       eventName: event.name,
       data: event.data,

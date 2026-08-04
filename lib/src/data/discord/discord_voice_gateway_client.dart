@@ -186,9 +186,6 @@ final class DiscordVoiceGatewayClient
     final base = Uri.parse(
       endpoint.contains('://') ? endpoint : 'wss://$endpoint',
     );
-    // A stream endpoint is dialled without a version: it is not the voice
-    // gateway, and pinning v8 on it is refused.
-    if (_protocol.carriesVideo) return base.replace(scheme: 'wss');
     // Explicitly 443: a URI parsed from a bare host has no port at all, and
     // `replace` keeps that — which dialled port 0 and was answered with a 522.
     return base.replace(
@@ -782,7 +779,7 @@ final class DiscordVoiceGatewayClient
             // The last few characters only: enough to tell two sessions
             // apart, not enough to be one.
             'session=…${_tail(d['session_id'])} '
-            'key=${d['stream_key'] != null} '
+            'token=…${_tail(d['token'])} '
             // The host, which is Discord's own address for the region — not
             // anything about who is on it.
             'host=${_protocol.credentials.endpoint}',

@@ -123,7 +123,9 @@ final class DiscordStreamRtcService {
         guildId: server.rtcServerId.isNotEmpty
             ? server.rtcServerId
             : server.key.guildId,
-        channelId: server.key.channelId,
+        channelId: server.rtcChannelId.isNotEmpty
+            ? server.rtcChannelId
+            : server.key.channelId,
         userId: identity.userId,
         sessionId: identity.sessionId,
         token: server.token,

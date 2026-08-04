@@ -105,12 +105,13 @@ final class DiscordVoiceGatewayProtocol {
     'op': 0,
     'd': {
       'server_id': credentials.serverId,
-      // A stream connection carries none of the call's fields: no channel,
-      // no DAVE version, no stream key. Just who is connecting, to what, and
-      // the layer it is there for. Discord closes anything else with 4017 the
-      // moment the handshake finishes.
-      if (!carriesVideo) 'channel_id': credentials.channelId,
-      'max_dave_protocol_version': maxDaveProtocolVersion,
+      // A stream socket identifies with six fields and no others: server,
+      // user, session, token, video, streams. A channel id, a DAVE version or
+      // a stream key alongside them is refused.
+      if (!carriesVideo) ...{
+        'channel_id': credentials.channelId,
+        'max_dave_protocol_version': maxDaveProtocolVersion,
+      },
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,

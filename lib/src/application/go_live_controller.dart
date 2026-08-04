@@ -152,6 +152,14 @@ final class GoLiveController extends ChangeNotifier {
         channelId: channelId,
         guildId: guildId,
       );
+      // Discord's own clients follow the create with an unpause. Attempted
+      // rather than required: a server that refuses it has not refused the
+      // stream, and failing the share over it would be inventing a problem.
+      try {
+        await repository.setPaused(_key!, paused: false);
+      } on Object catch (error) {
+        _diagnose('unpause refused', error);
+      }
       _diagnose('started', sourceId ?? 'primary screen');
       _startPinging();
       return true;

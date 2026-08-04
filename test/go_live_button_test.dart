@@ -183,7 +183,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-pause')));
     await tester.pumpAndSettle();
 
-    expect(repository.pauses, [true]);
+    // The unpause that follows the create comes first: Discord's own clients
+    // send one, and a stream that never does has its RTC session refused.
+    expect(repository.pauses, [false, true]);
     expect(controller.status, GoLiveStatus.paused);
 
     // A live stream keeps a ping timer running, and the binding refuses to
