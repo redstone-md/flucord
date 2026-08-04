@@ -116,9 +116,10 @@ final class DiscordStreamRtcService {
     final session = DiscordStreamRtcSession(
       key: server.key,
       credentials: VoiceServerCredentials(
-        // The RTC server Discord named for this stream, falling back to the
-        // guild when the create was not seen. `serverId` is what identify
-        // carries, and the wrong one is answered with 4006.
+        // The RTC server and channel Discord named for this stream in
+        // STREAM_CREATE, falling back to the guild and the voice channel when
+        // no create was seen. Those two are what identify carries, and the
+        // wrong pair is refused: 4006 for the guild, 4017 for the rest.
         guildId: server.rtcServerId.isNotEmpty
             ? server.rtcServerId
             : server.key.guildId,

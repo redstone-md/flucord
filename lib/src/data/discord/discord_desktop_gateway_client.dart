@@ -187,6 +187,7 @@ final class DiscordDesktopGatewayClient
   }
 
   /// The gateway session, or `null` before READY.
+  @override
   String? get sessionId => _protocol.sessionId;
 
   /// Opcode 18. `type` is `guild` or `call`, matching how the stream key is

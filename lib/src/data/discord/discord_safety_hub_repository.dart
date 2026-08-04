@@ -72,7 +72,8 @@ final class DiscordSafetyHubRepository implements SafetyHubRepository {
   static AccountSuspension readSuspension(Map<String, Object?> payload) {
     final ends = payload['ends_at'] ?? payload['expires_at'];
     return AccountSuspension(
-      isSuspended: payload['suspended'] == true || payload['is_suspended'] == true,
+      isSuspended:
+          payload['suspended'] == true || payload['is_suspended'] == true,
       reason: _string(payload['reason']) ?? _string(payload['title']) ?? '',
       classificationId:
           _string(payload['classification_id']) ?? _string(payload['id']),

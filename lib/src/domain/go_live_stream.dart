@@ -88,6 +88,7 @@ final class GoLiveServer {
     required this.endpoint,
     required this.token,
     this.rtcServerId = '',
+    this.rtcChannelId = '',
   });
 
   final GoLiveStreamKey key;
@@ -101,6 +102,13 @@ final class GoLiveServer {
   /// is answered with 4006 — "that session is no longer valid". Empty when
   /// the create has not been seen, where the guild is the best guess left.
   final String rtcServerId;
+
+  /// The channel that RTC server knows the stream by.
+  ///
+  /// Not the voice channel: `STREAM_CREATE` names both, and a connection
+  /// identifying with the voice one is refused. Empty when the create has not
+  /// been seen.
+  final String rtcChannelId;
 }
 
 /// One stream, ours or somebody else's.
@@ -108,6 +116,7 @@ final class GoLiveStream {
   const GoLiveStream({
     required this.key,
     this.rtcServerId = '',
+    this.rtcChannelId = '',
     this.region = '',
     this.viewerIds = const [],
     this.isPaused = false,
@@ -115,6 +124,9 @@ final class GoLiveStream {
 
   final GoLiveStreamKey key;
   final String rtcServerId;
+
+  /// The channel the RTC server knows this stream by, from the same create.
+  final String rtcChannelId;
   final String region;
 
   /// Who is watching. Discord reports this on every change rather than as a
@@ -125,12 +137,14 @@ final class GoLiveStream {
 
   GoLiveStream copyWith({
     String? rtcServerId,
+    String? rtcChannelId,
     String? region,
     List<String>? viewerIds,
     bool? isPaused,
   }) => GoLiveStream(
     key: key,
     rtcServerId: rtcServerId ?? this.rtcServerId,
+    rtcChannelId: rtcChannelId ?? this.rtcChannelId,
     region: region ?? this.region,
     viewerIds: viewerIds ?? this.viewerIds,
     isPaused: isPaused ?? this.isPaused,

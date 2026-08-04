@@ -75,6 +75,7 @@ final class DiscordVoiceGatewayClient
   Timer? _reconnectTimer;
   int _unacknowledgedHeartbeats = 0;
   bool _canResume = false;
+  bool _identified = false;
   bool _closing = false;
   bool _failed = false;
   int _generation = 0;
@@ -167,7 +168,13 @@ final class DiscordVoiceGatewayClient
         onError: (Object error) => _onSocketError(error, generation),
         cancelOnError: true,
       );
-      _send(_canResume ? _protocol.resume() : _protocol.identify());
+      // A stream socket waits for HELLO. The call's does not have to —
+      // Discord accepts an identify that arrives first — but the stream
+      // server closes with 4017 when it is the one being raced, which is the
+      // only difference between the two handshakes that this end controls.
+      if (!_protocol.carriesVideo) {
+        _send(_canResume ? _protocol.resume() : _protocol.identify());
+      }
     } catch (error) {
       _scheduleReconnect(error: error);
     }
@@ -178,6 +185,9 @@ final class DiscordVoiceGatewayClient
     final base = Uri.parse(
       endpoint.contains('://') ? endpoint : 'wss://$endpoint',
     );
+    // A stream endpoint is dialled without a version: it is not the voice
+    // gateway, and pinning v8 on it is refused.
+    if (_protocol.carriesVideo) return base.replace(scheme: 'wss');
     return base.replace(
       scheme: 'wss',
       queryParameters: {...base.queryParameters, 'v': '8'},
@@ -202,6 +212,10 @@ final class DiscordVoiceGatewayClient
     _protocol.acceptSequence(payload['seq']);
     final data = payload['d'];
     final opcode = payload['op'];
+    // Only for a stream socket, and only the opcode: this is the handshake
+    // that keeps being refused, and knowing how far it got — hello, ready,
+    // nothing at all — is the difference between reading and guessing.
+    if (_protocol.carriesVideo) _diagnose('received op $opcode');
     if (opcode is int && data is Map) {
       try {
         _executeDaveCommands(
@@ -263,6 +277,10 @@ final class DiscordVoiceGatewayClient
   }
 
   void _handleHello(Map<String, Object?> data) {
+    if (_protocol.carriesVideo && !_identified) {
+      _identified = true;
+      _send(_canResume ? _protocol.resume() : _protocol.identify());
+    }
     final rawInterval = data['heartbeat_interval'];
     if (rawInterval is! num || rawInterval <= 0) return;
     _heartbeatTimer?.cancel();
@@ -639,6 +657,11 @@ final class DiscordVoiceGatewayClient
   /// `dart:developer` alone goes to the VM service, which a desktop build's
   /// console never shows — and a reconnect nobody can see the reason for is
   /// the difference between a fix and a guess.
+  static String _tail(Object? value) {
+    final text = value is String ? value : '';
+    return text.length <= 4 ? '?' : text.substring(text.length - 4);
+  }
+
   void _diagnose(String what, [Object? detail]) {
     final line =
         'flucord.voice.transport $what'
@@ -650,6 +673,7 @@ final class DiscordVoiceGatewayClient
   void _scheduleReconnect({Object? error}) {
     if (_closing || _failed || _reconnectTimer?.isActive == true) return;
     _diagnose('reconnecting', error);
+    _identified = false;
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
@@ -697,6 +721,25 @@ final class DiscordVoiceGatewayClient
   void _send(Map<String, Object?> payload) {
     final socket = _socket;
     if (socket == null) return;
+    // Identify is the one frame worth reading back: everything after it
+    // depends on Discord having accepted it, and a rejection arrives as a
+    // close code with nothing attached. The token is not in here.
+    final identity = payload['op'] == 0 ? payload['d'] : null;
+    if (identity is Map<String, Object?>) {
+      final d = identity;
+      _diagnose(
+        'identify',
+        'server=${d['server_id']} channel=${d['channel_id']} '
+            'video=${d['video']} streams=${d['streams'] != null} '
+            'dave=${d['max_dave_protocol_version']} '
+            // The last few characters only: enough to tell two sessions
+            // apart, not enough to be one.
+            'session=…${_tail(d['session_id'])} '
+            // The host, which is Discord's own address for the region — not
+            // anything about who is on it.
+            'host=${_protocol.credentials.endpoint}',
+      );
+    }
     try {
       socket.send(jsonEncode(payload));
     } on Object catch (error) {

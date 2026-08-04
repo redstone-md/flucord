@@ -285,6 +285,9 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
   @override
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
+  @override
+  String? get sessionId => 'session-1';
+
   void dispatch(String name, Map<String, Object?> data) {
     _events.add(DiscordGatewayDispatch(name: name, data: data));
   }

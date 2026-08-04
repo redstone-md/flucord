@@ -98,10 +98,10 @@ final class DiscordVoiceGatewayProtocol {
     'd': {
       'server_id': credentials.serverId,
       'channel_id': credentials.channelId,
+      'max_dave_protocol_version': maxDaveProtocolVersion,
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,
-      'max_dave_protocol_version': maxDaveProtocolVersion,
       'video': carriesVideo,
       if (carriesVideo)
         'streams': const [

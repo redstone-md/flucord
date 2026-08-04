@@ -65,18 +65,15 @@ abstract final class DiscordFrecencyProtoCodec {
 
   static ExpressionFavorites decodeMessage(ProtoMessage root) {
     final gifsGroup = root.messageAt(FrecencyUserSettingsField.favoriteGifs);
-    final stickers = root.messageAt(
-      FrecencyUserSettingsField.favoriteStickers,
-    );
+    final stickers = root.messageAt(FrecencyUserSettingsField.favoriteStickers);
     final emojis = root.messageAt(FrecencyUserSettingsField.favoriteEmojis);
     return ExpressionFavorites(
       gifs: _decodeGifs(gifsGroup),
       hideGifTooltip: gifsGroup?.boolAt(FavoriteGifsField.hideTooltip) ?? false,
       stickerIds: [
-        for (final id in stickers?.fixed64ListAt(
-              FavoriteStickersField.stickerIds,
-            ) ??
-            const <int>[])
+        for (final id
+            in stickers?.fixed64ListAt(FavoriteStickersField.stickerIds) ??
+                const <int>[])
           _snowflakeOf(id),
       ],
       emojis: emojis?.stringsAt(FavoriteEmojisField.emojis) ?? const [],
@@ -101,11 +98,10 @@ abstract final class DiscordFrecencyProtoCodec {
       )
       ..setMessage(
         FrecencyUserSettingsField.favoriteStickers,
-        ProtoMessage()
-          ..setFixed64List(FavoriteStickersField.stickerIds, [
-            for (final id in favorites.stickerIds)
-              if (int.tryParse(id) case final int value) value,
-          ]),
+        ProtoMessage()..setFixed64List(FavoriteStickersField.stickerIds, [
+          for (final id in favorites.stickerIds)
+            if (int.tryParse(id) case final int value) value,
+        ]),
       )
       ..setMessage(
         FrecencyUserSettingsField.favoriteEmojis,

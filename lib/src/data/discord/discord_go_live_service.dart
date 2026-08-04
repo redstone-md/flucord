@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 
@@ -115,9 +119,13 @@ final class DiscordGoLiveService implements GoLiveRepository {
   /// Returns the stream it changed, or `null` for anything else.
   GoLiveStream? accept(String eventName, Map<String, Object?> data) =>
       switch (eventName) {
-        'STREAM_CREATE' => _acceptCreate(data),
+        'STREAM_CREATE' => _diagnosed('STREAM_CREATE', data, _acceptCreate),
         'STREAM_UPDATE' => _acceptUpdate(data),
-        'STREAM_SERVER_UPDATE' => _acceptServer(data),
+        'STREAM_SERVER_UPDATE' => _diagnosed(
+          'STREAM_SERVER_UPDATE',
+          data,
+          _acceptServer,
+        ),
         'STREAM_DELETE' => _acceptDelete(data),
         _ => null,
       };
@@ -127,6 +135,25 @@ final class DiscordGoLiveService implements GoLiveRepository {
     if (!_servers.isClosed) await _servers.close();
   }
 
+  /// Names the fields an event carried, and nothing they contained.
+  ///
+  /// Which keys Discord sends is the whole question when a connection built
+  /// from them is refused; what is in them is somebody's stream.
+  GoLiveStream? _diagnosed(
+    String name,
+    Map<String, Object?> data,
+    GoLiveStream? Function(Map<String, Object?>) accept,
+  ) {
+    final line =
+        'flucord.stream $name fields: ${data.keys.join(', ')}'
+        '${name == 'STREAM_CREATE' ? ' rtc types: '
+                  '${data['rtc_server_id'].runtimeType}/'
+                  '${data['rtc_channel_id'].runtimeType}' : ''}';
+    developer.log(line, name: 'flucord.stream', level: 900);
+    if (kDebugMode) stdout.writeln(line);
+    return accept(data);
+  }
+
   GoLiveStream? _acceptCreate(Map<String, Object?> data) {
     final key = _key(data);
     if (key == null) return null;
@@ -134,6 +161,7 @@ final class DiscordGoLiveService implements GoLiveRepository {
       GoLiveStream(
         key: key,
         rtcServerId: _text(data['rtc_server_id']),
+        rtcChannelId: _text(data['rtc_channel_id']),
         region: _text(data['region']),
         viewerIds: _strings(data['viewer_ids']),
         isPaused: data['paused'] == true,
@@ -168,17 +196,24 @@ final class DiscordGoLiveService implements GoLiveRepository {
     final token = _text(data['token']);
     if (endpoint.isEmpty || token.isEmpty) return null;
     if (!_servers.isClosed) {
+      final created = _streams[key.value];
+      final line =
+          'flucord.stream server update: create seen=${created != null} '
+          'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
+          'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false}';
+      developer.log(line, name: 'flucord.stream', level: 900);
+      if (kDebugMode) stdout.writeln(line);
       _servers.add(
         GoLiveServer(
           key: key,
           endpoint: endpoint,
           token: token,
-          // From the STREAM_CREATE that came before it. Discord gives a
-          // stream its own RTC server, and a connection identifying with the
-          // guild instead is closed with 4006.
-          rtcServerId: _text(data['rtc_server_id']).isNotEmpty
-              ? _text(data['rtc_server_id'])
-              : _streams[key.value]?.rtcServerId ?? '',
+          // From the STREAM_CREATE that came before it: the server update
+          // carries neither. A stream lives on its own RTC server and its own
+          // channel there, and identifying with the guild and the voice
+          // channel is refused — 4006 for the one, 4017 for the other.
+          rtcServerId: _streams[key.value]?.rtcServerId ?? '',
+          rtcChannelId: _streams[key.value]?.rtcChannelId ?? '',
         ),
       );
     }
@@ -206,7 +241,14 @@ final class DiscordGoLiveService implements GoLiveRepository {
     return raw is String ? GoLiveStreamKey.parse(raw) : null;
   }
 
-  static String _text(Object? value) => value is String ? value : '';
+  /// Discord's ids arrive as strings, but `rtc_server_id` comes back as a
+  /// number — and reading it as a string only left it empty, which sent every
+  /// stream connection off to identify with the guild instead.
+  static String _text(Object? value) => switch (value) {
+    final String text => text,
+    final int number => '$number',
+    _ => '',
+  };
 
   static List<String> _strings(Object? value) => value is List
       ? value.whereType<String>().toList(growable: false)

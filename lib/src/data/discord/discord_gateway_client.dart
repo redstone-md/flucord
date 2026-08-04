@@ -91,11 +91,20 @@ final class DiscordGatewayProtocol {
 abstract interface class DiscordVoiceStateGateway {
   Stream<DiscordGatewayEvent> get events;
 
+  /// The session every voice and stream connection identifies with, or null
+  /// before READY.
+  ///
+  /// Read live rather than remembered: this session is replaced whenever the
+  /// socket reconnects, and a connection identifying with the previous one is
+  /// closed with 4006.
+  String? get sessionId;
+
   void updateVoiceState({
     required String guildId,
     required String? channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+
     /// Whether the account's camera is on. Part of the same whole-state frame
     /// as the mute flags, so it cannot be announced on its own.
     bool selfVideo = false,
@@ -145,6 +154,9 @@ abstract interface class DiscordChatGateway
 }
 
 final class DiscordGatewayClient implements DiscordChatGateway {
+  @override
+  String? get sessionId => _protocol.sessionId;
+
   DiscordGatewayClient({required String botToken})
     : _protocol = DiscordGatewayProtocol(
         token: botToken.trim(),

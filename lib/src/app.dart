@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -61,6 +63,8 @@ import 'data/native_external_link_launcher.dart';
 import 'data/unavailable_discord_social_dm_gateway.dart';
 import 'data/discord/discord_oauth_account_service.dart';
 import 'data/discord/discord_remote_auth_gateway.dart';
+import 'domain/go_live_stream.dart';
+import 'domain/chat_models.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/keybind.dart';
@@ -564,6 +568,7 @@ class _FlucordAppState extends State<FlucordApp> {
     // Going live is the only streaming this client knows about, so it is
     // what the automatic switch follows.
     _goLiveController.addListener(_syncStreamerMode);
+    _goLiveController.addListener(_syncGoLiveTransport);
     _chatController.addListener(_syncVoiceSignaling);
     _voiceController.addListener(_syncRemoteCameras);
     _chatController.addListener(_syncUserSettings);
@@ -652,6 +657,7 @@ class _FlucordAppState extends State<FlucordApp> {
     _selfVideoController.dispose();
     _remoteCameraController.dispose();
     _goLiveController.removeListener(_syncStreamerMode);
+    _goLiveController.removeListener(_syncGoLiveTransport);
     _voiceController.removeListener(_refreshOverlay);
     _streamerModeController.removeListener(_refreshOverlay);
     _voiceOverlayController.dispose();
@@ -667,14 +673,92 @@ class _FlucordAppState extends State<FlucordApp> {
       unawaited(_voiceController.refreshSignalingService());
       _directCallController.reconcileService();
       _streamRtcService.reconcile();
+      unawaited(_runDeveloperCheck());
     }
   }
+
+  /// Joins a channel and starts a share on its own, when asked to by the
+  /// environment.
+  ///
+  /// Screen sharing is the one path that cannot be reached from a test: it
+  /// needs a live session, a real voice channel, and Discord's answer to a
+  /// stream it actually created. Reaching it meant asking somebody to press a
+  /// button and describe what happened, which is how three wrong fixes
+  /// happened in a row. Debug builds only, off unless the variables are set:
+  ///
+  ///   `FLUCORD_DEV_CHANNEL` — the voice channel to join, by name
+  ///   `FLUCORD_DEV_GOLIVE=1` — and start sharing once it is up
+  Future<void> _runDeveloperCheck() async {
+    if (!kDebugMode || _developerCheckRan) return;
+    final wanted = Platform.environment['FLUCORD_DEV_CHANNEL'];
+    if (wanted == null || wanted.isEmpty) return;
+    final workspace = _chatController.workspace;
+    final channel = workspace?.channels
+        .where(
+          (candidate) =>
+              candidate.kind == ChannelKind.voice &&
+              candidate.name.toLowerCase().contains(wanted.toLowerCase()),
+        )
+        .firstOrNull;
+    if (channel == null) return;
+    _developerCheckRan = true;
+    developer.log('flucord.dev joining ${channel.name}', name: 'flucord.dev');
+    stdout.writeln('flucord.dev joining ${channel.name}');
+    await _voiceController.connect(
+      guildId: channel.spaceId,
+      channelId: channel.id,
+    );
+    if (Platform.environment['FLUCORD_DEV_GOLIVE'] != '1') return;
+    // After the transport has had a moment: a stream created before the call
+    // is up is one Discord answers with an endpoint nobody can identify to.
+    await Future<void>.delayed(const Duration(seconds: 6));
+    stdout.writeln('flucord.dev starting a share');
+    await _goLiveController.start(
+      channelId: channel.id,
+      guildId: channel.spaceId,
+    );
+    _bindGoLiveToCall();
+  }
+
+  bool _developerCheckRan = false;
 
   /// Wires a stream connection to whichever end of it this client is.
   ///
   /// Our own stream gets the encoder pointed at it; anybody else's gets its
   /// pictures handed to the viewer. The SSRC only exists once the connection
   /// is ready, so this waits for that rather than reading it here.
+  /// Attaches the encoder as soon as a share opens, however it was started.
+  void _syncGoLiveTransport() {
+    final streaming =
+        _goLiveController.isStreaming ||
+        _goLiveController.status == GoLiveStatus.creating;
+    if (!streaming || _goLiveBound) {
+      _goLiveBound = streaming && _goLiveBound;
+      return;
+    }
+    _goLiveBound = true;
+    _bindGoLiveToCall();
+  }
+
+  bool _goLiveBound = false;
+
+  /// Points the encoder at the call's own connection.
+  ///
+  /// Discord refuses a second socket for the stream every way it has been
+  /// asked — 4006 with the guild, 4017 with the RTC server the create names —
+  /// while the call's connection already carries video: that is how a camera
+  /// is sent, announced with opcode 12 and keyed by SSRC. A share is the same
+  /// thing at a different size, so it goes out the same way.
+  void _bindGoLiveToCall() {
+    final signaling = _chatController.voiceSignalingService;
+    if (signaling is! DiscordVoiceSignalingService) return;
+    final ssrc = signaling.activeVideoTransport?.audioSsrc;
+    if (ssrc == null) return;
+    signaling.activeVideoTransport?.announceVideo(enabled: true);
+    _goLiveController.bindTransport(ssrc: ssrc, sink: signaling.sendVideoFrame);
+    stdout.writeln('flucord.stream sending over the call, ssrc $ssrc');
+  }
+
   void _acceptStreamSession(DiscordStreamRtcSession session) {
     late final StreamSubscription<VoiceSignalingEvent> events;
     events = session.events.listen((event) {
@@ -688,6 +772,8 @@ class _FlucordAppState extends State<FlucordApp> {
         );
         return;
       }
+      // Anything else is somebody else's stream, and its pictures come in
+      // here.
       unawaited(
         _streamViewerController.attach(
           session.key,

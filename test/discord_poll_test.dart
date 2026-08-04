@@ -253,6 +253,9 @@ final class _FakeGateway implements DiscordChatGateway {
   Stream<DiscordGatewayEvent> get events => _events.stream;
 
   @override
+  String? get sessionId => 'session-1';
+
+  @override
   Future<void> connect(String gatewayUrl) async {}
 
   @override

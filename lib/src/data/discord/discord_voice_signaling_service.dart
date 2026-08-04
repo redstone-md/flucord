@@ -88,7 +88,10 @@ final class DiscordVoiceSignalingService
   /// with the same session id voice did. That id only ever arrives on the self
   /// voice state, so it is kept here rather than asked for again.
   ({String sessionId, String userId})? get streamIdentity {
-    final sessionId = _currentSessionId;
+    // The gateway's own, not the one a voice state carried: that one is a
+    // snapshot, and the socket is replaced often enough that a stream opened
+    // afterwards identified with a session Discord had already dropped.
+    final sessionId = _gateway.sessionId ?? _currentSessionId;
     final userId = _currentUserId;
     if (sessionId == null || userId == null) return null;
     return (sessionId: sessionId, userId: userId);
