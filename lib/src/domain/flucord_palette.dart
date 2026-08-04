@@ -166,6 +166,24 @@ final class FlucordPalette {
   /// Per field rather than all-or-nothing: a theme that only restates the
   /// backgrounds is a normal thing to write, and refusing it because it said
   /// nothing about the warning colour would be refusing most themes.
+  ///
+  /// Reads `#rgb`, `#rrggbb` or `#aarrggbb`, or null when it is none of them.
+  ///
+  /// Alpha first when it is given, and opaque when it is not: a theme that
+  /// left it out and got a transparent surface would look broken in a way
+  /// that is very hard to attribute to the file.
+  static int? parseHexColour(String value) {
+    final digits = value.trim().replaceFirst('#', '');
+    if (!RegExp(r'^[0-9a-fA-F]+$').hasMatch(digits)) return null;
+    final expanded = switch (digits.length) {
+      3 => 'ff${digits[0] * 2}${digits[1] * 2}${digits[2] * 2}',
+      6 => 'ff$digits',
+      8 => digits,
+      _ => null,
+    };
+    return expanded == null ? null : int.tryParse(expanded, radix: 16);
+  }
+
   static FlucordPalette fromJson(
     Object? value, {
     FlucordPalette fallback = dark,
@@ -173,7 +191,12 @@ final class FlucordPalette {
     if (value is! Map) return fallback;
     int read(String key, int Function(FlucordPalette) of) {
       final held = value[key];
-      return held is int ? held : of(fallback);
+      if (held is int) return held;
+      // Hex too, because a theme is written by hand. Nobody types
+      // 4280358679 when they mean #1c1917, and a file that only accepts the
+      // decimal form is a file people edit with a calculator open.
+      if (held is String) return parseHexColour(held) ?? of(fallback);
+      return of(fallback);
     }
 
     final isDark = value['is_dark'];

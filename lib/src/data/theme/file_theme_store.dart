@@ -34,6 +34,13 @@ final class FileThemeStore implements ThemeStore {
   static const folderName = 'themes';
   static const selectionFileName = 'selected-theme.txt';
 
+  /// A theme dropped in the folder the first time it is opened.
+  ///
+  /// An empty folder tells somebody nothing: not which keys exist, not what
+  /// they are called, not what a value looks like. One working theme is the
+  /// documentation, and the fastest way to a second is to copy it.
+  static const exampleFileName = 'example-coffee.json';
+
   final Future<Directory> Function() _support;
 
   @override
@@ -41,8 +48,27 @@ final class FileThemeStore implements ThemeStore {
     final directory = Directory(
       '${(await _support()).path}${Platform.pathSeparator}$folderName',
     );
+    final existed = directory.existsSync();
     await directory.create(recursive: true);
+    if (!existed) await _writeExample(directory);
     return directory;
+  }
+
+  /// Writes the example, unless somebody already has files here.
+  ///
+  /// Only into a folder being made for the first time: rewriting it on every
+  /// launch would undo an edit, and putting it back after somebody deleted it
+  /// would be arguing with them.
+  Future<void> _writeExample(Directory directory) async {
+    try {
+      final file = File(
+        '${directory.path}${Platform.pathSeparator}$exampleFileName',
+      );
+      if (file.existsSync()) return;
+      await file.writeAsString(exampleTheme);
+    } on Object {
+      // A profile that cannot be written to still runs, with no example in it.
+    }
   }
 
   @override
@@ -61,9 +87,7 @@ final class FileThemeStore implements ThemeStore {
       final theme = await readTheme(entry);
       if (theme != null) themes.add(theme);
     }
-    themes.sort(
-      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-    );
+    themes.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return themes;
   }
 
@@ -134,3 +158,38 @@ final class FileThemeStore implements ThemeStore {
     '${(await _support()).path}${Platform.pathSeparator}$selectionFileName',
   );
 }
+
+/// The theme written into an empty folder, and the shape a hand-made one takes.
+///
+/// Warm neutrals rather than the blue-greys the built-in scheme uses: it is
+/// there to be copied and altered, and a copy of what is already on screen
+/// teaches nothing. Every key appears, because a missing one silently falls
+/// back to the built-in value and reads like a typo that worked.
+const exampleTheme = '''
+{
+  "name": "Coffee",
+  "author": "Flucord",
+  "version": "1.0.0",
+  "description":
+      "Warm, low-contrast dark theme. Copy this file, rename it, and edit the colours. Hex is fine: #rrggbb, or #aarrggbb when you want the alpha.",
+  "palette": {
+    "is_dark": true,
+    "rail": "#171310",
+    "canvas": "#1c1714",
+    "surface": "#211b17",
+    "raised": "#2b231d",
+    "inset": "#141110",
+    "control": "#2b231d",
+    "text": "#f2ece5",
+    "muted": "#a1938a",
+    "border": "#332a23",
+    "brand": "#c08457",
+    "brand_pressed": "#a56c45",
+    "success": "#7f9c6a",
+    "warning": "#d9a441",
+    "mention": "#c9705a",
+    "danger": "#b4553f",
+    "offline": "#7c6f66"
+  }
+}
+''';

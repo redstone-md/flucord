@@ -76,7 +76,7 @@ const _stageNames = {
   4: 'duplicating onto the original device',
 };
 
-void main(List<String> arguments) {
+Future<void> main(List<String> arguments) async {
   final path = arguments.isNotEmpty
       ? arguments.first
       : r'build\windows\x64\runner\Debug\flucord_video.dll';
@@ -116,7 +116,10 @@ void main(List<String> arguments) {
     if (status == 0) {
       // A capture that opens and produces nothing is still broken, so the
       // probe waits long enough for a frame or two to arrive.
-      sleep(const Duration(milliseconds: 600));
+      // Awaited rather than slept through: the frame callback is a listener,
+      // and a blocked isolate never runs it — which had this reporting zero
+      // frames from a capture that was working.
+      await Future<void>.delayed(const Duration(milliseconds: 900));
       stdout.writeln('display $index: captured, $_frames frames');
       // And again while the first is still open. Discord's own share does
       // exactly this — a picker that grabs thumbnails, then a capture — and

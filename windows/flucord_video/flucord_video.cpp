@@ -486,6 +486,8 @@ void CaptureLoop(FlucordVideoEncoder* state) {
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   const int frame_interval_ms = 1000 / state->config.frames_per_second;
   auto started = GetTickCount64();
+  std::vector<uint8_t> last_frame;
+  int last_pitch = 0;
 
   while (state->running.load()) {
     if (state->paused.load()) {
@@ -497,8 +499,15 @@ void CaptureLoop(FlucordVideoEncoder* state) {
     HRESULT hr = state->duplication->AcquireNextFrame(
         static_cast<UINT>(frame_interval_ms), &info, &resource);
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-      // Nothing changed on screen. Discord expects frames anyway, so the last
-      // one is re-sent rather than the stream stalling.
+      // Nothing changed on screen — which is most of the time, because a
+      // desktop only produces a frame when a pixel moves. Discord expects a
+      // stream regardless: a viewer who joins a still screen and is sent
+      // nothing sees black until somebody wiggles a window. The last picture
+      // goes out again instead.
+      if (!last_frame.empty()) {
+        EncodeFrame(state, last_frame.data(), last_pitch,
+                    static_cast<int64_t>(GetTickCount64() - started) * 1000);
+      }
       continue;
     }
     if (FAILED(hr)) break;
@@ -518,9 +527,17 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if (SUCCEEDED(state->context->Map(staging.Get(), 0, D3D11_MAP_READ, 0,
                                           &mapped))) {
-          EncodeFrame(state, static_cast<const uint8_t*>(mapped.pData),
-                      static_cast<int>(mapped.RowPitch),
+          const auto* pixels = static_cast<const uint8_t*>(mapped.pData);
+          EncodeFrame(state, pixels, static_cast<int>(mapped.RowPitch),
                       static_cast<int64_t>(GetTickCount64() - started) * 1000);
+          // Kept for the still frames that follow. A copy rather than the
+          // mapped pointer: the surface is unmapped and released before the
+          // next tick asks for it.
+          last_pitch = static_cast<int>(mapped.RowPitch);
+          // The surface's own height, not the encoder's: the capture is the
+          // display's resolution and the encoder scales it down afterwards.
+          const size_t bytes = static_cast<size_t>(last_pitch) * desc.Height;
+          last_frame.assign(pixels, pixels + bytes);
           state->context->Unmap(staging.Get(), 0);
         }
       }

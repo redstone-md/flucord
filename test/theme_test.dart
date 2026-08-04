@@ -11,6 +11,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('the folder somebody drops themes into', () {
+    test('starts with one to copy', () async {
+      final root = await Directory.systemTemp.createTemp('flucord-themes');
+      addTearDown(() => root.delete(recursive: true));
+      final store = FileThemeStore(directory: () async => root);
+
+      await store.themeDirectory();
+      final themes = await store.loadThemes();
+
+      // An empty folder says nothing: not which keys exist, not what they are
+      // called, not what a value looks like.
+      expect(themes.single.name, 'Coffee');
+      expect(themes.single.palette.isDark, isTrue);
+      // Written as hex, because that is what a person types.
+      expect(themes.single.palette.brand, 0xffc08457);
+    });
+
+    test('a folder somebody already has is left alone', () async {
+      final root = await Directory.systemTemp.createTemp('flucord-themes');
+      addTearDown(() => root.delete(recursive: true));
+      final store = FileThemeStore(directory: () async => root);
+      await store.themeDirectory();
+      final example = File(
+        '${root.path}/${FileThemeStore.folderName}/'
+        '${FileThemeStore.exampleFileName}',
+      );
+      await example.delete();
+
+      await store.themeDirectory();
+
+      // Putting it back after somebody deleted it is arguing with them.
+      expect(example.existsSync(), isFalse);
+    });
+  });
+
+  group('colours written by hand', () {
+    test('hex is read, in all three lengths', () {
+      expect(FlucordPalette.parseHexColour('#abc'), 0xffaabbcc);
+      expect(FlucordPalette.parseHexColour('1c1917'), 0xff1c1917);
+      expect(FlucordPalette.parseHexColour('#801c1917'), 0x801c1917);
+    });
+
+    test('anything else falls back rather than drawing nothing', () {
+      expect(FlucordPalette.parseHexColour('coffee please'), isNull);
+      expect(FlucordPalette.parseHexColour('#12345'), isNull);
+      final palette = FlucordPalette.fromJson(const {'rail': 'not a colour'});
+      expect(palette.rail, FlucordPalette.dark.rail);
+    });
+  });
+
   group('reading a BetterDiscord theme', () {
     test('the colours are taken and the rest is left alone', () {
       // The shape every BD theme has: a meta header, then Discord's own
@@ -204,9 +254,15 @@ void main() {
 
       final read = await store.loadThemes();
 
-      expect(read.map((theme) => theme.name), ['Midnight', 'Sunrise']);
-      expect(read.first.source, ThemeSource.betterDiscord);
-      expect(read.first.palette.canvas, 0xff101014);
+      // The example the folder is created with sorts in alongside them.
+      expect(read.map((theme) => theme.name), [
+        'Coffee',
+        'Midnight',
+        'Sunrise',
+      ]);
+      final midnight = read.firstWhere((theme) => theme.name == 'Midnight');
+      expect(midnight.source, ThemeSource.betterDiscord);
+      expect(midnight.palette.canvas, 0xff101014);
       expect(read.last.source, ThemeSource.flucord);
       expect(read.last.palette.canvas, 0xfffff5e6);
       expect(read.last.author, 'me');
