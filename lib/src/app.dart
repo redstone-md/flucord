@@ -442,6 +442,16 @@ class _FlucordAppState extends State<FlucordApp> {
             ? signaling.streamIdentity
             : null;
       },
+      daveVersionProvider: () {
+        final signaling = _chatController.voiceSignalingService;
+        return signaling is DiscordVoiceSignalingService
+            ? signaling.daveProtocolVersion
+            : 0;
+      },
+
+      // No DAVE service on the stream socket yet: it announces the call's
+      // version so the two agree, but a group of its own is the next problem,
+      // not this one.
     );
     _streamConnections = _streamRtcService.opened.listen(_acceptStreamSession);
     _messageComponentController = MessageComponentController(

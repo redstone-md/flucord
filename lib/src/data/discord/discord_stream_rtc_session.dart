@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
+import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_gateway_client.dart';
 
@@ -29,7 +30,11 @@ final class DiscordStreamRtcSession {
     required this.key,
     required VoiceServerCredentials credentials,
     DiscordStreamClientFactory? clientFactory,
-  }) : _credentials = credentials,
+    int maxDaveProtocolVersion = 0,
+    VoiceDaveService? daveService,
+  }) : _daveService = daveService,
+       _maxDaveProtocolVersion = maxDaveProtocolVersion,
+       _credentials = credentials,
        _clientFactory = clientFactory {
     _fallbackFactory = _createClient;
   }
@@ -38,6 +43,16 @@ final class DiscordStreamRtcSession {
 
   final GoLiveStreamKey key;
   final VoiceServerCredentials _credentials;
+
+  /// The version the call negotiated. A stream of a call running secure
+  /// frames has to say the same thing: offering 0 against a v1 call is
+  /// refused, and saying nothing at all is refused differently.
+  final int _maxDaveProtocolVersion;
+
+  /// The secure-frames boundary. A stream that announces v1 and then holds no
+  /// group cannot read a packet the room sends it: fifty in a row fail and
+  /// the connection is torn down as broken.
+  final VoiceDaveService? _daveService;
   final DiscordStreamClientFactory? _clientFactory;
 
   final StreamController<(String, DiscordRtpFrame)> _video =
@@ -147,7 +162,8 @@ final class DiscordStreamRtcSession {
   DiscordVoiceClient _createClient(VoiceServerCredentials credentials) =>
       DiscordVoiceGatewayClient(
         credentials: credentials,
-        maxDaveProtocolVersion: 0,
+        maxDaveProtocolVersion: _maxDaveProtocolVersion,
+        daveService: _daveService,
         streamKey: key.value,
         // This socket exists to carry a screen share, and Discord wants that
         // said at identify: one that does not say it is closed with 4017 as

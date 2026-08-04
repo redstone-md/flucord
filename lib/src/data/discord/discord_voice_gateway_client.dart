@@ -779,7 +779,7 @@ final class DiscordVoiceGatewayClient
             // The last few characters only: enough to tell two sessions
             // apart, not enough to be one.
             'session=…${_tail(d['session_id'])} '
-            'token=…${_tail(d['token'])} '
+            'token=…${_tail(d['token'])} user=${d['user_id']} '
             // The host, which is Discord's own address for the region — not
             // anything about who is on it.
             'host=${_protocol.credentials.endpoint}',

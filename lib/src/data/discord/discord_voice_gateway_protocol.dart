@@ -105,13 +105,10 @@ final class DiscordVoiceGatewayProtocol {
     'op': 0,
     'd': {
       'server_id': credentials.serverId,
-      // A stream socket identifies with six fields and no others: server,
-      // user, session, token, video, streams. A channel id, a DAVE version or
-      // a stream key alongside them is refused.
-      if (!carriesVideo) ...{
-        'channel_id': credentials.channelId,
-        'max_dave_protocol_version': maxDaveProtocolVersion,
-      },
+      // A stream socket carries no channel: it belongs to the RTC server the
+      // create named, not to a room.
+      if (!carriesVideo) 'channel_id': credentials.channelId,
+      'max_dave_protocol_version': maxDaveProtocolVersion,
       'user_id': credentials.userId,
       'session_id': credentials.sessionId,
       'token': credentials.token,

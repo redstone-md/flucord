@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
+import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_stream_rtc_session.dart';
 
@@ -26,13 +27,23 @@ final class DiscordStreamRtcService {
     required GoLiveRepository? Function() repositoryProvider,
     required DiscordStreamIdentity? Function() identityProvider,
     DiscordStreamClientFactory? clientFactory,
+    int Function()? daveVersionProvider,
+    VoiceDaveService? Function()? daveServiceProvider,
   }) : _repositoryProvider = repositoryProvider,
        _identityProvider = identityProvider,
+       _daveServiceProvider = daveServiceProvider ?? _noDaveService,
+       _daveVersionProvider = daveVersionProvider ?? _noDave,
        _clientFactory = clientFactory;
+
+  static int _noDave() => 0;
+
+  static VoiceDaveService? _noDaveService() => null;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final DiscordStreamIdentity? Function() _identityProvider;
   final DiscordStreamClientFactory? _clientFactory;
+  final int Function() _daveVersionProvider;
+  final VoiceDaveService? Function() _daveServiceProvider;
 
   final Map<String, DiscordStreamRtcSession> _sessions = {};
   final StreamController<DiscordStreamRtcSession> _opened =
@@ -132,6 +143,8 @@ final class DiscordStreamRtcService {
         endpoint: server.endpoint,
       ),
       clientFactory: _clientFactory,
+      maxDaveProtocolVersion: _daveVersionProvider(),
+      daveService: _daveServiceProvider(),
     );
     _sessions[server.key.value] = session;
     if (!_opened.isClosed) _opened.add(session);

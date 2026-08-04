@@ -85,6 +85,13 @@ final class DiscordVoiceSignalingService
     _currentUserId = userId;
   }
 
+  /// The DAVE version the call negotiates, which a stream of that call has to
+  /// match.
+  int get daveProtocolVersion => _daveService?.maxProtocolVersion ?? 0;
+
+  /// The secure-frames boundary a stream of this call needs its own group on.
+  VoiceDaveService? get daveService => _daveService;
+
   /// What a second connection of this session identifies with.
   ///
   /// Go Live runs on its own socket but not on its own session: it identifies
