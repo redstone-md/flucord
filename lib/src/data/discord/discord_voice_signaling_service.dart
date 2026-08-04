@@ -48,6 +48,15 @@ final class DiscordVoiceSignalingService
   final StreamController<VoiceRemoteOpusFrame> _remoteAudio =
       StreamController.broadcast();
   final Map<VoiceSessionKey, String> _desiredChannels = {};
+
+  /// The flags each session was last announced with.
+  ///
+  /// Re-announcing a channel has to repeat them: opcode 4 is a whole-state
+  /// frame, so sending it with the defaults would quietly unmute somebody who
+  /// muted themselves — during a reconnect, when they are least likely to
+  /// notice.
+  final Map<VoiceSessionKey, ({bool mute, bool deaf, bool video})> _lastFlags =
+      {};
   final Set<VoiceSessionKey> _pingedSessions = <VoiceSessionKey>{};
   final Map<VoiceSessionKey, int> _generations = {};
   final Map<VoiceSessionKey, DiscordVoiceClient> _clients = {};
@@ -204,6 +213,11 @@ final class DiscordVoiceSignalingService
     bool selfDeaf = false,
     bool selfVideo = false,
   }) {
+    if (channelId == null) {
+      _lastFlags.remove(key);
+    } else {
+      _lastFlags[key] = (mute: selfMute, deaf: selfDeaf, video: selfVideo);
+    }
     final guildId = key.guildId;
     if (guildId != null) {
       _gateway.updateVoiceState(
@@ -305,9 +319,27 @@ final class DiscordVoiceSignalingService
       final wasReconnecting = _pingedSessions.contains(key);
       final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;
       if (isReconnecting && !wasReconnecting) {
-        if (_desiredChannels.containsKey(key)) {
+        final channelId = _desiredChannels[key];
+        if (channelId != null) {
           _pingedSessions.add(key);
           _gateway.pingVoiceServer();
+          // And the voice state is sent again. The ping asks the server to
+          // re-issue what it already believes it has handed out; re-announcing
+          // the channel is what makes it hand out a *new* one. Without this a
+          // client holding credentials from a replaced session waited for an
+          // update that never came, and the room went from reconnecting
+          // straight to disconnected while Discord still had the account in
+          // the channel.
+          _assembler.clear(key);
+          _generations[key] = (_generations[key] ?? 0) + 1;
+          final flags = _lastFlags[key];
+          _sendVoiceState(
+            key,
+            channelId,
+            selfMute: flags?.mute ?? false,
+            selfDeaf: flags?.deaf ?? false,
+            selfVideo: flags?.video ?? false,
+          );
         }
       } else if (!isReconnecting) {
         _pingedSessions.remove(key);

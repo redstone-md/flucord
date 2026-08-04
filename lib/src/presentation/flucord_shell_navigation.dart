@@ -426,6 +426,40 @@ extension _FlucordShellNavigation on FlucordShell {
     await _openDirectConversation(context, recipientId);
   }
 
+  /// Shows whoever [userId] is, from a surface with no room for a popover.
+  ///
+  /// A dialog rather than the card the member list anchors to its row: the
+  /// voice rows sit in a narrow, scrolling column, and a card anchored to one
+  /// would be clipped by the sidebar it lives in.
+  Future<void> _openMemberCard(
+    BuildContext context,
+    String spaceId,
+    String userId,
+  ) async {
+    final workspace = chatController.workspace;
+    final member = workspace?.memberOrNull(userId);
+    if (member == null || !context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        key: const ValueKey('voice-member-card'),
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: MemberProfilePopover(
+            member: member,
+            spaceId: spaceId,
+            canMessage: member.id != workspace!.currentMemberId,
+            onMessage: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_openDirectConversation(context, member.id));
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openDirectConversation(
     BuildContext context,
     String recipientId,

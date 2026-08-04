@@ -42,6 +42,30 @@ void main() {
     expect(workspace.channels.single.position, 3);
   });
 
+  test('reads a guild named inside its properties', () {
+    final workspace = DiscordMapper().workspace(
+      currentUser: {'id': 'me', 'username': 'Me'},
+      // What a desktop session sends: the guild record split in two, with the
+      // name and the icon inside `properties`. Reading only the top level drew
+      // every server in the rail as "Unnamed server" with a blank badge.
+      guilds: const [
+        {
+          'id': 'guild-1',
+          'properties': {'id': 'guild-1', 'name': 'The Forge', 'icon': 'abc'},
+        },
+      ],
+      channelsByGuild: const {
+        'guild-1': [
+          {'id': 'general', 'guild_id': 'guild-1', 'name': 'general', 'type': 0},
+        ],
+      },
+    );
+
+    expect(workspace.spaces.single.name, 'The Forge');
+    expect(workspace.spaces.single.monogram, isNot('U'));
+    expect(workspace.spaces.single.iconUrl, contains('abc'));
+  });
+
   test('persists live category and child-channel changes', () async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,

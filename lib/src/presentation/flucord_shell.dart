@@ -57,6 +57,7 @@ import 'widgets/guild_settings_dialog.dart';
 import 'widgets/report_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
+import 'widgets/member_profile_popover.dart';
 import 'widgets/member_sidebar.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_forward_dialog.dart';
@@ -290,6 +291,11 @@ class FlucordShell extends StatelessWidget {
                               space: space,
                               friends: friendsController,
                               seatedByChannel: voiceController.seatedByChannel,
+                              // Discord opens a profile from these rows with
+                              // either mouse button. Ours were labels.
+                              onOpenMemberProfile: (userId) => unawaited(
+                                _openMemberCard(context, spaceId, userId),
+                              ),
                               // A voice connection outlives the room view, so
                               // leaving it has to stay reachable from wherever
                               // the user has navigated to since.

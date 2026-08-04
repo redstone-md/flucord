@@ -229,9 +229,26 @@ void main() {
     });
     await _flushEvents();
 
+    await service.joinVoiceChannel(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      selfMute: true,
+    );
+    gateway.updates.clear();
+
     clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
     await _flushEvents();
     expect(gateway.voiceServerPings, 1);
+
+    // The channel is announced again as well. The ping asks Discord to
+    // re-issue what it believes it already handed out; re-announcing is what
+    // makes it hand out a new one, and a client holding credentials from a
+    // replaced session otherwise waited for an update that never came.
+    expect(gateway.updates.single.channelId, 'voice-1');
+    // With the flags it was announced with. Opcode 4 is a whole-state frame,
+    // so repeating it with the defaults would quietly unmute somebody in the
+    // middle of a reconnect.
+    expect(gateway.updates.single.selfMute, isTrue);
 
     // A ready transport is not a reason to poke the gateway.
     clients.single.emitStatus(VoiceConnectionStatus.ready);

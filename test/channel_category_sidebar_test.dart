@@ -63,6 +63,7 @@ void main() {
   testWidgets('a voice channel inside a category shows who is in it', (
     tester,
   ) async {
+    final opened = <String>[];
     final controller = WorkspaceController()..reconcile(_workspace);
     await tester.pumpWidget(
       MaterialApp(
@@ -81,6 +82,7 @@ void main() {
               collapsedCategoryIds: controller.collapsedCategoryIds,
               onToggleCategory: controller.toggleCategory,
               onNewDirectMessage: () {},
+              onOpenMemberProfile: opened.add,
               seatedByChannel: const {
                 'the-lodge': [
                   VoiceParticipantStateEvent(
@@ -108,6 +110,12 @@ void main() {
       find.byKey(const ValueKey('voice-seat-the-lodge-bot-1')),
       findsOneWidget,
     );
+
+    // And they open. Discord opens a profile from these rows with either
+    // mouse button; ours were labels.
+    await tester.tap(find.byKey(const ValueKey('voice-seat-the-lodge-bot-1')));
+    await tester.pumpAndSettle();
+    expect(opened, ['bot-1']);
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
     await tester.pump();

@@ -410,7 +410,6 @@ final class DiscordMapper {
   }
 
   CommunitySpace _space(Map<String, Object?> payload) {
-    final name = payload['name'] as String? ?? 'Unnamed server';
     final id = payload['id']! as String;
     // The desktop session splits the guild record into a `properties` object
     // while the REST guild list keeps everything flat, so permission-relevant
@@ -419,12 +418,17 @@ final class DiscordMapper {
     final core = properties is Map
         ? properties.cast<String, Object?>()
         : payload;
+    // The name and the icon live in there too, which is why every server on a
+    // desktop session was drawn as "Unnamed server" with a blank badge.
+    final name =
+        (payload['name'] ?? core['name']) as String? ?? 'Unnamed server';
+    final icon = (payload['icon'] ?? core['icon']) as String?;
     return CommunitySpace(
       id: id,
       name: name,
       monogram: _monogram(name),
       colorValue: _colorFor(id),
-      iconUrl: DiscordCdn.guildIcon(id, payload['icon'] as String?),
+      iconUrl: DiscordCdn.guildIcon(id, icon),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
     );

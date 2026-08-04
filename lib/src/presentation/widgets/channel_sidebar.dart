@@ -31,6 +31,7 @@ class ChannelSidebar extends StatelessWidget {
     required this.channels,
     required this.selectedChannelId,
     required this.onSelectChannel,
+    this.onOpenMemberProfile,
     required this.sessionMode,
     required this.connectionStatus,
     required this.workspace,
@@ -68,6 +69,10 @@ class ChannelSidebar extends StatelessWidget {
   final List<ConversationChannel> channels;
   final String? selectedChannelId;
   final ValueChanged<String> onSelectChannel;
+
+  /// Opens somebody sitting in a voice channel. Absent on a surface with
+  /// nowhere to show a profile.
+  final void Function(String userId)? onOpenMemberProfile;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
   final ChatWorkspace workspace;
@@ -446,6 +451,7 @@ class ChannelSidebar extends StatelessWidget {
         member: workspace.memberOrNull(seat.userId),
         spaceId: space.id,
         indented: indented,
+        onOpenProfile: onOpenMemberProfile,
       ),
   ];
 

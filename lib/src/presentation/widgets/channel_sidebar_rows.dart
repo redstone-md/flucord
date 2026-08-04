@@ -229,6 +229,7 @@ class VoiceSeatRow extends StatelessWidget {
     required this.member,
     required this.spaceId,
     this.indented = false,
+    this.onOpenProfile,
     super.key,
   });
 
@@ -237,13 +238,17 @@ class VoiceSeatRow extends StatelessWidget {
   final String spaceId;
   final bool indented;
 
+  /// Opens whoever this row is. Discord opens a profile from these rows with
+  /// either button, and a row that answers neither reads as a label.
+  final void Function(String userId)? onOpenProfile;
+
   @override
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final name = member?.displayName ?? 'Unknown user';
     final silenced = state.selfMuted || state.serverMuted;
     final deafened = state.selfDeafened || state.serverDeafened;
-    return Padding(
+    final row = Padding(
       padding: EdgeInsets.fromLTRB(indented ? 34 : 22, 1, 8, 1),
       child: Row(
         children: [
@@ -302,6 +307,16 @@ class VoiceSeatRow extends StatelessWidget {
             ),
         ],
       ),
+    );
+    final open = onOpenProfile;
+    if (open == null) return row;
+    return InkWell(
+      onTap: () => open(state.userId),
+      // The right button too: Discord opens the same card from it, and a row
+      // that ignores it is the one place in the app where the mouse stops
+      // working.
+      onSecondaryTap: () => open(state.userId),
+      child: row,
     );
   }
 }
