@@ -201,8 +201,11 @@ final class DiscordDesktopGatewayClient
     DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamCreate, {
       'type': type,
       'channel_id': channelId,
-      'guild_id': ?guildId,
-      'preferred_region': ?preferredRegion,
+      'guild_id': guildId,
+      // Present and null rather than absent, which is how Discord's own
+      // clients send it. A create is answered either way, but the session the
+      // answer describes is the one the RTC server will accept.
+      'preferred_region': preferredRegion,
     }),
   );
 
