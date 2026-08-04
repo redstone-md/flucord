@@ -10,7 +10,6 @@ import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
-import 'discord_video_stream_transport.dart';
 import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_media_transport.dart';
 import 'discord_voice_transport_cipher.dart';
@@ -106,16 +105,16 @@ final class DiscordVoiceGatewayClient
   int _consecutiveAuthFailures = 0;
   bool _hasDecryptedAnyPacket = false;
 
-  /// The audio plane: everything that is not a camera.
+  /// The audio plane: Opus, and only Opus.
   ///
-  /// Split by payload type rather than by SSRC because the split has to work
-  /// before anybody has announced anything — a video packet fed to the Opus
-  /// decoder is noise, and one arriving before its opcode 12 would otherwise
-  /// be exactly that.
+  /// Named rather than "everything that is not our own video payload type",
+  /// which is what this used to say. Discord's own clients send pictures on
+  /// several payload types, and every one of them that was not ours landed in
+  /// here — to be handed to the group decryptor as audio, fail, and put "DAVE
+  /// decryption failed" over a call that was working.
   Stream<DiscordRtpFrame> get audioPackets => _decryptedPackets.where(
     (frame) =>
-        frame.header.payloadType !=
-        DiscordVideoStreamTransport.videoPayloadType,
+        frame.header.payloadType == DiscordRtpHeader.discordAudioPayloadType,
   );
 
   /// Somebody else's camera, paired with whoever is sending it.
@@ -126,8 +125,8 @@ final class DiscordVoiceGatewayClient
   Stream<(String, DiscordRtpFrame)> get videoPackets => _decryptedPackets
       .where(
         (frame) =>
-            frame.header.payloadType ==
-            DiscordVideoStreamTransport.videoPayloadType,
+            frame.header.payloadType !=
+            DiscordRtpHeader.discordAudioPayloadType,
       )
       .map((frame) => (_videoSsrcOwners[frame.header.ssrc], frame))
       .where((pair) => pair.$1 != null)

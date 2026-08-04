@@ -330,6 +330,61 @@ void main() {
       },
     );
 
+    test('a payload type nobody claimed is not fed to the Opus decoder',
+        () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      addTearDown(client.close);
+      final audio = <DiscordRtpFrame>[];
+      final subscription = client.audioPackets.listen(audio.add);
+      addTearDown(subscription.cancel);
+
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'd': {
+          'ssrc': 11,
+          'ip': '127.0.0.1',
+          'port': 5000,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      socket.addJson({
+        'op': 4,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+
+      // Discord's own clients send pictures on several payload types. The
+      // split used to be "anything that is not our own video type is audio",
+      // so every one of those landed in the Opus path — and on a DAVE call
+      // failed there, putting "DAVE decryption failed" over a working room.
+      final picture = DiscordRtpFrame(
+        header: DiscordRtpHeader(
+          payloadType: 103,
+          sequence: 1,
+          timestamp: 2,
+          ssrc: 12,
+        ),
+        payload: const [3, 4, 5],
+      );
+      client.sendAudioFrame(picture);
+      udp.addPacket(udp.sentPackets.last);
+      await _flushEvents();
+
+      expect(audio, isEmpty);
+    });
+
     test('splits cameras from audio and attributes them by SSRC', () async {
       final socket = _FakeVoiceWebSocket();
       final udp = _FakeVoiceUdpTransport();
