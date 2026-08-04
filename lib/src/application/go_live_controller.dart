@@ -9,6 +9,21 @@ import '../domain/go_live_stream.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_media.dart';
 
+/// A display this machine can share.
+///
+/// Named by the encoder rather than by a capture library: enumerating sources
+/// through WebRTC opens duplications of its own to build thumbnails with, and
+/// one of those left open is what refuses the share afterwards.
+final class GoLiveDisplay {
+  const GoLiveDisplay({required this.index, required this.name});
+
+  final int index;
+  final String name;
+
+  /// The id the capture takes, in the shape the encoder reads an index from.
+  String get sourceId => 'screen:$index:0';
+}
+
 /// Drives Go Live: opening a stream, holding it alive, and ending it.
 ///
 /// The stream is a second RTC connection alongside the voice one, so this is a
@@ -51,7 +66,6 @@ final class GoLiveController extends ChangeNotifier {
   GoLiveServer? _server;
   List<String> _viewerIds = const [];
   Object? _error;
-  Object? _previewError;
 
   bool get isSupported {
     _bind();
@@ -95,8 +109,11 @@ final class GoLiveController extends ChangeNotifier {
 
   Object? get error => _error;
 
-  /// Why the local preview is missing while the stream itself is running.
-  Object? get previewError => _previewError;
+  /// The displays this machine can share.
+  List<GoLiveDisplay> get displays => [
+    for (var index = 0; index < (_encoder?.displayCount ?? 0); index++)
+      GoLiveDisplay(index: index, name: 'Screen ${index + 1}'),
+  ];
 
   /// Attaches to the active transport.
   void reconcile() => _bind();
@@ -118,31 +135,24 @@ final class GoLiveController extends ChangeNotifier {
     if (repository == null || _status != GoLiveStatus.idle) return false;
     _status = GoLiveStatus.creating;
     _error = null;
-    _previewError = null;
     _notify();
     try {
       // The encoder is what produces the picture Discord receives: it reads
-      // the display itself, through Desktop Duplication. The media service's
-      // capture only feeds the local preview, so it is attempted rather than
-      // required — a preview that will not open is a room without a
-      // thumbnail, not a stream nobody can watch. It was aborting the entire
-      // share with "that display is no longer attached" while the encoder
-      // would have been perfectly happy.
+      // the display itself, through Desktop Duplication, and it is the only
+      // thing here that captures.
+      //
+      // Nothing else may hold a duplication of the same output at the same
+      // time: Windows refuses the second with E_INVALIDARG, which is what the
+      // room was reporting as "that display is no longer attached". The local
+      // preview this used to open through WebRTC was exactly that second
+      // holder, and a thumbnail of your own screen is not worth the stream it
+      // was cancelling.
       await _encoder?.start(_settingsFor(sourceId));
-      try {
-        await _mediaService.startScreenShare(sourceId);
-      } on Object catch (error) {
-        _previewError = error;
-      }
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
       );
-      _diagnose(
-        'started',
-        '${sourceId ?? 'primary screen'}'
-            '${_previewError == null ? '' : ' (no preview: $_previewError)'}',
-      );
+      _diagnose('started', sourceId ?? 'primary screen');
       _startPinging();
       return true;
     } on Object catch (error) {

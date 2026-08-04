@@ -126,6 +126,11 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
 // the device the encoder already had. Zero when nothing has failed.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
 
+// Writes what DXGI reports about this machine's adapters and displays into
+// [buffer] as text, answering how many bytes were written. Diagnostics only.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_describe_displays(char* buffer,
+                                                             int32_t capacity);
+
 typedef struct FlucordVideoDecoder FlucordVideoDecoder;
 
 // One decoded picture, as BGRA ready for a texture. Valid for the duration of

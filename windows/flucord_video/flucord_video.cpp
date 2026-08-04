@@ -3,6 +3,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -198,6 +199,12 @@ HRESULT FindOutput(int index, ComPtr<IDXGIAdapter1>* out_adapter,
     }
   }
   return DXGI_ERROR_NOT_FOUND;
+}
+
+std::string ToHex(HRESULT hr) {
+  char text[16];
+  snprintf(text, sizeof(text), "%08x", static_cast<unsigned>(hr));
+  return text;
 }
 
 // The platform's own answer to whatever failed last, for diagnostics only,
@@ -1217,17 +1224,88 @@ flucord_video_clip_close(FlucordVideoClip* clip) {
 }
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void) {
+  // Across every adapter, matching what a capture actually enumerates. Only
+  // adapter zero was counted before, which reports none at all on a laptop
+  // whose panel hangs off the integrated GPU.
   ComPtr<IDXGIFactory1> factory;
   if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0;
-  ComPtr<IDXGIAdapter1> adapter;
-  if (FAILED(factory->EnumAdapters1(0, &adapter))) return 0;
   int32_t count = 0;
-  ComPtr<IDXGIOutput> output;
-  while (SUCCEEDED(adapter->EnumOutputs(static_cast<UINT>(count), &output))) {
-    ++count;
-    output.Reset();
+  for (UINT adapter_index = 0;; ++adapter_index) {
+    ComPtr<IDXGIAdapter1> adapter;
+    if (factory->EnumAdapters1(adapter_index, &adapter) ==
+        DXGI_ERROR_NOT_FOUND) {
+      break;
+    }
+    for (UINT output_index = 0;; ++output_index) {
+      ComPtr<IDXGIOutput> output;
+      if (adapter->EnumOutputs(output_index, &output) ==
+          DXGI_ERROR_NOT_FOUND) {
+        break;
+      }
+      DXGI_OUTPUT_DESC desc{};
+      if (SUCCEEDED(output->GetDesc(&desc)) && desc.AttachedToDesktop) ++count;
+    }
   }
   return count;
+}
+
+// Writes what DXGI reports about this machine's adapters and displays into
+// [buffer], answering how many bytes were written.
+//
+// Diagnostics, and the only way to tell the ways "no display" can happen
+// apart without a person at the keyboard describing their hardware.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_describe_displays(char* buffer,
+                                                             int32_t capacity) {
+  if (buffer == nullptr || capacity <= 0) return 0;
+  std::string text;
+  ComPtr<IDXGIFactory1> factory;
+  HRESULT hr = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+  if (FAILED(hr)) {
+    text = "CreateDXGIFactory1 failed: 0x" + ToHex(hr) + "\n";
+  } else {
+    int display_index = 0;
+    for (UINT adapter_index = 0;; ++adapter_index) {
+      ComPtr<IDXGIAdapter1> adapter;
+      if (factory->EnumAdapters1(adapter_index, &adapter) ==
+          DXGI_ERROR_NOT_FOUND) {
+        break;
+      }
+      DXGI_ADAPTER_DESC1 adapter_desc{};
+      adapter->GetDesc1(&adapter_desc);
+      text += "adapter " + std::to_string(adapter_index) + " luid=" +
+              std::to_string(adapter_desc.AdapterLuid.LowPart) + " flags=" +
+              std::to_string(adapter_desc.Flags) + "\n";
+      for (UINT output_index = 0;; ++output_index) {
+        ComPtr<IDXGIOutput> output;
+        if (adapter->EnumOutputs(output_index, &output) ==
+            DXGI_ERROR_NOT_FOUND) {
+          break;
+        }
+        DXGI_OUTPUT_DESC desc{};
+        if (FAILED(output->GetDesc(&desc))) continue;
+        text += "  output " + std::to_string(output_index) +
+                " attached=" + (desc.AttachedToDesktop ? "yes" : "no");
+        if (desc.AttachedToDesktop) {
+          text += " index=" + std::to_string(display_index++);
+        }
+        text += " rect=" + std::to_string(desc.DesktopCoordinates.right -
+                                          desc.DesktopCoordinates.left) +
+                "x" +
+                std::to_string(desc.DesktopCoordinates.bottom -
+                               desc.DesktopCoordinates.top);
+        ComPtr<IDXGIOutput1> output1;
+        text += output.As(&output1) == S_OK ? " output1=yes" : " output1=no";
+        text += "\n";
+      }
+    }
+  }
+  const int32_t length =
+      static_cast<int32_t>(text.size()) < capacity - 1
+          ? static_cast<int32_t>(text.size())
+          : capacity - 1;
+  memcpy(buffer, text.data(), static_cast<size_t>(length));
+  buffer[length] = 0;
+  return length;
 }
 
 }  // extern "C"

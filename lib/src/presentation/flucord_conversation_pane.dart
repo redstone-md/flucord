@@ -268,21 +268,22 @@ class _ConversationPaneState extends State<_ConversationPane> {
 
   /// The call state is read on every build, so the pane has to be rebuilt when
   /// it moves — joining a call is what swaps the timeline for the room.
-  /// Asks which screen or window to share.
+  /// Asks which screen to share.
   ///
-  /// The sources are read at the moment of asking: the list is a snapshot, and
-  /// a display that has slept since the last read leaves a handle behind that
-  /// fails when it is used.
+  /// The displays come from the encoder, not from a capture library. WebRTC's
+  /// enumeration opens duplications of its own to build thumbnails with, and
+  /// Windows refuses a second duplication of a display something already
+  /// holds — which is what turned every share into "that display is no longer
+  /// attached".
   Future<String?> _pickCaptureSource(BuildContext context) async {
-    await widget.voiceController.loadCaptureSources();
-    if (!context.mounted) return null;
-    final source = await showDialog<VoiceCaptureSource>(
+    final displays = widget.goLiveController.displays;
+    // One screen, nothing to choose between.
+    if (displays.length <= 1) return displays.firstOrNull?.sourceId;
+    final picked = await showDialog<GoLiveDisplay>(
       context: context,
-      builder: (_) => VoiceCaptureSourceDialog(
-        sources: widget.voiceController.captureSources,
-      ),
+      builder: (_) => GoLiveDisplayDialog(displays: displays),
     );
-    return source?.id;
+    return picked?.sourceId;
   }
 
   /// Opens somebody's screen share, or closes the one already on screen.

@@ -33,9 +33,11 @@ void main() {
   test('captures before announcing, and pings while live', () async {
     final repository = _FakeRepository();
     final media = _FakeMedia();
+    final encoder = _FakeEncoder();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       mediaService: media,
+      encoder: encoder,
       pingInterval: const Duration(milliseconds: 10),
     )..reconcile();
     addTearDown(controller.dispose);
@@ -51,8 +53,10 @@ void main() {
     );
 
     // A stream announced with nothing behind it shows viewers a black
-    // rectangle, so the capture goes first.
-    expect(media.shared, ['screen-1']);
+    // rectangle, so the capture goes first — and the capture is the encoder's.
+    // Nothing else may hold a duplication of the same display.
+    expect(encoder.started, 1);
+    expect(media.shared, isEmpty);
     expect(controller.streamKey, _key);
     expect(controller.status, GoLiveStatus.creating);
 
@@ -144,7 +148,7 @@ void main() {
       isFalse,
     );
 
-    expect(media.shared, ['screen-1']);
+    expect(media.shared, isEmpty);
   });
 
   test('pausing and resuming report themselves', () async {
@@ -357,28 +361,45 @@ void main() {
 
       expect(await controller.start(channelId: 'voice-1'), isTrue);
 
-      // Nothing is named. A capture source id is a handle into a list that
-      // changes when a display sleeps or is unplugged: the invented "0" failed
-      // with "source not found", and a real id read moments earlier failed
-      // with "that display is no longer attached".
-      expect(media.shared, ['<primary screen>']);
+      // Nothing is named, and the encoder captures the primary display for
+      // itself. Naming one through a capture library is what left a
+      // duplication open and refused the share afterwards.
+      expect(media.shared, isEmpty);
     });
 
-    test('a preview that will not open does not stop the stream', () async {
+    test('nothing but the encoder captures the display', () async {
       final media = _FakeMedia(failShare: true);
       final controller = GoLiveController(
         repositoryProvider: () => _FakeRepository(),
         mediaService: media,
+        encoder: _FakeEncoder(),
       )..reconcile();
       addTearDown(controller.dispose);
 
       expect(await controller.start(channelId: 'voice-1'), isTrue);
 
-      // The encoder reads the display itself; the media service's capture only
-      // draws the room's thumbnail. Aborting the share for it left the whole
-      // stream refused with "that display is no longer attached".
+      // Windows allows one duplication of an output at a time, and refuses a
+      // second with E_INVALIDARG — "that display is no longer attached", as
+      // the room reported it. The local preview opened through WebRTC was
+      // that second holder, so the share cancelled itself.
+      expect(media.shared, isEmpty);
       expect(controller.status, isNot(GoLiveStatus.failure));
-      expect(controller.previewError.toString(), contains('no display'));
+    });
+
+    test('offers a screen per display the encoder can capture', () {
+      final controller = GoLiveController(
+        repositoryProvider: () => _FakeRepository(),
+        mediaService: _FakeMedia(),
+        encoder: _FakeEncoder(),
+      )..reconcile();
+      addTearDown(controller.dispose);
+
+      // Two, from the encoder — asking a capture library instead opens
+      // duplications to build thumbnails with, which is the same conflict.
+      expect(controller.displays.map((display) => display.sourceId), [
+        'screen:0:0',
+        'screen:1:0',
+      ]);
     });
 
     test('a chosen screen is the one the encoder captures', () async {
@@ -406,6 +427,7 @@ final class _FakeEncoder implements VideoEncoderService {
       StreamController.broadcast();
   VideoEncoderSettings? settings;
   bool failStart = false;
+  int started = 0;
 
   @override
   bool get isSupported => true;
@@ -422,6 +444,7 @@ final class _FakeEncoder implements VideoEncoderService {
   @override
   Future<void> start(VideoEncoderSettings requested) async {
     if (failStart) throw StateError('no encoder');
+    started++;
     settings = requested;
   }
 

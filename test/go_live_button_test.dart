@@ -59,13 +59,14 @@ void main() {
     tester,
   ) async {
     final media = _FakeMedia();
+    final encoder = _FakeEncoder();
     final controller = GoLiveController(
       repositoryProvider: _FakeRepository.new,
       mediaService: media,
-      encoder: _FakeEncoder(),
+      encoder: encoder,
     )..reconcile();
     addTearDown(controller.dispose);
-    String? answer = 'window:42';
+    String? answer = 'screen:1:0';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -87,19 +88,23 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    expect(media.shared, ['window:42']);
+    // Handed to the encoder, which is the only thing that captures: a second
+    // duplication of the same display is refused by Windows.
+    expect(encoder.settings?.displayIndex, 1);
+    expect(media.shared, isEmpty);
 
     await controller.stop();
     await tester.pumpAndSettle();
     answer = null;
     media.shared.clear();
 
+    encoder.settings = null;
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
     // Dismissed. Sharing the primary screen because somebody closed a picker
     // would put the wrong thing in the channel, which is worse than nothing.
-    expect(media.shared, isEmpty);
+    expect(encoder.settings, isNull);
   });
 
   testWidgets('starts and stops a stream, driving the encoder with it', (
@@ -120,8 +125,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    // The platform's own primary screen, resolved at capture time.
-    expect(media.shared, ['<primary screen>']);
+    // The encoder captures the primary display for itself.
+    expect(media.shared, isEmpty);
     expect(encoder.started, 1);
     expect(repository.started, ['voice-1']);
 
@@ -262,6 +267,7 @@ final class _FakeEncoder implements VideoEncoderService {
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
   int started = 0;
+  VideoEncoderSettings? settings;
   int stopped = 0;
   final List<bool> pauses = [];
   List<String> cameras = const [];
@@ -283,7 +289,10 @@ final class _FakeEncoder implements VideoEncoderService {
   Stream<EncodedVideoFrame> get frames => _frames.stream;
 
   @override
-  Future<void> start(VideoEncoderSettings settings) async => started++;
+  Future<void> start(VideoEncoderSettings requested) async {
+    started++;
+    settings = requested;
+  }
 
   @override
   Future<void> requestKeyframe() async {}
