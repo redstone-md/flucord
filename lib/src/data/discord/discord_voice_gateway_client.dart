@@ -32,9 +32,11 @@ final class DiscordVoiceGatewayClient
     VoiceDaveService? daveService,
     DiscordVoiceSocketConnector? socketConnector,
     DiscordVoiceUdpTransport? udpTransport,
+    bool carriesVideo = false,
   }) : _protocol = DiscordVoiceGatewayProtocol(
          credentials: credentials,
          maxDaveProtocolVersion: maxDaveProtocolVersion,
+         carriesVideo: carriesVideo,
        ),
        _daveController = daveService == null
            ? null

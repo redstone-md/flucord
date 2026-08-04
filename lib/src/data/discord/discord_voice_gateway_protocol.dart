@@ -66,20 +66,33 @@ final class DiscordVoiceGatewayProtocol {
   DiscordVoiceGatewayProtocol({
     required this.credentials,
     required this.maxDaveProtocolVersion,
+    this.carriesVideo = false,
   });
 
   static const preferredModes = DiscordVoiceTransportMode.preferred;
 
   final VoiceServerCredentials credentials;
   final int maxDaveProtocolVersion;
+
+  /// Whether this connection exists to carry a screen share.
+  ///
+  /// A Go Live socket has to say so when it identifies. A call's does not:
+  /// a camera on a call is announced later, with opcode 12, on a connection
+  /// that was opened for audio.
+  final bool carriesVideo;
   int sequenceAck = -1;
 
   /// `server_id` is the guild for guild voice and the channel for a DM or
   /// group-DM call (R08) — the credentials know which, so the identify body
   /// does not have to.
   /// `channel_id` and `video` are what the desktop client sends alongside the
-  /// four identifying fields; `streams` is omitted because this session
-  /// publishes no video, which is the same thing an empty list says.
+  /// four identifying fields.
+  ///
+  /// A Go Live connection declares the stream it is there to carry. Discord
+  /// closes one that does not with 4017 the moment it finishes connecting —
+  /// which is what every share and every attempt to watch somebody was doing.
+  /// `rid` "100" and quality 100 are the single full-quality layer; simulcast
+  /// would list more.
   Map<String, Object?> identify() => {
     'op': 0,
     'd': {
@@ -89,7 +102,11 @@ final class DiscordVoiceGatewayProtocol {
       'session_id': credentials.sessionId,
       'token': credentials.token,
       'max_dave_protocol_version': maxDaveProtocolVersion,
-      'video': false,
+      'video': carriesVideo,
+      if (carriesVideo)
+        'streams': const [
+          {'type': 'video', 'rid': '100', 'quality': 100},
+        ],
     },
   };
 

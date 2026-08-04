@@ -144,5 +144,9 @@ final class DiscordStreamRtcSession {
       DiscordVoiceGatewayClient(
         credentials: credentials,
         maxDaveProtocolVersion: 0,
+        // This socket exists to carry a screen share, and Discord wants that
+        // said at identify: one that does not say it is closed with 4017 as
+        // soon as it finishes connecting.
+        carriesVideo: true,
       );
 }

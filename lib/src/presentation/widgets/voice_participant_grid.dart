@@ -138,7 +138,8 @@ class _ParticipantTile extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (cameraFrame case final DecodedVideoFrame frame)
+            if (cameraFrame case final DecodedVideoFrame frame
+                when frame.hasPicture)
               Positioned.fill(
                 key: ValueKey('voice-camera-${participant.userId}'),
                 child: ClipRRect(

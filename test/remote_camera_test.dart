@@ -15,13 +15,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('a frame with nothing in it', () {
+    test('is not drawn in place of an avatar', () {
+      final empty = DecodedVideoFrame(
+        pixels: Uint8List(4 * 4 * 4),
+        width: 4,
+        height: 4,
+        timestamp: Duration.zero,
+      );
+
+      // All zero is not black. Converted from YUV with no chroma it comes out
+      // a flat, violent green, which is what the room showed in place of a
+      // face.
+      expect(empty.isComplete, isTrue);
+      expect(empty.hasPicture, isFalse);
+    });
+
+    test('a picture with content is drawn', () {
+      final pixels = Uint8List(4 * 4 * 4);
+      pixels[pixels.length - 1] = 7;
+      final frame = DecodedVideoFrame(
+        pixels: pixels,
+        width: 4,
+        height: 4,
+        timestamp: Duration.zero,
+      );
+
+      expect(frame.hasPicture, isTrue);
+    });
+
+    test('a buffer that does not match its dimensions is neither', () {
+      final short = DecodedVideoFrame(
+        pixels: Uint8List(8),
+        width: 4,
+        height: 4,
+        timestamp: Duration.zero,
+      );
+
+      expect(short.hasPicture, isFalse);
+    });
+  });
+
   setUp(() async {
     // Real engine images, one per conversion: the widget disposes what it is
     // handed, and handing the same image twice would ask it to draw one that
     // has already been released.
-    _images = [
-      for (var index = 0; index < 4; index++) await _decodeOnePixel(),
-    ];
+    _images = [for (var index = 0; index < 4; index++) await _decodeOnePixel()];
     _next = 0;
   });
 
@@ -55,7 +94,19 @@ void main() {
       // is the rule the depacketiser writes by. The second sender ends on NAL
       // type 8 — a picture parameter set — and so keeps the long one.
       expect(decoders[0].submitted.single, [0, 0, 0, 1, 0x65, 1, 0, 0, 1, 2]);
-      expect(decoders[1].submitted.single, [0, 0, 0, 1, 0x65, 9, 0, 0, 0, 1, 8]);
+      expect(decoders[1].submitted.single, [
+        0,
+        0,
+        0,
+        1,
+        0x65,
+        9,
+        0,
+        0,
+        0,
+        1,
+        8,
+      ]);
       expect(controller.packetsFrom('user-a'), 2);
       expect(controller.packetsFrom('nobody'), 0);
     });
@@ -179,9 +230,7 @@ void main() {
                 children: [
                   Expanded(
                     child: VoiceParticipantGrid(
-                      participants: const [
-                        VoiceParticipant(userId: 'user-a'),
-                      ],
+                      participants: const [VoiceParticipant(userId: 'user-a')],
                       members: const [
                         Member(
                           id: 'user-a',
@@ -359,9 +408,15 @@ DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
       payload: payload,
     );
 
+/// A frame with something in it.
+///
+/// Filled rather than zeroed: an all-zero buffer is what a decoder produces
+/// when it has been handed nothing usable, and the room now treats it as no
+/// picture at all rather than drawing it as flat green.
 DecodedVideoFrame _picture({int width = 2, int height = 2}) =>
     DecodedVideoFrame(
-      pixels: Uint8List(width * height * 4),
+      pixels: Uint8List(width * height * 4)
+        ..fillRange(0, width * height * 4, 9),
       width: width,
       height: height,
       timestamp: Duration.zero,

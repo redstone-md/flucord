@@ -20,6 +20,38 @@ void main() {
   _handshakeCases();
 
   group('Discord Voice Gateway v8', () {
+    test('a screen share declares the stream it carries', () {
+      final protocol = DiscordVoiceGatewayProtocol(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        carriesVideo: true,
+      );
+
+      final identify = protocol.identify()['d']! as Map<String, Object?>;
+
+      // Discord closes a Go Live socket that identifies without this with
+      // 4017, the moment it finishes connecting — which is what every share
+      // and every attempt to watch somebody was doing.
+      expect(identify['video'], isTrue);
+      expect(identify['streams'], [
+        {'type': 'video', 'rid': '100', 'quality': 100},
+      ]);
+    });
+
+    test('a call says it carries no video, and lists no streams', () {
+      final protocol = DiscordVoiceGatewayProtocol(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+      );
+
+      final identify = protocol.identify()['d']! as Map<String, Object?>;
+
+      // A camera on a call is announced later, with opcode 12, on a socket
+      // that was opened for audio.
+      expect(identify['video'], isFalse);
+      expect(identify.containsKey('streams'), isFalse);
+    });
+
     test('builds identify, resume, heartbeat, and protocol payloads', () {
       final protocol = DiscordVoiceGatewayProtocol(
         credentials: _credentials,
