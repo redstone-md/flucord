@@ -752,11 +752,20 @@ class _FlucordAppState extends State<FlucordApp> {
   void _bindGoLiveToCall() {
     final signaling = _chatController.voiceSignalingService;
     if (signaling is! DiscordVoiceSignalingService) return;
-    final ssrc = signaling.activeVideoTransport?.audioSsrc;
-    if (ssrc == null) return;
+    final audioSsrc = signaling.activeVideoTransport?.audioSsrc;
+    if (audioSsrc == null) return;
     signaling.activeVideoTransport?.announceVideo(enabled: true);
-    _goLiveController.bindTransport(ssrc: ssrc, sink: signaling.sendVideoFrame);
-    stdout.writeln('flucord.stream sending over the call, ssrc $ssrc');
+    // The video SSRC opcode 12 just declared, not the audio one: the audio
+    // SSRC carries Opus, and pictures arriving on it are dropped by every
+    // receiver as a stream nobody announced.
+    final videoSsrc = audioSsrc + 1;
+    _goLiveController.bindTransport(
+      ssrc: videoSsrc,
+      sink: signaling.sendVideoFrame,
+    );
+    stdout.writeln(
+      'flucord.stream sending over the call, video ssrc $videoSsrc',
+    );
   }
 
   void _acceptStreamSession(DiscordStreamRtcSession session) {

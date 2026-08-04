@@ -131,7 +131,11 @@ final class DiscordVoiceGatewayClient
       )
       .map((frame) => (_videoSsrcOwners[frame.header.ssrc], frame))
       .where((pair) => pair.$1 != null)
-      .map((pair) => (pair.$1!, pair.$2));
+      // Through the group's decryptor as well, on a call that has one: the
+      // transport cipher gets the packet off the wire, and what is inside it
+      // is still encrypted for the room. A picture handed to the decoder in
+      // that state decodes to nothing.
+      .expand((pair) => _decryptVideoOrDrop(pair.$1!, pair.$2));
   VoiceTransportSession? get session => _session;
   String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
 
@@ -527,6 +531,25 @@ final class DiscordVoiceGatewayClient
     return _udpTransport.send(cipher.encryptFrame(frame));
   }
 
+  /// Sends one picture, encrypted for the group first when the call has a
+  /// group to encrypt for.
+  ///
+  /// The transport cipher alone is not enough on a DAVE call: every receiver
+  /// runs the payload through the group's decryptor, and one that was sent in
+  /// the clear comes back as `decryptionFailure` — a share that arrives and
+  /// draws nothing.
+  int sendVideoFrame(DiscordRtpFrame frame) {
+    final controller = _daveController;
+    final ssrc = frame.header.ssrc;
+    if (controller == null) return sendAudioFrame(frame);
+    return sendAudioFrame(
+      DiscordRtpFrame(
+        header: frame.header,
+        payload: controller.encryptVideoFrame(ssrc: ssrc, frame: frame.payload),
+      ),
+    );
+  }
+
   @override
   void sendOpusFrame(Uint8List opusFrame) =>
       _mediaTransport.sendOpusFrame(opusFrame);
@@ -574,6 +597,35 @@ final class DiscordVoiceGatewayClient
           );
         }
       }
+      return const [];
+    }
+  }
+
+  /// One picture, decrypted for the group, or none when its key is missing.
+  ///
+  /// Dropped rather than raised: a frame arriving before the sender's key has
+  /// been distributed is ordinary at the start of a share, and the next one
+  /// usually decrypts.
+  Iterable<(String, DiscordRtpFrame)> _decryptVideoOrDrop(
+    String userId,
+    DiscordRtpFrame frame,
+  ) {
+    final controller = _daveController;
+    if (controller == null) return [(userId, frame)];
+    try {
+      return [
+        (
+          userId,
+          DiscordRtpFrame(
+            header: frame.header,
+            payload: controller.decryptVideoFrame(
+              userId: userId,
+              encryptedFrame: frame.payload,
+            ),
+          ),
+        ),
+      ];
+    } on Object {
       return const [];
     }
   }

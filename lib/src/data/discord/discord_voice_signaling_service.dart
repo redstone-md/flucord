@@ -421,7 +421,7 @@ final class DiscordVoiceSignalingService
     if (client is! DiscordVoiceGatewayClient) {
       throw StateError('Discord voice transport is not ready');
     }
-    return client.sendAudioFrame(frame);
+    return client.sendVideoFrame(frame);
   }
 
   @override

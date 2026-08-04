@@ -267,6 +267,19 @@ final class DiscordVoiceDaveController {
     );
   }
 
+  /// Encrypts one video frame for the group, when a group exists.
+  ///
+  /// A call with DAVE on encrypts everything that crosses it, pictures
+  /// included: a share sent in the clear over an encrypted connection is
+  /// rejected by every receiver with `decryptionFailure`, which is what a
+  /// black rectangle in the room turned out to be.
+  List<int> encryptVideoFrame({required int ssrc, required List<int> frame}) =>
+      _ensureEncryptor().encrypt(
+        mediaType: DaveMediaType.video,
+        ssrc: ssrc,
+        frame: frame,
+      );
+
   List<int> decryptAudioFrame({
     required String userId,
     required List<int> encryptedFrame,
@@ -281,6 +294,26 @@ final class DiscordVoiceDaveController {
     }
     return decryptor.decrypt(
       mediaType: DaveMediaType.audio,
+      encryptedFrame: encryptedFrame,
+    );
+  }
+
+  /// Decrypts one picture from [userId], or throws when there is no key for
+  /// them yet.
+  List<int> decryptVideoFrame({
+    required String userId,
+    required List<int> encryptedFrame,
+  }) {
+    var decryptor = _decryptors[userId];
+    if (decryptor == null && _protocolVersion == 0) {
+      decryptor = _service.createDecryptor()..transitionToPassthrough(true);
+      _decryptors[userId] = decryptor;
+    }
+    if (decryptor == null) {
+      throw StateError('DAVE decryptor is unavailable for user $userId');
+    }
+    return decryptor.decrypt(
+      mediaType: DaveMediaType.video,
       encryptedFrame: encryptedFrame,
     );
   }
