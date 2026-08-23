@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
@@ -255,6 +258,60 @@ void main() {
     await _flushEvents();
     expect(gateway.voiceServerPings, 1);
   });
+
+  test('carries video on the connection the call opened', () async {
+    final gateway = _FakeMainGateway();
+    final client = _FakeVoiceClient(const VoiceServerCredentials(
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      userId: 'bot-1',
+      sessionId: 'session-1',
+      token: 'voice-token',
+      endpoint: 'voice.example.test',
+    ));
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      nativeDaveService: _CapabilityOnlyDaveService(),
+      voiceClientFactory: (credentials, daveService) => client,
+    )..setCurrentUserId('bot-1');
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': 'guild-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'bot-1',
+      'session_id': 'session-1',
+    });
+    await _flushEvents();
+
+    // The camera sends through the same doors a viewer's pictures arrive on,
+    // with nothing between the controller and the connection.
+    expect(service.activeVideoTransport, same(client));
+    final frame = DiscordRtpFrame(
+      header: DiscordRtpHeader(
+        payloadType: 101,
+        sequence: 1,
+        timestamp: 1,
+        ssrc: 1,
+      ),
+      payload: Uint8List.fromList(const [1, 2, 3]),
+    );
+    service.sendVideoFrame(frame);
+    expect(client.sentFrames, [frame]);
+
+    final received = <(String, DiscordRtpFrame)>[];
+    final subscription = service.remoteVideo.listen(received.add);
+    addTearDown(subscription.cancel);
+    client.emitVideo('member-1', frame);
+    await _flushEvents();
+    expect(received, [('member-1', frame)]);
+  });
 }
 
 Future<void> _flushEvents() async {
@@ -314,20 +371,47 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
   void pingVoiceServer() => voiceServerPings++;
 }
 
+/// Carries pictures the same way the production client does, so the video
+/// half of the call's connection is testable without a socket.
 final class _FakeVoiceClient implements DiscordVoiceClient {
   _FakeVoiceClient(this.credentials);
 
   final VoiceServerCredentials credentials;
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+  final StreamController<(String, DiscordRtpFrame)> _video =
+      StreamController.broadcast();
+  final List<DiscordRtpFrame> sentFrames = [];
   bool connected = false;
   bool closed = false;
 
   @override
+  int? get audioSsrc => null;
+
+  @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
+
+  @override
+  Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
 
   void emitStatus(VoiceConnectionStatus status) =>
       _events.add(VoiceSignalingStatusEvent(status));
+
+  /// Delivers a picture as if it arrived off the wire.
+  void emitVideo(String userId, DiscordRtpFrame frame) =>
+      _video.add((userId, frame));
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) => false;
+
+  @override
+  int sendVideoFrame(DiscordRtpFrame frame) {
+    sentFrames.add(frame);
+    return frame.payload.length;
+  }
 
   @override
   Future<void> connect() async {
@@ -338,6 +422,7 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
   Future<void> close() async {
     closed = true;
     await _events.close();
+    await _video.close();
   }
 }
 

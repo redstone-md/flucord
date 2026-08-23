@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_call_api.dart';
 import 'package:flucord/src/data/discord/discord_direct_call_service.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
@@ -326,7 +328,23 @@ final class _InertVoiceClient implements DiscordVoiceClient {
       StreamController.broadcast();
 
   @override
+  int? get audioSsrc => null;
+
+  @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
+
+  @override
+  Stream<(String, DiscordRtpFrame)> get videoPackets =>
+      const Stream<(String, DiscordRtpFrame)>.empty();
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) => false;
+
+  @override
+  int sendVideoFrame(DiscordRtpFrame frame) => 0;
 
   @override
   Future<void> connect() async {}

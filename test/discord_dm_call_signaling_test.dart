@@ -3,9 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
@@ -351,10 +353,26 @@ final class _InertVoiceClient
   bool finished = false;
 
   @override
+  int? get audioSsrc => null;
+
+  @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
 
   @override
+  Stream<(String, DiscordRtpFrame)> get videoPackets =>
+      const Stream<(String, DiscordRtpFrame)>.empty();
+
+  @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _remoteAudio.stream;
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) => false;
+
+  @override
+  int sendVideoFrame(DiscordRtpFrame frame) => 0;
 
   @override
   void sendOpusFrame(Uint8List opusFrame) => frames.add(opusFrame);

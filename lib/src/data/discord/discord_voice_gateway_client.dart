@@ -17,11 +17,26 @@ import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 import 'discord_voice_websocket.dart';
 
-abstract interface class DiscordVoiceClient {
+/// A connection on Discord's voice plane.
+///
+/// A call's socket and a Go Live stream's socket are the same thing
+/// underneath: the same handshake, the same UDP media path, and pictures as
+/// well as sound can cross either. The interface states the whole video half
+/// so no caller needs the concrete class, and a test fake can carry pictures
+/// through the same doors as the production client.
+abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
   Stream<VoiceSignalingEvent> get events;
 
   Future<void> connect();
   Future<void> close();
+
+  /// Somebody else's pictures on this connection, tagged with whoever's SSRC
+  /// carried them.
+  Stream<(String, DiscordRtpFrame)> get videoPackets;
+
+  /// Sends one picture, encrypted for the group first when the connection has
+  /// a group to encrypt for.
+  int sendVideoFrame(DiscordRtpFrame frame);
 }
 
 /// The socket driver for a voice gateway connection.
@@ -31,7 +46,7 @@ abstract interface class DiscordVoiceClient {
 /// class carries the decision out against the socket, the timers and the
 /// media plane.
 final class DiscordVoiceGatewayClient
-    implements DiscordVoiceClient, VoiceAudioTransport, VoiceVideoTransport {
+    implements DiscordVoiceClient, VoiceAudioTransport {
   DiscordVoiceGatewayClient({
     required VoiceServerCredentials credentials,
     required int maxDaveProtocolVersion,
@@ -120,6 +135,7 @@ final class DiscordVoiceGatewayClient
   /// A packet whose SSRC nobody has claimed is dropped: it belongs to a peer
   /// whose opcode 12 has not arrived, and guessing the owner would draw one
   /// person's face over another's tile.
+  @override
   Stream<(String, DiscordRtpFrame)> get videoPackets => _decryptedPackets
       .where(
         (frame) =>
@@ -407,6 +423,7 @@ final class DiscordVoiceGatewayClient
   /// runs the payload through the group's decryptor, and one that was sent in
   /// the clear comes back as `decryptionFailure` — a share that arrives and
   /// draws nothing.
+  @override
   int sendVideoFrame(DiscordRtpFrame frame) {
     final controller = _daveController;
     final ssrc = frame.header.ssrc;

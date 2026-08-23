@@ -82,12 +82,10 @@ final class DiscordStreamRtcSession {
     final client = (_clientFactory ?? _fallbackFactory)(_credentials);
     _client = client;
     _clientEvents = client.events.listen(_onEvent);
-    if (client case final DiscordVoiceGatewayClient gateway) {
-      _videoPackets = gateway.videoPackets.listen(
-        _video.add,
-        onError: _video.addError,
-      );
-    }
+    _videoPackets = client.videoPackets.listen(
+      _video.add,
+      onError: _video.addError,
+    );
     await client.connect();
   }
 
@@ -99,10 +97,10 @@ final class DiscordStreamRtcSession {
   /// opened and showed nothing.
   int sendVideoFrame(DiscordRtpFrame frame) {
     final client = _client;
-    if (client is! DiscordVoiceGatewayClient) {
+    if (client == null) {
       throw StateError('Discord stream transport is not ready');
     }
-    return client.sendAudioFrame(frame);
+    return client.sendVideoFrame(frame);
   }
 
   /// Declares the video SSRCs on this connection.
@@ -111,7 +109,7 @@ final class DiscordStreamRtcSession {
     required VideoEncoderSettings settings,
   }) {
     final client = _client;
-    if (client is! DiscordVoiceGatewayClient) return false;
+    if (client == null) return false;
     return client.announceVideo(enabled: enabled, settings: settings);
   }
 

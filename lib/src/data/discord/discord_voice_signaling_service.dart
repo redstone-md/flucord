@@ -423,36 +423,34 @@ final class DiscordVoiceSignalingService
     await _clients.remove(key)?.close();
   }
 
+  /// The connection behind the session currently joined, if any.
+  DiscordVoiceClient? get _activeClient {
+    final session = _activeSession;
+    return session == null ? null : _clients[session];
+  }
+
   /// Everybody else's cameras on the session currently joined.
   ///
   /// Rebuilt on every join rather than held: the session is a different socket
   /// with different SSRCs, and a subscriber left on the old one would draw a
   /// room nobody is in.
   Stream<(String, DiscordRtpFrame)> get remoteVideo {
-    final session = _activeSession;
-    final client = session == null ? null : _clients[session];
-    if (client is! DiscordVoiceGatewayClient) {
-      return const Stream<(String, DiscordRtpFrame)>.empty();
-    }
+    final client = _activeClient;
+    if (client == null) return const Stream<(String, DiscordRtpFrame)>.empty();
     return client.videoPackets;
   }
 
   /// The video plane of the session currently joined, or null when there is
-  /// none — no session, or a client that cannot carry pictures.
-  VoiceVideoTransport? get activeVideoTransport {
-    final session = _activeSession;
-    final client = session == null ? null : _clients[session];
-    return client is VoiceVideoTransport ? client as VoiceVideoTransport : null;
-  }
+  /// no session to carry one.
+  VoiceVideoTransport? get activeVideoTransport => _activeClient;
 
   /// Encrypts and sends one video RTP frame on the active session.
   ///
   /// The same socket and the same cipher the audio uses: a camera is another
   /// SSRC on the connection that is already open, not a second connection.
   int sendVideoFrame(DiscordRtpFrame frame) {
-    final session = _activeSession;
-    final client = session == null ? null : _clients[session];
-    if (client is! DiscordVoiceGatewayClient) {
+    final client = _activeClient;
+    if (client == null) {
       throw StateError('Discord voice transport is not ready');
     }
     return client.sendVideoFrame(frame);
@@ -460,20 +458,19 @@ final class DiscordVoiceSignalingService
 
   @override
   void sendOpusFrame(Uint8List opusFrame) {
-    final session = _activeSession;
-    final client = session == null ? null : _clients[session];
-    if (client is! VoiceAudioTransport) {
-      throw StateError('Discord voice media transport is not ready');
+    final client = _activeClient;
+    if (client case final VoiceAudioTransport audioTransport) {
+      audioTransport.sendOpusFrame(opusFrame);
+      return;
     }
-    (client as VoiceAudioTransport).sendOpusFrame(opusFrame);
+    throw StateError('Discord voice media transport is not ready');
   }
 
   @override
   Future<void> finishSpeaking() async {
-    final session = _activeSession;
-    final client = session == null ? null : _clients[session];
-    if (client is VoiceAudioTransport) {
-      await (client as VoiceAudioTransport).finishSpeaking();
+    final client = _activeClient;
+    if (client case final VoiceAudioTransport audioTransport) {
+      await audioTransport.finishSpeaking();
     }
   }
 

@@ -7,6 +7,7 @@ import 'package:flucord/src/data/discord/discord_stream_rtc_session.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -92,6 +93,39 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(session.ssrc, 4242);
+    });
+
+    test('announces, sends and forwards pictures on the connection', () async {
+      final client = _FakeClient();
+      final session = DiscordStreamRtcSession(
+        key: _key,
+        credentials: _credentials,
+        clientFactory: (_) => client,
+      );
+      addTearDown(session.close);
+      await session.connect();
+
+      final received = <(String, DiscordRtpFrame)>[];
+      final subscription = session.video.listen(received.add);
+      addTearDown(subscription.cancel);
+
+      expect(
+        session.announceVideo(
+          enabled: true,
+          settings: VideoCaptureHub.shareSettings,
+        ),
+        isTrue,
+      );
+      session.sendVideoFrame(_frame);
+
+      // A viewer's pictures arrive off the same connection the sender's went
+      // out on, which is the whole of what a stream connection carries.
+      client.emitVideo('somebody-else', _frame);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(client.announcements.single.enabled, isTrue);
+      expect(client.sentFrames, [_frame]);
+      expect(received, [('somebody-else', _frame)]);
     });
   });
 
@@ -312,16 +346,48 @@ final _frame = DiscordRtpFrame(
   payload: Uint8List.fromList(const [1, 2, 3]),
 );
 
+/// Carries pictures the same way the production client does, so the video
+/// half of a stream connection is testable without a socket.
 final class _FakeClient implements DiscordVoiceClient {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
+  final StreamController<(String, DiscordRtpFrame)> _video =
+      StreamController.broadcast();
+  final List<DiscordRtpFrame> sentFrames = [];
+  final List<({bool enabled, VideoEncoderSettings settings})> announcements =
+      [];
   int connects = 0;
   bool closed = false;
 
   void announce(VoiceSignalingEvent event) => _events.add(event);
 
+  /// Delivers a picture as if it arrived off the wire.
+  void emitVideo(String userId, DiscordRtpFrame frame) =>
+      _video.add((userId, frame));
+
+  @override
+  int? get audioSsrc => null;
+
   @override
   Stream<VoiceSignalingEvent> get events => _events.stream;
+
+  @override
+  Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) {
+    announcements.add((enabled: enabled, settings: settings));
+    return true;
+  }
+
+  @override
+  int sendVideoFrame(DiscordRtpFrame frame) {
+    sentFrames.add(frame);
+    return frame.payload.length;
+  }
 
   @override
   Future<void> connect() async => connects++;
@@ -330,6 +396,7 @@ final class _FakeClient implements DiscordVoiceClient {
   Future<void> close() async {
     closed = true;
     await _events.close();
+    await _video.close();
   }
 }
 
