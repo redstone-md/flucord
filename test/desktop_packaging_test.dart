@@ -64,6 +64,9 @@ void main() {
 
   test('selects a protocol integration for every desktop host', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final flow = File(
+      'lib/src/platform/desktop_integration_flow.dart',
+    ).readAsStringSync();
     final windows = File(
       'lib/src/platform/windows_desktop_integration.dart',
     ).readAsStringSync();
@@ -77,10 +80,14 @@ void main() {
     expect(mainSource, contains('WindowsDesktopIntegration()'));
     expect(mainSource, contains('MacosDesktopIntegration()'));
     expect(mainSource, contains('LinuxDesktopIntegration('));
+    // The attach and teardown flow is wired once; each platform shell only
+    // configures it.
     for (final integration in [windows, macos, linux]) {
-      expect(integration, contains('DesktopMessageNotificationController'));
-      expect(integration, contains('DesktopTrayCoordinator'));
+      expect(integration, contains('DesktopIntegrationFlow'));
     }
+    expect(flow, contains('DesktopMessageNotificationController'));
+    expect(flow, contains('DesktopTrayCoordinator'));
+    expect(flow, contains('DesktopProtocolRouter'));
     expect(
       File('pubspec.yaml').readAsStringSync(),
       contains('app_icon_32.png'),

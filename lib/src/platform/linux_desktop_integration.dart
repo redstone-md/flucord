@@ -1,122 +1,34 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'desktop_integration.dart';
-import 'desktop_message_notification_controller.dart';
-import 'desktop_protocol_router.dart';
-import 'desktop_tray_coordinator.dart';
+import 'desktop_integration_flow.dart';
+import 'desktop_protocol_intake.dart';
 
-final class LinuxDesktopIntegration
-    with WindowListener
-    implements DesktopIntegration {
+/// Linux: the GTK runner forwards later flucord:// URLs over a method
+/// channel, and launch URLs arrive as process arguments. Everything else is
+/// the shared desktop flow.
+final class LinuxDesktopIntegration implements DesktopIntegration {
   factory LinuxDesktopIntegration({
     required List<String> initialArguments,
-    MethodChannel channel = const MethodChannel('flucord/protocol'),
-  }) => LinuxDesktopIntegration._(List.unmodifiable(initialArguments), channel);
+    MethodChannel? channel,
+  }) => LinuxDesktopIntegration._(
+    MethodChannelDesktopProtocolIntake(
+      initialArguments: initialArguments,
+      channel: channel ?? MethodChannelDesktopProtocolIntake.defaultChannel,
+    ),
+  );
 
-  LinuxDesktopIntegration._(this._initialArguments, this._channel) {
-    _desktopTray = DesktopTrayCoordinator(showWindow: _showWindow, quit: _quit);
-  }
+  LinuxDesktopIntegration._(DesktopProtocolIntake protocolIntake)
+    : _flow = DesktopIntegrationFlow(protocolIntake: protocolIntake);
 
-  final List<String> _initialArguments;
-  final MethodChannel _channel;
-  final DesktopProtocolRouter _protocolRouter = DesktopProtocolRouter();
-  final DesktopMessageNotificationController _messageNotifications =
-      DesktopMessageNotificationController(isFocused: windowManager.isFocused);
-  late final DesktopTrayCoordinator _desktopTray;
-
-  DesktopAppSurface? _surface;
-  bool _windowReady = false;
-  bool _allowClose = false;
-  bool _disposed = false;
+  final DesktopIntegrationFlow _flow;
 
   @override
-  Future<void> initialize() async {
-    await _initializeWindow();
-    await _messageNotifications.initialize();
-    await _initializeTray();
-    _channel.setMethodCallHandler(_handleMethodCall);
-    await _channel.invokeMethod<void>('ready');
-    for (final argument in _initialArguments) {
-      _protocolRouter.receive(argument);
-    }
-  }
-
-  Future<void> _handleMethodCall(MethodCall call) async {
-    final url = call.arguments;
-    if (call.method == 'url' && url is String) {
-      unawaited(_showWindow());
-      _protocolRouter.receive(url);
-    }
-  }
-
-  Future<void> _initializeWindow() async {
-    try {
-      await windowManager.ensureInitialized();
-      windowManager.addListener(this);
-      _windowReady = true;
-    } on Object catch (error) {
-      if (kDebugMode) {
-        debugPrint('Flucord window manager unavailable: $error');
-      }
-    }
-  }
-
-  Future<void> _initializeTray() async {
-    await _desktopTray.initialize();
-    if (_windowReady && _desktopTray.isReady) {
-      await windowManager.setPreventClose(true);
-    }
-  }
+  Future<void> initialize() => _flow.initialize();
 
   @override
-  void attach(DesktopAppSurface surface) {
-    _protocolRouter.attach(surface);
-    _messageNotifications.attach(surface: surface, showWindow: _showWindow);
-    _desktopTray.attach(surface);
-  }
-
-  Future<void> _showWindow() async {
-    if (!_windowReady) return;
-    if (await windowManager.isMinimized()) await windowManager.restore();
-    await windowManager.show();
-    await windowManager.focus();
-    _surface?.setApplicationActive(true);
-  }
+  void attach(DesktopAppSurface surface) => _flow.attach(surface);
 
   @override
-  void onWindowFocus() => _surface?.setApplicationActive(true);
-
-  @override
-  void onWindowBlur() => _surface?.setApplicationActive(false);
-
-  @override
-  void onWindowClose() {
-    if (!_allowClose && _desktopTray.isReady) {
-      _surface?.setApplicationActive(false);
-      unawaited(windowManager.hide());
-    }
-  }
-
-  Future<void> _quit() async {
-    _allowClose = true;
-    if (_windowReady) {
-      await windowManager.setPreventClose(false);
-      await windowManager.close();
-    }
-  }
-
-  @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-    _disposed = true;
-    _protocolRouter.detach();
-    await _messageNotifications.dispose();
-    await _desktopTray.dispose();
-    _channel.setMethodCallHandler(null);
-    if (_windowReady) windowManager.removeListener(this);
-  }
+  Future<void> dispose() => _flow.dispose();
 }
