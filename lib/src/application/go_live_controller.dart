@@ -19,8 +19,24 @@ final class GoLiveDisplay {
   final int index;
   final String name;
 
-  /// The id the capture takes, in the shape the encoder reads an index from.
-  String get sourceId => 'screen:$index:0';
+  /// The id a picked screen travels as between the picker and the capture.
+  String get sourceId => GoLiveDisplay.sourceIdFor(index);
+
+  /// Names a screen the way a capture source list does: `screen:<index>:<n>`.
+  /// This client never varies the tail, but the shape is not ours to change.
+  static String sourceIdFor(int index) => 'screen:$index:0';
+
+  /// Which display a source id names, or the primary when it names none.
+  ///
+  /// A window, or a name this client does not make, is the primary display:
+  /// the capture takes it by default, and refusing a share over a shape
+  /// nobody here writes would be inventing a failure.
+  static int displayIndexFor(String? sourceId) {
+    if (sourceId == null || !sourceId.startsWith('screen:')) return 0;
+    final index = int.tryParse(sourceId.split(':').elementAtOrNull(1) ?? '');
+    if (index == null || index < 0) return 0;
+    return index;
+  }
 }
 
 /// Drives Go Live: opening a stream, holding it alive, and ending it.
@@ -140,7 +156,9 @@ final class GoLiveController extends ChangeNotifier {
       // nothing else in the client opens a duplication of its own. Windows
       // refuses the second with E_INVALIDARG, which is what the room used
       // to report as "that display is no longer attached".
-      await _capture.startShare(displayIndex: _displayIndexFor(sourceId));
+      await _capture.startShare(
+        displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
+      );
       _captureStarted = true;
       _key = await repository.startStream(
         channelId: channelId,
@@ -166,19 +184,6 @@ final class GoLiveController extends ChangeNotifier {
     } finally {
       _notify();
     }
-  }
-
-  /// Which display [sourceId] names.
-  ///
-  /// A screen picked from the picker is named `screen:<index>:<n>`; the
-  /// capture addresses displays by index, so the index is read back out of it.
-  /// Anything else — a window, or no choice at all — is the primary display,
-  /// which is what the capture takes by default.
-  int _displayIndexFor(String? sourceId) {
-    if (sourceId == null || !sourceId.startsWith('screen:')) return 0;
-    final index = int.tryParse(sourceId.split(':').elementAtOrNull(1) ?? '');
-    if (index == null || index < 0) return 0;
-    return index;
   }
 
   /// Holds frames back without tearing the stream down.

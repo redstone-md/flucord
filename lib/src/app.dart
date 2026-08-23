@@ -31,7 +31,6 @@ import 'application/expression_favorites_controller.dart';
 import 'application/self_video_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
-import 'data/discord/discord_stream_rtc_session.dart';
 import 'application/keybind_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/streamer_mode_controller.dart';
@@ -43,6 +42,7 @@ import 'data/theme/file_theme_store.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
+import 'application/stream_router.dart';
 import 'application/stream_viewer_controller.dart';
 import 'application/message_component_controller.dart';
 import 'application/slash_command_controller.dart';
@@ -287,7 +287,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final GoLiveController _goLiveController;
   late final StreamViewerController _streamViewerController;
   late final DiscordStreamRtcService _streamRtcService;
-  StreamSubscription<DiscordStreamRtcSession>? _streamConnections;
+  late final StreamRouter _streamRouter;
   late final SlashCommandController _slashCommandController;
   late final MessageComponentController _messageComponentController;
   late final SelfPresenceController _selfPresenceController;
@@ -458,7 +458,15 @@ class _FlucordAppState extends State<FlucordApp> {
       // version so the two agree, but a group of its own is the next problem,
       // not this one.
     );
-    _streamConnections = _streamRtcService.opened.listen(_acceptStreamSession);
+    // Where a ready stream connection goes. The fork between this account's
+    // own share and everybody else's lives here rather than in the widget, so
+    // the riskiest wiring in the stream plane has tests of its own.
+    _streamRouter = StreamRouter(
+      opened: _streamRtcService.opened,
+      goLive: _goLiveController,
+      viewer: _streamViewerController,
+      capture: _videoCapture,
+    );
     _messageComponentController = MessageComponentController(
       () => _chatController.messageComponents,
     );
@@ -660,9 +668,9 @@ class _FlucordAppState extends State<FlucordApp> {
     _slashCommandController.dispose();
     _messageComponentController.dispose();
     _soundboardPlaybackController.dispose();
+    _streamRouter.dispose();
     _goLiveController.dispose();
     _streamViewerController.dispose();
-    unawaited(_streamConnections?.cancel());
     unawaited(_streamRtcService.close());
     _selfPresenceController.dispose();
     _workspaceController.dispose();
@@ -734,46 +742,6 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   bool _developerCheckRan = false;
-
-  /// Wires a stream connection to whichever end of it this client is.
-  ///
-  /// Our own stream gets the encoder pointed at it; anybody else's gets its
-  /// pictures handed to the viewer. The SSRC only exists once the connection
-  /// is ready, so this waits for that rather than reading it here.
-
-  void _acceptStreamSession(DiscordStreamRtcSession session) {
-    late final StreamSubscription<VoiceSignalingEvent> events;
-    events = session.events.listen((event) {
-      if (event is! VoiceTransportReadyEvent) return;
-      unawaited(events.cancel());
-      if (session.key == _goLiveController.streamKey) {
-        // Declared with what the capture is actually running at: the share's
-        // profile is the capture module's, not a number of this caller's own.
-        session.announceVideo(
-          enabled: true,
-          settings: _videoCapture.settings ?? VideoCaptureHub.shareSettings,
-        );
-        _goLiveController.bindTransport(
-          ssrc: event.session.ssrc,
-          sink: session.sendVideoFrame,
-        );
-        return;
-      }
-      // Anything else is somebody else's stream, and its pictures come in
-      // here.
-      unawaited(
-        _streamViewerController.attach(
-          session.key,
-          packets: session.video.map(
-            (packet) => IncomingVideoPacket(
-              payload: Uint8List.fromList(packet.$2.payload),
-              marker: packet.$2.header.marker,
-            ),
-          ),
-        ),
-      );
-    });
-  }
 
   /// Reads everybody else's cameras only while a room is actually connected.
   ///
