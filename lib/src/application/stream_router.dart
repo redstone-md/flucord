@@ -12,7 +12,8 @@ import 'stream_viewer_controller.dart';
 ///
 /// A connection knows whose stream it carries from the moment Discord hands
 /// out the endpoint, but only once the endpoint has answered does it have an
-/// SSRC to send with, so the fork waits for ready. Our own stream is declared
+/// SSRC (the source id Discord routes a sender's packets by) to send with, so
+/// the fork waits for ready. Our own stream is declared
 /// and pointed at the encoder; anybody else's is handed to the viewer. This
 /// used to live in a widget callback, where the riskiest wiring in the stream
 /// plane had no coverage at all.

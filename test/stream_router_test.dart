@@ -27,6 +27,27 @@ const _otherKey = GoLiveStreamKey.guild(
   userId: 'somebody-else',
 );
 
+const _otherServer = GoLiveServer(
+  key: _otherKey,
+  endpoint: 'stream.discord.gg',
+  token: 't',
+);
+
+/// One small keyframe: what the encoder produces and a sender packetises.
+final Uint8List _keyframe = Uint8List.fromList([
+  0,
+  0,
+  0,
+  1,
+  0x67,
+  0x42,
+  0,
+  0,
+  1,
+  0x65,
+  ...List.filled(8, 0xaa),
+]);
+
 const _session = VoiceTransportSession(
   guildId: 'guild-1',
   ssrc: 4242,
@@ -93,19 +114,7 @@ final class _Wiring {
 /// One small access unit, as the packets a sender would hand the connection.
 List<DiscordRtpFrame> _packetizedUnit() => [
   for (final (index, packet) in DiscordH264Packetizer.packetize(
-    Uint8List.fromList([
-      0,
-      0,
-      0,
-      1,
-      0x67,
-      0x42,
-      0,
-      0,
-      1,
-      0x65,
-      ...List.filled(8, 0xaa),
-    ]),
+    _keyframe,
   ).indexed)
     DiscordRtpFrame(
       header: DiscordRtpHeader(
@@ -163,13 +172,7 @@ void main() {
     addTearDown(wiring.dispose);
 
     await wiring.viewer.requestWatch(_otherKey);
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _otherKey,
-        endpoint: 'stream.discord.gg',
-        token: 't',
-      ),
-    );
+    wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
     final client = wiring.clients.single;
 
@@ -196,13 +199,7 @@ void main() {
     addTearDown(wiring.dispose);
 
     wiring.router.dispose();
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _otherKey,
-        endpoint: 'stream.discord.gg',
-        token: 't',
-      ),
-    );
+    wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
     wiring.clients.single.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
@@ -276,19 +273,7 @@ final class _FakeEncoder implements VideoEncoderService {
   /// Emits one small picture, as the capture would.
   void emitFrame() => _frames.add(
     EncodedVideoFrame(
-      bytes: Uint8List.fromList([
-        0,
-        0,
-        0,
-        1,
-        0x67,
-        0x42,
-        0,
-        0,
-        1,
-        0x65,
-        ...List.filled(8, 0xaa),
-      ]),
+      bytes: _keyframe,
       timestamp: const Duration(milliseconds: 100),
       isKeyframe: true,
     ),

@@ -19,12 +19,10 @@ final class GoLiveDisplay {
   final int index;
   final String name;
 
-  /// The id a picked screen travels as between the picker and the capture.
-  String get sourceId => GoLiveDisplay.sourceIdFor(index);
-
-  /// Names a screen the way a capture source list does: `screen:<index>:<n>`.
-  /// This client never varies the tail, but the shape is not ours to change.
-  static String sourceIdFor(int index) => 'screen:$index:0';
+  /// The id a picked screen travels as, `screen:<index>:<n>`, which is the
+  /// shape a capture source list uses. This client never varies the tail, but
+  /// the shape is not ours to change.
+  String get sourceId => 'screen:$index:0';
 
   /// Which display a source id names, or the primary when it names none.
   ///
