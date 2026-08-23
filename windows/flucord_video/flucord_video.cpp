@@ -1,6 +1,8 @@
 #include "flucord_video.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -424,10 +426,26 @@ std::string ToUtf8(const WCHAR* text) {
   return converted;
 }
 
+// True when an encoder MFT's friendly name is NVIDIA's. The vendor string,
+// not a GUID: the enumeration is what tells us what this machine has, and the
+// name is the only part of it that says whose silicon that is.
+bool IsNvidiaEncoder(const std::string& name) {
+  std::string lower = name;
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return lower.find("nvidia") != std::string::npos;
+}
+
 // The vendor encoders a GPU driver registers (NVIDIA's NVENC, AMD's and
 // Intel's equivalents), all as Media Foundation transforms speaking the same
 // NV12-in, H.264-out contract as the software one. Picked by enumeration
 // rather than by vendor GUID, so the same code path runs on every machine.
+//
+// NVIDIA first when present: a machine can carry two drivers' encoders (AMD's
+// registers itself even when no display hangs off that silicon), the
+// enumeration order is registration order rather than any quality ranking,
+// and a stream meant to replace Discord wants the better encoder at a given
+// bitrate.
 HRESULT TryConfigureHardwareEncoder(FlucordVideoEncoder* state) {
   MFT_REGISTER_TYPE_INFO output{};
   output.guidMajorType = MFMediaType_Video;
@@ -443,31 +461,52 @@ HRESULT TryConfigureHardwareEncoder(FlucordVideoEncoder* state) {
     return MF_E_NOT_FOUND;
   }
 
-  hr = MF_E_NOT_FOUND;
+  std::vector<std::string> names(count);
   for (UINT32 index = 0; index < count; ++index) {
+    WCHAR* friendly = nullptr;
+    UINT32 friendly_length = 0;
+    if (SUCCEEDED(activates[index]->GetAllocatedString(
+            MFT_FRIENDLY_NAME_Attribute, &friendly, &friendly_length)) &&
+        friendly != nullptr) {
+      names[index] = ToUtf8(friendly);
+      CoTaskMemFree(friendly);
+    }
+  }
+  const bool has_nvidia =
+      std::any_of(names.begin(), names.end(), IsNvidiaEncoder);
+
+  std::vector<UINT32> order(count);
+  for (UINT32 index = 0; index < count; ++index) order[index] = index;
+  std::stable_sort(order.begin(), order.end(),
+                   [&](UINT32 a, UINT32 b) {
+                     return IsNvidiaEncoder(names[a]) && !IsNvidiaEncoder(names[b]);
+                   });
+
+  hr = MF_E_NOT_FOUND;
+  for (UINT32 step = 0; step < count; ++step) {
+    const UINT32 index = order[step];
     ComPtr<IMFTransform> transform;
     if (FAILED(activates[index]->ActivateObject(IID_PPV_ARGS(&transform)))) {
       continue;
     }
-    WCHAR* friendly = nullptr;
-    UINT32 friendly_length = 0;
-    activates[index]->GetAllocatedString(MFT_FRIENDLY_NAME_Attribute, &friendly,
-                                         &friendly_length);
     std::string knobs;
     bool is_async = false;
     if (SUCCEEDED(SetupEncoderTransform(state, transform.Get(), true,
                                         &is_async, &knobs))) {
       state->encoder_is_async = is_async;
       state->encoder_accepts_input = !is_async;
-      state->encoder_name =
-          "hardware: " +
-          (friendly != nullptr ? ToUtf8(friendly) : "video encoder") + knobs;
+      state->encoder_name = "hardware: " + names[index] + knobs;
+      if (has_nvidia && !IsNvidiaEncoder(names[index])) {
+        // The one case this can print is an NVIDIA encoder that enumerated
+        // but refused to configure: worth a line in the log, because "why
+        // not NVENC" is the first question about a slower stream.
+        state->encoder_name += " (nvidia present)";
+      }
       hr = S_OK;
     } else {
       state->encoder_events.Reset();
       transform.Reset();
     }
-    if (friendly != nullptr) CoTaskMemFree(friendly);
     if (SUCCEEDED(hr)) break;
   }
   for (UINT32 index = 0; index < count; ++index) activates[index]->Release();
@@ -1126,7 +1165,9 @@ struct GpuScaler {
 void CaptureLoop(FlucordVideoEncoder* state) {
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   const int frame_interval_ms = 1000 / state->config.frames_per_second;
-  const auto started = GetTickCount64();
+  const int64_t frame_interval_ns =
+      1000000000 / state->config.frames_per_second;
+  const int64_t started_ns = NowNs();
   const int width = state->config.width;
   const int height = state->config.height;
   const size_t nv12_size =
@@ -1137,13 +1178,17 @@ void CaptureLoop(FlucordVideoEncoder* state) {
   // and the bitrate on frames the viewers will never see only starves the
   // ones they would. The same gate holds back the conversion: reading a
   // desktop back that nobody will encode is pure waste.
-  ULONGLONG last_encode_ms = 0;
-  const auto encode_due = [&](ULONGLONG now) {
-    if (last_encode_ms != 0 &&
-        now - last_encode_ms < static_cast<ULONGLONG>(frame_interval_ms)) {
+  //
+  // Measured on the performance counter: the tick counter steps in ~15 ms
+  // chunks, and on a 60 Hz display "32 ms since the last encode" rounds into
+  // "not yet 33", skipping a whole extra frame. That was 20 frames/s at a
+  // configured 30.
+  int64_t last_encode_ns = 0;
+  const auto encode_due = [&](int64_t now) {
+    if (last_encode_ns != 0 && now - last_encode_ns < frame_interval_ns) {
       return false;
     }
-    last_encode_ms = now;
+    last_encode_ns = now;
     return true;
   };
 
@@ -1179,10 +1224,10 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       // nothing sees black until somebody wiggles a window. The last
       // converted picture goes out again instead, and the encoder's skip
       // frames for it cost almost nothing.
-      if (have_nv12 && !state->nv12.empty() && encode_due(GetTickCount64())) {
+      if (have_nv12 && !state->nv12.empty() && encode_due(NowNs())) {
         const int64_t encode_started = NowNs();
         EncodeNv12(state, state->nv12.data(), nv12_size,
-                   static_cast<int64_t>(GetTickCount64() - started) * 1000);
+                   (NowNs() - started_ns) / 1000);
         state->encode_ns.fetch_add(NowNs() - encode_started);
         state->timed_frames.fetch_add(1);
       }
@@ -1191,7 +1236,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
     if (FAILED(hr)) break;
 
     ComPtr<ID3D11Texture2D> texture;
-    if (SUCCEEDED(resource.As(&texture)) && encode_due(GetTickCount64())) {
+    if (SUCCEEDED(resource.As(&texture)) && encode_due(NowNs())) {
       D3D11_TEXTURE2D_DESC desc{};
       texture->GetDesc(&desc);
 
@@ -1255,7 +1300,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         have_nv12 = true;
         const int64_t encode_started = NowNs();
         EncodeNv12(state, state->nv12.data(), nv12_size,
-                   static_cast<int64_t>(GetTickCount64() - started) * 1000);
+                   (NowNs() - started_ns) / 1000);
         state->encode_ns.fetch_add(NowNs() - encode_started);
         state->timed_frames.fetch_add(1);
       }
