@@ -227,6 +227,18 @@ void main() {
           'mode': 'aead_aes256_gcm_rtpsize',
         },
       );
+      // Without the codecs list the server carries the session as audio-only
+      // and drops every picture, which is a stream that never loads.
+      expect((select.payload['d'] as Map)['codecs'], [
+        {'name': 'opus', 'type': 'audio', 'priority': 1000, 'payload_type': 120},
+        {
+          'name': 'H264',
+          'type': 'video',
+          'priority': 1000,
+          'payload_type': 101,
+          'rtx_payload_type': 102,
+        },
+      ]);
 
       final ready = gateway
           .accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData))

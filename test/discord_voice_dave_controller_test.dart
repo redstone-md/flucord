@@ -3,17 +3,51 @@ import 'package:flucord/src/data/discord/discord_voice_dave_controller.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
 void main() {
-  test('builds a key package after receiving the external sender', () {
+  test('publishes the key package the moment the version is known', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service);
+
+    final commands = controller.activate(1);
+
+    // The server forms the group from the packages it holds when the first
+    // commit is made, so the package cannot wait for the external sender or
+    // a prepare epoch that may never come: a late package is a roster this
+    // account is not in.
+    final keyPackage = commands.single as DiscordVoiceDaveBinaryCommand;
+    expect(keyPackage.opcode, 26);
+    expect(keyPackage.payload, [9, 8, 7]);
+  });
+
+  test('records the external sender without re-publishing a key package', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);
 
     final commands = controller.acceptBinary(opcode: 25, payload: [1, 2, 3]);
 
-    expect(service.sessions, hasLength(1));
+    expect(commands, isEmpty);
     expect(service.sessions.single.externalSender, [1, 2, 3]);
-    final keyPackage = commands.single as DiscordVoiceDaveBinaryCommand;
-    expect(keyPackage.opcode, 26);
-    expect(keyPackage.payload, [9, 8, 7]);
+  });
+
+  test('a first epoch rebuilds the session and re-publishes its package', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+
+    final commands = controller.acceptJson(24, {
+      'epoch': 1,
+      'protocol_version': 1,
+    });
+
+    expect(service.sessions, hasLength(2));
+    expect(service.sessions.first.disposed, isTrue);
+    expect(
+      (commands.single as DiscordVoiceDaveBinaryCommand).opcode,
+      26,
+    );
+
+    // A later epoch continues the group the session already holds.
+    expect(controller.acceptJson(24, {'epoch': 2, 'protocol_version': 1}),
+        isEmpty);
+    expect(service.sessions, hasLength(2));
   });
 
   test('passes audio through until the group key exists', () {

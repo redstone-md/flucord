@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../../domain/video_encoder.dart';
+import 'discord_h264_sps.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_video_rtp_sender.dart';
 
@@ -12,28 +14,35 @@ import 'discord_video_rtp_sender.dart';
 /// way.
 typedef VideoFrameSink = int Function(DiscordRtpFrame frame);
 
+/// Encrypts one whole access unit for the room's group, before packetisation.
+typedef VideoFrameGroupEncryptor = Uint8List Function(Uint8List frame);
+
 /// Carries encoded pictures over a Go Live connection.
 ///
-/// This is the piece between the encoder and the socket: it packetises, builds
-/// the RTP header each payload needs, and hands the result to the transport.
-/// Without it the pipeline ends at a list of payloads nobody sends.
+/// This is the piece between the encoder and the socket: it fixes the SPS up,
+/// encrypts the picture for the group when there is one, builds the RTP header
+/// each payload needs, and hands the result to the transport. Without it the
+/// pipeline ends at a list of payloads nobody sends.
 final class DiscordVideoStreamTransport {
   DiscordVideoStreamTransport({
     required int ssrc,
     required VideoFrameSink sink,
+    VideoFrameGroupEncryptor? groupEncryptor,
     int payloadType = DiscordRtpHeader.discordVideoPayloadType,
     int initialSequence = 0,
     int maxPayloadSize = 1200,
   }) : _sender = DiscordVideoRtpSender(
-         ssrc: ssrc,
-         initialSequence: initialSequence,
-         maxPayloadSize: maxPayloadSize,
-       ),
+           ssrc: ssrc,
+           initialSequence: initialSequence,
+           maxPayloadSize: maxPayloadSize,
+         ),
        _sink = sink,
+       _groupEncryptor = groupEncryptor,
        _payloadType = payloadType;
 
   final DiscordVideoRtpSender _sender;
   final VideoFrameSink _sink;
+  final VideoFrameGroupEncryptor? _groupEncryptor;
   final int _payloadType;
 
   StreamSubscription<EncodedVideoFrame>? _subscription;
@@ -72,7 +81,7 @@ final class DiscordVideoStreamTransport {
   /// one told the stream ended.
   int send(EncodedVideoFrame frame) {
     var sent = 0;
-    for (final packet in _sender.packetsFor(frame)) {
+    for (final packet in _sender.packetsFor(_prepare(frame))) {
       final rtp = DiscordRtpFrame(
         header: DiscordRtpHeader(
           sequence: packet.sequence,
@@ -95,6 +104,21 @@ final class DiscordVideoStreamTransport {
       _sentBytes += packet.payload.length;
     }
     return sent;
+  }
+
+  /// The two whole-frame steps that must happen before packetisation.
+  ///
+  /// The SPS rewrite is a Discord requirement on the bytes every receiver
+  /// parses. The group encryption then needs the complete picture: a receiver
+  /// reassembles a frame from its RTP packets and decrypts it once, so
+  /// encrypting per packet would hand every viewer fragments of different
+  /// ciphertexts. With no group to encrypt for, the picture goes out as it
+  /// was rewritten.
+  EncodedVideoFrame _prepare(EncodedVideoFrame frame) {
+    final bytes = DiscordH264Sps.rewriteAccessUnit(frame.bytes);
+    final encryptor = _groupEncryptor;
+    if (encryptor == null) return frame.withBytes(bytes);
+    return frame.withBytes(Uint8List.fromList(encryptor(bytes)));
   }
 
   Future<void> stop() async {

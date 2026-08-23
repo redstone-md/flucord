@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_call_api.dart';
@@ -345,6 +346,12 @@ final class _InertVoiceClient implements DiscordVoiceClient {
 
   @override
   int sendVideoFrame(DiscordRtpFrame frame) => 0;
+
+  @override
+  Uint8List encryptVideoForGroup({
+    required int ssrc,
+    required Uint8List frame,
+  }) => frame;
 
   @override
   Future<void> connect() async {}

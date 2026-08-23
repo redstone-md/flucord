@@ -176,6 +176,10 @@ void main() {
         client.sentFrames.every((frame) => frame.header.ssrc == 4243),
         isTrue,
       );
+      // The group encryption ran once on the whole picture, before it became
+      // two RTP packets: receivers decrypt a frame, not a fragment.
+      expect(client.groupEncryptions, hasLength(1));
+      expect(client.groupEncryptions.single.ssrc, 4243);
       // The viewer is the other side of the fork, and this was not it.
       expect(wiring.viewer.watching, isNull);
     },
@@ -271,6 +275,19 @@ final class _FakeClient implements DiscordVoiceClient {
     sentFrames.add(frame);
     log.add('send');
     return frame.payload.length;
+  }
+
+  /// Recorded group encryptions: whole access units, with the SSRC they were
+  /// encrypted for.
+  final List<({int ssrc, Uint8List frame})> groupEncryptions = [];
+
+  @override
+  Uint8List encryptVideoForGroup({
+    required int ssrc,
+    required Uint8List frame,
+  }) {
+    groupEncryptions.add((ssrc: ssrc, frame: frame));
+    return frame;
   }
 
   @override

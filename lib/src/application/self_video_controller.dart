@@ -32,9 +32,11 @@ final class SelfVideoController extends ChangeNotifier {
     required VoiceVideoTransport? Function() transportProvider,
     required VideoFrameSink? Function() sinkProvider,
     required SelfVideoAnnouncer announceSelfVideo,
+    VideoFrameGroupEncryptor? Function()? groupEncryptorProvider,
   }) : _capture = capture,
        _transportProvider = transportProvider,
        _sinkProvider = sinkProvider,
+       _groupEncryptorProvider = groupEncryptorProvider,
        _announce = announceSelfVideo;
 
   /// The machine's one capture and encode resource. The camera is one of its
@@ -44,6 +46,7 @@ final class SelfVideoController extends ChangeNotifier {
 
   final VoiceVideoTransport? Function() _transportProvider;
   final VideoFrameSink? Function() _sinkProvider;
+  final VideoFrameGroupEncryptor? Function()? _groupEncryptorProvider;
   final SelfVideoAnnouncer _announce;
 
   /// Which camera the next start will use.
@@ -112,6 +115,7 @@ final class SelfVideoController extends ChangeNotifier {
     _transport = DiscordVideoStreamTransport(
       ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
       sink: sink,
+      groupEncryptor: _groupEncryptorProvider?.call(),
     )..attach(_capture.frames);
     if (!await _announce(enabled: true)) {
       await _tearDown(transport);

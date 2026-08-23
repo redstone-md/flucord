@@ -56,15 +56,24 @@ final class DiscordVoiceDaveController {
   int? _pendingTransitionId;
   int? _pendingProtocolVersion;
 
-  void activate(int protocolVersion) {
+  /// Brings the controller onto a negotiated session, and publishes this
+  /// account's key package the moment the protocol version is known.
+  ///
+  /// The key package cannot wait for the rest of the handshake: the server
+  /// forms the group from the packages it holds when the first commit is
+  /// made, and one that arrives after it builds a group this account is not
+  /// in. Every observed stream failure with a healthy socket was exactly
+  /// that, a package sent only after the external sender arrived and a roster
+  /// that never named this account.
+  List<DiscordVoiceDaveCommand> activate(int protocolVersion) {
     if (protocolVersion < 0 || protocolVersion > _service.maxProtocolVersion) {
       throw StateError('Discord selected an unsupported DAVE version');
     }
     _protocolVersion = protocolVersion;
     _transitionMediaProtocol(protocolVersion);
-    if (protocolVersion > 0) {
-      _ensureSession(protocolVersion).setProtocolVersion(protocolVersion);
-    }
+    if (protocolVersion <= 0) return const [];
+    _ensureSession(protocolVersion).setProtocolVersion(protocolVersion);
+    return _keyPackageCommands();
   }
 
   List<DiscordVoiceDaveCommand> acceptJson(
@@ -98,7 +107,8 @@ final class DiscordVoiceDaveController {
   }) {
     switch (opcode) {
       case 25:
-        return _acceptExternalSender(payload);
+        _acceptExternalSender(payload);
+        return const [];
       case 27:
         return _acceptProposals(payload);
       case 29:
@@ -143,17 +153,20 @@ final class DiscordVoiceDaveController {
       return const [];
     }
     _protocolVersion = protocolVersion;
-    _ensureSession(protocolVersion).setProtocolVersion(protocolVersion);
-    return epoch == 1 ? _keyPackageCommands() : const [];
+    // A first epoch is a new group: the session starts over, and the fresh
+    // key package that goes with it is what puts this account in the roster.
+    // Later epochs continue the group the session already holds.
+    if (epoch != 1) return const [];
+    _replaceSession(protocolVersion).setProtocolVersion(protocolVersion);
+    return _keyPackageCommands();
   }
 
-  List<DiscordVoiceDaveCommand> _acceptExternalSender(List<int> payload) {
+  void _acceptExternalSender(List<int> payload) {
     _externalSender = List<int>.unmodifiable(payload);
     final version = _protocolVersion > 0
         ? _protocolVersion
         : _service.maxProtocolVersion;
     _ensureSession(version).setExternalSender(payload);
-    return _keyPackageCommands();
   }
 
   List<DiscordVoiceDaveCommand> _acceptProposals(List<int> payload) {
@@ -206,9 +219,8 @@ final class DiscordVoiceDaveController {
   }
 
   List<DiscordVoiceDaveCommand> _keyPackageCommands() {
-    final sender = _externalSender;
     final session = _session;
-    if (sender == null || session == null) return const [];
+    if (session == null) return const [];
     final keyPackage = session.createKeyPackage();
     if (keyPackage.isEmpty) return const [];
     return [DiscordVoiceDaveBinaryCommand(opcode: 26, payload: keyPackage)];
@@ -238,12 +250,14 @@ final class DiscordVoiceDaveController {
   VoiceDaveSession _ensureSession(int protocolVersion) =>
       _session ??= _createSession(protocolVersion);
 
-  void _replaceSession(int protocolVersion) {
+  VoiceDaveSession _replaceSession(int protocolVersion) {
     _clearMediaCryptors();
     _session?.dispose();
-    _session = _createSession(protocolVersion);
+    final session = _createSession(protocolVersion);
+    _session = session;
     final sender = _externalSender;
-    if (sender != null) _session!.setExternalSender(sender);
+    if (sender != null) session.setExternalSender(sender);
+    return session;
   }
 
   VoiceDaveSession _createSession(int protocolVersion) =>

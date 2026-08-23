@@ -417,6 +417,8 @@ final class AppComposition {
         capture: videoCapture,
         transportProvider: () => liveVoiceSignaling?.activeVideoTransport,
         sinkProvider: () => liveVoiceSignaling?.sendVideoFrame,
+        groupEncryptorProvider: () =>
+            liveVoiceSignaling?.encryptVideoGroupFrame,
         announceSelfVideo: ({required bool enabled}) =>
             voice.setCameraAnnounced(enabled: enabled),
       ),

@@ -15,6 +15,14 @@ final class EncodedVideoFrame {
 
   /// Whether a viewer joining now could start decoding here.
   final bool isKeyframe;
+
+  /// The same picture in different bytes: what the SPS rewrite and the group
+  /// encryption hand down the pipeline, which changes nothing else about it.
+  EncodedVideoFrame withBytes(Uint8List other) => EncodedVideoFrame(
+    bytes: other,
+    timestamp: timestamp,
+    isKeyframe: isKeyframe,
+  );
 }
 
 /// Where the pictures come from.

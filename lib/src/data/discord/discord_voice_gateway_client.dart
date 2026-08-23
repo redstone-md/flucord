@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -33,8 +34,15 @@ abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
   /// carried them.
   Stream<(String, DiscordRtpFrame)> get videoPackets;
 
-  /// Sends one picture, encrypted for the group first when the connection has
-  /// a group to encrypt for.
+  /// Encrypts one whole picture for the room's group, when the connection has
+  /// one, before it is packetised into RTP.
+  Uint8List encryptVideoForGroup({
+    required int ssrc,
+    required Uint8List frame,
+  });
+
+  /// Sends one picture, already encrypted for the group when the connection
+  /// has a group to encrypt for.
   int sendVideoFrame(DiscordRtpFrame frame);
 }
 
@@ -325,8 +333,11 @@ final class DiscordVoiceGatewayClient
   /// Builds the media plane for a negotiated session: the cipher, the DAVE
   /// controller's version, and the keepalive that keeps the UDP path open.
   void _activateTransport(VoiceTransportSession session) {
+    var daveCommands = const <DiscordVoiceDaveCommand>[];
     try {
-      _daveController?.activate(session.daveProtocolVersion);
+      daveCommands =
+          _daveController?.activate(session.daveProtocolVersion) ??
+          const <DiscordVoiceDaveCommand>[];
       _replaceTransportCipher(
         DiscordVoiceTransportCipher(
           mode: session.mode,
@@ -337,6 +348,7 @@ final class DiscordVoiceGatewayClient
       _fail(error);
       return;
     }
+    _executeDaveCommands(daveCommands);
     _mediaTransport.configure(
       ssrc: session.ssrc,
       daveEnabled: session.daveProtocolVersion > 0,
@@ -444,23 +456,27 @@ final class DiscordVoiceGatewayClient
     return _udpTransport.send(cipher.encryptFrame(frame));
   }
 
-  /// Sends one picture, encrypted for the group first when the call has a
-  /// group to encrypt for.
+  /// Sends one picture, already encrypted for the group when the connection
+  /// has a group.
   ///
-  /// The transport cipher alone is not enough on a DAVE call: every receiver
-  /// runs the payload through the group's decryptor, and one that was sent in
-  /// the clear comes back as `decryptionFailure` — a share that arrives and
-  /// draws nothing.
+  /// Group encryption happens a frame at a time, before packetisation, in
+  /// [encryptVideoForGroup]: receivers reassemble a picture and decrypt it
+  /// once, so what crosses here is ciphertext with an RTP header built around
+  /// it, and the transport cipher is the only encryption applied.
   @override
-  int sendVideoFrame(DiscordRtpFrame frame) {
+  int sendVideoFrame(DiscordRtpFrame frame) => sendAudioFrame(frame);
+
+  /// Encrypts one whole access unit for the room's group, when there is one.
+  ///
+  /// A frame that comes back unchanged is passthrough: a connection without
+  /// a group, or one whose key has not been distributed yet, carries the
+  /// picture in the clear behind the transport cipher.
+  @override
+  Uint8List encryptVideoForGroup({required int ssrc, required Uint8List frame}) {
     final controller = _daveController;
-    final ssrc = frame.header.ssrc;
-    if (controller == null) return sendAudioFrame(frame);
-    return sendAudioFrame(
-      DiscordRtpFrame(
-        header: frame.header,
-        payload: controller.encryptVideoFrame(ssrc: ssrc, frame: frame.payload),
-      ),
+    if (controller == null) return frame;
+    return Uint8List.fromList(
+      controller.encryptVideoFrame(ssrc: ssrc, frame: frame),
     );
   }
 

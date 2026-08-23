@@ -95,6 +95,22 @@ void main() {
               'port': 50000,
               'mode': 'aead_aes256_gcm_rtpsize',
             },
+            // The server carries a session without codecs as audio-only.
+            'codecs': [
+              {
+                'name': 'opus',
+                'type': 'audio',
+                'priority': 1000,
+                'payload_type': 120,
+              },
+              {
+                'name': 'H264',
+                'type': 'video',
+                'priority': 1000,
+                'payload_type': 101,
+                'rtx_payload_type': 102,
+              },
+            ],
           },
         },
       );
@@ -783,11 +799,36 @@ void main() {
       addTearDown(client.close);
 
       await client.connect();
+      socket.addJson({
+        'op': 2,
+        'd': {
+          'ssrc': 42,
+          'ip': '127.0.0.1',
+          'port': 5000,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 1,
+        },
+      });
+      await _flushEvents();
+
+      // The description named DAVE v1, so the key package went out at once:
+      // the server builds the group from the packages it holds when the
+      // first commit is made, and a package waiting for the external sender
+      // arrives after the group this account should be in.
+      expect(socket.sent.last, [26, 9, 8]);
+
       socket.addBinary([0, 1, 25, 4, 5, 6]);
       await _flushEvents();
 
       expect(daveService.session?.externalSender, [4, 5, 6]);
-      expect(socket.sent.last, [26, 9, 8]);
 
       socket.addBinary([0, 2, 29, 0, 7, 3, 2, 1]);
       await _flushEvents();
@@ -945,12 +986,10 @@ final class _GatewayFakeDaveService implements VoiceDaveService {
   int get maxProtocolVersion => 1;
 
   @override
-  VoiceDaveEncryptor createEncryptor() =>
-      throw UnsupportedError('Media encryption is outside this test');
+  VoiceDaveEncryptor createEncryptor() => _GatewayFakeDaveEncryptor();
 
   @override
-  VoiceDaveDecryptor createDecryptor() =>
-      throw UnsupportedError('Media decryption is outside this test');
+  VoiceDaveDecryptor createDecryptor() => _GatewayFakeDaveDecryptor();
 
   @override
   VoiceDaveSession createSession({
@@ -958,6 +997,56 @@ final class _GatewayFakeDaveService implements VoiceDaveService {
     required String channelId,
     required String selfUserId,
   }) => session = _GatewayFakeDaveSession(protocolVersion);
+}
+
+/// Media cryptors that pass frames through: this file tests the signaling
+/// path, and the media plane only needs to exist for the handshake to reach
+/// it.
+final class _GatewayFakeDaveEncryptor implements VoiceDaveEncryptor {
+  @override
+  int get protocolVersion => 0;
+
+  @override
+  bool get hasKeyRatchet => false;
+
+  @override
+  bool get isPassthrough => true;
+
+  @override
+  void setKeyRatchet(VoiceDaveKeyRatchet keyRatchet) {}
+
+  @override
+  void setPassthrough(bool enabled) {}
+
+  @override
+  void assignSsrcToCodec(int ssrc, DaveMediaCodec codec) {}
+
+  @override
+  List<int> encrypt({
+    required DaveMediaType mediaType,
+    required int ssrc,
+    required List<int> frame,
+  }) => frame;
+
+  @override
+  void dispose() {}
+}
+
+final class _GatewayFakeDaveDecryptor implements VoiceDaveDecryptor {
+  @override
+  void transitionToKeyRatchet(VoiceDaveKeyRatchet keyRatchet) {}
+
+  @override
+  void transitionToPassthrough(bool enabled) {}
+
+  @override
+  List<int> decrypt({
+    required DaveMediaType mediaType,
+    required List<int> encryptedFrame,
+  }) => encryptedFrame;
+
+  @override
+  void dispose() {}
 }
 
 final class _GatewayFakeDaveSession implements VoiceDaveSession {

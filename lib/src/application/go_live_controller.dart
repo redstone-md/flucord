@@ -103,10 +103,17 @@ final class GoLiveController extends ChangeNotifier {
   /// Called once the RTC side has an SSRC and somewhere to send: the capture
   /// runs from the moment the stream opens, but its frames go nowhere until
   /// there is a socket to take them.
-  void bindTransport({required int ssrc, required VideoFrameSink sink}) {
+  void bindTransport({
+    required int ssrc,
+    required VideoFrameSink sink,
+    VideoFrameGroupEncryptor? groupEncryptor,
+  }) {
     _transport?.stop();
-    _transport = DiscordVideoStreamTransport(ssrc: ssrc, sink: sink)
-      ..attach(_capture.frames);
+    _transport = DiscordVideoStreamTransport(
+      ssrc: ssrc,
+      sink: sink,
+      groupEncryptor: groupEncryptor,
+    )..attach(_capture.frames);
   }
 
   bool get isStreaming =>

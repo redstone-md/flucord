@@ -420,6 +420,12 @@ final class _InertVoiceClient
   int sendVideoFrame(DiscordRtpFrame frame) => 0;
 
   @override
+  Uint8List encryptVideoForGroup({
+    required int ssrc,
+    required Uint8List frame,
+  }) => frame;
+
+  @override
   void sendOpusFrame(Uint8List opusFrame) => frames.add(opusFrame);
 
   @override

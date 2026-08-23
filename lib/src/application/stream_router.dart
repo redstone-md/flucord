@@ -78,9 +78,16 @@ final class StreamRouter {
       // announce declared the pictures would arrive on, and a frame sent on
       // any other is a frame Discord drops — a stream that opens, says it is
       // live, and shows a viewer nothing at all.
+      final videoSsrc = DiscordVoiceGatewayProtocol.videoSsrcFor(
+        event.session.ssrc,
+      );
       _goLive.bindTransport(
-        ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(event.session.ssrc),
+        ssrc: videoSsrc,
         sink: session.sendVideoFrame,
+        // Group encryption belongs to the whole picture, so the transport
+        // runs it before the picture becomes RTP packets.
+        groupEncryptor: (frame) =>
+            session.encryptVideoGroupFrame(ssrc: videoSsrc, frame: frame),
       );
       return;
     }

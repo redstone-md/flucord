@@ -8,6 +8,7 @@ import 'discord_call_state_roster.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_gateway_client.dart';
 import 'discord_voice_gateway_client.dart';
+import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_session_assembler.dart';
 import 'discord_voice_socket_factory.dart';
 import 'discord_voice_state_roster.dart';
@@ -575,6 +576,24 @@ final class DiscordVoiceSignalingService
       throw StateError('Discord voice transport is not ready');
     }
     return client.sendVideoFrame(frame);
+  }
+
+  /// Encrypts one whole camera picture for the room's group on the active
+  /// session, before the caller packetises it.
+  ///
+  /// Looked up per call rather than bound once: a reconnect replaces the
+  /// client, and a closure over the old one would encrypt pictures with a
+  /// key from a session nobody holds anymore.
+  Uint8List encryptVideoGroupFrame(Uint8List frame) {
+    final client = _activeClient;
+    final audioSsrc = client?.audioSsrc;
+    if (client == null || audioSsrc == null) {
+      throw StateError('Discord voice transport is not ready');
+    }
+    return client.encryptVideoForGroup(
+      ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
+      frame: frame,
+    );
   }
 
   @override

@@ -437,6 +437,21 @@ final class DiscordVoiceGatewayProtocol {
     'd': {
       'protocol': 'udp',
       'data': {'address': address, 'port': port, 'mode': mode},
+      // Without a codecs list the server treats the session as audio-only:
+      // opcode 12 is accepted, the video SSRCs are noted, and every picture is
+      // dropped, which a viewer watches as a stream that never loads. The
+      // payload types are Discord's own: 120 for Opus, 101 for H.264 with 102
+      // for its retransmissions.
+      'codecs': const [
+        {'name': 'opus', 'type': 'audio', 'priority': 1000, 'payload_type': 120},
+        {
+          'name': 'H264',
+          'type': 'video',
+          'priority': 1000,
+          'payload_type': 101,
+          'rtx_payload_type': 102,
+        },
+      ],
     },
   };
 

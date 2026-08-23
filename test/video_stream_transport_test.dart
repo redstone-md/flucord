@@ -203,4 +203,34 @@ void main() {
 
     expect(sent.map((frame) => frame.header.sequence), [0xfffe, 0xffff, 0, 1]);
   });
+
+  test('group encryption covers the whole picture, once, before packets', () {
+    final encrypted = <Uint8List>[];
+    final sent = <DiscordRtpFrame>[];
+    // Group ciphertext that still parses as a stream: DAVE encrypts ranges,
+    // so the NAL structure a receiver packetises on survives it.
+    final ciphertext = Uint8List.fromList([0, 0, 0, 1, 0x41, 0xee, 0xff]);
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) {
+        sent.add(frame);
+        return 0;
+      },
+      groupEncryptor: (frame) {
+        encrypted.add(frame);
+        return ciphertext;
+      },
+    );
+
+    final frame = _frame(sliceLength: 8);
+    transport.send(frame);
+
+    // One call per picture, on the whole access unit: receivers reassemble a
+    // frame and decrypt once, so per-packet ciphertext is undecryptable.
+    expect(encrypted, hasLength(1));
+    expect(encrypted.single.length, frame.bytes.length);
+    // And what went on the wire is the encrypted bytes, not the clear ones.
+    expect(sent, hasLength(1));
+    expect(sent.single.payload, [0x41, 0xee, 0xff]);
+  });
 }

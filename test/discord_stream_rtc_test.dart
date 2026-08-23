@@ -468,6 +468,12 @@ final class _FakeClient implements DiscordVoiceClient {
   }
 
   @override
+  Uint8List encryptVideoForGroup({
+    required int ssrc,
+    required Uint8List frame,
+  }) => frame;
+
+  @override
   Future<void> connect() async => connects++;
 
   @override

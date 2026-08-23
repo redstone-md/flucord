@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 
 import '../../domain/go_live_stream.dart';
@@ -79,6 +80,16 @@ final class DiscordStreamRtcSession {
       throw StateError('Discord stream transport is not ready');
     }
     return client.sendVideoFrame(frame);
+  }
+
+  /// Encrypts one whole picture for this stream's group, before the caller
+  /// packetises it.
+  Uint8List encryptVideoGroupFrame({required int ssrc, required Uint8List frame}) {
+    final client = _client;
+    if (client == null) {
+      throw StateError('Discord stream transport is not ready');
+    }
+    return client.encryptVideoForGroup(ssrc: ssrc, frame: frame);
   }
 
   /// Declares the video SSRCs on this connection.
