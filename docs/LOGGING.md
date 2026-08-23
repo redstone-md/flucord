@@ -6,19 +6,19 @@ view under `flutter run`).
 
 ## Where the file lives
 
-`<application support>/logs/flucord.log`:
+`<application support>/logs/flucord.log`. The folder names come from the
+executable's version metadata, and the app prints the exact resolved path as
+its first log line on every start:
 
-- Windows: `%APPDATA%\dev.flucord.app\flucord\logs\flucord.log`
-- Linux: `~/.local/share/dev.flucord.app/flucord/logs/flucord.log`
-- macOS: `~/Library/Application Support/dev.flucord.app/flucord/logs/flucord.log`
-
-The app prints the resolved path as its first log line on every start. The
+- Windows: `%APPDATA%\Redstone\Flucord\logs\flucord.log`
+- Linux: `~/.local/share/<app>/logs/flucord.log`
+- macOS: `~/Library/Application Support/<app>/logs/flucord.log` The
 file rolls over to `flucord.log.1` past 2 MB; one previous file is kept.
 
 Follow it live while running a built app:
 
 ```bash
-tail -f "$APPDATA/dev.flucord.app/flucord/logs/flucord.log"
+tail -f "$APPDATA/Redstone/Flucord/logs/flucord.log"
 ```
 
 Or capture the console mirror instead: `flucord.exe > console.log 2>&1`.

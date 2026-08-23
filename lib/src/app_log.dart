@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -87,7 +88,7 @@ final class AppLog {
     // Straight to stdout, not debugPrint: debugPrint throttles, and under a
     // burst of transport diagnostics the throttled-away lines were exactly
     // the ones that mattered.
-    _runSafely(() => stdout.writeln(line));
+    _writeToConsole(line);
     developer.log(
       message,
       name: 'flucord.$scope',
@@ -96,6 +97,32 @@ final class AppLog {
       stackTrace: stackTrace,
     );
     _active?._append(line, stackTrace);
+  }
+
+  static Zone? _consoleZone;
+  static bool _consoleBroken = false;
+
+  /// Writes to stdout inside its own zone. A Windows GUI app launched
+  /// without a console has no valid stdout handle, and the failure arrives
+  /// asynchronously where no caller can catch it; the first failure switches
+  /// this mirror off. The file keeps recording either way.
+  static void _writeToConsole(String line) {
+    if (_consoleBroken) return;
+    final consoleZone =
+        _consoleZone ??
+        Zone.current.fork(
+          specification: ZoneSpecification(
+            handleUncaughtError: (self, parent, zone, error, stackTrace) {
+              _consoleBroken = true;
+            },
+          ),
+        );
+    _consoleZone = consoleZone;
+    try {
+      consoleZone.run(() => stdout.writeln(line));
+    } on Object {
+      _consoleBroken = true;
+    }
   }
 
   static String _formatRecord(
@@ -169,7 +196,7 @@ final class AppLog {
     if (_active == this) _active = null;
   }
 
-  /// A logging sink that throws is a sink that gets disabled, not one that
+  /// A file sink that throws is a sink that gets disabled, not one that
   /// takes the caller down.
   static void _runSafely(void Function() action) {
     try {
@@ -180,11 +207,7 @@ final class AppLog {
         _active!._handle = null;
         _active!._file = null;
       }
-      try {
-        stdout.writeln('Flucord log sink failed: $error');
-      } on Object {
-        // Nothing left to report through.
-      }
+      _writeToConsole('Flucord log file sink failed: $error');
     }
   }
 }
