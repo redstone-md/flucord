@@ -1,69 +1,55 @@
-import 'dart:async';
+import '../domain/channel_link.dart';
 
-import '../application/channel_link.dart';
-import '../application/chat_controller.dart';
-import '../application/workspace_controller.dart';
+import 'desktop_integration.dart';
 
+/// Routes flucord:// URLs from the OS into the app: channel links navigate,
+/// any other URI of the scheme goes to the app's protocol handler. A URL that
+/// arrives before the app attaches is retained, one per route.
 final class DesktopProtocolRouter {
-  ChatController? _chatController;
-  WorkspaceController? _workspaceController;
-  void Function(Uri uri)? _onProtocolUri;
+  DesktopAppSurface? _surface;
   ChannelLink? _pendingChannelLink;
   Uri? _pendingProtocolUri;
 
-  void attach({
-    required ChatController chatController,
-    required WorkspaceController workspaceController,
-    required void Function(Uri uri) onProtocolUri,
-  }) {
-    _chatController = chatController;
-    _workspaceController = workspaceController;
-    _onProtocolUri = onProtocolUri;
+  void attach(DesktopAppSurface surface) {
+    _surface = surface;
     final pendingProtocolUri = _pendingProtocolUri;
     if (pendingProtocolUri != null) {
       _pendingProtocolUri = null;
-      onProtocolUri(pendingProtocolUri);
+      surface.handleProtocolUri(pendingProtocolUri);
     }
-    flushChannelLink();
+    _flushChannelLink();
   }
 
   void receive(String rawUrl) {
     final channelLink = ChannelLink.tryParse(rawUrl);
     if (channelLink != null) {
       _pendingChannelLink = channelLink;
-      flushChannelLink();
+      _flushChannelLink();
       return;
     }
     final uri = Uri.tryParse(rawUrl);
     if (uri == null || uri.scheme != ChannelLink.scheme) return;
-    final handler = _onProtocolUri;
-    if (handler == null) {
+    final surface = _surface;
+    if (surface == null) {
       _pendingProtocolUri = uri;
     } else {
-      handler(uri);
+      surface.handleProtocolUri(uri);
     }
   }
 
-  void flushChannelLink() {
+  /// Delivers a retained link once the app is there to open it. A link that
+  /// arrives after attach goes straight through; the app side holds it from
+  /// there until the workspace is loaded.
+  void _flushChannelLink() {
     final link = _pendingChannelLink;
-    final chatController = _chatController;
-    final workspaceController = _workspaceController;
-    final workspace = chatController?.workspace;
-    if (link == null ||
-        chatController == null ||
-        workspaceController == null ||
-        workspace == null) {
-      return;
-    }
+    final surface = _surface;
+    if (link == null || surface == null) return;
     _pendingChannelLink = null;
-    if (!workspaceController.openChannelLink(workspace, link)) return;
-    unawaited(chatController.openChannel(link.channelId));
+    surface.openChannelLink(link);
   }
 
   void detach() {
-    _chatController = null;
-    _workspaceController = null;
-    _onProtocolUri = null;
+    _surface = null;
     _pendingChannelLink = null;
     _pendingProtocolUri = null;
   }

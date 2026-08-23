@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/chat_models.dart';
 import '../domain/workspace_permissions.dart';
-import 'channel_link.dart';
+import '../domain/channel_link.dart';
 import 'voice_channel_surface.dart';
 
 final class WorkspaceController extends ChangeNotifier {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
+import 'package:flucord/src/application/desktop_app_surface.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/platform/linux_desktop_integration.dart';
@@ -43,8 +44,14 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final workspace = WorkspaceController();
     final received = <Uri>[];
+    final surface = FlucordAppSurface(
+      chat: chat,
+      workspace: workspace,
+      onProtocolUri: received.add,
+    );
     addTearDown(chat.dispose);
     addTearDown(workspace.dispose);
+    addTearDown(surface.dispose);
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     addTearDown(() => messenger.setMockMethodCallHandler(windowChannel, null));
     addTearDown(
@@ -57,11 +64,7 @@ void main() {
     expect(nativeCalls, hasLength(1));
     expect(nativeCalls.single.method, 'ready');
     expect(nativeCalls.single.arguments, isNull);
-    integration.attach(
-      chatController: chat,
-      workspaceController: workspace,
-      onProtocolUri: received.add,
-    );
+    integration.attach(surface);
     expect(received.single.queryParameters['code'], 'initial');
 
     final completer = Completer<void>();

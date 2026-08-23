@@ -15,6 +15,7 @@ import 'application/chat_controller.dart';
 import 'application/chat_session_coordination.dart';
 import 'application/connection_controller.dart';
 import 'application/developer_check.dart';
+import 'application/desktop_app_surface.dart';
 import 'application/direct_call_controller.dart';
 import 'application/discord_account_connection_controller.dart';
 import 'application/discord_desktop_login_controller.dart';
@@ -126,6 +127,7 @@ final class AppComposition {
 
   late final ChatController chat;
   late final ConnectionController connection;
+  late final FlucordAppSurface desktopSurface;
   late final DiscordDesktopLoginController desktopLogin;
   late final ExternalLinkLauncher externalLinkLauncher;
   late final DiscordOAuthController oauth;
@@ -505,6 +507,15 @@ final class AppComposition {
   /// they are the first thing torn down: no controller is disposed while a
   /// rule still listens to it.
   void _coordinate() {
+    // The app side of the desktop seam, registered first so it stops reading
+    // the controllers before any of them goes away.
+    desktopSurface = _register(
+      FlucordAppSurface(
+        chat: chat,
+        workspace: workspace,
+        onProtocolUri: (uri) => unawaited(oauth.handleProtocolUri(uri)),
+      ),
+    );
     sessionCoordination = ChatSessionCoordination(
       chat: chat,
       voice: voice,
@@ -551,13 +562,7 @@ final class AppComposition {
     // Installed on the keyboard rather than in a Shortcuts widget: a
     // binding has to fire wherever the focus is, including the composer.
     ServicesBinding.instance.keyboard.addHandler(keybinds.handleKeyEvent);
-    bootstrap.desktopIntegration?.attach(
-      chatController: chat,
-      workspaceController: workspace,
-      onProtocolUri: (uri) {
-        unawaited(oauth.handleProtocolUri(uri));
-      },
-    );
+    bootstrap.desktopIntegration?.attach(desktopSurface);
     connection.initialize(
       restoreSavedSession: bootstrap.restoreSavedSession && !_demo,
     );

@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:protocol_handler/protocol_handler.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../application/channel_link.dart';
-import '../application/chat_controller.dart';
-import '../application/workspace_controller.dart';
+import '../domain/channel_link.dart';
 import 'desktop_integration.dart';
 import 'desktop_message_notification_controller.dart';
 import 'desktop_protocol_router.dart';
@@ -24,7 +22,7 @@ final class MacosDesktopIntegration
       DesktopMessageNotificationController(isFocused: windowManager.isFocused);
   late final DesktopTrayCoordinator _desktopTray;
 
-  ChatController? _chatController;
+  DesktopAppSurface? _surface;
   bool _windowReady = false;
   bool _protocolReady = false;
   bool _allowClose = false;
@@ -58,9 +56,7 @@ final class MacosDesktopIntegration
         _protocolRouter.receive(initialUrl);
       }
     } on Object catch (error) {
-      if (kDebugMode) {
-        debugPrint('Flucord protocol handler unavailable: $error');
-      }
+      _debugFailure('protocol handler', error);
     }
   }
 
@@ -72,23 +68,10 @@ final class MacosDesktopIntegration
   }
 
   @override
-  void attach({
-    required ChatController chatController,
-    required WorkspaceController workspaceController,
-    required void Function(Uri uri) onProtocolUri,
-  }) {
-    _chatController = chatController;
-    _protocolRouter.attach(
-      chatController: chatController,
-      workspaceController: workspaceController,
-      onProtocolUri: onProtocolUri,
-    );
-    _messageNotifications.attach(
-      chatController: chatController,
-      onActivateLink: _activateLink,
-    );
-    _desktopTray.attach(chatController);
-    chatController.addListener(_protocolRouter.flushChannelLink);
+  void attach(DesktopAppSurface surface) {
+    _protocolRouter.attach(surface);
+    _messageNotifications.attach(surface: surface, showWindow: _showWindow);
+    _desktopTray.attach(surface);
   }
 
   @override
@@ -97,29 +80,24 @@ final class MacosDesktopIntegration
     _protocolRouter.receive(url);
   }
 
-  Future<void> _activateLink(ChannelLink link) async {
-    await _showWindow();
-    _protocolRouter.receive(link.toUri().toString());
-  }
-
   Future<void> _showWindow() async {
     if (!_windowReady) return;
     if (await windowManager.isMinimized()) await windowManager.restore();
     await windowManager.show();
     await windowManager.focus();
-    _chatController?.setApplicationActive(true);
+    _surface?.setApplicationActive(true);
   }
 
   @override
-  void onWindowFocus() => _chatController?.setApplicationActive(true);
+  void onWindowFocus() => _surface?.setApplicationActive(true);
 
   @override
-  void onWindowBlur() => _chatController?.setApplicationActive(false);
+  void onWindowBlur() => _surface?.setApplicationActive(false);
 
   @override
   void onWindowClose() {
     if (!_allowClose && _desktopTray.isReady) {
-      _chatController?.setApplicationActive(false);
+      _surface?.setApplicationActive(false);
       unawaited(windowManager.hide());
     }
   }
@@ -140,11 +118,10 @@ final class MacosDesktopIntegration
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _chatController?.removeListener(_protocolRouter.flushChannelLink);
+    _protocolRouter.detach();
     await _messageNotifications.dispose();
     await _desktopTray.dispose();
     if (_protocolReady) protocolHandler.removeListener(this);
     if (_windowReady) windowManager.removeListener(this);
-    _protocolRouter.detach();
   }
 }

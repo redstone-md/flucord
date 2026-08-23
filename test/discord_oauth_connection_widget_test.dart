@@ -3,8 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
-import 'package:flucord/src/application/chat_controller.dart';
-import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
 
@@ -121,18 +119,14 @@ final class _OAuthGateway implements DiscordOAuthAccountGateway {
 }
 
 final class _DesktopIntegration implements DesktopIntegration {
-  void Function(Uri uri)? _onProtocolUri;
+  DesktopAppSurface? _surface;
 
   @override
-  void attach({
-    required ChatController chatController,
-    required WorkspaceController workspaceController,
-    required void Function(Uri uri) onProtocolUri,
-  }) {
-    _onProtocolUri = onProtocolUri;
+  void attach(DesktopAppSurface surface) {
+    _surface = surface;
   }
 
-  void emit(Uri uri) => _onProtocolUri!(uri);
+  void emit(Uri uri) => _surface!.handleProtocolUri(uri);
 
   @override
   Future<void> dispose() async {}

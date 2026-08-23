@@ -1,51 +1,62 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flucord/src/application/chat_controller.dart';
-import 'package:flucord/src/data/mock_chat_repository.dart';
+import 'package:flucord/src/domain/channel_link.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/platform/desktop_tray_coordinator.dart';
 
 void main() {
-  test('projects unread state and routes every tray action', () async {
-    final gateway = _TrayGateway();
-    var openCount = 0;
-    var updateCount = 0;
-    var quitCount = 0;
-    final coordinator = DesktopTrayCoordinator(
-      showWindow: () async => openCount++,
-      checkForUpdates: () async => updateCount++,
-      quit: () async => quitCount++,
-      configuration: const DesktopTrayConfiguration(
-        includeUpdateAction: true,
-        updateActionEnabled: true,
-      ),
-      gateway: gateway,
-    );
-    final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    addTearDown(chat.dispose);
-    addTearDown(coordinator.dispose);
-    await chat.load();
+  test(
+    'projects the surface unread count and routes every tray action',
+    () async {
+      final gateway = _TrayGateway();
+      var openCount = 0;
+      var updateCount = 0;
+      var quitCount = 0;
+      final coordinator = DesktopTrayCoordinator(
+        showWindow: () async => openCount++,
+        checkForUpdates: () async => updateCount++,
+        quit: () async => quitCount++,
+        configuration: const DesktopTrayConfiguration(
+          includeUpdateAction: true,
+          updateActionEnabled: true,
+        ),
+        gateway: gateway,
+      );
+      final surface = _SurfaceStub()..unread = 3;
+      addTearDown(coordinator.dispose);
+      addTearDown(surface.dispose);
 
-    await coordinator.initialize();
-    coordinator.attach(chat);
-    await Future<void>.delayed(Duration.zero);
+      await coordinator.initialize();
+      coordinator.attach(surface);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(coordinator.isReady, isTrue);
-    expect(gateway.configuration?.includeUpdateAction, isTrue);
-    expect(gateway.configuration?.updateActionEnabled, isTrue);
-    expect(
-      gateway.unreadCounts.last,
-      chat.workspace!.channels.where((channel) => channel.unread).length,
-    );
+      expect(coordinator.isReady, isTrue);
+      expect(gateway.configuration?.includeUpdateAction, isTrue);
+      expect(gateway.configuration?.updateActionEnabled, isTrue);
+      expect(gateway.unreadCounts.last, 3);
 
-    await gateway.emit(DesktopTrayAction.open);
-    await gateway.emit(DesktopTrayAction.checkUpdates);
-    await gateway.emit(DesktopTrayAction.quit);
+      surface.unread = 5;
+      surface.notifyListeners();
+      await Future<void>.delayed(Duration.zero);
+      expect(gateway.unreadCounts.last, 5);
 
-    expect(openCount, 1);
-    expect(updateCount, 1);
-    expect(quitCount, 1);
-    expect(gateway.disposeCount, 1);
-    expect(coordinator.isReady, isFalse);
-  });
+      // No workspace: the badge keeps what it last showed.
+      surface.unread = null;
+      surface.notifyListeners();
+      await Future<void>.delayed(Duration.zero);
+      expect(gateway.unreadCounts.last, 5);
+
+      await gateway.emit(DesktopTrayAction.open);
+      await gateway.emit(DesktopTrayAction.checkUpdates);
+      await gateway.emit(DesktopTrayAction.quit);
+
+      expect(openCount, 1);
+      expect(updateCount, 1);
+      expect(quitCount, 1);
+      expect(gateway.disposeCount, 1);
+      expect(coordinator.isReady, isFalse);
+    },
+  );
 
   test('does not invoke a disabled update action', () async {
     final gateway = _TrayGateway();
@@ -63,6 +74,29 @@ void main() {
 
     expect(updateCount, 0);
   });
+}
+
+final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
+  int? unread;
+
+  @override
+  int? get unreadChannelCount => unread;
+
+  @override
+  String? get activeChannelId => null;
+
+  @override
+  Stream<DesktopMessageNotification> get messageNotifications =>
+      const Stream.empty();
+
+  @override
+  void openChannelLink(ChannelLink link) {}
+
+  @override
+  void handleProtocolUri(Uri uri) {}
+
+  @override
+  void setApplicationActive(bool value) {}
 }
 
 final class _TrayGateway implements DesktopTrayGateway {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flucord/src/application/channel_link.dart';
+import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/application/voice_channel_surface.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';

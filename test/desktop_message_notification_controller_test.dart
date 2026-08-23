@@ -1,152 +1,90 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flucord/src/application/channel_link.dart';
-import 'package:flucord/src/application/chat_controller.dart';
-import 'package:flucord/src/data/mock_chat_repository.dart';
-import 'package:flucord/src/domain/chat_models.dart';
-import 'package:flucord/src/domain/chat_repository.dart';
-import 'package:flucord/src/domain/guild_management_repository.dart';
-import 'package:flucord/src/domain/message_search_repository.dart';
-import 'package:flucord/src/domain/moderation_repository.dart';
-import 'package:flucord/src/domain/presence_repository.dart';
-import 'package:flucord/src/domain/user_settings.dart';
-import 'package:flucord/src/domain/read_state.dart';
-import 'package:flucord/src/domain/read_state_repository.dart';
-import 'package:flucord/src/domain/user_settings_repository.dart';
+import 'package:flucord/src/domain/channel_link.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/platform/desktop_message_notification_controller.dart';
+
+DesktopMessageNotification _notification({
+  required String identifier,
+  ChannelLink link = const ChannelLink(
+    spaceId: 'night',
+    channelId: 'night-ops',
+  ),
+}) => DesktopMessageNotification(
+  identifier: identifier,
+  title: 'Mira - #night-ops',
+  subtitle: 'Night City',
+  body: 'Native message delivery',
+  link: link,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('builds and activates a native message notification', () async {
+  test('shows a toast and activates its channel on click', () async {
     final gateway = _NotificationGateway();
     final controller = DesktopMessageNotificationController(
       isFocused: () async => false,
       gateway: gateway,
     );
-    final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    ChannelLink? activatedLink;
-    addTearDown(chat.dispose);
+    final surface = _SurfaceStub();
+    var windowShown = 0;
     addTearDown(controller.dispose);
-    await chat.load();
-    controller.attach(
-      chatController: chat,
-      onActivateLink: (link) async => activatedLink = link,
-    );
+    addTearDown(surface.dispose);
     await controller.initialize();
-    final workspace = chat.workspace!;
-    final channel = workspace.channels.firstWhere(
-      (item) => item.kind == ChannelKind.text && !item.isThread,
-    );
-    final author = workspace.members.firstWhere(
-      (item) => item.id != workspace.currentMemberId,
-    );
-    final message = ChatMessage(
-      id: 'native-notification',
-      channelId: channel.id,
-      authorId: author.id,
-      body: '  Native\nmessage   delivery  ',
-      sentAt: DateTime.utc(2026, 7, 24),
-    );
+    controller.attach(surface: surface, showWindow: () async => windowShown++);
 
-    await controller.notify(
-      MessageUpsertedEvent(message: message, member: author, isNew: true),
-    );
+    await controller.notify(_notification(identifier: 'flucord-toast-1'));
 
     expect(gateway.initializeCount, 1);
     expect(gateway.requests, hasLength(1));
     final request = gateway.requests.single;
-    expect(request.identifier, 'flucord-native-notification');
-    expect(request.title, '${author.displayName} - #${channel.name}');
-    expect(request.subtitle, workspace.spaceById(channel.spaceId).name);
+    expect(request.identifier, 'flucord-toast-1');
+    expect(request.title, 'Mira - #night-ops');
+    expect(request.subtitle, 'Night City');
     expect(request.body, 'Native message delivery');
 
     await request.onClick();
-    expect(activatedLink?.spaceId, channel.spaceId);
-    expect(activatedLink?.channelId, channel.id);
+    expect(windowShown, 1);
+    expect(
+      surface.openedLinks.single,
+      const ChannelLink(spaceId: 'night', channelId: 'night-ops'),
+    );
   });
 
-  test(
-    'suppresses the visible active channel and ignores old events',
-    () async {
-      final gateway = _NotificationGateway();
-      final controller = DesktopMessageNotificationController(
-        isFocused: () async => true,
-        gateway: gateway,
-      );
-      final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      addTearDown(chat.dispose);
-      addTearDown(controller.dispose);
-      await chat.load();
-      controller.attach(chatController: chat, onActivateLink: (_) async {});
-      await controller.initialize();
-      final workspace = chat.workspace!;
-      final author = workspace.members.firstWhere(
-        (item) => item.id != workspace.currentMemberId,
-      );
-      final message = ChatMessage(
-        id: 'suppressed-notification',
-        channelId: chat.activeChannelId!,
-        authorId: author.id,
-        body: 'Already visible',
-        sentAt: DateTime.utc(2026, 7, 24),
-      );
-
-      await controller.notify(
-        MessageUpsertedEvent(message: message, member: author, isNew: true),
-      );
-      await controller.notify(
-        MessageUpsertedEvent(message: message, member: author),
-      );
-
-      expect(gateway.requests, isEmpty);
-    },
-  );
-
-  test('stays silent while the account is in quiet mode', () async {
+  test('drops the toast for the focused active channel only', () async {
     final gateway = _NotificationGateway();
+    var focused = true;
     final controller = DesktopMessageNotificationController(
-      isFocused: () async => false,
+      isFocused: () async => focused,
       gateway: gateway,
     );
-    final repository = _QuietChatRepository();
-    final chat = ChatController(repository);
-    addTearDown(chat.dispose);
+    final surface = _SurfaceStub()..activeChannel = 'night-ops';
     addTearDown(controller.dispose);
-    await chat.load();
-    controller.attach(chatController: chat, onActivateLink: (_) async {});
+    addTearDown(surface.dispose);
     await controller.initialize();
-    final workspace = chat.workspace!;
-    final channel = workspace.channels.firstWhere(
-      (item) => item.kind == ChannelKind.text && !item.isThread,
-    );
-    final author = workspace.members.firstWhere(
-      (item) => item.id != workspace.currentMemberId,
-    );
-    final message = ChatMessage(
-      id: 'quiet-notification',
-      channelId: channel.id,
-      authorId: author.id,
-      body: 'Should not interrupt',
-      sentAt: DateTime.utc(2026, 7, 24),
-    );
+    controller.attach(surface: surface, showWindow: () async {});
 
-    expect(chat.suppressesMessageNotifications, isTrue);
-    await controller.notify(
-      MessageUpsertedEvent(message: message, member: author, isNew: true),
-    );
-
+    // The message's channel is on screen and the window is focused.
+    await controller.notify(_notification(identifier: 'visible'));
     expect(gateway.requests, isEmpty);
 
-    repository.settings.quiet = false;
-    await controller.notify(
-      MessageUpsertedEvent(message: message, member: author, isNew: true),
-    );
-
+    // Blurred, the same message interrupts again.
+    focused = false;
+    await controller.notify(_notification(identifier: 'blurred'));
     expect(gateway.requests, hasLength(1));
-  });
 
+    // Focused, a message for another channel still interrupts.
+    await controller.notify(
+      _notification(
+        identifier: 'elsewhere',
+        link: const ChannelLink(spaceId: 'night', channelId: 'general'),
+      ),
+    );
+    expect(gateway.requests, hasLength(2));
+  });
 
   test('stays silent while streamer mode is on', () async {
     final gateway = _NotificationGateway();
@@ -156,265 +94,68 @@ void main() {
       gateway: gateway,
       isSuppressed: () => streaming,
     );
-    final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    addTearDown(chat.dispose);
+    final surface = _SurfaceStub();
     addTearDown(controller.dispose);
-    await chat.load();
-    controller.attach(chatController: chat, onActivateLink: (_) async {});
+    addTearDown(surface.dispose);
     await controller.initialize();
-    final workspace = chat.workspace!;
-    final channel = workspace.channels.firstWhere(
-      (item) => item.kind == ChannelKind.text && !item.isThread,
-    );
-    final author = workspace.members.firstWhere(
-      (item) => item.id != workspace.currentMemberId,
-    );
-    final message = ChatMessage(
-      id: 'streamer-notification',
-      channelId: channel.id,
-      authorId: author.id,
-      body: 'Kept off the stream',
-      sentAt: DateTime.utc(2026, 7, 29),
-    );
+    controller.attach(surface: surface, showWindow: () async {});
 
-    await controller.notify(
-      MessageUpsertedEvent(message: message, member: author, isNew: true),
-    );
+    await controller.notify(_notification(identifier: 'streamer'));
     expect(gateway.requests, isEmpty);
 
     // Read per message: the mode can go on and off between two of them.
     streaming = false;
-    await controller.notify(
-      MessageUpsertedEvent(message: message, member: author, isNew: true),
-    );
+    await controller.notify(_notification(identifier: 'off-stream'));
     expect(gateway.requests, hasLength(1));
   });
 
-  test('honours mute, the notification level and suppress @everyone', () async {
+  test('shows what the surface stream delivers after attach', () async {
     final gateway = _NotificationGateway();
     final controller = DesktopMessageNotificationController(
       isFocused: () async => false,
       gateway: gateway,
     );
-    final repository = _QuietChatRepository();
-    repository.settings.quiet = false;
-    final chat = ChatController(repository);
-    addTearDown(chat.dispose);
+    final surface = _SurfaceStub();
     addTearDown(controller.dispose);
-    await chat.load();
-    controller.attach(chatController: chat, onActivateLink: (_) async {});
+    addTearDown(surface.dispose);
     await controller.initialize();
-    final workspace = chat.workspace!;
-    final channel = workspace.channels.firstWhere(
-      (item) => item.kind == ChannelKind.text && !item.isThread,
-    );
-    final author = workspace.members.firstWhere(
-      (item) => item.id != workspace.currentMemberId,
-    );
-    ChatMessage message({
-      required String id,
-      bool mentionsEveryone = false,
-      bool mentionsCurrentMember = false,
-    }) => ChatMessage(
-      id: id,
-      channelId: channel.id,
-      authorId: author.id,
-      body: 'Interruption',
-      sentAt: DateTime.utc(2026, 7, 24),
-      mentionsEveryone: mentionsEveryone,
-      mentionsCurrentMember: mentionsCurrentMember,
-    );
+    controller.attach(surface: surface, showWindow: () async {});
 
-    repository.readStates.publish(
-      ReadStateSnapshot(
-        settings: {
-          channel.spaceId: GuildNotificationSettings(
-            spaceId: channel.spaceId,
-            muted: true,
-          ),
-        },
-      ),
-    );
-    await controller.notify(
-      MessageUpsertedEvent(
-        message: message(id: 'muted-guild'),
-        member: author,
-        isNew: true,
-      ),
-    );
-    expect(gateway.requests, isEmpty);
+    surface.emit(_notification(identifier: 'flucord-streamed'));
+    await Future<void>.delayed(Duration.zero);
 
-    repository.readStates.publish(
-      ReadStateSnapshot(
-        settings: {
-          channel.spaceId: GuildNotificationSettings(
-            spaceId: channel.spaceId,
-            messageNotifications: MessageNotificationLevel.onlyMentions,
-            suppressEveryone: true,
-          ),
-        },
-      ),
-    );
-    await controller.notify(
-      MessageUpsertedEvent(
-        message: message(id: 'plain'),
-        member: author,
-        isNew: true,
-      ),
-    );
-    await controller.notify(
-      MessageUpsertedEvent(
-        message: message(id: 'everyone', mentionsEveryone: true),
-        member: author,
-        isNew: true,
-      ),
-    );
-    expect(gateway.requests, isEmpty);
-
-    await controller.notify(
-      MessageUpsertedEvent(
-        message: message(id: 'mention', mentionsCurrentMember: true),
-        member: author,
-        isNew: true,
-      ),
-    );
     expect(gateway.requests, hasLength(1));
+    expect(gateway.requests.single.identifier, 'flucord-streamed');
   });
 }
 
-/// A transport that behaves like the demo one but also carries settings, so
-/// the notification path can be exercised against quiet mode.
-final class _QuietChatRepository implements ChatRepository {
-  final MockChatRepository _delegate = MockChatRepository(
-    latency: Duration.zero,
-  );
-  final _QuietSettings settings = _QuietSettings();
-  final _StubReadStates readStates = _StubReadStates();
-
-  @override
-  UserSettingsRepository? get userSettings => settings;
-
-  @override
-  GuildManagementRepository? get guildManagement => null;
-
-  @override
-  ModerationRepository? get moderation => null;
-
-  @override
-  MessageSearchRepository? get messageSearch => null;
-
-  @override
-  PresenceService? get presence => null;
-
-  @override
-  ReadStateRepository? get readState => readStates;
-
-  @override
-  Stream<ChatRepositoryEvent> get events => _delegate.events;
-
-  @override
-  Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
-
-  @override
-  Future<ChannelHistoryPage> loadChannelHistory(
-    String channelId, {
-    String? beforeMessageId,
-  }) =>
-      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
-
-  @override
-  Future<void> saveChannelActivity(ConversationChannel channel) =>
-      _delegate.saveChannelActivity(channel);
-
-  @override
-  Future<void> close() => _delegate.close();
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// A read-state store that only ever answers questions: the notification path
-/// reads settings and never writes them.
-final class _StubReadStates implements ReadStateRepository {
-  final StreamController<ReadStateSnapshot> _updates =
+final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
+  final StreamController<DesktopMessageNotification> _notifications =
       StreamController.broadcast();
-  ReadStateSnapshot _current = ReadStateSnapshot.empty;
+  final List<ChannelLink> openedLinks = [];
+  String? activeChannel;
 
-  void publish(ReadStateSnapshot snapshot) {
-    _current = snapshot;
-    _updates.add(snapshot);
-  }
-
-  @override
-  ReadStateSnapshot get current => _current;
+  void emit(DesktopMessageNotification notification) =>
+      _notifications.add(notification);
 
   @override
-  Stream<ReadStateSnapshot> get updates => _updates.stream;
+  int? get unreadChannelCount => null;
 
   @override
-  Future<void> acknowledge(
-    ConversationChannel channel, {
-    required String messageId,
-    bool immediate = false,
-  }) async {}
+  String? get activeChannelId => activeChannel;
 
   @override
-  Future<void> markUnread(
-    ConversationChannel channel, {
-    required String messageId,
-    int mentionCount = 0,
-  }) async {}
+  Stream<DesktopMessageNotification> get messageNotifications =>
+      _notifications.stream;
 
   @override
-  Future<void> markSpaceRead(
-    String spaceId,
-    Iterable<ConversationChannel> channels,
-  ) async {}
+  void openChannelLink(ChannelLink link) => openedLinks.add(link);
 
   @override
-  Future<void> updateSpaceNotificationSettings(
-    String spaceId,
-    GuildNotificationSettingsPatch patch,
-  ) async {}
+  void handleProtocolUri(Uri uri) {}
 
   @override
-  Future<void> updateChannelNotificationOverride({
-    required String spaceId,
-    required String channelId,
-    required ChannelNotificationOverridePatch patch,
-  }) async {}
-
-  @override
-  Future<void> flush() async {}
-}
-
-final class _QuietSettings implements UserSettingsRepository {
-  bool quiet = true;
-
-  @override
-  UserSettings? get current =>
-      UserSettings(notifications: NotificationPreferences(quietMode: quiet));
-
-  @override
-  bool get isLoaded => true;
-
-  @override
-  Object? get lastWriteError => null;
-
-  @override
-  Stream<UserSettings> get updates => const Stream.empty();
-
-  @override
-  Future<UserSettings> load() async => current!;
-
-  @override
-  Future<void> apply(
-    UserSettingsPatch patch, {
-    UserSettingsSaveDelay delay = UserSettingsSaveDelay.immediate,
-  }) async {}
-
-  @override
-  Future<void> flush() async {}
+  void setApplicationActive(bool value) {}
 }
 
 final class _NotificationGateway implements DesktopNotificationGateway {

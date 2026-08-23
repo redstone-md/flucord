@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 
-import '../application/chat_controller.dart';
+import 'desktop_integration.dart';
 
 enum DesktopTrayAction { open, checkUpdates, quit }
 
@@ -173,7 +173,7 @@ final class DesktopTrayCoordinator {
   final DesktopTrayConfiguration _configuration;
   final DesktopTrayGateway _gateway;
 
-  ChatController? _chatController;
+  DesktopAppSurface? _surface;
   bool _ready = false;
   bool _disposed = false;
   int? _lastUnreadCount;
@@ -195,19 +195,19 @@ final class DesktopTrayCoordinator {
     }
   }
 
-  void attach(ChatController chatController) {
+  void attach(DesktopAppSurface surface) {
     if (_disposed) return;
-    _chatController?.removeListener(_syncUnreadCount);
-    _chatController = chatController;
-    chatController.addListener(_syncUnreadCount);
+    _surface?.removeListener(_syncUnreadCount);
+    _surface = surface;
+    surface.addListener(_syncUnreadCount);
     _syncUnreadCount();
   }
 
   void _syncUnreadCount() {
-    final workspace = _chatController?.workspace;
-    if (!isReady || workspace == null) return;
-    final unreadCount = workspace.channels.where((item) => item.unread).length;
-    if (_lastUnreadCount == unreadCount) return;
+    final surface = _surface;
+    if (!isReady || surface == null) return;
+    final unreadCount = surface.unreadChannelCount;
+    if (unreadCount == null || _lastUnreadCount == unreadCount) return;
     _lastUnreadCount = unreadCount;
     unawaited(_setUnreadCount(unreadCount));
   }
@@ -247,8 +247,8 @@ final class DesktopTrayCoordinator {
     if (_disposed) return;
     _disposed = true;
     _ready = false;
-    _chatController?.removeListener(_syncUnreadCount);
-    _chatController = null;
+    _surface?.removeListener(_syncUnreadCount);
+    _surface = null;
     await _disposeGatewaySafely();
   }
 

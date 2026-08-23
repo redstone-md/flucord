@@ -3,14 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
 
-import '../application/channel_link.dart';
-import '../application/chat_controller.dart';
-import '../application/system_message_text.dart';
-import '../domain/chat_models.dart';
-import '../domain/chat_repository.dart';
+import 'desktop_integration.dart';
 
 typedef DesktopFocusProbe = Future<bool> Function();
-typedef ChannelLinkActivator = Future<void> Function(ChannelLink link);
 
 final class DesktopNotificationRequest {
   const DesktopNotificationRequest({
@@ -93,6 +88,12 @@ final class LocalDesktopNotificationGateway
   }
 }
 
+/// Shows the app's message notifications as native toasts.
+///
+/// The app side has already decided a message should interrupt and formatted
+/// it; this side owns the window facts. A toast is dropped when streamer mode
+/// is on, and when it would land on the channel the user is looking at in a
+/// focused window.
 final class DesktopMessageNotificationController {
   factory DesktopMessageNotificationController({
     required DesktopFocusProbe isFocused,
@@ -119,9 +120,9 @@ final class DesktopMessageNotificationController {
   /// notifications back.
   final bool Function() _isSuppressed;
 
-  ChatController? _chatController;
-  ChannelLinkActivator? _activateLink;
-  StreamSubscription<MessageUpsertedEvent>? _subscription;
+  DesktopAppSurface? _surface;
+  Future<void> Function()? _showWindow;
+  StreamSubscription<DesktopMessageNotification>? _subscription;
   bool _ready = false;
   bool _disposed = false;
 
@@ -136,73 +137,44 @@ final class DesktopMessageNotificationController {
   }
 
   void attach({
-    required ChatController chatController,
-    required ChannelLinkActivator onActivateLink,
+    required DesktopAppSurface surface,
+    required Future<void> Function() showWindow,
   }) {
     if (_disposed) return;
-    _chatController = chatController;
-    _activateLink = onActivateLink;
+    _surface = surface;
+    _showWindow = showWindow;
     unawaited(_subscription?.cancel());
-    _subscription = chatController.incomingMessages.listen(
-      (event) => unawaited(notify(event)),
+    _subscription = surface.messageNotifications.listen(
+      (notification) => unawaited(notify(notification)),
     );
   }
 
-  Future<void> notify(MessageUpsertedEvent event) async {
-    final chatController = _chatController;
-    final workspace = chatController?.workspace;
-    final activateLink = _activateLink;
-    if (!_ready ||
-        _disposed ||
-        !event.isNew ||
-        chatController == null ||
-        workspace == null ||
-        activateLink == null ||
-        event.message.authorId == workspace.currentMemberId) {
+  Future<void> notify(DesktopMessageNotification notification) async {
+    final surface = _surface;
+    final showWindow = _showWindow;
+    if (!_ready || _disposed || surface == null || showWindow == null) {
       return;
     }
 
-    // Quiet mode is account state that another device can turn on mid-session,
-    // so it is read per message rather than captured when this controller was
-    // attached.
-    if (chatController.suppressesMessageNotifications) return;
-    // Read per message for the same reason: streamer mode can go on between
-    // one message and the next, and a toast is exactly what it exists to
-    // keep off a stream.
+    // Read per message: streamer mode can go on between one message and the
+    // next, and a toast is exactly what it exists to keep off a stream.
     if (_isSuppressed()) return;
 
-    if (chatController.activeChannelId == event.message.channelId &&
+    if (surface.activeChannelId == notification.link.channelId &&
         await _isFocusedSafely()) {
       return;
     }
 
-    final channel = workspace.channelOrNull(event.message.channelId);
-    if (channel == null) return;
-
-    // R04's notification settings are the account's own answer to "should this
-    // have interrupted me": a muted channel or guild, a channel set to mentions
-    // only, or `suppress_everyone` on a broadcast all stop here. They are read
-    // per message rather than captured on attach, because another device can
-    // change them mid-session exactly as it can change quiet mode.
-    if (!chatController.readState.allowsDesktopNotification(
-      channel,
-      mentionsCurrentMember:
-          event.mentionsCurrentMember || event.message.mentionsCurrentMember,
-      mentionsEveryone: event.message.mentionsEveryone,
-    )) {
-      return;
-    }
-
-    final space = workspace.spaceById(channel.spaceId);
-    final author =
-        event.member ?? workspace.memberOrNull(event.message.authorId);
-    final link = ChannelLink(spaceId: channel.spaceId, channelId: channel.id);
+    final link = notification.link;
     final request = DesktopNotificationRequest(
-      identifier: 'flucord-${event.message.id}',
-      title: '${author?.displayName ?? 'New message'} - #${channel.name}',
-      subtitle: space.name,
-      body: _notificationBody(event.message, author?.displayName),
-      onClick: () => activateLink(link),
+      identifier: notification.identifier,
+      title: notification.title,
+      subtitle: notification.subtitle,
+      body: notification.body,
+      onClick: () async {
+        await showWindow();
+        surface.openChannelLink(link);
+      },
     );
     try {
       await _gateway.show(request);
@@ -220,26 +192,6 @@ final class DesktopMessageNotificationController {
     }
   }
 
-  String _notificationBody(ChatMessage message, String? authorName) {
-    var body = message.isSystem
-        ? SystemMessageText.describe(message, authorName ?? 'Someone')
-        : message.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (body.isEmpty) {
-      final question = message.poll?.question.trim();
-      if (question != null && question.isNotEmpty) return question;
-      if (message.stickers.isNotEmpty) return message.stickers.first.name;
-      final count = message.attachments.length;
-      body = count == 1
-          ? 'Attachment: ${message.attachments.first.fileName}'
-          : count > 1
-          ? '$count attachments'
-          : message.embeds.isNotEmpty
-          ? 'Embedded content'
-          : 'New message';
-    }
-    return body.length <= 180 ? body : '${body.substring(0, 177)}...';
-  }
-
   void _debugFailure(String feature, Object error) {
     if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
   }
@@ -248,8 +200,8 @@ final class DesktopMessageNotificationController {
     if (_disposed) return;
     _disposed = true;
     _ready = false;
-    _chatController = null;
-    _activateLink = null;
+    _surface = null;
+    _showWindow = null;
     await _subscription?.cancel();
     await _gateway.dispose();
   }
