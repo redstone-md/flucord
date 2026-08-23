@@ -77,6 +77,39 @@ void main() {
       socket.addBinary([0, 1, 25, 4, 5, 6]);
       await _flushEvents();
       expect(dave.sessions, 1);
+      // The call's group is its voice channel.
+      expect(dave.groupIds.single, 'voice-1');
+    });
+
+    test('a stream keys its DAVE group one below the RTC server id', () async {
+      final socket = _FakeVoiceWebSocket();
+      final dave = _CountingDaveService();
+      final factory = _factory(socket, dave);
+      // The stream credentials an endpoint hands over: the RTC server id as
+      // the server, its channel as the channel.
+      const credentials = VoiceServerCredentials(
+        guildId: '1541148819067248681',
+        channelId: '1541148819067248682',
+        userId: 'me',
+        sessionId: 'session-1',
+        token: 'stream-token',
+        endpoint: 'stream.discord.gg',
+      );
+      final client = factory.streamSocket(
+        credentials: credentials,
+        streamKey: _streamKey,
+      );
+      addTearDown(client.close);
+
+      await client.connect();
+      socket.addBinary([0, 1, 25, 4, 5, 6]);
+      await _flushEvents();
+
+      // A session keyed by the RTC channel signs its key packages against a
+      // group the server does not recognise, and the roster never names the
+      // account. Discord's media stack keys a stream's group one below the
+      // RTC server id.
+      expect(dave.groupIds.single, '1541148819067248680');
     });
 
     test('a session without DAVE offers version 0 on both kinds', () async {
@@ -155,6 +188,7 @@ final class _FakeVoiceWebSocket implements DiscordVoiceWebSocket {
 /// Records group activity without doing any of it.
 final class _CountingDaveService implements VoiceDaveService {
   int sessions = 0;
+  final List<String> groupIds = [];
 
   @override
   int get maxProtocolVersion => 1;
@@ -174,6 +208,7 @@ final class _CountingDaveService implements VoiceDaveService {
     required String selfUserId,
   }) {
     sessions++;
+    groupIds.add(channelId);
     return _InertDaveSession();
   }
 }

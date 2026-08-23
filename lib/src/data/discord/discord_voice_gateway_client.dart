@@ -64,7 +64,10 @@ final class DiscordVoiceGatewayClient
            ? null
            : DiscordVoiceDaveController(
                daveService: daveService,
-               channelId: credentials.channelId,
+               channelId: DiscordVoiceGatewayProtocol.daveGroupId(
+                 credentials,
+                 carriesVideo: carriesVideo,
+               ),
                selfUserId: credentials.userId,
              ),
        _socketConnector =

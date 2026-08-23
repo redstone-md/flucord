@@ -498,6 +498,23 @@ final class DiscordVoiceGatewayProtocol {
     if (value is int) sequenceAck = value;
   }
 
+  /// The MLS group a DAVE session on this connection is keyed by.
+  ///
+  /// A call's group is its voice channel. A stream's is one below the RTC
+  /// server id it identifies with, which is what Discord's media stack keys
+  /// a stream's separate group by; a session keyed by anything else signs
+  /// its key packages against a group the server does not recognise, and the
+  /// roster never names the account. Falls back to the channel when the id
+  /// is not a snowflake, which is what a create-less endpoint leaves.
+  static String daveGroupId(
+    VoiceServerCredentials credentials, {
+    required bool carriesVideo,
+  }) {
+    if (!carriesVideo) return credentials.channelId;
+    final serverId = int.tryParse(credentials.serverId);
+    return serverId == null ? credentials.channelId : '${serverId - 1}';
+  }
+
   String? selectMode(List<String> supported) {
     for (final mode in preferredModes) {
       if (supported.contains(mode)) return mode;
