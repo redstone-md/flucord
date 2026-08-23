@@ -80,6 +80,139 @@ void BgraToNv12(const uint8_t* source,
   }
 }
 
+// Converts and scales in one pass. The capture is the display's own
+// resolution and the encoder wants its configured size, and nothing between
+// the desktop and this loop will do the resize: handing the encoder a
+// top-left crop of a larger desktop is what this replaced.
+//
+// Bilinear, with 8-bit fixed point weights. A screen is text and edges, and a
+// nearest-neighbour downscale of those shimmers; a proper area average would
+// be sharper still, but at these sizes bilinear is the quality-per-line that
+// keeps a 30 fps capture loop inside its frame budget.
+void BgraToNv12Scaled(const uint8_t* source,
+                      int source_stride,
+                      int source_width,
+                      int source_height,
+                      int width,
+                      int height,
+                      uint8_t* destination) {
+  uint8_t* luma = destination;
+  uint8_t* chroma = destination + static_cast<size_t>(width) * height;
+
+  // Source coordinates and weights, precomputed per destination line and
+  // column: the sampling grid is the same for every row of the plane.
+  std::vector<int> x0(width), x1(width), wx(width);
+  for (int x = 0; x < width; ++x) {
+    const double sx = (x + 0.5) * source_width / width - 0.5;
+    int ix0 = static_cast<int>(sx);
+    double frac = sx - ix0;
+    if (ix0 < 0) {
+      ix0 = 0;
+      frac = 0;
+    } else if (ix0 >= source_width - 1) {
+      ix0 = source_width - 1;
+      frac = 0;
+    }
+    x0[x] = ix0 * 4;
+    x1[x] = (ix0 + 1 < source_width ? ix0 + 1 : ix0) * 4;
+    wx[x] = static_cast<int>(frac * 256.0);
+  }
+  std::vector<int> y0(height), y1(height), wy(height);
+  for (int y = 0; y < height; ++y) {
+    const double sy = (y + 0.5) * source_height / height - 0.5;
+    int iy0 = static_cast<int>(sy);
+    double frac = sy - iy0;
+    if (iy0 < 0) {
+      iy0 = 0;
+      frac = 0;
+    } else if (iy0 >= source_height - 1) {
+      iy0 = source_height - 1;
+      frac = 0;
+    }
+    y0[y] = iy0 * source_stride;
+    y1[y] = (iy0 + 1 < source_height ? iy0 + 1 : iy0) * source_stride;
+    wy[y] = static_cast<int>(frac * 256.0);
+  }
+
+  for (int y = 0; y < height; ++y) {
+    const uint8_t* row0 = source + y0[y];
+    const uint8_t* row1 = source + y1[y];
+    const int weight_y = 256 - wy[y];
+    uint8_t* out = luma + static_cast<size_t>(y) * width;
+    for (int x = 0; x < width; ++x) {
+      const int weight_x = 256 - wx[x];
+      const int top = weight_x * weight_y;
+      const int bottom = wx[x] * weight_y;
+      const int left = weight_x * wy[y];
+      const int right = wx[x] * wy[y];
+      const int b = (row0[x0[x] + 0] * top + row0[x1[x] + 0] * bottom +
+                     row1[x0[x] + 0] * left + row1[x1[x] + 0] * right) >> 16;
+      const int g = (row0[x0[x] + 1] * top + row0[x1[x] + 1] * bottom +
+                     row1[x0[x] + 1] * left + row1[x1[x] + 1] * right) >> 16;
+      const int r = (row0[x0[x] + 2] * top + row0[x1[x] + 2] * bottom +
+                     row1[x0[x] + 2] * left + row1[x1[x] + 2] * right) >> 16;
+      out[x] = static_cast<uint8_t>(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
+    }
+  }
+
+  // Chroma at half resolution, sampled at the centre of each destination
+  // 2x2 block rather than its top-left corner, so the colour of a one-pixel
+  // source line does not fall between the samples.
+  const int chroma_width = width / 2;
+  const int chroma_height = height / 2;
+  std::vector<int> cx0(chroma_width), cx1(chroma_width), cwx(chroma_width);
+  for (int x = 0; x < chroma_width; ++x) {
+    const double sx = (x + 0.5) * source_width / chroma_width - 0.5;
+    int ix0 = static_cast<int>(sx);
+    double frac = sx - ix0;
+    if (ix0 < 0) {
+      ix0 = 0;
+      frac = 0;
+    } else if (ix0 >= source_width - 1) {
+      ix0 = source_width - 1;
+      frac = 0;
+    }
+    cx0[x] = ix0 * 4;
+    cx1[x] = (ix0 + 1 < source_width ? ix0 + 1 : ix0) * 4;
+    cwx[x] = static_cast<int>(frac * 256.0);
+  }
+  for (int y = 0; y < chroma_height; ++y) {
+    const double sy = (y + 0.5) * source_height / chroma_height - 0.5;
+    int iy0 = static_cast<int>(sy);
+    double frac = sy - iy0;
+    if (iy0 < 0) {
+      iy0 = 0;
+      frac = 0;
+    } else if (iy0 >= source_height - 1) {
+      iy0 = source_height - 1;
+      frac = 0;
+    }
+    const uint8_t* row0 = source + iy0 * source_stride;
+    const uint8_t* row1 =
+        source + (iy0 + 1 < source_height ? iy0 + 1 : iy0) * source_stride;
+    const int wy_ = static_cast<int>(frac * 256.0);
+    const int weight_y = 256 - wy_;
+    uint8_t* out = chroma + static_cast<size_t>(y) * width;
+    for (int x = 0; x < chroma_width; ++x) {
+      const int weight_x = 256 - cwx[x];
+      const int top = weight_x * weight_y;
+      const int bottom = cwx[x] * weight_y;
+      const int left = weight_x * wy_;
+      const int right = cwx[x] * wy_;
+      const int b = (row0[cx0[x] + 0] * top + row0[cx1[x] + 0] * bottom +
+                     row1[cx0[x] + 0] * left + row1[cx1[x] + 0] * right) >> 16;
+      const int g = (row0[cx0[x] + 1] * top + row0[cx1[x] + 1] * bottom +
+                     row1[cx0[x] + 1] * left + row1[cx1[x] + 1] * right) >> 16;
+      const int r = (row0[cx0[x] + 2] * top + row0[cx1[x] + 2] * bottom +
+                     row1[cx0[x] + 2] * left + row1[cx1[x] + 2] * right) >> 16;
+      out[x * 2] = static_cast<uint8_t>(
+          ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128);
+      out[x * 2 + 1] = static_cast<uint8_t>(
+          ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128);
+    }
+  }
+}
+
 bool IsKeyframe(IMFSample* sample) {
   UINT32 value = 0;
   return SUCCEEDED(sample->GetUINT32(MFSampleExtension_CleanPoint, &value)) &&
@@ -133,6 +266,18 @@ HRESULT ConfigureEncoder(FlucordVideoEncoder* state) {
     low_latency.boolVal = VARIANT_TRUE;
     codec->SetValue(&CODECAPI_AVLowLatencyMode, &low_latency);
     VariantClear(&low_latency);
+
+    // A keyframe every two seconds. Nothing retransmits a lost packet here,
+    // so a viewer's picture freezes until the next keyframe, and the
+    // encoder's own spacing is measured in scenes and seconds, not in
+    // anything a live viewer would call recovery.
+    VARIANT gop;
+    VariantInit(&gop);
+    gop.vt = VT_UI4;
+    gop.ulVal =
+        static_cast<UINT32>(state->config.frames_per_second) * 2;
+    codec->SetValue(&CODECAPI_AVEncMPVGOPSize, &gop);
+    VariantClear(&gop);
   }
 
   // Output first: the H.264 MFT refuses an input type until it knows what it
@@ -383,12 +528,20 @@ void EncodeNv12(FlucordVideoEncoder* state,
 void EncodeFrame(FlucordVideoEncoder* state,
                  const uint8_t* bgra,
                  int stride,
+                 int source_width,
+                 int source_height,
                  int64_t timestamp_us) {
   const size_t nv12_size =
       static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
   if (state->nv12.size() != nv12_size) state->nv12.resize(nv12_size);
-  BgraToNv12(bgra, stride, state->config.width, state->config.height,
-             state->nv12.data());
+  if (source_width == state->config.width &&
+      source_height == state->config.height) {
+    BgraToNv12(bgra, stride, source_width, source_height, state->nv12.data());
+  } else {
+    BgraToNv12Scaled(bgra, stride, source_width, source_height,
+                     state->config.width, state->config.height,
+                     state->nv12.data());
+  }
   EncodeNv12(state, state->nv12.data(), nv12_size, timestamp_us);
 }
 
@@ -505,6 +658,22 @@ void CaptureLoop(FlucordVideoEncoder* state) {
   auto started = GetTickCount64();
   std::vector<uint8_t> last_frame;
   int last_pitch = 0;
+  int last_width = 0;
+  int last_height = 0;
+
+  // Encoding is capped at the configured frame rate. A desktop can change far
+  // faster than a share carries — 60 Hz, 144 Hz — and spending the encoder
+  // and the bitrate on frames the viewers will never see only starves the
+  // ones they would.
+  ULONGLONG last_encode_ms = 0;
+  const auto encode_due = [&](ULONGLONG now) {
+    if (last_encode_ms != 0 &&
+        now - last_encode_ms < static_cast<ULONGLONG>(frame_interval_ms)) {
+      return false;
+    }
+    last_encode_ms = now;
+    return true;
+  };
 
   while (state->running.load()) {
     if (state->paused.load()) {
@@ -521,8 +690,9 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       // stream regardless: a viewer who joins a still screen and is sent
       // nothing sees black until somebody wiggles a window. The last picture
       // goes out again instead.
-      if (!last_frame.empty()) {
-        EncodeFrame(state, last_frame.data(), last_pitch,
+      if (!last_frame.empty() && encode_due(GetTickCount64())) {
+        EncodeFrame(state, last_frame.data(), last_pitch, last_width,
+                    last_height,
                     static_cast<int64_t>(GetTickCount64() - started) * 1000);
       }
       continue;
@@ -545,16 +715,21 @@ void CaptureLoop(FlucordVideoEncoder* state) {
         if (SUCCEEDED(state->context->Map(staging.Get(), 0, D3D11_MAP_READ, 0,
                                           &mapped))) {
           const auto* pixels = static_cast<const uint8_t*>(mapped.pData);
-          EncodeFrame(state, pixels, static_cast<int>(mapped.RowPitch),
-                      static_cast<int64_t>(GetTickCount64() - started) * 1000);
           // Kept for the still frames that follow. A copy rather than the
           // mapped pointer: the surface is unmapped and released before the
-          // next tick asks for it.
+          // next tick asks for it. The display's own size, not the encoder's:
+          // the conversion resizes what it is handed.
           last_pitch = static_cast<int>(mapped.RowPitch);
-          // The surface's own height, not the encoder's: the capture is the
-          // display's resolution and the encoder scales it down afterwards.
-          const size_t bytes = static_cast<size_t>(last_pitch) * desc.Height;
+          last_width = static_cast<int>(desc.Width);
+          last_height = static_cast<int>(desc.Height);
+          const size_t bytes =
+              static_cast<size_t>(last_pitch) * last_height;
           last_frame.assign(pixels, pixels + bytes);
+          if (encode_due(GetTickCount64())) {
+            EncodeFrame(state, pixels, last_pitch, last_width, last_height,
+                        static_cast<int64_t>(GetTickCount64() - started) *
+                            1000);
+          }
           state->context->Unmap(staging.Get(), 0);
         }
       }
