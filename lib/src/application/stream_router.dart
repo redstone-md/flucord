@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_stream_rtc_session.dart';
+import '../data/discord/discord_voice_gateway_protocol.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/voice_connection.dart';
 import 'go_live_controller.dart';
@@ -73,8 +74,12 @@ final class StreamRouter {
         enabled: true,
         settings: _capture.settings ?? _capture.shareSettings,
       );
+      // One above the SSRC the connection was given: that is the one the
+      // announce declared the pictures would arrive on, and a frame sent on
+      // any other is a frame Discord drops — a stream that opens, says it is
+      // live, and shows a viewer nothing at all.
       _goLive.bindTransport(
-        ssrc: event.session.ssrc,
+        ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(event.session.ssrc),
         sink: session.sendVideoFrame,
       );
       return;

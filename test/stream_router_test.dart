@@ -169,8 +169,11 @@ void main() {
       // the packetiser does with a keyframe of this size.
       expect(wiring.log, ['announce', 'send', 'send']);
       expect(client.sentFrames, isNotEmpty);
+      // One above the connection's own SSRC: the announce declared the
+      // pictures as audio + 1, and a frame on any other SSRC is dropped —
+      // a stream that opens, says it is live, and shows a viewer nothing.
       expect(
-        client.sentFrames.every((frame) => frame.header.ssrc == 4242),
+        client.sentFrames.every((frame) => frame.header.ssrc == 4243),
         isTrue,
       );
       // The viewer is the other side of the fork, and this was not it.
