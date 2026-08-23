@@ -424,6 +424,11 @@ final class DiscordVoiceGatewayClient
   }) {
     final ssrc = _protocol.audioSsrc;
     if (ssrc == null) return false;
+    // Declaring the camera or share's SSRC and teaching the group encryptor
+    // which codec it carries are the same fact, stated once.
+    _daveController?.assignVideoSsrc(
+      DiscordVoiceGatewayProtocol.videoSsrcFor(ssrc),
+    );
     _send(
       _protocol.video(audioSsrc: ssrc, enabled: enabled, settings: settings),
     );

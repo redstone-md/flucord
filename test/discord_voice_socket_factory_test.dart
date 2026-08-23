@@ -71,11 +71,12 @@ void main() {
         {'type': 'screen', 'rid': '100', 'quality': 100},
       ]);
 
-      // No group of its own: the same frame the call's socket would hand to
-      // the service never reaches it.
+      // A group of its own: a stream is a separate media session with a
+      // separate MLS group, so the same frame the call's socket would hand
+      // to the service reaches it here too.
       socket.addBinary([0, 1, 25, 4, 5, 6]);
       await _flushEvents();
-      expect(dave.sessions, 0);
+      expect(dave.sessions, 1);
     });
 
     test('a session without DAVE offers version 0 on both kinds', () async {

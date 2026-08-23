@@ -105,7 +105,11 @@ final class DiscordStreamRtcSession {
   void _onEvent(VoiceSignalingEvent event) {
     if (event is VoiceTransportReadyEvent) {
       _ssrc = event.session.ssrc;
-      _diagnose('ready', 'ssrc ${event.session.ssrc}');
+      _diagnose(
+        'ready',
+        'ssrc ${event.session.ssrc} '
+        'dave ${event.session.daveProtocolVersion}',
+      );
     }
     if (event is VoiceSignalingStatusEvent) {
       _diagnose(event.status.name, event.error);

@@ -10,11 +10,11 @@ import 'discord_voice_websocket.dart';
 /// underneath. What differs is the configuration, and those differences live
 /// here once rather than hand-assembled at each caller:
 ///
-/// - a call socket joins the room's MLS group when the account has DAVE, so
-///   it carries the service and offers its version;
-/// - a stream socket has no group of its own, so it carries no service and
-///   rides the transport cipher. It still offers the call's version: a
-///   stream of a call running secure frames that offers 0 is refused;
+/// - both kinds join an MLS group when the account has DAVE, each its own:
+///   a call's group is the voice channel's, and a stream is a separate media
+///   session with a separate group of its own (discord/dave-protocol), which
+///   the credentials' channel already names: the RTC channel the create
+///   assigned the stream to;
 /// - a stream socket says at identify that it carries a screen. One that
 ///   does not is closed with `identifyRefused` as soon as it finishes
 ///   connecting;
@@ -63,12 +63,13 @@ final class DiscordVoiceGatewaySocketFactory
     required VoiceServerCredentials credentials,
     required GoLiveStreamKey streamKey,
   }) => DiscordVoiceGatewayClient(
-    credentials: credentials,
-    maxDaveProtocolVersion: _daveVersion,
-    socketConnector: _socketConnector,
-    streamKey: streamKey.value,
-    carriesVideo: true,
-  );
+        credentials: credentials,
+        maxDaveProtocolVersion: _daveVersion,
+        daveService: _daveService,
+        socketConnector: _socketConnector,
+        streamKey: streamKey.value,
+        carriesVideo: true,
+      );
 
   /// What both kinds offer, from one source. A stream of a call has to say
   /// the same thing the call did, so the two cannot drift apart here.
