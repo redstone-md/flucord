@@ -475,6 +475,13 @@ final class DiscordVoiceGatewayClient
   /// or the mode is wrong rather than the packet, and the room is told after
   /// enough attempts to be sure.
   Iterable<DiscordRtpFrame> _decryptOrDrop(Uint8List packet) {
+    // The media port carries traffic that is not media and never could
+    // authenticate: RTCP feedback for the pictures this client is sending
+    // (its packet types, 192-223, are ones RTP never uses) and the
+    // eight-byte keepalives. Dropping them before the attempt keeps them out
+    // of the stale-key count, where a send-only stream socket collected
+    // fifty in a row and asked for a new session the one it had was fine.
+    if (_isNotEncryptedMedia(packet)) return const [];
     try {
       final frame = _decryptAudioPacket(packet);
       _hasDecryptedAnyPacket = true;
@@ -539,6 +546,19 @@ final class DiscordVoiceGatewayClient
   /// How many failures in a row are needed before the key is blamed rather
   /// than the packet. A handful of strays is ordinary; fifty is not.
   static const _authFailureLimit = 50;
+
+  /// What the media port carries that is not encrypted media: smaller than a
+  /// header, a tag and a nonce could ever be, or typed as RTCP.
+  static bool _isNotEncryptedMedia(Uint8List packet) {
+    if (packet.length <
+        12 +
+            DiscordVoiceTransportCipher.authenticationTagLength +
+            DiscordVoiceTransportCipher.nonceSuffixLength) {
+      return true;
+    }
+    final packetType = packet[1];
+    return packetType >= 192 && packetType <= 223;
+  }
 
   DiscordRtpFrame _decryptAudioPacket(Uint8List packet) {
     final cipher = _transportCipher;

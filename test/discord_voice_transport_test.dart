@@ -130,6 +130,81 @@ void main() {
       );
     });
 
+    test(
+      'feedback and keepalives never count against the key',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final udp = _FakeVoiceUdpTransport();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 1,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: udp,
+        );
+        final statuses = <VoiceSignalingStatusEvent>[];
+        final subscription = client.events.listen((event) {
+          if (event is VoiceSignalingStatusEvent) statuses.add(event);
+        });
+        addTearDown(subscription.cancel);
+        addTearDown(client.close);
+
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'd': {
+            'ssrc': 42,
+            'ip': '127.0.0.1',
+            'port': 5000,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        await _flushEvents();
+        socket.addJson({
+          'op': 4,
+          'd': {
+            'mode': 'aead_aes256_gcm_rtpsize',
+            'secret_key': List<int>.generate(32, (index) => index),
+            'dave_protocol_version': 0,
+          },
+        });
+        await _flushEvents();
+        expect(
+          statuses.last.status,
+          VoiceConnectionStatus.ready,
+        );
+
+        // A send-only socket receives no media, only what a sender's pictures
+        // generate: receiver reports (packet types 192-223) and the
+        // eight-byte keepalives. None of it can authenticate, and none of it
+        // ever said the key was wrong.
+        final receiverReport = Uint8List(64);
+        receiverReport[0] = 0x80;
+        receiverReport[1] = 201;
+        final keepalive = Uint8List(8);
+        for (var i = 0; i < 60; i++) {
+          udp.addPacket(i.isEven ? receiverReport : keepalive);
+        }
+        await _flushEvents();
+
+        expect(
+          statuses.where(
+            (status) => status.status == VoiceConnectionStatus.reconnecting,
+          ),
+          isEmpty,
+        );
+
+        // And genuine media still comes through after the storm.
+        final receivedFrame = client.audioPackets.first;
+        final frame = DiscordRtpFrame(
+          header: DiscordRtpHeader(sequence: 3, timestamp: 4, ssrc: 42),
+          payload: [9, 9, 9],
+        );
+        client.sendAudioFrame(frame);
+        udp.addPacket(udp.sentPackets.last);
+        expect((await receivedFrame).payload, frame.payload);
+      },
+    );
+
     test('reaches transport ready and routes DAVE binary frames', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);
