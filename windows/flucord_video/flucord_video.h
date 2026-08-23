@@ -123,8 +123,24 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
 
 // Which call produced that HRESULT: 1 finding the output, 2 creating the
 // device on its adapter, 3 duplicating onto that device, 4 duplicating onto
-// the device the encoder already had. Zero when nothing has failed.
+// the device the encoder already had, 5 handing a frame to the encoder, 6
+// reading an event from a hardware encoder. Zero when nothing has failed.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
+
+// Writes the running encoder's own description into [buffer] ("hardware:
+// NVIDIA Video Encoder gop=ok cbr=ok" or "software: Microsoft H.264 gop=ok")
+// and returns how many bytes were written. The pace log carries it, because
+// "the stream is slow" and "this machine has no NVENC" look identical from
+// the outside.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_encoder_name(
+    FlucordVideoEncoder* encoder, char* buffer, int32_t capacity);
+
+// Where the frames' time went: four int64 values — nanoseconds spent waiting
+// for the desktop to change, converting the captured frame, encoding it, and
+// how many frames those cover. Totals since the capture opened; the caller
+// takes deltas and divides.
+FLUCORD_VIDEO_EXPORT void flucord_video_stage_timings(
+    FlucordVideoEncoder* encoder, int64_t* out_values);
 
 // Writes what DXGI reports about this machine's adapters and displays into
 // [buffer] as text, answering how many bytes were written. Diagnostics only.
