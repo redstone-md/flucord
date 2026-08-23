@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/app_bootstrap.dart';
+import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
@@ -14,9 +16,12 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      FlucordApp.demo(
-        discordOAuthAccountGateway: _OAuthGateway(),
-        enableBotTransport: true,
+      FlucordApp(
+        bootstrap: AppBootstrap(
+          initialSessionMode: SessionMode.demo,
+          discordOAuthAccountGateway: _OAuthGateway(),
+          enableBotTransport: true,
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
@@ -43,9 +48,12 @@ void main() {
     final desktop = _DesktopIntegration();
 
     await tester.pumpWidget(
-      FlucordApp.demo(
-        discordOAuthAccountGateway: gateway,
-        desktopIntegration: desktop,
+      FlucordApp(
+        bootstrap: AppBootstrap(
+          initialSessionMode: SessionMode.demo,
+          discordOAuthAccountGateway: gateway,
+          desktopIntegration: desktop,
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));

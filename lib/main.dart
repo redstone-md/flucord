@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'src/app.dart';
+import 'src/app_bootstrap.dart';
+import 'src/application/connection_controller.dart';
 import 'src/data/native_opus_codec.dart';
 import 'src/data/native_voice_message_recorder.dart';
 import 'src/data/soloud_voice_playback_service.dart';
@@ -26,20 +28,21 @@ Future<void> main(List<String> arguments) async {
       : null;
   await desktopIntegration?.initialize();
   final opusCodecFactory = await NativeOpusCodecFactory.initialize();
-  final app = demoMode
-      ? FlucordApp.demo(
+  final bootstrap = demoMode
+      ? AppBootstrap(
+          initialSessionMode: SessionMode.demo,
           desktopIntegration: desktopIntegration,
           voiceMediaService: WebRtcVoiceMediaService(),
           voiceOpusCodecFactory: opusCodecFactory,
           voiceMessageRecorder: NativeVoiceMessageRecorder(opusCodecFactory),
           voicePlaybackService: SoLoudVoicePlaybackService(),
         )
-      : FlucordApp(
+      : AppBootstrap(
           desktopIntegration: desktopIntegration,
           voiceMediaService: WebRtcVoiceMediaService(),
           voiceOpusCodecFactory: opusCodecFactory,
           voiceMessageRecorder: NativeVoiceMessageRecorder(opusCodecFactory),
           voicePlaybackService: SoLoudVoicePlaybackService(),
         );
-  runApp(app);
+  runApp(FlucordApp(bootstrap: bootstrap));
 }

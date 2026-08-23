@@ -19,6 +19,7 @@ import 'package:flucord/src/domain/user_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -137,9 +138,10 @@ Future<void> _openWorkspace(
 ) async {
   await tester.pumpWidget(
     FlucordApp(
-      initialRepository: repository,
-      initialSessionMode: SessionMode.demo,
-      restoreSavedSession: false,
+      bootstrap: AppBootstrap(
+        initialRepository: repository,
+        initialSessionMode: SessionMode.demo,
+      ),
     ),
   );
   await tester.pump(const Duration(milliseconds: 300));

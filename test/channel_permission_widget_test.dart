@@ -10,6 +10,7 @@ import 'package:flucord/src/domain/thread_membership.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/channel_capabilities.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -163,9 +164,10 @@ Future<void> _pumpShell(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     FlucordApp(
-      initialRepository: _PermissionRepository(),
-      initialSessionMode: SessionMode.demo,
-      restoreSavedSession: false,
+      bootstrap: AppBootstrap(
+        initialRepository: _PermissionRepository(),
+        initialSessionMode: SessionMode.demo,
+      ),
     ),
   );
   await tester.pumpAndSettle();

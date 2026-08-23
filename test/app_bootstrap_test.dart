@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/app_bootstrap.dart';
+import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
@@ -18,9 +20,11 @@ void main() {
 
     await tester.pumpWidget(
       FlucordApp(
-        credentialVault: _EmptyCredentialVault(),
-        chatRepositoryFactory: _UnusedRepositoryFactory(),
-        discordOAuthAccountGateway: _OAuthGateway(),
+        bootstrap: AppBootstrap(
+          credentialVault: _EmptyCredentialVault(),
+          chatRepositoryFactory: _UnusedRepositoryFactory(),
+          discordOAuthAccountGateway: _OAuthGateway(),
+        ),
       ),
     );
     await tester.pump();
@@ -41,7 +45,12 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      FlucordApp.demo(discordOAuthAccountGateway: _OAuthGateway()),
+      FlucordApp(
+        bootstrap: AppBootstrap(
+          initialSessionMode: SessionMode.demo,
+          discordOAuthAccountGateway: _OAuthGateway(),
+        ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
@@ -59,10 +68,12 @@ void main() {
 
       await tester.pumpWidget(
         FlucordApp(
-          credentialVault: _EmptyCredentialVault(),
-          chatRepositoryFactory: _UnusedRepositoryFactory(),
-          discordOAuthAccountGateway: _OAuthGateway(
-            restoredAccount: _oauthAccount(),
+          bootstrap: AppBootstrap(
+            credentialVault: _EmptyCredentialVault(),
+            chatRepositoryFactory: _UnusedRepositoryFactory(),
+            discordOAuthAccountGateway: _OAuthGateway(
+              restoredAccount: _oauthAccount(),
+            ),
           ),
         ),
       );
@@ -104,12 +115,14 @@ void main() {
 
     await tester.pumpWidget(
       FlucordApp(
-        credentialVault: _EmptyCredentialVault(),
-        chatRepositoryFactory: _UnusedRepositoryFactory(),
-        discordOAuthAccountGateway: _OAuthGateway(
-          restoredAccount: _oauthAccount(),
+        bootstrap: AppBootstrap(
+          credentialVault: _EmptyCredentialVault(),
+          chatRepositoryFactory: _UnusedRepositoryFactory(),
+          discordOAuthAccountGateway: _OAuthGateway(
+            restoredAccount: _oauthAccount(),
+          ),
+          discordSocialSdkGateway: _ReadySocialGateway(),
         ),
-        discordSocialSdkGateway: _ReadySocialGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -137,10 +150,12 @@ void main() {
 
     await tester.pumpWidget(
       FlucordApp(
-        credentialVault: _EmptyCredentialVault(),
-        chatRepositoryFactory: _UnusedRepositoryFactory(),
-        discordOAuthAccountGateway: oauthGateway,
-        discordSocialSdkGateway: socialGateway,
+        bootstrap: AppBootstrap(
+          credentialVault: _EmptyCredentialVault(),
+          chatRepositoryFactory: _UnusedRepositoryFactory(),
+          discordOAuthAccountGateway: oauthGateway,
+          discordSocialSdkGateway: socialGateway,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -169,12 +184,14 @@ void main() {
 
     await tester.pumpWidget(
       FlucordApp(
-        credentialVault: _EmptyCredentialVault(),
-        chatRepositoryFactory: _UnusedRepositoryFactory(),
-        discordOAuthAccountGateway: _OAuthGateway(
-          restoredAccount: _oauthAccount(),
+        bootstrap: AppBootstrap(
+          credentialVault: _EmptyCredentialVault(),
+          chatRepositoryFactory: _UnusedRepositoryFactory(),
+          discordOAuthAccountGateway: _OAuthGateway(
+            restoredAccount: _oauthAccount(),
+          ),
+          discordSocialSdkGateway: socialGateway,
         ),
-        discordSocialSdkGateway: socialGateway,
       ),
     );
     await tester.pumpAndSettle();
@@ -193,8 +210,10 @@ void main() {
 
     await tester.pumpWidget(
       FlucordApp(
-        credentialVault: _EmptyCredentialVault(),
-        chatRepositoryFactory: _UnusedRepositoryFactory(),
+        bootstrap: AppBootstrap(
+          credentialVault: _EmptyCredentialVault(),
+          chatRepositoryFactory: _UnusedRepositoryFactory(),
+        ),
       ),
     );
     await tester.pump();
