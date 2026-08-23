@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../app_log.dart';
 import '../../domain/voice_dave.dart';
 
 sealed class DiscordVoiceDaveCommand {
@@ -257,6 +258,16 @@ final class DiscordVoiceDaveController {
     _ensureEncryptor().assignSsrcToCodec(ssrc, DaveMediaCodec.opus);
   }
 
+  /// Registers the SSRC pictures will go out on, which is one above the
+  /// audio one wherever opcode 12 declared it.
+  ///
+  /// The group encryptor keeps a codec's clear ranges intact (H264's
+  /// non-VCL NAL bytes ride unencrypted so depacketizers still work), and it
+  /// cannot know which codec an SSRC carries until it is told.
+  void assignVideoSsrc(int ssrc) {
+    _ensureEncryptor().assignSsrcToCodec(ssrc, DaveMediaCodec.h264);
+  }
+
   List<int> encryptAudioFrame(List<int> opusFrame) {
     final ssrc = _audioSsrc;
     if (ssrc == null) throw StateError('Discord voice SSRC is unavailable');
@@ -321,7 +332,16 @@ final class DiscordVoiceDaveController {
   void _applyRoster(DaveCommitResult result) {
     final roster = result.rosterUserIds.toSet();
     if (!roster.contains(selfUserId)) {
-      throw StateError('DAVE roster does not contain the current user');
+      // A transition that removes this account is ordinary protocol, not a
+      // failure: the usual reason is a re-add with a different key package
+      // already in flight, and the previous epoch's ratchets stay valid until
+      // `dave_protocol_execute_transition` says otherwise. Killing the
+      // connection here took a working call down the moment a stream started.
+      AppLog.warning(
+        'voice.dave',
+        'roster transition without this account, keeping the last epoch',
+      );
+      return;
     }
     final session = _requiredSession();
     final encryptor = _ensureEncryptor();

@@ -119,6 +119,40 @@ void main() {
     );
   });
 
+  test('a roster transition without this account keeps the last epoch', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+    final session = service.sessions.single;
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['100', '200'],
+    );
+    controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
+    expect(service.encryptors.single.isPassthrough, isFalse);
+
+    // Removal is ordinary protocol, not a failure: a re-add with a different
+    // key package is usually already in flight, and the previous epoch's
+    // ratchets stay valid until execute_transition says otherwise.
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['200'],
+    );
+    final commands = controller.acceptBinary(opcode: 29, payload: [0, 2, 8]);
+
+    expect(commands.single, isA<DiscordVoiceDaveJsonCommand>());
+    expect(service.encryptors.single.isPassthrough, isFalse);
+
+    // And the re-add re-keys as usual once the roster names this account
+    // again.
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['100'],
+    );
+    controller.acceptBinary(opcode: 29, payload: [0, 3, 9]);
+    expect(service.encryptors.single.keyUserId, '100');
+  });
+
   test('recovers from an invalid welcome with a fresh session', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);
