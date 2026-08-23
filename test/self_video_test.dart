@@ -10,6 +10,7 @@ import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/data/video/native_camera_names.dart';
 import 'package:flucord/src/data/video/native_video_encoder_service.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
@@ -31,7 +32,7 @@ void main() {
       final frame = protocol.video(
         audioSsrc: 40,
         enabled: true,
-        settings: VideoCaptureHub.cameraSettings,
+        settings: _cameraProfile,
       );
       final body = frame['d']! as Map<String, Object?>;
       final stream = (body['streams']! as List).single as Map<String, Object?>;
@@ -65,7 +66,7 @@ void main() {
           protocol.video(
                 audioSsrc: 7,
                 enabled: false,
-                settings: VideoCaptureHub.cameraSettings,
+                settings: _cameraProfile,
               )['d']!
               as Map<String, Object?>;
       final stream = (body['streams']! as List).single as Map<String, Object?>;
@@ -106,8 +107,6 @@ void main() {
     });
   });
 
-
-
   group('a build without the native module', () {
     // The DLL is not on a test host, so this is the shape every non-Windows
     // build and every developer machine without it actually runs in — and the
@@ -126,7 +125,7 @@ void main() {
       addTearDown(service.close);
 
       await expectLater(
-        service.start(VideoCaptureHub.cameraSettings),
+        service.start(_cameraProfile),
         throwsA(
           isA<VideoEncoderException>().having(
             (error) => error.failure,
@@ -461,6 +460,13 @@ const _credentials = VoiceServerCredentials(
   endpoint: 'voice.example',
 );
 
+/// The camera profile as announce payload: these tests exercise the frame and
+/// the announce path, so any settings answer, and the bitrate comes from the
+/// quality home rather than being named again here.
+const _cameraProfile = VideoEncoderSettings.camera(
+  bitrate: StreamQualitySettings.defaultCameraBitrate,
+);
+
 SelfVideoController _controllerFor(
   _FakeEncoder encoder, {
   _FakeVoiceVideoTransport? transport,
@@ -579,7 +585,8 @@ final class _FakeVoiceVideoTransport implements VoiceVideoTransport {
   }
 }
 
-final class _FakeSignaling implements VoiceSignalingService, VoiceAudioTransport {
+final class _FakeSignaling
+    implements VoiceSignalingService, VoiceAudioTransport {
   @override
   VoiceConnectionStatus currentStatus = VoiceConnectionStatus.disconnected;
 
@@ -623,7 +630,6 @@ final class _FakeSignaling implements VoiceSignalingService, VoiceAudioTransport
   @override
   Future<void> leaveVoiceChannel(String guildId) async {}
 }
-
 
 /// Stands in for `flucord_video_camera_name`, writing UTF-8 into the buffer
 /// the way the native side does.

@@ -109,12 +109,10 @@ final class SelfVideoController extends ChangeNotifier {
     // undeclared SSRC would drop it.
     transport.announceVideo(enabled: true, settings: settings);
     _transport?.stop();
-    _transport =
-        DiscordVideoStreamTransport(
-            ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
-            sink: sink,
-          )
-          ..attach(_capture.frames);
+    _transport = DiscordVideoStreamTransport(
+      ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
+      sink: sink,
+    )..attach(_capture.frames);
     if (!await _announce(enabled: true)) {
       await _tearDown(transport);
       _fail(StateError('The gateway would not take the camera'));
@@ -164,7 +162,7 @@ final class SelfVideoController extends ChangeNotifier {
     // renderer marks the stream inactive rather than forgetting its numbers.
     transport?.announceVideo(
       enabled: false,
-      settings: _capture.settings ?? VideoCaptureHub.cameraSettings,
+      settings: _capture.settings ?? _capture.cameraSettings,
     );
     _transport?.stop();
     _transport = null;

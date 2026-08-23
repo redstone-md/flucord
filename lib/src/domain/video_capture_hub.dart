@@ -1,3 +1,4 @@
+import 'stream_quality.dart';
 import 'video_encoder.dart';
 
 /// The machine's one capture and encode resource.
@@ -11,20 +12,26 @@ import 'video_encoder.dart';
 final class VideoCaptureHub {
   VideoCaptureHub({required VideoEncoderService encoder}) : _encoder = encoder;
 
-  /// What a screen share is encoded at. Discord's own default for a 720p30
-  /// share.
-  static const VideoEncoderSettings shareSettings = VideoEncoderSettings(
-    bitrate: 2500000,
-  );
-
-  /// What the camera is encoded at: Discord sends camera video considerably
-  /// smaller than a share, and a webcam picture carries far less detail than a
-  /// desktop full of text.
-  static const VideoEncoderSettings cameraSettings = VideoEncoderSettings.camera(
-    bitrate: 1200000,
-  );
+  /// The bitrates the next share or camera starts at.
+  ///
+  /// Read at start, not listened to: a capture that is already running keeps
+  /// the settings it began with, and the next one takes whatever this says by
+  /// then. The settings plane writes it; the numbers themselves are named
+  /// nowhere but [StreamQualitySettings].
+  StreamQualitySettings quality = const StreamQualitySettings();
 
   final VideoEncoderService _encoder;
+
+  /// What a screen share would start at now: the quality's bitrate on the
+  /// share profile (720p30, the shape Discord's protocol announces).
+  VideoEncoderSettings get shareSettings =>
+      VideoEncoderSettings(bitrate: quality.shareBitrate);
+
+  /// What the camera would start at now: Discord sends camera video
+  /// considerably smaller than a share, and a webcam picture carries far less
+  /// detail than a desktop full of text.
+  VideoEncoderSettings get cameraSettings =>
+      VideoEncoderSettings.camera(bitrate: quality.cameraBitrate);
 
   bool _running = false;
   VideoEncoderSettings? _settings;

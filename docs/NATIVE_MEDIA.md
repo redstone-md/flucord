@@ -17,8 +17,11 @@ Media Foundation H.264 encoder, run in low-latency mode so no picture waits on
 frame reordering), and anyone who wants local pictures attaches to it: a Go Live
 share, the camera, the clip buffer. Only one capture can run at a time, refused
 rather than queued, which is what makes a double capture of a display impossible.
-The share runs at 2.5 Mbit and the camera at 1.2 Mbit, and those numbers live in
-the module and nowhere else. The clip buffer follows the module's frames and
+The share and the camera run at the bitrates the stream quality setting says
+(2.5 Mbit and 1.2 Mbit by default, Discord's web-client numbers), kept in the
+`StreamQualitySettings` object and changed from the settings window; a capture
+that is already running keeps what it started with, and the next one takes
+whatever the setting says then. The clip buffer follows the module's frames and
 writes them out as they were encoded, so a clip is the recording that was already
 running. The native lifecycle is owned by the encoder service: frame buffers are
 copied before release, the callback closes only after the capture thread joins,

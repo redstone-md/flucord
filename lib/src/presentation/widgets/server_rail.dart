@@ -12,6 +12,7 @@ import 'account_standing_scope.dart';
 import 'auth_session_scope.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
+import 'stream_quality_scope.dart';
 import 'streamer_mode_scope.dart';
 import 'theme_scope.dart';
 import 'voice_scope.dart';
@@ -132,6 +133,7 @@ class ServerRail extends StatelessWidget {
                   ageController: AgeVerificationScope.maybeOf(context),
                   keybindController: KeybindScope.maybeOf(context),
                   streamerModeController: StreamerModeScope.maybeOf(context),
+                  streamQualityController: StreamQualityScope.maybeOf(context),
                   themeController: ThemeScope.maybeOf(context),
                   voiceController: VoiceScope.maybeOf(context),
                 ),

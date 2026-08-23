@@ -1,24 +1,42 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('the two profiles are the decision, and the only home of the numbers',
-      () {
-    // A share carries a desktop full of text; a camera picture carries far
-    // less. Discord's own defaults: 2.5 Mbit for a 720p30 share, half that
-    // for a camera.
-    expect(VideoCaptureHub.shareSettings.bitrate, 2500000);
-    expect(VideoCaptureHub.shareSettings.source, VideoCaptureSource.display);
-    expect(VideoCaptureHub.shareSettings.width, 1280);
-    expect(VideoCaptureHub.shareSettings.height, 720);
-    expect(VideoCaptureHub.shareSettings.framesPerSecond, 30);
+  test(
+    'the two profiles follow the quality, and name no bitrates of their own',
+    () {
+      final hub = VideoCaptureHub(encoder: _FakeEncoder());
 
-    expect(VideoCaptureHub.cameraSettings.bitrate, 1200000);
-    expect(VideoCaptureHub.cameraSettings.source, VideoCaptureSource.camera);
+      // A share carries a desktop full of text; a camera picture carries far
+      // less. Discord's own defaults: 2.5 Mbit for a 720p30 share, half that
+      // for a camera.
+      expect(hub.shareSettings.bitrate, 2500000);
+      expect(hub.shareSettings.source, VideoCaptureSource.display);
+      expect(hub.shareSettings.width, 1280);
+      expect(hub.shareSettings.height, 720);
+      expect(hub.shareSettings.framesPerSecond, 30);
+
+      expect(hub.cameraSettings.bitrate, 1200000);
+      expect(hub.cameraSettings.source, VideoCaptureSource.camera);
+    },
+  );
+
+  test('a quality change is what the next capture starts at', () async {
+    final encoder = _FakeEncoder();
+    final hub = VideoCaptureHub(encoder: encoder);
+
+    hub.quality = const StreamQualitySettings(
+      shareBitrate: 5000000,
+      cameraBitrate: 300000,
+    );
+    expect((await hub.startShare()).bitrate, 5000000);
+    await hub.stop();
+    expect((await hub.startCamera()).bitrate, 300000);
   });
 
   test('a share and a camera both start through their profile', () async {
@@ -37,35 +55,36 @@ void main() {
     expect(camera.bitrate, 1200000);
   });
 
-  test('a second capture while one runs is refused, and the first survives',
-      () async {
-    final encoder = _FakeEncoder();
-    final hub = VideoCaptureHub(encoder: encoder);
-    await hub.startShare();
+  test(
+    'a second capture while one runs is refused, and the first survives',
+    () async {
+      final encoder = _FakeEncoder();
+      final hub = VideoCaptureHub(encoder: encoder);
+      await hub.startShare();
 
-    await expectLater(
-      hub.startCamera(),
-      throwsA(
-        isA<VideoEncoderException>().having(
-          (error) => error.failure,
-          'failure',
-          VideoEncoderFailure.state,
+      await expectLater(
+        hub.startCamera(),
+        throwsA(
+          isA<VideoEncoderException>().having(
+            (error) => error.failure,
+            'failure',
+            VideoEncoderFailure.state,
+          ),
         ),
-      ),
-    );
+      );
 
-    // The refusal happened before the encoder was touched, so the share is
-    // still the capture that is running.
-    expect(encoder.started.length, 1);
-    expect(hub.isCapturing, isTrue);
-    expect(hub.settings!.source, VideoCaptureSource.display);
-  });
+      // The refusal happened before the encoder was touched, so the share is
+      // still the capture that is running.
+      expect(encoder.started.length, 1);
+      expect(hub.isCapturing, isTrue);
+      expect(hub.settings!.source, VideoCaptureSource.display);
+    },
+  );
 
   test('two overlapping starts: only one reaches the encoder', () async {
     // A start that has not finished yet: the guard must hold from the moment
     // the first start is called, not from the moment it completes.
-    final encoder = _FakeEncoder()
-      ..gate = Completer<void>();
+    final encoder = _FakeEncoder()..gate = Completer<void>();
     final hub = VideoCaptureHub(encoder: encoder);
 
     final first = hub.startShare();
@@ -101,20 +120,22 @@ void main() {
     expect(hub.isCapturing, isTrue);
   });
 
-  test('the settings outlive the capture, because the clip buffer does',
-      () async {
-    final encoder = _FakeEncoder();
-    final hub = VideoCaptureHub(encoder: encoder);
-    await hub.startCamera();
-    await hub.stop();
+  test(
+    'the settings outlive the capture, because the clip buffer does',
+    () async {
+      final encoder = _FakeEncoder();
+      final hub = VideoCaptureHub(encoder: encoder);
+      await hub.startCamera();
+      await hub.stop();
 
-    expect(hub.isCapturing, isFalse);
-    expect(hub.settings, VideoCaptureHub.cameraSettings);
+      expect(hub.isCapturing, isFalse);
+      expect(hub.settings, hub.cameraSettings);
 
-    // Stopped again: nothing to stop, and the encoder is not asked twice.
-    await hub.stop();
-    expect(encoder.stopped, 1);
-  });
+      // Stopped again: nothing to stop, and the encoder is not asked twice.
+      await hub.stop();
+      expect(encoder.stopped, 1);
+    },
+  );
 
   test('frames and keyframe requests reach whoever attached', () async {
     final encoder = _FakeEncoder();

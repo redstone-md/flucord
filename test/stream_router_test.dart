@@ -130,70 +130,83 @@ List<DiscordRtpFrame> _packetizedUnit() => [
 ];
 
 void main() {
-  test('a ready stream of ours is declared, then the encoder sends on it', () async {
-    final wiring = _Wiring();
-    addTearDown(wiring.dispose);
+  test(
+    'a ready stream of ours is declared, then the encoder sends on it',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
 
-    await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
-    // The endpoint arrives long after the button was pressed, and the session
-    // it opens is the one this fork decides about.
-    wiring.repository.assign(
-      const GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: 't'),
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(wiring.clients, hasLength(1));
-    final client = wiring.clients.single;
+      await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
+      // The endpoint arrives long after the button was pressed, and the session
+      // it opens is the one this fork decides about.
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 't',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.clients, hasLength(1));
+      final client = wiring.clients.single;
 
-    client.announce(const VoiceTransportReadyEvent(_session));
-    await Future<void>.delayed(Duration.zero);
+      client.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
 
-    // Declared with what the capture is actually running at, and bound to the
-    // SSRC the connection was given.
-    expect(client.announcements.single.enabled, isTrue);
-    expect(client.announcements.single.settings, VideoCaptureHub.shareSettings);
+      // Declared with what the capture is actually running at, and bound to the
+      // SSRC the connection was given.
+      expect(client.announcements.single.enabled, isTrue);
+      expect(
+        client.announcements.single.settings,
+        wiring.capture.shareSettings,
+      );
 
-    wiring.encoder.emitFrame();
-    await Future<void>.delayed(Duration.zero);
+      wiring.encoder.emitFrame();
+      await Future<void>.delayed(Duration.zero);
 
-    // Declared before the first packet leaves: Discord drops a packet whose
-    // SSRC was never announced. The picture takes two packets, which is what
-    // the packetiser does with a keyframe of this size.
-    expect(wiring.log, ['announce', 'send', 'send']);
-    expect(client.sentFrames, isNotEmpty);
-    expect(
-      client.sentFrames.every((frame) => frame.header.ssrc == 4242),
-      isTrue,
-    );
-    // The viewer is the other side of the fork, and this was not it.
-    expect(wiring.viewer.watching, isNull);
-  });
+      // Declared before the first packet leaves: Discord drops a packet whose
+      // SSRC was never announced. The picture takes two packets, which is what
+      // the packetiser does with a keyframe of this size.
+      expect(wiring.log, ['announce', 'send', 'send']);
+      expect(client.sentFrames, isNotEmpty);
+      expect(
+        client.sentFrames.every((frame) => frame.header.ssrc == 4242),
+        isTrue,
+      );
+      // The viewer is the other side of the fork, and this was not it.
+      expect(wiring.viewer.watching, isNull);
+    },
+  );
 
-  test('a ready stream of somebody else\'s is attached to the viewer', () async {
-    final wiring = _Wiring();
-    addTearDown(wiring.dispose);
+  test(
+    'a ready stream of somebody else\'s is attached to the viewer',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
 
-    await wiring.viewer.requestWatch(_otherKey);
-    wiring.repository.assign(_otherServer);
-    await Future<void>.delayed(Duration.zero);
-    final client = wiring.clients.single;
+      await wiring.viewer.requestWatch(_otherKey);
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      final client = wiring.clients.single;
 
-    client.announce(const VoiceTransportReadyEvent(_session));
-    await Future<void>.delayed(Duration.zero);
+      client.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
 
-    expect(wiring.viewer.watching, _otherKey);
-    // Nobody declared video and nothing was bound: this client is receiving.
-    expect(client.announcements, isEmpty);
-    expect(client.sentFrames, isEmpty);
+      expect(wiring.viewer.watching, _otherKey);
+      // Nobody declared video and nothing was bound: this client is receiving.
+      expect(client.announcements, isEmpty);
+      expect(client.sentFrames, isEmpty);
 
-    for (final frame in _packetizedUnit()) {
-      client.emitVideo('somebody-else', frame);
-    }
-    await Future<void>.delayed(Duration.zero);
+      for (final frame in _packetizedUnit()) {
+        client.emitVideo('somebody-else', frame);
+      }
+      await Future<void>.delayed(Duration.zero);
 
-    expect(wiring.viewer.receivedPackets, 2);
-    // Two packets, one picture: the marker survived the mapping.
-    expect(wiring.viewer.decodedUnits, 1);
-  });
+      expect(wiring.viewer.receivedPackets, 2);
+      // Two packets, one picture: the marker survived the mapping.
+      expect(wiring.viewer.decodedUnits, 1);
+    },
+  );
 
   test('a disposed router routes nothing', () async {
     final wiring = _Wiring();
@@ -356,7 +369,11 @@ final class _FakeRepository implements GoLiveRepository {
     String? preferredRegion,
   }) async => guildId == null
       ? GoLiveStreamKey.call(channelId: channelId, userId: 'me')
-      : GoLiveStreamKey.guild(guildId: guildId, channelId: channelId, userId: 'me');
+      : GoLiveStreamKey.guild(
+          guildId: guildId,
+          channelId: channelId,
+          userId: 'me',
+        );
 
   @override
   Future<void> watchStream(GoLiveStreamKey key) async {}

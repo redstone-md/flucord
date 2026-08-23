@@ -71,7 +71,7 @@ final class StreamRouter {
       // inventing is a share nobody can decode.
       session.announceVideo(
         enabled: true,
-        settings: _capture.settings ?? VideoCaptureHub.shareSettings,
+        settings: _capture.settings ?? _capture.shareSettings,
       );
       _goLive.bindTransport(
         ssrc: event.session.ssrc,

@@ -7,7 +7,7 @@ import 'package:flucord/src/data/discord/discord_stream_rtc_session.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
-import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +16,13 @@ const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
   channelId: 'voice-1',
   userId: 'streamer',
+);
+
+/// The share profile as announce payload: these tests exercise the session's
+/// announce path, so any settings answer, and the bitrate comes from the
+/// quality home rather than being named again here.
+const _shareProfile = VideoEncoderSettings(
+  bitrate: StreamQualitySettings.defaultShareBitrate,
 );
 
 void main() {
@@ -71,10 +78,7 @@ void main() {
       // showed a black rectangle.
       expect(() => session.sendVideoFrame(_frame), throwsA(isA<StateError>()));
       expect(
-        session.announceVideo(
-          enabled: true,
-          settings: VideoCaptureHub.shareSettings,
-        ),
+        session.announceVideo(enabled: true, settings: _shareProfile),
         isFalse,
       );
     });
@@ -111,10 +115,7 @@ void main() {
       addTearDown(subscription.cancel);
 
       expect(
-        session.announceVideo(
-          enabled: true,
-          settings: VideoCaptureHub.shareSettings,
-        ),
+        session.announceVideo(enabled: true, settings: _shareProfile),
         isTrue,
       );
       session.sendVideoFrame(_frame);

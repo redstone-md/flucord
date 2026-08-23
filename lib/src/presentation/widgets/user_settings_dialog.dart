@@ -7,6 +7,7 @@ import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
 import '../../application/age_verification_controller.dart';
 import '../../application/keybind_controller.dart';
+import '../../application/stream_quality_controller.dart';
 import '../../application/streamer_mode_controller.dart';
 import '../../application/theme_controller.dart';
 import '../../application/voice_controller.dart';
@@ -27,6 +28,7 @@ import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
 import 'keybind_section.dart';
+import 'stream_quality_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
@@ -68,6 +70,7 @@ class UserSettingsDialog extends StatefulWidget {
     this.ageController,
     this.keybindController,
     this.streamerModeController,
+    this.streamQualityController,
     this.themeController,
     this.voiceController,
     super.key,
@@ -106,6 +109,10 @@ class UserSettingsDialog extends StatefulWidget {
   /// Streamer mode, local for the same reason.
   final StreamerModeController? streamerModeController;
 
+  /// The bitrates a share and a camera are encoded at. Local like the rest of
+  /// this run of controllers: the machine's connection is what they describe.
+  final StreamQualityController? streamQualityController;
+
   /// The installed themes, which belong to the machine rather than the
   /// account and so are there whatever the session is.
   final ThemeController? themeController;
@@ -124,6 +131,7 @@ class UserSettingsDialog extends StatefulWidget {
     AgeVerificationController? ageController,
     KeybindController? keybindController,
     StreamerModeController? streamerModeController,
+    StreamQualityController? streamQualityController,
     ThemeController? themeController,
     VoiceController? voiceController,
   }) => showDialog<void>(
@@ -139,6 +147,7 @@ class UserSettingsDialog extends StatefulWidget {
       ageController: ageController,
       keybindController: keybindController,
       streamerModeController: streamerModeController,
+      streamQualityController: streamQualityController,
       themeController: themeController,
       voiceController: voiceController,
     ),
@@ -185,6 +194,7 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               ageController: widget.ageController,
               keybindController: widget.keybindController,
               streamerModeController: widget.streamerModeController,
+              streamQualityController: widget.streamQualityController,
               themeController: widget.themeController,
               voiceController: widget.voiceController,
               category: _category,
@@ -344,6 +354,7 @@ class _Body extends StatelessWidget {
     required this.ageController,
     required this.keybindController,
     required this.streamerModeController,
+    required this.streamQualityController,
     required this.themeController,
     required this.voiceController,
     required this.category,
@@ -358,6 +369,7 @@ class _Body extends StatelessWidget {
   final AgeVerificationController? ageController;
   final KeybindController? keybindController;
   final StreamerModeController? streamerModeController;
+  final StreamQualityController? streamQualityController;
   final ThemeController? themeController;
   final VoiceController? voiceController;
   final UserSettingsCategory category;
@@ -465,14 +477,25 @@ class _Body extends StatelessWidget {
     }
     if (category == UserSettingsCategory.voice) {
       final voice = voiceController;
-      if (voice == null) {
+      final quality = streamQualityController;
+      if (voice == null && quality == null) {
         return const ProfileNotice(
           key: ValueKey('user-voice-unavailable'),
           icon: Icons.mic_off_outlined,
           message: 'Voice is unavailable in this build.',
         );
       }
-      return VoiceDevicesSection(controller: voice);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // The devices answer what the machine has; the quality answers what
+          // this machine sends its pictures at. Either can be missing without
+          // taking the other with it.
+          if (voice != null) VoiceDevicesSection(controller: voice),
+          if (voice != null && quality != null) const SizedBox(height: 28),
+          if (quality != null) StreamQualitySection(controller: quality),
+        ],
+      );
     }
     if (category == UserSettingsCategory.themes) {
       final themes = themeController;

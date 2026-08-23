@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
-import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
@@ -335,60 +336,62 @@ void main() {
       },
     );
 
-    test('a payload type nobody claimed is not fed to the Opus decoder',
-        () async {
-      final socket = _FakeVoiceWebSocket();
-      final udp = _FakeVoiceUdpTransport();
-      final client = DiscordVoiceGatewayClient(
-        credentials: _credentials,
-        maxDaveProtocolVersion: 0,
-        socketConnector: _FakeVoiceSocketConnector(socket),
-        udpTransport: udp,
-      );
-      addTearDown(client.close);
-      final audio = <DiscordRtpFrame>[];
-      final subscription = client.audioPackets.listen(audio.add);
-      addTearDown(subscription.cancel);
+    test(
+      'a payload type nobody claimed is not fed to the Opus decoder',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final udp = _FakeVoiceUdpTransport();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: udp,
+        );
+        addTearDown(client.close);
+        final audio = <DiscordRtpFrame>[];
+        final subscription = client.audioPackets.listen(audio.add);
+        addTearDown(subscription.cancel);
 
-      await client.connect();
-      socket.addJson({
-        'op': 2,
-        'd': {
-          'ssrc': 11,
-          'ip': '127.0.0.1',
-          'port': 5000,
-          'modes': ['aead_aes256_gcm_rtpsize'],
-        },
-      });
-      socket.addJson({
-        'op': 4,
-        'd': {
-          'mode': 'aead_aes256_gcm_rtpsize',
-          'secret_key': List<int>.generate(32, (index) => index),
-          'dave_protocol_version': 0,
-        },
-      });
-      await _flushEvents();
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'd': {
+            'ssrc': 11,
+            'ip': '127.0.0.1',
+            'port': 5000,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        socket.addJson({
+          'op': 4,
+          'd': {
+            'mode': 'aead_aes256_gcm_rtpsize',
+            'secret_key': List<int>.generate(32, (index) => index),
+            'dave_protocol_version': 0,
+          },
+        });
+        await _flushEvents();
 
-      // Discord's own clients send pictures on several payload types. The
-      // split used to be "anything that is not our own video type is audio",
-      // so every one of those landed in the Opus path — and on a DAVE call
-      // failed there, putting "DAVE decryption failed" over a working room.
-      final picture = DiscordRtpFrame(
-        header: DiscordRtpHeader(
-          payloadType: 103,
-          sequence: 1,
-          timestamp: 2,
-          ssrc: 12,
-        ),
-        payload: const [3, 4, 5],
-      );
-      client.sendAudioFrame(picture);
-      udp.addPacket(udp.sentPackets.last);
-      await _flushEvents();
+        // Discord's own clients send pictures on several payload types. The
+        // split used to be "anything that is not our own video type is audio",
+        // so every one of those landed in the Opus path — and on a DAVE call
+        // failed there, putting "DAVE decryption failed" over a working room.
+        final picture = DiscordRtpFrame(
+          header: DiscordRtpHeader(
+            payloadType: 103,
+            sequence: 1,
+            timestamp: 2,
+            ssrc: 12,
+          ),
+          payload: const [3, 4, 5],
+        );
+        client.sendAudioFrame(picture);
+        udp.addPacket(udp.sentPackets.last);
+        await _flushEvents();
 
-      expect(audio, isEmpty);
-    });
+        expect(audio, isEmpty);
+      },
+    );
 
     test('splits cameras from audio and attributes them by SSRC', () async {
       final socket = _FakeVoiceWebSocket();
@@ -614,10 +617,7 @@ void main() {
         // read from it and the next write, and turning a camera on threw from
         // inside the button's callback and took the client down.
         expect(
-          client.announceVideo(
-            enabled: true,
-            settings: VideoCaptureHub.cameraSettings,
-          ),
+          client.announceVideo(enabled: true, settings: _cameraProfile),
           isTrue,
         );
         await _flushEvents();
@@ -687,6 +687,13 @@ const _credentials = VoiceServerCredentials(
   sessionId: 'session-1',
   token: 'voice-token',
   endpoint: 'voice.example.test',
+);
+
+/// The camera profile as announce payload: the announce path is under test,
+/// so any settings answer, and the bitrate comes from the quality home rather
+/// than being named again here.
+const _cameraProfile = VideoEncoderSettings.camera(
+  bitrate: StreamQualitySettings.defaultCameraBitrate,
 );
 
 Map<String, Object?> _jsonAt(List<Object> values, int index) =>

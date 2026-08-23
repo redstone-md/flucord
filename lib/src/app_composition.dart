@@ -46,6 +46,7 @@ import 'application/soundboard_controller.dart';
 import 'application/soundboard_playback_controller.dart';
 import 'application/stage_controller.dart';
 import 'application/stream_viewer_controller.dart';
+import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
@@ -69,6 +70,7 @@ import 'data/discord/discord_oauth_account_service.dart';
 import 'data/discord/discord_remote_auth_gateway.dart';
 import 'data/discord/discord_repository_factory.dart';
 import 'data/file_keybind_repository.dart';
+import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
@@ -156,6 +158,7 @@ final class AppComposition {
   late final MessageSearchController messageSearch;
   late final SelfPresenceController selfPresence;
   late final VideoCaptureHub videoCapture;
+  late final StreamQualityController streamQuality;
   late final GoLiveController goLive;
   late final StreamViewerController streamViewer;
   late final DiscordStreamRtcService streamRtc;
@@ -328,6 +331,15 @@ final class AppComposition {
     videoCapture = VideoCaptureHub(
       encoder: bootstrap.videoEncoderService ?? NativeVideoEncoderService(),
     );
+    // The bitrates the capture runs at, loaded from the machine's own file and
+    // kept there: they describe this machine's connection, not the account.
+    streamQuality = _register(
+      StreamQualityController(
+        bootstrap.streamQualityRepository ?? FileStreamQualityRepository(),
+        capture: videoCapture,
+      ),
+    );
+    unawaited(streamQuality.load());
     goLive = _register(
       GoLiveController(
         repositoryProvider: () => chat.goLive,

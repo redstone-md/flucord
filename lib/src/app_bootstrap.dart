@@ -10,6 +10,7 @@ import 'domain/discord_social_sdk.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/keybind.dart';
 import 'domain/soundboard_playback.dart';
+import 'domain/stream_quality.dart';
 import 'domain/streamer_mode.dart';
 import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
@@ -52,6 +53,7 @@ class AppBootstrap {
     this.keybindRepository,
     this.themeStore,
     this.streamerModeRepository,
+    this.streamQualityRepository,
     this.windowCaptureShield,
     this.globalKeyboardHook,
     this.screenshotService,
@@ -106,6 +108,9 @@ class AppBootstrap {
 
   /// Where streamer mode's switches are kept, injected for the same reason.
   final StreamerModeRepository? streamerModeRepository;
+
+  /// Where the stream quality bitrates are kept, injected for the same reason.
+  final StreamQualityRepository? streamQualityRepository;
 
   /// Keeps the window out of screen recordings. Injected so a test does not
   /// reach for the real window list.

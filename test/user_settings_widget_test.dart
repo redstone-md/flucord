@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/user_settings.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
@@ -333,6 +337,30 @@ void main() {
     expect(find.byKey(const ValueKey('voice-devices-section')), findsOneWidget);
   });
 
+  testWidgets('stream quality sits under the voice devices', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final voice = VoiceController(_SilentMedia());
+    addTearDown(voice.dispose);
+    await voice.initialize();
+    final quality = StreamQualityController(
+      _InMemoryQualityRepository(),
+      capture: VideoCaptureHub(encoder: _UnusedEncoder()),
+    );
+    await quality.load();
+    addTearDown(quality.dispose);
+
+    await _pumpVoiceDialog(tester, voice: voice, quality: quality);
+
+    expect(
+      find.byKey(const ValueKey('stream-quality-section')),
+      findsOneWidget,
+    );
+    // The defaults, as picked up by a machine with no stored file.
+    expect(find.text('2.5 Mbit'), findsOneWidget);
+    expect(find.text('1.2 Mbit'), findsOneWidget);
+  });
+
   testWidgets('a build without voice says so rather than showing nothing', (
     tester,
   ) async {
@@ -386,6 +414,7 @@ Future<void> _tapChoice(WidgetTester tester, String key) async {
 Future<void> _pumpVoiceDialog(
   WidgetTester tester, {
   VoiceController? voice,
+  StreamQualityController? quality,
 }) async {
   final controller = UserSettingsController(() => _Repository());
   addTearDown(controller.dispose);
@@ -396,6 +425,7 @@ Future<void> _pumpVoiceDialog(
         body: UserSettingsDialog(
           controller: controller,
           voiceController: voice,
+          streamQualityController: quality,
         ),
       ),
     ),
@@ -516,4 +546,43 @@ final class _SilentMedia implements VoiceMediaService {
 
   @override
   Future<void> dispose() async {}
+}
+
+final class _InMemoryQualityRepository implements StreamQualityRepository {
+  StreamQualitySettings _settings = const StreamQualitySettings();
+
+  @override
+  Future<StreamQualitySettings> load() async => _settings;
+
+  @override
+  Future<void> save(StreamQualitySettings settings) async =>
+      _settings = settings;
+}
+
+/// Answers nothing: the capture module is only the quality's destination in
+/// these tests, and no capture is ever started.
+final class _UnusedEncoder implements VideoEncoderService {
+  @override
+  bool get isSupported => false;
+
+  @override
+  int get displayCount => 0;
+
+  @override
+  List<String> get cameraNames => const [];
+
+  @override
+  Stream<EncodedVideoFrame> get frames => const Stream.empty();
+
+  @override
+  Future<void> start(VideoEncoderSettings settings) async {}
+
+  @override
+  Future<void> requestKeyframe() async {}
+
+  @override
+  Future<void> setPaused({required bool paused}) async {}
+
+  @override
+  Future<void> stop() async {}
 }

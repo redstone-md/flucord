@@ -28,8 +28,9 @@ enum VideoCaptureSource { display, camera }
 
 /// What a stream is being encoded at.
 ///
-/// A value object: the decisions about what a share or a camera should run at
-/// live in [VideoCaptureHub], which is the one place that names a bitrate.
+/// A value object: a share or a camera profile is assembled in
+/// [VideoCaptureHub] from the [StreamQualitySettings] the settings plane
+/// holds, which is the one place that names a bitrate.
 final class VideoEncoderSettings {
   const VideoEncoderSettings({
     required this.bitrate,
@@ -88,8 +89,14 @@ final class VideoEncoderSettings {
       other.bitrate == bitrate;
 
   @override
-  int get hashCode =>
-      Object.hash(source, displayIndex, width, height, framesPerSecond, bitrate);
+  int get hashCode => Object.hash(
+    source,
+    displayIndex,
+    width,
+    height,
+    framesPerSecond,
+    bitrate,
+  );
 }
 
 /// Why the encoder could not start.
