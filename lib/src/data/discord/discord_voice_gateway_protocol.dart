@@ -3,6 +3,7 @@ import '../../domain/voice_connection.dart';
 
 import 'discord_gateway_rules.dart';
 import 'discord_voice_transport_cipher.dart';
+import 'discord_voice_udp_transport.dart';
 
 final class DiscordVoiceReady {
   const DiscordVoiceReady({
@@ -107,7 +108,8 @@ final class DiscordVoiceGatewayReconnect extends DiscordVoiceGatewayAction {
   final Object? error;
 }
 
-/// The session ended, and Discord will hand out a new one out of band.
+/// The session ended, and Discord will issue a new one through the main
+/// gateway rather than this socket.
 ///
 /// The driver reports the state and waits; redialling would only reuse a
 /// token that is already dead.
@@ -203,8 +205,7 @@ final class DiscordVoiceGatewayProtocol {
   int? get audioSsrc => _audioSsrc;
 
   String? _mode;
-  String? _discoveredAddress;
-  int? _discoveredPort;
+  DiscordVoiceIpDiscovery? _discovered;
   VoiceTransportSession? _session;
 
   /// The negotiated session, or null while the handshake runs.
@@ -262,7 +263,7 @@ final class DiscordVoiceGatewayProtocol {
   /// Decides what a due heartbeat means. The driver calls this from its
   /// timer and applies the result.
   DiscordVoiceGatewayAction heartbeatDue() {
-    if (_heartbeat.hasExceeded) {
+    if (_heartbeat.hasExceededTolerance) {
       // Not resumable: a session this far behind is one Discord has already
       // stopped recognising, and resuming into it is answered with 4006.
       _canResume = false;
@@ -317,17 +318,17 @@ final class DiscordVoiceGatewayProtocol {
 
   /// Continues the handshake after the driver punched the UDP hole: the
   /// address it learned is the one SELECT_PROTOCOL announces.
-  List<DiscordVoiceGatewayAction> udpDiscovered({
-    required String address,
-    required int port,
-  }) {
-    _discoveredAddress = address;
-    _discoveredPort = port;
+  List<DiscordVoiceGatewayAction> udpDiscovered(DiscordVoiceIpDiscovery discovered) {
+    _discovered = discovered;
     final mode = _mode;
     if (mode == null) return const [];
     return [
       DiscordVoiceGatewaySend(
-        selectProtocol(address: address, port: port, mode: mode),
+        selectProtocol(
+          address: discovered.address,
+          port: discovered.port,
+          mode: mode,
+        ),
       ),
     ];
   }
@@ -337,15 +338,16 @@ final class DiscordVoiceGatewayProtocol {
   /// session Discord has replaced.
   void revokeResume() => _canResume = false;
 
-  /// Drops everything learned from the socket: discovery, the negotiated
-  /// session, and who is on which SSRC. Identity and resume eligibility
-  /// survive, for the redial.
+  /// Drops what a redial would learn again anyway: discovery, the
+  /// negotiated session, and the speaking roster (opcode 5 re-adds anybody
+  /// the moment they talk). Video owners are kept: a resume does not
+  /// re-announce peers whose cameras did not change, and dropping them
+  /// would black out tiles that are still being sent. Identity and resume
+  /// eligibility survive as well, for the redial.
   void dropSession() {
-    _discoveredAddress = null;
-    _discoveredPort = null;
+    _discovered = null;
     _session = null;
     _userIdsBySsrc.clear();
-    _videoSsrcOwners.clear();
   }
 
   /// `server_id` is the guild for guild voice and the channel for a DM or
@@ -504,8 +506,7 @@ final class DiscordVoiceGatewayProtocol {
     }
     _audioSsrc = ready.ssrc;
     _mode = mode;
-    _discoveredAddress = null;
-    _discoveredPort = null;
+    _discovered = null;
     return [
       DiscordVoiceGatewayDiscoverUdp(ready: ready, mode: mode),
     ];
@@ -517,16 +518,11 @@ final class DiscordVoiceGatewayProtocol {
     final description = DiscordVoiceSessionDescription.tryParse(data);
     final ssrc = _audioSsrc;
     final mode = _mode;
-    final address = _discoveredAddress;
-    final port = _discoveredPort;
+    final discovered = _discovered;
     // A description with no handshake behind it means Discord and this client
     // disagree about where the session is: nothing downstream could be built
     // from it.
-    if (description == null ||
-        ssrc == null ||
-        mode == null ||
-        address == null ||
-        port == null) {
+    if (description == null || ssrc == null || mode == null || discovered == null) {
       return const [
         DiscordVoiceGatewayFail(
           FormatException('Invalid Discord voice session description'),
@@ -545,8 +541,8 @@ final class DiscordVoiceGatewayProtocol {
     final session = VoiceTransportSession(
       guildId: credentials.guildId,
       ssrc: ssrc,
-      address: address,
-      port: port,
+      address: discovered.address,
+      port: discovered.port,
       mode: mode,
       secretKey: description.secretKey,
       daveProtocolVersion: description.daveProtocolVersion,

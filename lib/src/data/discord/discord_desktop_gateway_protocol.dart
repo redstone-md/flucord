@@ -219,7 +219,7 @@ final class DiscordDesktopGatewayProtocol {
   DiscordDesktopGatewayAction heartbeatDue({
     Map<String, Object?> qos = const {},
   }) {
-    if (_heartbeat.hasExceeded) {
+    if (_heartbeat.hasExceededTolerance) {
       _state = DiscordDesktopGatewayState.reconnectPending;
       return const DiscordDesktopGatewayReconnect(immediate: true);
     }

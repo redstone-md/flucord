@@ -18,8 +18,9 @@ final class DiscordGatewayHeartbeatWatchdog {
   /// next interval is a slow network, not a dead socket, and tearing the
   /// connection down for it costs more than the wait: the voice gateway
   /// answers the redial with 4006 and the call spends its life
-  /// reconnecting, and the main gateway's reconnect ends every voice
-  /// session identified with its id.
+  /// reconnecting, and a reconnect on the main gateway ends every voice
+  /// call downstream, because each voice session is identified with that
+  /// gateway session's id.
   static const tolerance = 2;
 
   int _unacknowledged = 0;
@@ -34,7 +35,7 @@ final class DiscordGatewayHeartbeatWatchdog {
   void recordSent() => _unacknowledged++;
 
   /// Whether the count has passed [tolerance] and the session is dead.
-  bool get hasExceeded => _unacknowledged >= tolerance;
+  bool get hasExceededTolerance => _unacknowledged >= tolerance;
 }
 
 /// Close codes shared by Discord's gateways.

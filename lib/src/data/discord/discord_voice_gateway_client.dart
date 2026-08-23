@@ -275,10 +275,7 @@ final class DiscordVoiceGatewayClient
       );
       if (_closing || _failed || generation != _generation) return;
       _emitStatus(VoiceConnectionStatus.negotiating);
-      for (final next in _protocol.udpDiscovered(
-        address: discovered.address,
-        port: discovered.port,
-      )) {
+      for (final next in _protocol.udpDiscovered(discovered)) {
         _apply(next);
       }
     } on Object catch (error) {

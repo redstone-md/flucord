@@ -1,4 +1,5 @@
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
+import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -106,7 +107,7 @@ void main() {
     test('a session description makes the session resumable', () {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-        ..udpDiscovered(address: '203.0.113.7', port: 50000)
+        ..udpDiscovered(_discovery)
         ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
 
       expect(gateway.canResume, isTrue);
@@ -127,7 +128,7 @@ void main() {
         () {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-        ..udpDiscovered(address: '203.0.113.7', port: 50000)
+        ..udpDiscovered(_discovery)
         ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
       expect(gateway.canResume, isTrue);
 
@@ -140,7 +141,7 @@ void main() {
       expect(reconnect.error.toString(), contains('heartbeats'));
     });
 
-    test('revoked resume stays revoked until a new session is negotiated', () {
+    test('a revoked resume keeps the next connect identifying afresh', () {
       final gateway = protocol()..revokeResume();
 
       expect(gateway.canResume, isFalse);
@@ -198,7 +199,7 @@ void main() {
       ]) {
         final gateway = protocol()
           ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-          ..udpDiscovered(address: '203.0.113.7', port: 50000);
+          ..udpDiscovered(_discovery);
 
         expect(
           gateway.accept(
@@ -214,7 +215,7 @@ void main() {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
       final select = gateway
-          .udpDiscovered(address: '203.0.113.7', port: 50000)
+          .udpDiscovered(_discovery)
           .single as DiscordVoiceGatewaySend;
 
       expect(select.payload['op'], DiscordVoiceGatewayOpcode.selectProtocol);
@@ -245,8 +246,13 @@ void main() {
     test('dropping the session keeps the identity for the redial', () {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-        ..udpDiscovered(address: '203.0.113.7', port: 50000)
+        ..udpDiscovered(_discovery)
         ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData))
+        ..accept(frame(DiscordVoiceGatewayOpcode.clientVideo, {
+          'user_id': 'remote-2',
+          'audio_ssrc': 91,
+          'video_ssrc': 92,
+        }))
         ..accept(frame(DiscordVoiceGatewayOpcode.speaking, {
           'user_id': 'remote-1',
           'ssrc': 77,
@@ -257,7 +263,9 @@ void main() {
 
       expect(gateway.session, isNull);
       expect(gateway.userIdForSsrc(77), isNull);
-      expect(gateway.userIdForVideoSsrc(92), isNull);
+      // Kept: a resume does not re-announce cameras that did not change,
+      // and dropping their owners would black out tiles still being sent.
+      expect(gateway.userIdForVideoSsrc(92), 'remote-2');
       expect(gateway.canResume, isTrue);
       expect(gateway.audioSsrc, 42);
     });
@@ -360,6 +368,11 @@ final _readyData = {
   'port': 50001,
   'modes': ['aead_aes256_gcm_rtpsize'],
 };
+
+const _discovery = DiscordVoiceIpDiscovery(
+  address: '203.0.113.7',
+  port: 50000,
+);
 
 final _sessionData = {
   'mode': 'aead_aes256_gcm_rtpsize',
