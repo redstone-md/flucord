@@ -186,7 +186,8 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         // Not the guild. Discord gives a stream its own RTC server, and a
-        // connection identifying with the guild is closed with 4006.
+        // connection identifying with the guild is closed with
+        // `sessionInvalid`.
         expect(seen.serverId, 'rtc-77');
       },
     );
@@ -339,7 +340,7 @@ const _session = VoiceTransportSession(
 
 final _frame = DiscordRtpFrame(
   header: DiscordRtpHeader(
-    payloadType: 101,
+    payloadType: DiscordRtpHeader.discordVideoPayloadType,
     sequence: 1,
     timestamp: 1,
     ssrc: 1,

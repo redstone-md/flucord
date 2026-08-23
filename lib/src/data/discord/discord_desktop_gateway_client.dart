@@ -14,13 +14,14 @@ import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
 import 'discord_gateway_rules.dart';
 import 'discord_gateway_transport_codec.dart';
+import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
 
 export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
 
 final class DiscordDesktopGatewayClient
-    implements DiscordChatGateway, DiscordCallGateway {
+    implements DiscordChatGateway, DiscordCallGateway, DiscordGoLiveGateway {
   DiscordDesktopGatewayClient({
     required String authorization,
     required Map<String, Object?> properties,
@@ -191,8 +192,13 @@ final class DiscordDesktopGatewayClient
   @override
   String? get sessionId => _protocol.sessionId;
 
+  /// The account this session is signed in as, or `null` before READY.
+  @override
+  String? get currentUserId => _protocol.currentUserId;
+
   /// Opcode 18. `type` is `guild` or `call`, matching how the stream key is
   /// composed, and the region is a preference Discord may ignore.
+  @override
   void sendStreamCreate({
     required String type,
     required String channelId,
@@ -211,6 +217,7 @@ final class DiscordDesktopGatewayClient
   );
 
   /// Opcode 19.
+  @override
   void sendStreamDelete(String streamKey) => _send(
     DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamDelete, {
       'stream_key': streamKey,
@@ -218,6 +225,7 @@ final class DiscordDesktopGatewayClient
   );
 
   /// Opcode 20.
+  @override
   void sendStreamWatch(String streamKey) => _send(
     DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamWatch, {
       'stream_key': streamKey,
@@ -225,6 +233,7 @@ final class DiscordDesktopGatewayClient
   );
 
   /// Opcode 21.
+  @override
   void sendStreamPing(String streamKey) => _send(
     DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamPing, {
       'stream_key': streamKey,
@@ -232,6 +241,7 @@ final class DiscordDesktopGatewayClient
   );
 
   /// Opcode 22.
+  @override
   void sendStreamSetPaused(String streamKey, {required bool paused}) => _send(
     DiscordDesktopGatewayFrame(DiscordDesktopGatewayOpcode.streamSetPaused, {
       'stream_key': streamKey,
@@ -496,8 +506,8 @@ final class DiscordDesktopGatewayClient
   /// Says what the session just did, where it can be read.
   ///
   /// The voice sockets identify with this session's id, so its reconnects are
-  /// the first thing to check when Discord starts answering voice with 4022 —
-  /// "session expired" downstream is this session having been replaced.
+  /// the first thing to check when Discord starts answering voice with
+  /// `sessionExpired`, which is this session having been replaced.
   void _diagnose(String what, [Object? detail]) {
     final line = 'flucord.gateway $what${detail == null ? '' : ': $detail'}';
     developer.log(line, name: 'flucord.discord.gateway', level: 900);

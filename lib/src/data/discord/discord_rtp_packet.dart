@@ -36,7 +36,13 @@ final class DiscordRtpHeader {
     }
   }
 
+  /// The payload types Discord assigns the two media: Opus audio rides
+  /// 0x78 and H.264 video rides 101. A picture sent on the audio one
+  /// would be decoded as Opus and discarded, so the two must not meet on
+  /// either connection kind: a call and a Go Live stream use the same
+  /// pair.
   static const int discordAudioPayloadType = 0x78;
+  static const int discordVideoPayloadType = 101;
   static const int fixedLength = 12;
 
   final int sequence;

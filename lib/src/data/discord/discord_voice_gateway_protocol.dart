@@ -156,6 +156,34 @@ final class DiscordVoiceGatewayTransportReady
   final VoiceTransportSession session;
 }
 
+/// Close codes Discord's voice gateway closes a connection with, and what
+/// each one means where this client has met it.
+///
+/// The call socket and the Go Live stream socket are closed by the same
+/// server with the same codes, so they share this vocabulary.
+abstract final class DiscordVoiceCloseCodes {
+  /// The identify named a session the server does not recognise: a session id
+  /// from before the main gateway reconnected, a resume into a session
+  /// Discord had already replaced, or, on a stream socket, the guild id
+  /// where the stream's own RTC server id belongs.
+  static const sessionInvalid = 4006;
+
+  /// The voice server moved, or the call was moved. Discord hands out fresh
+  /// credentials for the next one; a client gone silent long enough for its
+  /// NAT mapping to expire is closed with this as well.
+  static const serverMoved = 4014;
+
+  /// The connection did not match what its identify claimed: a stream socket
+  /// that did not declare its stream or its screen, one identifying with the
+  /// voice channel instead of the stream's RTC channel, or a websocket dialled
+  /// on the UDP port instead of 443.
+  static const identifyRefused = 4017;
+
+  /// The main gateway session this connection identified with expired, which
+  /// is what happens when that gateway reconnected and was handed a new one.
+  static const sessionExpired = 4022;
+}
+
 final class DiscordVoiceGatewayProtocol {
   DiscordVoiceGatewayProtocol({
     required this.credentials,
@@ -180,7 +208,8 @@ final class DiscordVoiceGatewayProtocol {
   ///
   /// A stream server carries many at once and is told which by key. Nothing
   /// else in the identify names one: the RTC server id it was given is per
-  /// stream, but the server answers an identify without the key with 4017.
+  /// stream, but the server answers an identify without the key with
+  /// `identifyRefused`.
   final String? streamKey;
   int sequenceAck = -1;
 
@@ -265,7 +294,8 @@ final class DiscordVoiceGatewayProtocol {
   DiscordVoiceGatewayAction heartbeatDue() {
     if (_heartbeat.hasExceededTolerance) {
       // Not resumable: a session this far behind is one Discord has already
-      // stopped recognising, and resuming into it is answered with 4006.
+      // stopped recognising, and resuming into it is answered with
+      // `sessionInvalid`.
       _canResume = false;
       return DiscordVoiceGatewayReconnect(
         error: StateError(
@@ -295,14 +325,16 @@ final class DiscordVoiceGatewayProtocol {
     return const DiscordVoiceGatewayReconnect();
   }
 
-  /// A session Discord ended but will re-issue. 4014 is "the voice server
-  /// moved, or you were moved"; 4022 is "this session expired"; 4006 is
-  /// "that session id is no longer valid". None of them is an error to show
-  /// somebody: the main gateway answers a ping with a fresh
+  /// A session Discord ended but will re-issue, and none of them is an error
+  /// to show somebody: the main gateway answers a ping with a fresh
   /// VOICE_SERVER_UPDATE and the connection is rebuilt from it. Redialling
   /// this endpoint would only reuse a token that is already dead, so this
   /// reports the state and waits to be handed a new one.
-  static const _sessionEndedCodes = {4006, 4014, 4022};
+  static const _sessionEndedCodes = {
+    DiscordVoiceCloseCodes.sessionInvalid,
+    DiscordVoiceCloseCodes.serverMoved,
+    DiscordVoiceCloseCodes.sessionExpired,
+  };
 
   /// Codes a redial cannot fix: the credential was rejected, the session
   /// was refused, or the protocol was used wrongly enough that Discord
@@ -311,7 +343,7 @@ final class DiscordVoiceGatewayProtocol {
     DiscordGatewayCloseCodes.authenticationFailed,
     4009,
     4011,
-    4017,
+    DiscordVoiceCloseCodes.identifyRefused,
     4020,
     4021,
   };
@@ -357,10 +389,10 @@ final class DiscordVoiceGatewayProtocol {
   /// four identifying fields.
   ///
   /// A Go Live connection declares the stream it is there to carry. Discord
-  /// closes one that does not with 4017 the moment it finishes connecting —
-  /// which is what every share and every attempt to watch somebody was doing.
-  /// `rid` "100" and quality 100 are the single full-quality layer; simulcast
-  /// would list more.
+  /// closes one that does not with `identifyRefused` the moment it finishes
+  /// connecting, which is what every share and every attempt to watch
+  /// somebody was doing. `rid` "100" and quality 100 are the single
+  /// full-quality layer; simulcast would list more.
   Map<String, Object?> identify() => {
     'op': 0,
     'd': {

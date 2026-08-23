@@ -89,6 +89,23 @@ void main() {
     });
   });
 
+  test('READY names the account the session belongs to', () {
+    final gateway = protocol()..identify();
+    expect(gateway.currentUserId, isNull);
+
+    gateway.accept({
+      'op': DiscordDesktopGatewayOpcode.dispatch,
+      's': 42,
+      't': 'READY',
+      'd': {
+        'session_id': 'session',
+        'user': const {'id': 'user-1'},
+      },
+    });
+
+    expect(gateway.currentUserId, 'user-1');
+  });
+
   test('HELLO and ACK drive the QoS heartbeat watchdog', () {
     final gateway = protocol();
     final hello = gateway.accept({

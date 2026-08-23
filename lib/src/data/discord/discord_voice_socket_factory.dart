@@ -16,7 +16,8 @@ import 'discord_voice_websocket.dart';
 ///   rides the transport cipher. It still offers the call's version: a
 ///   stream of a call running secure frames that offers 0 is refused;
 /// - a stream socket says at identify that it carries a screen. One that
-///   does not is closed with 4017 as soon as it finishes connecting;
+///   does not is closed with `identifyRefused` as soon as it finishes
+///   connecting;
 /// - a session without DAVE offers version 0, which is what tells Discord to
 ///   stay on the transport cipher rather than negotiating a group.
 ///

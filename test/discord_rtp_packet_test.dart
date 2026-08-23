@@ -35,6 +35,11 @@ void main() {
     expect(second.header.timestamp, 0x10 + 960);
   });
 
+  test('names the payload types Discord assigns the two media', () {
+    expect(DiscordRtpHeader.discordAudioPayloadType, 0x78);
+    expect(DiscordRtpHeader.discordVideoPayloadType, 101);
+  });
+
   test('wraps RTP sequence and timestamp counters', () {
     final packetizer = DiscordAudioRtpPacketizer(
       ssrc: 1,

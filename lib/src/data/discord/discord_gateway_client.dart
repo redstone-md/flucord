@@ -96,7 +96,7 @@ abstract interface class DiscordVoiceStateGateway {
   ///
   /// Read live rather than remembered: this session is replaced whenever the
   /// socket reconnects, and a connection identifying with the previous one is
-  /// closed with 4006.
+  /// closed with `sessionInvalid`.
   String? get sessionId;
 
   void updateVoiceState({

@@ -294,7 +294,7 @@ void main() {
     expect(service.activeVideoTransport, same(client));
     final frame = DiscordRtpFrame(
       header: DiscordRtpHeader(
-        payloadType: 101,
+        payloadType: DiscordRtpHeader.discordVideoPayloadType,
         sequence: 1,
         timestamp: 1,
         ssrc: 1,

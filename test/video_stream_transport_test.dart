@@ -51,7 +51,13 @@ void main() {
     expect(sent.every((frame) => frame.header.ssrc == 0x1234), isTrue);
     // Video takes its own payload type: a stream reusing the voice one would
     // be decoded as Opus and thrown away.
-    expect(sent.every((frame) => frame.header.payloadType == 101), isTrue);
+    expect(
+      sent.every(
+        (frame) =>
+            frame.header.payloadType == DiscordRtpHeader.discordVideoPayloadType,
+      ),
+      isTrue,
+    );
     expect(sent.map((frame) => frame.header.sequence), [0, 1]);
     expect(sent.map((frame) => frame.header.timestamp).toSet().length, 1);
     expect(sent.first.header.marker, isFalse);

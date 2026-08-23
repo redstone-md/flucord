@@ -192,8 +192,9 @@ final class DiscordVoiceGatewayClient
   }
 
   Uri _voiceUri() {
-    // The port Discord names is the UDP one — the media path — and dialling
-    // the websocket on it is answered with 4017 once the handshake finishes.
+    // The port Discord names is the UDP one, the media path, and dialling
+    // the websocket on it is answered with `identifyRefused` once the
+    // handshake finishes.
     // The socket belongs on 443, which is what dropping the port leaves.
     final endpoint = _protocol.credentials.endpoint.trim().split(':').first;
     final base = Uri.parse(
@@ -355,9 +356,9 @@ final class DiscordVoiceGatewayClient
   /// nothing about the UDP path the audio actually takes. A muted client sends
   /// no RTP at all, so the NAT mapping that path depends on expires, Discord
   /// stops hearing from the address it was told to send to, and the session is
-  /// closed with 4014 — which is what had a quiet call reconnecting every
-  /// minute or so. Discord's own libraries send a counter on the same socket
-  /// for exactly this.
+  /// closed with `serverMoved`, which is what had a quiet call
+  /// reconnecting every minute or so. Discord's own libraries send a
+  /// counter on the same socket for exactly this.
   void _startUdpKeepalive() {
     _keepaliveTimer?.cancel();
     _keepaliveTimer = Timer.periodic(

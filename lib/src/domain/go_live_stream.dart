@@ -99,7 +99,7 @@ final class GoLiveServer {
   ///
   /// Discord assigns a stream its own RTC server and names it in
   /// `STREAM_CREATE`; it is not the guild id, and identifying with the guild
-  /// is answered with 4006 — "that session is no longer valid". Empty when
+  /// is answered with `sessionInvalid`. Empty when
   /// the create has not been seen, where the guild is the best guess left.
   final String rtcServerId;
 

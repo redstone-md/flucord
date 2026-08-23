@@ -119,7 +119,7 @@ List<DiscordRtpFrame> _packetizedUnit() => [
   ).indexed)
     DiscordRtpFrame(
       header: DiscordRtpHeader(
-        payloadType: 101,
+        payloadType: DiscordRtpHeader.discordVideoPayloadType,
         sequence: index,
         timestamp: 1,
         ssrc: 99,

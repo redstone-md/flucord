@@ -120,7 +120,8 @@ final class DiscordStreamRtcService {
         // The RTC server and channel Discord named for this stream in
         // STREAM_CREATE, falling back to the guild and the voice channel when
         // no create was seen. Those two are what identify carries, and the
-        // wrong pair is refused: 4006 for the guild, 4017 for the rest.
+        // wrong pair is refused: `sessionInvalid` for the guild,
+        // `identifyRefused` for the rest.
         guildId: server.rtcServerId.isNotEmpty
             ? server.rtcServerId
             : server.key.guildId,

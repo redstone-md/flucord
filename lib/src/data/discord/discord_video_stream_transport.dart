@@ -21,7 +21,7 @@ final class DiscordVideoStreamTransport {
   DiscordVideoStreamTransport({
     required int ssrc,
     required VideoFrameSink sink,
-    int payloadType = videoPayloadType,
+    int payloadType = DiscordRtpHeader.discordVideoPayloadType,
     int initialSequence = 0,
     int maxPayloadSize = 1200,
   }) : _sender = DiscordVideoRtpSender(
@@ -31,11 +31,6 @@ final class DiscordVideoStreamTransport {
        ),
        _sink = sink,
        _payloadType = payloadType;
-
-  /// Discord's payload type for H.264 on a Go Live connection. Audio uses
-  /// 0x78 on the voice one; a stream that reused it would be decoded as Opus
-  /// and discarded.
-  static const videoPayloadType = 101;
 
   final DiscordVideoRtpSender _sender;
   final VideoFrameSink _sink;

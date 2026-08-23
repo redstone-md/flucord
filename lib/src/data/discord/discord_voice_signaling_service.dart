@@ -94,13 +94,14 @@ final class DiscordVoiceSignalingService
   ({String sessionId, String userId})? get streamIdentity {
     // The one the voice state carried, which is the session the call itself
     // identified with. The gateway's own is a different value on a desktop
-    // session, and a stream connection offering it is closed with 4006.
+    // session, and a stream connection offering it is closed with
+    // `sessionInvalid`.
     final sessionId = _currentSessionId ?? _gateway.sessionId;
     final userId = _currentUserId;
     if (sessionId == null || userId == null) return null;
     // The two sources, by their last four characters: if they differ, which
     // one a stream connection is given is the difference between a stream
-    // that opens and 4006.
+    // that opens and `sessionInvalid`.
     final line =
         'flucord.stream identity voice=…${_tail(_currentSessionId)} '
         'gateway=…${_tail(_gateway.sessionId)}';

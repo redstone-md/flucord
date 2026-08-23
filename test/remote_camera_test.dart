@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:flucord/src/application/remote_camera_controller.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
-import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -399,7 +398,7 @@ Future<ui.Image> _decodeOnePixel() {
 DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
     DiscordRtpFrame(
       header: DiscordRtpHeader(
-        payloadType: DiscordVideoStreamTransport.videoPayloadType,
+        payloadType: DiscordRtpHeader.discordVideoPayloadType,
         sequence: 1,
         timestamp: 0,
         ssrc: 41,

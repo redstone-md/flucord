@@ -17,7 +17,7 @@ final class DiscordGatewayHeartbeatWatchdog {
   /// One is too few. An acknowledgement that arrives a moment after the
   /// next interval is a slow network, not a dead socket, and tearing the
   /// connection down for it costs more than the wait: the voice gateway
-  /// answers the redial with 4006 and the call spends its life
+  /// answers the redial with `sessionInvalid` and the call spends its life
   /// reconnecting, and a reconnect on the main gateway ends every voice
   /// call downstream, because each voice session is identified with that
   /// gateway session's id.

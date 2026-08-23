@@ -124,6 +124,7 @@ final class DiscordDesktopGatewayProtocol {
   DiscordDesktopGatewayState _state = DiscordDesktopGatewayState.closed;
   int? _sequence;
   String? _sessionId;
+  String? _currentUserId;
   Uri? _resumeGatewayUri;
   final DiscordGatewayHeartbeatWatchdog _heartbeat =
       DiscordGatewayHeartbeatWatchdog();
@@ -139,6 +140,12 @@ final class DiscordDesktopGatewayProtocol {
   /// application's response back to this client rather than another one signed
   /// into the same account.
   String? get sessionId => _sessionId;
+
+  /// The account READY named, or `null` before the first one.
+  ///
+  /// An account fact rather than a session one: a reconnect of this client is
+  /// the same account, so it outlives session resets and is never cleared.
+  String? get currentUserId => _currentUserId;
 
   DiscordDesktopGatewayFrame identify({bool fastConnect = false}) {
     _sequence = 0;
@@ -294,6 +301,9 @@ final class DiscordDesktopGatewayProtocol {
     final data = rawData.cast<String, Object?>();
     if (rawName == 'READY') {
       _sessionId = data['session_id'] as String?;
+      final user = data['user'];
+      final userId = user is Map ? user['id'] : null;
+      if (userId is String) _currentUserId = userId;
       final resumeUrl = data['resume_gateway_url'] as String?;
       _resumeGatewayUri = resumeUrl == null ? null : Uri.tryParse(resumeUrl);
       _state = DiscordDesktopGatewayState.established;
@@ -310,8 +320,8 @@ final class DiscordDesktopGatewayProtocol {
   /// sequence with telemetry attached, and sending it here had Discord close
   /// the socket without a code the moment it arrived — every interval, for
   /// the life of the session. Voice identifies with this session, so each
-  /// closure ended the call with 4022 as well. The telemetry is not worth a
-  /// connection.
+  /// closure ended the call with `sessionExpired` as well. The telemetry
+  /// is not worth a connection.
   DiscordDesktopGatewayFrame _heartbeatFrame(Map<String, Object?> qos) =>
       DiscordDesktopGatewayFrame(
         DiscordDesktopGatewayOpcode.heartbeat,

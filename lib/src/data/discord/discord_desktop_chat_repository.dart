@@ -153,9 +153,7 @@ final class DiscordDesktopChatRepository
       DiscordRelationshipService();
   final DiscordConversationSummaryService _summaries =
       DiscordConversationSummaryService();
-  late final DiscordGoLiveService _goLive = DiscordGoLiveService(
-    _DesktopGoLiveGateway(_gateway, () => _currentMemberId),
-  );
+  late final DiscordGoLiveService _goLive = DiscordGoLiveService(_gateway);
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
   final StreamController<ChatRepositoryEvent> _events =
@@ -724,47 +722,6 @@ final class DiscordDesktopChatRepository
     await _cache.close();
     await _events.close();
   }
-}
-
-/// Adapts the desktop gateway to the frames Go Live needs.
-///
-/// The service is written against the five frames rather than the whole
-/// gateway so it can be tested without a socket, and this is the seam.
-final class _DesktopGoLiveGateway implements DiscordGoLiveGateway {
-  const _DesktopGoLiveGateway(this._gateway, this._currentUserId);
-
-  final DiscordDesktopGatewayClient _gateway;
-  final String? Function() _currentUserId;
-
-  @override
-  String? get currentUserId => _currentUserId();
-
-  @override
-  void sendStreamCreate({
-    required String type,
-    required String channelId,
-    String? guildId,
-    String? preferredRegion,
-  }) => _gateway.sendStreamCreate(
-    type: type,
-    channelId: channelId,
-    guildId: guildId,
-    preferredRegion: preferredRegion,
-  );
-
-  @override
-  void sendStreamDelete(String streamKey) =>
-      _gateway.sendStreamDelete(streamKey);
-
-  @override
-  void sendStreamWatch(String streamKey) => _gateway.sendStreamWatch(streamKey);
-
-  @override
-  void sendStreamPing(String streamKey) => _gateway.sendStreamPing(streamKey);
-
-  @override
-  void sendStreamSetPaused(String streamKey, {required bool paused}) =>
-      _gateway.sendStreamSetPaused(streamKey, paused: paused);
 }
 
 /// The read-only face the surfaces see.

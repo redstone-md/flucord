@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
-import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
@@ -31,11 +30,11 @@ void main() {
       final identify = protocol.identify()['d']! as Map<String, Object?>;
 
       // Discord closes a Go Live socket that identifies without this with
-      // 4017, the moment it finishes connecting — which is what every share
-      // and every attempt to watch somebody was doing.
+      // `identifyRefused`, the moment it finishes connecting, which is
+      // what every share and every attempt to watch somebody was doing.
       expect(identify['video'], isTrue);
       // A screen, not a camera. Discord closes a Go Live socket that says
-      // "video" with 4017 the moment the handshake finishes.
+      // "video" with `identifyRefused` the moment the handshake finishes.
       expect(identify['streams'], [
         {'type': 'screen', 'rid': '100', 'quality': 100},
       ]);
@@ -117,7 +116,8 @@ void main() {
 
       await client.connect();
       // Port 443 explicitly: the port Discord names in the endpoint is the
-      // UDP one, and dialling the websocket on it is answered with 4017.
+      // UDP one, and dialling the websocket on it is answered with
+      // `identifyRefused`.
       expect(connector.lastUri.toString(), 'wss://voice.example.test:443?v=8');
       expect(_jsonAt(socket.sent, 0)['op'], 0);
 
@@ -442,8 +442,8 @@ void main() {
       addTearDown(videoSubscription.cancel);
 
       for (final frame in [
-        // Opus on the voice payload type, a camera on 101, and a camera from
-        // somebody whose opcode 12 has not arrived.
+        // Opus on the voice payload type, a camera on the video one, and a
+        // camera from somebody whose opcode 12 has not arrived.
         DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
           payload: const [1, 2, 3],
@@ -453,7 +453,7 @@ void main() {
             sequence: 2,
             timestamp: 3,
             ssrc: 92,
-            payloadType: DiscordVideoStreamTransport.videoPayloadType,
+            payloadType: DiscordRtpHeader.discordVideoPayloadType,
           ),
           payload: const [4, 5, 6],
         ),
@@ -462,7 +462,7 @@ void main() {
             sequence: 3,
             timestamp: 4,
             ssrc: 500,
-            payloadType: DiscordVideoStreamTransport.videoPayloadType,
+            payloadType: DiscordRtpHeader.discordVideoPayloadType,
           ),
           payload: const [7, 8, 9],
         ),
@@ -572,8 +572,8 @@ void main() {
       await socket.closeFromServer(4014);
       await _flushEvents();
 
-      // 4014 is the voice server moving, not a failure to show somebody. The
-      // token that endpoint was reached with is dead, so redialling it would
+      // A `serverMoved` close is not a failure to show somebody. The token
+      // that endpoint was reached with is dead, so redialling it would
       // fail; the main gateway answers a ping with a fresh
       // VOICE_SERVER_UPDATE and the connection is rebuilt from that.
       expect(statuses.last.status, VoiceConnectionStatus.reconnecting);

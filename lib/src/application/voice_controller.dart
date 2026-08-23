@@ -471,8 +471,8 @@ final class VoiceController extends ChangeNotifier {
           _error = event.error;
         }
         // A connection that came back clears what killed the last one. The
-        // room used to keep showing "closed with code 4014" in red over a
-        // working call, because nothing ever took the message down.
+        // room used to keep showing a close code in red over a working
+        // call, because nothing ever took the message down.
         if (event.status == VoiceConnectionStatus.ready ||
             event.status == VoiceConnectionStatus.reconnecting) {
           _error = null;
