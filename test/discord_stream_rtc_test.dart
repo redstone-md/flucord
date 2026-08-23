@@ -276,6 +276,81 @@ void main() {
       expect(clients.last.closed, isFalse);
     });
 
+    test("the account's own stream under a new key closes the old one", () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      // A stream key names the channel it started in, so a share that
+      // follows the account into another channel arrives under a second key.
+      const moved = GoLiveStreamKey.guild(
+        guildId: 'guild-1',
+        channelId: 'voice-2',
+        userId: 'me',
+      );
+      for (final key in [
+        const GoLiveStreamKey.guild(
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          userId: 'me',
+        ),
+        moved,
+      ]) {
+        repository.announceServer(
+          GoLiveServer(key: key, endpoint: 'stream.discord.gg', token: 'token'),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(clients, hasLength(2));
+      expect(clients.first.closed, isTrue);
+      expect(service.sessionFor(moved), isNotNull);
+    });
+
+    test('a stream that ends closes its connection', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(service.sessionFor(_key), isNotNull);
+
+      // Both a local end and a STREAM_DELETE dispatch publish the stream's
+      // final state after removing it from the repository.
+      repository.end(_key);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.sessionFor(_key), isNull);
+      expect(clients.single.closed, isTrue);
+    });
+
     test('stopping one leaves the others alone', () async {
       final repository = _FakeRepository();
       final service = DiscordStreamRtcService(
@@ -406,12 +481,23 @@ final class _FakeClient implements DiscordVoiceClient {
 final class _FakeRepository implements GoLiveRepository {
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
+  final Map<String, GoLiveStream> _streams = {};
   int serverListeners = 0;
 
-  void announceServer(GoLiveServer server) => _servers.add(server);
+  void announceServer(GoLiveServer server) {
+    _streams.putIfAbsent(server.key.value, () => GoLiveStream(key: server.key));
+    _servers.add(server);
+  }
+
+  /// Ends a stream the way the real repository does: removed first, the
+  /// final state published after.
+  void end(GoLiveStreamKey key) {
+    final removed = _streams.remove(key.value);
+    if (removed != null) _updates.add(removed.copyWith(viewerIds: const []));
+  }
 
   @override
-  Map<String, GoLiveStream> get streams => const {};
+  Map<String, GoLiveStream> get streams => _streams;
 
   @override
   Stream<GoLiveStream> get updates => _updates.stream;

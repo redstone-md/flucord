@@ -39,6 +39,7 @@ final class DiscordStreamRtcService {
 
   GoLiveRepository? _repository;
   StreamSubscription<GoLiveServer>? _servers;
+  StreamSubscription<GoLiveStream>? _streamUpdates;
   bool _closed = false;
 
   /// Fires whenever a stream connection has been opened.
@@ -53,8 +54,10 @@ final class DiscordStreamRtcService {
     final repository = _repositoryProvider();
     if (identical(repository, _repository)) return _repository != null;
     unawaited(_servers?.cancel());
+    unawaited(_streamUpdates?.cancel());
     _repository = repository;
     _servers = repository?.servers.listen(_acceptServer);
+    _streamUpdates = repository?.updates.listen(_acceptStreamUpdate);
     return repository != null;
   }
 
@@ -77,11 +80,22 @@ final class DiscordStreamRtcService {
     if (_closed) return;
     _closed = true;
     await _servers?.cancel();
+    await _streamUpdates?.cancel();
     for (final session in _sessions.values.toList(growable: false)) {
       await session.close();
     }
     _sessions.clear();
     await _opened.close();
+  }
+
+  /// An update for a stream the repository no longer holds is that stream's
+  /// end: a local `endStream` and a `STREAM_DELETE` dispatch both publish the
+  /// final state after removing it. The connection must not outlive its
+  /// stream, whose credentials died with it.
+  void _acceptStreamUpdate(GoLiveStream stream) {
+    if (_closed) return;
+    if (_repository?.streams.containsKey(stream.key.value) ?? true) return;
+    unawaited(stop(stream.key));
   }
 
   void _acceptServer(GoLiveServer server) {
@@ -109,9 +123,22 @@ final class DiscordStreamRtcService {
     GoLiveServer server,
     DiscordStreamIdentity identity,
   ) async {
-    // A replaced endpoint for a stream already up is a move, so the old
-    // connection goes first — two sockets for one stream would both be sending.
+    // A replaced endpoint closes what it replaces, and not only the same key:
+    // a stream key names the channel it started in, so a share that follows
+    // the account into another channel, or a restart from one, arrives under
+    // a second key with the first connection still live. Two sockets for one
+    // account would both be sending, and the first one's credentials are
+    // already dead.
     await stop(server.key);
+    if (server.key.userId == identity.userId) {
+      final replaced = _sessions.values
+          .where((session) => session.key.userId == server.key.userId)
+          .map((session) => session.key)
+          .toList(growable: false);
+      for (final key in replaced) {
+        await stop(key);
+      }
+    }
     if (_closed) return;
     final session = DiscordStreamRtcSession(
       key: server.key,
