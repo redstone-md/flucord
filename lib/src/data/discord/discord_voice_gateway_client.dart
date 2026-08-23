@@ -258,6 +258,23 @@ final class DiscordVoiceGatewayClient
       case DiscordVoiceGatewayAwaitCredentials(:final error):
         // The token is dead; the main gateway will hand over a fresh
         // VOICE_SERVER_UPDATE and the connection is rebuilt from that.
+        //
+        // This socket is finished, not merely idle: a heartbeat timer left
+        // running counts acknowledgements a closed socket can never deliver,
+        // and its watchdog then redials this endpoint with the dead token,
+        // exactly what waiting was meant to avoid.
+        _generation++;
+        _heartbeatTimer?.cancel();
+        _heartbeatTimer = null;
+        _keepaliveTimer?.cancel();
+        _keepaliveTimer = null;
+        unawaited(_socketSubscription?.cancel());
+        _socketSubscription = null;
+        unawaited(_socket?.close());
+        _socket = null;
+        _protocol.dropSession();
+        _mediaTransport.reset();
+        _replaceTransportCipher(null);
         _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
       case DiscordVoiceGatewayFail(:final error):
         _fail(error);

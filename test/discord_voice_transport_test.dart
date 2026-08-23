@@ -584,6 +584,41 @@ void main() {
     });
 
     test(
+      'a session Discord ended does not redial on unanswered heartbeats',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final connector = _FakeVoiceSocketConnector(socket);
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: connector,
+          udpTransport: _FakeVoiceUdpTransport(),
+        );
+        addTearDown(client.close);
+
+        await client.connect();
+        socket.addJson({
+          'op': 8,
+          'd': {'heartbeat_interval': 60},
+        });
+        await _flushEvents();
+        await socket.closeFromServer(4006);
+        await _flushEvents();
+
+        // The heartbeat timer keeps its interval against a socket that can
+        // deliver no acknowledgement, and its watchdog used to redial the
+        // dead token the protocol had just decided not to redial.
+        await Future<void>.delayed(const Duration(milliseconds: 260));
+
+        expect(connector.connectCount, 1);
+        expect(
+          socket.sent.where((frame) => jsonDecode(frame as String)['op'] == 0),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
       'a socket that died under a send reconnects instead of throwing',
       () async {
         final socket = _FakeVoiceWebSocket();
