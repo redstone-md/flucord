@@ -52,6 +52,7 @@ import 'discord_reaction_handler.dart';
 import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
+import 'discord_voice_socket_factory.dart';
 
 part 'discord_chat_repository_messages.dart';
 part 'discord_chat_repository_emojis.dart';
@@ -98,7 +99,7 @@ final class DiscordChatRepository
            messageNonceFactory ?? DiscordMessageNonceFactory(),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
-         nativeDaveService: daveService,
+         socketFactory: DiscordVoiceGatewaySocketFactory(daveService: daveService),
        ) {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }

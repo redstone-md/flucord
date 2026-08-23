@@ -447,16 +447,15 @@ class _FlucordAppState extends State<FlucordApp> {
             ? signaling.streamIdentity
             : null;
       },
-      daveVersionProvider: () {
+
+      // The stream plane dials through the same factory the call does, so the
+      // two agree about DAVE without this widget knowing a version number.
+      socketFactoryProvider: () {
         final signaling = _chatController.voiceSignalingService;
         return signaling is DiscordVoiceSignalingService
-            ? signaling.daveProtocolVersion
-            : 0;
+            ? signaling.socketFactory
+            : null;
       },
-
-      // No DAVE service on the stream socket yet: it announces the call's
-      // version so the two agree, but a group of its own is the next problem,
-      // not this one.
     );
     // Where a ready stream connection goes. The fork between this account's
     // own share and everybody else's lives here rather than in the widget, so

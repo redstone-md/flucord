@@ -6,19 +6,13 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
-import '../../domain/voice_dave.dart';
 import 'discord_call_state_roster.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_gateway_client.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_session_assembler.dart';
+import 'discord_voice_socket_factory.dart';
 import 'discord_voice_state_roster.dart';
-
-typedef DiscordVoiceClientFactory =
-    DiscordVoiceClient Function(
-      VoiceServerCredentials credentials,
-      VoiceDaveService? daveService,
-    );
 
 final class DiscordVoiceSignalingService
     implements VoiceSignalingService, VoiceAudioTransport {
@@ -28,19 +22,18 @@ final class DiscordVoiceSignalingService
   /// instead of a method existing that would always throw.
   DiscordVoiceSignalingService({
     required DiscordVoiceStateGateway mainGateway,
-    required VoiceDaveService? nativeDaveService,
+    required DiscordVoiceSocketFactory socketFactory,
     this._callGateway,
-    DiscordVoiceClientFactory? voiceClientFactory,
   }) : _gateway = mainGateway,
-       _daveService = nativeDaveService,
-       _clientFactory = voiceClientFactory ?? _createVoiceClient {
+       _socketFactory = socketFactory {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
 
   final DiscordVoiceStateGateway _gateway;
   final DiscordCallGateway? _callGateway;
-  final VoiceDaveService? _daveService;
-  final DiscordVoiceClientFactory _clientFactory;
+
+  /// Where the call's sockets come from, and the stream plane's too.
+  final DiscordVoiceSocketFactory _socketFactory;
   final DiscordVoiceSessionAssembler _assembler =
       DiscordVoiceSessionAssembler();
   final DiscordVoiceStateRoster _roster = DiscordVoiceStateRoster();
@@ -85,12 +78,13 @@ final class DiscordVoiceSignalingService
     _currentUserId = userId;
   }
 
-  /// The DAVE version the call negotiates, which a stream of that call has to
-  /// match.
-  int get daveProtocolVersion => _daveService?.maxProtocolVersion ?? 0;
-
-  /// The secure-frames boundary a stream of this call needs its own group on.
-  VoiceDaveService? get daveService => _daveService;
+  /// The construction site both planes dial through.
+  ///
+  /// A stream socket has to offer the same DAVE version the call did, and
+  /// the version lives behind the factory this service was built with. The
+  /// stream plane reaches it the same way it reaches [streamIdentity]:
+  /// through the call, because that is where the account's DAVE state is.
+  DiscordVoiceSocketFactory get socketFactory => _socketFactory;
 
   /// What a second connection of this session identifies with.
   ///
@@ -396,7 +390,7 @@ final class DiscordVoiceSignalingService
         _desiredChannels[key] != credentials.channelId) {
       return;
     }
-    final client = _clientFactory(credentials, _daveService);
+    final client = _socketFactory.callSocket(credentials);
     _clients[key] = client;
     _clientSubscriptions[key] = client.events.listen(
       (event) => _onClientEvent(key, event),
@@ -495,16 +489,4 @@ final class DiscordVoiceSignalingService
     await _remoteAudio.close();
     await _events.close();
   }
-
-  static DiscordVoiceClient _createVoiceClient(
-    VoiceServerCredentials credentials,
-    VoiceDaveService? daveService,
-  ) => DiscordVoiceGatewayClient(
-    credentials: credentials,
-    // Zero is what the desktop client sends when it cannot do secure frames,
-    // and it is what tells Discord to leave the room on transport encryption
-    // rather than negotiating an MLS group this session could not join.
-    maxDaveProtocolVersion: daveService?.maxProtocolVersion ?? 0,
-    daveService: daveService,
-  );
 }

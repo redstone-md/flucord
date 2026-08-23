@@ -59,6 +59,7 @@ import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
 import 'discord_voice_signaling_service.dart';
+import 'discord_voice_socket_factory.dart';
 
 part 'discord_desktop_chat_events.dart';
 part 'discord_desktop_chat_session.dart';
@@ -95,7 +96,9 @@ final class DiscordDesktopChatRepository
 
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
-         nativeDaveService: daveService,
+         socketFactory: DiscordVoiceGatewaySocketFactory(
+           daveService: daveService,
+         ),
          callGateway: _gateway,
        ) {
     _memberLists = DiscordMemberListHandler(_mapper);

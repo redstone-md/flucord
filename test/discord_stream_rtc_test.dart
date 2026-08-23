@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_session.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
@@ -25,10 +26,10 @@ void main() {
       final session = DiscordStreamRtcSession(
         key: _key,
         credentials: _credentials,
-        clientFactory: (credentials) {
+        socketFactory: _StreamSocketFactory((credentials) {
           seen = credentials;
           return client;
-        },
+        }),
       );
       addTearDown(session.close);
 
@@ -48,7 +49,7 @@ void main() {
       final session = DiscordStreamRtcSession(
         key: _key,
         credentials: _credentials,
-        clientFactory: (_) => client,
+        socketFactory: _StreamSocketFactory((_) => client),
       );
       addTearDown(session.close);
 
@@ -62,7 +63,7 @@ void main() {
       final session = DiscordStreamRtcSession(
         key: _key,
         credentials: _credentials,
-        clientFactory: (_) => _FakeClient(),
+        socketFactory: _StreamSocketFactory((_) => _FakeClient()),
       );
       addTearDown(session.close);
 
@@ -83,7 +84,7 @@ void main() {
       final session = DiscordStreamRtcSession(
         key: _key,
         credentials: _credentials,
-        clientFactory: (_) => client,
+        socketFactory: _StreamSocketFactory((_) => client),
       );
       addTearDown(session.close);
       await session.connect();
@@ -100,7 +101,7 @@ void main() {
       final session = DiscordStreamRtcSession(
         key: _key,
         credentials: _credentials,
-        clientFactory: (_) => client,
+        socketFactory: _StreamSocketFactory((_) => client),
       );
       addTearDown(session.close);
       await session.connect();
@@ -136,11 +137,11 @@ void main() {
       final service = DiscordStreamRtcService(
         repositoryProvider: () => repository,
         identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        clientFactory: (_) {
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
           final client = _FakeClient();
           clients.add(client);
           return client;
-        },
+        }),
       );
       addTearDown(service.close);
       service.reconcile();
@@ -166,10 +167,10 @@ void main() {
         final service = DiscordStreamRtcService(
           repositoryProvider: () => repository,
           identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-          clientFactory: (credentials) {
+          socketFactoryProvider: () => _StreamSocketFactory((credentials) {
             seen = credentials;
             return _FakeClient();
-          },
+          }),
         );
         addTearDown(service.close);
         service.reconcile();
@@ -196,10 +197,10 @@ void main() {
       final service = DiscordStreamRtcService(
         repositoryProvider: () => repository,
         identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        clientFactory: (credentials) {
+        socketFactoryProvider: () => _StreamSocketFactory((credentials) {
           seen = credentials;
           return _FakeClient();
-        },
+        }),
       );
       addTearDown(service.close);
       service.reconcile();
@@ -224,10 +225,10 @@ void main() {
         // Before the account's voice session exists there is nothing to
         // identify with, and Discord reissues the endpoint on the next ask.
         identityProvider: () => null,
-        clientFactory: (_) {
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
           made++;
           return _FakeClient();
-        },
+        }),
       );
       addTearDown(service.close);
       service.reconcile();
@@ -251,11 +252,11 @@ void main() {
       final service = DiscordStreamRtcService(
         repositoryProvider: () => repository,
         identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        clientFactory: (_) {
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
           final client = _FakeClient();
           clients.add(client);
           return client;
-        },
+        }),
       );
       addTearDown(service.close);
       service.reconcile();
@@ -278,7 +279,7 @@ void main() {
       final service = DiscordStreamRtcService(
         repositoryProvider: () => repository,
         identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        clientFactory: (_) => _FakeClient(),
+        socketFactoryProvider: () => _StreamSocketFactory((_) => _FakeClient()),
       );
       addTearDown(service.close);
       service.reconcile();
@@ -306,7 +307,7 @@ void main() {
       final service = DiscordStreamRtcService(
         repositoryProvider: () => repository,
         identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        clientFactory: (_) => _FakeClient(),
+        socketFactoryProvider: () => _StreamSocketFactory((_) => _FakeClient()),
       );
       addTearDown(service.close);
 
@@ -437,4 +438,22 @@ final class _FakeRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
+}
+
+/// The socket factory seam, faked on the stream side only: hands back the
+/// client the test chose and shows what credentials were dialled with.
+final class _StreamSocketFactory implements DiscordVoiceSocketFactory {
+  _StreamSocketFactory(this._build);
+
+  final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
+
+  @override
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      throw UnsupportedError('the stream plane dials no call sockets');
+
+  @override
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => _build(credentials);
 }

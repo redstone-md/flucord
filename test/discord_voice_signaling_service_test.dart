@@ -6,16 +6,17 @@ import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
-import 'package:flucord/src/domain/voice_dave.dart';
 
 void main() {
   test('refuses to join before Discord Gateway READY', () async {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _UnusedSocketFactory(),
     );
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -37,12 +38,11 @@ void main() {
     final clients = <_FakeVoiceClient>[];
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
-      voiceClientFactory: (credentials, daveService) {
+      socketFactory: _CallSocketFactory((credentials) {
         final client = _FakeVoiceClient(credentials);
         clients.add(client);
         return client;
-      },
+      }),
     )..setCurrentUserId('bot-1');
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -92,15 +92,16 @@ void main() {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: null,
+
+      // An account with no native DAVE library. The join is not held hostage
+      // to it; that the sockets this factory would dial identify with
+      // max_dave_protocol_version 0 is the factory's own test.
+      socketFactory: DiscordVoiceGatewaySocketFactory(),
     )..setCurrentUserId('bot-1');
     addTearDown(service.close);
 
     await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
 
-    // Discord's own client identifies with max_dave_protocol_version 0 when
-    // secure frames are unavailable; a missing native library is not a reason
-    // to refuse the channel.
     expect(gateway.updates.single.channelId, 'voice-1');
   });
 
@@ -108,7 +109,7 @@ void main() {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _UnusedSocketFactory(),
     )..setCurrentUserId('bot-1');
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -143,7 +144,7 @@ void main() {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _UnusedSocketFactory(),
     )..setCurrentUserId('bot-1');
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -177,7 +178,7 @@ void main() {
     final gateway = _FakeMainGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _UnusedSocketFactory(),
     )..setCurrentUserId('bot-1');
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -209,12 +210,11 @@ void main() {
     final clients = <_FakeVoiceClient>[];
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
-      voiceClientFactory: (credentials, daveService) {
+      socketFactory: _CallSocketFactory((credentials) {
         final client = _FakeVoiceClient(credentials);
         clients.add(client);
         return client;
-      },
+      }),
     )..setCurrentUserId('bot-1');
     addTearDown(service.close);
 
@@ -271,8 +271,7 @@ void main() {
     ));
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
-      voiceClientFactory: (credentials, daveService) => client,
+      socketFactory: _CallSocketFactory((credentials) => client),
     )..setCurrentUserId('bot-1');
     addTearDown(service.close);
 
@@ -426,22 +425,32 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
   }
 }
 
-final class _CapabilityOnlyDaveService implements VoiceDaveService {
+/// The seam most of this file never reaches: joining and roster behaviour,
+/// not the sockets a join would dial.
+final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
   @override
-  int get maxProtocolVersion => 1;
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      throw UnsupportedError('no test here dials a call socket');
 
   @override
-  VoiceDaveEncryptor createEncryptor() =>
-      throw UnsupportedError('Media encryption is outside this test');
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('no test here dials a stream socket');
+}
+
+final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  _CallSocketFactory(this._build);
+
+  final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
 
   @override
-  VoiceDaveDecryptor createDecryptor() =>
-      throw UnsupportedError('Media decryption is outside this test');
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      _build(credentials);
 
   @override
-  VoiceDaveSession createSession({
-    required int protocolVersion,
-    required String channelId,
-    required String selfUserId,
-  }) => throw UnsupportedError('Not used by signaling boundary tests');
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('the call plane dials no streams');
 }

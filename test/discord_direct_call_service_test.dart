@@ -7,10 +7,11 @@ import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
-import 'package:flucord/src/domain/voice_dave.dart';
 
 void main() {
   test('subscribes to a channel before anything can be learned about it', () {
@@ -214,9 +215,8 @@ final class _Harness {
   _Harness() {
     signaling = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _CallSocketFactory((credentials) => _InertVoiceClient()),
       callGateway: gateway,
-      voiceClientFactory: (credentials, dave) => _InertVoiceClient(),
     );
     service = DiscordDirectCallService(
       api: api,
@@ -353,22 +353,18 @@ final class _InertVoiceClient implements DiscordVoiceClient {
   Future<void> close() => _events.close();
 }
 
-final class _CapabilityOnlyDaveService implements VoiceDaveService {
-  @override
-  int get maxProtocolVersion => 1;
+final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  _CallSocketFactory(this._build);
+
+  final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
 
   @override
-  VoiceDaveEncryptor createEncryptor() =>
-      throw UnsupportedError('Media encryption is outside this test');
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      _build(credentials);
 
   @override
-  VoiceDaveDecryptor createDecryptor() =>
-      throw UnsupportedError('Media decryption is outside this test');
-
-  @override
-  VoiceDaveSession createSession({
-    required int protocolVersion,
-    required String channelId,
-    required String selfUserId,
-  }) => throw UnsupportedError('Not used by the call boundary');
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('the call plane dials no streams');
 }

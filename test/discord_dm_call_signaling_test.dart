@@ -7,10 +7,11 @@ import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
-import 'package:flucord/src/domain/voice_dave.dart';
 
 void main() {
   test('a session with no call plane refuses to join a call', () async {
@@ -18,7 +19,7 @@ void main() {
     // No callGateway: this is the shape a bot transport has.
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _UnusedSocketFactory(),
     )..setCurrentUserId('me');
     final events = <VoiceSignalingEvent>[];
     final subscription = service.voiceEvents.listen(events.add);
@@ -40,9 +41,8 @@ void main() {
     final gateway = _FakeCallGateway();
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
+      socketFactory: _CallSocketFactory((credentials) => _InertVoiceClient()),
       callGateway: gateway,
-      voiceClientFactory: (credentials, dave) => _InertVoiceClient(),
     )..setCurrentUserId('me');
     addTearDown(service.close);
     addTearDown(gateway.close);
@@ -66,13 +66,12 @@ void main() {
     final clients = <_InertVoiceClient>[];
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
-      nativeDaveService: _CapabilityOnlyDaveService(),
-      callGateway: gateway,
-      voiceClientFactory: (credentials, dave) {
+      socketFactory: _CallSocketFactory((credentials) {
         final client = _InertVoiceClient();
         clients.add(client);
         return client;
-      },
+      }),
+      callGateway: gateway,
     )..setCurrentUserId('me');
     addTearDown(service.close);
     addTearDown(gateway.close);
@@ -390,22 +389,32 @@ final class _InertVoiceClient
   }
 }
 
-final class _CapabilityOnlyDaveService implements VoiceDaveService {
+/// The seam this file does not reach: the DM-call behaviour, not the sockets
+/// a call would dial.
+final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
   @override
-  int get maxProtocolVersion => 1;
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      throw UnsupportedError('no test here dials a call socket');
 
   @override
-  VoiceDaveEncryptor createEncryptor() =>
-      throw UnsupportedError('Media encryption is outside this test');
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('no test here dials a stream socket');
+}
+
+final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  _CallSocketFactory(this._build);
+
+  final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
 
   @override
-  VoiceDaveDecryptor createDecryptor() =>
-      throw UnsupportedError('Media decryption is outside this test');
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      _build(credentials);
 
   @override
-  VoiceDaveSession createSession({
-    required int protocolVersion,
-    required String channelId,
-    required String selfUserId,
-  }) => throw UnsupportedError('Not used by the signalling boundary');
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('the call plane dials no streams');
 }

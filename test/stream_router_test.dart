@@ -7,6 +7,7 @@ import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
@@ -76,11 +77,11 @@ final class _Wiring {
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
       identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-      clientFactory: (_) {
+      socketFactoryProvider: () => _StreamSocketFactory((_) {
         final client = _FakeClient(log);
         clients.add(client);
         return client;
-      },
+      }),
     )..reconcile();
     router = StreamRouter(
       opened: service.opened,
@@ -368,4 +369,21 @@ final class _FakeRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
+}
+
+/// The socket factory seam, faked on the stream side only.
+final class _StreamSocketFactory implements DiscordVoiceSocketFactory {
+  _StreamSocketFactory(this._build);
+
+  final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
+
+  @override
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      throw UnsupportedError('the stream plane dials no call sockets');
+
+  @override
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => _build(credentials);
 }
