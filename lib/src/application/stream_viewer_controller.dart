@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_h264_depacketizer.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_decoder.dart';
+import '../app_log.dart';
 
 /// One RTP payload as it arrives from a stream connection.
 final class IncomingVideoPacket {
@@ -168,8 +167,7 @@ final class StreamViewerController extends ChangeNotifier {
   }
 
   void _diagnose(String what) {
-    developer.log('flucord.stream $what', name: 'flucord.stream', level: 900);
-    if (kDebugMode) stdout.writeln('flucord.stream $what');
+    AppLog.warning('stream', what);
   }
 
   void _accept(IncomingVideoPacket packet) {

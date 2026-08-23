@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:protocol_handler/protocol_handler.dart';
 
 import '../domain/channel_link.dart';
+import '../app_log.dart';
 
 /// How flucord:// URLs reach the app on this platform.
 ///
@@ -51,7 +51,7 @@ final class ProtocolHandlerDesktopProtocolIntake
   }
 
   void _debugFailure(String feature, Object error) {
-    if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
+    AppLog.warning('desktop', '$feature unavailable', error: error);
   }
 }
 

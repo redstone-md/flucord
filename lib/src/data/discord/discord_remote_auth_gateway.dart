@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 
 import '../../domain/discord_remote_auth.dart';
 import '../../domain/discord_session.dart';
@@ -8,6 +7,7 @@ import 'discord_remote_auth_api.dart';
 import 'discord_remote_auth_crypto.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_rest_client.dart';
+import '../../app_log.dart';
 
 typedef RemoteAuthSocketConnector =
     Future<DiscordDesktopWebSocket> Function(Uri uri);
@@ -225,9 +225,9 @@ final class DiscordRemoteAuthGatewayClient implements DiscordRemoteAuthGateway {
   }
 
   static void _logFailure(String stage, Object error, StackTrace stackTrace) {
-    developer.log(
+    AppLog.error(
+      'remote_auth',
       'Remote auth $stage failed.',
-      name: 'flucord.remote_auth',
       error: error,
       stackTrace: stackTrace,
     );

@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
@@ -10,6 +7,7 @@ import '../../domain/video_encoder.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_socket_factory.dart';
+import '../../app_log.dart';
 
 /// One Go Live stream's RTC connection.
 ///
@@ -122,10 +120,9 @@ final class DiscordStreamRtcSession {
   /// reconnected. No token, and no endpoint host: this is a diagnostic, not a
   /// record of where somebody's stream lives.
   void _diagnose(String what, [Object? detail]) {
-    final line =
-        'flucord.stream[${key.userId}] $what'
-        '${detail == null ? '' : ': $detail'}';
-    developer.log(line, name: 'flucord.stream', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'stream',
+      '[${key.userId}] $what${detail == null ? '' : ': $detail'}',
+    );
   }
 }

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:developer' as developer;
 
 import 'discord_desktop_rest_protocol.dart';
 import 'discord_rest_client.dart';
+import '../../app_log.dart';
 
 /// Sends one built request and hands back the decoded body, if any.
 typedef DiscordReadStateAckSender =
@@ -281,11 +281,11 @@ final class DiscordReadStateAckQueue {
       }
       if (attempt + 1 < maxAttempts) await _delay(retryStep * (attempt + 1));
     }
-    developer.log(
+    AppLog.warning(
+      'discord.readstate',
       'Discord read-state ${request.method} ${request.path} failed after '
       '$maxAttempts attempts: $lastError',
-      name: 'flucord.discord.readstate',
-      level: 900,
+      error: lastError,
     );
     throw lastError;
   }

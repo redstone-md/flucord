@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
+import '../../app_log.dart';
 
 /// The gateway frames Go Live needs.
 ///
@@ -144,13 +142,13 @@ final class DiscordGoLiveService implements GoLiveRepository {
     Map<String, Object?> data,
     GoLiveStream? Function(Map<String, Object?>) accept,
   ) {
-    final line =
-        'flucord.stream $name fields: ${data.keys.join(', ')}'
-        '${name == 'STREAM_CREATE' ? ' rtc types: '
-                  '${data['rtc_server_id'].runtimeType}/'
-                  '${data['rtc_channel_id'].runtimeType}' : ''}';
-    developer.log(line, name: 'flucord.stream', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'stream',
+      '$name fields: ${data.keys.join(', ')}'
+      '${name == 'STREAM_CREATE' ? ' rtc types: '
+                '${data['rtc_server_id'].runtimeType}/'
+                '${data['rtc_channel_id'].runtimeType}' : ''}',
+    );
     return accept(data);
   }
 
@@ -200,13 +198,13 @@ final class DiscordGoLiveService implements GoLiveRepository {
       final tokenTail = token.length <= 4
           ? '?'
           : token.substring(token.length - 4);
-      final line =
-          'flucord.stream server update: create seen=${created != null} '
-          'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
-          'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false} '
-          'token=…$tokenTail';
-      developer.log(line, name: 'flucord.stream', level: 900);
-      if (kDebugMode) stdout.writeln(line);
+      AppLog.warning(
+        'stream',
+        'server update: create seen=${created != null} '
+        'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
+        'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false} '
+        'token=…$tokenTail',
+      );
       _servers.add(
         GoLiveServer(
           key: key,

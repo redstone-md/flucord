@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +15,7 @@ import 'discord_gateway_transport_codec.dart';
 import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
+import '../../app_log.dart';
 
 export 'discord_desktop_bootstrap.dart' show DiscordDesktopWorkspaceSnapshot;
 
@@ -149,10 +148,9 @@ final class DiscordDesktopGatewayClient
       final payloads = _codec.decode(raw);
       if (payloads.isEmpty) {
         if (_bootstrapCompleter?.isCompleted == false) {
-          developer.log(
+          AppLog.warning(
+            'discord.gateway',
             'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
-            name: 'flucord.discord.gateway',
-            level: 900,
           );
         }
         return;
@@ -251,10 +249,10 @@ final class DiscordDesktopGatewayClient
 
   void _acceptPayload(Map<String, Object?> payload) {
     if (_bootstrapCompleter?.isCompleted == false) {
-      developer.log(
+      AppLog.info(
+        'discord.gateway',
         'Discord Gateway bootstrap frame: op=${payload['op']}, '
         'event=${payload['t'] ?? '-'}',
-        name: 'flucord.discord.gateway',
       );
     }
     for (final action in _protocol.accept(payload)) {
@@ -432,10 +430,9 @@ final class DiscordDesktopGatewayClient
       // and WinHTTP in particular answers 12017 for a connection that went
       // away mid-frame. Left to propagate it killed the isolate's error zone
       // — the session then sat there looking connected while nothing moved.
-      developer.log(
+      AppLog.warning(
+        'discord.gateway',
         'Gateway send failed, reconnecting: ${_diagnosticFor(error)}',
-        name: 'flucord.discord.gateway',
-        level: 900,
       );
       unawaited(socket.close());
       _socket = null;
@@ -447,10 +444,9 @@ final class DiscordDesktopGatewayClient
     final code = _socket?.closeCode;
     _lastBootstrapCloseCode = code;
     if (_bootstrapCompleter?.isCompleted == false) {
-      developer.log(
+      AppLog.warning(
+        'discord.gateway',
         'Discord Gateway closed during bootstrap (code=${code ?? 'unknown'}).',
-        name: 'flucord.discord.gateway',
-        level: 900,
       );
     }
     if (code == DiscordGatewayCloseCodes.authenticationFailed) {
@@ -490,10 +486,9 @@ final class DiscordDesktopGatewayClient
 
   void _logBootstrapFailure(String stage, Object error, StackTrace stackTrace) {
     if (_bootstrapCompleter?.isCompleted != false) return;
-    developer.log(
+    AppLog.error(
+      'discord.gateway',
       'Discord Gateway bootstrap failed at $stage: ${_diagnosticFor(error)}',
-      name: 'flucord.discord.gateway',
-      level: 1000,
       stackTrace: stackTrace,
     );
   }
@@ -509,9 +504,10 @@ final class DiscordDesktopGatewayClient
   /// the first thing to check when Discord starts answering voice with
   /// `sessionExpired`, which is this session having been replaced.
   void _diagnose(String what, [Object? detail]) {
-    final line = 'flucord.gateway $what${detail == null ? '' : ': $detail'}';
-    developer.log(line, name: 'flucord.discord.gateway', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'discord.gateway',
+      '$what${detail == null ? '' : ': $detail'}',
+    );
   }
 
   void _scheduleReconnect({bool immediate = false, String reason = 'unknown'}) {

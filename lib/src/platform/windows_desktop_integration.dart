@@ -1,10 +1,10 @@
 import 'package:auto_updater/auto_updater.dart';
-import 'package:flutter/foundation.dart';
 
 import 'desktop_integration.dart';
 import 'desktop_integration_flow.dart';
 import 'desktop_protocol_intake.dart';
 import 'desktop_tray_coordinator.dart';
+import '../app_log.dart';
 
 /// Windows: updates through a WinSparkle appcast, and a tray that offers
 /// them. Everything else is the shared desktop flow.
@@ -71,6 +71,6 @@ final class AutoDesktopUpdater implements DesktopUpdater {
   }
 
   void _debugFailure(String feature, Object error) {
-    if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
+    AppLog.warning('desktop', '$feature unavailable', error: error);
   }
 }

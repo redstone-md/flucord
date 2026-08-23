@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import '../../domain/expression_favorites.dart';
 import '../proto/proto_message.dart';
@@ -7,6 +6,7 @@ import 'discord_frecency_proto.dart';
 import 'discord_user_settings_patch.dart';
 import 'discord_user_settings_proto.dart';
 import 'discord_user_settings_transport.dart';
+import '../../app_log.dart';
 
 /// The starred GIFs, stickers and emoji of the desktop-user session.
 ///
@@ -260,5 +260,5 @@ final class DiscordExpressionFavoritesRepository
   }
 
   static void _log(String message) =>
-      developer.log(message, name: 'flucord.discord.favorites', level: 900);
+      AppLog.warning('discord.favorites', message);
 }

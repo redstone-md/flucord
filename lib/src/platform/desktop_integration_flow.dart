@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'desktop_integration.dart';
@@ -8,6 +7,7 @@ import 'desktop_message_notification_controller.dart';
 import 'desktop_protocol_intake.dart';
 import 'desktop_protocol_router.dart';
 import 'desktop_tray_coordinator.dart';
+import '../app_log.dart';
 
 /// The app's update channel, when the platform has one. Windows wraps
 /// auto_updater, which reads an appcast: an XML feed listing releases. The
@@ -136,7 +136,7 @@ final class DesktopIntegrationFlow
   }
 
   void _debugFailure(String feature, Object error) {
-    if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
+    AppLog.warning('desktop', '$feature unavailable', error: error);
   }
 
   @override

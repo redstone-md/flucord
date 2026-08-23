@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +7,7 @@ import 'chat_controller.dart';
 import 'go_live_controller.dart';
 import 'voice_controller.dart';
 import '../domain/chat_models.dart';
+import '../app_log.dart';
 
 /// Joins a channel and starts a share on its own, when asked to by the
 /// environment.
@@ -59,20 +59,13 @@ final class DeveloperCheck {
         .firstOrNull;
     if (channel == null) return;
     _ran = true;
-    developer.log('flucord.dev joining ${channel.name}', name: 'flucord.dev');
-    stdout.writeln('flucord.dev joining ${channel.name}');
-    await _voice.connect(
-      guildId: channel.spaceId,
-      channelId: channel.id,
-    );
+    AppLog.info('dev', 'joining ${channel.name}');
+    await _voice.connect(guildId: channel.spaceId, channelId: channel.id);
     if (Platform.environment['FLUCORD_DEV_GOLIVE'] != '1') return;
     // After the transport has had a moment: a stream created before the call
     // is up is one Discord answers with an endpoint nobody can identify to.
     await Future<void>.delayed(const Duration(seconds: 6));
     stdout.writeln('flucord.dev starting a share');
-    await _goLive.start(
-      channelId: channel.id,
-      guildId: channel.spaceId,
-    );
+    await _goLive.start(channelId: channel.id, guildId: channel.spaceId);
   }
 }

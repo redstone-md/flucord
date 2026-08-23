@@ -9,7 +9,6 @@ import '../../domain/family_centre.dart';
 import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
@@ -60,6 +59,7 @@ import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
 import 'discord_voice_signaling_service.dart';
 import 'discord_voice_socket_factory.dart';
+import '../../app_log.dart';
 
 part 'discord_desktop_chat_events.dart';
 part 'discord_desktop_chat_session.dart';

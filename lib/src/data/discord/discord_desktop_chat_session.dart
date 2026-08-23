@@ -58,11 +58,9 @@ extension _DiscordDesktopChatSession on DiscordDesktopChatRepository {
     try {
       return await operation();
     } catch (error, stackTrace) {
-      developer.log(
-        'Discord desktop bootstrap failed at $stage: '
-        '${_diagnosticFor(error)}',
-        name: 'flucord.discord.desktop',
-        level: 1000,
+      AppLog.error(
+        'discord.desktop',
+        'Discord desktop bootstrap failed at $stage: ${_diagnosticFor(error)}',
         stackTrace: stackTrace,
       );
       Error.throwWithStackTrace(error, stackTrace);

@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -16,6 +14,7 @@ import '../../domain/video_encoder.dart';
 import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 import 'discord_voice_websocket.dart';
+import '../../app_log.dart';
 
 /// A connection on Discord's voice plane.
 ///
@@ -584,11 +583,10 @@ final class DiscordVoiceGatewayClient
   }
 
   void _diagnose(String what, [Object? detail]) {
-    final line =
-        'flucord.voice.transport $what'
-        '${detail == null ? '' : ': $detail'}';
-    developer.log(line, name: 'flucord.discord.voice', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'voice.transport',
+      '$what${detail == null ? '' : ': $detail'}',
+    );
   }
 
   void _scheduleReconnect({Object? error}) {

@@ -239,9 +239,6 @@ extension ChatControllerReadState on ChatController {
   /// re-reads the truth from the server, so surfacing this as the controller's
   /// error would replace a working chat window with a failure screen over an
   /// unread pip.
-  void _absorbReadStateFailure(Object error) => developer.log(
-    'Read-state update failed: $error',
-    name: 'flucord.readstate',
-    level: 900,
-  );
+  void _absorbReadStateFailure(Object error) =>
+      AppLog.warning('readstate', 'Read-state update failed', error: error);
 }

@@ -1,9 +1,9 @@
-import 'dart:developer' as developer;
 
 import '../../domain/read_state.dart';
 import 'discord_private_channel_directory.dart';
 import 'discord_read_state_codec.dart';
 import 'discord_ready_user_table.dart';
+import '../../app_log.dart';
 
 final class DiscordDesktopWorkspaceSnapshot {
   DiscordDesktopWorkspaceSnapshot({
@@ -184,11 +184,10 @@ final class DiscordDesktopBootstrap {
       // The recipients are simply absent from those channels, so the DM rows
       // will render without a name. Worth a line in the log, not a failed
       // bootstrap.
-      developer.log(
+      AppLog.warning(
+        'discord.gateway',
         'Discord private channels referenced $missed recipient(s) missing '
         'from the READY user table.',
-        name: 'flucord.discord.gateway',
-        level: 900,
       );
     }
     return expanded;

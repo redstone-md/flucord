@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
@@ -8,6 +7,7 @@ import 'discord_rest_client.dart';
 import 'discord_user_settings_patch.dart';
 import 'discord_user_settings_proto.dart';
 import 'discord_user_settings_transport.dart';
+import '../../app_log.dart';
 
 /// The account settings store for the desktop-user session.
 ///
@@ -268,5 +268,5 @@ final class DiscordUserSettingsRepository implements UserSettingsRepository {
   }
 
   static void _log(String message) =>
-      developer.log(message, name: 'flucord.discord.settings', level: 900);
+      AppLog.warning('discord.settings', message);
 }

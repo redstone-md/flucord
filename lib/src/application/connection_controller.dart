@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/foundation.dart';
 
 import '../data/disconnected_chat_repository.dart';
@@ -8,6 +6,7 @@ import '../domain/chat_repository_factory.dart';
 import '../domain/credential_vault.dart';
 import '../domain/discord_session.dart';
 import 'chat_controller.dart';
+import '../app_log.dart';
 
 enum SessionMode { disconnected, demo, discord }
 
@@ -144,10 +143,9 @@ final class ConnectionController extends ChangeNotifier {
       final repository = await _repositoryFactory.create(session);
       await _chatController.useRepository(repository);
     } catch (error, stackTrace) {
-      developer.log(
+      AppLog.error(
+        'connection',
         'Discord connection bootstrap failed: ${_diagnosticFor(error)}',
-        name: 'flucord.connection',
-        level: 1000,
         stackTrace: stackTrace,
       );
       await _ensureDisconnectedWorkspace();

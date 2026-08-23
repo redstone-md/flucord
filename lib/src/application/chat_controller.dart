@@ -6,7 +6,6 @@ import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
@@ -46,6 +45,7 @@ import '../domain/voice_message_recorder.dart';
 import '../domain/voice_message_repository.dart';
 import '../domain/workspace_permissions.dart';
 import 'channel_activity_persistence.dart';
+import '../app_log.dart';
 
 part 'chat_controller_events.dart';
 part 'chat_controller_typing.dart';

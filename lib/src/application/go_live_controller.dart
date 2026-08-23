@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_capture_hub.dart';
+import '../app_log.dart';
 
 /// A display this machine can share.
 ///
@@ -309,9 +308,7 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   void _diagnose(String what, [Object? detail]) {
-    final line = 'flucord.golive $what${detail == null ? '' : ': $detail'}';
-    developer.log(line, name: 'flucord.golive', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning('golive', '$what${detail == null ? '' : ': $detail'}');
   }
 
   void _notify() {

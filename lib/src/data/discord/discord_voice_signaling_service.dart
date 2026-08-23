@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -13,6 +11,7 @@ import 'discord_voice_gateway_client.dart';
 import 'discord_voice_session_assembler.dart';
 import 'discord_voice_socket_factory.dart';
 import 'discord_voice_state_roster.dart';
+import '../../app_log.dart';
 
 final class DiscordVoiceSignalingService
     implements VoiceSignalingService, VoiceAudioTransport {
@@ -102,11 +101,11 @@ final class DiscordVoiceSignalingService
     // The two sources, by their last four characters: if they differ, which
     // one a stream connection is given is the difference between a stream
     // that opens and `sessionInvalid`.
-    final line =
-        'flucord.stream identity voice=…${_tail(_currentSessionId)} '
-        'gateway=…${_tail(_gateway.sessionId)}';
-    developer.log(line, name: 'flucord.stream', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'stream',
+      'identity voice=…${_tail(_currentSessionId)} '
+      'gateway=…${_tail(_gateway.sessionId)}',
+    );
     return (sessionId: sessionId, userId: userId);
   }
 

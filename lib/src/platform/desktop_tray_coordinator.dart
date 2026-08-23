@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 import 'desktop_integration.dart';
+import '../app_log.dart';
 
 enum DesktopTrayAction { open, checkUpdates, quit }
 
@@ -240,7 +240,7 @@ final class DesktopTrayCoordinator {
   }
 
   void _debugFailure(String feature, Object error) {
-    if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
+    AppLog.warning('desktop', '$feature unavailable', error: error);
   }
 
   Future<void> dispose() async {

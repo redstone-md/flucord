@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_stream_rtc_session.dart';
 import 'discord_voice_socket_factory.dart';
+import '../../app_log.dart';
 
 /// The credentials a stream connection needs from the account's live session.
 ///
@@ -101,9 +99,10 @@ final class DiscordStreamRtcService {
   }
 
   void _diagnose(String what, [Object? detail]) {
-    final line = 'flucord.stream $what${detail == null ? '' : ': $detail'}';
-    developer.log(line, name: 'flucord.stream', level: 900);
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.warning(
+      'stream',
+      '$what${detail == null ? '' : ': $detail'}',
+    );
   }
 
   Future<void> _open(

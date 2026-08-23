@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
 
 import 'desktop_integration.dart';
+import '../app_log.dart';
 
 typedef DesktopFocusProbe = Future<bool> Function();
 
@@ -193,7 +193,7 @@ final class DesktopMessageNotificationController {
   }
 
   void _debugFailure(String feature, Object error) {
-    if (kDebugMode) debugPrint('Flucord $feature unavailable: $error');
+    AppLog.warning('desktop', '$feature unavailable', error: error);
   }
 
   Future<void> dispose() async {

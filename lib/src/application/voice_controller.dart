@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -9,6 +7,7 @@ import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
 import 'voice_audio_pipeline.dart';
+import '../app_log.dart';
 
 part 'voice_controller_devices.dart';
 
@@ -512,15 +511,10 @@ final class VoiceController extends ChangeNotifier {
   }
 
   void _logStatus(String what, VoiceConnectionStatus status, {Object? error}) {
-    final line =
-        'flucord.voice.status $what: ${status.name}'
-        '${error == null ? '' : ' ($error)'}';
-    developer.log(line, name: 'flucord.voice.status');
-    // Straight to stdout, not `debugPrint`: `dart:developer` writes to the VM
-    // service, which a desktop build's console never shows, and debugPrint
-    // throttles — under the native logging this client emits, the lines that
-    // mattered were the ones that went missing. Debug builds only.
-    if (kDebugMode) stdout.writeln(line);
+    AppLog.info(
+      'voice.status',
+      '$what: ${status.name}${error == null ? '' : ' ($error)'}',
+    );
   }
 
   void _handleSignalingDone() {
