@@ -563,6 +563,9 @@ final class _InMemoryQualityRepository implements StreamQualityRepository {
 /// these tests, and no capture is ever started.
 final class _UnusedEncoder implements VideoEncoderService {
   @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
+  @override
   bool get isSupported => false;
 
   @override

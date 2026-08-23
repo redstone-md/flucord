@@ -511,6 +511,9 @@ Future<void> _pumpBar(WidgetTester tester, SelfVideoController camera) async {
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   _FakeEncoder({this.supported = true, this.cameras = const ['Webcam']});
 
   final bool supported;

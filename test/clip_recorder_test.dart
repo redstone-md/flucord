@@ -291,6 +291,9 @@ _AttachedCapture _attachedCapture(NativeClipRecorder recorder) {
 
 /// A fake encoder whose frames a test emits by hand.
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
 

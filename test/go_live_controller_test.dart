@@ -380,6 +380,9 @@ void main() {
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   _FakeEncoder({this.cameras = const []});
 
   final StreamController<EncodedVideoFrame> _frames =

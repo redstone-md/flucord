@@ -155,6 +155,9 @@ void main() {
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   /// When set, a start waits on it before finishing, so a test can hold one
   /// capture mid-open.
   Completer<void>? gate;

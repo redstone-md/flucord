@@ -48,6 +48,9 @@ final class VideoCaptureHub {
   /// Encoded frames, from whichever capture is running.
   Stream<EncodedVideoFrame> get frames => _encoder.frames;
 
+  /// The native pipeline's own account of itself, for the pace log.
+  VideoEncoderDiagnostics? get diagnostics => _encoder.diagnostics;
+
   bool get isCapturing => _running;
 
   /// What the running capture started with, or what the last one did.

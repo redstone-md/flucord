@@ -62,6 +62,13 @@ typedef VideoOpenDart =
       Pointer<Pointer<Void>>,
     );
 
+typedef EncoderNameNative =
+    Int32 Function(Pointer<Void>, Pointer<Uint8>, Int32);
+typedef EncoderNameDart = int Function(Pointer<Void>, Pointer<Uint8>, int);
+
+typedef StageTimingsNative = Void Function(Pointer<Void>, Pointer<Int64>);
+typedef StageTimingsDart = void Function(Pointer<Void>, Pointer<Int64>);
+
 /// The five functions `flucord_video.dll` exports.
 ///
 /// Split from the service so the Dart half can be tested against a stand-in:
@@ -133,6 +140,8 @@ final class NativeVideoBindings {
         library,
         'flucord_video_last_error_stage',
       ),
+      encoderName = _lookUpEncoderName(library),
+      stageTimings = _lookUpStageTimings(library),
       clip = ClipWriterBindings.lookUp(library);
 
   /// A zero-argument counter the module may or may not export, depending on
@@ -143,6 +152,29 @@ final class NativeVideoBindings {
   ) {
     try {
       return library.lookupFunction<Int32 Function(), int Function()>(symbol);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// A function the module may or may not export, depending on when it was
+  /// built. A build without it must still load.
+  static EncoderNameDart? _lookUpEncoderName(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<EncoderNameNative, EncoderNameDart>(
+        'flucord_video_encoder_name',
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Same shape, different signature; looked up the same way.
+  static StageTimingsDart? _lookUpStageTimings(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<StageTimingsNative, StageTimingsDart>(
+        'flucord_video_stage_timings',
+      );
     } on Object {
       return null;
     }
@@ -197,8 +229,17 @@ final class NativeVideoBindings {
 
   /// Which call produced it: 1 finding the output, 2 creating the device on
   /// its adapter, 3 duplicating onto that device, 4 duplicating onto the one
-  /// the encoder already had.
+  /// the encoder already had, 5 handing a frame to the encoder, 6 reading an
+  /// event from a hardware encoder.
   final int Function()? lastErrorStage;
+
+  /// The running encoder's own description ("hardware: ... gop=ok"), or null
+  /// in a module built before it existed.
+  final EncoderNameDart? encoderName;
+
+  /// Writes four int64 values (wait, convert, encode, frames, all nanoseconds
+  /// but the last), or null in a module built before it existed.
+  final StageTimingsDart? stageTimings;
 
   /// The MP4 writer, or null in a module built before clips existed.
   final ClipWriterBindings? clip;

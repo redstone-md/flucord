@@ -78,6 +78,54 @@ final class NativeVideoEncoderService
   Stream<EncodedVideoFrame> get frames => _frames.stream;
 
   @override
+  VideoEncoderDiagnostics? get diagnostics {
+    final bindings = _bindings;
+    final handle = _handle;
+    if (bindings == null || handle == nullptr) return null;
+
+    var name = '';
+    final nameFunction = bindings.encoderName;
+    if (nameFunction != null) {
+      const capacity = 256;
+      final buffer = calloc<Uint8>(capacity);
+      try {
+        final length = nameFunction(handle, buffer, capacity);
+        if (length > 0) {
+          name = buffer.cast<Utf8>().toDartString(length: length);
+        }
+      } finally {
+        calloc.free(buffer);
+      }
+    }
+
+    final timingsFunction = bindings.stageTimings;
+    if (timingsFunction == null) {
+      return name.isEmpty
+          ? null
+          : VideoEncoderDiagnostics(
+              encoderName: name,
+              captureWaitNs: 0,
+              convertNs: 0,
+              encodeNs: 0,
+              frames: 0,
+            );
+    }
+    final values = calloc<Int64>(4);
+    try {
+      timingsFunction(handle, values);
+      return VideoEncoderDiagnostics(
+        encoderName: name,
+        captureWaitNs: values[0],
+        convertNs: values[1],
+        encodeNs: values[2],
+        frames: values[3],
+      );
+    } finally {
+      calloc.free(values);
+    }
+  }
+
+  @override
   Future<void> start(VideoEncoderSettings settings) async {
     final bindings = _bindings;
     if (bindings == null) {

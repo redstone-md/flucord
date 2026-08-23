@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_capture_hub.dart';
+import '../domain/video_encoder.dart';
 import '../app_log.dart';
 
 /// A display this machine can share.
@@ -122,26 +123,47 @@ final class GoLiveController extends ChangeNotifier {
   ///
   /// "A stream is slow" has three different culprits (the encoder, this
   /// client, the server) and no way to tell them apart from a viewer's
-  /// impression. The numbers here split the path in two: if the frame rate
-  /// that left this machine is the configured one, whatever a viewer sees is
-  /// happening beyond this socket.
+  /// impression. The numbers here split the path: the frame rate that left
+  /// this machine, and the per-frame cost of each native stage, so a slow
+  /// frame rate names its own bottleneck and a healthy one points past this
+  /// socket.
   void _startPaceLog() {
     _paceLog?.cancel();
     var frames = _transport?.sentFrames ?? 0;
     var packets = _transport?.sentPackets ?? 0;
+    VideoEncoderDiagnostics? stage;
     _paceLog = Timer.periodic(const Duration(seconds: 5), (_) {
       final transport = _transport;
       if (transport == null) return;
       final nextFrames = transport.sentFrames;
       final nextPackets = transport.sentPackets;
-      _diagnose(
-        'pace',
-        '${(nextFrames - frames) / 5} frames/s, '
-            '${(nextPackets - packets) / 5} packets/s',
-      );
+      final nextStage = _capture.diagnostics;
+      var line =
+          '${(nextFrames - frames) / 5} frames/s, '
+          '${(nextPackets - packets) / 5} packets/s';
+      final stages = _stageLine(stage, nextStage);
+      if (stages != null) line += ', $stages';
+      _diagnose('pace', line);
       frames = nextFrames;
       packets = nextPackets;
+      stage = nextStage;
     });
+  }
+
+  /// The per-frame cost of each native stage over the window, or null when
+  /// the platform has nothing to say or no frame went through.
+  String? _stageLine(
+    VideoEncoderDiagnostics? was,
+    VideoEncoderDiagnostics? now,
+  ) {
+    if (was == null || now == null) return null;
+    final frames = now.frames - was.frames;
+    if (frames <= 0) return null;
+    int micros(int deltaNs) => deltaNs ~/ frames ~/ 1000;
+    return '${now.encoderName}, '
+        'wait ${micros(now.captureWaitNs - was.captureWaitNs)}us, '
+        'convert ${micros(now.convertNs - was.convertNs)}us, '
+        'encode ${micros(now.encodeNs - was.encodeNs)}us';
   }
 
   bool get isStreaming =>

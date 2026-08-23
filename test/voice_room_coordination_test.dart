@@ -248,6 +248,9 @@ class _FakeGoLiveRepository implements GoLiveRepository {
 
 class _FakeEncoderService implements VideoEncoderService {
   @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
+  @override
   bool get isSupported => false;
 
   @override

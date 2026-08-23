@@ -166,6 +166,33 @@ final class VideoEncoderException implements Exception {
   String toString() => '$message$_platformSuffix';
 }
 
+/// The native pipeline's own account of itself: which encoder it runs and
+/// where its frame time went.
+///
+/// Read as deltas over a window and divided by the frames in it: the totals
+/// mean nothing on their own, and the pace log is the reader.
+final class VideoEncoderDiagnostics {
+  const VideoEncoderDiagnostics({
+    required this.encoderName,
+    required this.captureWaitNs,
+    required this.convertNs,
+    required this.encodeNs,
+    required this.frames,
+  });
+
+  /// "hardware: NVIDIA Video Encoder gop=ok" or "software: ...". Carries what
+  /// the encoder accepted, because a refused GOP looks like a working stream
+  /// until a viewer joins midway.
+  final String encoderName;
+
+  final int captureWaitNs;
+  final int convertNs;
+  final int encodeNs;
+
+  /// How many frames the timings above cover.
+  final int frames;
+}
+
 /// Turns a display into encoded frames.
 ///
 /// Deliberately not a WebRTC track: Go Live carries its own RTP over the voice
@@ -187,6 +214,10 @@ abstract interface class VideoEncoderService {
 
   /// Encoded frames, from the moment [start] returns until [stop].
   Stream<EncodedVideoFrame> get frames;
+
+  /// The native pipeline's own account of itself, for the pace log. Null
+  /// while nothing is capturing, and on platforms with nothing to say.
+  VideoEncoderDiagnostics? get diagnostics;
 
   Future<void> start(VideoEncoderSettings settings);
 

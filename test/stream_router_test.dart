@@ -307,6 +307,9 @@ final class _FakeClient implements DiscordVoiceClient {
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
 

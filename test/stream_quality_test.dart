@@ -263,6 +263,9 @@ final class _RefusingSaveRepository implements StreamQualityRepository {
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  @override
+  VideoEncoderDiagnostics? get diagnostics => null;
+
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
 
