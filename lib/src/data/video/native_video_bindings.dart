@@ -124,6 +124,10 @@ final class NativeVideoBindings {
             int Function(int, Pointer<Utf8>, int)
           >('flucord_video_camera_name'),
       captureScreen = _lookUpCaptureScreen(library),
+      closeAddress = library
+          .lookup<NativeFunction<Void Function(Pointer<Void>)>>(
+            'flucord_video_close',
+          ),
       lastError = _lookUpOptionalCounter(library, 'flucord_video_last_error'),
       lastErrorStage = _lookUpOptionalCounter(
         library,
@@ -183,6 +187,10 @@ final class NativeVideoBindings {
 
   /// One BGRA frame from a display, or null in a module without it.
   final ScreenshotCaptureDart? captureScreen;
+
+  /// The raw `flucord_video_close` address, for the finalizer that pairs a
+  /// leaked handle with its close.
+  final Pointer<NativeFinalizerFunction> closeAddress;
 
   /// Reads the HRESULT behind the last failure, when the module reports one.
   final int Function()? lastError;

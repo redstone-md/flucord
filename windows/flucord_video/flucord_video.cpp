@@ -17,6 +17,7 @@
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <mftransform.h>
+#include <strmif.h>
 #include <wrl/client.h>
 
 #pragma comment(lib, "d3d11.lib")
@@ -117,6 +118,22 @@ HRESULT ConfigureEncoder(FlucordVideoEncoder* state) {
   HRESULT hr = CoCreateInstance(CLSID_MSH264EncoderMFT, nullptr,
                                 CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&transform));
   if (FAILED(hr)) return hr;
+
+  // Real-time playback: a viewer decodes each picture as it arrives, so the
+  // encoder must not hold frames back for reordering. Other clients force
+  // max_num_reorder_frames = 0 in the SPS for this; low-latency mode is the
+  // platform's own switch for the same thing. Set before the media types:
+  // a hardware encoder may lock its codec API once types are negotiated, and
+  // best-effort because refusing it still leaves a watchable stream.
+  ComPtr<ICodecAPI> codec;
+  if (SUCCEEDED(transform.As(&codec))) {
+    VARIANT low_latency;
+    VariantInit(&low_latency);
+    low_latency.vt = VT_BOOL;
+    low_latency.boolVal = VARIANT_TRUE;
+    codec->SetValue(&CODECAPI_AVLowLatencyMode, &low_latency);
+    VariantClear(&low_latency);
+  }
 
   // Output first: the H.264 MFT refuses an input type until it knows what it
   // is producing.

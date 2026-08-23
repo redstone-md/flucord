@@ -6,8 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
-import '../domain/video_encoder.dart';
-import '../domain/voice_media.dart';
+import '../domain/video_capture_hub.dart';
 
 /// A display this machine can share.
 ///
@@ -32,24 +31,19 @@ final class GoLiveDisplay {
 final class GoLiveController extends ChangeNotifier {
   GoLiveController({
     required GoLiveRepository? Function() repositoryProvider,
-    required VoiceMediaService mediaService,
-    VideoEncoderService? encoder,
-    VideoEncoderSettings settings = const VideoEncoderSettings(),
+    required VideoCaptureHub capture,
     Duration pingInterval = const Duration(seconds: 30),
   }) : _repositoryProvider = repositoryProvider,
-       _mediaService = mediaService,
-       _encoder = encoder,
-       _settings = settings,
+       _capture = capture,
        _pingInterval = pingInterval;
 
   final GoLiveRepository? Function() _repositoryProvider;
-  final VoiceMediaService _mediaService;
 
-  /// Turns the display into H.264. Null on a build without the native module,
-  /// where a stream can still be opened and watched but not sent.
-  final VideoEncoderService? _encoder;
+  /// The machine's one capture and encode resource. The share is one of its
+  /// clients: the camera and the clip buffer draw on it too, and only one of
+  /// the three can capture at a time.
+  final VideoCaptureHub _capture;
 
-  final VideoEncoderSettings _settings;
   final Duration _pingInterval;
 
   DiscordVideoStreamTransport? _transport;
@@ -82,7 +76,7 @@ final class GoLiveController extends ChangeNotifier {
   GoLiveServer? get server => _server;
 
   /// Whether this build can send pictures at all.
-  bool get canEncode => _encoder?.isSupported ?? false;
+  bool get canEncode => _capture.isSupported;
 
   /// How many RTP packets the picture has taken so far, which is what tells a
   /// caller the stream is moving rather than merely open.
@@ -91,17 +85,15 @@ final class GoLiveController extends ChangeNotifier {
   /// Why sending stopped, if it did.
   Object? get transportError => _transport?.error;
 
-  /// Points the encoder's output at a stream connection.
+  /// Points the capture's output at a stream connection.
   ///
-  /// Called once the RTC side has an SSRC and somewhere to send: the encoder
+  /// Called once the RTC side has an SSRC and somewhere to send: the capture
   /// runs from the moment the stream opens, but its frames go nowhere until
   /// there is a socket to take them.
   void bindTransport({required int ssrc, required VideoFrameSink sink}) {
-    final encoder = _encoder;
-    if (encoder == null) return;
     _transport?.stop();
     _transport = DiscordVideoStreamTransport(ssrc: ssrc, sink: sink)
-      ..attach(encoder.frames);
+      ..attach(_capture.frames);
   }
 
   bool get isStreaming =>
@@ -111,7 +103,7 @@ final class GoLiveController extends ChangeNotifier {
 
   /// The displays this machine can share.
   List<GoLiveDisplay> get displays => [
-    for (var index = 0; index < (_encoder?.displayCount ?? 0); index++)
+    for (var index = 0; index < _capture.displayCount; index++)
       GoLiveDisplay(index: index, name: 'Screen ${index + 1}'),
   ];
 
@@ -125,6 +117,12 @@ final class GoLiveController extends ChangeNotifier {
   /// screen from a list read earlier is what failed with "that display is no
   /// longer attached"; the invented "0" before it failed with "source not
   /// found".
+  // Whether the capture behind this stream is the stream's to stop: the
+  // module is shared, and stopping what another client is running (the
+  // camera's session, when a share was refused) would tear down somebody
+  // else's picture on the way out.
+  bool _captureStarted = false;
+
   Future<bool> start({
     required String channelId,
     String? sourceId,
@@ -137,17 +135,13 @@ final class GoLiveController extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      // The encoder is what produces the picture Discord receives: it reads
-      // the display itself, through Desktop Duplication, and it is the only
-      // thing here that captures.
-      //
-      // Nothing else may hold a duplication of the same output at the same
-      // time: Windows refuses the second with E_INVALIDARG, which is what the
-      // room was reporting as "that display is no longer attached". The local
-      // preview this used to open through WebRTC was exactly that second
-      // holder, and a thumbnail of your own screen is not worth the stream it
-      // was cancelling.
-      await _encoder?.start(_settingsFor(sourceId));
+      // The capture is what produces the picture Discord receives: the one
+      // module reads the display itself, through Desktop Duplication, and
+      // nothing else in the client opens a duplication of its own. Windows
+      // refuses the second with E_INVALIDARG, which is what the room used
+      // to report as "that display is no longer attached".
+      await _capture.startShare(displayIndex: _displayIndexFor(sourceId));
+      _captureStarted = true;
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
@@ -174,17 +168,17 @@ final class GoLiveController extends ChangeNotifier {
     }
   }
 
-  /// The encoder settings for [sourceId].
+  /// Which display [sourceId] names.
   ///
-  /// A screen picked from the capturer is named `screen:<index>:<n>`; the
-  /// encoder addresses displays by index, so the index is read back out of it.
+  /// A screen picked from the picker is named `screen:<index>:<n>`; the
+  /// capture addresses displays by index, so the index is read back out of it.
   /// Anything else — a window, or no choice at all — is the primary display,
-  /// which is what the encoder captures by default.
-  VideoEncoderSettings _settingsFor(String? sourceId) {
-    if (sourceId == null || !sourceId.startsWith('screen:')) return _settings;
+  /// which is what the capture takes by default.
+  int _displayIndexFor(String? sourceId) {
+    if (sourceId == null || !sourceId.startsWith('screen:')) return 0;
     final index = int.tryParse(sourceId.split(':').elementAtOrNull(1) ?? '');
-    if (index == null || index < 0) return _settings;
-    return _settings.onDisplay(index);
+    if (index == null || index < 0) return 0;
+    return index;
   }
 
   /// Holds frames back without tearing the stream down.
@@ -194,9 +188,9 @@ final class GoLiveController extends ChangeNotifier {
     if (repository == null || key == null || !isStreaming) return false;
     try {
       await repository.setPaused(key, paused: paused);
-      // The encoder stops producing too: pausing that only told Discord would
+      // The capture stops producing too: pausing that only told Discord would
       // keep burning the CPU on frames nobody receives.
-      await _encoder?.setPaused(paused: paused);
+      await _capture.setPaused(paused: paused);
       _status = paused ? GoLiveStatus.paused : GoLiveStatus.live;
       return true;
     } on Object catch (error) {
@@ -269,16 +263,12 @@ final class GoLiveController extends ChangeNotifier {
   Future<void> _stopCapture() async {
     await _transport?.stop();
     _transport = null;
+    if (!_captureStarted) return;
+    _captureStarted = false;
     try {
-      await _encoder?.stop();
+      await _capture.stop();
     } on Object catch (_) {
       // Already stopped. Not worth reporting over whatever ended the stream.
-    }
-    try {
-      await _mediaService.stopScreenShare();
-    } on Object catch (_) {
-      // Already stopped, or the device went away with the stream. Neither is
-      // worth reporting over whatever ended the stream in the first place.
     }
   }
 

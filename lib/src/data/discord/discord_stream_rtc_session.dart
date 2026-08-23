@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_connection.dart';
+import '../../domain/video_encoder.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_gateway_client.dart';
@@ -107,20 +108,11 @@ final class DiscordStreamRtcSession {
   /// Declares the video SSRCs on this connection.
   bool announceVideo({
     required bool enabled,
-    int width = 1280,
-    int height = 720,
-    int framesPerSecond = 30,
-    int maxBitrate = 2500000,
+    required VideoEncoderSettings settings,
   }) {
     final client = _client;
     if (client is! DiscordVoiceGatewayClient) return false;
-    return client.announceVideo(
-      enabled: enabled,
-      width: width,
-      height: height,
-      framesPerSecond: framesPerSecond,
-      maxBitrate: maxBitrate,
-    );
+    return client.announceVideo(enabled: enabled, settings: settings);
   }
 
   Future<void> close() async {

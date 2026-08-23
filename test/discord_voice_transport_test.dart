@@ -7,6 +7,7 @@ import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/discord/discord_voice_session_assembler.dart';
 import 'package:flucord/src/data/discord/discord_voice_udp_transport.dart';
@@ -612,7 +613,13 @@ void main() {
         // The crash this was found in: a socket closes between the last thing
         // read from it and the next write, and turning a camera on threw from
         // inside the button's callback and took the client down.
-        expect(client.announceVideo(enabled: true), isTrue);
+        expect(
+          client.announceVideo(
+            enabled: true,
+            settings: VideoCaptureHub.cameraSettings,
+          ),
+          isTrue,
+        );
         await _flushEvents();
 
         expect(statuses.last.status, VoiceConnectionStatus.reconnecting);

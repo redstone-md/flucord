@@ -77,6 +77,7 @@ import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
 import 'domain/discord_social_sdk.dart';
 import 'domain/soundboard_playback.dart';
+import 'domain/video_capture_hub.dart';
 import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
@@ -282,6 +283,7 @@ class _FlucordAppState extends State<FlucordApp> {
   late final GifPickerController _gifPickerController;
   late final ExpressionFavoritesController _expressionFavoritesController;
   late final SoundboardPlaybackController _soundboardPlaybackController;
+  late final VideoCaptureHub _videoCapture;
   late final GoLiveController _goLiveController;
   late final StreamViewerController _streamViewerController;
   late final DiscordStreamRtcService _streamRtcService;
@@ -417,12 +419,15 @@ class _FlucordAppState extends State<FlucordApp> {
     _expressionFavoritesController = ExpressionFavoritesController(
       () => _chatController.expressionFavorites,
     );
-    // Go Live: the stream plane, the display encoder behind it, and the
-    // capture the local preview draws.
+    // Go Live: the stream plane and the transport binding behind it. The
+    // picture comes from the capture module shared with the camera and the
+    // clip buffer.
+    _videoCapture = VideoCaptureHub(
+      encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
+    );
     _goLiveController = GoLiveController(
       repositoryProvider: () => _chatController.goLive,
-      mediaService: widget.voiceMediaService ?? const NoopVoiceMediaService(),
-      encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
+      capture: _videoCapture,
     );
     // Watching somebody else's share: the decoder and the depacketiser in
     // front of it.
@@ -494,7 +499,7 @@ class _FlucordAppState extends State<FlucordApp> {
     // a reconnect replaces the transport, and a controller holding the old one
     // would encode into a socket that is already closed.
     _selfVideoController = SelfVideoController(
-      encoder: widget.videoEncoderService ?? NativeVideoEncoderService(),
+      capture: _videoCapture,
       transportProvider: () =>
           _chatController.voiceSignalingService is DiscordVoiceSignalingService
           ? (_chatController.voiceSignalingService
@@ -570,10 +575,10 @@ class _FlucordAppState extends State<FlucordApp> {
         (Platform.isWindows
             ? NativeClipRecorder()
             : const UnavailableClipRecorder());
-    // Fed from whichever encoder is running: the screen share and the camera
-    // are the same encoder, so the buffer follows whichever opened it.
-    final encoder = widget.videoEncoderService ?? NativeVideoEncoderService();
-    _clipRecorder.attach(encoder.frames, const VideoEncoderSettings());
+    // Fed from the capture module, whichever of its clients is running: a
+    // clip is the recording that was already going, and the share and the
+    // camera are both that recording.
+    _clipRecorder.attach(_videoCapture);
     // Going live is the only streaming this client knows about, so it is
     // what the automatic switch follows.
     _goLiveController.addListener(_syncStreamerMode);
@@ -742,7 +747,12 @@ class _FlucordAppState extends State<FlucordApp> {
       if (event is! VoiceTransportReadyEvent) return;
       unawaited(events.cancel());
       if (session.key == _goLiveController.streamKey) {
-        session.announceVideo(enabled: true);
+        // Declared with what the capture is actually running at: the share's
+        // profile is the capture module's, not a number of this caller's own.
+        session.announceVideo(
+          enabled: true,
+          settings: _videoCapture.settings ?? VideoCaptureHub.shareSettings,
+        );
         _goLiveController.bindTransport(
           ssrc: event.session.ssrc,
           sink: session.sendVideoFrame,

@@ -14,22 +14,6 @@ final class VoiceDevice {
   final VoiceDeviceKind kind;
 }
 
-enum VoiceCaptureKind { screen, window }
-
-final class VoiceCaptureSource {
-  const VoiceCaptureSource({
-    required this.id,
-    required this.name,
-    required this.kind,
-    this.thumbnail,
-  });
-
-  final String id;
-  final String name;
-  final VoiceCaptureKind kind;
-  final Uint8List? thumbnail;
-}
-
 final class VoicePcmChunk {
   VoicePcmChunk({
     required Uint8List bytes,
@@ -52,26 +36,20 @@ final class VoicePcmChunk {
   final int channels;
 }
 
+/// The microphone and speaker half of a voice session.
+///
+/// Deliberately without any screen capture: the machine's display is captured
+/// by the capture and encode module (`VideoCaptureHub`), which is the one
+/// path to a duplication. A second capture opened here was exactly what
+/// refused the share on the machines that could least afford it.
 abstract interface class VoiceMediaService {
-  Object? get previewRenderer;
   Stream<VoicePcmChunk> get microphonePcm;
-  Stream<void> get screenShareEnded;
 
   Future<void> initialize();
   Future<List<VoiceDevice>> enumerateDevices();
   Future<void> startMicrophone(String? deviceId);
   Future<void> setMicrophoneEnabled(bool enabled);
   Future<void> selectAudioOutput(String deviceId);
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources();
-  /// Starts capturing [sourceId], or the primary screen when it is null.
-  ///
-  /// Null is not a convenience: the platform's own default screen is more
-  /// reliable than naming one. A capture source id is a handle into a list
-  /// that changes when a display sleeps or is unplugged, and passing a stale
-  /// one fails with "that display is no longer attached" — which is what a
-  /// share of the main screen did every time.
-  Future<void> startScreenShare(String? sourceId);
-  Future<void> stopScreenShare();
   Future<void> stopMicrophone();
   Future<void> dispose();
 }

@@ -12,6 +12,7 @@ import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_media_transport.dart';
+import '../../domain/video_encoder.dart';
 import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 import 'discord_voice_websocket.dart';
@@ -498,22 +499,12 @@ final class DiscordVoiceGatewayClient
   @override
   bool announceVideo({
     required bool enabled,
-    int width = 1280,
-    int height = 720,
-    int framesPerSecond = 30,
-    int maxBitrate = 1200000,
+    required VideoEncoderSettings settings,
   }) {
     final ssrc = _ssrc;
     if (ssrc == null) return false;
     _send(
-      _protocol.video(
-        audioSsrc: ssrc,
-        enabled: enabled,
-        width: width,
-        height: height,
-        framesPerSecond: framesPerSecond,
-        maxBitrate: maxBitrate,
-      ),
+      _protocol.video(audioSsrc: ssrc, enabled: enabled, settings: settings),
     );
     return true;
   }

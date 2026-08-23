@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
-import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/presentation/widgets/go_live_button.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -39,8 +39,7 @@ void main() {
   ) async {
     final controller = GoLiveController(
       repositoryProvider: () => null,
-      mediaService: _FakeMedia(),
-      encoder: _FakeEncoder(),
+      capture: VideoCaptureHub(encoder: _FakeEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
 
@@ -58,12 +57,10 @@ void main() {
   testWidgets('shares what the picker chose, and nothing when dismissed', (
     tester,
   ) async {
-    final media = _FakeMedia();
     final encoder = _FakeEncoder();
     final controller = GoLiveController(
       repositoryProvider: _FakeRepository.new,
-      mediaService: media,
-      encoder: encoder,
+      capture: VideoCaptureHub(encoder: encoder),
     )..reconcile();
     addTearDown(controller.dispose);
     String? answer = 'screen:1:0';
@@ -88,15 +85,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    // Handed to the encoder, which is the only thing that captures: a second
-    // duplication of the same display is refused by Windows.
+    // Handed to the capture module, which is the only thing that captures: a
+    // second duplication of the same display is refused by Windows.
     expect(encoder.settings?.displayIndex, 1);
-    expect(media.shared, isEmpty);
 
     await controller.stop();
     await tester.pumpAndSettle();
     answer = null;
-    media.shared.clear();
 
     encoder.settings = null;
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
@@ -112,11 +107,9 @@ void main() {
   ) async {
     final repository = _FakeRepository();
     final encoder = _FakeEncoder();
-    final media = _FakeMedia();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: media,
-      encoder: encoder,
+      capture: VideoCaptureHub(encoder: encoder),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -125,8 +118,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
-    // The encoder captures the primary display for itself.
-    expect(media.shared, isEmpty);
+    // The capture module captures the primary display for itself.
     expect(encoder.started, 1);
     expect(repository.started, ['voice-1']);
 
@@ -135,15 +127,13 @@ void main() {
 
     expect(repository.ended, [_key]);
     expect(encoder.stopped, greaterThan(0));
-    expect(media.stopped, greaterThan(0));
   });
 
   testWidgets('a build with no encoder cannot start one', (tester) async {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-      encoder: _FakeEncoder(supported: false),
+      capture: VideoCaptureHub(encoder: _FakeEncoder(supported: false)),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -164,8 +154,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-      encoder: _FakeEncoder(),
+      capture: VideoCaptureHub(encoder: _FakeEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -198,8 +187,7 @@ void main() {
     final repository = _FakeRepository(failStart: true);
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-      encoder: _FakeEncoder(),
+      capture: VideoCaptureHub(encoder: _FakeEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -216,8 +204,7 @@ void main() {
     final encoder = _FakeEncoder();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-      encoder: encoder,
+      capture: VideoCaptureHub(encoder: encoder),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -250,7 +237,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
+      capture: VideoCaptureHub(encoder: _FakeEncoder(supported: false)),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -304,63 +291,6 @@ final class _FakeEncoder implements VideoEncoderService {
 
   @override
   Future<void> stop() async => stopped++;
-}
-
-final class _FakeMedia implements VoiceMediaService {
-  final StreamController<void> _screenEnded = StreamController.broadcast();
-  final StreamController<VoicePcmChunk> _microphone =
-      StreamController.broadcast();
-  final List<String> shared = [];
-  int stopped = 0;
-
-  @override
-  Object? get previewRenderer => null;
-
-  @override
-  Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
-
-  @override
-  Stream<void> get screenShareEnded => _screenEnded.stream;
-
-  @override
-  Future<void> initialize() async {}
-
-  @override
-  Future<List<VoiceDevice>> enumerateDevices() async => const [];
-
-  @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [
-    VoiceCaptureSource(
-      id: 'screen:0:0',
-      name: 'Primary screen',
-      kind: VoiceCaptureKind.screen,
-    ),
-  ];
-
-  @override
-  Future<void> startMicrophone(String? deviceId) async {}
-
-  @override
-  Future<void> setMicrophoneEnabled(bool enabled) async {}
-
-  @override
-  Future<void> stopMicrophone() async {}
-
-  @override
-  Future<void> selectAudioOutput(String deviceId) async {}
-
-  @override
-  Future<void> startScreenShare(String? sourceId) async =>
-      shared.add(sourceId ?? '<primary screen>');
-
-  @override
-  Future<void> stopScreenShare() async => stopped++;
-
-  @override
-  Future<void> dispose() async {
-    await _screenEnded.close();
-    await _microphone.close();
-  }
 }
 
 final class _FakeRepository implements GoLiveRepository {

@@ -27,25 +27,25 @@ final class EncodedVideoFrame {
 enum VideoCaptureSource { display, camera }
 
 /// What a stream is being encoded at.
+///
+/// A value object: the decisions about what a share or a camera should run at
+/// live in [VideoCaptureHub], which is the one place that names a bitrate.
 final class VideoEncoderSettings {
   const VideoEncoderSettings({
+    required this.bitrate,
     this.source = VideoCaptureSource.display,
     this.displayIndex = 0,
     this.width = 1280,
     this.height = 720,
     this.framesPerSecond = 30,
-    this.bitrate = 2500000,
   });
 
-  /// A camera at 720p30 rather than a screen's 2.5 Mbit: Discord sends camera
-  /// video considerably smaller than a share, and a webcam picture carries far
-  /// less detail than a desktop full of text.
   const VideoEncoderSettings.camera({
+    required this.bitrate,
     this.displayIndex = 0,
     this.width = 1280,
     this.height = 720,
     this.framesPerSecond = 30,
-    this.bitrate = 1200000,
   }) : source = VideoCaptureSource.camera;
 
   final VideoCaptureSource source;
@@ -56,11 +56,12 @@ final class VideoEncoderSettings {
   final int height;
   final int framesPerSecond;
 
-  /// Bits per second. Discord's own default for a 720p30 share.
+  /// Bits per second.
   final int bitrate;
 
-  /// The same settings pointed at another display.
-  VideoEncoderSettings onDisplay(int index) => VideoEncoderSettings(
+  /// The same settings pointed at another source: a display index, or a
+  /// camera index when [source] is a camera.
+  VideoEncoderSettings onSource(int index) => VideoEncoderSettings(
     source: source,
     displayIndex: index,
     width: width,
@@ -75,6 +76,20 @@ final class VideoEncoderSettings {
       framesPerSecond > 0 &&
       bitrate > 0 &&
       displayIndex >= 0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VideoEncoderSettings &&
+      other.source == source &&
+      other.displayIndex == displayIndex &&
+      other.width == width &&
+      other.height == height &&
+      other.framesPerSecond == framesPerSecond &&
+      other.bitrate == bitrate;
+
+  @override
+  int get hashCode =>
+      Object.hash(source, displayIndex, width, height, framesPerSecond, bitrate);
 }
 
 /// Why the encoder could not start.

@@ -273,27 +273,17 @@ final class _FakeCallService implements DirectCallService {
 }
 
 final class _SilentMediaService implements VoiceMediaService {
-  final StreamController<void> _screenEnded = StreamController.broadcast();
   final StreamController<VoicePcmChunk> _microphone =
       StreamController.broadcast();
 
   @override
-  Object? get previewRenderer => null;
-
-  @override
   Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
-
-  @override
-  Stream<void> get screenShareEnded => _screenEnded.stream;
 
   @override
   Future<void> initialize() async {}
 
   @override
   Future<List<VoiceDevice>> enumerateDevices() async => const [];
-
-  @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
 
   @override
   Future<void> selectAudioOutput(String deviceId) async {}
@@ -305,17 +295,10 @@ final class _SilentMediaService implements VoiceMediaService {
   Future<void> startMicrophone(String? deviceId) async {}
 
   @override
-  Future<void> startScreenShare(String? sourceId) async {}
-
-  @override
   Future<void> stopMicrophone() async {}
 
   @override
-  Future<void> stopScreenShare() async {}
-
-  @override
   Future<void> dispose() async {
-    await _screenEnded.close();
     await _microphone.close();
   }
 }

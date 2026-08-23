@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
@@ -269,29 +268,6 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    final renderer = controller.previewRenderer;
-    if (controller.isScreenSharing && renderer is RTCVideoRenderer) {
-      return ColoredBox(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            RTCVideoView(
-              renderer,
-              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-            ),
-            Positioned(
-              left: 12,
-              top: 12,
-              child: _StatusLabel(
-                icon: Icons.screen_share_outlined,
-                label: channelName,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -373,35 +349,6 @@ class _VoiceStage extends StatelessWidget {
               ),
         ),
       ],
-    );
-  }
-}
-
-class _StatusLabel extends StatelessWidget {
-  const _StatusLabel({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.surfaces.raised.withValues(alpha: 0.92),
-        border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15),
-            const SizedBox(width: 7),
-            Text(label, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-      ),
     );
   }
 }

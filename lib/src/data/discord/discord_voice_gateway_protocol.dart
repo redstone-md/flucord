@@ -1,3 +1,4 @@
+import '../../domain/video_encoder.dart';
 import '../../domain/voice_connection.dart';
 
 import 'discord_voice_transport_cipher.dart';
@@ -168,10 +169,7 @@ final class DiscordVoiceGatewayProtocol {
   Map<String, Object?> video({
     required int audioSsrc,
     required bool enabled,
-    int width = 1280,
-    int height = 720,
-    int framesPerSecond = 30,
-    int maxBitrate = 1200000,
+    required VideoEncoderSettings settings,
   }) {
     final videoSsrc = audioSsrc + 1;
     return {
@@ -190,12 +188,12 @@ final class DiscordVoiceGatewayProtocol {
             'active': enabled,
             'quality': 100,
             'rtx_ssrc': audioSsrc + 2,
-            'max_bitrate': maxBitrate,
-            'max_framerate': framesPerSecond,
+            'max_bitrate': settings.bitrate,
+            'max_framerate': settings.framesPerSecond,
             'max_resolution': {
               'type': 'fixed',
-              'width': width,
-              'height': height,
+              'width': settings.width,
+              'height': settings.height,
             },
           },
         ],

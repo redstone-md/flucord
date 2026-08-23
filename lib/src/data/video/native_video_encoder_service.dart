@@ -11,18 +11,38 @@ import 'native_video_bindings.dart';
 
 /// Screen capture and H.264 encoding through `flucord_video.dll`.
 ///
+/// The native lifecycle is owned here and nowhere else: frames are copied
+/// before the native buffer is released, the callable is closed only after
+/// the native close has joined the capture thread, and a handle nobody
+/// stopped is closed by a finalizer rather than leaked with the isolate.
+///
 /// The native side calls back on its own capture thread, which Dart cannot be
 /// entered from directly, so frames cross over a native port: the callback is
 /// a `NativeCallable.listener` and the bytes are copied before the native
 /// buffer is released.
-final class NativeVideoEncoderService implements VideoEncoderService {
+final class NativeVideoEncoderService
+    implements VideoEncoderService, Finalizable {
   NativeVideoEncoderService({NativeVideoBindings? bindings})
-    : _bindings = bindings ?? _openLibrary();
+    : _bindings = bindings ?? _openLibrary(),
+      // After the initializer above, the resident library is open whenever
+      // there was one to open, so the finalizer can be built from either it
+      // or the bindings this service was handed.
+      _finalizer = _finalizerFor(bindings);
+
+  /// The module, opened once for the whole process.
+  ///
+  /// Kept for the process lifetime on purpose: the finalizer below holds the
+  /// address of the module's close, and a module nobody holds a handle to
+  /// could be unmapped before the finalizer gets to call it.
+  static NativeVideoBindings? _residentLibrary;
 
   static NativeVideoBindings? _openLibrary() {
     if (!Platform.isWindows) return null;
+    if (_residentLibrary != null) return _residentLibrary;
     try {
-      return NativeVideoBindings(DynamicLibrary.open('flucord_video.dll'));
+      return _residentLibrary = NativeVideoBindings(
+        DynamicLibrary.open('flucord_video.dll'),
+      );
     } on Object {
       // A build without the native module still runs; Go Live simply reports
       // itself unavailable rather than the whole client failing to start.
@@ -30,7 +50,18 @@ final class NativeVideoEncoderService implements VideoEncoderService {
     }
   }
 
+  static NativeFinalizer? _handleFinalizer;
+
+  /// Pairs a leaked handle with its close. Built once, so the close address
+  /// outlives every service that shares it.
+  static NativeFinalizer? _finalizerFor(NativeVideoBindings? bindings) {
+    final library = bindings ?? _residentLibrary;
+    if (library == null) return null;
+    return _handleFinalizer ??= NativeFinalizer(library.closeAddress);
+  }
+
   final NativeVideoBindings? _bindings;
+  final NativeFinalizer? _finalizer;
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
 
@@ -82,6 +113,10 @@ final class NativeVideoEncoderService implements VideoEncoderService {
       }
       _handle = out.value;
       _callback = callback;
+      // The finalizer closes what stop might never get to: a service dropped
+      // while capturing would otherwise take the handle and the isolate's
+      // liveness with it.
+      _finalizer?.attach(this, out.value, detach: this);
     } finally {
       calloc
         ..free(config)
@@ -104,6 +139,7 @@ final class NativeVideoEncoderService implements VideoEncoderService {
   @override
   Future<void> stop() async {
     if (_handle == nullptr) return;
+    _finalizer?.detach(this);
     // The native close joins the capture thread, so no further callback can
     // arrive once it returns and the callable is safe to release.
     _bindings?.close(_handle);

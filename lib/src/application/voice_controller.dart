@@ -44,10 +44,6 @@ final class VoiceController extends ChangeNotifier {
               mediaService: _mediaService,
               codecFactory: audioCodecFactory,
             ) {
-    _screenEndedSubscription = _mediaService.screenShareEnded.listen((_) {
-      _isScreenSharing = false;
-      if (!_disposed) notifyListeners();
-    });
     _audioErrorSubscription = _audioPipeline?.errors.listen((error) {
       _error = error;
       if (!_disposed) notifyListeners();
@@ -60,7 +56,6 @@ final class VoiceController extends ChangeNotifier {
   final DirectCallServiceProvider _callServiceProvider;
   final VoiceAudioPlaybackService? _playbackService;
   final VoiceAudioPipeline? _audioPipeline;
-  StreamSubscription<void>? _screenEndedSubscription;
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
@@ -69,7 +64,6 @@ final class VoiceController extends ChangeNotifier {
   VoiceState _state = VoiceState.idle;
   VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
   List<VoiceDevice> _devices = const [];
-  List<VoiceCaptureSource> _captureSources = const [];
   String? _selectedInputId;
   String? _selectedOutputId;
   String? _connectedGuildId;
@@ -79,14 +73,13 @@ final class VoiceController extends ChangeNotifier {
   final Map<String, VoiceParticipant> _participants = {};
   Object? _error;
 
-  /// Why the audio devices could not be opened, kept apart from [_error] so a
-  /// transport failure is not reported as a missing microphone.
+  /// Why the audio devices could not be opened, kept apart from [_error] so
+  /// a transport failure is not reported as a missing microphone.
   Object? _deviceError;
   Object? _microphoneError;
   bool _isMuted = false;
   bool _isDeafened = false;
   bool _isCameraOn = false;
-  bool _isScreenSharing = false;
   bool _isAudioPlaybackActive = false;
   bool _isBusy = false;
   bool _disposed = false;
@@ -99,7 +92,6 @@ final class VoiceController extends ChangeNotifier {
   List<VoiceDevice> get outputDevices => _devices
       .where((device) => device.kind == VoiceDeviceKind.audioOutput)
       .toList(growable: false);
-  List<VoiceCaptureSource> get captureSources => _captureSources;
   String? get selectedInputId => _selectedInputId;
   String? get selectedOutputId => _selectedOutputId;
   String? get connectedGuildId => _connectedGuildId;
@@ -196,9 +188,7 @@ final class VoiceController extends ChangeNotifier {
   /// whole-state frame: the flag has to be replayed with every mute toggle and
   /// every reconnect, and the thing that replays those is this.
   bool get isCameraOn => _isCameraOn;
-  bool get isScreenSharing => _isScreenSharing;
   bool get isBusy => _isBusy;
-  Object? get previewRenderer => _mediaService.previewRenderer;
 
   Future<void> initialize() async {
     // A previous failure is tried again rather than remembered forever. Audio
@@ -404,7 +394,6 @@ final class VoiceController extends ChangeNotifier {
       await _audioPipeline?.setEnabled(false);
       await _setPlaybackEnabled(false);
       await _leaveActiveSession();
-      await _mediaService.stopScreenShare();
       await _mediaService.stopMicrophone();
       _connectedGuildId = null;
       _connectedChannelId = null;
@@ -412,7 +401,6 @@ final class VoiceController extends ChangeNotifier {
       _connectionStatus = VoiceConnectionStatus.disconnected;
       _transportSession = null;
       _participants.clear();
-      _isScreenSharing = false;
       _isMuted = false;
       _isDeafened = false;
       _isCameraOn = false;
@@ -624,7 +612,6 @@ final class VoiceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    unawaited(_screenEndedSubscription?.cancel());
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());

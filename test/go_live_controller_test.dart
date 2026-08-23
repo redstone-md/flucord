@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
-import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _key = GoLiveStreamKey.guild(
@@ -12,14 +12,25 @@ const _key = GoLiveStreamKey.guild(
   userId: 'me',
 );
 
+/// The controller over the machine's one capture module, with the fake
+/// encoder behind it.
+GoLiveController _controller(
+  _FakeRepository? repository, {
+  _FakeEncoder? encoder,
+  Duration pingInterval = const Duration(seconds: 30),
+}) {
+  final controller = GoLiveController(
+    repositoryProvider: () => repository,
+    capture: VideoCaptureHub(encoder: encoder ?? _FakeEncoder()),
+    pingInterval: pingInterval,
+  )..reconcile();
+  addTearDown(controller.dispose);
+  return controller;
+}
+
 void main() {
   test('a transport that cannot stream offers nothing', () async {
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => null,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
+    final controller = _controller(null);
 
     expect(controller.isSupported, isFalse);
     expect(
@@ -27,21 +38,17 @@ void main() {
       isFalse,
     );
     expect(await controller.watch(_key), isFalse);
-    expect(media.shared, isEmpty);
   });
 
   test('captures before announcing, and pings while live', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia();
+    addTearDown(repository.close);
     final encoder = _FakeEncoder();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
+    final controller = _controller(
+      repository,
       encoder: encoder,
       pingInterval: const Duration(milliseconds: 10),
-    )..reconcile();
-    addTearDown(controller.dispose);
-    addTearDown(repository.close);
+    );
 
     expect(
       await controller.start(
@@ -53,10 +60,9 @@ void main() {
     );
 
     // A stream announced with nothing behind it shows viewers a black
-    // rectangle, so the capture goes first — and the capture is the encoder's.
-    // Nothing else may hold a duplication of the same display.
+    // rectangle, so the capture goes first. And the capture is the capture
+    // module's, which is the only thing that duplicates the display.
     expect(encoder.started, 1);
-    expect(media.shared, isEmpty);
     expect(controller.streamKey, _key);
     expect(controller.status, GoLiveStatus.creating);
 
@@ -77,7 +83,7 @@ void main() {
     expect(repository.pings, isNotEmpty);
 
     await controller.stop();
-    expect(media.stopped, 1);
+    expect(encoder.stopped, 1);
     expect(repository.ended, [_key]);
     expect(controller.status, GoLiveStatus.idle);
     expect(controller.streamKey, isNull);
@@ -91,37 +97,29 @@ void main() {
 
   test('an encoder that fails leaves nothing announced', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-      encoder: _FakeEncoder()..failStart = true,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(
+      repository,
+      encoder: _FakeEncoder()..failStart = true,
+    );
 
     expect(
       await controller.start(sourceId: 'screen-1', channelId: 'voice-1'),
       isFalse,
     );
 
-    // The encoder is the picture. Announcing a stream with nothing behind it
+    // The capture is the picture. Announcing a stream with nothing behind it
     // shows every viewer a black rectangle.
     expect(controller.status, GoLiveStatus.failure);
     expect(controller.error, isNotNull);
     expect(repository.started, isEmpty);
-    expect(media.stopped, 1);
   });
 
   test('a refused stream stops the capture behind it', () async {
     final repository = _FakeRepository(failStart: true);
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final encoder = _FakeEncoder();
+    final controller = _controller(repository, encoder: encoder);
 
     expect(
       await controller.start(sourceId: 'screen-1', channelId: 'voice-1'),
@@ -129,18 +127,14 @@ void main() {
     );
 
     expect(controller.status, GoLiveStatus.failure);
-    expect(media.stopped, 1);
+    expect(encoder.stopped, 1);
   });
 
   test('a second start while one is running is refused', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final encoder = _FakeEncoder();
+    final controller = _controller(repository, encoder: encoder);
 
     await controller.start(sourceId: 'screen-1', channelId: 'voice-1');
     expect(
@@ -148,17 +142,44 @@ void main() {
       isFalse,
     );
 
-    expect(media.shared, isEmpty);
+    // One capture, still the first one's.
+    expect(encoder.started, 1);
+  });
+
+  test('a share while the camera holds the capture is refused', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    // One capture module, shared the way the app shares it: the camera and
+    // the share are clients of the same one.
+    final encoder = _FakeEncoder(cameras: const ['Webcam']);
+    final capture = VideoCaptureHub(encoder: encoder);
+    await capture.startCamera();
+    final controller = GoLiveController(
+      repositoryProvider: () => repository,
+      capture: capture,
+    )..reconcile();
+    addTearDown(controller.dispose);
+
+    expect(await controller.start(channelId: 'voice-1'), isFalse);
+
+    // The capture module is the arbiter: with the camera on it, a share is
+    // not started on the side and nothing is announced.
+    expect(encoder.started, 1);
+    expect(encoder.startedSettings.single.source, VideoCaptureSource.camera);
+    expect(repository.started, isEmpty);
+    expect(controller.status, GoLiveStatus.failure);
+    expect(controller.error, isA<VideoEncoderException>());
+
+    // And the camera itself is undisturbed.
+    expect(capture.isCapturing, isTrue);
+    expect(capture.settings!.source, VideoCaptureSource.camera);
+    await capture.stop();
   });
 
   test('pausing and resuming report themselves', () async {
     final repository = _FakeRepository();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
 
     // Nothing to pause before a stream exists.
     expect(await controller.setPaused(paused: true), isFalse);
@@ -183,12 +204,8 @@ void main() {
 
   test('a pause somebody else applied is followed', () async {
     final repository = _FakeRepository();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
     await controller.start(
       sourceId: 'screen-1',
       channelId: 'voice-1',
@@ -210,12 +227,8 @@ void main() {
 
   test('a refused pause is reported without changing the state', () async {
     final repository = _FakeRepository(failPause: true);
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
     await controller.start(
       sourceId: 'screen-1',
       channelId: 'voice-1',
@@ -232,12 +245,8 @@ void main() {
 
   test('somebody else\'s stream is ignored by this controller', () async {
     final repository = _FakeRepository();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
     await controller.start(
       sourceId: 'screen-1',
       channelId: 'voice-1',
@@ -257,12 +266,8 @@ void main() {
 
   test('watching somebody else asks for it', () async {
     final repository = _FakeRepository();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
 
     const other = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'them');
     expect(await controller.watch(other), isTrue);
@@ -275,32 +280,20 @@ void main() {
 
   test('stopping what was never started tears nothing down', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(repository);
 
     await controller.stop();
 
     expect(repository.ended, isEmpty);
     expect(controller.status, GoLiveStatus.idle);
-    // The capture is stopped regardless: it may be running without a stream
-    // if the announce failed.
-    expect(media.stopped, 1);
   });
 
   test('an end Discord refuses still releases the capture', () async {
     final repository = _FakeRepository(failEnd: true);
-    final media = _FakeMedia();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final encoder = _FakeEncoder();
+    final controller = _controller(repository, encoder: encoder);
     await controller.start(
       sourceId: 'screen-1',
       channelId: 'voice-1',
@@ -310,19 +303,17 @@ void main() {
     await controller.stop();
 
     expect(controller.error, isNotNull);
-    expect(media.stopped, 1);
+    expect(encoder.stopped, 1);
     expect(controller.streamKey, isNull);
   });
 
   test('a capture that will not stop does not mask the reason', () async {
     final repository = _FakeRepository();
-    final media = _FakeMedia(failStop: true);
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: media,
-    )..reconcile();
-    addTearDown(controller.dispose);
     addTearDown(repository.close);
+    final controller = _controller(
+      repository,
+      encoder: _FakeEncoder()..failStop = true,
+    );
     await controller.start(
       sourceId: 'screen-1',
       channelId: 'voice-1',
@@ -339,11 +330,7 @@ void main() {
     var repository = _FakeRepository();
     final first = repository;
     addTearDown(first.close);
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      mediaService: _FakeMedia(),
-    )..reconcile();
-    addTearDown(controller.dispose);
+    final controller = _controller(repository);
 
     repository = _FakeRepository();
     addTearDown(() => repository.close());
@@ -353,51 +340,24 @@ void main() {
 
     expect(controller.isSupported, isTrue);
   });
+
   group('sharing without picking a source', () {
-    test('shares the screen the platform reports, not an invented id', () async {
-      final media = _FakeMedia();
-      final controller = GoLiveController(
-        repositoryProvider: () => _FakeRepository(),
-        mediaService: media,
-      )..reconcile();
-      addTearDown(controller.dispose);
+    test('shares the primary display the capture takes by default', () async {
+      final encoder = _FakeEncoder();
+      final controller = _controller(_FakeRepository(), encoder: encoder);
 
       expect(await controller.start(channelId: 'voice-1'), isTrue);
 
-      // Nothing is named, and the encoder captures the primary display for
-      // itself. Naming one through a capture library is what left a
-      // duplication open and refused the share afterwards.
-      expect(media.shared, isEmpty);
+      // Nothing is named, and the capture module takes the primary display
+      // for itself.
+      expect(encoder.started, 1);
+      expect(encoder.startedSettings.single.displayIndex, 0);
     });
 
-    test('nothing but the encoder captures the display', () async {
-      final media = _FakeMedia(failShare: true);
-      final controller = GoLiveController(
-        repositoryProvider: () => _FakeRepository(),
-        mediaService: media,
-        encoder: _FakeEncoder(),
-      )..reconcile();
-      addTearDown(controller.dispose);
+    test('offers a screen per display the capture module can capture', () {
+      final controller = _controller(_FakeRepository());
 
-      expect(await controller.start(channelId: 'voice-1'), isTrue);
-
-      // Windows allows one duplication of an output at a time, and refuses a
-      // second with E_INVALIDARG — "that display is no longer attached", as
-      // the room reported it. The local preview opened through WebRTC was
-      // that second holder, so the share cancelled itself.
-      expect(media.shared, isEmpty);
-      expect(controller.status, isNot(GoLiveStatus.failure));
-    });
-
-    test('offers a screen per display the encoder can capture', () {
-      final controller = GoLiveController(
-        repositoryProvider: () => _FakeRepository(),
-        mediaService: _FakeMedia(),
-        encoder: _FakeEncoder(),
-      )..reconcile();
-      addTearDown(controller.dispose);
-
-      // Two, from the encoder — asking a capture library instead opens
+      // Two, from the capture module. Asking a capture library instead opens
       // duplications to build thumbnails with, which is the same conflict.
       expect(controller.displays.map((display) => display.sourceId), [
         'screen:0:0',
@@ -405,32 +365,32 @@ void main() {
       ]);
     });
 
-    test('a chosen screen is the one the encoder captures', () async {
-      final media = _FakeMedia();
+    test('a chosen screen is the one the capture takes', () async {
       final encoder = _FakeEncoder();
-      final controller = GoLiveController(
-        repositoryProvider: () => _FakeRepository(),
-        mediaService: media,
-        encoder: encoder,
-      )..reconcile();
-      addTearDown(controller.dispose);
+      final controller = _controller(_FakeRepository(), encoder: encoder);
 
       await controller.start(channelId: 'voice-1', sourceId: 'screen:2:0');
 
-      // The capturer names a screen by its index; the encoder addresses
+      // The picker names a screen by its index; the capture addresses
       // displays by the same index, and sharing the second monitor used to
       // encode the first.
-      expect(encoder.settings?.displayIndex, 2);
+      expect(encoder.startedSettings.single.displayIndex, 2);
     });
   });
 }
 
 final class _FakeEncoder implements VideoEncoderService {
+  _FakeEncoder({this.cameras = const []});
+
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
+  final List<String> cameras;
+  final List<VideoEncoderSettings> startedSettings = [];
   VideoEncoderSettings? settings;
   bool failStart = false;
+  bool failStop = false;
   int started = 0;
+  int stopped = 0;
 
   @override
   bool get isSupported => true;
@@ -439,7 +399,7 @@ final class _FakeEncoder implements VideoEncoderService {
   int get displayCount => 2;
 
   @override
-  List<String> get cameraNames => const [];
+  List<String> get cameraNames => cameras;
 
   @override
   Stream<EncodedVideoFrame> get frames => _frames.stream;
@@ -449,6 +409,7 @@ final class _FakeEncoder implements VideoEncoderService {
     if (failStart) throw StateError('no encoder');
     started++;
     settings = requested;
+    startedSettings.add(requested);
   }
 
   @override
@@ -458,82 +419,9 @@ final class _FakeEncoder implements VideoEncoderService {
   Future<void> requestKeyframe() async {}
 
   @override
-  Future<void> stop() async {}
-
-  Future<void> dispose() async => _frames.close();
-}
-
-final class _FakeMedia implements VoiceMediaService {
-  _FakeMedia({this.failShare = false, this.failStop = false});
-
-  final bool failShare;
-  final bool failStop;
-  final List<String> shared = [];
-  int stopped = 0;
-
-  final StreamController<void> _screenEnded = StreamController.broadcast();
-  final StreamController<VoicePcmChunk> _microphone =
-      StreamController.broadcast();
-
-  @override
-  Object? get previewRenderer => null;
-
-  @override
-  Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
-
-  @override
-  Stream<void> get screenShareEnded => _screenEnded.stream;
-
-  @override
-  Future<void> initialize() async {}
-
-  @override
-  Future<List<VoiceDevice>> enumerateDevices() async => const [];
-
-  List<VoiceCaptureSource> sources = const [
-    VoiceCaptureSource(
-      id: 'window:7',
-      name: 'A window',
-      kind: VoiceCaptureKind.window,
-    ),
-    VoiceCaptureSource(
-      id: 'screen:0:0',
-      name: 'Primary screen',
-      kind: VoiceCaptureKind.screen,
-    ),
-  ];
-
-  @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => sources;
-
-  @override
-  Future<void> startMicrophone(String? deviceId) async {}
-
-  @override
-  Future<void> setMicrophoneEnabled(bool enabled) async {}
-
-  @override
-  Future<void> stopMicrophone() async {}
-
-  @override
-  Future<void> selectAudioOutput(String deviceId) async {}
-
-  @override
-  Future<void> startScreenShare(String? sourceId) async {
-    if (failShare) throw StateError('no display');
-    shared.add(sourceId ?? '<primary screen>');
-  }
-
-  @override
-  Future<void> stopScreenShare() async {
-    stopped++;
+  Future<void> stop() async {
     if (failStop) throw StateError('already gone');
-  }
-
-  @override
-  Future<void> dispose() async {
-    await _screenEnded.close();
-    await _microphone.close();
+    stopped++;
   }
 }
 

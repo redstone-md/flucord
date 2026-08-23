@@ -80,20 +80,9 @@ void main() {
     expect(media.selectedOutput, 'speaker-2');
     expect(media.microphoneEnabled, isFalse);
 
-    await controller.loadCaptureSources();
-    expect(controller.captureSources.single.id, 'screen-1');
-    await controller.shareScreen('screen-1');
-    expect(controller.isScreenSharing, isTrue);
-    expect(media.sharedSource, 'screen-1');
-
-    media.endScreenShare();
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.isScreenSharing, isFalse);
-
     await controller.disconnect();
     expect(controller.isConnected, isFalse);
     expect(media.microphoneStopped, isTrue);
-    expect(media.screenStopped, isTrue);
   });
 
   test('tracks Discord voice signaling without claiming RTP audio', () async {
@@ -411,7 +400,6 @@ final class _FakeVoiceSignalingService
 final class _FakeVoiceMediaService implements VoiceMediaService {
   _FakeVoiceMediaService({this._operations});
 
-  final StreamController<void> _screenEnded = StreamController.broadcast();
   final StreamController<VoicePcmChunk> _microphone =
       StreamController.broadcast();
   final List<String>? _operations;
@@ -420,24 +408,14 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   bool failMicrophoneToggle = false;
   bool microphoneEnabled = true;
   bool microphoneStopped = false;
-  bool screenStopped = false;
   String? selectedOutput;
-  String? sharedSource;
-
-  void endScreenShare() => _screenEnded.add(null);
 
   void addPcm(Uint8List bytes) => _microphone.add(
     VoicePcmChunk(bytes: bytes, sampleRate: 48000, channels: 2),
   );
 
   @override
-  Object? get previewRenderer => null;
-
-  @override
   Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
-
-  @override
-  Stream<void> get screenShareEnded => _screenEnded.stream;
 
   @override
   Future<void> initialize() async {}
@@ -467,16 +445,6 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   ];
 
   @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => [
-    VoiceCaptureSource(
-      id: 'screen-1',
-      name: 'Entire screen',
-      kind: VoiceCaptureKind.screen,
-      thumbnail: Uint8List(0),
-    ),
-  ];
-
-  @override
   Future<void> selectAudioOutput(String deviceId) async {
     selectedOutput = deviceId;
   }
@@ -495,25 +463,13 @@ final class _FakeVoiceMediaService implements VoiceMediaService {
   }
 
   @override
-  Future<void> startScreenShare(String? sourceId) async {
-    sharedSource = sourceId;
-  }
-
-  @override
   Future<void> stopMicrophone() async {
     microphoneStopped = true;
     _operations?.add('microphone:stop');
   }
 
   @override
-  Future<void> stopScreenShare() async {
-    screenStopped = true;
-    _operations?.add('screen:stop');
-  }
-
-  @override
   Future<void> dispose() async {
-    await _screenEnded.close();
     await _microphone.close();
   }
 }

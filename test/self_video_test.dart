@@ -10,6 +10,7 @@ import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/data/video/native_camera_names.dart';
 import 'package:flucord/src/data/video/native_video_encoder_service.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -27,7 +28,11 @@ void main() {
         maxDaveProtocolVersion: 0,
       );
 
-      final frame = protocol.video(audioSsrc: 40, enabled: true);
+      final frame = protocol.video(
+        audioSsrc: 40,
+        enabled: true,
+        settings: VideoCaptureHub.cameraSettings,
+      );
       final body = frame['d']! as Map<String, Object?>;
       final stream = (body['streams']! as List).single as Map<String, Object?>;
 
@@ -57,7 +62,11 @@ void main() {
       );
 
       final body =
-          protocol.video(audioSsrc: 7, enabled: false)['d']!
+          protocol.video(
+                audioSsrc: 7,
+                enabled: false,
+                settings: VideoCaptureHub.cameraSettings,
+              )['d']!
               as Map<String, Object?>;
       final stream = (body['streams']! as List).single as Map<String, Object?>;
 
@@ -77,10 +86,12 @@ void main() {
           protocol.video(
                 audioSsrc: 1,
                 enabled: true,
-                width: 640,
-                height: 480,
-                framesPerSecond: 15,
-                maxBitrate: 500000,
+                settings: const VideoEncoderSettings(
+                  bitrate: 500000,
+                  width: 640,
+                  height: 480,
+                  framesPerSecond: 15,
+                ),
               )['d']!
               as Map<String, Object?>;
       final stream = (body['streams']! as List).single as Map<String, Object?>;
@@ -115,7 +126,7 @@ void main() {
       addTearDown(service.close);
 
       await expectLater(
-        service.start(const VideoEncoderSettings.camera()),
+        service.start(VideoCaptureHub.cameraSettings),
         throwsA(
           isA<VideoEncoderException>().having(
             (error) => error.failure,
@@ -456,7 +467,7 @@ SelfVideoController _controllerFor(
   bool accept = true,
   void Function(bool)? onAnnounce,
 }) => SelfVideoController(
-  encoder: encoder,
+  capture: VideoCaptureHub(encoder: encoder),
   transportProvider: () => transport,
   sinkProvider: () => transport?.send,
   announceSelfVideo: ({required bool enabled}) async {
@@ -561,10 +572,7 @@ final class _FakeVoiceVideoTransport implements VoiceVideoTransport {
   @override
   bool announceVideo({
     required bool enabled,
-    int width = 1280,
-    int height = 720,
-    int framesPerSecond = 30,
-    int maxBitrate = 1200000,
+    required VideoEncoderSettings settings,
   }) {
     announcements.add(enabled);
     return true;

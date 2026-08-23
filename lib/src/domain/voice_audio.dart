@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'video_encoder.dart';
 import 'voice_media.dart';
 
 final class VoiceRemoteOpusFrame {
@@ -49,12 +50,13 @@ abstract interface class VoiceVideoTransport {
 
   /// Declares the camera's SSRCs, or marks them inactive. Answers whether the
   /// frame could be sent at all.
+  ///
+  /// The settings travel whole: what the stream is declared with is what the
+  /// capture runs at, and unpacking it field by field here would only let the
+  /// two drift apart.
   bool announceVideo({
     required bool enabled,
-    int width,
-    int height,
-    int framesPerSecond,
-    int maxBitrate,
+    required VideoEncoderSettings settings,
   });
 }
 

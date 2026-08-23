@@ -1,7 +1,7 @@
 part of 'voice_controller.dart';
 
 /// The device half of the controller: which microphone and speaker the session
-/// uses, whether the microphone is live, and what is being shared.
+/// uses, and whether the microphone is live.
 ///
 /// Split out because none of it touches the connection state machine — it acts
 /// on the media service and republishes — and keeping it beside the join and
@@ -95,26 +95,6 @@ extension VoiceControllerDevices on VoiceController {
         () => _setPlaybackEnabled(!_isDeafened && isTransportReady),
       );
       await _sendJoin();
-    });
-  }
-
-  Future<void> loadCaptureSources() async {
-    await _run(() async {
-      _captureSources = await _mediaService.enumerateCaptureSources();
-    });
-  }
-
-  Future<void> shareScreen(String sourceId) async {
-    await _run(() async {
-      await _mediaService.startScreenShare(sourceId);
-      _isScreenSharing = true;
-    });
-  }
-
-  Future<void> stopScreenShare() async {
-    await _run(() async {
-      await _mediaService.stopScreenShare();
-      _isScreenSharing = false;
     });
   }
 }

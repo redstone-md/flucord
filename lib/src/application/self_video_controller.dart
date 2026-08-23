@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_video_stream_transport.dart';
 import '../data/discord/discord_voice_gateway_protocol.dart';
+import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
 
@@ -15,7 +16,7 @@ typedef SelfVideoAnnouncer = Future<bool> Function({required bool enabled});
 ///
 /// Deliberately apart from Go Live: a screen share is its own connection with
 /// its own stream key and its own viewers, while a camera rides the voice
-/// connection that is already open. The two share the encoder and the
+/// connection that is already open. The two share the capture module and the
 /// packetiser and nothing above them.
 ///
 /// Turning it on takes three announcements, and all three are needed. Opcode
@@ -27,23 +28,26 @@ typedef SelfVideoAnnouncer = Future<bool> Function({required bool enabled});
 /// with nothing behind it.
 final class SelfVideoController extends ChangeNotifier {
   SelfVideoController({
-    required VideoEncoderService encoder,
+    required VideoCaptureHub capture,
     required VoiceVideoTransport? Function() transportProvider,
     required VideoFrameSink? Function() sinkProvider,
     required SelfVideoAnnouncer announceSelfVideo,
-    VideoEncoderSettings settings = const VideoEncoderSettings.camera(),
-  }) : _encoder = encoder,
+  }) : _capture = capture,
        _transportProvider = transportProvider,
        _sinkProvider = sinkProvider,
-       _announce = announceSelfVideo,
-       _settings = settings;
+       _announce = announceSelfVideo;
 
-  final VideoEncoderService _encoder;
+  /// The machine's one capture and encode resource. The camera is one of its
+  /// clients: a share or the clip buffer draw on it too, and only one of them
+  /// can capture at a time.
+  final VideoCaptureHub _capture;
+
   final VoiceVideoTransport? Function() _transportProvider;
   final VideoFrameSink? Function() _sinkProvider;
   final SelfVideoAnnouncer _announce;
 
-  VideoEncoderSettings _settings;
+  /// Which camera the next start will use.
+  int _selectedCamera = 0;
   DiscordVideoStreamTransport? _transport;
   bool _isOn = false;
   bool _isBusy = false;
@@ -51,13 +55,13 @@ final class SelfVideoController extends ChangeNotifier {
 
   /// Whether this build can encode at all. A machine with no camera still
   /// reports supported: [cameras] is simply empty and the button says so.
-  bool get isSupported => _encoder.isSupported;
+  bool get isSupported => _capture.isSupported;
 
   /// The cameras attached, by name.
-  List<String> get cameras => _encoder.cameraNames;
+  List<String> get cameras => _capture.cameraNames;
 
   /// Which camera the next start will use.
-  int get selectedCamera => _settings.displayIndex;
+  int get selectedCamera => _selectedCamera;
 
   bool get isOn => _isOn;
 
@@ -70,20 +74,14 @@ final class SelfVideoController extends ChangeNotifier {
   int get sentPackets => _transport?.sentPackets ?? 0;
 
   void selectCamera(int index) {
-    if (index < 0 || index == _settings.displayIndex) return;
-    _settings = VideoEncoderSettings.camera(
-      displayIndex: index,
-      width: _settings.width,
-      height: _settings.height,
-      framesPerSecond: _settings.framesPerSecond,
-      bitrate: _settings.bitrate,
-    );
+    if (index < 0 || index == _selectedCamera) return;
+    _selectedCamera = index;
     notifyListeners();
   }
 
   Future<bool> turnOn() async {
     if (_isOn || _isBusy) return _isOn;
-    if (!_encoder.isSupported || cameras.isEmpty) {
+    if (!_capture.isSupported || cameras.isEmpty) {
       _fail(const VideoEncoderException(VideoEncoderFailure.noCamera));
       return false;
     }
@@ -100,28 +98,23 @@ final class SelfVideoController extends ChangeNotifier {
     _isBusy = true;
     _error = null;
     notifyListeners();
+    VideoEncoderSettings settings;
     try {
-      await _encoder.start(_settings);
+      settings = await _capture.startCamera(cameraIndex: _selectedCamera);
     } on Object catch (error) {
       _fail(error);
       return false;
     }
     // Declared before the first packet: a receiver that saw RTP on an
     // undeclared SSRC would drop it.
-    transport.announceVideo(
-      enabled: true,
-      width: _settings.width,
-      height: _settings.height,
-      framesPerSecond: _settings.framesPerSecond,
-      maxBitrate: _settings.bitrate,
-    );
+    transport.announceVideo(enabled: true, settings: settings);
     _transport?.stop();
     _transport =
         DiscordVideoStreamTransport(
             ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
             sink: sink,
           )
-          ..attach(_encoder.frames);
+          ..attach(_capture.frames);
     if (!await _announce(enabled: true)) {
       await _tearDown(transport);
       _fail(StateError('The gateway would not take the camera'));
@@ -155,7 +148,7 @@ final class SelfVideoController extends ChangeNotifier {
     _transport?.stop();
     _transport = null;
     if (!_isOn) return;
-    await _encoder.stop();
+    await _capture.stop();
     _isOn = false;
     notifyListeners();
   }
@@ -167,10 +160,15 @@ final class SelfVideoController extends ChangeNotifier {
   }
 
   Future<void> _tearDown(VoiceVideoTransport? transport) async {
-    transport?.announceVideo(enabled: false);
+    // The withdrawal carries the same shape it was declared with: the
+    // renderer marks the stream inactive rather than forgetting its numbers.
+    transport?.announceVideo(
+      enabled: false,
+      settings: _capture.settings ?? VideoCaptureHub.cameraSettings,
+    );
     _transport?.stop();
     _transport = null;
-    await _encoder.stop();
+    await _capture.stop();
   }
 
   void _fail(Object error) {
@@ -183,7 +181,9 @@ final class SelfVideoController extends ChangeNotifier {
   void dispose() {
     _transport?.stop();
     _transport = null;
-    unawaited(_encoder.stop());
+    // Only the camera's own capture: the module is shared, and a share that
+    // is running must outlive this controller being torn down.
+    if (_isOn) unawaited(_capture.stop());
     super.dispose();
   }
 }

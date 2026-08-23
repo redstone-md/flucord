@@ -6,22 +6,52 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('settings', () {
     test('rejects anything the encoder could not act on', () {
-      expect(const VideoEncoderSettings().isValid, isTrue);
-      expect(const VideoEncoderSettings(width: 0).isValid, isFalse);
-      expect(const VideoEncoderSettings(height: -1).isValid, isFalse);
-      expect(const VideoEncoderSettings(framesPerSecond: 0).isValid, isFalse);
+      expect(const VideoEncoderSettings(bitrate: 2500000).isValid, isTrue);
+      expect(const VideoEncoderSettings(bitrate: 2500000, width: 0).isValid,
+          isFalse);
+      expect(
+        const VideoEncoderSettings(bitrate: 2500000, height: -1).isValid,
+        isFalse,
+      );
+      expect(
+        const VideoEncoderSettings(bitrate: 2500000, framesPerSecond: 0)
+            .isValid,
+        isFalse,
+      );
       expect(const VideoEncoderSettings(bitrate: 0).isValid, isFalse);
-      expect(const VideoEncoderSettings(displayIndex: -1).isValid, isFalse);
+      expect(
+        const VideoEncoderSettings(bitrate: 2500000, displayIndex: -1).isValid,
+        isFalse,
+      );
     });
 
-    test('defaults to what Discord sends for a 720p share', () {
-      const settings = VideoEncoderSettings();
+    test('defaults to the shape every stream is sent in', () {
+      const settings = VideoEncoderSettings(bitrate: 2500000);
 
+      // The bitrate is deliberately not defaulted here: what a share or a
+      // camera runs at is the capture module's decision, and this value
+      // object only carries it.
       expect(settings.width, 1280);
       expect(settings.height, 720);
       expect(settings.framesPerSecond, 30);
-      expect(settings.bitrate, 2500000);
       expect(settings.displayIndex, 0);
+    });
+
+    test('settings of the same shape are the same settings', () {
+      // The clip buffer relies on this to notice when a new capture began
+      // under a different size or source.
+      expect(
+        const VideoEncoderSettings(bitrate: 1200000),
+        const VideoEncoderSettings(bitrate: 1200000),
+      );
+      expect(
+        const VideoEncoderSettings(bitrate: 1200000),
+        isNot(const VideoEncoderSettings(bitrate: 2500000)),
+      );
+      expect(
+        const VideoEncoderSettings(bitrate: 1200000, width: 640),
+        isNot(const VideoEncoderSettings(bitrate: 1200000)),
+      );
     });
   });
 

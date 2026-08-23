@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../domain/video_capture_hub.dart';
 import '../../domain/video_encoder.dart';
 import 'native_video_bindings.dart';
 
@@ -31,7 +32,7 @@ enum ClipFailure {
   write,
 }
 
-/// The last few seconds of what the encoder produced.
+/// The last few seconds of what the machine's capture encoded.
 ///
 /// Discord's `SAVE_CLIP`: a clip is not a recording somebody started, it is
 /// the recording that was already running. Frames are kept as they were
@@ -43,8 +44,8 @@ abstract interface class ClipRecorder {
   /// How much is buffered right now.
   Duration get buffered;
 
-  /// Follows [frames] until [detach].
-  void attach(Stream<EncodedVideoFrame> frames, VideoEncoderSettings settings);
+  /// Follows the capture module's frames until [detach].
+  void attach(VideoCaptureHub capture);
 
   void detach();
 
@@ -63,10 +64,7 @@ final class UnavailableClipRecorder implements ClipRecorder {
   Duration get buffered => Duration.zero;
 
   @override
-  void attach(
-    Stream<EncodedVideoFrame> frames,
-    VideoEncoderSettings settings,
-  ) {}
+  void attach(VideoCaptureHub capture) {}
 
   @override
   void detach() {}
@@ -111,6 +109,11 @@ final class NativeClipRecorder implements ClipRecorder {
 
   final Queue<EncodedVideoFrame> _frames = Queue<EncodedVideoFrame>();
   StreamSubscription<EncodedVideoFrame>? _subscription;
+  VideoCaptureHub? _capture;
+
+  /// What the frames in the buffer were encoded at. Set when they arrived,
+  /// because only the running capture knows, and kept after it stops: a clip
+  /// is saved after the session it belongs to.
   VideoEncoderSettings? _settings;
 
   @override
@@ -122,20 +125,29 @@ final class NativeClipRecorder implements ClipRecorder {
       : _frames.last.timestamp - _frames.first.timestamp;
 
   @override
-  void attach(Stream<EncodedVideoFrame> frames, VideoEncoderSettings settings) {
+  void attach(VideoCaptureHub capture) {
     detach();
-    _settings = settings;
-    _subscription = frames.listen(_accept);
+    _capture = capture;
+    _subscription = capture.frames.listen(_accept);
   }
 
   @override
   void detach() {
     unawaited(_subscription?.cancel());
     _subscription = null;
+    _capture = null;
     _frames.clear();
+    _settings = null;
   }
 
   void _accept(EncodedVideoFrame frame) {
+    final settings = _capture?.settings;
+    if (settings != null && settings != _settings) {
+      // A new capture began under different settings: the buffer holds
+      // pictures of another size or source, and one file cannot mix them.
+      _frames.clear();
+      _settings = settings;
+    }
     _frames.add(frame);
     _trim();
   }
@@ -167,9 +179,12 @@ final class NativeClipRecorder implements ClipRecorder {
   Future<ClipResult> save() async {
     final writer = _writer;
     final settings = _settings;
-    if (writer == null || settings == null) {
+    if (writer == null) {
       return const ClipResult.failed(ClipFailure.unsupported);
     }
+    // No settings means no frame ever arrived, which means there is nothing
+    // worth saving rather than something that failed to write.
+    if (settings == null) return const ClipResult.failed(ClipFailure.empty);
     final frames = clipFrames;
     if (frames.isEmpty) return const ClipResult.failed(ClipFailure.empty);
 

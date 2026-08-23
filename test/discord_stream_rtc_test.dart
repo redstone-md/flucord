@@ -6,6 +6,7 @@ import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_session.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -67,7 +68,13 @@ void main() {
       // Silently dropping the frame would look like a stream that opened and
       // showed a black rectangle.
       expect(() => session.sendVideoFrame(_frame), throwsA(isA<StateError>()));
-      expect(session.announceVideo(enabled: true), isFalse);
+      expect(
+        session.announceVideo(
+          enabled: true,
+          settings: VideoCaptureHub.shareSettings,
+        ),
+        isFalse,
+      );
     });
 
     test('remembers the SSRC the connection was given', () async {

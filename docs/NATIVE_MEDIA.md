@@ -6,9 +6,23 @@ Discord hangs off the same channel. Only the room initializes the native Windows
 WebRTC media layer, so a channel opened from a mention, a jump-to-message, or the
 inbox lands on the chat and never reaches for a device.
 
-The room surface supports microphone mute, input/output device selection,
-screen/window source selection, live desktop-capture preview, and deterministic
-track teardown. This path uses native WebRTC textures and devices, not a WebView.
+The room surface supports microphone mute and input/output device selection,
+using native WebRTC devices rather than a WebView. Screen capture is not part of
+it: the machine's display is captured by one module, described below, and a
+second capture path is exactly what used to refuse a share outright.
+
+One capture and encode module owns the machine's video. `VideoCaptureHub` wraps
+the single native encoder behind `flucord_video.dll` (Desktop Duplication into a
+Media Foundation H.264 encoder, run in low-latency mode so no picture waits on
+frame reordering), and anyone who wants local pictures attaches to it: a Go Live
+share, the camera, the clip buffer. Only one capture can run at a time, refused
+rather than queued, which is what makes a double capture of a display impossible.
+The share runs at 2.5 Mbit and the camera at 1.2 Mbit, and those numbers live in
+the module and nowhere else. The clip buffer follows the module's frames and
+writes them out as they were encoded, so a clip is the recording that was already
+running. The native lifecycle is owned by the encoder service: frame buffers are
+copied before release, the callback closes only after the capture thread joins,
+and a finalizer closes a handle nobody stopped.
 
 Inline message video uses `media_kit` with the packaged Windows native video
 libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
@@ -43,5 +57,5 @@ SoLoud streams with a 60 ms playout buffer and live output-device switching.
 The media path is implemented end to end, but real Discord interoperability
 still needs verification in an actual bot voice session before production-ready
 calls can be claimed. Discord's public bot voice contract documents Opus audio
-transport but no outbound screen-video payload, so screen capture remains a
-local preview and is not sent to Discord.
+transport; outbound video rides the Go Live stream connection and the camera's
+voice-connection SSRCs instead, both fed by the capture module above.

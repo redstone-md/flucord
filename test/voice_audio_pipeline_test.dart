@@ -196,12 +196,6 @@ final class _FakeMediaService implements VoiceMediaService {
   @override
   Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
   @override
-  Object? get previewRenderer => null;
-  @override
-  Stream<void> get screenShareEnded => const Stream.empty();
-  @override
-  Future<List<VoiceCaptureSource>> enumerateCaptureSources() async => const [];
-  @override
   Future<List<VoiceDevice>> enumerateDevices() async => const [];
   @override
   Future<void> initialize() async {}
@@ -212,11 +206,7 @@ final class _FakeMediaService implements VoiceMediaService {
   @override
   Future<void> startMicrophone(String? deviceId) async {}
   @override
-  Future<void> startScreenShare(String? sourceId) async {}
-  @override
   Future<void> stopMicrophone() async {}
-  @override
-  Future<void> stopScreenShare() async {}
   @override
   Future<void> dispose() => _microphone.close();
 }

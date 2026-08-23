@@ -3,29 +3,28 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:ffi/ffi.dart';
 import 'package:flucord/src/data/video/clip_recorder.dart';
 import 'package:flucord/src/data/video/native_video_bindings.dart';
+import 'package:flucord/src/data/video/native_video_encoder_service.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('the ring buffer', () {
     test('a clip starts on a keyframe, never on a difference', () async {
-      final frames = StreamController<EncodedVideoFrame>();
       final recorder = NativeClipRecorder(
         writer: _stubWriter(),
         window: const Duration(seconds: 2),
       );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
+      final capture = _attachedCapture(recorder);
+      await capture.start();
 
       // A delta frame before the first keyframe cannot open a clip: the
       // picture it is a difference from was never in the buffer.
-      frames
-        ..add(_frame(0, isKeyframe: false))
-        ..add(_frame(100, isKeyframe: true))
-        ..add(_frame(200, isKeyframe: false));
+      capture.emit(_frame(0, isKeyframe: false));
+      capture.emit(_frame(100, isKeyframe: true));
+      capture.emit(_frame(200, isKeyframe: false));
       await Future<void>.delayed(Duration.zero);
 
       expect(recorder.clipFrames.first.isKeyframe, isTrue);
@@ -33,17 +32,16 @@ void main() {
     });
 
     test('what ages out is dropped, but never the last keyframe', () async {
-      final frames = StreamController<EncodedVideoFrame>();
       final recorder = NativeClipRecorder(
         writer: _stubWriter(),
         window: const Duration(seconds: 1),
       );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
+      final capture = _attachedCapture(recorder);
+      await capture.start();
 
-      frames.add(_frame(0, isKeyframe: true));
+      capture.emit(_frame(0, isKeyframe: true));
       for (var index = 1; index <= 5; index++) {
-        frames.add(_frame(index * 1000000, isKeyframe: false));
+        capture.emit(_frame(index * 1000000, isKeyframe: false));
       }
       await Future<void>.delayed(Duration.zero);
 
@@ -52,17 +50,39 @@ void main() {
       expect(recorder.clipFrames.first.isKeyframe, isTrue);
       expect(recorder.buffered, const Duration(seconds: 5));
 
-      frames.add(_frame(6000000, isKeyframe: true));
+      capture.emit(_frame(6000000, isKeyframe: true));
       await Future<void>.delayed(Duration.zero);
       // Now that a newer keyframe exists, the old front can go.
       expect(recorder.clipFrames.length, lessThan(7));
     });
 
+    test('a capture under different settings empties the buffer', () async {
+      final recorder = NativeClipRecorder(
+        writer: _stubWriter(),
+        window: const Duration(seconds: 30),
+      );
+      final capture = _attachedCapture(recorder);
+      await capture.hub.startShare();
+      capture.emit(_frame(0, isKeyframe: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(recorder.clipFrames, isNotEmpty);
+
+      await capture.hub.stop();
+      await capture.hub.startCamera();
+
+      // A share's frames and a camera's frames cannot sit in one file: they
+      // were encoded at different rates, and the writer is told one header.
+      capture.emit(_frame(50000000, isKeyframe: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(recorder.clipFrames, hasLength(1));
+      await capture.hub.stop();
+    });
+
     test('detaching forgets what was held', () async {
-      final frames = StreamController<EncodedVideoFrame>.broadcast();
       final recorder = NativeClipRecorder(writer: _stubWriter());
-      recorder.attach(frames.stream, const VideoEncoderSettings());
-      frames.add(_frame(0, isKeyframe: true));
+      final capture = _attachedCapture(recorder);
+      await capture.start();
+      capture.emit(_frame(0, isKeyframe: true));
       await Future<void>.delayed(Duration.zero);
       expect(recorder.clipFrames, isNotEmpty);
 
@@ -80,27 +100,24 @@ void main() {
       expect(recorder.isSupported, isFalse);
       expect(recorder.buffered, Duration.zero);
       recorder
-        ..attach(
-          const Stream<EncodedVideoFrame>.empty(),
-          const VideoEncoderSettings(),
-        )
+        ..attach(VideoCaptureHub(encoder: _FakeEncoder()))
         ..detach();
       expect((await recorder.save()).failure, ClipFailure.unsupported);
     });
 
-    test('a recorder with no writer refuses before it touches the disk', () async {
-      final recorder = NativeClipRecorder(bindings: null, writer: null);
+    test(
+      'a recorder with no writer refuses before it touches the disk',
+      () async {
+        final recorder = NativeClipRecorder(bindings: null, writer: null);
 
-      expect(recorder.isSupported, isFalse);
-      expect((await recorder.save()).failure, ClipFailure.unsupported);
-    });
+        expect(recorder.isSupported, isFalse);
+        expect((await recorder.save()).failure, ClipFailure.unsupported);
+      },
+    );
 
     test('an empty buffer is not a failure to write', () async {
       final recorder = NativeClipRecorder(writer: _stubWriter());
-      recorder.attach(
-        const Stream<EncodedVideoFrame>.empty(),
-        const VideoEncoderSettings(),
-      );
+      recorder.attach(VideoCaptureHub(encoder: _FakeEncoder()));
       addTearDown(recorder.detach);
 
       expect((await recorder.save()).failure, ClipFailure.empty);
@@ -108,7 +125,6 @@ void main() {
 
     test('the frames reach the writer with rebased timestamps', () async {
       final calls = <(int, int, bool)>[];
-      final frames = StreamController<EncodedVideoFrame>();
       final directory = await Directory.systemTemp.createTemp('flucord-clip');
       addTearDown(() => directory.delete(recursive: true));
       final recorder = NativeClipRecorder(
@@ -116,11 +132,11 @@ void main() {
         directory: () async => directory,
         now: () => DateTime(2026, 7, 29, 2, 3, 4),
       );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
-      frames
-        ..add(_frame(5000000, isKeyframe: true))
-        ..add(_frame(5040000, isKeyframe: false));
+      final capture = _attachedCapture(recorder);
+      await capture.start();
+      capture
+        ..emit(_frame(5000000, isKeyframe: true))
+        ..emit(_frame(5040000, isKeyframe: false));
       await Future<void>.delayed(Duration.zero);
 
       final result = await recorder.save();
@@ -133,50 +149,53 @@ void main() {
       expect(calls.first.$3, isTrue);
     });
 
-    test('a writer that refuses a frame is reported, and still closed', () async {
-      var closes = 0;
-      final frames = StreamController<EncodedVideoFrame>();
-      final recorder = NativeClipRecorder(
-        writer: _stubWriter(failWrite: true, onClose: () => closes++),
-        directory: () async => Directory.systemTemp,
-      );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
-      frames.add(_frame(0, isKeyframe: true));
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'a writer that refuses a frame is reported, and still closed',
+      () async {
+        var closes = 0;
+        final recorder = NativeClipRecorder(
+          writer: _stubWriter(failWrite: true, onClose: () => closes++),
+          directory: () async => Directory.systemTemp,
+        );
+        final capture = _attachedCapture(recorder);
+        await capture.start();
+        capture.emit(_frame(0, isKeyframe: true));
+        await Future<void>.delayed(Duration.zero);
 
-      expect((await recorder.save()).failure, ClipFailure.write);
-      // A file left unfinalised is one no player opens.
-      expect(closes, 1);
-    });
+        expect((await recorder.save()).failure, ClipFailure.write);
+        // A file left unfinalised is one no player opens.
+        expect(closes, 1);
+      },
+    );
 
     test('a writer that will not open the file is reported', () async {
-      final frames = StreamController<EncodedVideoFrame>();
       final recorder = NativeClipRecorder(
         writer: _stubWriter(failOpen: true),
         directory: () async => Directory.systemTemp,
       );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
-      frames.add(_frame(0, isKeyframe: true));
+      final capture = _attachedCapture(recorder);
+      await capture.start();
+      capture.emit(_frame(0, isKeyframe: true));
       await Future<void>.delayed(Duration.zero);
 
       expect((await recorder.save()).failure, ClipFailure.write);
     });
 
-    test('a directory that cannot be reached is reported, not thrown', () async {
-      final frames = StreamController<EncodedVideoFrame>();
-      final recorder = NativeClipRecorder(
-        writer: _stubWriter(),
-        directory: () async => throw const FileSystemException('nowhere'),
-      );
-      addTearDown(recorder.detach);
-      recorder.attach(frames.stream, const VideoEncoderSettings());
-      frames.add(_frame(0, isKeyframe: true));
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'a directory that cannot be reached is reported, not thrown',
+      () async {
+        final recorder = NativeClipRecorder(
+          writer: _stubWriter(),
+          directory: () async => throw const FileSystemException('nowhere'),
+        );
+        final capture = _attachedCapture(recorder);
+        await capture.start();
+        capture.emit(_frame(0, isKeyframe: true));
+        await Future<void>.delayed(Duration.zero);
 
-      expect((await recorder.save()).failure, ClipFailure.write);
-    });
+        expect((await recorder.save()).failure, ClipFailure.write);
+      },
+    );
 
     test('the name sorts and says when it was taken', () {
       expect(
@@ -187,98 +206,119 @@ void main() {
   });
 
   group('against the real module', () {
-    test('a clip of encoded frames becomes an MP4 a player would open', () async {
-      const path = 'build/windows/x64/runner/Release/flucord_video.dll';
-      if (!Platform.isWindows || !File(path).existsSync()) return;
-      final bindings = NativeVideoBindings(DynamicLibrary.open(path));
-      expect(bindings.clip, isNotNull);
+    test(
+      'a clip of encoded frames becomes an MP4 a player would open',
+      () async {
+        const path = 'build/windows/x64/runner/Release/flucord_video.dll';
+        if (!Platform.isWindows || !File(path).existsSync()) return;
+        final bindings = NativeVideoBindings(DynamicLibrary.open(path));
+        expect(bindings.clip, isNotNull);
 
-      // Real H.264 rather than made-up bytes: the file sink parses what it is
-      // handed, and a stub would prove only that the call returned.
-      final encoded = <EncodedVideoFrame>[];
-      if (!await _encodeSomething(bindings, encoded)) return;
+        // The whole production path: one capture module over the real encoder,
+        // the recorder attached to it, real H.264 frames, one file out.
+        final service = NativeVideoEncoderService(bindings: bindings);
+        final capture = VideoCaptureHub(encoder: service);
+        final recorder = NativeClipRecorder(
+          bindings: bindings,
+          directory: () async => Directory.systemTemp,
+          now: () => DateTime(2026, 7, 29, 5, 6, 7),
+        );
+        recorder.attach(capture);
+        addTearDown(recorder.detach);
 
-      final directory = await Directory.systemTemp.createTemp('flucord-clip');
-      addTearDown(() => directory.delete(recursive: true));
-      final frames = StreamController<EncodedVideoFrame>();
-      final recorder = NativeClipRecorder(
-        bindings: bindings,
-        directory: () async => directory,
-        now: () => DateTime(2026, 7, 29, 5, 6, 7),
-      );
-      addTearDown(recorder.detach);
-      recorder.attach(
-        frames.stream,
-        const VideoEncoderSettings(width: 640, height: 360, framesPerSecond: 15),
-      );
-      for (final frame in encoded) {
-        frames.add(frame);
-      }
-      await Future<void>.delayed(Duration.zero);
+        final frames = <EncodedVideoFrame>[];
+        final done = Completer<void>();
+        final collected = capture.frames.listen((frame) {
+          frames.add(frame);
+          if (frames.length >= 8 && !done.isCompleted) done.complete();
+        });
+        bool opened = false;
+        try {
+          await capture.startShare();
+          opened = true;
+          await Future.any([
+            done.future,
+            Future<void>.delayed(const Duration(seconds: 4)),
+          ]);
+        } on Object {
+          // No display to capture on the machine running the test, which is
+          // what lets this test skip itself.
+          return;
+        } finally {
+          await collected.cancel();
+          if (opened) await capture.stop();
+        }
 
-      final result = await recorder.save();
-      expect(result.isSaved, isTrue);
-      final bytes = File(result.path!).readAsBytesSync();
-      // 'ftyp' at offset four is what makes it an MP4 rather than a file with
-      // an MP4 name on it.
-      expect(String.fromCharCodes(bytes.sublist(4, 8)), 'ftyp');
-      expect(bytes.length, greaterThan(1000));
-    });
+        // Real H.264 rather than made-up bytes: the file sink parses what it is
+        // handed, and a stub would prove only that the call returned.
+        if (!frames.any((frame) => frame.isKeyframe)) return;
+        expect(recorder.buffered, greaterThan(Duration.zero));
+
+        final result = await recorder.save();
+        expect(result.isSaved, isTrue);
+        final bytes = File(result.path!).readAsBytesSync();
+        // 'ftyp' at offset four is what makes it an MP4 rather than a file with
+        // an MP4 name on it.
+        expect(String.fromCharCodes(bytes.sublist(4, 8)), 'ftyp');
+        expect(bytes.length, greaterThan(1000));
+      },
+    );
   });
 }
 
-/// Runs the real encoder briefly, so the muxer is handed frames it produced.
-///
-/// Answers false where there is no display to capture, which is what lets the
-/// test above skip itself on a machine that has none.
-Future<bool> _encodeSomething(
-  NativeVideoBindings bindings,
-  List<EncodedVideoFrame> into,
-) async {
-  final config = calloc<NativeVideoConfig>();
-  final out = calloc<Pointer<Void>>();
-  final done = Completer<void>();
-  final callback = NativeCallable<NativeFrameCallback>.listener((
-    Pointer<Void> userData,
-    Pointer<Uint8> data,
-    int length,
-    int timestampUs,
-    int isKeyframe,
-  ) {
-    if (length > 0) {
-      into.add(
-        EncodedVideoFrame(
-          bytes: Uint8List.fromList(data.asTypedList(length)),
-          timestamp: Duration(microseconds: timestampUs),
-          isKeyframe: isKeyframe != 0,
-        ),
-      );
-    }
-    bindings.releaseFrame(data);
-    if (into.length >= 8 && !done.isCompleted) done.complete();
-  });
-  try {
-    config.ref
-      ..displayIndex = 0
-      ..width = 640
-      ..height = 360
-      ..framesPerSecond = 15
-      ..bitrate = 800000;
-    if (bindings.open(config, callback.nativeFunction, nullptr, out) != 0) {
-      return false;
-    }
-    await Future.any([
-      done.future,
-      Future<void>.delayed(const Duration(seconds: 4)),
-    ]);
-    bindings.close(out.value);
-    return into.any((frame) => frame.isKeyframe);
-  } finally {
-    callback.close();
-    calloc
-      ..free(config)
-      ..free(out);
-  }
+/// A recorder attached to the capture module, over a fake encoder the test
+/// emits frames through. The capture must be started through the returned
+/// module rather than driven by hand: only a running capture knows what its
+/// frames are encoded at, and that is what the recorder writes out.
+final class _AttachedCapture {
+  _AttachedCapture(this.hub, this._encoder);
+
+  final VideoCaptureHub hub;
+  final _FakeEncoder _encoder;
+
+  /// Starts a share capture, which is what every one-capture test wants.
+  Future<void> start() => hub.startShare();
+
+  void emit(EncodedVideoFrame frame) => _encoder.emit(frame);
+}
+
+_AttachedCapture _attachedCapture(NativeClipRecorder recorder) {
+  final encoder = _FakeEncoder();
+  final hub = VideoCaptureHub(encoder: encoder);
+  recorder.attach(hub);
+  return _AttachedCapture(hub, encoder);
+}
+
+/// A fake encoder whose frames a test emits by hand.
+final class _FakeEncoder implements VideoEncoderService {
+  final StreamController<EncodedVideoFrame> _frames =
+      StreamController.broadcast();
+
+  void emit(EncodedVideoFrame frame) => _frames.add(frame);
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  int get displayCount => 1;
+
+  @override
+  List<String> get cameraNames => const ['Webcam'];
+
+  @override
+  Stream<EncodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Future<void> start(VideoEncoderSettings settings) async {}
+
+  @override
+  Future<void> requestKeyframe() async {}
+
+  @override
+  Future<void> setPaused({required bool paused}) async {}
+
+  @override
+  Future<void> stop() async {}
 }
 
 EncodedVideoFrame _frame(int microseconds, {required bool isKeyframe}) =>
