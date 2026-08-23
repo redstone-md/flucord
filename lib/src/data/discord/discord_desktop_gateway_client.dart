@@ -12,6 +12,7 @@ import 'discord_desktop_profile.dart';
 import 'discord_desktop_voice_frames.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
+import 'discord_gateway_rules.dart';
 import 'discord_gateway_transport_codec.dart';
 import 'discord_guild_subscriptions.dart';
 import 'discord_rest_client.dart';
@@ -442,7 +443,7 @@ final class DiscordDesktopGatewayClient
         level: 900,
       );
     }
-    if (code == 4004) {
+    if (code == DiscordGatewayCloseCodes.authenticationFailed) {
       _emitStatus(DiscordGatewayStatus.offline);
       final completer = _bootstrapCompleter;
       if (completer?.isCompleted == false) {
