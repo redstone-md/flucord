@@ -23,10 +23,17 @@ final class DiscordVoiceSignalingService
     required DiscordVoiceStateGateway mainGateway,
     required DiscordVoiceSocketFactory socketFactory,
     this._callGateway,
+    Duration reissueFallbackDelay = const Duration(seconds: 2),
   }) : _gateway = mainGateway,
-       _socketFactory = socketFactory {
+       _socketFactory = socketFactory,
+       _reissueFallbackDelay = reissueFallbackDelay {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
+
+  /// How long a session Discord ended waits for the gateway to re-issue its
+  /// credentials before forcing the issue itself. A seam for the tests; the
+  /// production wait is two seconds.
+  final Duration _reissueFallbackDelay;
 
   final DiscordVoiceStateGateway _gateway;
   final DiscordCallGateway? _callGateway;
@@ -55,6 +62,19 @@ final class DiscordVoiceSignalingService
   final Set<VoiceSessionKey> _pingedSessions = <VoiceSessionKey>{};
   final Map<VoiceSessionKey, int> _generations = {};
   final Map<VoiceSessionKey, DiscordVoiceClient> _clients = {};
+
+  /// What each session's client last reported, so a join into a channel this
+  /// service already wants can tell a live connection from a dead one.
+  final Map<VoiceSessionKey, VoiceConnectionStatus> _lastStatuses = {};
+
+  /// The timers that escalate a stalled credential re-issue, one per session.
+  final Map<VoiceSessionKey, Timer> _reissueTimers = {};
+
+  /// How many leave-and-rejoin cycles a session has forced without reaching
+  /// a ready transport. The count is what keeps a server that refuses every
+  /// fresh pair from turning the recovery into a loop.
+  final Map<VoiceSessionKey, int> _forcedReissues = {};
+  static const _maxForcedReissues = 3;
   VoiceConnectionStatus _currentStatus = VoiceConnectionStatus.disconnected;
   VoiceTransportSession? _currentSession;
   final Map<VoiceSessionKey, StreamSubscription<VoiceSignalingEvent>>
@@ -183,6 +203,16 @@ final class DiscordVoiceSignalingService
     }
     _activeSession = key;
     if (_desiredChannels[key] == channelId) {
+      // Joining the channel this session already wants is a flags update on a
+      // live connection. On a dead one the identical frame changes nothing
+      // server-side, Discord answers it with silence, and the only way out is
+      // the leave-and-rejoin cycle below.
+      if (_isStuck(key)) {
+        _forcedReissues.remove(key);
+        _pingedSessions.add(key);
+        _forceReissue(key);
+        return;
+      }
       _sendVoiceState(
         key,
         channelId,
@@ -194,6 +224,7 @@ final class DiscordVoiceSignalingService
     }
     _desiredChannels[key] = channelId;
     _generations[key] = (_generations[key] ?? 0) + 1;
+    _forcedReissues.remove(key);
     _assembler.clear(key);
     _emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.joining));
     // The people already sitting in the channel were announced at bootstrap and
@@ -214,6 +245,10 @@ final class DiscordVoiceSignalingService
   Future<void> _leave(VoiceSessionKey key) async {
     _desiredChannels.remove(key);
     _generations[key] = (_generations[key] ?? 0) + 1;
+    _reissueTimers.remove(key)?.cancel();
+    _forcedReissues.remove(key);
+    _lastStatuses.remove(key);
+    _pingedSessions.remove(key);
     _assembler.clear(key);
     _sendVoiceState(key, null);
     await _closeClient(key);
@@ -294,6 +329,15 @@ final class DiscordVoiceSignalingService
     }
     final currentUserId = _currentUserId;
     if (currentUserId == null) return;
+    // Which fields the credentials frames carry is the whole question when a
+    // connection built from them is refused, and only the names matter: the
+    // values are somebody's voice session.
+    if (event.name == 'VOICE_SERVER_UPDATE') {
+      AppLog.warning(
+        'voice.creds',
+        'VOICE_SERVER_UPDATE fields: ${event.data.keys.join(', ')}',
+      );
+    }
     // Every self voice state carries the session a stream connection has to
     // identify with, and it is reissued more often than credentials are
     // rebuilt — the assembler only produces those when a server update
@@ -301,6 +345,10 @@ final class DiscordVoiceSignalingService
     // ended up offering a session Discord had already replaced.
     if (event.name == 'VOICE_STATE_UPDATE' &&
         event.data['user_id'] == currentUserId) {
+      AppLog.warning(
+        'voice.creds',
+        'self VOICE_STATE_UPDATE fields: ${event.data.keys.join(', ')}',
+      );
       final sessionId = event.data['session_id'];
       if (sessionId is String && sessionId.isNotEmpty) {
         _currentSessionId = sessionId;
@@ -322,13 +370,12 @@ final class DiscordVoiceSignalingService
   ///
   /// R08: the desktop client answers a will-reconnect disconnect with opcode 5
   /// `VOICE_SERVER_PING`, which is how the server learns to re-issue a
-  /// `VOICE_SERVER_UPDATE` for a session it still believes is live. Without it
-  /// the reconnecting voice client redials an endpoint whose token may already
-  /// have been rotated.
-  /// A failing voice socket can report `reconnecting` repeatedly, so the ping
-  /// fires on the transition into that state and not on every repeat. Left
-  /// unguarded it turns one broken voice connection into a flood on the main
-  /// gateway, which is the socket carrying every message.
+  /// `VOICE_SERVER_UPDATE` for a session it still believes is live. A failing
+  /// voice socket can report `reconnecting` repeatedly, so the ping fires on
+  /// the transition into that state and not on every repeat, and the
+  /// leave-and-rejoin escalation behind it (`_forceReissue`) is capped: left
+  /// unguarded either one turns a broken voice connection into a flood on the
+  /// main gateway, which is the socket carrying every message.
   @override
   VoiceConnectionStatus get currentStatus => _currentStatus;
 
@@ -347,11 +394,14 @@ final class DiscordVoiceSignalingService
       if (event is VoiceTransportReadyEvent) _currentSession = event.session;
     }
     if (event is VoiceSignalingStatusEvent) {
+      _lastStatuses[key] = event.status;
       final wasReconnecting = _pingedSessions.contains(key);
       final isReconnecting = event.status == VoiceConnectionStatus.reconnecting;
       if (isReconnecting && !wasReconnecting) {
         final channelId = _desiredChannels[key];
-        if (channelId != null) {
+        final userId = _currentUserId;
+        final sessionId = _currentSessionId ?? _gateway.sessionId;
+        if (channelId != null && userId != null && sessionId != null) {
           _pingedSessions.add(key);
           _gateway.pingVoiceServer();
           // And the voice state is sent again. The ping asks the server to
@@ -361,7 +411,16 @@ final class DiscordVoiceSignalingService
           // update that never came, and the room went from reconnecting
           // straight to disconnected while Discord still had the account in
           // the channel.
-          _assembler.clear(key);
+          // The identity halves are seeded rather than dropped: a ping that
+          // is answered with a lone server update still completes against
+          // them, and a stale token or endpoint can no more complete the
+          // pairing than it could before.
+          _assembler.remember(
+            key: key,
+            channelId: channelId,
+            userId: userId,
+            sessionId: sessionId,
+          );
           _generations[key] = (_generations[key] ?? 0) + 1;
           final flags = _lastFlags[key];
           _sendVoiceState(
@@ -371,12 +430,77 @@ final class DiscordVoiceSignalingService
             selfDeaf: flags?.deaf ?? false,
             selfVideo: flags?.video ?? false,
           );
+          _scheduleReissueFallback(key);
         }
       } else if (!isReconnecting) {
         _pingedSessions.remove(key);
       }
     }
+    // A transport that reached ready settles every forced cycle that led to
+    // it; the next time one is needed, the count starts from zero.
+    if (event is VoiceTransportReadyEvent) _forcedReissues.remove(key);
     _emit(event);
+  }
+
+  /// Whether the session's connection is one a join into the same channel
+  /// has to revive rather than re-announce. A status of null means no client
+  /// has reported anything yet: the first pairing is still in flight.
+  bool _isStuck(VoiceSessionKey key) => switch (_lastStatuses[key]) {
+    VoiceConnectionStatus.reconnecting ||
+    VoiceConnectionStatus.failure ||
+    VoiceConnectionStatus.disconnected => true,
+    _ => false,
+  };
+
+  /// Waits for the gateway to re-issue the session's credentials, then makes
+  /// the re-issue happen if nothing arrived.
+  ///
+  /// The ping and the re-announcement carry no state change, and Discord
+  /// answers a voice state that changes nothing with silence, which is how a
+  /// refused identify used to sit in `reconnecting` until somebody rejoined
+  /// by hand.
+  void _scheduleReissueFallback(VoiceSessionKey key) {
+    _reissueTimers.remove(key)?.cancel();
+    _reissueTimers[key] = Timer(_reissueFallbackDelay, () {
+      _reissueTimers.remove(key);
+      // Fresh credentials landed on the way and a new client took over.
+      if (!_pingedSessions.contains(key)) return;
+      _forceReissue(key);
+    });
+  }
+
+  /// Leaves the channel and rejoins it, which is the one ask Discord always
+  /// answers with a fresh `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE`
+  /// pair: both halves of the frame change, so nothing is a no-op.
+  void _forceReissue(VoiceSessionKey key) {
+    final channelId = _desiredChannels[key];
+    if (channelId == null) return;
+    final forced = (_forcedReissues[key] ?? 0) + 1;
+    _forcedReissues[key] = forced;
+    if (forced > _maxForcedReissues) {
+      _pingedSessions.remove(key);
+      _emit(
+        VoiceSignalingStatusEvent(
+          VoiceConnectionStatus.failure,
+          error: StateError(
+            'Discord refused $_maxForcedReissues fresh voice sessions in a row',
+          ),
+        ),
+      );
+      return;
+    }
+    final flags = _lastFlags[key];
+    _sendVoiceState(key, null);
+    _sendVoiceState(
+      key,
+      channelId,
+      selfMute: flags?.mute ?? false,
+      selfDeaf: flags?.deaf ?? false,
+      selfVideo: flags?.video ?? false,
+    );
+    // The cycle is answered with a new pair or with nothing; both are waited
+    // on, and the cap decides when waiting stops.
+    _scheduleReissueFallback(key);
   }
 
   Future<void> _startVoiceClient(
@@ -390,6 +514,9 @@ final class DiscordVoiceSignalingService
         _desiredChannels[key] != credentials.channelId) {
       return;
     }
+    // Fresh credentials are the recovery's answer: the fallback that would
+    // force another cycle stands down.
+    _reissueTimers.remove(key)?.cancel();
     final client = _socketFactory.callSocket(credentials);
     _clients[key] = client;
     _clientSubscriptions[key] = client.events.listen(
@@ -480,6 +607,10 @@ final class DiscordVoiceSignalingService
     if (_closed) return;
     _closed = true;
     await _gatewaySubscription.cancel();
+    for (final timer in _reissueTimers.values) {
+      timer.cancel();
+    }
+    _reissueTimers.clear();
     for (final key in _clients.keys.toList(growable: false)) {
       await _closeClient(key);
     }

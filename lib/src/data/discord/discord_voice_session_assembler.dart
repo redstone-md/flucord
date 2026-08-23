@@ -23,6 +23,25 @@ final class DiscordVoiceSessionAssembler {
 
   void clear(VoiceSessionKey key) => _pending.remove(key);
 
+  /// Restores the identity halves a re-issued server update needs.
+  ///
+  /// A consumed pairing leaves nothing behind, yet the ping that asks Discord
+  /// to re-issue is answered with the server half alone: the state half is
+  /// whatever the session already was, and Discord does not repeat it.
+  /// Seeding the last known identity lets that lone frame complete; the token
+  /// and the endpoint stay absent, so nothing stale can complete it.
+  void remember({
+    required VoiceSessionKey key,
+    required String channelId,
+    required String userId,
+    required String sessionId,
+  }) {
+    _pending[key] = _PendingVoiceSession(key)
+      ..channelId = channelId
+      ..userId = userId
+      ..sessionId = sessionId;
+  }
+
   void clearAll() => _pending.clear();
 
   VoiceServerCredentials? _acceptVoiceState(

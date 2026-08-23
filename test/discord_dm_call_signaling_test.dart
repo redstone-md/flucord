@@ -135,6 +135,52 @@ void main() {
       expect(credentials.sessionKey, const VoiceSessionKey.privateCall('dm-1'));
     });
 
+    test('a remembered session completes from a lone server update', () {
+      final assembler = DiscordVoiceSessionAssembler();
+      // A consumed pairing leaves nothing behind, and the ping that asks for
+      // a re-issue is answered with the server half alone.
+      assembler.remember(
+        key: const VoiceSessionKey.guild('guild-1'),
+        channelId: 'voice-1',
+        userId: 'me',
+        sessionId: 'voice-session',
+      );
+
+      final credentials = assembler.accept(
+        eventName: 'VOICE_SERVER_UPDATE',
+        data: const {
+          'guild_id': 'guild-1',
+          'token': 'voice-token',
+          'endpoint': 'voice.example.test',
+        },
+        currentUserId: 'me',
+      );
+
+      expect(credentials, isNotNull);
+      expect(credentials!.sessionId, 'voice-session');
+      expect(credentials.token, 'voice-token');
+      // Nothing stale completes the pairing while no server update lands.
+      assembler.remember(
+        key: const VoiceSessionKey.guild('guild-1'),
+        channelId: 'voice-1',
+        userId: 'me',
+        sessionId: 'voice-session',
+      );
+      expect(
+        assembler.accept(
+          eventName: 'VOICE_STATE_UPDATE',
+          data: const {
+            'user_id': 'me',
+            'guild_id': 'guild-1',
+            'channel_id': 'voice-1',
+            'session_id': 'voice-session',
+          },
+          currentUserId: 'me',
+        ),
+        isNull,
+      );
+    });
+
     test('a call disconnect drops the half-built call session', () {
       final assembler = DiscordVoiceSessionAssembler()
         ..accept(

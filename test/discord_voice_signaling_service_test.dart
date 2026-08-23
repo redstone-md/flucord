@@ -259,6 +259,135 @@ void main() {
     expect(gateway.voiceServerPings, 1);
   });
 
+  test('forces a fresh pair when nothing re-issues the credentials', () async {
+    final gateway = _FakeMainGateway();
+    final clients = <_FakeVoiceClient>[];
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      reissueFallbackDelay: const Duration(milliseconds: 20),
+      socketFactory: _CallSocketFactory((credentials) {
+        final client = _FakeVoiceClient(credentials);
+        clients.add(client);
+        return client;
+      }),
+    )..setCurrentUserId('bot-1');
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'bot-1',
+      'session_id': 'session-1',
+    });
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': 'guild-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    await _flushEvents();
+
+    clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
+    await _flushEvents();
+    gateway.updates.clear();
+
+    // The ping and the re-announcement change nothing Discord can see, so
+    // nothing answers them. Short of the fallback's wait, the cycle has not
+    // fired yet.
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    // The leave and the rejoin: both halves of the voice state change, which
+    // is the one ask Discord cannot answer with silence.
+    expect(gateway.updates, hasLength(2));
+    expect(gateway.updates.first.channelId, isNull);
+    expect(gateway.updates.last.channelId, 'voice-1');
+  });
+
+  test('calls the cycle off after three unanswered rounds', () async {
+    final gateway = _FakeMainGateway();
+    final clients = <_FakeVoiceClient>[];
+    final events = <VoiceSignalingEvent>[];
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      reissueFallbackDelay: const Duration(milliseconds: 10),
+      socketFactory: _CallSocketFactory((credentials) {
+        final client = _FakeVoiceClient(credentials);
+        clients.add(client);
+        return client;
+      }),
+    )..setCurrentUserId('bot-1');
+    final subscription = service.voiceEvents.listen(events.add);
+    addTearDown(subscription.cancel);
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'bot-1',
+      'session_id': 'session-1',
+    });
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': 'guild-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    await _flushEvents();
+
+    clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
+    // Every cycle goes unanswered: no fresh pair, no client to report a
+    // status, so the timers keep firing until the cap stops them.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(
+      gateway.updates.where((update) => update.channelId == null),
+      hasLength(3),
+    );
+    final statuses = events.whereType<VoiceSignalingStatusEvent>().toList();
+    expect(statuses.last.status, VoiceConnectionStatus.failure);
+    expect(statuses.last.error.toString(), contains('refused'));
+  });
+
+  test('a join into the stuck channel forces the re-issue', () async {
+    final gateway = _FakeMainGateway();
+    final clients = <_FakeVoiceClient>[];
+    final service = DiscordVoiceSignalingService(
+      mainGateway: gateway,
+      socketFactory: _CallSocketFactory((credentials) {
+        final client = _FakeVoiceClient(credentials);
+        clients.add(client);
+        return client;
+      }),
+    )..setCurrentUserId('bot-1');
+    addTearDown(service.close);
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+    gateway.dispatch('VOICE_STATE_UPDATE', {
+      'guild_id': 'guild-1',
+      'channel_id': 'voice-1',
+      'user_id': 'bot-1',
+      'session_id': 'session-1',
+    });
+    gateway.dispatch('VOICE_SERVER_UPDATE', {
+      'guild_id': 'guild-1',
+      'token': 'voice-token',
+      'endpoint': 'voice.example.test',
+    });
+    await _flushEvents();
+
+    clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
+    await _flushEvents();
+    gateway.updates.clear();
+
+    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+
+    // An identical voice state is a no-op server-side; joining the same
+    // channel on a dead session has to leave and rejoin instead.
+    expect(gateway.updates, hasLength(2));
+    expect(gateway.updates.first.channelId, isNull);
+    expect(gateway.updates.last.channelId, 'voice-1');
+  });
+
   test('carries video on the connection the call opened', () async {
     final gateway = _FakeMainGateway();
     final client = _FakeVoiceClient(const VoiceServerCredentials(
