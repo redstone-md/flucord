@@ -24,6 +24,12 @@ abstract interface class DiscordVoiceClient {
   Future<void> close();
 }
 
+/// The socket driver for a voice gateway connection.
+///
+/// Every stateful Discord rule lives in [DiscordVoiceGatewayProtocol]: it
+/// decides what a frame, a due heartbeat or a close code means, and this
+/// class carries the decision out against the socket, the timers and the
+/// media plane.
 final class DiscordVoiceGatewayClient
     implements DiscordVoiceClient, VoiceAudioTransport, VoiceVideoTransport {
   DiscordVoiceGatewayClient({
@@ -75,19 +81,9 @@ final class DiscordVoiceGatewayClient
   Timer? _keepaliveTimer;
   int _keepaliveCounter = 0;
   Timer? _reconnectTimer;
-  int _unacknowledgedHeartbeats = 0;
-  bool _canResume = false;
   bool _closing = false;
   bool _failed = false;
   int _generation = 0;
-  int? _ssrc;
-  final Map<int, String> _userIdsBySsrc = {};
-
-  /// Video SSRC to whoever announced it, from opcode 12.
-  final Map<int, String> _videoSsrcOwners = {};
-  String? _mode;
-  DiscordVoiceIpDiscovery? _discovered;
-  VoiceTransportSession? _session;
   DiscordVoiceTransportCipher? _transportCipher;
 
   @override
@@ -130,18 +126,18 @@ final class DiscordVoiceGatewayClient
             frame.header.payloadType !=
             DiscordRtpHeader.discordAudioPayloadType,
       )
-      .map((frame) => (_videoSsrcOwners[frame.header.ssrc], frame))
+      .map((frame) => (_protocol.userIdForVideoSsrc(frame.header.ssrc), frame))
       .where((pair) => pair.$1 != null)
       // Through the group's decryptor as well, on a call that has one: the
       // transport cipher gets the packet off the wire, and what is inside it
       // is still encrypted for the room. A picture handed to the decoder in
       // that state decodes to nothing.
       .expand((pair) => _decryptVideoOrDrop(pair.$1!, pair.$2));
-  VoiceTransportSession? get session => _session;
-  String? userIdForSsrc(int ssrc) => _userIdsBySsrc[ssrc];
+  VoiceTransportSession? get session => _protocol.session;
+  String? userIdForSsrc(int ssrc) => _protocol.userIdForSsrc(ssrc);
 
   /// Who sends on a video SSRC, once their opcode 12 has said so.
-  String? userIdForVideoSsrc(int ssrc) => _videoSsrcOwners[ssrc];
+  String? userIdForVideoSsrc(int ssrc) => _protocol.userIdForVideoSsrc(ssrc);
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _mediaTransport.remoteAudio;
 
@@ -155,7 +151,7 @@ final class DiscordVoiceGatewayClient
   Future<void> _open() async {
     if (_closing || _failed) return;
     _emitStatus(
-      _canResume
+      _protocol.canResume
           ? VoiceConnectionStatus.reconnecting
           : VoiceConnectionStatus.connecting,
     );
@@ -173,7 +169,7 @@ final class DiscordVoiceGatewayClient
         onError: (Object error) => _onSocketError(error, generation),
         cancelOnError: true,
       );
-      _send(_canResume ? _protocol.resume() : _protocol.identify());
+      _send(_protocol.canResume ? _protocol.resume() : _protocol.identify());
     } catch (error) {
       _scheduleReconnect(error: error);
     }
@@ -211,7 +207,6 @@ final class DiscordVoiceGatewayClient
     } on TypeError {
       return;
     }
-    _protocol.acceptSequence(payload['seq']);
     final data = payload['d'];
     final opcode = payload['op'];
     // Only for a stream socket, and only the opcode: this is the handshake
@@ -229,27 +224,90 @@ final class DiscordVoiceGatewayClient
         return;
       }
     }
-    switch (opcode) {
-      case 2:
-        if (data is Map) {
-          unawaited(_handleReady(data.cast<String, Object?>(), generation));
-        }
-      case 4:
-        if (data is Map) _handleSession(data.cast<String, Object?>());
-      case 5:
-        if (data is Map) _handleSpeaking(data.cast<String, Object?>());
-      case 6:
-        _unacknowledgedHeartbeats = 0;
-      case 8:
-        if (data is Map) _handleHello(data.cast<String, Object?>());
-      case 9:
-        _canResume = true;
-        _emitStatus(VoiceConnectionStatus.ready);
-      case 12:
-        if (data is Map) _handleClientVideo(data.cast<String, Object?>());
-      case 13:
-        if (data is Map) _handleClientDisconnect(data.cast<String, Object?>());
+    for (final action in _protocol.accept(payload)) {
+      _apply(action);
     }
+  }
+
+  /// Carries a protocol decision out against the socket, the timers and the
+  /// media plane.
+  void _apply(DiscordVoiceGatewayAction action) {
+    switch (action) {
+      case DiscordVoiceGatewaySend(:final payload):
+        _send(payload);
+      case DiscordVoiceGatewayScheduleHeartbeat(:final interval):
+        _startHeartbeat(interval);
+      case DiscordVoiceGatewayReconnect(:final error):
+        _scheduleReconnect(error: error);
+      case DiscordVoiceGatewayAwaitCredentials(:final error):
+        // The token is dead; the main gateway will hand over a fresh
+        // VOICE_SERVER_UPDATE and the connection is rebuilt from that.
+        _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
+      case DiscordVoiceGatewayFail(:final error):
+        _fail(error);
+      case DiscordVoiceGatewayDispatch(:final event):
+        if (!_events.isClosed) _events.add(event);
+      case DiscordVoiceGatewayDiscoverUdp():
+        unawaited(_discoverUdp(action));
+      case DiscordVoiceGatewayTransportReady(:final session):
+        _activateTransport(session);
+    }
+  }
+
+  void _startHeartbeat(Duration interval) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(interval, (_) => _heartbeat());
+  }
+
+  void _heartbeat() => _apply(_protocol.heartbeatDue());
+
+  /// The one handshake step that needs real I/O: punch the UDP hole, then
+  /// let the protocol announce the address it produced.
+  Future<void> _discoverUdp(DiscordVoiceGatewayDiscoverUdp action) async {
+    final generation = _generation;
+    _emitStatus(VoiceConnectionStatus.discovering);
+    try {
+      _daveController?.assignAudioSsrc(action.ready.ssrc);
+      final discovered = await _udpTransport.discover(
+        host: action.ready.ip,
+        port: action.ready.port,
+        ssrc: action.ready.ssrc,
+      );
+      if (_closing || _failed || generation != _generation) return;
+      _emitStatus(VoiceConnectionStatus.negotiating);
+      for (final next in _protocol.udpDiscovered(
+        address: discovered.address,
+        port: discovered.port,
+      )) {
+        _apply(next);
+      }
+    } on Object catch (error) {
+      _fail(error);
+    }
+  }
+
+  /// Builds the media plane for a negotiated session: the cipher, the DAVE
+  /// controller's version, and the keepalive that keeps the UDP path open.
+  void _activateTransport(VoiceTransportSession session) {
+    try {
+      _daveController?.activate(session.daveProtocolVersion);
+      _replaceTransportCipher(
+        DiscordVoiceTransportCipher(
+          mode: session.mode,
+          secretKey: session.secretKey,
+        ),
+      );
+    } on Object catch (error) {
+      _fail(error);
+      return;
+    }
+    _mediaTransport.configure(
+      ssrc: session.ssrc,
+      daveEnabled: session.daveProtocolVersion > 0,
+    );
+    _startUdpKeepalive();
+    _emitStatus(VoiceConnectionStatus.ready);
+    if (!_events.isClosed) _events.add(VoiceTransportReadyEvent(session));
   }
 
   void _handleBinary(Uint8List message) {
@@ -278,75 +336,6 @@ final class DiscordVoiceGatewayClient
     }
   }
 
-  void _handleHello(Map<String, Object?> data) {
-    final rawInterval = data['heartbeat_interval'];
-    if (rawInterval is! num || rawInterval <= 0) return;
-    _heartbeatTimer?.cancel();
-    _unacknowledgedHeartbeats = 0;
-    final interval = Duration(milliseconds: rawInterval.round());
-    _heartbeatTimer = Timer.periodic(interval, (_) => _heartbeat());
-  }
-
-  void _handleSpeaking(Map<String, Object?> data) {
-    final userId = data['user_id'];
-    final ssrc = data['ssrc'];
-    final speakingFlags = data['speaking'];
-    if (userId is! String ||
-        ssrc is! int ||
-        ssrc < 0 ||
-        ssrc > 0xffffffff ||
-        speakingFlags is! int) {
-      return;
-    }
-    _userIdsBySsrc[ssrc] = userId;
-    if (!_events.isClosed) {
-      _events.add(
-        VoiceSpeakingEvent(
-          userId: userId,
-          ssrc: ssrc,
-          speakingFlags: speakingFlags,
-        ),
-      );
-    }
-  }
-
-  /// Opcode 12 announces a peer's media layout, not their departure.
-  ///
-  /// It arrives when someone joins or changes their video state and carries the
-  /// SSRCs they will send on. Taking `audio_ssrc` from here means a peer is
-  /// resolvable before they ever speak, where opcode 5 only reveals them at
-  /// their first speaking flag.
-  void _handleClientVideo(Map<String, Object?> data) {
-    final userId = data['user_id'];
-    final audioSsrc = data['audio_ssrc'];
-    if (userId is! String || audioSsrc is! int || audioSsrc == 0) return;
-    _userIdsBySsrc[audioSsrc] = userId;
-    // Taken from the frame rather than derived: the peer says which SSRC its
-    // pictures will arrive on, and a client that assumed audio + 1 would
-    // mis-attribute anybody whose layout differs.
-    final videoSsrc = data['video_ssrc'];
-    if (videoSsrc is int && videoSsrc != 0) {
-      _videoSsrcOwners[videoSsrc] = userId;
-    }
-  }
-
-  void _handleClientDisconnect(Map<String, Object?> data) {
-    final userId = data['user_id'];
-    if (userId is! String) return;
-    _userIdsBySsrc.removeWhere((_, mappedUserId) => mappedUserId == userId);
-    _videoSsrcOwners.removeWhere((_, mappedUserId) => mappedUserId == userId);
-    if (!_events.isClosed) _events.add(VoiceUserDisconnectedEvent(userId));
-  }
-
-  /// How many heartbeats may go unanswered before the connection is written
-  /// off.
-  ///
-  /// One is too few. An acknowledgement that arrives a moment after the next
-  /// interval is a slow network, not a dead socket, and tearing the connection
-  /// down for it was the first link in a chain: the redial was answered with
-  /// 4006, that with 4014, and the call spent its life reconnecting.
-  static const _heartbeatTolerance = 2;
-
   /// Keeps the UDP path open while nothing is being said.
   ///
   /// The voice socket's heartbeat proves the *websocket* is alive; it says
@@ -365,7 +354,7 @@ final class DiscordVoiceGatewayClient
   }
 
   void _sendKeepalive() {
-    if (_closing || _failed || _discovered == null) return;
+    if (_closing || _failed || _protocol.session == null) return;
     final packet = Uint8List(8);
     ByteData.sublistView(packet).setUint32(0, _keepaliveCounter, Endian.little);
     _keepaliveCounter = (_keepaliveCounter + 1) & 0xffffffff;
@@ -378,109 +367,8 @@ final class DiscordVoiceGatewayClient
     }
   }
 
-  void _heartbeat() {
-    if (_unacknowledgedHeartbeats >= _heartbeatTolerance) {
-      // Not resumable: a session this far behind is one Discord has already
-      // stopped recognising, and resuming into it is answered with 4006.
-      _canResume = false;
-      _scheduleReconnect(
-        error: StateError(
-          'Discord did not acknowledge $_unacknowledgedHeartbeats heartbeats',
-        ),
-      );
-      return;
-    }
-    _unacknowledgedHeartbeats++;
-    _send(_protocol.heartbeat(DateTime.now().millisecondsSinceEpoch));
-  }
-
-  Future<void> _handleReady(Map<String, Object?> data, int generation) async {
-    final ready = DiscordVoiceReady.tryParse(data);
-    if (ready == null) {
-      _fail(const FormatException('Invalid Discord voice Ready payload'));
-      return;
-    }
-    final mode = _protocol.selectMode(ready.modes);
-    if (mode == null) {
-      _fail(StateError('Discord voice server offered no supported AEAD mode'));
-      return;
-    }
-    _ssrc = ready.ssrc;
-    _mode = mode;
-    _discovered = null;
-    _emitStatus(VoiceConnectionStatus.discovering);
-    try {
-      _daveController?.assignAudioSsrc(ready.ssrc);
-      final discovered = await _udpTransport.discover(
-        host: ready.ip,
-        port: ready.port,
-        ssrc: ready.ssrc,
-      );
-      if (_closing || _failed || generation != _generation) return;
-      _discovered = discovered;
-      _emitStatus(VoiceConnectionStatus.negotiating);
-      _send(
-        _protocol.selectProtocol(
-          address: discovered.address,
-          port: discovered.port,
-          mode: mode,
-        ),
-      );
-    } catch (error) {
-      _fail(error);
-    }
-  }
-
-  void _handleSession(Map<String, Object?> data) {
-    final description = DiscordVoiceSessionDescription.tryParse(data);
-    final ssrc = _ssrc;
-    final mode = _mode;
-    final discovered = _discovered;
-    if (description == null ||
-        ssrc == null ||
-        mode == null ||
-        discovered == null) {
-      _fail(const FormatException('Invalid Discord voice session description'));
-      return;
-    }
-    if (description.mode != mode ||
-        description.daveProtocolVersion > _protocol.maxDaveProtocolVersion) {
-      _fail(StateError('Discord selected an unsupported voice protocol'));
-      return;
-    }
-    try {
-      _daveController?.activate(description.daveProtocolVersion);
-      _replaceTransportCipher(
-        DiscordVoiceTransportCipher(
-          mode: mode,
-          secretKey: description.secretKey,
-        ),
-      );
-    } catch (error) {
-      _fail(error);
-      return;
-    }
-    _session = VoiceTransportSession(
-      guildId: _protocol.credentials.guildId,
-      ssrc: ssrc,
-      address: discovered.address,
-      port: discovered.port,
-      mode: mode,
-      secretKey: description.secretKey,
-      daveProtocolVersion: description.daveProtocolVersion,
-    );
-    _mediaTransport.configure(
-      ssrc: ssrc,
-      daveEnabled: description.daveProtocolVersion > 0,
-    );
-    _canResume = true;
-    _startUdpKeepalive();
-    _emitStatus(VoiceConnectionStatus.ready);
-    if (!_events.isClosed) _events.add(VoiceTransportReadyEvent(_session!));
-  }
-
   void setSpeaking(bool enabled) {
-    final ssrc = _ssrc;
+    final ssrc = _protocol.audioSsrc;
     if (ssrc != null) _send(_protocol.speaking(ssrc: ssrc, enabled: enabled));
   }
 
@@ -489,7 +377,7 @@ final class DiscordVoiceGatewayClient
   /// A camera sends on the one above it, which is how the desktop client
   /// derives its own video SSRC rather than being told one.
   @override
-  int? get audioSsrc => _ssrc;
+  int? get audioSsrc => _protocol.audioSsrc;
 
   /// Declares the camera's SSRCs with opcode 12, or marks them inactive.
   ///
@@ -501,7 +389,7 @@ final class DiscordVoiceGatewayClient
     required bool enabled,
     required VideoEncoderSettings settings,
   }) {
-    final ssrc = _ssrc;
+    final ssrc = _protocol.audioSsrc;
     if (ssrc == null) return false;
     _send(
       _protocol.video(audioSsrc: ssrc, enabled: enabled, settings: settings),
@@ -567,7 +455,7 @@ final class DiscordVoiceGatewayClient
         // credentials, and this socket is still holding the old secret. That
         // is asked to be re-issued, not reported as a broken call: failing
         // here dropped somebody out of a channel Discord still had them in.
-        _canResume = false;
+        _protocol.revokeResume();
         _diagnose('nothing decrypts, asking for a new session', error);
         if (!_events.isClosed) {
           _events.add(
@@ -667,25 +555,7 @@ final class DiscordVoiceGatewayClient
     if (_closing || _failed || generation != _generation) return;
     final code = socket.closeCode;
     _diagnose('socket closed', 'code $code');
-    // A session Discord ended but will re-issue. 4014 is "the voice server
-    // moved, or you were moved"; 4022 is "this session expired"; 4006 is "that
-    // session id is no longer valid". None of them is an error to show
-    // somebody: the main gateway answers a ping with a fresh
-    // VOICE_SERVER_UPDATE and the connection is rebuilt from it. Redialling
-    // this endpoint would only reuse a token that is already dead, so this
-    // reports the state and waits to be handed a new one.
-    if ({4006, 4014, 4022}.contains(code)) {
-      _emitStatus(
-        VoiceConnectionStatus.reconnecting,
-        error: StateError('Discord ended the voice session (code $code)'),
-      );
-      return;
-    }
-    if ({4004, 4009, 4011, 4017, 4020, 4021}.contains(code)) {
-      _fail(StateError('Discord voice connection closed with code $code'));
-      return;
-    }
-    _scheduleReconnect();
+    _apply(_protocol.closedWithCode(code));
   }
 
   /// Says what the transport just did, where it can actually be read.
@@ -714,11 +584,9 @@ final class DiscordVoiceGatewayClient
     _heartbeatTimer = null;
     _keepaliveTimer?.cancel();
     _keepaliveTimer = null;
-    _discovered = null;
-    _session = null;
+    _protocol.dropSession();
     _mediaTransport.reset();
     _replaceTransportCipher(null);
-    _userIdsBySsrc.clear();
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
     _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
@@ -737,11 +605,9 @@ final class DiscordVoiceGatewayClient
     _reconnectTimer?.cancel();
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
-    _discovered = null;
-    _session = null;
+    _protocol.dropSession();
     _mediaTransport.reset();
     _replaceTransportCipher(null);
-    _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.failure, error: error);
   }
@@ -807,9 +673,9 @@ final class DiscordVoiceGatewayClient
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    _protocol.dropSession();
     _mediaTransport.reset();
     _replaceTransportCipher(null);
-    _userIdsBySsrc.clear();
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.disconnected);
     await _events.close();
