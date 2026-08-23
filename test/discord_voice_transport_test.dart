@@ -100,6 +100,36 @@ void main() {
       );
     });
 
+    test('dials the port the endpoint names', () async {
+      // The endpoint's port is where the session lives: an endpoint naming
+      // 2083, dialled on 443, was answered with `sessionInvalid` on every
+      // attempt, while the one endpoint naming 443 was the one connection
+      // that ever opened.
+      const credentials = VoiceServerCredentials(
+        guildId: 'guild-1',
+        channelId: 'voice-1',
+        userId: 'bot-1',
+        sessionId: 'session-1',
+        token: 'voice-token',
+        endpoint: 'c-mad01-261e88f2.discord.media:2083',
+      );
+      final connector = _FakeVoiceSocketConnector(_FakeVoiceWebSocket());
+      final client = DiscordVoiceGatewayClient(
+        credentials: credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: connector,
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      addTearDown(client.close);
+
+      await client.connect();
+
+      expect(
+        connector.lastUri.toString(),
+        'wss://c-mad01-261e88f2.discord.media:2083?v=8',
+      );
+    });
+
     test('reaches transport ready and routes DAVE binary frames', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);
@@ -116,9 +146,9 @@ void main() {
       addTearDown(client.close);
 
       await client.connect();
-      // Port 443 explicitly: the port Discord names in the endpoint is the
-      // UDP one, and dialling the websocket on it is answered with
-      // `identifyRefused`.
+      // Port 443 explicitly: an endpoint that names no port has none after
+      // parsing, and `replace` keeping that dialled port 0 once, which the
+      // server answered with a 522.
       expect(connector.lastUri.toString(), 'wss://voice.example.test:443?v=8');
       expect(_jsonAt(socket.sent, 0)['op'], 0);
 

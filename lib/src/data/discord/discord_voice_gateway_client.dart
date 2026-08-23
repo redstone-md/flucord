@@ -191,16 +191,19 @@ final class DiscordVoiceGatewayClient
   }
 
   Uri _voiceUri() {
-    // The port Discord names is the UDP one, the media path, and dialling
-    // the websocket on it is answered with `identifyRefused` once the
-    // handshake finishes.
-    // The socket belongs on 443, which is what dropping the port leaves.
-    final endpoint = _protocol.credentials.endpoint.trim().split(':').first;
+    final endpoint = _protocol.credentials.endpoint.trim();
     final base = Uri.parse(
       endpoint.contains('://') ? endpoint : 'wss://$endpoint',
     );
-    // Explicitly 443: a URI parsed from a bare host has no port at all, and
-    // `replace` keeps that — which dialled port 0 and was answered with a 522.
+    // The port the endpoint names is where the session lives. Dropping it in
+    // favour of 443 reached a frontend that answered every identify with
+    // `sessionInvalid` — five refusals over two days, each on an endpoint
+    // naming a port other than 443, while the one endpoint naming 443 was the
+    // one connection that ever opened. (The `identifyRefused` once blamed on
+    // dialling the named port came from a stream identify that had not yet
+    // learned to declare its screen.) 443 remains the default for an endpoint
+    // that names no port at all: a URI parsed from a bare host has none, and
+    // `replace` keeps that, which dialled port 0 and was answered with a 522.
     return base.replace(
       scheme: 'wss',
       port: base.hasPort && base.port != 0 ? base.port : 443,

@@ -174,9 +174,8 @@ abstract final class DiscordVoiceCloseCodes {
   static const serverMoved = 4014;
 
   /// The connection did not match what its identify claimed: a stream socket
-  /// that did not declare its stream or its screen, one identifying with the
-  /// voice channel instead of the stream's RTC channel, or a websocket dialled
-  /// on the UDP port instead of 443.
+  /// that did not declare its stream or its screen, or one identifying with
+  /// the voice channel instead of the stream's RTC channel.
   static const identifyRefused = 4017;
 
   /// The main gateway session this connection identified with expired, which
