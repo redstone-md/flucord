@@ -506,6 +506,11 @@ final class VoiceController extends ChangeNotifier {
         _participants.remove(event.userId);
       case VoiceDaveBinaryEvent():
         break;
+      case VoiceKeyframeRequestedEvent():
+        // Answered where the pictures come from: the stream router points the
+        // share's capture at one of these. A camera's turn, when its pictures
+        // are being sent at all.
+        break;
     }
     if (!_disposed) notifyListeners();
   }

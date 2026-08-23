@@ -505,7 +505,10 @@ final class DiscordVoiceGatewayClient
     // eight-byte keepalives. Dropping them before the attempt keeps them out
     // of the stale-key count, where a send-only stream socket collected
     // fifty in a row and asked for a new session the one it had was fine.
-    if (_isNotEncryptedMedia(packet)) return const [];
+    if (_isNotEncryptedMedia(packet)) {
+      _acceptPictureLossIndication(packet);
+      return const [];
+    }
     try {
       final frame = _decryptAudioPacket(packet);
       _hasDecryptedAnyPacket = true;
@@ -583,6 +586,28 @@ final class DiscordVoiceGatewayClient
     final packetType = packet[1];
     return packetType >= 192 && packetType <= 223;
   }
+
+  /// A picture-loss indication from a viewer who cannot decode the pictures
+  /// this client is sending, and the request for a keyframe it becomes.
+  ///
+  /// Nothing retransmits a lost packet on this path, so the only recovery is
+  /// a picture that stands alone. Rate-limited because the server relays one
+  /// per struggling viewer and a burst of joins must not become a burst of
+  /// keyframes, which would spend more bitrate than the loss did.
+  void _acceptPictureLossIndication(Uint8List packet) {
+    if (packet.length < 12 || (packet[0] & 0x1f) != 1 || packet[1] != 206) {
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastKeyframeRequest != null &&
+        now.difference(_lastKeyframeRequest!) < const Duration(milliseconds: 500)) {
+      return;
+    }
+    _lastKeyframeRequest = now;
+    if (!_events.isClosed) _events.add(const VoiceKeyframeRequestedEvent());
+  }
+
+  DateTime? _lastKeyframeRequest;
 
   DiscordRtpFrame _decryptAudioPacket(Uint8List packet) {
     final cipher = _transportCipher;

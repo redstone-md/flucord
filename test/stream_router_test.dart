@@ -182,6 +182,12 @@ void main() {
       expect(client.groupEncryptions.single.ssrc, 4243);
       // The viewer is the other side of the fork, and this was not it.
       expect(wiring.viewer.watching, isNull);
+
+      // A viewer who cannot decode asks for a keyframe, and the request
+      // reaches the one capture that could produce one.
+      client.announce(const VoiceKeyframeRequestedEvent());
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.encoder.keyframeRequests, 1);
     },
   );
 
@@ -304,6 +310,10 @@ final class _FakeEncoder implements VideoEncoderService {
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
 
+  /// Keyframe requests that reached the encoder, which is where a viewer's
+  /// picture-loss indication ends up.
+  int keyframeRequests = 0;
+
   /// Emits one small picture, as the capture would.
   void emitFrame() => _frames.add(
     EncodedVideoFrame(
@@ -329,7 +339,7 @@ final class _FakeEncoder implements VideoEncoderService {
   Future<void> start(VideoEncoderSettings settings) async {}
 
   @override
-  Future<void> requestKeyframe() async {}
+  Future<void> requestKeyframe() async => keyframeRequests++;
 
   @override
   Future<void> setPaused({required bool paused}) async {}

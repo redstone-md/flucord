@@ -57,11 +57,25 @@ final class StreamRouter {
 
   void _accept(DiscordStreamRtcSession session) {
     if (_disposed) return;
-    _waiting[session] = session.events.listen((event) {
-      if (event is! VoiceTransportReadyEvent) return;
-      unawaited(_waiting.remove(session)?.cancel());
-      _route(session, event);
-    });
+    late final StreamSubscription<VoiceSignalingEvent> subscription;
+    subscription = session.events.listen(
+      (event) {
+        if (event is VoiceTransportReadyEvent) {
+          _route(session, event);
+          return;
+        }
+        // Only the stream this client is sending: a viewer who cannot decode
+        // asks for a keyframe, and the capture is where one is made.
+        if (event is VoiceKeyframeRequestedEvent &&
+            session.key == _goLive.streamKey) {
+          unawaited(_capture.requestKeyframe());
+        }
+      },
+      // The session closes its events with itself; the entry must not outlive
+      // the connection it was keyed by.
+      onDone: () => _waiting.remove(session)?.cancel(),
+    );
+    _waiting[session] = subscription;
   }
 
   void _route(DiscordStreamRtcSession session, VoiceTransportReadyEvent event) {

@@ -247,6 +247,13 @@ final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
   final String userId;
 }
 
+/// The media server relayed a viewer's picture-loss indication, which means a
+/// viewer cannot decode what is arriving and only a fresh keyframe recovers
+/// them.
+final class VoiceKeyframeRequestedEvent extends VoiceSignalingEvent {
+  const VoiceKeyframeRequestedEvent();
+}
+
 abstract interface class VoiceSignalingService {
   Stream<VoiceSignalingEvent> get voiceEvents;
 

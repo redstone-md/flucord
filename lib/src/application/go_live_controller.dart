@@ -65,6 +65,7 @@ final class GoLiveController extends ChangeNotifier {
   StreamSubscription<GoLiveStream>? _updates;
   StreamSubscription<GoLiveServer>? _servers;
   Timer? _ping;
+  Timer? _paceLog;
   bool _bound = false;
   bool _disposed = false;
 
@@ -114,6 +115,33 @@ final class GoLiveController extends ChangeNotifier {
       sink: sink,
       groupEncryptor: groupEncryptor,
     )..attach(_capture.frames);
+    _startPaceLog();
+  }
+
+  /// Says what the stream is actually sending, every few seconds.
+  ///
+  /// "A stream is slow" has three different culprits (the encoder, this
+  /// client, the server) and no way to tell them apart from a viewer's
+  /// impression. The numbers here split the path in two: if the frame rate
+  /// that left this machine is the configured one, whatever a viewer sees is
+  /// happening beyond this socket.
+  void _startPaceLog() {
+    _paceLog?.cancel();
+    var frames = _transport?.sentFrames ?? 0;
+    var packets = _transport?.sentPackets ?? 0;
+    _paceLog = Timer.periodic(const Duration(seconds: 5), (_) {
+      final transport = _transport;
+      if (transport == null) return;
+      final nextFrames = transport.sentFrames;
+      final nextPackets = transport.sentPackets;
+      _diagnose(
+        'pace',
+        '${(nextFrames - frames) / 5} frames/s, '
+            '${(nextPackets - packets) / 5} packets/s',
+      );
+      frames = nextFrames;
+      packets = nextPackets;
+    });
   }
 
   bool get isStreaming =>
@@ -251,6 +279,8 @@ final class GoLiveController extends ChangeNotifier {
     _disposed = true;
     _ping?.cancel();
     _ping = null;
+    _paceLog?.cancel();
+    _paceLog = null;
     unawaited(_updates?.cancel());
     unawaited(_servers?.cancel());
     super.dispose();
@@ -270,6 +300,8 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   Future<void> _stopCapture() async {
+    _paceLog?.cancel();
+    _paceLog = null;
     await _transport?.stop();
     _transport = null;
     if (!_captureStarted) return;

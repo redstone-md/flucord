@@ -221,6 +221,70 @@ void main() {
       },
     );
 
+    test(
+      'a picture-loss indication becomes a keyframe request, once per burst',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final udp = _FakeVoiceUdpTransport();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 1,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: udp,
+        );
+        final keyframeRequests = <VoiceKeyframeRequestedEvent>[];
+        final subscription = client.events.listen((event) {
+          if (event is VoiceKeyframeRequestedEvent) keyframeRequests.add(event);
+        });
+        addTearDown(subscription.cancel);
+        // The packet chain only runs while something reads it, and a test
+        // that only watches the events stream would never deliver a packet.
+        final mediaSubscription = client.audioPackets.listen((_) {});
+        addTearDown(mediaSubscription.cancel);
+        addTearDown(client.close);
+
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'd': {
+            'ssrc': 42,
+            'ip': '127.0.0.1',
+            'port': 5000,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        await _flushEvents();
+        socket.addJson({
+          'op': 4,
+          'd': {
+            'mode': 'aead_aes256_gcm_rtpsize',
+            'secret_key': List<int>.generate(32, (index) => index),
+            'dave_protocol_version': 0,
+          },
+        });
+        await _flushEvents();
+
+        // A viewer who cannot decode asks for a picture that stands alone.
+        // One request leaves the socket even when several viewers asked at
+        // once: a keyframe burst would cost more than the loss did.
+        final pictureLoss = Uint8List(12);
+        pictureLoss[0] = 0x81; // V=2, FMT=1 (PLI)
+        pictureLoss[1] = 206; // payload-specific feedback
+        udp.addPacket(pictureLoss);
+        udp.addPacket(pictureLoss);
+        await _flushEvents();
+        expect(keyframeRequests, hasLength(1));
+
+        // Other feedback is not a keyframe request.
+        final receiverReport = Uint8List(64);
+        receiverReport[0] = 0x80;
+        receiverReport[1] = 201;
+        udp.addPacket(receiverReport);
+        await _flushEvents();
+        expect(keyframeRequests, hasLength(1));
+      },
+    );
+
     test('reaches transport ready and routes DAVE binary frames', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);

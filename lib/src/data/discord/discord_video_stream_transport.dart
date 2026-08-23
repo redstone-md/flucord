@@ -47,12 +47,17 @@ final class DiscordVideoStreamTransport {
 
   StreamSubscription<EncodedVideoFrame>? _subscription;
   int _sentPackets = 0;
+  int _sentFrames = 0;
   int _sentBytes = 0;
   Object? _error;
 
   /// How many RTP packets have gone out, which is what a caller checks to know
   /// the stream is actually moving.
   int get sentPackets => _sentPackets;
+
+  /// How many pictures have gone out, which is what says the encoder and the
+  /// frame path are keeping pace.
+  int get sentFrames => _sentFrames;
 
   int get sentBytes => _sentBytes;
 
@@ -103,6 +108,7 @@ final class DiscordVideoStreamTransport {
       _sentPackets++;
       _sentBytes += packet.payload.length;
     }
+    if (sent > 0) _sentFrames++;
     return sent;
   }
 
