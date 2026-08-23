@@ -75,6 +75,10 @@ final class ConversationChannel {
 
   bool get isDirectMessage => recipientId != null;
 
+  /// The channel whose thread browser this channel is browsed under: a thread
+  /// under its parent, every other channel under itself.
+  String? get threadParentId => isThread ? parentId : id;
+
   /// A voice channel carries an ordinary message timeline on the same channel
   /// id as the room, so every message-shaped feature has to treat it like a
   /// text channel. Forum and media channels look similar but are threads-only

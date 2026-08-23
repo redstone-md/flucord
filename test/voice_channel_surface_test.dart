@@ -143,4 +143,74 @@ void main() {
       );
     });
   });
+
+  group('showsMessageTimeline', () {
+    ConversationChannel channel(ChannelKind kind) => ConversationChannel(
+      id: 'c',
+      spaceId: 'forge',
+      name: 'c',
+      topic: '',
+      kind: kind,
+    );
+
+    test('a text channel always shows its timeline', () {
+      expect(
+        showsMessageTimeline(channel(ChannelKind.text), VoiceChannelSurface.room),
+        isTrue,
+      );
+    });
+
+    test('a voice channel shows its timeline only on the chat surface', () {
+      final voice = channel(ChannelKind.voice);
+      expect(
+        showsMessageTimeline(voice, VoiceChannelSurface.room),
+        isFalse,
+      );
+      expect(showsMessageTimeline(voice, VoiceChannelSurface.chat), isTrue);
+    });
+
+    test('a call swaps the timeline for the room on any channel', () {
+      final dm = channel(ChannelKind.text);
+      expect(
+        showsMessageTimeline(dm, VoiceChannelSurface.room, inCall: true),
+        isFalse,
+      );
+      expect(
+        showsMessageTimeline(dm, VoiceChannelSurface.chat, inCall: true),
+        isTrue,
+      );
+    });
+
+    test('forum and media channels never show a timeline', () {
+      for (final kind in [ChannelKind.forum, ChannelKind.media]) {
+        expect(
+          showsMessageTimeline(channel(kind), VoiceChannelSurface.chat),
+          isFalse,
+        );
+      }
+    });
+  });
+
+  group('hasVoiceSurfaces', () {
+    test('only voice channels and active calls get the switch', () {
+      const voice = ConversationChannel(
+        id: 'v',
+        spaceId: 'forge',
+        name: 'v',
+        topic: '',
+        kind: ChannelKind.voice,
+      );
+      const text = ConversationChannel(
+        id: 't',
+        spaceId: 'forge',
+        name: 't',
+        topic: '',
+        kind: ChannelKind.text,
+      );
+
+      expect(hasVoiceSurfaces(voice, inCall: false), isTrue);
+      expect(hasVoiceSurfaces(text, inCall: false), isFalse);
+      expect(hasVoiceSurfaces(text, inCall: true), isTrue);
+    });
+  });
 }

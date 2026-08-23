@@ -1,89 +1,65 @@
-import '../domain/go_live_stream.dart';
-import '../domain/automod_rule.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
-import '../application/composer_autocomplete_catalog.dart';
-import '../application/expression_favorites_controller.dart';
-import '../application/self_video_controller.dart';
-import '../application/remote_camera_controller.dart';
-import '../application/friends_controller.dart';
 import '../application/connection_controller.dart';
-import '../application/direct_call_controller.dart';
 import '../application/discord_oauth_controller.dart';
+import '../application/friends_controller.dart';
 import '../application/guild_member_list_controller.dart';
 import '../application/guild_settings_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/message_search_controller.dart';
 import '../application/message_search_grammar.dart';
-import '../application/report_flow_controller.dart';
 import '../application/oauth_guild_directory_controller.dart';
 import '../application/oauth_guild_membership_controller.dart';
 import '../application/quick_switcher_catalog.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/workspace_controller.dart';
-import '../application/gif_picker_controller.dart';
-import '../application/go_live_controller.dart';
-import '../application/stream_viewer_controller.dart';
-import '../application/message_component_controller.dart';
-import '../application/slash_command_controller.dart';
-import '../application/soundboard_controller.dart';
-import '../application/stage_controller.dart';
-import '../application/thread_membership_controller.dart';
+import '../application/self_video_controller.dart';
 import '../application/voice_controller.dart';
+import '../application/direct_call_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
 import '../domain/discord_permissions.dart';
-import '../domain/message_search.dart';
-import '../domain/attachment_download.dart';
 import '../domain/external_link_launcher.dart';
+import '../domain/message_search.dart';
 import '../domain/moderation_report.dart';
-import '../domain/voice_message_recorder.dart';
 import '../domain/workspace_permissions.dart';
+import '../application/report_flow_controller.dart';
+import 'conversation_pane.dart';
 import 'widgets/channel_sidebar.dart';
-import 'widgets/chat_header.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/discord_desktop_login_scope.dart';
-import 'widgets/create_forum_post_dialog.dart';
-import 'widgets/create_poll_dialog.dart';
 import 'widgets/direct_message_views.dart';
-import 'widgets/forum_channel_view.dart';
 import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
-import 'widgets/report_dialog.dart';
 import 'widgets/inbox_dialog.dart';
 import 'widgets/incoming_call_overlay.dart';
 import 'widgets/member_profile_popover.dart';
 import 'widgets/member_sidebar.dart';
-import 'widgets/message_composer.dart';
-import 'widgets/message_forward_dialog.dart';
-import 'widgets/message_list.dart';
 import 'widgets/message_search_panel.dart';
 import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
-import 'widgets/reaction_details_dialog.dart';
+import 'widgets/report_dialog.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
 import 'widgets/thread_browser_panel.dart';
-import 'widgets/typing_indicator.dart';
-import 'widgets/go_live_button.dart';
-import 'widgets/go_live_viewer.dart';
-import 'widgets/soundboard_picker.dart';
-import 'widgets/stage_controls.dart';
-import 'widgets/thread_membership_button.dart';
-import 'widgets/go_live_display_dialog.dart';
 import 'widgets/voice_connection_bar.dart';
-import 'widgets/voice_room_view.dart';
 
 part 'flucord_shell_navigation.dart';
-part 'flucord_conversation_pane.dart';
 part 'flucord_shell_conversation.dart';
 
+/// The workspace chrome: the rail, the channel sidebar, the member and search
+/// panels, and the conversation pane in the middle.
+///
+/// The controllers this widget lays out arrive as constructor parameters. The
+/// conversation plane is different: the pane resolves its controllers from the
+/// scope modules above this widget, so only navigation and panel intents cross
+/// the boundary between the two.
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
     required this.chatController,
@@ -94,18 +70,6 @@ class FlucordShell extends StatelessWidget {
     required this.workspaceController,
     required this.voiceController,
     required this.selfVideoController,
-    required this.remoteCameraController,
-    required this.threadMembershipController,
-    required this.stageController,
-    required this.soundboardController,
-    required this.goLiveController,
-    required this.streamViewerController,
-    required this.gifPickerController,
-    required this.expressionFavoritesController,
-    required this.slashCommandController,
-    required this.messageComponentController,
-    required this.voiceMessageRecorder,
-    required this.attachmentDownloadService,
     required this.externalLinkLauncher,
     this.memberListController,
     this.friendsController,
@@ -122,18 +86,6 @@ class FlucordShell extends StatelessWidget {
   final WorkspaceController workspaceController;
   final VoiceController voiceController;
   final SelfVideoController selfVideoController;
-  final RemoteCameraController remoteCameraController;
-  final ThreadMembershipController threadMembershipController;
-  final StageController stageController;
-  final SoundboardController soundboardController;
-  final GoLiveController goLiveController;
-  final StreamViewerController streamViewerController;
-  final GifPickerController gifPickerController;
-  final ExpressionFavoritesController expressionFavoritesController;
-  final SlashCommandController slashCommandController;
-  final MessageComponentController messageComponentController;
-  final VoiceMessageRecorder? voiceMessageRecorder;
-  final AttachmentDownloadService attachmentDownloadService;
   final ExternalLinkLauncher externalLinkLauncher;
 
   /// Owns the member panel's roster subscription. Absent in hosts that never
@@ -206,7 +158,6 @@ class FlucordShell extends StatelessWidget {
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
-            final inboxSummary = InboxCatalog.fromWorkspace(workspace).summary;
             return Scaffold(
               body: _withIncomingCall(
                 workspace,
@@ -214,11 +165,7 @@ class FlucordShell extends StatelessWidget {
                   builder: (context, constraints) {
                     final showChannels = constraints.maxWidth >= 760;
                     final membersFit = constraints.maxWidth >= 1120;
-                    final threadParentId = channel == null
-                        ? null
-                        : channel.isThread
-                        ? channel.parentId
-                        : channel.id;
+                    final threadParentId = channel?.threadParentId;
                     final allowThreadPanel =
                         channel?.kind == ChannelKind.text &&
                         channel?.isDirectMessage == false &&
@@ -228,7 +175,7 @@ class FlucordShell extends StatelessWidget {
                         : workspaceController.voiceSurfaceOf(channel.id);
                     final showsMessages =
                         channel != null &&
-                        _showsMessageTimeline(channel, voiceSurface);
+                        showsMessageTimeline(channel, voiceSurface);
                     final searchController = messageSearchController;
                     final showThreads =
                         workspaceController.showThreads && allowThreadPanel;
@@ -376,10 +323,7 @@ class FlucordShell extends StatelessWidget {
                                   showMembers: showMembers,
                                   showPins: showPins,
                                   showThreads: showThreads,
-                                  threadParentId: threadParentId,
                                   allowThreadPanel: allowThreadPanel,
-                                  voiceSurface: voiceSurface,
-                                  inboxSummary: inboxSummary,
                                   canSearch: canSearch,
                                 ),
                         ),

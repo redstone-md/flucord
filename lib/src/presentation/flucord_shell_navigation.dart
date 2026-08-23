@@ -281,29 +281,6 @@ extension _FlucordShellNavigation on FlucordShell {
     }
   }
 
-  /// Opens the in-app report flow for one message.
-  ///
-  /// A first DM from somebody not yet spoken to has its own report type, and
-  /// its own menu, so the target says which it is rather than the surface
-  /// guessing after the menu comes back.
-  Future<void> _reportMessage(BuildContext context, ChatMessage message) async {
-    final repository = chatController.moderation;
-    if (repository == null) return;
-    final controller = ReportFlowController(
-      repository,
-      target: MessageReportTarget(
-        channelId: message.channelId,
-        messageId: message.id,
-        isFirstDirectMessage: _isFirstDirectMessage(message),
-      ),
-    );
-    try {
-      await showReportDialog(context: context, controller: controller);
-    } finally {
-      controller.dispose();
-    }
-  }
-
   /// Opens the in-app report flow for a whole server.
   Future<void> _reportSpace(BuildContext context, CommunitySpace space) async {
     final repository = chatController.moderation;
@@ -317,27 +294,6 @@ extension _FlucordShellNavigation on FlucordShell {
     } finally {
       controller.dispose();
     }
-  }
-
-  /// Whether this is the opening message of a DM from somebody the account
-  /// has not written to. Discord treats that case separately because it is
-  /// the one where the reporter has no history to judge the sender by.
-  bool _isFirstDirectMessage(ChatMessage message) {
-    final workspace = chatController.workspace;
-    if (workspace == null) return false;
-    final channel = workspace.channels
-        .where((candidate) => candidate.id == message.channelId)
-        .firstOrNull;
-    if (channel == null || channel.spaceId != CommunitySpace.directMessagesId) {
-      return false;
-    }
-    final inChannel = [
-      for (final candidate in workspace.messages)
-        if (candidate.channelId == message.channelId) candidate,
-    ];
-    return inChannel.length == 1 &&
-        inChannel.single.id == message.id &&
-        message.authorId != workspace.currentMemberId;
   }
 
   /// Blocks [member], after a confirmation. Blocking is not undoable from any

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'app_bootstrap.dart';
 import 'app_composition.dart';
 import 'presentation/flucord_shell.dart';
+import 'presentation/widgets/attachment_download_scope.dart';
+import 'presentation/widgets/chat_scope.dart';
 import 'presentation/widgets/discord_account_connection_scope.dart';
 import 'presentation/widgets/discord_desktop_login_scope.dart';
 import 'presentation/widgets/discord_friends_scope.dart';
@@ -11,7 +13,21 @@ import 'presentation/widgets/discord_social_dm_scope.dart';
 import 'presentation/widgets/discord_social_activity_scope.dart';
 import 'presentation/widgets/discord_social_presence_scope.dart';
 import 'presentation/widgets/discord_social_sdk_scope.dart';
+import 'presentation/widgets/direct_call_scope.dart';
+import 'presentation/widgets/expression_favorites_scope.dart';
+import 'presentation/widgets/external_link_launcher_scope.dart';
+import 'presentation/widgets/gif_picker_scope.dart';
+import 'presentation/widgets/go_live_scope.dart';
+import 'presentation/widgets/message_component_scope.dart';
+import 'presentation/widgets/remote_camera_scope.dart';
 import 'presentation/widgets/self_presence_scope.dart';
+import 'presentation/widgets/slash_command_scope.dart';
+import 'presentation/widgets/soundboard_scope.dart';
+import 'presentation/widgets/stage_scope.dart';
+import 'presentation/widgets/stream_viewer_scope.dart';
+import 'presentation/widgets/thread_membership_scope.dart';
+import 'presentation/widgets/voice_message_recorder_scope.dart';
+import 'presentation/widgets/workspace_scope.dart';
 import 'presentation/widgets/account_standing_scope.dart';
 import 'presentation/widgets/auth_session_scope.dart';
 import 'presentation/widgets/age_verification_scope.dart';
@@ -126,65 +142,37 @@ class _FlucordAppState extends State<FlucordApp> {
                                               child: DiscordFriendsScope(
                                                 controller:
                                                     _composition.discordFriends,
-                                                child: FlucordShell(
-                                                  chatController:
-                                                      _composition.chat,
-                                                  connectionController:
-                                                      _composition.connection,
-                                                  discordOAuthController:
-                                                      _composition.oauth,
-                                                  oauthGuildDirectoryController:
-                                                      _composition
-                                                          .oauthGuildDirectory,
-                                                  oauthGuildMembershipController:
-                                                      _composition
-                                                          .oauthGuildMembership,
-                                                  workspaceController:
-                                                      _composition.workspace,
-                                                  memberListController:
-                                                      _composition.memberList,
-                                                  messageSearchController:
-                                                      _composition
-                                                          .messageSearch,
-                                                  voiceController:
-                                                      _composition.voice,
-                                                  threadMembershipController:
-                                                      _composition
-                                                          .threadMembership,
-                                                  stageController:
-                                                      _composition.stage,
-                                                  soundboardController:
-                                                      _composition.soundboard,
-                                                  goLiveController:
-                                                      _composition.goLive,
-                                                  selfVideoController:
-                                                      _composition.selfVideo,
-                                                  remoteCameraController:
-                                                      _composition
-                                                          .remoteCameras,
-                                                  streamViewerController:
-                                                      _composition.streamViewer,
-                                                  gifPickerController:
-                                                      _composition.gifPicker,
-                                                  expressionFavoritesController:
-                                                      _composition
-                                                          .expressionFavorites,
-                                                  slashCommandController:
-                                                      _composition.slashCommand,
-                                                  messageComponentController:
-                                                      _composition
-                                                          .messageComponent,
-                                                  directCallController:
-                                                      _composition.directCall,
-                                                  voiceMessageRecorder:
-                                                      _composition
-                                                          .voiceMessageRecorder,
-                                                  attachmentDownloadService:
-                                                      _composition
-                                                          .attachmentDownload,
-                                                  externalLinkLauncher:
-                                                      _composition
-                                                          .externalLinkLauncher,
+                                                child: _conversationScopes(
+                                                  FlucordShell(
+                                                    chatController:
+                                                        _composition.chat,
+                                                    connectionController:
+                                                        _composition.connection,
+                                                    discordOAuthController:
+                                                        _composition.oauth,
+                                                    oauthGuildDirectoryController:
+                                                        _composition
+                                                            .oauthGuildDirectory,
+                                                    oauthGuildMembershipController:
+                                                        _composition
+                                                            .oauthGuildMembership,
+                                                    workspaceController:
+                                                        _composition.workspace,
+                                                    memberListController:
+                                                        _composition.memberList,
+                                                    messageSearchController:
+                                                        _composition
+                                                            .messageSearch,
+                                                    voiceController:
+                                                        _composition.voice,
+                                                    selfVideoController:
+                                                        _composition.selfVideo,
+                                                    directCallController:
+                                                        _composition.directCall,
+                                                    externalLinkLauncher:
+                                                        _composition
+                                                            .externalLinkLauncher,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -213,5 +201,62 @@ class _FlucordAppState extends State<FlucordApp> {
   /// The theme to draw with, built from whichever palette is in force.
   ThemeData _installedTheme({required bool dark}) => FlucordTheme.fromPalette(
     _composition.theme.paletteFor(systemIsDark: dark),
+  );
+
+  /// Wraps the shell in the scopes the conversation pane resolves its
+  /// controllers from.
+  ///
+  /// One wrap per controller, following the scope modules that already serve
+  /// the settings window: adding a conversation feature means adding its
+  /// scope here and reading it in the pane, with no constructor in between
+  /// changing shape.
+  Widget _conversationScopes(Widget child) => ChatScope(
+    controller: _composition.chat,
+    child: WorkspaceScope(
+      controller: _composition.workspace,
+      child: DirectCallScope(
+        controller: _composition.directCall,
+        child: ExternalLinkLauncherScope(
+          launcher: _composition.externalLinkLauncher,
+          child: AttachmentDownloadScope(
+            service: _composition.attachmentDownload,
+            child: VoiceMessageRecorderScope(
+              recorder: _composition.voiceMessageRecorder,
+              child: ThreadMembershipScope(
+                controller: _composition.threadMembership,
+                child: StageScope(
+                  controller: _composition.stage,
+                  child: SoundboardScope(
+                    controller: _composition.soundboard,
+                    child: GoLiveScope(
+                      controller: _composition.goLive,
+                      child: StreamViewerScope(
+                        controller: _composition.streamViewer,
+                        child: RemoteCameraScope(
+                          controller: _composition.remoteCameras,
+                          child: GifPickerScope(
+                            controller: _composition.gifPicker,
+                            child: ExpressionFavoritesScope(
+                              controller: _composition.expressionFavorites,
+                              child: SlashCommandScope(
+                                controller: _composition.slashCommand,
+                                child: MessageComponentScope(
+                                  controller: _composition.messageComponent,
+                                  child: child,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
