@@ -166,7 +166,10 @@ void main() {
 
       // Declared before the first packet leaves: Discord drops a packet whose
       // SSRC was never announced. The picture takes two packets, which is what
-      // the packetiser does with a keyframe of this size.
+      // the packetiser does with a keyframe of this size; the second is paced
+      // out a few milliseconds behind the first.
+      expect(wiring.log, ['announce', 'send']);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(wiring.log, ['announce', 'send', 'send']);
       expect(client.sentFrames, isNotEmpty);
       // One above the connection's own SSRC: the announce declared the

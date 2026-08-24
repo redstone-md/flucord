@@ -27,6 +27,21 @@ running. The native lifecycle is owned by the encoder service: frame buffers are
 copied before release, the callback closes only after the capture thread joins,
 and a finalizer closes a handle nobody stopped.
 
+The capture runs on a fixed tick at the configured frame rate (any rate: the
+tick is one over it): sleep until the tick on a high-resolution timer, take
+whatever the desktop shows right then, encode it, and repeat the last picture
+when nothing moved. The schedule is absolute, so a frame's own convert and
+encode time does not push the next tick later. The `golive pace` log line
+prints each stage per frame; on a loop keeping pace, wait + convert + encode
+adds up to one frame interval.
+
+Between the encoder and the socket, `DiscordVideoStreamTransport` paces a
+picture's packets onto the wire at 2.5 times the encoder bitrate instead of in
+one burst (WebRTC's pacer, in short): ten packets for a picture and a hundred
+for a keyframe, sent in one loop, overflow the uplink's queue, and the packets
+it drops are the loss the media server reports back. Retransmissions skip the
+queue.
+
 Inline message video uses `media_kit` with the packaged Windows native video
 libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
 bot authorization, personal tokens, fingerprints, private client headers, or a

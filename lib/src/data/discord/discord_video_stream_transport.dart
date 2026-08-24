@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:typed_data';
 
 import '../../domain/video_encoder.dart';
@@ -33,6 +34,8 @@ final class DiscordVideoStreamTransport {
     int rtxPayloadType = DiscordRtpHeader.discordVideoRtxPayloadType,
     int initialSequence = 0,
     int maxPayloadSize = 1200,
+    int pacingBitsPerSecond = 0,
+    DateTime Function() now = DateTime.now,
   }) : _sender = DiscordVideoRtpSender(
            ssrc: ssrc,
            initialSequence: initialSequence,
@@ -42,12 +45,25 @@ final class DiscordVideoStreamTransport {
        _groupEncryptor = groupEncryptor,
        _rtxSsrc = rtxSsrc ?? ssrc + 1,
        _payloadType = payloadType,
-       _rtxPayloadType = rtxPayloadType;
+       _rtxPayloadType = rtxPayloadType,
+       _paceBytesPerSecond = pacingBitsPerSecond * paceMultiplier / 8,
+       _now = now;
 
   /// How many sent packets are kept for retransmission: four seconds at
   /// the packet rate of a 720p share, which is longer than any viewer waits
   /// for a missing packet. A power of two, so a sequence indexes it by mask.
   static const historySize = 1024;
+
+  /// The wire rate packets are let out at, as a multiple of the encoder's
+  /// bitrate: fast enough that a keyframe several times the size of an
+  /// ordinary picture drains in a few frame intervals, slow enough that a
+  /// picture is not one burst. The multiple WebRTC's pacer uses.
+  static const paceMultiplier = 2.5;
+
+  /// How often the queue is let out. A coarse system timer only makes each
+  /// release bigger, because the budget is counted from the clock rather
+  /// than from the ticks.
+  static const paceInterval = Duration(milliseconds: 5);
 
   final DiscordVideoRtpSender _sender;
   final VideoFrameSink _sink;
@@ -55,6 +71,22 @@ final class DiscordVideoStreamTransport {
   final int _rtxSsrc;
   final int _payloadType;
   final int _rtxPayloadType;
+
+  /// Pacing: a picture's packets are queued and let out at
+  /// [_paceBytesPerSecond] rather than in one burst. Zero sends at once.
+  ///
+  /// A 720p picture is ten packets and a keyframe can be a hundred; put on
+  /// the wire in one loop they arrive at the uplink faster than it drains,
+  /// and the ones the router's queue has no room for are the loss the far
+  /// end reports. The budget is a token bucket: it grows with the clock,
+  /// each packet spends its size, and it never builds up while nothing is
+  /// queued, so a frame after silence is still let out one packet at a time.
+  final double _paceBytesPerSecond;
+  final DateTime Function() _now;
+  final Queue<DiscordRtpFrame> _queue = Queue();
+  double _budgetBytes = 0;
+  DateTime? _budgetRead;
+  Timer? _paceTimer;
 
   /// The packets that went out most recently, by sequence, as the wire saw
   /// them: group-encrypted already, so a retransmission is a copy.
@@ -98,12 +130,16 @@ final class DiscordVideoStreamTransport {
     );
   }
 
+  /// How many packets are waiting for pacing budget.
+  int get queuedPackets => _queue.length;
+
   /// Sends one frame, returning how many packets it took.
   ///
-  /// A failure stops the stream rather than being swallowed per packet: a
-  /// transport that has gone away will not come back on the next picture, and
-  /// a viewer left watching a frozen frame with no explanation is worse than
-  /// one told the stream ended.
+  /// With pacing, "sent" means accepted for the wire: the packets leave over
+  /// the next few milliseconds. A failure stops the stream rather than being
+  /// swallowed per packet: a transport that has gone away will not come back
+  /// on the next picture, and a viewer left watching a frozen frame with no
+  /// explanation is worse than one told the stream ended.
   int send(EncodedVideoFrame frame) {
     var sent = 0;
     for (final packet in _sender.packetsFor(_prepare(frame))) {
@@ -117,14 +153,54 @@ final class DiscordVideoStreamTransport {
         ),
         payload: packet.payload,
       );
-      if (!_put(rtp)) return sent;
-      _history[packet.sequence & (historySize - 1)] = rtp;
+      if (_paceBytesPerSecond > 0) {
+        _queue.add(rtp);
+      } else if (!_putOnWire(rtp)) {
+        return sent;
+      }
       sent++;
-      _sentPackets++;
-      _sentBytes += packet.payload.length;
     }
     if (sent > 0) _sentFrames++;
+    if (_queue.isNotEmpty) _release();
     return sent;
+  }
+
+  /// Lets out as many queued packets as the budget covers, and keeps the
+  /// timer running while any are left.
+  void _release() {
+    final now = _now();
+    final read = _budgetRead;
+    if (read != null) {
+      _budgetBytes +=
+          now.difference(read).inMicroseconds *
+          _paceBytesPerSecond /
+          Duration.microsecondsPerSecond;
+    }
+    _budgetRead = now;
+    // A packet goes when the budget is not in debt: the first one after
+    // silence leaves at once and puts the bucket in debt for its size.
+    while (_queue.isNotEmpty && _budgetBytes >= 0) {
+      final rtp = _queue.removeFirst();
+      if (!_putOnWire(rtp)) return;
+      _budgetBytes -= rtp.payload.length;
+    }
+    if (_queue.isEmpty) {
+      _paceTimer?.cancel();
+      _paceTimer = null;
+      // No saving up while idle: silence earns no burst.
+      if (_budgetBytes > 0) _budgetBytes = 0;
+      return;
+    }
+    _paceTimer ??= Timer.periodic(paceInterval, (_) => _release());
+  }
+
+  /// One packet of a picture onto the wire, recorded for retransmission.
+  bool _putOnWire(DiscordRtpFrame rtp) {
+    if (!_put(rtp)) return false;
+    _history[rtp.header.sequence & (historySize - 1)] = rtp;
+    _sentPackets++;
+    _sentBytes += rtp.payload.length;
+    return true;
   }
 
   /// Sends [sequences] again, answering how many were still held.
@@ -133,7 +209,9 @@ final class DiscordVideoStreamTransport {
   /// type, numbered in their own sequence, with the original sequence
   /// leading the payload so the receiver can put the packet back where it
   /// belongs. A sequence that has left the history, or was never sent, is
-  /// skipped: the viewer has moved on from it already.
+  /// skipped: the viewer has moved on from it already. Retransmissions skip
+  /// the pacing queue: a viewer is already waiting on them, and they are a
+  /// few packets, not a picture.
   int retransmit(Iterable<int> sequences) {
     var sent = 0;
     for (final sequence in sequences) {
@@ -187,6 +265,9 @@ final class DiscordVideoStreamTransport {
   Future<void> stop() async {
     final subscription = _subscription;
     _subscription = null;
+    _paceTimer?.cancel();
+    _paceTimer = null;
+    _queue.clear();
     await subscription?.cancel();
   }
 }

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Uint8List _accessUnit({int sliceLength = 8}) => Uint8List.fromList([
@@ -32,6 +33,8 @@ EncodedVideoFrame _frame({
 );
 
 void main() {
+  group('pacing', _pacingTests);
+
   test('builds an RTP header for every payload of a picture', () {
     final sent = <DiscordRtpFrame>[];
     final transport = DiscordVideoStreamTransport(
@@ -280,5 +283,118 @@ void main() {
     // And what went on the wire is the encrypted bytes, not the clear ones.
     expect(sent, hasLength(1));
     expect(sent.single.payload, [0x41, 0xee, 0xff]);
+  });
+}
+
+/// A clock the test moves by hand, in step with [FakeAsync.elapse].
+final class _Clock {
+  DateTime now = DateTime(2026, 8, 24);
+  void elapse(FakeAsync async, Duration by) {
+    now = now.add(by);
+    async.elapse(by);
+  }
+}
+
+void _pacingTests() {
+  // 8 kbit/s paces at 2.5x = 2500 bytes/s: one 100-byte packet every 40 ms.
+  const bitsPerSecond = 8000;
+
+  test('a paced frame leaves one packet at a time, not in a burst', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      final sent = <DiscordRtpFrame>[];
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          sent.add(frame);
+          return 0;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        now: () => clock.now,
+      );
+
+      final queued = transport.send(_frame(sliceLength: 430));
+
+      expect(queued, 6);
+      // The first packet goes out at once; the rest wait for budget.
+      expect(sent, hasLength(1));
+      clock.elapse(async, const Duration(milliseconds: 100));
+      expect(sent.length, inExclusiveRange(1, 6));
+      clock.elapse(async, const Duration(milliseconds: 400));
+      expect(sent, hasLength(6));
+      expect(sent.map((frame) => frame.header.sequence), [0, 1, 2, 3, 4, 5]);
+      expect(transport.sentPackets, 6);
+      expect(transport.queuedPackets, 0);
+    });
+  });
+
+  test('budget does not pile up while the queue is empty', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      var count = 0;
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          count++;
+          return 0;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        now: () => clock.now,
+      );
+
+      // A long silence, then a frame: still one packet at once, no burst.
+      clock.elapse(async, const Duration(seconds: 5));
+      transport.send(_frame(sliceLength: 430));
+      expect(count, 1);
+    });
+  });
+
+  test('a retransmission goes ahead of the queue', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      final sent = <DiscordRtpFrame>[];
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          sent.add(frame);
+          return 0;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        now: () => clock.now,
+      );
+      transport.send(_frame(sliceLength: 430));
+      expect(sent, hasLength(1));
+
+      expect(transport.retransmit([0]), 1);
+
+      expect(sent, hasLength(2));
+      expect(sent.last.header.ssrc, 2);
+    });
+  });
+
+  test('stopping drops what was still queued', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      var count = 0;
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          count++;
+          return 0;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        now: () => clock.now,
+      );
+      transport.send(_frame(sliceLength: 430));
+      transport.stop();
+      clock.elapse(async, const Duration(seconds: 1));
+
+      expect(count, 1);
+      expect(transport.queuedPackets, 0);
+    });
   });
 }

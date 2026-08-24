@@ -163,6 +163,7 @@ final class GoLiveController extends ChangeNotifier {
       rtxSsrc: rtxSsrc,
       sink: sink,
       groupEncryptor: groupEncryptor,
+      pacingBitsPerSecond: _capture.shareSettings.bitrate,
     )..attach(_capture.frames);
     _feedback = const _Feedback();
     _startPaceLog();
