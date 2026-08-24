@@ -6,7 +6,53 @@ import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
+import '../domain/voice_connection.dart';
 import '../app_log.dart';
+
+/// What the media server reported about the picture over one pace window.
+///
+/// Kept apart from the send counters because it comes from the far end, not
+/// from this machine: loss the network caused, packets it asked back, and the
+/// keyframes a struggling viewer needed. A window with none of it prints
+/// nothing, so a clean stream's log stays about the send pace.
+final class _Feedback {
+  const _Feedback({
+    this.lossRatio = 0,
+    this.reports = 0,
+    this.nacked = 0,
+    this.pictureLosses = 0,
+  });
+
+  final double lossRatio;
+  final int reports;
+  final int nacked;
+  final int pictureLosses;
+
+  _Feedback copyWith({
+    double? lossRatio,
+    int? reports,
+    int? nacked,
+    int? pictureLosses,
+  }) => _Feedback(
+    lossRatio: lossRatio ?? this.lossRatio,
+    reports: reports ?? this.reports,
+    nacked: nacked ?? this.nacked,
+    pictureLosses: pictureLosses ?? this.pictureLosses,
+  );
+
+  /// A phrase for the pace log, given how many packets were actually resent
+  /// this window. "healthy" when the far end said nothing is wrong.
+  String describe({required int retransmitted}) {
+    if (reports == 0 && nacked == 0 && pictureLosses == 0) return 'healthy';
+    final parts = <String>[];
+    if (reports > 0) {
+      parts.add('${(lossRatio * 100).toStringAsFixed(1)}% loss');
+    }
+    if (nacked > 0) parts.add('$retransmitted/$nacked resent');
+    if (pictureLosses > 0) parts.add('$pictureLosses keyframe req');
+    return parts.join(', ');
+  }
+}
 
 /// A display this machine can share.
 ///
@@ -107,17 +153,38 @@ final class GoLiveController extends ChangeNotifier {
   /// there is a socket to take them.
   void bindTransport({
     required int ssrc,
+    required int rtxSsrc,
     required VideoFrameSink sink,
     VideoFrameGroupEncryptor? groupEncryptor,
   }) {
     _transport?.stop();
     _transport = DiscordVideoStreamTransport(
       ssrc: ssrc,
+      rtxSsrc: rtxSsrc,
       sink: sink,
       groupEncryptor: groupEncryptor,
     )..attach(_capture.frames);
+    _feedback = const _Feedback();
     _startPaceLog();
   }
+
+  /// What the media server said about the picture: the packets it wants
+  /// again are sent again, and the rest is kept for the pace log.
+  void acceptFeedback(VoiceSignalingEvent event) {
+    switch (event) {
+      case VoiceRetransmitRequestedEvent(:final sequences):
+        _feedback = _feedback.copyWith(nacked: _feedback.nacked + sequences.length);
+        _transport?.retransmit(sequences);
+      case VoiceReceiverReportEvent(:final lossRatio):
+        _feedback = _feedback.copyWith(lossRatio: lossRatio, reports: _feedback.reports + 1);
+      case VoiceKeyframeRequestedEvent():
+        _feedback = _feedback.copyWith(pictureLosses: _feedback.pictureLosses + 1);
+      default:
+        break;
+    }
+  }
+
+  _Feedback _feedback = const _Feedback();
 
   /// Says what the stream is actually sending, every few seconds.
   ///
@@ -131,21 +198,27 @@ final class GoLiveController extends ChangeNotifier {
     _paceLog?.cancel();
     var frames = _transport?.sentFrames ?? 0;
     var packets = _transport?.sentPackets ?? 0;
+    var retransmitted = _transport?.retransmittedPackets ?? 0;
     VideoEncoderDiagnostics? stage;
     _paceLog = Timer.periodic(const Duration(seconds: 5), (_) {
       final transport = _transport;
       if (transport == null) return;
       final nextFrames = transport.sentFrames;
       final nextPackets = transport.sentPackets;
+      final nextRetransmitted = transport.retransmittedPackets;
       final nextStage = _capture.diagnostics;
+      final feedback = _feedback;
+      _feedback = const _Feedback();
       var line =
           '${(nextFrames - frames) / 5} frames/s, '
-          '${(nextPackets - packets) / 5} packets/s';
+          '${(nextPackets - packets) / 5} packets/s, '
+          '${feedback.describe(retransmitted: nextRetransmitted - retransmitted)}';
       final stages = _stageLine(stage, nextStage);
       if (stages != null) line += ', $stages';
       _diagnose('pace', line);
       frames = nextFrames;
       packets = nextPackets;
+      retransmitted = nextRetransmitted;
       stage = nextStage;
     });
   }
@@ -376,3 +449,4 @@ final class GoLiveController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 }
+

@@ -188,6 +188,17 @@ void main() {
       client.announce(const VoiceKeyframeRequestedEvent());
       await Future<void>.delayed(Duration.zero);
       expect(wiring.encoder.keyframeRequests, 1);
+
+      // And a NACK for a packet already sent is answered from the sender's
+      // history: the missing sequence goes out again on the rtx SSRC (one
+      // above the video's), not the encoder being asked to redraw.
+      final before = client.sentFrames.length;
+      client.announce(
+        const VoiceRetransmitRequestedEvent(ssrc: 4243, sequences: [1]),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(client.sentFrames.length, before + 1);
+      expect(client.sentFrames.last.header.ssrc, 4244);
     },
   );
 

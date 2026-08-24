@@ -32,7 +32,33 @@ void main() {
     });
 
     for (final mode in DiscordVoiceTransportMode.preferred) {
-      test('$mode round-trips RTP extension payload and codec data', () {
+      test('$mode round-trips an RTCP feedback packet', () {
+      final sender = DiscordVoiceTransportCipher(
+        mode: mode,
+        secretKey: List<int>.generate(32, (index) => index + 3),
+      );
+      final receiver = DiscordVoiceTransportCipher(
+        mode: mode,
+        secretKey: List<int>.generate(32, (index) => index + 3),
+      );
+      addTearDown(sender.dispose);
+      addTearDown(receiver.dispose);
+
+      // An 8-byte RTCP header (a PLI) plus a body that gets encrypted.
+      final packet = Uint8List.fromList([
+        0x81, 206, 0x00, 0x03, // header
+        0xde, 0xad, 0xbe, 0xef, // rest of the 8-byte header
+        0xaa, 0xbb, 0xcc, 0xdd, // encrypted body
+      ]);
+
+      final recovered = receiver.decryptRtcp(sender.encryptRtcp(packet));
+
+      // The 8 clear header bytes survive, and the body decrypts back.
+      expect(recovered.sublist(0, 8), packet.sublist(0, 8));
+      expect(recovered.sublist(8), [0xaa, 0xbb, 0xcc, 0xdd]);
+    });
+
+    test('$mode round-trips RTP extension payload and codec data', () {
         final sender = DiscordVoiceTransportCipher(
           mode: mode,
           secretKey: List<int>.generate(32, (index) => index + 1),

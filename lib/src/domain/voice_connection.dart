@@ -254,6 +254,36 @@ final class VoiceKeyframeRequestedEvent extends VoiceSignalingEvent {
   const VoiceKeyframeRequestedEvent();
 }
 
+/// The media server did not get these packets of this client's pictures and
+/// wants them again. Answered from the sender's history, or not at all: a
+/// packet too old to be held is one the viewer has given up on already.
+final class VoiceRetransmitRequestedEvent extends VoiceSignalingEvent {
+  const VoiceRetransmitRequestedEvent({
+    required this.ssrc,
+    required this.sequences,
+  });
+
+  /// Whose packets: the video SSRC, or the camera's on a call.
+  final int ssrc;
+  final List<int> sequences;
+}
+
+/// What the far end reports receiving of this client's pictures, which is
+/// the one number that separates "the network drops it" from "it never left".
+final class VoiceReceiverReportEvent extends VoiceSignalingEvent {
+  const VoiceReceiverReportEvent({
+    required this.ssrc,
+    required this.lossRatio,
+    required this.cumulativeLost,
+  });
+
+  final int ssrc;
+
+  /// Packets lost since the last report, 0 to 1.
+  final double lossRatio;
+  final int cumulativeLost;
+}
+
 abstract interface class VoiceSignalingService {
   Stream<VoiceSignalingEvent> get voiceEvents;
 

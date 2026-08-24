@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
+import 'discord_rtcp_packet.dart';
 import 'discord_rtp_packet.dart';
 
 abstract final class DiscordVoiceTransportMode {
@@ -83,26 +84,7 @@ final class DiscordVoiceTransportCipher {
   DiscordRtpFrame decryptPacket(Uint8List packet) {
     _checkActive();
     final header = DiscordRtpHeader.parseAeadAdditionalData(packet);
-    final additionalDataLength = header.aeadAdditionalDataLength;
-    final encryptedEnd = packet.length - nonceSuffixLength;
-    final tagStart = encryptedEnd - authenticationTagLength;
-    if (tagStart < additionalDataLength) {
-      throw const FormatException('Truncated Discord voice AEAD packet');
-    }
-
-    final nonce = Uint8List(_cipher.nonceLength);
-    nonce.setRange(
-      0,
-      nonceSuffixLength,
-      packet,
-      packet.length - nonceSuffixLength,
-    );
-    final box = SecretBox(
-      packet.sublist(additionalDataLength, tagStart),
-      nonce: nonce,
-      mac: Mac(packet.sublist(tagStart, encryptedEnd)),
-    );
-    final clearText = _decrypt(box, packet.sublist(0, additionalDataLength));
+    final clearText = _open(packet, header.aeadAdditionalDataLength);
     final extensionLength = header.encryptedExtensionLength;
     if (extensionLength > clearText.length) {
       throw const FormatException('Truncated encrypted RTP extension payload');
@@ -111,6 +93,81 @@ final class DiscordVoiceTransportCipher {
       header: header,
       payload: clearText.sublist(extensionLength),
     );
+  }
+
+  /// Encrypts one RTCP packet the way Discord's transport does: the eight-byte
+  /// header stays clear and authenticated, the rest is encrypted, and the tag
+  /// and nonce trail. The receiving half of the pair is [decryptRtcp].
+  ///
+  /// This client only receives RTCP today, so nothing calls this in
+  /// production; it is the encrypt side the decrypt side is tested against,
+  /// and the one place the wire format is written down once for both.
+  Uint8List encryptRtcp(Uint8List packet) {
+    _checkActive();
+    if (_nonceExhausted) {
+      throw StateError('Discord voice nonce counter is exhausted');
+    }
+    if (packet.length < DiscordRtcpPacket.headerLength) {
+      throw const FormatException('RTCP packet is shorter than its header');
+    }
+    final clear = packet.sublist(0, DiscordRtcpPacket.headerLength);
+    final body = packet.sublist(DiscordRtcpPacket.headerLength);
+    final nonce = _nonceForCounter(_nonceCounter);
+    final box = _cipher.encrypt(body, _secretKey, nonce, clear);
+    final out = Uint8List(
+      clear.length +
+          box.cipherText.length +
+          authenticationTagLength +
+          nonceSuffixLength,
+    );
+    var offset = 0;
+    out.setRange(offset, offset += clear.length, clear);
+    out.setRange(offset, offset += box.cipherText.length, box.cipherText);
+    out.setRange(offset, offset += box.mac.bytes.length, box.mac.bytes);
+    out.setRange(offset, offset + nonceSuffixLength, nonce);
+    if (_nonceCounter == _maximumNonceCounter) {
+      _nonceExhausted = true;
+    } else {
+      _nonceCounter++;
+    }
+    return out;
+  }
+
+  /// One RTCP packet in the clear: the eight-byte header it arrived with,
+  /// followed by what was encrypted behind it.
+  ///
+  /// The same envelope as media — tag and nonce trailing — with the fixed
+  /// RTCP header as the authenticated clear part where RTP has its own.
+  Uint8List decryptRtcp(Uint8List packet) {
+    _checkActive();
+    final clearText = _open(packet, DiscordRtcpPacket.headerLength);
+    return Uint8List.fromList([
+      ...packet.sublist(0, DiscordRtcpPacket.headerLength),
+      ...clearText,
+    ]);
+  }
+
+  /// Authenticates [packet] against its first [clearLength] bytes and
+  /// answers what the rest decrypted to.
+  List<int> _open(Uint8List packet, int clearLength) {
+    final encryptedEnd = packet.length - nonceSuffixLength;
+    final tagStart = encryptedEnd - authenticationTagLength;
+    if (tagStart < clearLength) {
+      throw const FormatException('Truncated Discord voice AEAD packet');
+    }
+    final nonce = Uint8List(_cipher.nonceLength);
+    nonce.setRange(
+      0,
+      nonceSuffixLength,
+      packet,
+      packet.length - nonceSuffixLength,
+    );
+    final box = SecretBox(
+      packet.sublist(clearLength, tagStart),
+      nonce: nonce,
+      mac: Mac(packet.sublist(tagStart, encryptedEnd)),
+    );
+    return _decrypt(box, packet.sublist(0, clearLength));
   }
 
   List<int> _decrypt(SecretBox box, List<int> additionalData) {

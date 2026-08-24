@@ -2,6 +2,7 @@ import '../../domain/video_encoder.dart';
 import '../../domain/voice_connection.dart';
 
 import 'discord_gateway_rules.dart';
+import 'discord_rtp_packet.dart';
 import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 
@@ -78,6 +79,10 @@ abstract final class DiscordVoiceGatewayOpcode {
   static const resumed = 9;
   static const clientVideo = 12;
   static const clientDisconnect = 13;
+
+  /// What the media server wants of this client's video: sent whenever a
+  /// viewer's demand changes, and read only for the log so far.
+  static const mediaSinkWants = 15;
 }
 
 /// What the protocol decided; the client's job is to carry it out.
@@ -449,7 +454,7 @@ final class DiscordVoiceGatewayProtocol {
           'type': 'video',
           'priority': 1000,
           'payload_type': 101,
-          'rtx_payload_type': 102,
+          'rtx_payload_type': DiscordRtpHeader.discordVideoRtxPayloadType,
         },
       ],
     },
@@ -508,6 +513,10 @@ final class DiscordVoiceGatewayProtocol {
 
   /// The SSRC a camera's RTP goes out on, given the audio one.
   static int videoSsrcFor(int audioSsrc) => audioSsrc + 1;
+
+  /// The SSRC retransmissions of the video go out on: one above the video's,
+  /// which is what opcode 12's `rtx_ssrc` declared.
+  static int rtxSsrcFor(int audioSsrc) => audioSsrc + 2;
 
   void acceptSequence(Object? value) {
     if (value is int) sequenceAck = value;

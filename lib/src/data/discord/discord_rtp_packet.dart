@@ -43,6 +43,10 @@ final class DiscordRtpHeader {
   /// pair.
   static const int discordAudioPayloadType = 0x78;
   static const int discordVideoPayloadType = 101;
+
+  /// Retransmissions of video packets the far end did not get (RFC 4588),
+  /// on their own SSRC one above the video's.
+  static const int discordVideoRtxPayloadType = 102;
   static const int fixedLength = 12;
 
   final int sequence;

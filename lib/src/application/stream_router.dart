@@ -65,11 +65,13 @@ final class StreamRouter {
           return;
         }
         // Only the stream this client is sending: a viewer who cannot decode
-        // asks for a keyframe, and the capture is where one is made.
-        if (event is VoiceKeyframeRequestedEvent &&
-            session.key == _goLive.streamKey) {
+        // asks for a keyframe, and the capture is where one is made; the
+        // packets they did not get, and how many they lose, go to the sender.
+        if (session.key != _goLive.streamKey) return;
+        if (event is VoiceKeyframeRequestedEvent) {
           unawaited(_capture.requestKeyframe());
         }
+        _goLive.acceptFeedback(event);
       },
       // The session closes its events with itself; the entry must not outlive
       // the connection it was keyed by.
@@ -97,6 +99,8 @@ final class StreamRouter {
       );
       _goLive.bindTransport(
         ssrc: videoSsrc,
+        // And one above that for retransmissions, as the announce declared.
+        rtxSsrc: DiscordVoiceGatewayProtocol.rtxSsrcFor(event.session.ssrc),
         sink: session.sendVideoFrame,
         // Group encryption belongs to the whole picture, so the transport
         // runs it before the picture becomes RTP packets.

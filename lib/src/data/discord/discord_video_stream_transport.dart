@@ -28,7 +28,9 @@ final class DiscordVideoStreamTransport {
     required int ssrc,
     required VideoFrameSink sink,
     VideoFrameGroupEncryptor? groupEncryptor,
+    int? rtxSsrc,
     int payloadType = DiscordRtpHeader.discordVideoPayloadType,
+    int rtxPayloadType = DiscordRtpHeader.discordVideoRtxPayloadType,
     int initialSequence = 0,
     int maxPayloadSize = 1200,
   }) : _sender = DiscordVideoRtpSender(
@@ -38,22 +40,40 @@ final class DiscordVideoStreamTransport {
          ),
        _sink = sink,
        _groupEncryptor = groupEncryptor,
-       _payloadType = payloadType;
+       _rtxSsrc = rtxSsrc ?? ssrc + 1,
+       _payloadType = payloadType,
+       _rtxPayloadType = rtxPayloadType;
+
+  /// How many sent packets are kept for retransmission: four seconds at
+  /// the packet rate of a 720p share, which is longer than any viewer waits
+  /// for a missing packet. A power of two, so a sequence indexes it by mask.
+  static const historySize = 1024;
 
   final DiscordVideoRtpSender _sender;
   final VideoFrameSink _sink;
   final VideoFrameGroupEncryptor? _groupEncryptor;
+  final int _rtxSsrc;
   final int _payloadType;
+  final int _rtxPayloadType;
+
+  /// The packets that went out most recently, by sequence, as the wire saw
+  /// them: group-encrypted already, so a retransmission is a copy.
+  final List<DiscordRtpFrame?> _history = List.filled(historySize, null);
+  int _rtxSequence = 0;
 
   StreamSubscription<EncodedVideoFrame>? _subscription;
   int _sentPackets = 0;
   int _sentFrames = 0;
   int _sentBytes = 0;
+  int _retransmittedPackets = 0;
   Object? _error;
 
   /// How many RTP packets have gone out, which is what a caller checks to know
   /// the stream is actually moving.
   int get sentPackets => _sentPackets;
+
+  /// How many packets went out a second time because the far end asked.
+  int get retransmittedPackets => _retransmittedPackets;
 
   /// How many pictures have gone out, which is what says the encoder and the
   /// frame path are keeping pace.
@@ -97,19 +117,56 @@ final class DiscordVideoStreamTransport {
         ),
         payload: packet.payload,
       );
-      try {
-        _sink(rtp);
-      } on Object catch (error) {
-        _error = error;
-        unawaited(stop());
-        return sent;
-      }
+      if (!_put(rtp)) return sent;
+      _history[packet.sequence & (historySize - 1)] = rtp;
       sent++;
       _sentPackets++;
       _sentBytes += packet.payload.length;
     }
     if (sent > 0) _sentFrames++;
     return sent;
+  }
+
+  /// Sends [sequences] again, answering how many were still held.
+  ///
+  /// As RFC 4588 retransmissions: on the retransmission SSRC and payload
+  /// type, numbered in their own sequence, with the original sequence
+  /// leading the payload so the receiver can put the packet back where it
+  /// belongs. A sequence that has left the history, or was never sent, is
+  /// skipped: the viewer has moved on from it already.
+  int retransmit(Iterable<int> sequences) {
+    var sent = 0;
+    for (final sequence in sequences) {
+      final held = _history[sequence & (historySize - 1)];
+      if (held == null || held.header.sequence != sequence) continue;
+      final rtx = DiscordRtpFrame(
+        header: DiscordRtpHeader(
+          sequence: _rtxSequence,
+          timestamp: held.header.timestamp,
+          ssrc: _rtxSsrc,
+          payloadType: _rtxPayloadType,
+          marker: held.header.marker,
+        ),
+        payload: [sequence >> 8, sequence & 0xff, ...held.payload],
+      );
+      if (!_put(rtx)) return sent;
+      _rtxSequence = (_rtxSequence + 1) & 0xffff;
+      sent++;
+      _retransmittedPackets++;
+    }
+    return sent;
+  }
+
+  /// One packet onto the wire, or the stream stopped with the reason kept.
+  bool _put(DiscordRtpFrame rtp) {
+    try {
+      _sink(rtp);
+      return true;
+    } on Object catch (error) {
+      _error = error;
+      unawaited(stop());
+      return false;
+    }
   }
 
   /// The two whole-frame steps that must happen before packetisation.

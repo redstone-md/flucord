@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
+import 'discord_rtcp_packet.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
@@ -242,7 +243,14 @@ final class DiscordVoiceGatewayClient
     // Only for a stream socket, and only the opcode: this is the handshake
     // that keeps being refused, and knowing how far it got — hello, ready,
     // nothing at all — is the difference between reading and guessing.
-    if (_protocol.carriesVideo) _diagnose('received op $opcode');
+    if (_protocol.carriesVideo) {
+      // With its body for the media server's wants: what it asks of the
+      // picture is the one demand this client does not yet follow.
+      _diagnose(
+        'received op $opcode',
+        opcode == DiscordVoiceGatewayOpcode.mediaSinkWants ? data : null,
+      );
+    }
     if (opcode is int && data is Map) {
       try {
         _executeDaveCommands(
@@ -506,7 +514,7 @@ final class DiscordVoiceGatewayClient
     // of the stale-key count, where a send-only stream socket collected
     // fifty in a row and asked for a new session the one it had was fine.
     if (_isNotEncryptedMedia(packet)) {
-      _acceptPictureLossIndication(packet);
+      _acceptFeedback(packet);
       return const [];
     }
     try {
@@ -587,24 +595,65 @@ final class DiscordVoiceGatewayClient
     return packetType >= 192 && packetType <= 223;
   }
 
-  /// A picture-loss indication from a viewer who cannot decode the pictures
-  /// this client is sending, and the request for a keyframe it becomes.
+  /// The RTCP the media server relays about the pictures this client sends:
+  /// receiver reports, the packets a viewer did not get, and picture-loss
+  /// indications. Each becomes an event for whoever is sending.
   ///
-  /// Nothing retransmits a lost packet on this path, so the only recovery is
-  /// a picture that stands alone. Rate-limited because the server relays one
-  /// per struggling viewer and a burst of joins must not become a burst of
-  /// keyframes, which would spend more bitrate than the loss did.
-  void _acceptPictureLossIndication(Uint8List packet) {
-    if (packet.length < 12 || (packet[0] & 0x1f) != 1 || packet[1] != 206) {
-      return;
+  /// An RTCP packet that will not decrypt still answers a picture-loss
+  /// indication from its clear header, which is what this path did before
+  /// it could read the rest; the count of them is logged once so a wrong
+  /// envelope shows up rather than passing as a quiet network.
+  void _acceptFeedback(Uint8List packet) {
+    if (!DiscordRtcpPacket.isRtcp(packet)) return;
+    final cipher = _transportCipher;
+    List<DiscordRtcpReport> reports;
+    try {
+      if (cipher == null) throw StateError('no transport cipher yet');
+      reports = DiscordRtcpPacket.parse(cipher.decryptRtcp(packet));
+    } on Object catch (error) {
+      if (_undecryptableFeedback++ == 0) {
+        _diagnose('rtcp did not decrypt, reading headers only', error);
+      }
+      reports = (packet[0] & 0x1f) == 1 &&
+              packet[1] == DiscordRtcpPacket.payloadFeedback
+          ? const [DiscordRtcpPictureLoss(mediaSsrc: 0)]
+          : const [];
     }
+    if (_events.isClosed) return;
+    for (final report in reports) {
+      switch (report) {
+        case DiscordRtcpPictureLoss():
+          _requestKeyframe();
+        case DiscordRtcpNack(:final mediaSsrc, :final sequences):
+          _events.add(
+            VoiceRetransmitRequestedEvent(ssrc: mediaSsrc, sequences: sequences),
+          );
+        case DiscordRtcpReceiverReport(:final ssrc, :final cumulativeLost):
+          _events.add(
+            VoiceReceiverReportEvent(
+              ssrc: ssrc,
+              lossRatio: report.lossRatio,
+              cumulativeLost: cumulativeLost,
+            ),
+          );
+      }
+    }
+  }
+
+  int _undecryptableFeedback = 0;
+
+  /// The keyframe a picture-loss indication asks for. Rate-limited because
+  /// the server relays one per struggling viewer and a burst of joins must
+  /// not become a burst of keyframes, which would spend more bitrate than the
+  /// loss did.
+  void _requestKeyframe() {
     final now = DateTime.now();
     if (_lastKeyframeRequest != null &&
         now.difference(_lastKeyframeRequest!) < const Duration(milliseconds: 500)) {
       return;
     }
     _lastKeyframeRequest = now;
-    if (!_events.isClosed) _events.add(const VoiceKeyframeRequestedEvent());
+    _events.add(const VoiceKeyframeRequestedEvent());
   }
 
   DateTime? _lastKeyframeRequest;

@@ -204,6 +204,54 @@ void main() {
     expect(sent.map((frame) => frame.header.sequence), [0xfffe, 0xffff, 0, 1]);
   });
 
+  test('a NACKed packet is resent on the rtx ssrc with its sequence ahead', () {
+    final sent = <DiscordRtpFrame>[];
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 0x1000,
+      rtxSsrc: 0x2000,
+      sink: (frame) {
+        sent.add(frame);
+        return 0;
+      },
+    );
+
+    // Two packets of one picture go out, sequences 0 and 1.
+    transport.send(_frame(sliceLength: 8, isKeyframe: true));
+    sent.clear();
+
+    final resent = transport.retransmit([1]);
+
+    expect(resent, 1);
+    expect(transport.retransmittedPackets, 1);
+    expect(sent, hasLength(1));
+    final rtx = sent.single;
+    // On the retransmission SSRC and payload type, in its own sequence.
+    expect(rtx.header.ssrc, 0x2000);
+    expect(rtx.header.payloadType, DiscordRtpHeader.discordVideoRtxPayloadType);
+    expect(rtx.header.sequence, 0);
+    // The original sequence (1) leads the payload so the receiver can place it.
+    expect(rtx.payload.first, 0);
+    expect(rtx.payload[1], 1);
+  });
+
+  test('a sequence no longer held is skipped', () {
+    var count = 0;
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) {
+        count++;
+        return 0;
+      },
+    );
+
+    transport.send(_frame());
+    count = 0;
+
+    // Sequence 999 was never sent: nothing goes out for it.
+    expect(transport.retransmit([999]), 0);
+    expect(count, 0);
+  });
+
   test('group encryption covers the whole picture, once, before packets', () {
     final encrypted = <Uint8List>[];
     final sent = <DiscordRtpFrame>[];

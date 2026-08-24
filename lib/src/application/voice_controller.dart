@@ -511,6 +511,12 @@ final class VoiceController extends ChangeNotifier {
         // share's capture at one of these. A camera's turn, when its pictures
         // are being sent at all.
         break;
+      case VoiceRetransmitRequestedEvent():
+      case VoiceReceiverReportEvent():
+        // Feedback about the pictures this client sends. The Go Live path
+        // acts on it through the stream router; a call carrying only audio
+        // has nothing to resend.
+        break;
     }
     if (!_disposed) notifyListeners();
   }

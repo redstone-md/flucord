@@ -213,6 +213,7 @@ void main() {
     var packets = 0;
     controller.bindTransport(
       ssrc: 7,
+      rtxSsrc: 9,
       sink: (frame) {
         packets++;
         return frame.payload.length;
@@ -242,7 +243,7 @@ void main() {
     addTearDown(controller.dispose);
     addTearDown(repository.close);
 
-    controller.bindTransport(ssrc: 7, sink: (frame) => 0);
+    controller.bindTransport(ssrc: 7, rtxSsrc: 9, sink: (frame) => 0);
 
     expect(controller.sentPackets, 0);
     expect(controller.canEncode, isFalse);
