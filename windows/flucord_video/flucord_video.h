@@ -107,6 +107,13 @@ flucord_video_request_keyframe(FlucordVideoEncoder* encoder);
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_set_paused(FlucordVideoEncoder* encoder, int32_t paused);
 
+// Changes the running encoder's bitrate. FLUCORD_VIDEO_ERROR_UNSUPPORTED when
+// the encoder refuses to change it mid-stream, in which case it keeps the
+// rate it started with.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_set_bitrate(FlucordVideoEncoder* encoder,
+                          int32_t bits_per_second);
+
 // Stops and releases everything. Safe to call twice.
 FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
 

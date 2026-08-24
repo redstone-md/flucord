@@ -37,10 +37,10 @@ final class DiscordVideoStreamTransport {
     int pacingBitsPerSecond = 0,
     DateTime Function() now = DateTime.now,
   }) : _sender = DiscordVideoRtpSender(
-           ssrc: ssrc,
-           initialSequence: initialSequence,
-           maxPayloadSize: maxPayloadSize,
-         ),
+         ssrc: ssrc,
+         initialSequence: initialSequence,
+         maxPayloadSize: maxPayloadSize,
+       ),
        _sink = sink,
        _groupEncryptor = groupEncryptor,
        _rtxSsrc = rtxSsrc ?? ssrc + 1,
@@ -81,8 +81,30 @@ final class DiscordVideoStreamTransport {
   /// end reports. The budget is a token bucket: it grows with the clock,
   /// each packet spends its size, and it never builds up while nothing is
   /// queued, so a frame after silence is still let out one packet at a time.
-  final double _paceBytesPerSecond;
+  double _paceBytesPerSecond;
   final DateTime Function() _now;
+
+  /// Follows the encoder's bitrate when it changes mid-stream: the pace is
+  /// a multiple of it, and a pace left at the old rate would let a lowered
+  /// bitrate out in the bursts the lowering was meant to end.
+  set pacingBitsPerSecond(int bitsPerSecond) {
+    _paceBytesPerSecond = bitsPerSecond * paceMultiplier / 8;
+  }
+
+  /// Two numbers about this window of the stream, for the pace log: the
+  /// longest gap between two pictures arriving to be sent (a stall in the
+  /// encoder or in this isolate), and the deepest the pacing queue got (a
+  /// pace that is not keeping up). Reading them starts the next window.
+  ({Duration maxSendGap, int maxQueued}) takeWindow() {
+    final window = (maxSendGap: _maxSendGap, maxQueued: _maxQueued);
+    _maxSendGap = Duration.zero;
+    _maxQueued = 0;
+    return window;
+  }
+
+  DateTime? _lastSendAt;
+  Duration _maxSendGap = Duration.zero;
+  int _maxQueued = 0;
   final Queue<DiscordRtpFrame> _queue = Queue();
   double _budgetBytes = 0;
   DateTime? _budgetRead;
@@ -141,6 +163,13 @@ final class DiscordVideoStreamTransport {
   /// on the next picture, and a viewer left watching a frozen frame with no
   /// explanation is worse than one told the stream ended.
   int send(EncodedVideoFrame frame) {
+    final now = _now();
+    final last = _lastSendAt;
+    if (last != null) {
+      final gap = now.difference(last);
+      if (gap > _maxSendGap) _maxSendGap = gap;
+    }
+    _lastSendAt = now;
     var sent = 0;
     for (final packet in _sender.packetsFor(_prepare(frame))) {
       final rtp = DiscordRtpFrame(
@@ -161,6 +190,7 @@ final class DiscordVideoStreamTransport {
       sent++;
     }
     if (sent > 0) _sentFrames++;
+    if (_queue.length > _maxQueued) _maxQueued = _queue.length;
     if (_queue.isNotEmpty) _release();
     return sent;
   }

@@ -21,7 +21,7 @@ import 'native_video_bindings.dart';
 /// a `NativeCallable.listener` and the bytes are copied before the native
 /// buffer is released.
 final class NativeVideoEncoderService
-    implements VideoEncoderService, Finalizable {
+    implements VideoEncoderService, VideoBitrateControl, Finalizable {
   NativeVideoEncoderService({NativeVideoBindings? bindings})
     : _bindings = bindings ?? _openLibrary(),
       // After the initializer above, the resident library is open whenever
@@ -170,6 +170,13 @@ final class NativeVideoEncoderService
         ..free(config)
         ..free(out);
     }
+  }
+
+  @override
+  Future<bool> setBitrate(int bitsPerSecond) async {
+    final setBitrate = _bindings?.setBitrate;
+    if (_handle == nullptr || setBitrate == null) return false;
+    return setBitrate(_handle, bitsPerSecond) == NativeVideoStatus.ok;
   }
 
   @override

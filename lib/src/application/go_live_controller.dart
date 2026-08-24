@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_video_stream_transport.dart';
 import '../domain/go_live_stream.dart';
+import '../domain/stream_bitrate_adapter.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_connection.dart';
@@ -166,7 +167,31 @@ final class GoLiveController extends ChangeNotifier {
       pacingBitsPerSecond: _capture.shareSettings.bitrate,
     )..attach(_capture.frames);
     _feedback = const _Feedback();
+    _bitrate = StreamBitrateAdapter(target: _capture.shareSettings.bitrate);
+    _bitrateRefused = false;
     _startPaceLog();
+  }
+
+  /// The bitrate the share is running at, following the loss the far end
+  /// reports. Rebuilt with each transport, at the share's configured rate.
+  StreamBitrateAdapter? _bitrate;
+  bool _bitrateRefused = false;
+
+  /// One receiver report into the adapter; a change goes to the encoder
+  /// and to the pacer. An encoder that cannot change rate is logged once,
+  /// and the pacer follows regardless: spreading the same bytes thinner is
+  /// still less loss than bursting them.
+  void _adaptBitrate(double lossRatio) {
+    final next = _bitrate?.report(lossRatio);
+    if (next == null) return;
+    _transport?.pacingBitsPerSecond = next;
+    unawaited(
+      _capture.setBitrate(next).then((accepted) {
+        if (accepted || _bitrateRefused) return;
+        _bitrateRefused = true;
+        _diagnose('bitrate', 'encoder keeps its rate; only the pace follows');
+      }),
+    );
   }
 
   /// What the media server said about the picture: the packets it wants
@@ -174,12 +199,20 @@ final class GoLiveController extends ChangeNotifier {
   void acceptFeedback(VoiceSignalingEvent event) {
     switch (event) {
       case VoiceRetransmitRequestedEvent(:final sequences):
-        _feedback = _feedback.copyWith(nacked: _feedback.nacked + sequences.length);
+        _feedback = _feedback.copyWith(
+          nacked: _feedback.nacked + sequences.length,
+        );
         _transport?.retransmit(sequences);
       case VoiceReceiverReportEvent(:final lossRatio):
-        _feedback = _feedback.copyWith(lossRatio: lossRatio, reports: _feedback.reports + 1);
+        _feedback = _feedback.copyWith(
+          lossRatio: lossRatio,
+          reports: _feedback.reports + 1,
+        );
+        _adaptBitrate(lossRatio);
       case VoiceKeyframeRequestedEvent():
-        _feedback = _feedback.copyWith(pictureLosses: _feedback.pictureLosses + 1);
+        _feedback = _feedback.copyWith(
+          pictureLosses: _feedback.pictureLosses + 1,
+        );
       default:
         break;
     }
@@ -216,6 +249,14 @@ final class GoLiveController extends ChangeNotifier {
           '${feedback.describe(retransmitted: nextRetransmitted - retransmitted)}';
       final stages = _stageLine(stage, nextStage);
       if (stages != null) line += ', $stages';
+      final window = transport.takeWindow();
+      line +=
+          ', gap ${window.maxSendGap.inMilliseconds}ms, '
+          'queue ${window.maxQueued}';
+      final bitrate = _bitrate;
+      if (bitrate != null && bitrate.isAdapted) {
+        line += ', bitrate ${bitrate.bitrate ~/ 1000}k';
+      }
       _diagnose('pace', line);
       frames = nextFrames;
       packets = nextPackets;
@@ -450,4 +491,3 @@ final class GoLiveController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 }
-

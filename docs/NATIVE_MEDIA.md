@@ -42,6 +42,17 @@ for a keyframe, sent in one loop, overflow the uplink's queue, and the packets
 it drops are the loss the media server reports back. Retransmissions skip the
 queue.
 
+The share's bitrate follows that loss. Each receiver report goes through
+`StreamBitrateAdapter` (WebRTC's loss-based rule: back off in proportion to
+loss above 10%, creep back 8% per clean report, hold in between, never below
+a fifth of the target); a change goes to the running encoder
+(`flucord_video_set_bitrate`, applied from the next picture) and to the pacer.
+An encoder that refuses to change rate is logged once and keeps its rate; the
+pacer follows regardless. The pace log then reads `bitrate 1800k` while
+adapted, and always `gap <ms>` (the longest wait between two pictures reaching
+the transport: a stall in the encoder or in this isolate) and `queue <n>` (the
+deepest the pacing queue got).
+
 Inline message video uses `media_kit` with the packaged Windows native video
 libraries and a Flutter texture. Discord CDN URLs are opened as issued, without
 bot authorization, personal tokens, fingerprints, private client headers, or a

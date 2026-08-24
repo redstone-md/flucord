@@ -69,6 +69,9 @@ typedef EncoderNameDart = int Function(Pointer<Void>, Pointer<Uint8>, int);
 typedef StageTimingsNative = Void Function(Pointer<Void>, Pointer<Int64>);
 typedef StageTimingsDart = void Function(Pointer<Void>, Pointer<Int64>);
 
+typedef SetBitrateNative = Int32 Function(Pointer<Void>, Int32);
+typedef SetBitrateDart = int Function(Pointer<Void>, int);
+
 /// The five functions `flucord_video.dll` exports.
 ///
 /// Split from the service so the Dart half can be tested against a stand-in:
@@ -142,6 +145,7 @@ final class NativeVideoBindings {
       ),
       encoderName = _lookUpEncoderName(library),
       stageTimings = _lookUpStageTimings(library),
+      setBitrate = _lookUpSetBitrate(library),
       clip = ClipWriterBindings.lookUp(library);
 
   /// A zero-argument counter the module may or may not export, depending on
@@ -174,6 +178,17 @@ final class NativeVideoBindings {
     try {
       return library.lookupFunction<StageTimingsNative, StageTimingsDart>(
         'flucord_video_stage_timings',
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Absent in a module built before the bitrate could change mid-stream.
+  static SetBitrateDart? _lookUpSetBitrate(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<SetBitrateNative, SetBitrateDart>(
+        'flucord_video_set_bitrate',
       );
     } on Object {
       return null;
@@ -240,6 +255,10 @@ final class NativeVideoBindings {
   /// Writes four int64 values (wait, convert, encode, frames, all nanoseconds
   /// but the last), or null in a module built before it existed.
   final StageTimingsDart? stageTimings;
+
+  /// Changes the running encoder's bitrate, answering a status; null in a
+  /// module built before it existed.
+  final SetBitrateDart? setBitrate;
 
   /// The MP4 writer, or null in a module built before clips existed.
   final ClipWriterBindings? clip;

@@ -1721,6 +1721,30 @@ flucord_video_set_paused(FlucordVideoEncoder* encoder, int32_t paused) {
   return FLUCORD_VIDEO_OK;
 }
 
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_set_bitrate(FlucordVideoEncoder* encoder,
+                          int32_t bits_per_second) {
+  if (encoder == nullptr || bits_per_second <= 0) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  // The same knob the setup turned, turned again while the stream runs:
+  // both the platform encoder and the vendor ones take a new mean bitrate
+  // mid-stream and apply it from the next picture. Under the encoder lock
+  // because the capture thread is inside ProcessInput on the same object.
+  std::lock_guard<std::mutex> guard(encoder->encoder_lock);
+  ICodecAPI* codec = encoder->codec.Get();
+  if (codec == nullptr) return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  VARIANT value;
+  VariantInit(&value);
+  value.vt = VT_UI4;
+  value.ulVal = static_cast<UINT32>(bits_per_second);
+  const HRESULT hr = codec->SetValue(&CODECAPI_AVEncCommonMeanBitRate, &value);
+  VariantClear(&value);
+  if (FAILED(hr)) return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  encoder->config.bitrate_bits_per_second = bits_per_second;
+  return FLUCORD_VIDEO_OK;
+}
+
 FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder) {
   if (encoder == nullptr) return;
   encoder->running.store(false);

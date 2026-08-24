@@ -51,6 +51,16 @@ final class VideoCaptureHub {
   /// The native pipeline's own account of itself, for the pace log.
   VideoEncoderDiagnostics? get diagnostics => _encoder.diagnostics;
 
+  /// Changes the running capture's bitrate, when the encoder can.
+  Future<bool> setBitrate(int bitsPerSecond) {
+    if (!_running) return Future.value(false);
+    // Typed as Object so the check can promote: the control is a second
+    // interface, not a subtype of the service.
+    final Object encoder = _encoder;
+    if (encoder is! VideoBitrateControl) return Future.value(false);
+    return encoder.setBitrate(bitsPerSecond);
+  }
+
   bool get isCapturing => _running;
 
   /// What the running capture started with, or what the last one did.

@@ -198,6 +198,17 @@ final class VideoEncoderDiagnostics {
 /// Deliberately not a WebRTC track: Go Live carries its own RTP over the voice
 /// socket, so what this client needs is the encoded bytes rather than a track
 /// somebody else would send.
+/// An encoder whose bitrate can change while it runs.
+///
+/// Separate from [VideoEncoderService] because not every encoder can: the
+/// share's bitrate follows the loss the far end reports, and an encoder
+/// without this simply keeps the rate it started at.
+abstract interface class VideoBitrateControl {
+  /// Applies [bitsPerSecond] from the next picture on. False when the running
+  /// encoder refused, in which case it keeps its rate.
+  Future<bool> setBitrate(int bitsPerSecond);
+}
+
 abstract interface class VideoEncoderService {
   /// Whether this platform can encode at all.
   bool get isSupported;

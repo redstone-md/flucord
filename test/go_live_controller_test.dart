@@ -4,6 +4,7 @@ import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _key = GoLiveStreamKey.guild(
@@ -94,6 +95,41 @@ void main() {
     // The ping stops with the stream.
     expect(repository.pings.length, pings);
   });
+
+  test(
+    'loss the server reports lowers the bitrate, a clean path restores it',
+    () async {
+      final repository = _FakeRepository();
+      addTearDown(repository.close);
+      final encoder = _FakeEncoder();
+      final controller = _controller(repository, encoder: encoder);
+      await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+      controller.bindTransport(ssrc: 1, rtxSsrc: 2, sink: (frame) => 0);
+
+      controller.acceptFeedback(
+        const VoiceReceiverReportEvent(
+          ssrc: 1,
+          lossRatio: 0.2,
+          cumulativeLost: 9,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // 2.5 Mbit, the share default, backed off by half the loss.
+      expect(encoder.bitrates, [2250000]);
+
+      controller.acceptFeedback(
+        const VoiceReceiverReportEvent(
+          ssrc: 1,
+          lossRatio: 0.0,
+          cumulativeLost: 9,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(encoder.bitrates, [2250000, 2430000]);
+    },
+  );
 
   test('an encoder that fails leaves nothing announced', () async {
     final repository = _FakeRepository();
@@ -379,9 +415,17 @@ void main() {
   });
 }
 
-final class _FakeEncoder implements VideoEncoderService {
+final class _FakeEncoder implements VideoEncoderService, VideoBitrateControl {
   @override
   VideoEncoderDiagnostics? get diagnostics => null;
+
+  final List<int> bitrates = [];
+
+  @override
+  Future<bool> setBitrate(int bitsPerSecond) async {
+    bitrates.add(bitsPerSecond);
+    return true;
+  }
 
   _FakeEncoder({this.cameras = const []});
 
