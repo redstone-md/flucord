@@ -23,6 +23,12 @@
 #include <strmif.h>
 #include <wrl/client.h>
 
+// Older SDK headers do not name the flag; the value is what Windows 10 1803+
+// reads, and an older system refuses it and gets the Sleep fallback.
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "mf.lib")
@@ -1173,24 +1179,38 @@ void CaptureLoop(FlucordVideoEncoder* state) {
   const size_t nv12_size =
       static_cast<size_t>(width) * height * 3 / 2;
 
-  // Encoding is capped at the configured frame rate. A desktop can change far
-  // faster than a share carries — 60 Hz, 144 Hz — and spending the encoder
-  // and the bitrate on frames the viewers will never see only starves the
-  // ones they would. The same gate holds back the conversion: reading a
-  // desktop back that nobody will encode is pure waste.
+  // The loop runs on a fixed tick at the configured frame rate: sleep until
+  // the tick, take whatever is on the desktop right then, encode it. The
+  // schedule is absolute (each tick is the last plus the interval), so the
+  // convert and encode time of one frame does not push the next one later.
   //
-  // Measured on the performance counter: the tick counter steps in ~15 ms
-  // chunks, and on a 60 Hz display "32 ms since the last encode" rounds into
-  // "not yet 33", skipping a whole extra frame. That was 20 frames/s at a
-  // configured 30.
-  int64_t last_encode_ns = 0;
-  const auto encode_due = [&](int64_t now) {
-    if (last_encode_ns != 0 && now - last_encode_ns < frame_interval_ns) {
-      return false;
+  // What this replaced waited for the desktop to change, then asked "has an
+  // interval passed since the last encode?". Both halves lost frames: the
+  // wait blocked for a full interval on a still screen and the encode time
+  // came on top of it (26 frames/s at a configured 30), and on a 60 Hz
+  // desktop a frame landing a moment before the interval was up was skipped
+  // for the next one 16 ms later.
+  //
+  // The sleep is a high-resolution waitable timer: Sleep() steps in ~15 ms,
+  // which is a whole frame at 60 Hz. A system without the timer (before
+  // Windows 10 1803) falls back to Sleep and the coarser pace that implies.
+  HANDLE tick_timer = CreateWaitableTimerExW(
+      nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+      TIMER_ALL_ACCESS);
+  const auto sleep_until = [&](int64_t deadline_ns) {
+    const int64_t remaining_ns = deadline_ns - NowNs();
+    if (remaining_ns <= 0) return;
+    if (tick_timer != nullptr) {
+      LARGE_INTEGER due;
+      due.QuadPart = -(remaining_ns / 100);  // Relative, in 100 ns units.
+      if (SetWaitableTimer(tick_timer, &due, 0, nullptr, nullptr, FALSE)) {
+        WaitForSingleObject(tick_timer, INFINITE);
+        return;
+      }
     }
-    last_encode_ns = now;
-    return true;
+    Sleep(static_cast<DWORD>(remaining_ns / 1000000));
   };
+  int64_t next_tick_ns = NowNs();
 
   // The GPU path, taken unless the driver has no video processor to offer.
   // `gpu_available` is sticky: one refusal moves the capture to the CPU
@@ -1209,22 +1229,32 @@ void CaptureLoop(FlucordVideoEncoder* state) {
   while (state->running.load()) {
     if (state->paused.load()) {
       Sleep(static_cast<DWORD>(frame_interval_ms));
+      next_tick_ns = NowNs();
       continue;
     }
+    // "wait" in the pace log is this idle time until the tick: on a loop
+    // that keeps pace, wait + convert + encode adds up to one interval.
     const int64_t wait_started = NowNs();
+    sleep_until(next_tick_ns);
+    state->capture_wait_ns.fetch_add(NowNs() - wait_started);
+    next_tick_ns += frame_interval_ns;
+    if (next_tick_ns < NowNs()) {
+      // Fell behind by a whole tick (a slow encode, a suspended thread):
+      // resume from now rather than sending a burst to catch up.
+      next_tick_ns = NowNs() + frame_interval_ns;
+    }
+
+    // Whatever the desktop shows right now, or a timeout when nothing moved
+    // since the last tick. A desktop only produces a frame when a pixel
+    // changes, but Discord expects a stream regardless: a viewer who joins a
+    // still screen and is sent nothing sees black until somebody wiggles a
+    // window. The last converted picture goes out again instead, and the
+    // encoder's skip frames for it cost almost nothing.
     DXGI_OUTDUPL_FRAME_INFO info{};
     ComPtr<IDXGIResource> resource;
-    HRESULT hr = state->duplication->AcquireNextFrame(
-        static_cast<UINT>(frame_interval_ms), &info, &resource);
-    state->capture_wait_ns.fetch_add(NowNs() - wait_started);
+    HRESULT hr = state->duplication->AcquireNextFrame(0, &info, &resource);
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-      // Nothing changed on screen — which is most of the time, because a
-      // desktop only produces a frame when a pixel moves. Discord expects a
-      // stream regardless: a viewer who joins a still screen and is sent
-      // nothing sees black until somebody wiggles a window. The last
-      // converted picture goes out again instead, and the encoder's skip
-      // frames for it cost almost nothing.
-      if (have_nv12 && !state->nv12.empty() && encode_due(NowNs())) {
+      if (have_nv12 && !state->nv12.empty()) {
         const int64_t encode_started = NowNs();
         EncodeNv12(state, state->nv12.data(), nv12_size,
                    (NowNs() - started_ns) / 1000);
@@ -1236,7 +1266,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
     if (FAILED(hr)) break;
 
     ComPtr<ID3D11Texture2D> texture;
-    if (SUCCEEDED(resource.As(&texture)) && encode_due(NowNs())) {
+    if (SUCCEEDED(resource.As(&texture))) {
       D3D11_TEXTURE2D_DESC desc{};
       texture->GetDesc(&desc);
 
@@ -1307,6 +1337,7 @@ void CaptureLoop(FlucordVideoEncoder* state) {
     }
     state->duplication->ReleaseFrame();
   }
+  if (tick_timer != nullptr) CloseHandle(tick_timer);
   CoUninitialize();
 }
 
