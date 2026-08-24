@@ -25,6 +25,7 @@ import 'widgets/go_live_button.dart';
 import 'widgets/go_live_display_dialog.dart';
 import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
+import 'widgets/stream_quality_scope.dart';
 import 'widgets/message_component_scope.dart';
 import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
@@ -290,6 +291,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                 builder: (_, _) => GoLiveButton(
                   controller: goLive,
                   channelId: channel.id,
+                  quality: StreamQualityScope.maybeOf(context),
                   pickSource: () => _pickCaptureSource(context),
                   guildId: channel.spaceId.isEmpty
                       ? null

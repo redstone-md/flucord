@@ -27,6 +27,16 @@ running. The native lifecycle is owned by the encoder service: frame buffers are
 copied before release, the callback closes only after the capture thread joins,
 and a finalizer closes a handle nobody stopped.
 
+A share's size (480p to 1440p) and frame rate (15, 30, 60) are picked from
+the menu next to the share button and kept in `StreamQualitySettings` with
+the bitrates; the bitrate slider names a 720p30 share and other shapes scale
+from it (by pixels, and by frame rate less than proportionally). A pick while
+sharing reaches the running share through `GoLiveController.applyQuality`: a
+bitrate alone changes on the running encoder, a new shape restarts the capture
+(the frames stream outlives it, so the transport stays attached), announces
+the new shape to Discord, and the transport keeps the RTP clock running
+forward across the restart.
+
 The capture runs on a fixed tick at the configured frame rate (any rate: the
 tick is one over it): sleep until the tick on a high-resolution timer, take
 whatever the desktop shows right then, encode it, and repeat the last picture

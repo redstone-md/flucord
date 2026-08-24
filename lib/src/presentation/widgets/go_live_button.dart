@@ -4,7 +4,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/go_live_controller.dart';
+import '../../application/stream_quality_controller.dart';
 import '../../domain/go_live_stream.dart';
+import '../../domain/stream_quality.dart';
 import '../../theme/flucord_theme.dart';
 
 /// Starts and ends a Go Live stream from inside the voice room.
@@ -14,12 +16,18 @@ class GoLiveButton extends StatelessWidget {
     required this.channelId,
     this.guildId,
     this.pickSource,
+    this.quality,
     super.key,
   });
 
   final GoLiveController controller;
   final String channelId;
   final String? guildId;
+
+  /// Where the share's frame rate and size are picked, when the surface has
+  /// the setting to offer. The menu next to the share button, the way
+  /// Discord's own client places it; a running share follows the pick.
+  final StreamQualityController? quality;
 
   /// Asks which screen or window to share, answering null when the picker was
   /// dismissed. Absent on a surface with no picker, where the primary screen
@@ -69,6 +77,8 @@ class GoLiveButton extends StatelessWidget {
             streaming ? Icons.stop_screen_share : Icons.screen_share_outlined,
           ),
         ),
+        if (quality case final quality? when controller.canEncode)
+          _QualityMenu(quality: quality),
         if (streaming)
           IconButton(
             key: const ValueKey('go-live-pause'),
@@ -126,6 +136,72 @@ class GoLiveButton extends StatelessWidget {
       sourceId: sourceId,
     );
   }
+}
+
+/// The frame rate and size picker: two lists of choices, one marked.
+class _QualityMenu extends StatelessWidget {
+  const _QualityMenu({required this.quality});
+
+  final StreamQualityController quality;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = TextStyle(color: context.surfaces.muted, fontSize: 11);
+    return PopupMenuButton<void>(
+      key: const ValueKey('go-live-quality'),
+      tooltip: 'Stream quality',
+      icon: const Icon(Icons.expand_more, size: 18),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32),
+      itemBuilder: (context) => [
+        PopupMenuItem<void>(
+          enabled: false,
+          height: 28,
+          child: Text('Frame rate', style: muted),
+        ),
+        for (final frameRate in StreamQualitySettings.frameRates)
+          _choice(
+            key: ValueKey('go-live-fps-$frameRate'),
+            label: '$frameRate FPS',
+            selected: quality.shareFrameRate == frameRate,
+            onTap: () => unawaited(quality.setShareFrameRate(frameRate)),
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem<void>(
+          enabled: false,
+          height: 28,
+          child: Text('Resolution', style: muted),
+        ),
+        for (final resolution in StreamResolution.values)
+          _choice(
+            key: ValueKey('go-live-res-${resolution.height}'),
+            label: resolution.label,
+            selected: quality.shareResolution == resolution,
+            onTap: () => unawaited(quality.setShareResolution(resolution)),
+          ),
+      ],
+    );
+  }
+
+  PopupMenuEntry<void> _choice({
+    required Key key,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) => PopupMenuItem<void>(
+    key: key,
+    height: 36,
+    onTap: onTap,
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Icon(
+          selected ? Icons.radio_button_checked : Icons.radio_button_off,
+          size: 16,
+        ),
+      ],
+    ),
+  );
 }
 
 /// One line of whatever went wrong.

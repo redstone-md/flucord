@@ -25,6 +25,10 @@ final class StreamQualityController extends ChangeNotifier {
 
   int get cameraBitrate => _settings.cameraBitrate;
 
+  StreamResolution get shareResolution => _settings.shareResolution;
+
+  int get shareFrameRate => _settings.shareFrameRate;
+
   /// Why the last change did not reach the file, where it did not.
   ///
   /// The change is still applied for this session; what is lost is the next
@@ -46,6 +50,12 @@ final class StreamQualityController extends ChangeNotifier {
 
   Future<void> setCameraBitrate(int bitrate) =>
       _set(_settings.copyWith(cameraBitrate: bitrate));
+
+  Future<void> setShareResolution(StreamResolution resolution) =>
+      _set(_settings.copyWith(shareResolution: resolution));
+
+  Future<void> setShareFrameRate(int frameRate) =>
+      _set(_settings.copyWith(shareFrameRate: frameRate));
 
   Future<void> _set(StreamQualitySettings settings) async {
     if (!settings.isValid || settings == _settings) return;

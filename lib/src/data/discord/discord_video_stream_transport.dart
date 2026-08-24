@@ -105,6 +105,36 @@ final class DiscordVideoStreamTransport {
   DateTime? _lastSendAt;
   Duration _maxSendGap = Duration.zero;
   int _maxQueued = 0;
+
+  /// Keeps the RTP clock running forward across an encoder restart.
+  ///
+  /// An encoder counts from zero, so a share whose quality changed hands
+  /// over pictures stamped before the ones already sent, and a receiver
+  /// treats a clock that jumped back as pictures from the past. The offset
+  /// puts the new encoder's first picture one frame after the last one sent.
+  Duration _timestampOffset = Duration.zero;
+  Duration? _lastRawTimestamp;
+  Duration _lastTimestamp = Duration.zero;
+
+  /// One frame at the lowest rate a share is sent at: far enough forward to
+  /// be a new picture, not so far that a viewer waits for it.
+  static const _restartGap = Duration(milliseconds: 33);
+
+  EncodedVideoFrame _continuous(EncodedVideoFrame frame) {
+    final lastRaw = _lastRawTimestamp;
+    if (lastRaw != null && frame.timestamp < lastRaw) {
+      _timestampOffset = _lastTimestamp + _restartGap - frame.timestamp;
+    }
+    _lastRawTimestamp = frame.timestamp;
+    _lastTimestamp = frame.timestamp + _timestampOffset;
+    if (_timestampOffset == Duration.zero) return frame;
+    return EncodedVideoFrame(
+      bytes: frame.bytes,
+      timestamp: _lastTimestamp,
+      isKeyframe: frame.isKeyframe,
+    );
+  }
+
   final Queue<DiscordRtpFrame> _queue = Queue();
   double _budgetBytes = 0;
   DateTime? _budgetRead;
@@ -171,7 +201,7 @@ final class DiscordVideoStreamTransport {
     }
     _lastSendAt = now;
     var sent = 0;
-    for (final packet in _sender.packetsFor(_prepare(frame))) {
+    for (final packet in _sender.packetsFor(_prepare(_continuous(frame)))) {
       final rtp = DiscordRtpFrame(
         header: DiscordRtpHeader(
           sequence: packet.sequence,

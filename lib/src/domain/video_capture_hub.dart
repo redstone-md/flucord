@@ -22,10 +22,14 @@ final class VideoCaptureHub {
 
   final VideoEncoderService _encoder;
 
-  /// What a screen share would start at now: the quality's bitrate on the
-  /// share profile (720p30, the shape Discord's protocol announces).
-  VideoEncoderSettings get shareSettings =>
-      VideoEncoderSettings(bitrate: quality.shareBitrate);
+  /// What a screen share would start at now: the shape and frame rate the
+  /// quality names, at the bitrate scaled for them.
+  VideoEncoderSettings get shareSettings => VideoEncoderSettings(
+    bitrate: quality.shareEncodeBitrate,
+    width: quality.shareResolution.width,
+    height: quality.shareResolution.height,
+    framesPerSecond: quality.shareFrameRate,
+  );
 
   /// What the camera would start at now: Discord sends camera video
   /// considerably smaller than a share, and a webcam picture carries far less
@@ -58,6 +62,7 @@ final class VideoCaptureHub {
     // interface, not a subtype of the service.
     final Object encoder = _encoder;
     if (encoder is! VideoBitrateControl) return Future.value(false);
+    _settings = _settings?.withBitrate(bitsPerSecond);
     return encoder.setBitrate(bitsPerSecond);
   }
 

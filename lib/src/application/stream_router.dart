@@ -106,6 +106,9 @@ final class StreamRouter {
         // runs it before the picture becomes RTP packets.
         groupEncryptor: (frame) =>
             session.encryptVideoGroupFrame(ssrc: videoSsrc, frame: frame),
+        // A quality change mid-stream declares the new shape the same way.
+        announce: (settings) =>
+            session.announceVideo(enabled: true, settings: settings),
       );
       return;
     }

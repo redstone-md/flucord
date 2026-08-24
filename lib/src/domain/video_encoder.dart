@@ -68,6 +68,23 @@ final class VideoEncoderSettings {
   /// Bits per second.
   final int bitrate;
 
+  /// The same shape at another bitrate.
+  VideoEncoderSettings withBitrate(int bitrate) => VideoEncoderSettings(
+    source: source,
+    displayIndex: displayIndex,
+    width: width,
+    height: height,
+    framesPerSecond: framesPerSecond,
+    bitrate: bitrate,
+  );
+
+  /// Whether [other] is the same picture shape: size and frame rate, which
+  /// are what an encoder must be restarted to change.
+  bool hasShapeOf(VideoEncoderSettings other) =>
+      other.width == width &&
+      other.height == height &&
+      other.framesPerSecond == framesPerSecond;
+
   /// The same settings pointed at another source: a display index, or a
   /// camera index when [source] is a camera.
   VideoEncoderSettings onSource(int index) => VideoEncoderSettings(

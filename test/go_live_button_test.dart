@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
+import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/presentation/widgets/go_live_button.dart';
@@ -52,6 +54,51 @@ void main() {
       find.byKey(const ValueKey('go-live-toggle')),
     );
     expect(button.onPressed, isNull);
+  });
+
+  testWidgets('the menu next to the button picks frame rate and size', (
+    tester,
+  ) async {
+    final capture = VideoCaptureHub(encoder: _FakeEncoder());
+    final controller = GoLiveController(
+      repositoryProvider: _FakeRepository.new,
+      capture: capture,
+    )..reconcile();
+    addTearDown(controller.dispose);
+    final quality = StreamQualityController(
+      _MemoryQualityRepository(),
+      capture: capture,
+    );
+    addTearDown(quality.dispose);
+    await quality.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: GoLiveButton(
+            controller: controller,
+            channelId: 'voice-1',
+            quality: quality,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('go-live-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('go-live-fps-60')));
+    await tester.pumpAndSettle();
+
+    expect(quality.shareFrameRate, 60);
+    expect(capture.shareSettings.framesPerSecond, 60);
+
+    await tester.tap(find.byKey(const ValueKey('go-live-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('go-live-res-1080')));
+    await tester.pumpAndSettle();
+
+    expect(quality.shareResolution, StreamResolution.p1080);
+    expect(capture.shareSettings.height, 1080);
   });
 
   testWidgets('shares what the picker chose, and nothing when dismissed', (
@@ -248,6 +295,18 @@ void main() {
     expect(controller.sentPackets, 0);
     expect(controller.canEncode, isFalse);
   });
+}
+
+final class _MemoryQualityRepository implements StreamQualityRepository {
+  StreamQualitySettings _settings = const StreamQualitySettings();
+
+  @override
+  Future<StreamQualitySettings> load() async => _settings;
+
+  @override
+  Future<void> save(StreamQualitySettings settings) async {
+    _settings = settings;
+  }
 }
 
 final class _FakeEncoder implements VideoEncoderService {

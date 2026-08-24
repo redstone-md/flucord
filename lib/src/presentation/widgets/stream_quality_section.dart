@@ -36,7 +36,9 @@ class StreamQualitySection extends StatelessWidget {
         _BitrateSlider(
           sliderKey: const ValueKey('stream-quality-share'),
           label: 'Screen share bitrate',
-          subtitle: 'A share of a desktop full of text needs the larger part.',
+          subtitle:
+              'For a 720p 30 fps share; other sizes and frame rates, picked '
+              'next to the share button, scale from it.',
           bitrate: controller.shareBitrate,
           min: _shareMin,
           max: _shareMax,

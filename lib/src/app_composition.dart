@@ -348,6 +348,12 @@ final class AppComposition {
         capture: videoCapture,
       ),
     );
+    // A quality picked while sharing reaches the running share: the
+    // setting writes the hub, and the share brings itself to what the hub
+    // says. Idle, it does nothing; the next start reads the hub itself.
+    void applyQuality() => unawaited(goLive.applyQuality());
+    streamQuality.addListener(applyQuality);
+    _teardown.add(() => streamQuality.removeListener(applyQuality));
     // Watching somebody else's share: the decoder and the depacketiser in
     // front of it.
     streamViewer = _register(

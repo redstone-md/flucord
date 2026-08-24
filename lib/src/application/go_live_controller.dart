@@ -157,8 +157,10 @@ final class GoLiveController extends ChangeNotifier {
     required int rtxSsrc,
     required VideoFrameSink sink,
     VideoFrameGroupEncryptor? groupEncryptor,
+    void Function(VideoEncoderSettings settings)? announce,
   }) {
     _transport?.stop();
+    _announce = announce;
     _transport = DiscordVideoStreamTransport(
       ssrc: ssrc,
       rtxSsrc: rtxSsrc,
@@ -176,6 +178,55 @@ final class GoLiveController extends ChangeNotifier {
   /// reports. Rebuilt with each transport, at the share's configured rate.
   StreamBitrateAdapter? _bitrate;
   bool _bitrateRefused = false;
+
+  /// Declares the picture's shape to Discord again, after it changed.
+  void Function(VideoEncoderSettings settings)? _announce;
+
+  /// Brings a running share to what the quality setting says now.
+  ///
+  /// A bitrate alone changes on the running encoder. A new size or frame
+  /// rate restarts the capture, because an encoder is built for one shape;
+  /// the transport stays attached (the frames stream outlives a restart),
+  /// the new shape is announced, and the timestamps carry on from where
+  /// the old encoder's stopped. Nothing to do when this controller has no
+  /// capture running: the next start reads the setting itself. A share
+  /// still connecting counts, since it goes live with whatever the capture
+  /// runs at by then.
+  Future<void> applyQuality() async {
+    if (!_captureStarted) return;
+    final running = _capture.settings;
+    if (running == null) return;
+    final wanted = _capture.shareSettings.onSource(running.displayIndex);
+    if (running == wanted) return;
+    if (running.hasShapeOf(wanted)) {
+      _retarget(wanted.bitrate);
+      await _capture.setBitrate(wanted.bitrate);
+      return;
+    }
+    try {
+      await _capture.stop();
+      await _capture.startShare(displayIndex: running.displayIndex);
+    } on Object catch (error) {
+      _diagnose('quality change refused', error);
+      _error = error;
+      _notify();
+      return;
+    }
+    _announce?.call(wanted);
+    _retarget(wanted.bitrate);
+    _diagnose(
+      'quality',
+      '${wanted.width}x${wanted.height}@${wanted.framesPerSecond} '
+          '${wanted.bitrate ~/ 1000}k',
+    );
+  }
+
+  /// A new target for the bitrate adapter and the pacer.
+  void _retarget(int bitrate) {
+    _bitrate = StreamBitrateAdapter(target: bitrate);
+    _bitrateRefused = false;
+    _transport?.pacingBitsPerSecond = bitrate;
+  }
 
   /// One receiver report into the adapter; a change goes to the encoder
   /// and to the pacer. An encoder that cannot change rate is logged once,

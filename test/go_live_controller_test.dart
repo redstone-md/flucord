@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
+import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -130,6 +131,48 @@ void main() {
       expect(encoder.bitrates, [2250000, 2430000]);
     },
   );
+
+  test('a new shape restarts the running share and announces it', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = _FakeEncoder();
+    final capture = VideoCaptureHub(encoder: encoder);
+    final controller = GoLiveController(
+      repositoryProvider: () => repository,
+      capture: capture,
+    )..reconcile();
+    addTearDown(controller.dispose);
+    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+    final announced = <VideoEncoderSettings>[];
+    controller.bindTransport(
+      ssrc: 1,
+      rtxSsrc: 2,
+      sink: (frame) => 0,
+      announce: announced.add,
+    );
+
+    // Nothing changed: nothing restarts.
+    await controller.applyQuality();
+    expect(encoder.started, 1);
+
+    // A bitrate alone reaches the running encoder.
+    capture.quality = const StreamQualitySettings(shareBitrate: 3000000);
+    await controller.applyQuality();
+    expect(encoder.started, 1);
+    expect(encoder.bitrates, [3000000]);
+
+    // A new shape is a new encoder, declared to Discord.
+    capture.quality = const StreamQualitySettings(
+      shareResolution: StreamResolution.p1080,
+      shareFrameRate: 60,
+    );
+    await controller.applyQuality();
+    expect(encoder.started, 2);
+    expect(encoder.stopped, 1);
+    expect(encoder.settings?.height, 1080);
+    expect(encoder.settings?.framesPerSecond, 60);
+    expect(announced.single.height, 1080);
+  });
 
   test('an encoder that fails leaves nothing announced', () async {
     final repository = _FakeRepository();

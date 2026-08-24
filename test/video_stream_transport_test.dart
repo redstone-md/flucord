@@ -57,7 +57,8 @@ void main() {
     expect(
       sent.every(
         (frame) =>
-            frame.header.payloadType == DiscordRtpHeader.discordVideoPayloadType,
+            frame.header.payloadType ==
+            DiscordRtpHeader.discordVideoPayloadType,
       ),
       isTrue,
     );
@@ -85,6 +86,29 @@ void main() {
 
     expect(count, greaterThan(5));
     expect(transport.sentPackets, count);
+  });
+
+  test('the RTP clock keeps going forward across an encoder restart', () {
+    final sent = <DiscordRtpFrame>[];
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) {
+        sent.add(frame);
+        return 0;
+      },
+    );
+
+    transport.send(_frame(timestamp: const Duration(seconds: 10)));
+    // A restarted encoder counts from zero again.
+    transport.send(_frame(timestamp: Duration.zero));
+    transport.send(_frame(timestamp: const Duration(milliseconds: 33)));
+
+    final stamps = sent.map((frame) => frame.header.timestamp).toSet().toList();
+    expect(stamps, hasLength(3));
+    expect(stamps[1], greaterThan(stamps[0]));
+    expect(stamps[2], greaterThan(stamps[1]));
+    // One frame on, at 90 kHz: 33 ms is 2970 ticks.
+    expect(stamps[1] - stamps[0], 2970);
   });
 
   test('an empty picture sends nothing', () {

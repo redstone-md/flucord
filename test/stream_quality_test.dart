@@ -23,6 +23,39 @@ void main() {
       },
     );
 
+    test('a share shape round trips, and a hand-edited one falls back', () {
+      const settings = StreamQualitySettings(
+        shareResolution: StreamResolution.p1080,
+        shareFrameRate: 60,
+      );
+
+      final restored = StreamQualitySettings.fromJson(settings.toJson());
+
+      expect(restored, settings);
+      expect(settings.toJson()['share_resolution'], 1080);
+      final edited = StreamQualitySettings.fromJson({
+        'share_resolution': 999,
+        'share_frame_rate': 24,
+      });
+      expect(edited.shareResolution, StreamResolution.p720);
+      expect(edited.shareFrameRate, 30);
+      expect(const StreamQualitySettings(shareFrameRate: 24).isValid, isFalse);
+    });
+
+    test('the slider names a 720p30 share; other shapes scale from it', () {
+      const base = StreamQualitySettings(shareBitrate: 2000000);
+
+      expect(base.shareEncodeBitrate, 2000000);
+      expect(
+        base
+            .copyWith(shareResolution: StreamResolution.p1080)
+            .shareEncodeBitrate,
+        4500000,
+      );
+      expect(base.copyWith(shareFrameRate: 60).shareEncodeBitrate, 3000000);
+      expect(base.copyWith(shareFrameRate: 15).shareEncodeBitrate, 1400000);
+    });
+
     test('round trips through json', () {
       const settings = StreamQualitySettings(
         shareBitrate: 6000000,
@@ -253,8 +286,7 @@ final class _RefusingSaveRepository implements StreamQualityRepository {
   bool refuse = true;
 
   @override
-  Future<StreamQualitySettings> load() async =>
-      const StreamQualitySettings();
+  Future<StreamQualitySettings> load() async => const StreamQualitySettings();
 
   @override
   Future<void> save(StreamQualitySettings settings) async {
