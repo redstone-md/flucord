@@ -335,14 +335,17 @@ HRESULT SetupEncoderTransform(FlucordVideoEncoder* state,
     codec->SetValue(&CODECAPI_AVLowLatencyMode, &low_latency);
     VariantClear(&low_latency);
 
-    // A keyframe every two seconds. Nothing retransmits a lost packet here,
-    // so a viewer's picture freezes until the next keyframe, and the
-    // encoder's own spacing is measured in scenes and seconds, not in
-    // anything a live viewer would call recovery.
+    // A keyframe every ten seconds, as a safety net only. A keyframe is
+    // several times the size of an ordinary picture, and a burst of one
+    // every two seconds was a loss event every two seconds. Lost packets
+    // are retransmitted on request and a viewer who needs a fresh picture
+    // asks for one (PLI), which the encoder answers at once; the periodic
+    // one covers a request that never arrived. WebRTC's screen share sends
+    // none at all.
     VARIANT gop;
     VariantInit(&gop);
     gop.vt = VT_UI4;
-    gop.ulVal = static_cast<UINT32>(state->config.frames_per_second) * 2;
+    gop.ulVal = static_cast<UINT32>(state->config.frames_per_second) * 10;
     const HRESULT gop_result =
         codec->SetValue(&CODECAPI_AVEncMPVGOPSize, &gop);
     VariantClear(&gop);
