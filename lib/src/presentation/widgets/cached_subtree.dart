@@ -53,13 +53,15 @@ class _CachedSubtreeState extends State<CachedSubtree> {
     return true;
   }
 
-  static bool _same(Object? left, Object? right) => switch ((left, right)) {
-    (final List<Object?> a, final List<Object?> b) => listEquals(a, b),
-    (final Set<Object?> a, final Set<Object?> b) => setEquals(a, b),
-    (final Map<Object?, Object?> a, final Map<Object?, Object?> b) => mapEquals(
-      a,
-      b,
-    ),
-    _ => left == right,
-  };
+  static bool _same(Object? left, Object? right) =>
+      identical(left, right) || _sameContents(left, right);
+
+  static bool _sameContents(Object? left, Object? right) =>
+      switch ((left, right)) {
+        (final List<Object?> a, final List<Object?> b) => listEquals(a, b),
+        (final Set<Object?> a, final Set<Object?> b) => setEquals(a, b),
+        (final Map<Object?, Object?> a, final Map<Object?, Object?> b) =>
+          mapEquals(a, b),
+        _ => left == right,
+      };
 }

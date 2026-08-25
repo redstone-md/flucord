@@ -34,7 +34,10 @@ class ChannelSidebar extends StatelessWidget {
     this.onOpenMemberProfile,
     required this.sessionMode,
     required this.connectionStatus,
-    required this.workspace,
+    required this.categories,
+    required this.currentMember,
+    required this.memberOf,
+    required this.channelOf,
     required this.collapsedCategoryIds,
     required this.onToggleCategory,
     required this.onNewDirectMessage,
@@ -75,7 +78,27 @@ class ChannelSidebar extends StatelessWidget {
   final void Function(String userId)? onOpenMemberProfile;
   final SessionMode sessionMode;
   final RepositoryConnectionStatus connectionStatus;
-  final ChatWorkspace workspace;
+
+  /// The space's categories, in whatever order they arrived.
+  final List<ChannelCategory> categories;
+
+  /// The account itself, for the panel at the bottom.
+  final Member currentMember;
+
+  /// Looks a member up when a row is drawn — a voice seat, the other side of a
+  /// direct message, a friend's presence.
+  ///
+  /// Read through to whatever the workspace holds now rather than handed a
+  /// copy: the sidebar can be kept across rebuilds, and a captured table would
+  /// answer with whatever it held when it was built. The members a row does
+  /// show are named in the sidebar's dependencies, so a change to one of them
+  /// still redraws it.
+  final Member? Function(String userId) memberOf;
+
+  /// Looks a channel up while classifying a thread's parent. Read through for
+  /// the same reason as [memberOf].
+  final ConversationChannel? Function(String channelId) channelOf;
+
   final Set<String> collapsedCategoryIds;
   final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
@@ -223,8 +246,7 @@ class ChannelSidebar extends StatelessWidget {
                     // From the workspace, which the presence service already
                     // keeps current; a second copy would be a second thing to
                     // go stale.
-                    presenceOf: (userId) =>
-                        workspace.memberOrNull(userId)?.presence,
+                    presenceOf: (userId) => memberOf(userId)?.presence,
                   )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
@@ -237,7 +259,7 @@ class ChannelSidebar extends StatelessWidget {
           ),
           ?voiceConnectionBar,
           AccountPanel(
-            member: workspace.memberById(workspace.currentMemberId),
+            member: currentMember,
             sessionMode: sessionMode,
             connectionStatus: connectionStatus,
           ),
@@ -285,7 +307,7 @@ class ChannelSidebar extends StatelessWidget {
   bool _isForumPost(ConversationChannel channel) {
     final parentId = channel.parentId;
     if (parentId == null) return false;
-    final parent = workspace.channelOrNull(parentId);
+    final parent = channelOf(parentId);
     return parent?.kind == ChannelKind.forum ||
         parent?.kind == ChannelKind.media;
   }
@@ -301,15 +323,15 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in regularChannels) _rowFor(channel),
       ];
     }
-    final categories = [...workspace.categoriesFor(space.id)]
+    final sortedCategories = [...categories]
       ..sort((left, right) => left.position.compareTo(right.position));
-    if (categories.isEmpty) {
+    if (sortedCategories.isEmpty) {
       return [
         ..._eventEntries(),
         ..._uncategorizedEntries(regularChannels, threads),
       ];
     }
-    final categoryIds = categories.map((category) => category.id).toSet();
+    final categoryIds = sortedCategories.map((category) => category.id).toSet();
     final uncategorized = _ordered(
       regularChannels.where(
         (channel) =>
@@ -323,7 +345,7 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in uncategorized) _rowFor(channel),
         const SizedBox(height: 10),
       ],
-      for (final category in categories)
+      for (final category in sortedCategories)
         // A category whose every channel was filtered out is dropped whole.
         // Collapsing hides rows without emptying this list, so a collapsed
         // category still keeps its header — only a category the account
@@ -448,7 +470,7 @@ class ChannelSidebar extends StatelessWidget {
       VoiceSeatRow(
         key: ValueKey('voice-seat-${channel.id}-${seat.userId}'),
         state: seat,
-        member: workspace.memberOrNull(seat.userId),
+        member: memberOf(seat.userId),
         spaceId: space.id,
         indented: indented,
         onOpenProfile: onOpenMemberProfile,
@@ -461,7 +483,7 @@ class ChannelSidebar extends StatelessWidget {
         selected: channel.id == selectedChannelId,
         recipient: channel.recipientId == null
             ? null
-            : workspace.memberOrNull(channel.recipientId!),
+            : memberOf(channel.recipientId!),
         indented: indented,
         muted: _isMuted(channel),
         showsUnread: _showsUnread(channel),

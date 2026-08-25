@@ -355,6 +355,41 @@ extension _FlucordShellNavigation on FlucordShell {
     unawaited(chatController.openChannel(channelId));
   }
 
+  /// Looks a member up in the workspace as it stands.
+  ///
+  /// Handed to kept subtrees so a row drawn from an older build still reads the
+  /// current table. What such a subtree *shows* is named in its dependencies,
+  /// so it is redrawn when one of those members changes; this only keeps the
+  /// answer honest in between.
+  Member? _memberOf(String userId) =>
+      chatController.workspace?.memberOrNull(userId);
+
+  /// Looks a channel up in the workspace as it stands. Same reasoning as
+  /// [_memberOf].
+  ConversationChannel? _channelOf(String channelId) =>
+      chatController.workspace?.channelOrNull(channelId);
+
+  /// The members the channel sidebar actually draws: whoever is seated in a
+  /// voice channel it lists, and the person on the other side of each direct
+  /// message.
+  ///
+  /// Named as a dependency so a presence landing in one of a couple of hundred
+  /// spaces redraws the sidebar only when it belongs to somebody on screen.
+  /// Members keep their identity until they change, so an unchanged list
+  /// compares equal.
+  List<Member?> _shownMembers(
+    ChatWorkspace workspace, {
+    required List<ConversationChannel> channels,
+    required Map<String, List<VoiceParticipantStateEvent>> seats,
+  }) => [
+    for (final channel in channels)
+      if (channel.recipientId case final recipientId?)
+        workspace.memberOrNull(recipientId),
+    for (final channel in channels)
+      for (final seat in seats[channel.id] ?? const [])
+        workspace.memberOrNull(seat.userId),
+  ];
+
   /// Opens [spaceId], landing on whichever channel it offers.
   ///
   /// The workspace is read from the controller rather than captured, because

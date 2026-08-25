@@ -43,7 +43,14 @@ void main() {
                   onSelectChannel: (_) {},
                   sessionMode: SessionMode.discord,
                   connectionStatus: RepositoryConnectionStatus.connected,
-                  workspace: _workspace,
+                  categories: _workspace.categoriesFor(
+                    CommunitySpace.directMessagesId,
+                  ),
+                  currentMember: _workspace.memberById(
+                    _workspace.currentMemberId,
+                  ),
+                  memberOf: _workspace.memberOrNull,
+                  channelOf: _workspace.channelOrNull,
                   collapsedCategoryIds: const {},
                   onToggleCategory: (_) {},
                   onNewDirectMessage: () => newMessages++,

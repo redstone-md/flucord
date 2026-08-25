@@ -25,6 +25,7 @@ import '../domain/discord_permissions.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
 import '../domain/moderation_report.dart';
+import '../domain/voice_connection.dart';
 import '../domain/workspace_activity.dart';
 import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
@@ -250,75 +251,115 @@ class FlucordShell extends StatelessWidget {
                           // unrelated event redrew the sidebar.
                           ListenableBuilder(
                             listenable: voiceController,
-                            builder: (_, _) => ChannelSidebar(
-                              space: space,
-                              friends: friendsController,
-                              seatedByChannel: voiceController.seatedByChannel,
-                              // Discord opens a profile from these rows with
-                              // either mouse button. Ours were labels.
-                              onOpenMemberProfile: (userId) => unawaited(
-                                _openMemberCard(context, spaceId, userId),
-                              ),
-                              // A voice connection outlives the room view, so
-                              // leaving it has to stay reachable from wherever
-                              // the user has navigated to since.
-                              // Rebuilt from the voice controller rather than
-                              // with the rest of the shell: joining a channel is
-                              // not a workspace change, and the strip used to
-                              // appear only when something else happened to
-                              // redraw the sidebar.
-                              voiceConnectionBar: ListenableBuilder(
-                                listenable: voiceController,
-                                builder: (_, _) => VoiceConnectionBar(
-                                  controller: voiceController,
-                                  camera: selfVideoController,
-                                  channelNameFor: (id) => channels
-                                      .where((channel) => channel.id == id)
-                                      .map((channel) => channel.name)
-                                      .firstOrNull,
-                                  onOpenChannel: _selectChannel,
-                                ),
-                              ),
-                              channels: channels,
-                              selectedChannelId: channelId,
-                              workspace: workspace,
-                              collapsedCategoryIds:
-                                  workspaceController.collapsedCategoryIds,
-                              onToggleCategory:
-                                  workspaceController.toggleCategory,
-                              onNewDirectMessage: () =>
-                                  _openDirectMessage(context),
-                              scheduledEventCount: chatController
-                                  .scheduledEventsFor(space.id)
-                                  .length,
-                              isLoadingScheduledEvents: chatController
-                                  .isLoadingScheduledEvents(space.id),
-                              scheduledEventsError: chatController
-                                  .scheduledEventsError(space.id),
-                              onOpenEvents: () =>
-                                  _openScheduledEvents(context, space),
-                              onOpenServerSettings: canOpenSettings
-                                  ? () => unawaited(
-                                      _openGuildSettings(
-                                        context,
-                                        space,
-                                        administration,
-                                      ),
-                                    )
-                                  : null,
-                              onReportServer: () =>
-                                  unawaited(_reportSpace(context, space)),
-                              onSelectChannel: _selectChannel,
-                              readState: chatController.readState,
-                              onNotificationRequest: (request, target) =>
-                                  _applyNotificationRequest(
-                                    request,
-                                    space: space,
-                                    channel: target,
+                            builder: (_, _) {
+                              final seats = voiceController.seatedByChannel;
+                              final categories = workspace.categoriesFor(
+                                spaceId,
+                              );
+                              final currentMember = workspace.memberById(
+                                workspace.currentMemberId,
+                              );
+                              return CachedSubtree(
+                                dependencies: [
+                                  space,
+                                  channels,
+                                  categories,
+                                  currentMember,
+                                  _shownMembers(
+                                    workspace,
+                                    channels: channels,
+                                    seats: seats,
                                   ),
-                              sessionMode: connectionController.mode,
-                              connectionStatus: chatController.connectionStatus,
-                            ),
+                                  seats,
+                                  channelId,
+                                  workspaceController.collapsedCategoryIds,
+                                  chatController.readState,
+                                  connectionController.mode,
+                                  chatController.connectionStatus,
+                                  canOpenSettings,
+                                  chatController
+                                      .scheduledEventsFor(spaceId)
+                                      .length,
+                                  chatController.isLoadingScheduledEvents(
+                                    spaceId,
+                                  ),
+                                  chatController.scheduledEventsError(spaceId),
+                                ],
+                                builder: (_) => ChannelSidebar(
+                                  space: space,
+                                  friends: friendsController,
+                                  categories: categories,
+                                  currentMember: currentMember,
+                                  memberOf: _memberOf,
+                                  channelOf: _channelOf,
+                                  seatedByChannel: seats,
+                                  // Discord opens a profile from these rows with
+                                  // either mouse button. Ours were labels.
+                                  onOpenMemberProfile: (userId) => unawaited(
+                                    _openMemberCard(context, spaceId, userId),
+                                  ),
+                                  // A voice connection outlives the room view, so
+                                  // leaving it has to stay reachable from wherever
+                                  // the user has navigated to since.
+                                  // Rebuilt from the voice controller rather than
+                                  // with the rest of the shell: joining a channel is
+                                  // not a workspace change, and the strip used to
+                                  // appear only when something else happened to
+                                  // redraw the sidebar.
+                                  voiceConnectionBar: ListenableBuilder(
+                                    listenable: voiceController,
+                                    builder: (_, _) => VoiceConnectionBar(
+                                      controller: voiceController,
+                                      camera: selfVideoController,
+                                      channelNameFor: (id) => channels
+                                          .where((channel) => channel.id == id)
+                                          .map((channel) => channel.name)
+                                          .firstOrNull,
+                                      onOpenChannel: _selectChannel,
+                                    ),
+                                  ),
+                                  channels: channels,
+                                  selectedChannelId: channelId,
+                                  collapsedCategoryIds:
+                                      workspaceController.collapsedCategoryIds,
+                                  onToggleCategory:
+                                      workspaceController.toggleCategory,
+                                  onNewDirectMessage: () =>
+                                      _openDirectMessage(context),
+                                  scheduledEventCount: chatController
+                                      .scheduledEventsFor(space.id)
+                                      .length,
+                                  isLoadingScheduledEvents: chatController
+                                      .isLoadingScheduledEvents(space.id),
+                                  scheduledEventsError: chatController
+                                      .scheduledEventsError(space.id),
+                                  onOpenEvents: () =>
+                                      _openScheduledEvents(context, space),
+                                  onOpenServerSettings: canOpenSettings
+                                      ? () => unawaited(
+                                          _openGuildSettings(
+                                            context,
+                                            space,
+                                            administration,
+                                          ),
+                                        )
+                                      : null,
+                                  onReportServer: () =>
+                                      unawaited(_reportSpace(context, space)),
+                                  onSelectChannel: _selectChannel,
+                                  readState: chatController.readState,
+                                  onNotificationRequest: (request, target) =>
+                                      _applyNotificationRequest(
+                                        request,
+                                        space: space,
+                                        channel: target,
+                                      ),
+                                  sessionMode: connectionController.mode,
+                                  connectionStatus:
+                                      chatController.connectionStatus,
+                                ),
+                              );
+                            },
                           ),
                         Expanded(
                           child: channel == null
