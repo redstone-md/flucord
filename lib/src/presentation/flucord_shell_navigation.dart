@@ -118,11 +118,19 @@ extension _FlucordShellNavigation on FlucordShell {
     final target = await showDialog<InboxTarget>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.58),
-      builder: (_) => ListenableBuilder(
-        listenable: chatController,
-        builder: (dialogContext, _) => InboxDialog(
+      // The inbox is a snapshot of what was waiting when it was opened, not a
+      // live feed. Following the chat controller here rebuilt the whole
+      // catalogue on every gateway event — on a busy account that is every
+      // frame the dialog is on screen — and shuffled the list under the reader
+      // while they were reading it. Marking everything read is the one action
+      // that changes what it shows, so it asks for the rebuild itself.
+      builder: (_) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => InboxDialog(
           catalog: InboxCatalog.fromWorkspace(chatController.workspace!),
-          onMarkAllRead: chatController.markAllChannelsRead,
+          onMarkAllRead: () {
+            chatController.markAllChannelsRead();
+            setDialogState(() {});
+          },
         ),
       ),
     );
