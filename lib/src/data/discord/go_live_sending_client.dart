@@ -62,6 +62,11 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   StreamBitrateAdapter? _bitrate;
   int? _ssrc;
 
+  /// Whether the transport is up: set on ready, cleared on any lesser status.
+  /// Audio and video are held while it is false so a reconnect does not throw
+  /// a frame at a torn-down cipher.
+  bool _ready = false;
+
   /// The transport under the share, or null before the share was announced.
   DiscordVideoStreamTransport? get transport => _transport;
 
@@ -96,23 +101,36 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
     );
     final ssrc = _ssrc;
     if (!enabled || ssrc == null) return announced;
+    final videoSsrc = DiscordVoiceGatewayProtocol.videoSsrcFor(ssrc);
+    // A reconnect can hand out a new SSRC, and a transport keeps sending on
+    // the one it was built with: frames on a stale SSRC are dropped by the
+    // server. When it changed, the old transport is torn down and a new one
+    // built for the new numbering.
+    if (_transport != null && videoSsrc != _videoSsrc) {
+      unawaited(_transport!.stop());
+      _transport = null;
+    }
     if (_transport == null) {
-      final videoSsrc = DiscordVoiceGatewayProtocol.videoSsrcFor(ssrc);
+      _videoSsrc = videoSsrc;
       _transport = DiscordVideoStreamTransport(
         ssrc: videoSsrc,
         rtxSsrc: DiscordVoiceGatewayProtocol.rtxSsrcFor(ssrc),
-        sink: _inner.sendVideoFrame,
+        // Gated on readiness: during a reconnect the transport cipher is gone,
+        // and a frame pushed through then throws — which the transport treats
+        // as a dead socket and stops for good. Dropped instead, the share
+        // resumes when the connection comes back.
+        sink: (frame) => _ready ? _inner.sendVideoFrame(frame) : 0,
         groupEncryptor: (frame) {
           final cipher = _inner.encryptVideoForGroup(
             ssrc: videoSsrc,
             frame: frame,
           );
-          if (!_loggedEncrypt) {
-            _loggedEncrypt = true;
+          final passthrough = cipher.length == frame.length;
+          if (passthrough != _wasPassthrough) {
+            _wasPassthrough = passthrough;
             AppLog.warning(
               'golive.media',
-              'first frame: ${frame.length}B plain -> ${cipher.length}B '
-                  '(${cipher.length == frame.length ? 'PASSTHROUGH' : 'encrypted'})',
+              'frames now ${passthrough ? 'PASSTHROUGH (no group key yet)' : 'group-encrypted'}',
             );
           }
           return cipher;
@@ -132,8 +150,9 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
     _transport?.pacingBitsPerSecond = bitrate;
   }
 
-  bool _loggedEncrypt = false;
+  bool _wasPassthrough = false;
   int _keyframesSent = 0;
+  int? _videoSsrc;
 
   /// The frames the transport sends, tapped to count keyframes for the pace
   /// line: a viewer decodes nothing until an IDR, so a window with none is
@@ -154,7 +173,7 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   /// when they join regardless, so an early frame is nothing to keep.
   @override
   void sendOpusFrame(Uint8List opus) {
-    if (_ssrc == null) return;
+    if (!_ready) return;
     if (_inner case final VoiceAudioTransport audio) audio.sendOpusFrame(opus);
   }
 
@@ -181,6 +200,11 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
     switch (event) {
       case VoiceTransportReadyEvent(:final session):
         _ssrc = session.ssrc;
+        _ready = true;
+      case VoiceSignalingStatusEvent(:final status):
+        // Anything short of ready means the transport cipher is gone or not
+        // yet up; audio and video hold until it comes back.
+        if (status != VoiceConnectionStatus.ready) _ready = false;
       case VoiceRetransmitRequestedEvent(:final sequences):
         _nacked += sequences.length;
         _transport?.retransmit(sequences);
