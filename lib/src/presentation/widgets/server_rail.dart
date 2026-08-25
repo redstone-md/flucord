@@ -202,6 +202,7 @@ class _SpaceButton extends StatelessWidget {
     builder: (_, _) => RemoteIdentityImage(
       url: space.iconUrl,
       imageKey: ValueKey('space-icon-${space.id}'),
+      animatesOnHover: true,
       fallback: Center(
         child: Text(
           space.monogram,
