@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'discord_snowflake.dart';
 import 'message_component.dart';
 import 'guild_membership.dart';
@@ -49,14 +51,27 @@ final class ChatWorkspace {
     List<ChannelCategory> categories = const [],
     List<GuildEmoji> emojis = const [],
     List<GuildSticker> stickers = const [],
-  }) : spaces = List.unmodifiable(spaces),
-       channels = List.unmodifiable(channels),
-       members = List.unmodifiable(members),
-       messages = List.unmodifiable(messages),
-       roles = List.unmodifiable(roles),
-       categories = List.unmodifiable(categories),
-       emojis = List.unmodifiable(emojis),
-       stickers = List.unmodifiable(stickers);
+  }) : spaces = _sealed(spaces),
+       channels = _sealed(channels),
+       members = _sealed(members),
+       messages = _sealed(messages),
+       roles = _sealed(roles),
+       categories = _sealed(categories),
+       emojis = _sealed(emojis),
+       stickers = _sealed(stickers);
+
+  /// Seals [items] against change, and hands back a list already sealed by an
+  /// earlier workspace as it stands.
+  ///
+  /// Every change to a workspace rebuilds it through [copyWith], which passes
+  /// the seven collections it did not touch straight back. Copying those again
+  /// meant one arriving message copied every message, member and channel the
+  /// client held. Reusing the sealed list also keeps its identity stable, which
+  /// is what lets anything downstream tell "the same channels as last time"
+  /// from "a new set of channels".
+  static List<T> _sealed<T>(List<T> items) => items is UnmodifiableListView<T>
+      ? items
+      : UnmodifiableListView(List.of(items, growable: false));
 
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
