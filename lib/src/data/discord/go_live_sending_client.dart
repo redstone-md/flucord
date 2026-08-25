@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../../app_log.dart';
 import '../../domain/go_live_media.dart';
 import '../../domain/stream_bitrate_adapter.dart';
 import '../../domain/video_encoder.dart';
@@ -34,6 +35,16 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
        _now = now,
        _windowStarted = now() {
     _events = inner.events.listen(_onEvent);
+    // A share sends, but its socket still has to be drained: the media
+    // server's RTCP — the loss it saw, the packets a viewer missed, the
+    // keyframes a viewer joining needs (PLI) — arrives on the same socket,
+    // and the client only reads it while something listens to its incoming
+    // packets. Nothing here wants the packets themselves (a send-only stream
+    // receives none), but the act of listening is what pumps the socket and
+    // routes the feedback to the events this client acts on. Without it a
+    // viewer's PLI never arrives, no fresh keyframe is sent, and the stream
+    // never loads for anyone who joined after the first picture.
+    _incoming = inner.videoPackets.listen((_) {});
   }
 
   final DiscordVoiceClient _inner;
@@ -46,6 +57,7 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   final void Function()? onClosed;
 
   late final StreamSubscription<VoiceSignalingEvent> _events;
+  late final StreamSubscription<(String, DiscordRtpFrame)> _incoming;
   DiscordVideoStreamTransport? _transport;
   StreamBitrateAdapter? _bitrate;
   int? _ssrc;
@@ -90,11 +102,24 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
         ssrc: videoSsrc,
         rtxSsrc: DiscordVoiceGatewayProtocol.rtxSsrcFor(ssrc),
         sink: _inner.sendVideoFrame,
-        groupEncryptor: (frame) =>
-            _inner.encryptVideoForGroup(ssrc: videoSsrc, frame: frame),
+        groupEncryptor: (frame) {
+          final cipher = _inner.encryptVideoForGroup(
+            ssrc: videoSsrc,
+            frame: frame,
+          );
+          if (!_loggedEncrypt) {
+            _loggedEncrypt = true;
+            AppLog.warning(
+              'golive.media',
+              'first frame: ${frame.length}B plain -> ${cipher.length}B '
+                  '(${cipher.length == frame.length ? 'PASSTHROUGH' : 'encrypted'})',
+            );
+          }
+          return cipher;
+        },
         pacingBitsPerSecond: settings.bitrate,
         now: _now,
-      )..attach(_frames);
+      )..attach(_countingFrames(_frames));
       _onEncoderCommand(const GoLiveKeyframeCommand());
     }
     retarget(settings.bitrate);
@@ -106,6 +131,18 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
     _bitrate = StreamBitrateAdapter(target: bitrate);
     _transport?.pacingBitsPerSecond = bitrate;
   }
+
+  bool _loggedEncrypt = false;
+  int _keyframesSent = 0;
+
+  /// The frames the transport sends, tapped to count keyframes for the pace
+  /// line: a viewer decodes nothing until an IDR, so a window with none is
+  /// worth seeing.
+  Stream<EncodedVideoFrame> _countingFrames(Stream<EncodedVideoFrame> frames) =>
+      frames.map((frame) {
+        if (frame.isKeyframe) _keyframesSent++;
+        return frame;
+      });
 
   /// Through the connection's own audio path, which encrypts for the group
   /// and declares the speaking state as a call does. A connection without one
@@ -133,6 +170,7 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   @override
   Future<void> close() async {
     await _events.cancel();
+    await _incoming.cancel();
     await _transport?.stop();
     _transport = null;
     await _inner.close();
@@ -205,6 +243,7 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
       _describeFeedback(retransmitted),
       'gap ${window.maxSendGap.inMilliseconds}ms',
       'queue ${window.maxQueued}',
+      'kf $_keyframesSent',
       if (bitrate != null && bitrate.isAdapted)
         'bitrate ${bitrate.bitrate ~/ 1000}k',
       if (error != null && !_stopReported) 'stopped: $error',

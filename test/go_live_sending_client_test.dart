@@ -178,6 +178,23 @@ void main() {
     expect(inner.opus, hasLength(1));
   });
 
+  test('drains the socket so the server\'s feedback is read', () async {
+    final inner = _FakeClient();
+    final client = GoLiveSendingClient(
+      inner: inner,
+      frames: const Stream<EncodedVideoFrame>.empty(),
+      onEncoderCommand: (_) {},
+    );
+    addTearDown(client.close);
+
+    // A share sends, but the client only reads the incoming RTCP (loss, NACK,
+    // the PLI a viewer joining needs) while its packets are listened to. A
+    // send-only stream that never subscribes never hears the viewer, and the
+    // stream never loads for anyone who joined after the first picture.
+    await Future<void>.delayed(Duration.zero);
+    expect(inner.videoPacketsListened, isTrue);
+  });
+
   test('closing closes the connection and says so', () async {
     final inner = _FakeClient();
     var closed = 0;
@@ -204,6 +221,7 @@ final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
   final List<int> groupEncryptions = [];
   final List<Uint8List> opus = [];
   bool closed = false;
+  bool videoPacketsListened = false;
 
   void emit(VoiceSignalingEvent event) => _events.add(event);
 
@@ -215,7 +233,9 @@ final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
 
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets =>
-      const Stream<(String, DiscordRtpFrame)>.empty();
+      Stream<(String, DiscordRtpFrame)>.multi((controller) {
+        videoPacketsListened = true;
+      });
 
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio =>
