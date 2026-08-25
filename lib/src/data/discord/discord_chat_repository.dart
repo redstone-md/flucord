@@ -99,7 +99,9 @@ final class DiscordChatRepository
            messageNonceFactory ?? DiscordMessageNonceFactory(),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
-         socketFactory: DiscordVoiceGatewaySocketFactory(daveService: daveService),
+         socketFactory: DiscordVoiceGatewaySocketFactory(
+           daveService: daveService,
+         ),
        ) {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
@@ -118,6 +120,7 @@ final class DiscordChatRepository
     _mapper,
     _cache,
     () => _currentMemberId,
+    _events.add,
   );
   late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
     _api,

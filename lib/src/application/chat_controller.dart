@@ -81,6 +81,10 @@ final class ChatController extends ChangeNotifier {
   RepositoryConnectionStatus _connectionStatus =
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
+
+  /// Channels showing a locally held page while their refresh is in flight.
+  /// A refresh that then fails leaves what is on screen rather than an error.
+  final Set<String> _restoredChannels = {};
   final Set<String> _loadingChannels = {};
   final Map<String, Object> _channelErrors = {};
   final Set<String> _loadingOlderChannels = {};
@@ -190,6 +194,7 @@ final class ChatController extends ChangeNotifier {
     _repository = repository;
     _workspace = null;
     _loadedChannels.clear();
+    _restoredChannels.clear();
     _loadingChannels.clear();
     _channelErrors.clear();
     _loadingOlderChannels.clear();
@@ -289,7 +294,11 @@ final class ChatController extends ChangeNotifier {
       // channel is on screen either way, so the cursor is moved again here.
       acknowledgeChannel(channelId);
     } catch (error) {
-      _channelErrors[channelId] = error;
+      // A channel already reading from its local copy keeps it. The error
+      // state is for a channel with nothing to show.
+      if (!_restoredChannels.contains(channelId)) {
+        _channelErrors[channelId] = error;
+      }
     } finally {
       _loadingChannels.remove(channelId);
       if (!_disposed) notifyListeners();
@@ -349,6 +358,20 @@ final class ChatController extends ChangeNotifier {
       _loadingOlderChannels.remove(channelId);
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Puts a transport's locally held page on screen while its refresh runs.
+  ///
+  /// The channel counts as loaded from here: it has messages to read, so the
+  /// loading view would only hide them.
+  void _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
+    final channelId = event.history.channelId;
+    if (_workspace == null || _loadedChannels.contains(channelId)) return;
+    _workspace = _workspace?.mergeInitialHistory(event.history);
+    _loadedChannels.add(channelId);
+    _restoredChannels.add(channelId);
+    _loadingChannels.remove(channelId);
+    _setHistoryExhausted(channelId, !event.hasMore);
   }
 
   void _setHistoryExhausted(String channelId, bool exhausted) {

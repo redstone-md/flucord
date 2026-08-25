@@ -96,12 +96,25 @@ final class _EventRepository
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
 
+  /// Holds the next history request open, so a test can watch what the
+  /// controller does while the network has not answered yet.
+  Completer<ChannelHistoryPage>? pendingHistory;
+
   @override
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
-  }) =>
-      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
+  }) {
+    final pending = pendingHistory;
+    if (pending != null) {
+      pendingHistory = null;
+      return pending.future;
+    }
+    return _delegate.loadChannelHistory(
+      channelId,
+      beforeMessageId: beforeMessageId,
+    );
+  }
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>

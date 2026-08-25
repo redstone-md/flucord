@@ -135,13 +135,20 @@ final class SqliteChatCache
   }
 
   @override
-  Future<ChannelHistory> readChannelHistory(String channelId) async {
-    final messages = await _database.query(
+  Future<ChannelHistory> readChannelHistory(
+    String channelId, {
+    int? limit,
+  }) async {
+    // Read newest first so a limit keeps the newest page, then turn the rows
+    // back to oldest first, which is the order every caller expects.
+    final rows = await _database.query(
       'messages',
       where: 'channel_id = ?',
       whereArgs: [channelId],
-      orderBy: 'sent_at',
+      orderBy: 'sent_at DESC',
+      limit: limit,
     );
+    final messages = rows.reversed.toList(growable: false);
     final authorIds = messages
         .map((row) => row['author_id']! as String)
         .toSet();

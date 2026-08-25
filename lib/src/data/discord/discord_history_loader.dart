@@ -1,7 +1,9 @@
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/chat_repository.dart';
 import 'discord_api_client.dart';
 import 'discord_mapper.dart';
+import 'discord_restored_history.dart';
 
 final class DiscordHistoryLoader {
   const DiscordHistoryLoader(
@@ -9,6 +11,7 @@ final class DiscordHistoryLoader {
     this._mapper,
     this._cache, [
     this._currentMemberId,
+    this._onRestored,
   ]);
 
   static const pageSize = 100;
@@ -18,10 +21,22 @@ final class DiscordHistoryLoader {
   final ChatCache _cache;
   final String? Function()? _currentMemberId;
 
+  /// Told about the held page as soon as it is read. A host that leaves this
+  /// out keeps the old behaviour, where the cache is only a fallback.
+  final void Function(ChannelHistoryRestoredEvent event)? _onRestored;
+
   Future<ChannelHistoryPage> load(
     String channelId, {
     String? beforeMessageId,
   }) async {
+    if (_onRestored case final onRestored? when beforeMessageId == null) {
+      final restored = await readRestoredHistory(
+        _cache,
+        channelId,
+        pageSize: pageSize,
+      );
+      if (restored != null) onRestored(restored);
+    }
     try {
       final payloads = await _api.getChannelMessages(
         channelId,

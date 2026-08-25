@@ -758,5 +758,118 @@ void main() {
 
       expect(controller.workspace!.emojisFor('forge').single.id, 'live-emoji');
     });
+
+    test('a restored channel reads before the refresh answers', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      repository.pendingHistory = Completer<ChannelHistoryPage>();
+
+      unawaited(controller.openChannel('forge-design'));
+      await Future<void>.delayed(Duration.zero);
+      repository.emit(
+        ChannelHistoryRestoredEvent(history: _restoredHistory, hasMore: true),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isChannelLoading('forge-design'), isFalse);
+      expect(
+        controller.workspace!.messagesFor('forge-design').map((m) => m.id),
+        ['cached-1', 'cached-2'],
+      );
+      expect(controller.canLoadOlderMessages('forge-design'), isTrue);
+    });
+
+    test(
+      'the refresh replaces a restored page without duplicating it',
+      () async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+        final pending = repository.pendingHistory =
+            Completer<ChannelHistoryPage>();
+
+        unawaited(controller.openChannel('forge-design'));
+        await Future<void>.delayed(Duration.zero);
+        repository.emit(
+          ChannelHistoryRestoredEvent(history: _restoredHistory, hasMore: true),
+        );
+        await Future<void>.delayed(Duration.zero);
+        pending.complete(
+          ChannelHistoryPage(
+            history: ChannelHistory(
+              channelId: 'forge-design',
+              messages: [_cachedMessage(2), _cachedMessage(3)],
+              members: const [],
+            ),
+            hasMore: false,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          controller.workspace!.messagesFor('forge-design').map((m) => m.id),
+          ['cached-2', 'cached-3'],
+        );
+        expect(controller.canLoadOlderMessages('forge-design'), isFalse);
+      },
+    );
+
+    test('a refresh failure leaves a restored channel readable', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final pending = repository.pendingHistory =
+          Completer<ChannelHistoryPage>();
+
+      unawaited(controller.openChannel('forge-design'));
+      await Future<void>.delayed(Duration.zero);
+      repository.emit(
+        ChannelHistoryRestoredEvent(history: _restoredHistory, hasMore: true),
+      );
+      await Future<void>.delayed(Duration.zero);
+      pending.completeError(StateError('offline'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.channelError('forge-design'), isNull);
+      expect(controller.isChannelLoading('forge-design'), isFalse);
+      expect(controller.workspace!.messagesFor('forge-design'), isNotEmpty);
+    });
+
+    test('a channel with nothing restored still reports its failure', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      final pending = repository.pendingHistory =
+          Completer<ChannelHistoryPage>();
+
+      unawaited(controller.openChannel('forge-design'));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isChannelLoading('forge-design'), isTrue);
+
+      pending.completeError(StateError('offline'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.channelError('forge-design'), isNotNull);
+      expect(controller.isChannelLoading('forge-design'), isFalse);
+    });
   });
 }
+
+ChatMessage _cachedMessage(int index) => ChatMessage(
+  id: 'cached-$index',
+  channelId: 'forge-design',
+  authorId: 'ash',
+  body: 'Cached $index',
+  sentAt: DateTime.utc(2024, 1, 1).add(Duration(minutes: index)),
+);
+
+final _restoredHistory = ChannelHistory(
+  channelId: 'forge-design',
+  messages: [_cachedMessage(1), _cachedMessage(2)],
+  members: const [],
+);

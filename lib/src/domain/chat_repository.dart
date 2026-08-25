@@ -188,6 +188,24 @@ final class CategoryDeletedEvent extends ChatRepositoryEvent {
   final String categoryId;
 }
 
+/// A channel's locally held history, served before its refresh answers.
+///
+/// A transport that keeps a copy of a conversation emits this as soon as it
+/// has one, so the channel is readable while the network is still being asked.
+/// A transport that keeps none never emits it, and nothing about that
+/// transport changes.
+final class ChannelHistoryRestoredEvent extends ChatRepositoryEvent {
+  const ChannelHistoryRestoredEvent({
+    required this.history,
+    required this.hasMore,
+  });
+
+  final ChannelHistory history;
+
+  /// Whether the local copy knows of older messages beyond this page.
+  final bool hasMore;
+}
+
 final class RepositoryStatusChangedEvent extends ChatRepositoryEvent {
   const RepositoryStatusChangedEvent(this.status);
 

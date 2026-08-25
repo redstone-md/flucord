@@ -60,6 +60,8 @@ extension _ChatControllerEvents on ChatController {
             event.messageId,
           );
           _applyReadState();
+        case ChannelHistoryRestoredEvent():
+          _restoreChannelHistory(event);
         case RepositoryStatusChangedEvent():
           _connectionStatus = event.status;
       }

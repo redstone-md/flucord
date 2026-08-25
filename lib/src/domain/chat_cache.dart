@@ -13,7 +13,12 @@ abstract interface class ChatCache {
 
   Future<void> writeWorkspace(ChatWorkspace workspace);
 
-  Future<ChannelHistory> readChannelHistory(String channelId);
+  /// A channel's held messages, oldest first.
+  ///
+  /// [limit] keeps only the newest that many, which is what opening a channel
+  /// wants: a channel with years of history then costs the same to open as a
+  /// fresh one. Omit it to read the channel in full.
+  Future<ChannelHistory> readChannelHistory(String channelId, {int? limit});
 
   Future<ChatMessage?> readMessage(String messageId);
 
