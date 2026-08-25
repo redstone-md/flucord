@@ -23,6 +23,11 @@ class MessageAttachmentView extends StatefulWidget {
     super.key,
   }) : assert(downloadService == null || downloadController == null);
 
+  /// The box an inline image preview is drawn in, and so the size it is
+  /// fetched and decoded at. Kept here because it is the one place the
+  /// preview's cost is decided.
+  static const Size previewSize = Size(420, 280);
+
   final MessageAttachment attachment;
   final AttachmentDownloadService? downloadService;
   final AttachmentDownloadController? downloadController;
@@ -162,6 +167,42 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
   }
 }
 
+/// The image a preview draws, fetched and decoded at the size it is shown at.
+///
+/// Discord's media proxy resizes on request, so a photo taken on a phone costs
+/// its thumbnail rather than its original. An attachment Discord did not proxy
+/// keeps its own address and is still decoded down, which is the part that
+/// keeps a large picture out of the image cache at full size.
+ImageProvider _preview(MessageAttachment attachment, BuildContext context) {
+  final scale = MediaQuery.devicePixelRatioOf(context);
+  final width = (MessageAttachmentView.previewSize.width * scale).round();
+  final height = (MessageAttachmentView.previewSize.height * scale).round();
+  return ResizeImage(
+    NetworkImage(_previewUrl(attachment, width: width, height: height)),
+    width: width,
+    height: height,
+    policy: ResizeImagePolicy.fit,
+  );
+}
+
+String _previewUrl(
+  MessageAttachment attachment, {
+  required int width,
+  required int height,
+}) {
+  final proxy = Uri.tryParse(attachment.proxyUrl ?? '');
+  if (proxy == null || !proxy.hasAuthority) return attachment.url;
+  return proxy
+      .replace(
+        queryParameters: {
+          ...proxy.queryParameters,
+          'width': '$width',
+          'height': '$height',
+        },
+      )
+      .toString();
+}
+
 class _ImageAttachment extends StatelessWidget {
   const _ImageAttachment({required this.attachment, required this.onOpen});
 
@@ -184,14 +225,18 @@ class _ImageAttachment extends StatelessWidget {
             key: ValueKey('open-image-attachment-${attachment.id}'),
             onTap: onOpen,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 280),
+              constraints: BoxConstraints(
+                maxWidth: MessageAttachmentView.previewSize.width,
+                maxHeight: MessageAttachmentView.previewSize.height,
+              ),
               child: AspectRatio(
                 aspectRatio: ratio.clamp(0.7, 2.2),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    attachment.url,
+                  child: Image(
+                    image: _preview(attachment, context),
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
                     errorBuilder: (_, _, _) =>
                         _FileAttachment(attachment: attachment),
                   ),

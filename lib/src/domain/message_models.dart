@@ -92,6 +92,7 @@ final class MessageAttachment {
     required this.fileName,
     required this.url,
     required this.size,
+    this.proxyUrl,
     this.contentType,
     this.width,
     this.height,
@@ -102,6 +103,11 @@ final class MessageAttachment {
   final String id;
   final String fileName;
   final String url;
+
+  /// The same file on Discord's media proxy, which serves it resized when the
+  /// request asks for a width and a height. Null on an attachment Discord did
+  /// not proxy, and on one cached before this field was kept.
+  final String? proxyUrl;
   final int size;
   final String? contentType;
   final int? width;
