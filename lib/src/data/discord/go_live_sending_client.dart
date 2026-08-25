@@ -110,8 +110,14 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   /// Through the connection's own audio path, which encrypts for the group
   /// and declares the speaking state as a call does. A connection without one
   /// (a test double) carries no sound.
+  ///
+  /// Dropped until the transport is ready: the capture starts producing sound
+  /// the moment the share does, well before the endpoint answered, and the
+  /// audio path throws on a frame sent before then — a viewer only hears from
+  /// when they join regardless, so an early frame is nothing to keep.
   @override
   void sendOpusFrame(Uint8List opus) {
+    if (_ssrc == null) return;
     if (_inner case final VoiceAudioTransport audio) audio.sendOpusFrame(opus);
   }
 

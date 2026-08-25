@@ -385,7 +385,21 @@ Future<void> _workerMain(SendPort toMain) async {
   );
   await for (final message in inbox) {
     if (message is _Shutdown) break;
-    worker.handle(message);
+    // One bad message must not end the loop: a throw here used to terminate
+    // the isolate, and every share after it hung at "dialling" against a
+    // worker that no longer read its inbox.
+    try {
+      worker.handle(message);
+    } on Object catch (error, stackTrace) {
+      toMain.send(
+        _Log(
+          level: AppLogLevel.error,
+          scope: 'golive.media',
+          message: 'message failed',
+          error: '$error\n$stackTrace',
+        ),
+      );
+    }
   }
   await worker.closeAll();
   frames?.close();

@@ -159,8 +159,21 @@ void main() {
     expect(client.takePaceLine(), contains('1/1 resent, 1 keyframe req'));
   });
 
-  test('sound goes through the connection\'s own audio path', () {
-    final (:client, :inner, commands: _, frames: _) = _announced();
+  test('sound goes through the connection\'s own audio path once ready', () {
+    final inner = _FakeClient();
+    final client = GoLiveSendingClient(
+      inner: inner,
+      frames: const Stream<EncodedVideoFrame>.empty(),
+      onEncoderCommand: (_) {},
+    );
+    addTearDown(client.close);
+
+    // The capture produces sound before the endpoint answered; a frame sent
+    // then is dropped rather than thrown at a transport that is not up.
+    client.sendOpusFrame(Uint8List.fromList([1, 2, 3]));
+    expect(inner.opus, isEmpty);
+
+    inner.emit(const VoiceTransportReadyEvent(_session));
     client.sendOpusFrame(Uint8List.fromList([1, 2, 3]));
     expect(inner.opus, hasLength(1));
   });
