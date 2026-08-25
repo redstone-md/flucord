@@ -57,6 +57,8 @@ class MemberSidebar extends StatefulWidget {
 class _MemberSidebarState extends State<MemberSidebar> {
   final OverlayPortalController _overlayController = OverlayPortalController();
   final Map<String, LayerLink> _memberLinks = {};
+  List<Member>? _indexedMembers;
+  Map<String, Member> _membersById = const {};
   Member? _selectedMember;
   LayerLink? _selectedLink;
   bool _openUp = false;
@@ -81,8 +83,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
       _watchChannel();
     }
     if (!identical(oldWidget.members, widget.members)) {
-      final memberIds = {for (final member in widget.members) member.id};
-      _memberLinks.removeWhere((id, _) => !memberIds.contains(id));
+      _memberLinks.removeWhere((id, _) => !_memberIndex.containsKey(id));
     }
     final selectedId = _selectedMember?.id;
     if (oldWidget.spaceId != widget.spaceId ||
@@ -143,10 +144,21 @@ class _MemberSidebarState extends State<MemberSidebar> {
       )
       .toList(growable: false);
 
+  /// The member table keyed by id, rebuilt only when the table itself changes.
+  ///
+  /// The roster asks for a member per row it draws and the panel redraws with
+  /// the shell, so keying the table per draw cost a pass over every member the
+  /// client holds on every frame.
+  Map<String, Member> get _memberIndex {
+    if (!identical(_indexedMembers, widget.members)) {
+      _indexedMembers = widget.members;
+      _membersById = {for (final member in widget.members) member.id: member};
+    }
+    return _membersById;
+  }
+
   Widget _buildRoster(GuildMemberList roster) {
-    final membersById = <String, Member>{
-      for (final member in widget.members) member.id: member,
-    };
+    final membersById = _memberIndex;
     return MemberRosterView(
       list: roster,
       memberOf: (userId) => membersById[userId],

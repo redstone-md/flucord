@@ -101,6 +101,9 @@ final class ChatWorkspace {
   late final Map<String, CommunityRole> _roleById = {
     for (final role in roles) role.id: role,
   };
+  late final Map<String, ChannelCategory> _categoryById = {
+    for (final category in categories) category.id: category,
+  };
   late final Map<String, List<ConversationChannel>> _channelsBySpaceId =
       _groupBy(channels, (channel) => channel.spaceId);
   late final Map<String, List<ChatMessage>> _messagesByChannelId = _groupBy(
@@ -150,6 +153,10 @@ final class ChatWorkspace {
   ConversationChannel? channelOrNull(String id) => _channelById[id];
 
   CommunityRole? roleOrNull(String id) => _roleById[id];
+
+  CommunitySpace? spaceOrNull(String id) => _spaceById[id];
+
+  ChannelCategory? categoryOrNull(String id) => _categoryById[id];
 
   ChatWorkspace copyWith({
     List<CommunitySpace>? spaces,

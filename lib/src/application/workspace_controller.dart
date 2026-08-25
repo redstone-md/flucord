@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/chat_models.dart';
+import '../domain/discord_permissions.dart';
 import '../domain/workspace_permissions.dart';
 import '../domain/channel_link.dart';
 import 'voice_channel_surface.dart';
@@ -44,12 +45,30 @@ final class WorkspaceController extends ChangeNotifier {
   void reconcile(ChatWorkspace workspace) {
     if (identical(_reconciledWorkspace, workspace)) return;
     _reconciledWorkspace = workspace;
-    final categoryIds = workspace.categories.map((category) => category.id);
-    _collapsedCategoryIds.retainAll(categoryIds);
-    _voiceSurfaces.retainAll(workspace.channels.map((channel) => channel.id));
+    // Both sets hold a handful of ids, so each held id is looked up in the
+    // workspace rather than every category and channel id being collected into
+    // a set to compare against.
+    _collapsedCategoryIds.retainWhere(
+      (id) => workspace.categoryOrNull(id) != null,
+    );
+    _voiceSurfaces.retainWhere((id) => workspace.channelOrNull(id) != null);
     if (_selectedSpaceId == null ||
-        !workspace.spaces.any((space) => space.id == _selectedSpaceId)) {
+        workspace.spaceOrNull(_selectedSpaceId!) == null) {
       _selectedSpaceId = workspace.spaces.first.id;
+    }
+    // A selection that is still open needs the same question answered as the
+    // filter below asks — but about one channel, not about every channel of the
+    // space. Resolving the whole list to confirm nothing moved was the common
+    // case, and it ran on every gateway event.
+    final selected = _selectedChannelId == null
+        ? null
+        : workspace.channelOrNull(_selectedChannelId!);
+    if (selected != null &&
+        selected.spaceId == _selectedSpaceId &&
+        WorkspacePermissions(
+          workspace,
+        ).can(DiscordPermissions.viewChannel, selected)) {
+      return;
     }
     final availableChannels = _visibleChannels(workspace, _selectedSpaceId!);
     if (availableChannels.isEmpty) {
@@ -57,16 +76,13 @@ final class WorkspaceController extends ChangeNotifier {
       _targetMessageId = null;
       return;
     }
-    if (_selectedChannelId == null ||
-        !availableChannels.any((channel) => channel.id == _selectedChannelId)) {
-      _targetMessageId = null;
-      _selectedChannelId = availableChannels
-          .firstWhere(
-            _isDefaultLandingChannel,
-            orElse: () => availableChannels.first,
-          )
-          .id;
-    }
+    _targetMessageId = null;
+    _selectedChannelId = availableChannels
+        .firstWhere(
+          _isDefaultLandingChannel,
+          orElse: () => availableChannels.first,
+        )
+        .id;
   }
 
   /// Voice channels are skipped when a landing channel has to be guessed: the

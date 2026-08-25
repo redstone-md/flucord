@@ -26,7 +26,15 @@ final class DiscordVoiceStateRoster {
   List<VoiceParticipantStateEvent> accept({
     required String eventName,
     required Map<String, Object?> data,
-  }) => switch (eventName) {
+  }) {
+    _seatedByChannel = null;
+    return _accept(eventName, data);
+  }
+
+  List<VoiceParticipantStateEvent> _accept(
+    String eventName,
+    Map<String, Object?> data,
+  ) => switch (eventName) {
     'VOICE_STATE_UPDATE' => _apply([data], null),
     'VOICE_STATE_UPDATE_BATCH' => _apply(_objects(data['voice_states']), null),
     'GUILD_CREATE' => _replaceGuild(data),
@@ -52,13 +60,26 @@ final class DiscordVoiceStateRoster {
       .where((state) => state.channelId == channelId)
       .toList(growable: false);
 
-  void clearAll() => _byGuild.clear();
+  void clearAll() {
+    _byGuild.clear();
+    _seatedByChannel = null;
+  }
 
   /// Everyone seated, grouped by the channel they are in.
   ///
   /// The sidebar needs this for channels nobody has joined from here, so it is
   /// read off the whole tracked set rather than off a connection.
-  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel {
+  ///
+  /// Kept until the roster changes: the sidebar reads it while it builds, which
+  /// on a busy account is every frame, and regrouping every guild's voice
+  /// states to answer showed up in the profile as a permanent cost of having
+  /// the shell on screen.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
+      _seatedByChannel ??= _groupSeats();
+
+  Map<String, List<VoiceParticipantStateEvent>>? _seatedByChannel;
+
+  Map<String, List<VoiceParticipantStateEvent>> _groupSeats() {
     final byChannel = <String, List<VoiceParticipantStateEvent>>{};
     for (final guild in _byGuild.values) {
       for (final state in guild.values) {
@@ -114,7 +135,10 @@ final class DiscordVoiceStateRoster {
   }
 
   /// Forgets a guild's seats, as a replayed `READY` requires.
-  void clearGuild(String guildId) => _byGuild.remove(guildId);
+  void clearGuild(String guildId) {
+    _byGuild.remove(guildId);
+    _seatedByChannel = null;
+  }
 
   List<VoiceParticipantStateEvent> _apply(
     List<Map<String, Object?>> states,

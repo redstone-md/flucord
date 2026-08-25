@@ -57,8 +57,11 @@ final class VoiceChannelSurfaces {
     return true;
   }
 
-  void retainAll(Iterable<String> channelIds) {
-    final retained = channelIds.toSet();
-    _surfaces.removeWhere((channelId, _) => !retained.contains(channelId));
-  }
+  /// Drops the surfaces of channels [isKnown] no longer recognises.
+  ///
+  /// Asked per held surface, of which there are a handful, rather than by
+  /// collecting every channel id in the workspace into a set to compare
+  /// against — that set was rebuilt on every gateway event.
+  void retainWhere(bool Function(String channelId) isKnown) =>
+      _surfaces.removeWhere((channelId, _) => !isKnown(channelId));
 }

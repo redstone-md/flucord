@@ -24,7 +24,7 @@ void main() {
         ..select('forge-voice', VoiceChannelSurface.chat)
         ..select('night-radio', VoiceChannelSurface.chat);
 
-      surfaces.retainAll(const ['forge-voice', 'forge-general']);
+      surfaces.retainWhere(const ['forge-voice', 'forge-general'].contains);
 
       expect(surfaces.of('forge-voice'), VoiceChannelSurface.chat);
       expect(surfaces.of('night-radio'), VoiceChannelSurface.room);
@@ -155,17 +155,17 @@ void main() {
 
     test('a text channel always shows its timeline', () {
       expect(
-        showsMessageTimeline(channel(ChannelKind.text), VoiceChannelSurface.room),
+        showsMessageTimeline(
+          channel(ChannelKind.text),
+          VoiceChannelSurface.room,
+        ),
         isTrue,
       );
     });
 
     test('a voice channel shows its timeline only on the chat surface', () {
       final voice = channel(ChannelKind.voice);
-      expect(
-        showsMessageTimeline(voice, VoiceChannelSurface.room),
-        isFalse,
-      );
+      expect(showsMessageTimeline(voice, VoiceChannelSurface.room), isFalse);
       expect(showsMessageTimeline(voice, VoiceChannelSurface.chat), isTrue);
     });
 
