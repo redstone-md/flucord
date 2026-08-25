@@ -85,35 +85,58 @@ final class ChatWorkspace {
 
   /// Lookup tables over the lists above.
   ///
-  /// The workspace never changes after construction, so each table is built on
-  /// first use and then answers every later lookup in constant time. Scanning
-  /// the lists instead costs a full pass per lookup, which an account with a
-  /// couple of hundred spaces pays thousands of times per frame.
-  late final Map<String, CommunitySpace> _spaceById = {
-    for (final space in spaces) space.id: space,
-  };
-  late final Map<String, ConversationChannel> _channelById = {
-    for (final channel in channels) channel.id: channel,
-  };
-  late final Map<String, Member> _memberById = {
-    for (final member in members) member.id: member,
-  };
-  late final Map<String, CommunityRole> _roleById = {
-    for (final role in roles) role.id: role,
-  };
-  late final Map<String, ChannelCategory> _categoryById = {
-    for (final category in categories) category.id: category,
-  };
-  late final Map<String, List<ConversationChannel>> _channelsBySpaceId =
-      _groupBy(channels, (channel) => channel.spaceId);
-  late final Map<String, List<ChatMessage>> _messagesByChannelId = _groupBy(
-    messages,
-    (message) => message.channelId,
-  );
-  late final Map<String, List<ChannelCategory>> _categoriesBySpaceId = _groupBy(
-    categories,
-    (category) => category.spaceId,
-  );
+  /// Scanning a list per lookup costs a full pass, which an account with a
+  /// couple of hundred spaces pays thousands of times per frame, so each table
+  /// is built on first use and answers every later lookup in constant time.
+  ///
+  /// Each table is remembered against the list it was built from, not against
+  /// the workspace, so workspaces that share a list share its table. That is
+  /// the usual case: a change rebuilds the workspace but leaves the lists it
+  /// did not touch as they were, and a presence arriving from one of a couple
+  /// of hundred spaces leaves every channel, category and message where it was.
+  static final _spaceTables = Expando<Map<String, CommunitySpace>>();
+  static final _channelTables = Expando<Map<String, ConversationChannel>>();
+  static final _memberTables = Expando<Map<String, Member>>();
+  static final _roleTables = Expando<Map<String, CommunityRole>>();
+  static final _categoryTables = Expando<Map<String, ChannelCategory>>();
+  static final _channelsBySpaceTables =
+      Expando<Map<String, List<ConversationChannel>>>();
+  static final _messagesByChannelTables =
+      Expando<Map<String, List<ChatMessage>>>();
+  static final _categoriesBySpaceTables =
+      Expando<Map<String, List<ChannelCategory>>>();
+
+  Map<String, CommunitySpace> get _spaceById =>
+      _spaceTables[spaces] ??= _byId(spaces, (space) => space.id);
+  Map<String, ConversationChannel> get _channelById =>
+      _channelTables[channels] ??= _byId(channels, (channel) => channel.id);
+  Map<String, Member> get _memberById =>
+      _memberTables[members] ??= _byId(members, (member) => member.id);
+  Map<String, CommunityRole> get _roleById =>
+      _roleTables[roles] ??= _byId(roles, (role) => role.id);
+  Map<String, ChannelCategory> get _categoryById =>
+      _categoryTables[categories] ??= _byId(
+        categories,
+        (category) => category.id,
+      );
+  Map<String, List<ConversationChannel>> get _channelsBySpaceId =>
+      _channelsBySpaceTables[channels] ??= _groupBy(
+        channels,
+        (channel) => channel.spaceId,
+      );
+  Map<String, List<ChatMessage>> get _messagesByChannelId =>
+      _messagesByChannelTables[messages] ??= _groupBy(
+        messages,
+        (message) => message.channelId,
+      );
+  Map<String, List<ChannelCategory>> get _categoriesBySpaceId =>
+      _categoriesBySpaceTables[categories] ??= _groupBy(
+        categories,
+        (category) => category.spaceId,
+      );
+
+  static Map<String, T> _byId<T>(List<T> items, String Function(T item) idOf) =>
+      {for (final item in items) idOf(item): item};
 
   static Map<String, List<T>> _groupBy<T>(
     List<T> items,
