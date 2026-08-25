@@ -9,7 +9,6 @@ import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
-import 'anchored_scroll_controller.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
 import 'reaction_details_dialog.dart';
@@ -93,54 +92,43 @@ class MessageList extends StatefulWidget {
 }
 
 class _MessageListState extends State<MessageList> {
-  final AnchoredScrollController _scrollController = AnchoredScrollController();
+  final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _messageKeys = {};
-  bool _readyForHistoryPaging = false;
+
+  /// The sliver the viewport is built around. What sits above it is laid out
+  /// upward from it and what sits below downward, so adding history at either
+  /// end leaves everything on screen where it was.
+  final GlobalKey _centreKey = GlobalKey(debugLabel: 'message-centre');
+
+  /// A message this list was asked to jump to from inside itself, such as a
+  /// system message pointing at the message it talks about.
+  String? _pinnedMessageId;
   bool _didReachUnread = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
-    _scheduleInitialPosition();
   }
 
   @override
   void didUpdateWidget(covariant MessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final previousMessages = _visibleMessagesFor(oldWidget);
-    final messages = _visibleMessages;
-    final channelChanged = oldWidget.channel.id != widget.channel.id;
-    final unreadChanged =
-        oldWidget.channel.firstUnreadMessageId !=
-        widget.channel.firstUnreadMessageId;
-    final targetChanged = oldWidget.targetMessageId != widget.targetMessageId;
-    final previousFirstId = previousMessages.isEmpty
-        ? null
-        : previousMessages.first.id;
-    final prepended =
-        !channelChanged &&
-        previousFirstId != null &&
-        messages.length > previousMessages.length &&
-        messages.first.id != previousFirstId &&
-        messages.any((message) => message.id == previousFirstId);
-    final anchor = prepended ? _captureVisibleAnchor(previousMessages) : null;
-    if (channelChanged) {
+    if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
-      _readyForHistoryPaging = false;
+      _pinnedMessageId = null;
       _didReachUnread = false;
-      _scheduleInitialPosition();
-    } else if (targetChanged && _targetMessageId != null) {
-      _scrollToMessage(_targetMessageId!, animate: false);
-    } else if (unreadChanged && _unreadMessageId != null) {
-      _didReachUnread = false;
-      _scrollToUnread(animate: false);
-    } else if (anchor != null && _scrollController.hasClients) {
-      _preserveScrollAfterPrepend(anchor, remainingPasses: 3);
-    } else if (messages.length > previousMessages.length) {
-      _scrollToEnd(jump: false);
+      return;
     }
-    if (unreadChanged && _unreadMessageId == null) _didReachUnread = false;
+    if (oldWidget.channel.firstUnreadMessageId !=
+        widget.channel.firstUnreadMessageId) {
+      _didReachUnread = false;
+    }
+    if (oldWidget.targetMessageId != widget.targetMessageId &&
+        widget.targetMessageId != null) {
+      _pinnedMessageId = null;
+      _returnToCentre();
+    }
   }
 
   @override
@@ -157,6 +145,10 @@ class _MessageListState extends State<MessageList> {
 
   String? get _targetMessageId =>
       widget.query.trim().isEmpty ? widget.targetMessageId : null;
+
+  /// The message the viewport is built around, or null to sit at the newest.
+  String? get _anchorMessageId =>
+      _pinnedMessageId ?? _targetMessageId ?? _unreadMessageId;
 
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
@@ -178,158 +170,36 @@ class _MessageListState extends State<MessageList> {
         .toList(growable: false);
   }
 
-  void _scrollToEnd({required bool jump}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final target = _scrollController.position.maxScrollExtent;
-      if (jump) {
-        _scrollController.jumpTo(target);
-      } else {
-        _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        );
-      }
-      _readyForHistoryPaging = true;
-    });
-  }
-
-  void _scheduleInitialPosition() {
-    if (_targetMessageId case final String targetMessageId) {
-      _scrollToMessage(targetMessageId, animate: false);
-      return;
-    }
-    if (_unreadMessageId == null) {
-      _scrollToEnd(jump: true);
-      return;
-    }
-    _scrollToUnread(animate: false);
-  }
-
-  void _scrollToUnread({required bool animate, int attempt = 0}) {
-    final messageId = _unreadMessageId;
-    if (messageId == null) return;
-    _scrollToMessage(
-      messageId,
-      animate: animate,
-      attempt: attempt,
-      marksUnread: true,
-    );
-  }
-
-  void _scrollToMessage(
-    String messageId, {
-    required bool animate,
-    int attempt = 0,
-    bool marksUnread = false,
-  }) {
+  /// Puts the viewport back on the message it is built around.
+  ///
+  /// Only a deliberate jump calls this. Arriving messages and loaded history
+  /// never move the viewport, because they land on the far side of the centre.
+  void _returnToCentre() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      final messages = _visibleMessages;
-      final index = messages.indexWhere((message) => message.id == messageId);
-      if (index < 0) return;
-      final key = _messageKeys.putIfAbsent(
-        messageId,
-        () => GlobalKey(debugLabel: 'message-anchor-$messageId'),
-      );
-      final targetContext = key.currentContext;
-      if (targetContext != null) {
-        Scrollable.ensureVisible(
-          targetContext,
-          alignment: 0.16,
-          duration: animate ? const Duration(milliseconds: 180) : Duration.zero,
-          curve: Curves.easeOut,
-        );
-        if (marksUnread && !_didReachUnread) {
-          setState(() => _didReachUnread = true);
-        }
-        return;
-      }
-      final position = _scrollController.position;
-      final fraction = (index + 1) / (messages.length + 1);
-      final estimate = (position.maxScrollExtent * fraction).clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
-      );
-      if (animate) {
-        _scrollController.animateTo(
-          estimate,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scrollController.jumpTo(estimate);
-      }
-      if (attempt < 4) {
-        _scrollToMessage(
-          messageId,
-          animate: animate,
-          attempt: attempt + 1,
-          marksUnread: marksUnread,
-        );
-      }
+      _scrollController.jumpTo(0);
     });
   }
 
-  ({GlobalKey key, double top})? _captureVisibleAnchor(
-    List<ChatMessage> messages,
-  ) {
-    final viewport = _scrollController.position.context.notificationContext
-        ?.findRenderObject();
-    if (viewport is! RenderBox || !viewport.hasSize) return null;
-    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
-    final viewportBottom = viewportTop + viewport.size.height;
-    ({GlobalKey key, double top})? partial;
-    for (final message in messages) {
-      final key = _messageKeys[message.id];
-      final renderObject = key?.currentContext?.findRenderObject();
-      if (key == null || renderObject is! RenderBox || !renderObject.hasSize) {
-        continue;
-      }
-      final top = renderObject.localToGlobal(Offset.zero).dy;
-      final bottom = top + renderObject.size.height;
-      if (bottom <= viewportTop || top >= viewportBottom) continue;
-      final candidate = (key: key, top: top);
-      if (top >= viewportTop) return candidate;
-      partial ??= candidate;
-    }
-    return partial;
-  }
-
-  void _preserveScrollAfterPrepend(
-    ({GlobalKey key, double top}) anchor, {
-    required int remainingPasses,
-  }) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final renderObject = anchor.key.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.hasSize) return;
-      final displacement =
-          renderObject.localToGlobal(Offset.zero).dy - anchor.top;
-      _scrollController.shiftBy(displacement);
-      if (remainingPasses > 1 && displacement.abs() > 0.5) {
-        _preserveScrollAfterPrepend(
-          anchor,
-          remainingPasses: remainingPasses - 1,
-        );
-        WidgetsBinding.instance.scheduleFrame();
-      }
-    });
+  void _jumpToMessage(String messageId) {
+    setState(() => _pinnedMessageId = messageId);
+    _returnToCentre();
   }
 
   void _handleScroll() {
     if (!_didReachUnread && _isUnreadBoundaryVisible()) {
       setState(() => _didReachUnread = true);
     }
-    if (!_readyForHistoryPaging ||
-        !_scrollController.hasClients ||
-        _scrollController.offset > 160 ||
+    if (!_scrollController.hasClients ||
         !widget.canLoadOlder ||
         widget.isLoadingOlder ||
         widget.olderLoadError != null) {
       return;
     }
+    // Older history sits above the centre, at offsets below zero, so the top
+    // of the conversation is the minimum extent rather than offset zero.
+    final position = _scrollController.position;
+    if (position.pixels > position.minScrollExtent + 160) return;
     widget.onLoadOlder();
   }
 
@@ -353,108 +223,147 @@ class _MessageListState extends State<MessageList> {
     if (messages.isEmpty) {
       return _MessageEmptyState(hasQuery: widget.query.trim().isNotEmpty);
     }
+    final anchorId = _anchorMessageId;
+    final anchorIndex = anchorId == null
+        ? -1
+        : messages.indexWhere((message) => message.id == anchorId);
+    // With no message to sit on, the centre goes past the newest message and
+    // is pinned to the bottom edge, which is how a channel opens at its end.
+    final centreIndex = anchorIndex < 0 ? messages.length : anchorIndex;
+    final atEnd = centreIndex == messages.length;
     return Stack(
       children: [
         Positioned.fill(
-          child: ListView.builder(
+          child: CustomScrollView(
             key: ValueKey('messages-${widget.channel.id}'),
             controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(0, 18, 0, 22),
-            itemCount: messages.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                if (!widget.canLoadOlder &&
-                    !widget.isLoadingOlder &&
-                    widget.olderLoadError == null) {
-                  return _ChannelStart(channel: widget.channel);
-                }
-                return _HistoryBoundary(
-                  isLoading: widget.isLoadingOlder,
-                  error: widget.olderLoadError,
-                  onLoad: widget.onLoadOlder,
-                );
-              }
-              final message = messages[index - 1];
-              final previous = index > 1 ? messages[index - 2] : null;
-              final startsUnread = message.id == _unreadMessageId;
-              final grouped =
-                  !startsUnread &&
-                  !message.isSystem &&
-                  message.reply == null &&
-                  previous != null &&
-                  !previous.isSystem &&
-                  previous.authorId == message.authorId &&
-                  message.sentAt.difference(previous.sentAt).inMinutes < 7;
-              return KeyedSubtree(
-                key: _messageKeys.putIfAbsent(
-                  message.id,
-                  () => GlobalKey(debugLabel: 'message-anchor-${message.id}'),
+            center: _centreKey,
+            anchor: atEnd ? 1 : _anchorAlignment,
+            slivers: [
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => index == centreIndex
+                      ? _channelHead()
+                      : _messageAt(messages, centreIndex - 1 - index),
+                  childCount: centreIndex + 1,
                 ),
-                child: ColoredBox(
-                  color: message.id == _targetMessageId
-                      ? FlucordColors.brand.withValues(alpha: 0.08)
-                      : Colors.transparent,
-                  child: Column(
-                    children: [
-                      if (startsUnread) const UnreadMessageBoundary(),
-                      if (message.isSystem)
-                        SystemMessageItem(
-                          key: ValueKey('message-${message.id}'),
-                          message: message,
-                          member: widget.workspace.memberById(message.authorId),
-                          workspace: widget.workspace,
-                          onJumpToMessage: (messageId) =>
-                              _scrollToMessage(messageId, animate: true),
-                          onSelectChannel: widget.onSelectChannel,
-                        )
-                      else
-                        MessageItem(
-                          componentController: widget.componentController,
-                          applicationCommands: widget.applicationCommands,
-                          expressionFavorites: widget.expressionFavorites,
-                          key: ValueKey('message-${message.id}'),
-                          message: message,
-                          member: widget.workspace.memberById(message.authorId),
-                          workspace: widget.workspace,
-                          capabilities: widget.capabilities,
-                          grouped: grouped,
-                          isCurrentUser:
-                              message.authorId ==
-                              widget.workspace.currentMemberId,
-                          onReply: widget.onReply,
-                          onEdit: widget.onEdit,
-                          onDelete: widget.onDelete,
-                          onToggleReaction: widget.onToggleReaction,
-                          onLoadReactionUsers: widget.onLoadReactionUsers,
-                          onAddReaction: widget.onAddReaction,
-                          onCreateThread: widget.onCreateThread,
-                          onTogglePin: widget.onTogglePin,
-                          onResolveAlert: widget.onResolveAlert,
-                          onReport: widget.onReport,
-                          onEndPoll: widget.onEndPoll,
-                          onForward: widget.onForward,
-                          onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
-                          linkLauncher: widget.externalLinkLauncher,
-                          onSelectChannel: widget.onSelectChannel,
-                          attachmentDownloadService:
-                              widget.attachmentDownloadService,
-                        ),
-                    ],
-                  ),
+              ),
+              SliverToBoxAdapter(
+                key: _centreKey,
+                child: SizedBox(height: atEnd ? 22 : 0),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _messageAt(messages, centreIndex + index),
+                  childCount: messages.length - centreIndex,
                 ),
-              );
-            },
+              ),
+              if (!atEnd) const SliverToBoxAdapter(child: SizedBox(height: 22)),
+            ],
           ),
         ),
-        if (_unreadMessageId != null && !_didReachUnread)
+        // Offered only while the boundary is somewhere else: a list built
+        // around it is already showing it.
+        if (_unreadMessageId != null &&
+            !_didReachUnread &&
+            anchorId != _unreadMessageId)
           Positioned(
             top: 10,
             right: 16,
             child: JumpToUnreadButton(
-              onPressed: () => _scrollToUnread(animate: true),
+              onPressed: () => _jumpToMessage(_unreadMessageId!),
             ),
           ),
       ],
+    );
+  }
+
+  /// Where the message the viewport is built around sits in it. Not flush
+  /// against the top edge: a little of what came before it reads as context.
+  static const double _anchorAlignment = 0.16;
+
+  /// What sits above the oldest held message: the start of the channel, or
+  /// the control that asks for more of its history.
+  Widget _channelHead() => Padding(
+    padding: const EdgeInsets.only(top: 18),
+    child:
+        !widget.canLoadOlder &&
+            !widget.isLoadingOlder &&
+            widget.olderLoadError == null
+        ? _ChannelStart(channel: widget.channel)
+        : _HistoryBoundary(
+            isLoading: widget.isLoadingOlder,
+            error: widget.olderLoadError,
+            onLoad: widget.onLoadOlder,
+          ),
+  );
+
+  Widget _messageAt(List<ChatMessage> messages, int index) {
+    final message = messages[index];
+    final previous = index > 0 ? messages[index - 1] : null;
+    final startsUnread = message.id == _unreadMessageId;
+    final grouped =
+        !startsUnread &&
+        !message.isSystem &&
+        message.reply == null &&
+        previous != null &&
+        !previous.isSystem &&
+        previous.authorId == message.authorId &&
+        message.sentAt.difference(previous.sentAt).inMinutes < 7;
+    return KeyedSubtree(
+      key: _messageKeys.putIfAbsent(
+        message.id,
+        () => GlobalKey(debugLabel: 'message-anchor-${message.id}'),
+      ),
+      child: ColoredBox(
+        color: message.id == _targetMessageId
+            ? FlucordColors.brand.withValues(alpha: 0.08)
+            : Colors.transparent,
+        child: Column(
+          children: [
+            if (startsUnread) const UnreadMessageBoundary(),
+            if (message.isSystem)
+              SystemMessageItem(
+                key: ValueKey('message-${message.id}'),
+                message: message,
+                member: widget.workspace.memberById(message.authorId),
+                workspace: widget.workspace,
+                onJumpToMessage: _jumpToMessage,
+                onSelectChannel: widget.onSelectChannel,
+              )
+            else
+              MessageItem(
+                componentController: widget.componentController,
+                applicationCommands: widget.applicationCommands,
+                expressionFavorites: widget.expressionFavorites,
+                key: ValueKey('message-${message.id}'),
+                message: message,
+                member: widget.workspace.memberById(message.authorId),
+                workspace: widget.workspace,
+                capabilities: widget.capabilities,
+                grouped: grouped,
+                isCurrentUser:
+                    message.authorId == widget.workspace.currentMemberId,
+                onReply: widget.onReply,
+                onEdit: widget.onEdit,
+                onDelete: widget.onDelete,
+                onToggleReaction: widget.onToggleReaction,
+                onLoadReactionUsers: widget.onLoadReactionUsers,
+                onAddReaction: widget.onAddReaction,
+                onCreateThread: widget.onCreateThread,
+                onTogglePin: widget.onTogglePin,
+                onResolveAlert: widget.onResolveAlert,
+                onReport: widget.onReport,
+                onEndPoll: widget.onEndPoll,
+                onForward: widget.onForward,
+                onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
+                linkLauncher: widget.externalLinkLauncher,
+                onSelectChannel: widget.onSelectChannel,
+                attachmentDownloadService: widget.attachmentDownloadService,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

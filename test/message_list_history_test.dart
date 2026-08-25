@@ -46,7 +46,7 @@ void main() {
     await tester.pumpWidget(_host(current));
     await tester.pump();
     await tester.pump();
-    await tester.drag(find.byType(ListView), const Offset(0, 500));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
     await tester.pumpAndSettle();
     final anchor = find.byKey(const ValueKey('message-m020'));
     expect(anchor, findsOneWidget);
@@ -97,6 +97,37 @@ void main() {
 
     expect(find.byKey(const ValueKey('unread-message-boundary')), findsNothing);
     expect(find.textContaining('Message 15'), findsOneWidget);
+  });
+
+  testWidgets('opens at the newest message when nothing is unread', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_host(List.generate(60, _unevenMessage)));
+    await tester.pumpAndSettle();
+
+    final newest = find.byKey(const ValueKey('message-m059'));
+    expect(newest, findsOneWidget);
+    expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+  });
+
+  testWidgets('opens on the unread message among unevenly tall ones', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm040');
+
+    await tester.pumpWidget(
+      _host(List.generate(60, _unevenMessage), channel: channel),
+    );
+    await tester.pumpAndSettle();
+
+    final unread = find.byKey(const ValueKey('message-m040'));
+    expect(unread, findsOneWidget);
+    expect(tester.getTopLeft(unread).dy, inInclusiveRange(0, 400));
   });
 
   testWidgets('positions the timeline at an explicit inbox message', (
@@ -170,6 +201,21 @@ ChatMessage _message(int index) => ChatMessage(
   channelId: 'channel-1',
   authorId: 'bot-1',
   body: 'Message $index with enough content to keep row height stable.',
+  sentAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+);
+
+/// Messages whose heights differ by an order of magnitude, which is what a
+/// real channel looks like and what a position estimate cannot survive.
+ChatMessage _unevenMessage(int index) => ChatMessage(
+  id: 'm${index.toString().padLeft(3, '0')}',
+  channelId: 'channel-1',
+  authorId: 'bot-1',
+  body: index.isEven
+      ? 'ok'
+      : List.filled(
+          index % 7 + 1,
+          'A long paragraph of content that wraps across several lines.',
+        ).join(String.fromCharCode(10)),
   sentAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
 );
 
