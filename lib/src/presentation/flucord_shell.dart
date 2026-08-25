@@ -25,9 +25,11 @@ import '../domain/discord_permissions.dart';
 import '../domain/external_link_launcher.dart';
 import '../domain/message_search.dart';
 import '../domain/moderation_report.dart';
+import '../domain/workspace_activity.dart';
 import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
 import 'conversation_pane.dart';
+import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/discord_desktop_login_scope.dart';
@@ -146,6 +148,12 @@ class FlucordShell extends StatelessWidget {
             // and they must not answer differently.
             final permissions = WorkspacePermissions(workspace);
             final channels = permissions.visibleChannelsFor(spaceId);
+            // Rolled up here rather than inside the rail so it can be compared
+            // against the last frame's, which is what decides whether the rail
+            // is redrawn at all.
+            final activityBySpaceId = workspace.activityBySpace(
+              readState: chatController.readState,
+            );
             // Computed once per frame alongside the channel filter, from the
             // same resolver: the settings door and the buttons inside it must
             // not answer differently about the same account.
@@ -207,23 +215,32 @@ class FlucordShell extends StatelessWidget {
                         );
                     return Row(
                       children: [
-                        ServerRail(
-                          workspace: workspace,
-                          readState: chatController.readState,
-                          selectedSpaceId: spaceId,
-                          onSelectSpace: (id) {
-                            workspaceController.selectSpace(workspace, id);
-                            final selected =
-                                workspaceController.selectedChannelId;
-                            if (selected != null) {
-                              chatController.openChannel(selected);
-                            }
-                          },
-                          onToggleTheme: workspaceController.toggleTheme,
-                          onOpenConnections: () => _openConnections(context),
-                          sessionMode: connectionController.mode,
-                          isDark:
-                              workspaceController.themeMode == ThemeMode.dark,
+                        // Kept across rebuilds that leave every pip where it
+                        // was, which is most of them: an arriving message moves
+                        // a space's activity only when it changes what is
+                        // waiting there. Everything the rail draws is listed
+                        // below, and it opens a space from the workspace as it
+                        // stands when pressed rather than the one it was built
+                        // with.
+                        CachedSubtree(
+                          dependencies: [
+                            workspace.spaces,
+                            activityBySpaceId,
+                            spaceId,
+                            connectionController.mode,
+                            workspaceController.themeMode,
+                          ],
+                          builder: (_) => ServerRail(
+                            spaces: workspace.spaces,
+                            activity: activityBySpaceId,
+                            selectedSpaceId: spaceId,
+                            onSelectSpace: _selectSpace,
+                            onToggleTheme: workspaceController.toggleTheme,
+                            onOpenConnections: () => _openConnections(context),
+                            sessionMode: connectionController.mode,
+                            isDark:
+                                workspaceController.themeMode == ThemeMode.dark,
+                          ),
                         ),
                         if (showChannels)
                           // Rebuilt from the voice controller: who is

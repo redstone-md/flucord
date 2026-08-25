@@ -17,6 +17,18 @@ final class SpaceActivity {
   final bool muted;
 
   bool get hasUnread => unread || mentionCount > 0;
+
+  /// Compared by value so a rolled-up map can be checked against the last one,
+  /// which is how the rail decides it has nothing to redraw.
+  @override
+  bool operator ==(Object other) =>
+      other is SpaceActivity &&
+      other.unread == unread &&
+      other.mentionCount == mentionCount &&
+      other.muted == muted;
+
+  @override
+  int get hashCode => Object.hash(unread, mentionCount, muted);
 }
 
 /// The last roll-up built for a workspace, so a rebuilt rail can reuse it.

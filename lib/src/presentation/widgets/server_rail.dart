@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
-import '../../domain/read_state.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
@@ -24,18 +23,25 @@ import 'user_settings_scope.dart';
 
 class ServerRail extends StatelessWidget {
   const ServerRail({
-    required this.workspace,
+    required this.spaces,
+    required this.activity,
     required this.selectedSpaceId,
     required this.onSelectSpace,
     required this.onToggleTheme,
     required this.onOpenConnections,
     required this.sessionMode,
     required this.isDark,
-    this.readState,
     super.key,
   });
 
-  final ChatWorkspace workspace;
+  final List<CommunitySpace> spaces;
+
+  /// What each space has waiting, already rolled up. Taken ready-made rather
+  /// than rolled up here so the rail's inputs are small enough to compare,
+  /// which is what lets the shell keep the rail across a rebuild that did not
+  /// move any pip.
+  final Map<String, SpaceActivity> activity;
+
   final String selectedSpaceId;
   final ValueChanged<String> onSelectSpace;
   final VoidCallback onToggleTheme;
@@ -43,20 +49,13 @@ class ServerRail extends StatelessWidget {
   final SessionMode sessionMode;
   final bool isDark;
 
-  /// The server's read state, when the transport has one. It decides which
-  /// channels count towards a pip and which spaces are muted.
-  final ReadStateSnapshot? readState;
-
   @override
   Widget build(BuildContext context) {
-    final directSpaces = workspace.spaces.where(
-      (space) => space.isDirectMessages,
-    );
+    final directSpaces = spaces.where((space) => space.isDirectMessages);
     final directSpace = directSpaces.isEmpty ? null : directSpaces.first;
-    final guildSpaces = workspace.spaces
+    final guildSpaces = spaces
         .where((space) => !space.isDirectMessages)
         .toList(growable: false);
-    final activityBySpaceId = workspace.activityBySpace(readState: readState);
     return Container(
       key: const ValueKey('server-rail'),
       width: 72,
@@ -71,7 +70,7 @@ class ServerRail extends StatelessWidget {
             selected: directSpace?.id == selectedSpaceId,
             activity: directSpace == null
                 ? SpaceActivity.none
-                : activityBySpaceId[directSpace.id] ?? SpaceActivity.none,
+                : activity[directSpace.id] ?? SpaceActivity.none,
             onPressed: directSpace == null
                 ? null
                 : () => onSelectSpace(directSpace.id),
@@ -90,7 +89,7 @@ class ServerRail extends StatelessWidget {
                 return _SpaceButton(
                   space: space,
                   selected: space.id == selectedSpaceId,
-                  activity: activityBySpaceId[space.id] ?? SpaceActivity.none,
+                  activity: activity[space.id] ?? SpaceActivity.none,
                   onPressed: () => onSelectSpace(space.id),
                 );
               },

@@ -355,6 +355,19 @@ extension _FlucordShellNavigation on FlucordShell {
     unawaited(chatController.openChannel(channelId));
   }
 
+  /// Opens [spaceId], landing on whichever channel it offers.
+  ///
+  /// The workspace is read from the controller rather than captured, because
+  /// the rail that calls this is kept across rebuilds and may have been built
+  /// against an older one.
+  void _selectSpace(String spaceId) {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
+    workspaceController.selectSpace(workspace, spaceId);
+    final selected = workspaceController.selectedChannelId;
+    if (selected != null) unawaited(chatController.openChannel(selected));
+  }
+
   void _openDestination({
     required String spaceId,
     String? channelId,

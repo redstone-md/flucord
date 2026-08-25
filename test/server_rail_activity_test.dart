@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/workspace_activity.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -16,7 +17,8 @@ void main() {
         theme: FlucordTheme.dark,
         home: Scaffold(
           body: ServerRail(
-            workspace: _workspace,
+            spaces: _workspace.spaces,
+            activity: _workspace.activityBySpace(),
             selectedSpaceId: CommunitySpace.directMessagesId,
             onSelectSpace: (value) => selectedSpace = value,
             onToggleTheme: () {},
@@ -80,25 +82,27 @@ void main() {
         theme: FlucordTheme.dark,
         home: Scaffold(
           body: ServerRail(
-            workspace: _workspace,
+            spaces: _workspace.spaces,
+            activity: _workspace.activityBySpace(
+              readState: ReadStateSnapshot(
+                settings: {
+                  'guild-2': GuildNotificationSettings(
+                    spaceId: 'guild-2',
+                    muted: true,
+                  ),
+                  'guild-1': GuildNotificationSettings(
+                    spaceId: 'guild-1',
+                    muted: true,
+                  ),
+                },
+              ),
+            ),
             selectedSpaceId: CommunitySpace.directMessagesId,
             onSelectSpace: (_) {},
             onToggleTheme: () {},
             onOpenConnections: () {},
             sessionMode: SessionMode.discord,
             isDark: true,
-            readState: ReadStateSnapshot(
-              settings: {
-                'guild-2': GuildNotificationSettings(
-                  spaceId: 'guild-2',
-                  muted: true,
-                ),
-                'guild-1': GuildNotificationSettings(
-                  spaceId: 'guild-1',
-                  muted: true,
-                ),
-              },
-            ),
           ),
         ),
       ),

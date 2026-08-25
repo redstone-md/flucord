@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/workspace_activity.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/member_avatar.dart';
@@ -95,7 +96,8 @@ void main() {
           body: Row(
             children: [
               ServerRail(
-                workspace: workspace,
+                spaces: workspace.spaces,
+                activity: workspace.activityBySpace(),
                 selectedSpaceId: 'guild-1',
                 onSelectSpace: (_) {},
                 onToggleTheme: () {},
