@@ -3,6 +3,14 @@ import 'chat_models.dart';
 abstract interface class ChatCache {
   Future<ChatWorkspace?> readWorkspace();
 
+  /// The workspace without its message history and without its members.
+  ///
+  /// Read this where only the navigation is wanted: which spaces, channels,
+  /// categories and roles the account has, and what each channel has waiting.
+  /// Decoding every cached message costs seconds on an account with a long
+  /// history, and a caller that only looks up a channel never touches one.
+  Future<ChatWorkspace?> readWorkspaceShell();
+
   Future<void> writeWorkspace(ChatWorkspace workspace);
 
   Future<ChannelHistory> readChannelHistory(String channelId);

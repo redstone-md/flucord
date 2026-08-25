@@ -313,7 +313,10 @@ final class DiscordDesktopChatRepository
         'gateway-session',
         () => _gateway.connectAndReadWorkspace(gatewayUrl),
       );
-      final cached = await _bootstrapStage('cache-read', _cache.readWorkspace);
+      final cached = await _bootstrapStage(
+        'cache-read',
+        _cache.readWorkspaceShell,
+      );
       final workspace = await _bootstrapStage(
         'workspace-mapping',
         () async => _mapper
@@ -428,7 +431,7 @@ final class DiscordDesktopChatRepository
     required String name,
     required int autoArchiveDurationMinutes,
   }) async {
-    final workspace = await _cache.readWorkspace();
+    final workspace = await _cache.readWorkspaceShell();
     final parent = workspace?.channelOrNull(channelId);
     if (parent == null) throw StateError('Parent channel is not cached');
     final payload = await _api.createThreadFromMessage(

@@ -53,7 +53,17 @@ final class SqliteChatCache
   }
 
   @override
-  Future<ChatWorkspace?> readWorkspace() async {
+  Future<ChatWorkspace?> readWorkspace() => _readWorkspace(withHistory: true);
+
+  @override
+  Future<ChatWorkspace?> readWorkspaceShell() =>
+      _readWorkspace(withHistory: false);
+
+  /// Reads the workspace, with its members and messages when [withHistory].
+  ///
+  /// The two reads differ only in those two tables, and those two are the
+  /// expensive ones: every message row carries seven encoded fields to decode.
+  Future<ChatWorkspace?> _readWorkspace({required bool withHistory}) async {
     final metadata = await _database.query(
       'metadata',
       where: 'key = ?',
@@ -65,8 +75,12 @@ final class SqliteChatCache
     final channels = await _database.query('channels', orderBy: 'sort_index');
     final categories = await _database.query('categories', orderBy: 'position');
     final roles = await _database.query('roles', orderBy: 'position DESC');
-    final members = await _database.query('members');
-    final messages = await _database.query('messages', orderBy: 'sent_at');
+    final members = withHistory
+        ? await _database.query('members')
+        : const <Map<String, Object?>>[];
+    final messages = withHistory
+        ? await _database.query('messages', orderBy: 'sent_at')
+        : const <Map<String, Object?>>[];
     final (emojis, stickers) = await _readGuildExpressions();
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),

@@ -9,7 +9,7 @@ extension _DiscordChatRepositoryForums on DiscordChatRepository {
     required List<PendingAttachment> attachments,
     required List<String> appliedTagIds,
   }) async {
-    final workspace = await _cache.readWorkspace();
+    final workspace = await _cache.readWorkspaceShell();
     final parent = workspace?.channelOrNull(channelId);
     if (parent == null ||
         (parent.kind != ChannelKind.forum &&

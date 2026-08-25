@@ -7,7 +7,7 @@ extension _DiscordChatRepositoryThreads on DiscordChatRepository {
     required String name,
     required int autoArchiveDurationMinutes,
   }) async {
-    final workspace = await _cache.readWorkspace();
+    final workspace = await _cache.readWorkspaceShell();
     final parent = workspace?.channelOrNull(channelId);
     if (parent == null) throw StateError('Parent channel is not cached');
     final payload = await _api.createThreadFromMessage(
@@ -25,7 +25,7 @@ extension _DiscordChatRepositoryThreads on DiscordChatRepository {
     String parentChannelId, {
     DateTime? before,
   }) async {
-    final workspace = await _cache.readWorkspace();
+    final workspace = await _cache.readWorkspaceShell();
     final parent = workspace?.channelOrNull(parentChannelId);
     if (parent == null) throw StateError('Parent channel is not cached');
     final payload = await _api.getPublicArchivedThreads(
