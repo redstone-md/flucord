@@ -56,6 +56,13 @@ final class DiscordVoiceDaveController {
   int? _pendingTransitionId;
   int? _pendingProtocolVersion;
 
+  /// Whether this account's own key is waiting on an `execute_transition`.
+  bool _selfRatchetPending = false;
+
+  /// The transition a connection starts on, whose keys take effect at once
+  /// because there is no epoch before it to keep sending on.
+  static const _initTransitionId = 0;
+
   /// Brings the controller onto a negotiated session, and publishes this
   /// account's key package the moment the protocol version is known.
   ///
@@ -144,6 +151,14 @@ final class DiscordVoiceDaveController {
     }
     _pendingTransitionId = null;
     _pendingProtocolVersion = null;
+    // Where this account's own key actually changes. Everyone else's ratchet
+    // was prepared when the commit landed, because their media can arrive on
+    // either epoch in the meantime; ours may not move until the server says
+    // the room has finished the transition.
+    if (_selfRatchetPending) {
+      _selfRatchetPending = false;
+      _adoptSelfRatchet();
+    }
   }
 
   List<DiscordVoiceDaveCommand> _prepareEpoch(Map<String, Object?> data) {
@@ -185,9 +200,10 @@ final class DiscordVoiceDaveController {
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
-    if (result.status == DaveCommitStatus.applied) _applyRoster(result);
-    _pendingTransitionId = transitionId;
-    _pendingProtocolVersion = _protocolVersion;
+    // A commit this session already holds decides nothing, and answering it
+    // would acknowledge a transition that is not this one's to acknowledge.
+    if (result.status == DaveCommitStatus.ignored) return const [];
+    _prepareRatchets(transitionId);
     return [_readyCommand(transitionId)];
   }
 
@@ -201,9 +217,7 @@ final class DiscordVoiceDaveController {
     if (result.status == DaveCommitStatus.failed) {
       return _recoverFromInvalid(transitionId);
     }
-    if (result.status == DaveCommitStatus.applied) _applyRoster(result);
-    _pendingTransitionId = transitionId;
-    _pendingProtocolVersion = _protocolVersion;
+    _prepareRatchets(transitionId);
     return [_readyCommand(transitionId)];
   }
 
@@ -343,42 +357,70 @@ final class DiscordVoiceDaveController {
     );
   }
 
-  void _applyRoster(DaveCommitResult result) {
-    final roster = result.rosterUserIds.toSet();
-    if (!roster.contains(selfUserId)) {
-      // A transition that removes this account is ordinary protocol, not a
-      // failure: the usual reason is a re-add with a different key package
-      // already in flight, and the previous epoch's ratchets stay valid until
-      // `dave_protocol_execute_transition` says otherwise. Killing the
-      // connection here took a working call down the moment a stream started.
-      AppLog.warning(
-        'voice.dave',
-        'roster transition without this account, keeping the last epoch',
-      );
-      return;
-    }
+  /// Builds the ratchets for an epoch the group has just agreed on.
+  ///
+  /// Who is in the group comes from the connection's own roster — the users
+  /// `clients_connect` named — and never from the value a commit returns.
+  /// That value is a change map, not a roster: it lists only the members an
+  /// epoch added or dropped, so reading it as the membership meant a commit
+  /// that merely added a viewer looked like one that had removed this
+  /// account. The old ratchet was then kept for the whole call while the room
+  /// moved on without it, and every viewer sat on a stream that would not
+  /// decrypt.
+  ///
+  /// Everybody else's ratchet takes effect at once, since their media can
+  /// arrive on either epoch while the room finishes transitioning. This
+  /// account's own waits for `execute_transition`.
+  void _prepareRatchets(int transitionId) {
     final session = _requiredSession();
-    final encryptor = _ensureEncryptor();
-    _withRatchet(session.getKeyRatchet(selfUserId), encryptor.setKeyRatchet);
-    _hasKeyRatchet = true;
-    encryptor.setPassthrough(false);
-
-    final remoteUsers = roster.where((userId) => userId != selfUserId).toSet();
-    for (final userId in remoteUsers) {
+    for (final userId in _recognizedUsers) {
+      if (userId == selfUserId) continue;
       final decryptor = _decryptors.putIfAbsent(
         userId,
         _service.createDecryptor,
       );
-      _withRatchet(
-        session.getKeyRatchet(userId),
-        decryptor.transitionToKeyRatchet,
-      );
+      try {
+        _withRatchet(
+          session.getKeyRatchet(userId),
+          decryptor.transitionToKeyRatchet,
+        );
+      } on Object {
+        // Somebody the connection has named but the group has not added yet.
+        // Their next epoch brings a key; the rest of the room still needs one.
+        continue;
+      }
       decryptor.transitionToPassthrough(false);
     }
-    final departedUsers = _decryptors.keys
-        .where((userId) => !remoteUsers.contains(userId))
+    _forgetUnrecognizedDecryptors();
+    if (transitionId == _initTransitionId) {
+      _adoptSelfRatchet();
+      return;
+    }
+    _pendingTransitionId = transitionId;
+    _pendingProtocolVersion = _protocolVersion;
+    _selfRatchetPending = true;
+  }
+
+  /// Moves this account's own sending key onto the epoch the room agreed on.
+  void _adoptSelfRatchet() {
+    final session = _session;
+    if (session == null || _protocolVersion <= 0) return;
+    final encryptor = _ensureEncryptor();
+    try {
+      _withRatchet(session.getKeyRatchet(selfUserId), encryptor.setKeyRatchet);
+    } on Object catch (error) {
+      AppLog.warning('voice.dave', 'no key for this account yet: $error');
+      return;
+    }
+    _hasKeyRatchet = true;
+    encryptor.setPassthrough(false);
+  }
+
+  void _forgetUnrecognizedDecryptors() {
+    final departed = _decryptors.keys
+        .where((userId) => !_recognizedUserIds.contains(userId))
         .toList(growable: false);
-    for (final userId in departedUsers) {
+    for (final userId in departed) {
       _decryptors.remove(userId)?.dispose();
     }
   }
@@ -418,6 +460,7 @@ final class DiscordVoiceDaveController {
     // group again, and a client that still believed it held a ratchet would
     // encrypt to a key nobody in the room has.
     _hasKeyRatchet = false;
+    _selfRatchetPending = false;
     _encryptor?.dispose();
     _encryptor = null;
     for (final decryptor in _decryptors.values) {

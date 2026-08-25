@@ -61,7 +61,11 @@ void main() {
     // room reported as "voice ran into a problem" on every single frame.
     expect(service.encryptors.single.isPassthrough, isTrue);
 
+    // The commit agrees the epoch and the execute puts the room on it.
     controller.acceptBinary(opcode: 29, payload: [0, 42, 7, 8]);
+    expect(service.encryptors.single.isPassthrough, isTrue);
+
+    controller.acceptJson(22, {'transition_id': 42});
 
     expect(service.encryptors.single.isPassthrough, isFalse);
   });
@@ -71,6 +75,7 @@ void main() {
     final controller = _controller(service)..activate(1);
     controller.assignAudioSsrc(42);
     controller.acceptBinary(opcode: 29, payload: [0, 42, 7, 8]);
+    controller.acceptJson(22, {'transition_id': 42});
     expect(service.encryptors.single.isPassthrough, isFalse);
 
     // A failed commit rebuilds the session: this client is outside the group
@@ -115,35 +120,89 @@ void main() {
     final ready = commands.single as DiscordVoiceDaveJsonCommand;
     expect(ready.opcode, 23);
     expect(ready.data, {'transition_id': 42});
+    // The commit agrees the epoch; the server says when the room has moved
+    // onto it, and only then does this account send on the new key.
+    expect(service.encryptors, isEmpty);
+
+    controller.acceptJson(22, {'transition_id': 42});
+
     expect(service.encryptors.single.keyUserId, '100');
+    expect(service.encryptors.single.isPassthrough, isFalse);
   });
 
-  test('rotates roster ratchets and releases departed decryptors', () {
+  test('keys every user the connection named, not the commit change map', () {
     final service = _FakeDaveService();
     final controller = _controller(service)..activate(1);
     controller.assignAudioSsrc(42);
+    controller.acceptJson(11, {
+      'user_ids': ['200', '300'],
+    });
     final session = service.sessions.single;
+    // What a commit hands back is a change map — only the members this epoch
+    // added or dropped — so it names the viewer who just joined and nobody
+    // else. Membership comes from `clients_connect`.
     session.commitResult = const DaveCommitResult(
       status: DaveCommitStatus.applied,
-      rosterUserIds: ['100', '200'],
+      rosterUserIds: ['300'],
     );
 
     controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
+    controller.acceptJson(22, {'transition_id': 1});
 
-    expect(service.encryptors.single.ssrc, 42);
     expect(service.encryptors.single.keyUserId, '100');
-    expect(service.decryptors.single.keyUserId, '200');
+    expect(
+      service.decryptors.map((decryptor) => decryptor.keyUserId),
+      containsAll(<String>['200', '300']),
+    );
     expect(session.ratchets.every((ratchet) => ratchet.disposed), isTrue);
-    expect(controller.encryptAudioFrame([8, 9]), [8, 9]);
+  });
+
+  test('a commit that changed somebody else still re-keys this account', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+    controller.acceptJson(11, {
+      'user_ids': ['200'],
+    });
+    final session = service.sessions.single;
+    controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
+    controller.acceptJson(22, {'transition_id': 1});
+    final keyedOnce = session.ratchets
+        .where((ratchet) => ratchet.userId == '100')
+        .length;
+
+    // A viewer joining moves the whole room onto a new epoch, and the change
+    // map names only them. Reading that as "this account was removed" left
+    // the share encrypting on a key the room had left behind, which is a
+    // stream that loads forever for everybody watching.
+    session.commitResult = const DaveCommitResult(
+      status: DaveCommitStatus.applied,
+      rosterUserIds: ['300'],
+    );
+    controller.acceptBinary(opcode: 29, payload: [0, 2, 8]);
+    controller.acceptJson(22, {'transition_id': 2});
+
+    expect(
+      session.ratchets.where((ratchet) => ratchet.userId == '100').length,
+      keyedOnce + 1,
+    );
+    expect(service.encryptors.single.isPassthrough, isFalse);
+  });
+
+  test('a user the connection dropped loses its decryptor', () {
+    final service = _FakeDaveService();
+    final controller = _controller(service)..activate(1);
+    controller.assignAudioSsrc(42);
+    controller.acceptJson(11, {
+      'user_ids': ['200'],
+    });
+    controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
     expect(
       controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
       [6, 7],
     );
 
-    session.commitResult = const DaveCommitResult(
-      status: DaveCommitStatus.applied,
-      rosterUserIds: ['100'],
-    );
+    controller.acceptJson(13, {'user_id': '200'});
     controller.acceptBinary(opcode: 29, payload: [0, 2, 8]);
 
     expect(service.decryptors.single.disposed, isTrue);
@@ -151,40 +210,6 @@ void main() {
       () => controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
       throwsStateError,
     );
-  });
-
-  test('a roster transition without this account keeps the last epoch', () {
-    final service = _FakeDaveService();
-    final controller = _controller(service)..activate(1);
-    controller.assignAudioSsrc(42);
-    final session = service.sessions.single;
-    session.commitResult = const DaveCommitResult(
-      status: DaveCommitStatus.applied,
-      rosterUserIds: ['100', '200'],
-    );
-    controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
-    expect(service.encryptors.single.isPassthrough, isFalse);
-
-    // Removal is ordinary protocol, not a failure: a re-add with a different
-    // key package is usually already in flight, and the previous epoch's
-    // ratchets stay valid until execute_transition says otherwise.
-    session.commitResult = const DaveCommitResult(
-      status: DaveCommitStatus.applied,
-      rosterUserIds: ['200'],
-    );
-    final commands = controller.acceptBinary(opcode: 29, payload: [0, 2, 8]);
-
-    expect(commands.single, isA<DiscordVoiceDaveJsonCommand>());
-    expect(service.encryptors.single.isPassthrough, isFalse);
-
-    // And the re-add re-keys as usual once the roster names this account
-    // again.
-    session.commitResult = const DaveCommitResult(
-      status: DaveCommitStatus.applied,
-      rosterUserIds: ['100'],
-    );
-    controller.acceptBinary(opcode: 29, payload: [0, 3, 9]);
-    expect(service.encryptors.single.keyUserId, '100');
   });
 
   test('recovers from an invalid welcome with a fresh session', () {
