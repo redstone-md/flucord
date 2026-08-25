@@ -264,10 +264,7 @@ final class ChatWorkspace {
   );
 
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
-    final nextMessages = [
-      ...messages.where((existing) => existing.id != message.id),
-      message,
-    ]..sort((left, right) => left.sentAt.compareTo(right.sentAt));
+    final nextMessages = _withMessage(message);
     final nextMembers = member == null
         ? members
         : _mergeMemberInto(members, member);
@@ -278,6 +275,35 @@ final class ChatWorkspace {
       messages: nextMessages,
       members: nextMembers,
     ).recordLatestMessage(message.channelId, message.id);
+  }
+
+  /// [messages] with [message] put in its channel's timeline, replacing any
+  /// earlier copy of it.
+  ///
+  /// Only the order within a channel is ever read — every caller slices the
+  /// list by channel — so the message is placed ahead of the first message of
+  /// its own channel that was sent later, and appended when there is none.
+  /// Re-sorting the whole corpus per arriving message, which is what this
+  /// replaced, made one message on any of a couple of hundred spaces cost a
+  /// sort of every message the client had cached.
+  List<ChatMessage> _withMessage(ChatMessage message) {
+    final next = <ChatMessage>[];
+    var insertAt = -1;
+    for (final existing in messages) {
+      if (existing.id == message.id) continue;
+      if (insertAt < 0 &&
+          existing.channelId == message.channelId &&
+          existing.sentAt.isAfter(message.sentAt)) {
+        insertAt = next.length;
+      }
+      next.add(existing);
+    }
+    if (insertAt < 0) {
+      next.add(message);
+    } else {
+      next.insert(insertAt, message);
+    }
+    return next;
   }
 
   /// Records [messageId] as the newest message in [channelId].
