@@ -675,6 +675,55 @@ void main() {
       expect(client.userIdForVideoSsrc(92), isNull);
     });
 
+    test(
+      'a socket drop that will resume keeps the media plane alive',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final udp = _FakeVoiceUdpTransport();
+        final client = DiscordVoiceGatewayClient(
+          credentials: _credentials,
+          maxDaveProtocolVersion: 0,
+          socketConnector: _FakeVoiceSocketConnector(socket),
+          udpTransport: udp,
+        );
+        addTearDown(client.close);
+
+        await client.connect();
+        socket.addJson({
+          'op': 2,
+          'd': {
+            'ssrc': 42,
+            'ip': '127.0.0.1',
+            'port': 5000,
+            'modes': ['aead_aes256_gcm_rtpsize'],
+          },
+        });
+        await _flushEvents();
+        socket.addJson({
+          'op': 4,
+          'd': {
+            'mode': 'aead_aes256_gcm_rtpsize',
+            'secret_key': List<int>.generate(32, (index) => index),
+            'dave_protocol_version': 0,
+          },
+        });
+        await _flushEvents();
+
+        await socket.closeFromServer(1006);
+        await _flushEvents();
+
+        // The socket is what dropped, not the session: UDP carries the same
+        // key to the same media server, and a resume continues it. Throwing
+        // the cipher away here left a share sending nothing at all, because
+        // a RESUMED brings no second session description to build it from.
+        final frame = DiscordRtpFrame(
+          header: DiscordRtpHeader(sequence: 7, timestamp: 8, ssrc: 42),
+          payload: [1, 2, 3],
+        );
+        expect(client.sendAudioFrame(frame), greaterThan(0));
+      },
+    );
+
     test('treats close code 4017 as terminal', () async {
       final socket = _FakeVoiceWebSocket();
       final connector = _FakeVoiceSocketConnector(socket);

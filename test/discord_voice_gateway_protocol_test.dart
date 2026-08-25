@@ -124,6 +124,31 @@ void main() {
       );
     });
 
+    test('RESUMED re-announces the session the resume carried over', () {
+      final gateway = protocol()
+        ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
+        ..udpDiscovered(_discovery)
+        ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
+      final session = gateway.session;
+
+      final events = gateway
+          .accept(frame(DiscordVoiceGatewayOpcode.resumed, null))
+          .whereType<DiscordVoiceGatewayDispatch>()
+          .map((action) => action.event)
+          .toList();
+
+      // Discord sends no second session description after a resume, so the
+      // only way anything downstream learns the transport is up again is
+      // this. Without it a share holds its pictures back for good.
+      expect(
+        events.whereType<VoiceTransportReadyEvent>().single.session,
+        same(session),
+      );
+      // A viewer's decoder has a gap where the socket was down, and no
+      // keyframe is due until it asks for one.
+      expect(events.whereType<VoiceKeyframeRequestedEvent>(), hasLength(1));
+    });
+
     test('a heartbeat timeout withdraws resume: the redial identifies afresh',
         () {
       final gateway = protocol()

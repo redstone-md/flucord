@@ -733,11 +733,23 @@ final class DiscordVoiceGatewayClient
     _generation++;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    _keepaliveTimer?.cancel();
-    _keepaliveTimer = null;
-    _protocol.dropSession();
-    _mediaTransport.reset();
-    _replaceTransportCipher(null);
+    // What dropped is the socket, not the session. A resume continues the
+    // same one: the same key, the same SSRC, the same media server, over a
+    // UDP path that never went anywhere — and Discord answers a resume with
+    // RESUMED alone, never a second session description. Tearing the media
+    // plane down here left nothing to rebuild it from, and a share went on
+    // encoding into a cipher that no longer existed, reporting sixty healthy
+    // frames a second that never reached the wire.
+    //
+    // A redial that must identify afresh gets everything back, since it
+    // negotiates a new key and SSRC and the old ones would only mislead it.
+    if (!_protocol.canResume) {
+      _keepaliveTimer?.cancel();
+      _keepaliveTimer = null;
+      _protocol.dropSession();
+      _mediaTransport.reset();
+      _replaceTransportCipher(null);
+    }
     unawaited(_socketSubscription?.cancel());
     unawaited(_socket?.close());
     _emitStatus(VoiceConnectionStatus.reconnecting, error: error);

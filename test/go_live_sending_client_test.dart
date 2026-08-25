@@ -178,6 +178,31 @@ void main() {
     expect(inner.opus, hasLength(1));
   });
 
+  test('a reconnect holds the share, and RESUMED starts it again', () {
+    final inner = _FakeClient();
+    final client = GoLiveSendingClient(
+      inner: inner,
+      frames: const Stream<EncodedVideoFrame>.empty(),
+      onEncoderCommand: (_) {},
+    );
+    addTearDown(client.close);
+
+    inner.emit(const VoiceTransportReadyEvent(_session));
+    inner.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.reconnecting),
+    );
+    client.sendOpusFrame(Uint8List.fromList([1, 2, 3]));
+    expect(inner.opus, isEmpty);
+
+    // Discord answers a resume with RESUMED alone and never a second session
+    // description, so the connection re-announcing the session it kept is the
+    // only thing that lifts the hold. Without it the share stayed silent and
+    // dark for the rest of its life, while its own counters read healthy.
+    inner.emit(const VoiceTransportReadyEvent(_session));
+    client.sendOpusFrame(Uint8List.fromList([1, 2, 3]));
+    expect(inner.opus, hasLength(1));
+  });
+
   test('drains the socket so the server\'s feedback is read', () async {
     final inner = _FakeClient();
     final client = GoLiveSendingClient(

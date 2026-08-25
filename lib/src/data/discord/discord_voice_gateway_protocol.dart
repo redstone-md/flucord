@@ -277,12 +277,7 @@ final class DiscordVoiceGatewayProtocol {
       case DiscordVoiceGatewayOpcode.hello:
         if (data is Map) return _acceptHello(data.cast<String, Object?>());
       case DiscordVoiceGatewayOpcode.resumed:
-        _canResume = true;
-        return const [
-          DiscordVoiceGatewayDispatch(
-            VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
-          ),
-        ];
+        return _acceptResumed();
       case DiscordVoiceGatewayOpcode.clientVideo:
         if (data is Map) _acceptClientVideo(data.cast<String, Object?>());
       case DiscordVoiceGatewayOpcode.clientDisconnect:
@@ -556,6 +551,29 @@ final class DiscordVoiceGatewayProtocol {
       DiscordVoiceGatewayScheduleHeartbeat(
         Duration(milliseconds: rawInterval.round()),
       ),
+    ];
+  }
+
+  /// A resume that Discord accepted: the same session, continuing.
+  ///
+  /// No second session description follows one — the key, the SSRC and the
+  /// media address all carry over — so re-announcing the session here is the
+  /// only thing that tells a sender its transport is up again. Without it a
+  /// share holds every picture back from the moment the socket blinked,
+  /// while its own counters go on reporting a healthy sixty frames a second.
+  List<DiscordVoiceGatewayAction> _acceptResumed() {
+    _canResume = true;
+    final session = _session;
+    return [
+      if (session != null)
+        DiscordVoiceGatewayDispatch(VoiceTransportReadyEvent(session)),
+      const DiscordVoiceGatewayDispatch(
+        VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+      ),
+      // Whoever was watching has a gap where the socket was down, and decodes
+      // nothing until the next keyframe.
+      if (session != null)
+        const DiscordVoiceGatewayDispatch(VoiceKeyframeRequestedEvent()),
     ];
   }
 
