@@ -3,38 +3,39 @@ import 'dart:typed_data';
 
 import '../../domain/voice_audio.dart';
 import '../video/system_audio_capture.dart';
-import 'discord_rtp_packet.dart';
-import 'discord_video_stream_transport.dart';
 
-/// Puts a share's own sound on the stream connection.
+/// Turns a share's own sound into the Opus frames its connection sends.
 ///
-/// On the stream's audio SSRC rather than the voice one. A client that reused
-/// the voice uplink would play the shared application to everybody in the
-/// channel whether they opened the stream or not — and would mix it into the
-/// same stream as the person's microphone, where no viewer could turn one down
-/// without the other.
-///
-/// The SSRC is the stream's own base: Discord's own client derives the audio
-/// SSRC of a stream connection from the number the stream `READY` handed it,
-/// exactly as the voice connection does with its own.
+/// The sound goes out on the stream connection, not the voice one. A client
+/// that reused the voice uplink would play the shared application to
+/// everybody in the channel whether they opened the stream or not — and would
+/// mix it into the same stream as the person's microphone, where no viewer
+/// could turn one down without the other. Where the frames go from here is
+/// the connection's business: it encrypts for the group, numbers the packets
+/// and declares the speaking state exactly as a call does.
 final class DiscordStreamAudioSender {
   DiscordStreamAudioSender({
-    required int ssrc,
-    required VideoFrameSink sink,
     required VoiceOpusEncoder encoder,
+    required void Function(Uint8List opus) sendOpus,
     this.frameSamples = 960,
-  }) : _packetizer = DiscordAudioRtpPacketizer.secure(ssrc: ssrc),
-       _sink = sink,
-       _encoder = encoder;
+  }) : _encoder = encoder,
+       _sendOpus = sendOpus;
 
-  /// One Opus frame at 48 kHz is 960 samples — 20 ms, which is what every
-  /// Discord client sends and what the jitter buffers on the other side are
-  /// sized for.
+  /// One Opus frame at 48 kHz is 960 samples per channel — 20 ms, which is
+  /// what every Discord client sends and what the jitter buffers on the
+  /// other side are sized for.
   final int frameSamples;
 
-  final DiscordAudioRtpPacketizer _packetizer;
-  final VideoFrameSink _sink;
+  /// Stereo, as Discord sends a share's sound: the encoder was made for two
+  /// channels, and a frame of any other width is refused by it.
+  static const channels = 2;
+
+  /// The only rate the encoder takes. A loopback endpoint running at another
+  /// rate would need resampling, which this path does not do.
+  static const sampleRate = 48000;
+
   final VoiceOpusEncoder _encoder;
+  final void Function(Uint8List opus) _sendOpus;
   final List<int> _pending = [];
 
   StreamSubscription<SystemAudioChunk>? _subscription;
@@ -45,8 +46,6 @@ final class DiscordStreamAudioSender {
 
   /// Why sending stopped, or `null`.
   Object? get error => _error;
-
-  int get ssrc => _packetizer.ssrc;
 
   /// Sends every block [chunks] produces until [stop].
   void attach(Stream<SystemAudioChunk> chunks) {
@@ -65,10 +64,17 @@ final class DiscordStreamAudioSender {
   /// is refused by the encoder rather than merely sounding wrong.
   void accept(SystemAudioChunk chunk) {
     if (chunk.channels <= 0) return;
-    _pending.addAll(downmixToMono(chunk.samples, chunk.channels));
-    while (_pending.length >= frameSamples) {
-      final frame = Int16List.fromList(_pending.take(frameSamples).toList());
-      _pending.removeRange(0, frameSamples);
+    if (chunk.sampleRate != sampleRate) {
+      _error = StateError(
+        'system audio runs at ${chunk.sampleRate} Hz, not $sampleRate',
+      );
+      return;
+    }
+    _pending.addAll(toStereo(chunk.samples, chunk.channels));
+    final frameLength = frameSamples * channels;
+    while (_pending.length >= frameLength) {
+      final frame = Int16List.fromList(_pending.sublist(0, frameLength));
+      _pending.removeRange(0, frameLength);
       _send(frame);
     }
   }
@@ -77,7 +83,7 @@ final class DiscordStreamAudioSender {
     try {
       final opus = _encoder.encode(pcm);
       if (opus.isEmpty) return;
-      _sink(_packetizer.packetize(opus));
+      _sendOpus(opus);
       _sentPackets++;
     } on Object catch (error) {
       // Reported rather than thrown: this runs from a capture callback, and

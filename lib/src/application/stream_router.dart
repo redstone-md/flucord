@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_stream_rtc_session.dart';
-import '../data/discord/discord_voice_gateway_protocol.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/voice_connection.dart';
 import 'go_live_controller.dart';
@@ -14,10 +13,10 @@ import 'stream_viewer_controller.dart';
 /// A connection knows whose stream it carries from the moment Discord hands
 /// out the endpoint, but only once the endpoint has answered does it have an
 /// SSRC (the source id Discord routes a sender's packets by) to send with, so
-/// the fork waits for ready. Our own stream is declared
-/// and pointed at the encoder; anybody else's is handed to the viewer. This
-/// used to live in a widget callback, where the riskiest wiring in the stream
-/// plane had no coverage at all.
+/// the fork waits for ready. Our own stream is declared, and its connection
+/// sends the encoder's pictures from then on by itself; anybody else's is
+/// handed to the viewer. This used to live in a widget callback, where the
+/// riskiest wiring in the stream plane had no coverage at all.
 final class StreamRouter {
   StreamRouter({
     required Stream<DiscordStreamRtcSession> opened,
@@ -60,18 +59,7 @@ final class StreamRouter {
     late final StreamSubscription<VoiceSignalingEvent> subscription;
     subscription = session.events.listen(
       (event) {
-        if (event is VoiceTransportReadyEvent) {
-          _route(session, event);
-          return;
-        }
-        // Only the stream this client is sending: a viewer who cannot decode
-        // asks for a keyframe, and the capture is where one is made; the
-        // packets they did not get, and how many they lose, go to the sender.
-        if (session.key != _goLive.streamKey) return;
-        if (event is VoiceKeyframeRequestedEvent) {
-          unawaited(_capture.requestKeyframe());
-        }
-        _goLive.acceptFeedback(event);
+        if (event is VoiceTransportReadyEvent) _route(session);
       },
       // The session closes its events with itself; the entry must not outlive
       // the connection it was keyed by.
@@ -80,35 +68,16 @@ final class StreamRouter {
     _waiting[session] = subscription;
   }
 
-  void _route(DiscordStreamRtcSession session, VoiceTransportReadyEvent event) {
+  void _route(DiscordStreamRtcSession session) {
     if (session.key == _goLive.streamKey) {
       // Declared before the first packet, with what the capture is actually
       // running at: a packet whose SSRC was never announced is dropped on
       // Discord's side, and a share declared at numbers of this caller's own
-      // inventing is a share nobody can decode.
+      // inventing is a share nobody can decode. The connection, opened by the
+      // media plane, starts sending on the announce.
       session.announceVideo(
         enabled: true,
         settings: _capture.settings ?? _capture.shareSettings,
-      );
-      // One above the SSRC the connection was given: that is the one the
-      // announce declared the pictures would arrive on, and a frame sent on
-      // any other is a frame Discord drops — a stream that opens, says it is
-      // live, and shows a viewer nothing at all.
-      final videoSsrc = DiscordVoiceGatewayProtocol.videoSsrcFor(
-        event.session.ssrc,
-      );
-      _goLive.bindTransport(
-        ssrc: videoSsrc,
-        // And one above that for retransmissions, as the announce declared.
-        rtxSsrc: DiscordVoiceGatewayProtocol.rtxSsrcFor(event.session.ssrc),
-        sink: session.sendVideoFrame,
-        // Group encryption belongs to the whole picture, so the transport
-        // runs it before the picture becomes RTP packets.
-        groupEncryptor: (frame) =>
-            session.encryptVideoGroupFrame(ssrc: videoSsrc, frame: frame),
-        // A quality change mid-stream declares the new shape the same way.
-        announce: (settings) =>
-            session.announceVideo(enabled: true, settings: settings),
       );
       return;
     }

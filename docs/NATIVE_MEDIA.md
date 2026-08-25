@@ -33,9 +33,30 @@ the bitrates; the bitrate slider names a 720p30 share and other shapes scale
 from it (by pixels, and by frame rate less than proportionally). A pick while
 sharing reaches the running share through `GoLiveController.applyQuality`: a
 bitrate alone changes on the running encoder, a new shape restarts the capture
-(the frames stream outlives it, so the transport stays attached), announces
-the new shape to Discord, and the transport keeps the RTP clock running
-forward across the restart.
+(the connection outlives it, so the sender stays attached), announces the new
+shape to Discord, and the transport keeps the RTP clock running forward across
+the restart.
+
+The share is sent from an isolate of its own, the way Discord runs media on a
+thread of its own. `GoLiveMediaIsolate` hosts the share's whole connection on
+a worker: the signalling socket, the DAVE group, the packetiser, the pacer,
+the transport cipher and the UDP socket, wrapped by `GoLiveSendingClient`,
+which announces the share and then sends the encoder's pictures on it by
+itself. The native encoder delivers straight to that isolate
+(`VideoFrameSinkControl`), and the main isolate keeps a proxy per connection
+that speaks the client interface the stream plane already dials. Only what
+the encoder must do crosses back: a keyframe a viewer needs, a bitrate the
+loss allows. Before this, every stage from the frame copy to the per-packet
+AES-GCM ran on the UI isolate, and a long build or a garbage collection held
+the send path for hundreds of milliseconds at a time, which reached the
+viewer as a freeze followed by a burst. The worker echoes each frame back to
+the hub, so the clip buffer keeps recording a share.
+
+The share's sound is captured from the machine's output (WASAPI loopback),
+framed into 20 ms stereo Opus on the main isolate, and handed to the share's
+connection, which sends it exactly as a call sends the microphone: encrypted
+for the group, on the connection's own audio SSRC, with the speaking state
+declared. A viewer hears the game, not the room.
 
 The capture runs on a fixed tick at the configured frame rate (any rate: the
 tick is one over it): sleep until the tick on a high-resolution timer, take
@@ -60,8 +81,8 @@ a fifth of the target); a change goes to the running encoder
 An encoder that refuses to change rate is logged once and keeps its rate; the
 pacer follows regardless. The pace log then reads `bitrate 1800k` while
 adapted, and always `gap <ms>` (the longest wait between two pictures reaching
-the transport: a stall in the encoder or in this isolate) and `queue <n>` (the
-deepest the pacing queue got).
+the sender: a stall in the encoder or in the media isolate) and `queue <n>`
+(the deepest the pacing queue got).
 
 Inline message video uses `media_kit` with the packaged Windows native video
 libraries and a Flutter texture. Discord CDN URLs are opened as issued, without

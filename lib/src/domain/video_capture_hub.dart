@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'stream_quality.dart';
 import 'video_encoder.dart';
 
@@ -10,7 +12,9 @@ import 'video_encoder.dart';
 /// is the whole arbitration, and it is what makes a double capture impossible
 /// to construct: there is no path to a second native handle.
 final class VideoCaptureHub {
-  VideoCaptureHub({required VideoEncoderService encoder}) : _encoder = encoder;
+  VideoCaptureHub({required VideoEncoderService encoder}) : _encoder = encoder {
+    _encoder.frames.listen(_frames.add, onError: _frames.addError);
+  }
 
   /// The bitrates the next share or camera starts at.
   ///
@@ -49,8 +53,16 @@ final class VideoCaptureHub {
   /// The cameras attached, by name, in the order the platform lists them.
   List<String> get cameraNames => _encoder.cameraNames;
 
-  /// Encoded frames, from whichever capture is running.
-  Stream<EncodedVideoFrame> get frames => _encoder.frames;
+  final StreamController<EncodedVideoFrame> _frames =
+      StreamController.broadcast();
+
+  /// Encoded frames, from whichever capture is running: the encoder's own,
+  /// or the ones a share's isolate echoes back through [relay].
+  Stream<EncodedVideoFrame> get frames => _frames.stream;
+
+  /// A frame the encoder delivered elsewhere, echoed for whoever listens
+  /// here (the clip buffer keeps recording a share this way).
+  void relay(EncodedVideoFrame frame) => _frames.add(frame);
 
   /// The native pipeline's own account of itself, for the pace log.
   VideoEncoderDiagnostics? get diagnostics => _encoder.diagnostics;
@@ -75,14 +87,23 @@ final class VideoCaptureHub {
   VideoEncoderSettings? get settings => _settings;
 
   /// Starts capturing a display, answering the settings it runs at.
-  Future<VideoEncoderSettings> startShare({int displayIndex = 0}) =>
-      _start(shareSettings.onSource(displayIndex));
+  ///
+  /// With [nativeFrameSink], the encoder delivers straight to that listener
+  /// (the share's isolate) and [frames] carries only what comes back through
+  /// [relay]; without it, frames arrive here as they always did.
+  Future<VideoEncoderSettings> startShare({
+    int displayIndex = 0,
+    int? nativeFrameSink,
+  }) => _start(shareSettings.onSource(displayIndex), nativeFrameSink);
 
   /// Starts capturing a camera, answering the settings it runs at.
   Future<VideoEncoderSettings> startCamera({int cameraIndex = 0}) =>
-      _start(cameraSettings.onSource(cameraIndex));
+      _start(cameraSettings.onSource(cameraIndex), null);
 
-  Future<VideoEncoderSettings> _start(VideoEncoderSettings settings) async {
+  Future<VideoEncoderSettings> _start(
+    VideoEncoderSettings settings,
+    int? nativeFrameSink,
+  ) async {
     if (_running) {
       throw const VideoEncoderException(VideoEncoderFailure.state);
     }
@@ -91,6 +112,10 @@ final class VideoCaptureHub {
     // after the await is only a hope. The claim and the check are one
     // synchronous step, which is what makes the refusal a construction.
     _running = true;
+    final Object encoder = _encoder;
+    if (encoder is VideoFrameSinkControl) {
+      encoder.nativeFrameSink = nativeFrameSink;
+    }
     try {
       await _encoder.start(settings);
     } on Object {

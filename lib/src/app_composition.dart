@@ -58,6 +58,9 @@ import 'application/voice_controller.dart';
 import 'application/voice_overlay_controller.dart';
 import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
+import 'data/discord/go_live_media_isolate.dart';
+import 'data/discord/go_live_media_plane.dart';
+import 'data/video/system_audio_capture.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/disconnected_chat_repository.dart';
@@ -161,6 +164,7 @@ final class AppComposition {
   late final SelfPresenceController selfPresence;
   late final VideoCaptureHub videoCapture;
   late final StreamQualityController streamQuality;
+  late final GoLiveMediaIsolate goLiveMedia;
   late final GoLiveController goLive;
   late final StreamViewerController streamViewer;
   late final DiscordStreamRtcService streamRtc;
@@ -342,10 +346,19 @@ final class AppComposition {
       ),
     );
     unawaited(streamQuality.load());
+    // The share is sent from an isolate of its own, so that nothing the UI
+    // does on this one can hold a picture back.
+    goLiveMedia = GoLiveMediaIsolate();
+    _teardown.add(() => unawaited(goLiveMedia.dispose()));
     goLive = _register(
       GoLiveController(
         repositoryProvider: () => chat.goLive,
         capture: videoCapture,
+        media: goLiveMedia,
+        systemAudio: Platform.isWindows
+            ? WindowsSystemAudioCapture()
+            : const UnavailableSystemAudioCapture(),
+        opusCodecFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
     // A quality picked while sharing reaches the running share: the
@@ -371,8 +384,12 @@ final class AppComposition {
       identityProvider: () => liveVoiceSignaling?.streamIdentity,
       // The stream plane dials through the same factory the call does, so
       // the two agree about DAVE without this module knowing a version
-      // number.
-      socketFactoryProvider: () => liveVoiceSignaling?.socketFactory,
+      // number; this account's own share is dialled by the media plane.
+      socketFactoryProvider: () {
+        final factory = liveVoiceSignaling?.socketFactory;
+        if (factory == null) return null;
+        return GoLiveMediaSocketFactory(inner: factory, plane: goLiveMedia);
+      },
     );
     _teardown.add(() => unawaited(streamRtc.close()));
     // Where a ready stream connection goes. The fork between this account's

@@ -71,7 +71,8 @@ typedef _AudioCallback =
 
 /// WASAPI loopback through `flucord_audio.dll`.
 final class WindowsSystemAudioCapture implements SystemAudioCapture {
-  WindowsSystemAudioCapture() : this.withLibrary(Platform.isWindows ? _open() : null);
+  WindowsSystemAudioCapture()
+    : this.withLibrary(Platform.isWindows ? _open() : null);
 
   /// The module handed in rather than opened, so a test can state that it is
   /// genuinely absent.
@@ -119,11 +120,9 @@ final class WindowsSystemAudioCapture implements SystemAudioCapture {
               Pointer<Void>,
               Pointer<Pointer<Void>>,
             )
-          >('flucord_audio_open_loopback')(
-        callback.nativeFunction,
-        nullptr,
-        out,
-      );
+          >(
+            'flucord_audio_open_loopback',
+          )(callback.nativeFunction, nullptr, out);
       if (status != 0) {
         callback.close();
         return false;
@@ -163,9 +162,7 @@ final class WindowsSystemAudioCapture implements SystemAudioCapture {
       SystemAudioChunk(
         // Copied: the buffer belongs to the endpoint and is released the
         // moment the callback returns.
-        samples: Int16List.fromList(
-          frames.asTypedList(frameCount * channels),
-        ),
+        samples: Int16List.fromList(frames.asTypedList(frameCount * channels)),
         channels: channels,
         sampleRate: sampleRate,
       ),
@@ -178,20 +175,18 @@ final class WindowsSystemAudioCapture implements SystemAudioCapture {
   }
 }
 
-/// Mixes interleaved PCM down to one channel.
+/// Interleaved PCM as two channels.
 ///
-/// Opus is sent mono on this path, and averaging rather than taking the left
-/// channel keeps anything panned hard right from vanishing.
-Int16List downmixToMono(Int16List samples, int channels) {
-  if (channels <= 1) return samples;
+/// A share's sound is sent stereo, as Discord sends it: a mono endpoint is
+/// doubled, and anything wider keeps its first two channels, which are the
+/// front pair on every layout Windows names.
+Int16List toStereo(Int16List samples, int channels) {
+  if (channels == 2) return samples;
   final frames = samples.length ~/ channels;
-  final mono = Int16List(frames);
+  final stereo = Int16List(frames * 2);
   for (var frame = 0; frame < frames; frame++) {
-    var sum = 0;
-    for (var channel = 0; channel < channels; channel++) {
-      sum += samples[frame * channels + channel];
-    }
-    mono[frame] = (sum / channels).round();
+    stereo[frame * 2] = samples[frame * channels];
+    stereo[frame * 2 + 1] = samples[frame * channels + (channels > 1 ? 1 : 0)];
   }
-  return mono;
+  return stereo;
 }

@@ -77,6 +77,25 @@ final class AppLog {
     StackTrace? stackTrace,
   }) => _write(AppLogLevel.error, scope, message, error, stackTrace);
 
+  /// Where another isolate's records go: the file belongs to the main
+  /// isolate, so a worker hands its lines over instead of opening a second
+  /// handle on the same file.
+  static void Function(
+    AppLogLevel level,
+    String scope,
+    String message,
+    Object? error,
+  )?
+  redirect;
+
+  /// A record at [level], as the main isolate writes one on a worker's behalf.
+  static void record(
+    AppLogLevel level,
+    String scope,
+    String message, {
+    Object? error,
+  }) => _write(level, scope, message, error, null);
+
   static void _write(
     AppLogLevel level,
     String scope,
@@ -84,6 +103,11 @@ final class AppLog {
     Object? error,
     StackTrace? stackTrace,
   ) {
+    final redirect = AppLog.redirect;
+    if (redirect != null) {
+      redirect(level, scope, message, error);
+      return;
+    }
     final line = _formatRecord(DateTime.now(), level, scope, message, error);
     // Straight to stdout, not debugPrint: debugPrint throttles, and under a
     // burst of transport diagnostics the throttled-away lines were exactly

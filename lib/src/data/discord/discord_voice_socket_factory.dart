@@ -24,6 +24,9 @@ import 'discord_voice_websocket.dart';
 /// The DAVE rules follow discord/dave-protocol, Discord's reference for
 /// end-to-end encryption of voice and Go Live.
 abstract interface class DiscordVoiceSocketFactory {
+  /// The DAVE version every socket from here offers; 0 without DAVE.
+  int get maxDaveProtocolVersion;
+
   /// The socket a call runs on.
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials);
 
@@ -49,11 +52,16 @@ final class DiscordVoiceGatewaySocketFactory
   final VoiceDaveService? _daveService;
   final DiscordVoiceSocketConnector? _socketConnector;
 
+  /// What both kinds offer, from one source. A stream of a call has to say
+  /// the same thing the call did, so the two cannot drift apart here.
+  @override
+  int get maxDaveProtocolVersion => _daveService?.maxProtocolVersion ?? 0;
+
   @override
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
       DiscordVoiceGatewayClient(
         credentials: credentials,
-        maxDaveProtocolVersion: _daveVersion,
+        maxDaveProtocolVersion: maxDaveProtocolVersion,
         daveService: _daveService,
         socketConnector: _socketConnector,
       );
@@ -63,15 +71,11 @@ final class DiscordVoiceGatewaySocketFactory
     required VoiceServerCredentials credentials,
     required GoLiveStreamKey streamKey,
   }) => DiscordVoiceGatewayClient(
-        credentials: credentials,
-        maxDaveProtocolVersion: _daveVersion,
-        daveService: _daveService,
-        socketConnector: _socketConnector,
-        streamKey: streamKey.value,
-        carriesVideo: true,
-      );
-
-  /// What both kinds offer, from one source. A stream of a call has to say
-  /// the same thing the call did, so the two cannot drift apart here.
-  int get _daveVersion => _daveService?.maxProtocolVersion ?? 0;
+    credentials: credentials,
+    maxDaveProtocolVersion: maxDaveProtocolVersion,
+    daveService: _daveService,
+    socketConnector: _socketConnector,
+    streamKey: streamKey.value,
+    carriesVideo: true,
+  );
 }

@@ -35,15 +35,19 @@ void main() {
       );
     });
 
-    test('a downmix averages rather than taking the left channel', () {
-      // Anything panned hard right vanishes if only the left is taken.
+    test('any width becomes stereo: mono doubled, wider trimmed', () {
+      expect(toStereo(Int16List.fromList([1, 2, 3]), 1), [1, 1, 2, 2, 3, 3]);
+      // 5.1: the front pair stays, the rest is dropped.
       expect(
-        downmixToMono(Int16List.fromList([0, 100, -50, 50]), 2),
-        [50, 0],
+        toStereo(
+          Int16List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+          6,
+        ),
+        [1, 2, 7, 8],
       );
-      // Mono is handed straight back rather than copied.
-      final mono = Int16List.fromList([1, 2, 3]);
-      expect(identical(downmixToMono(mono, 1), mono), isTrue);
+      // Stereo is handed straight back rather than copied.
+      final stereo = Int16List.fromList([1, 2, 3, 4]);
+      expect(identical(toStereo(stereo, 2), stereo), isTrue);
     });
   });
 

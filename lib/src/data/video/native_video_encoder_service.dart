@@ -21,7 +21,11 @@ import 'native_video_bindings.dart';
 /// a `NativeCallable.listener` and the bytes are copied before the native
 /// buffer is released.
 final class NativeVideoEncoderService
-    implements VideoEncoderService, VideoBitrateControl, Finalizable {
+    implements
+        VideoEncoderService,
+        VideoBitrateControl,
+        VideoFrameSinkControl,
+        Finalizable {
   NativeVideoEncoderService({NativeVideoBindings? bindings})
     : _bindings = bindings ?? _openLibrary(),
       // After the initializer above, the resident library is open whenever
@@ -67,6 +71,10 @@ final class NativeVideoEncoderService
 
   Pointer<Void> _handle = nullptr;
   NativeCallable<NativeFrameCallback>? _callback;
+  int? _nativeFrameSink;
+
+  @override
+  set nativeFrameSink(int? address) => _nativeFrameSink = address;
 
   @override
   bool get isSupported => _bindings != null;
@@ -135,7 +143,15 @@ final class NativeVideoEncoderService
       throw const VideoEncoderException(VideoEncoderFailure.state);
     }
 
-    final callback = NativeCallable<NativeFrameCallback>.listener(_onFrame);
+    // Frames go to another isolate's listener when one was named, and to
+    // this service's own otherwise.
+    final sink = _nativeFrameSink;
+    final callback = sink == null
+        ? NativeCallable<NativeFrameCallback>.listener(_onFrame)
+        : null;
+    final target =
+        callback?.nativeFunction ??
+        Pointer<NativeFunction<NativeFrameCallback>>.fromAddress(sink!);
     final config = calloc<NativeVideoConfig>();
     final out = calloc<Pointer<Void>>();
     try {
@@ -150,9 +166,9 @@ final class NativeVideoEncoderService
       final open = settings.source == VideoCaptureSource.camera
           ? bindings.openCamera
           : bindings.open;
-      final status = open(config, callback.nativeFunction, nullptr, out);
+      final status = open(config, target, nullptr, out);
       if (status != NativeVideoStatus.ok) {
-        callback.close();
+        callback?.close();
         throw VideoEncoderException(
           _failureFor(status),
           platformCode: _bindings?.lastError?.call(),

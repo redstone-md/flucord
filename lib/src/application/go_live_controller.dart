@@ -2,58 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/discord/discord_video_stream_transport.dart';
+import '../data/discord/discord_stream_audio_sender.dart';
+import '../data/discord/go_live_media_plane.dart';
+import '../data/video/system_audio_capture.dart';
+import '../domain/go_live_media.dart';
 import '../domain/go_live_stream.dart';
-import '../domain/stream_bitrate_adapter.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
-import '../domain/voice_connection.dart';
+import '../domain/voice_audio.dart';
 import '../app_log.dart';
-
-/// What the media server reported about the picture over one pace window.
-///
-/// Kept apart from the send counters because it comes from the far end, not
-/// from this machine: loss the network caused, packets it asked back, and the
-/// keyframes a struggling viewer needed. A window with none of it prints
-/// nothing, so a clean stream's log stays about the send pace.
-final class _Feedback {
-  const _Feedback({
-    this.lossRatio = 0,
-    this.reports = 0,
-    this.nacked = 0,
-    this.pictureLosses = 0,
-  });
-
-  final double lossRatio;
-  final int reports;
-  final int nacked;
-  final int pictureLosses;
-
-  _Feedback copyWith({
-    double? lossRatio,
-    int? reports,
-    int? nacked,
-    int? pictureLosses,
-  }) => _Feedback(
-    lossRatio: lossRatio ?? this.lossRatio,
-    reports: reports ?? this.reports,
-    nacked: nacked ?? this.nacked,
-    pictureLosses: pictureLosses ?? this.pictureLosses,
-  );
-
-  /// A phrase for the pace log, given how many packets were actually resent
-  /// this window. "healthy" when the far end said nothing is wrong.
-  String describe({required int retransmitted}) {
-    if (reports == 0 && nacked == 0 && pictureLosses == 0) return 'healthy';
-    final parts = <String>[];
-    if (reports > 0) {
-      parts.add('${(lossRatio * 100).toStringAsFixed(1)}% loss');
-    }
-    if (nacked > 0) parts.add('$retransmitted/$nacked resent');
-    if (pictureLosses > 0) parts.add('$pictureLosses keyframe req');
-    return parts.join(', ');
-  }
-}
 
 /// A display this machine can share.
 ///
@@ -89,14 +46,34 @@ final class GoLiveDisplay {
 /// The stream is a second RTC connection alongside the voice one, so this is a
 /// controller of its own rather than a mode of the voice controller: ending a
 /// stream must not disturb the call it is inside.
+///
+/// The pictures are not sent from here. The media plane opens the share's
+/// connection and sends on it from wherever it runs; this controller runs
+/// the capture and the sound on the main isolate, and does for the encoder
+/// what the far end's feedback asks of it.
 final class GoLiveController extends ChangeNotifier {
   GoLiveController({
     required GoLiveRepository? Function() repositoryProvider,
     required VideoCaptureHub capture,
+
+    /// Where the share is sent from. In-process unless told otherwise, which
+    /// is what a test wants; the app hands over its media isolate.
+    GoLiveMediaPlane? media,
+    SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
+    VoiceOpusCodecFactory? opusCodecFactory,
     Duration pingInterval = const Duration(seconds: 30),
   }) : _repositoryProvider = repositoryProvider,
        _capture = capture,
-       _pingInterval = pingInterval;
+       _media = media ?? InProcessGoLiveMediaPlane(frames: capture.frames),
+       _systemAudio = systemAudio,
+       _opusCodecFactory = opusCodecFactory,
+       _pingInterval = pingInterval {
+    _mediaSubscriptions = [
+      _media.encoderCommands.listen(_applyEncoderCommand),
+      _media.paceLines.listen(_logPace),
+      _media.relayedFrames.listen(capture.relay),
+    ];
+  }
 
   final GoLiveRepository? Function() _repositoryProvider;
 
@@ -105,15 +82,22 @@ final class GoLiveController extends ChangeNotifier {
   /// the three can capture at a time.
   final VideoCaptureHub _capture;
 
+  /// Where the share is sent from.
+  final GoLiveMediaPlane _media;
+
+  /// The sound of what is being shared, and what encodes it. Without an
+  /// encoder the share is silent, which is what a build without Opus can do.
+  final SystemAudioCapture _systemAudio;
+  final VoiceOpusCodecFactory? _opusCodecFactory;
+
   final Duration _pingInterval;
 
-  DiscordVideoStreamTransport? _transport;
+  late final List<StreamSubscription<Object?>> _mediaSubscriptions;
 
   GoLiveRepository? _repository;
   StreamSubscription<GoLiveStream>? _updates;
   StreamSubscription<GoLiveServer>? _servers;
   Timer? _ping;
-  Timer? _paceLog;
   bool _bound = false;
   bool _disposed = false;
 
@@ -122,6 +106,9 @@ final class GoLiveController extends ChangeNotifier {
   GoLiveServer? _server;
   List<String> _viewerIds = const [];
   Object? _error;
+
+  DiscordStreamAudioSender? _audio;
+  VoiceOpusEncoder? _audioEncoder;
 
   bool get isSupported {
     _bind();
@@ -140,56 +127,14 @@ final class GoLiveController extends ChangeNotifier {
   /// Whether this build can send pictures at all.
   bool get canEncode => _capture.isSupported;
 
-  /// How many RTP packets the picture has taken so far, which is what tells a
-  /// caller the stream is moving rather than merely open.
-  int get sentPackets => _transport?.sentPackets ?? 0;
-
-  /// Why sending stopped, if it did.
-  Object? get transportError => _transport?.error;
-
-  /// Points the capture's output at a stream connection.
-  ///
-  /// Called once the RTC side has an SSRC and somewhere to send: the capture
-  /// runs from the moment the stream opens, but its frames go nowhere until
-  /// there is a socket to take them.
-  void bindTransport({
-    required int ssrc,
-    required int rtxSsrc,
-    required VideoFrameSink sink,
-    VideoFrameGroupEncryptor? groupEncryptor,
-    void Function(VideoEncoderSettings settings)? announce,
-  }) {
-    _transport?.stop();
-    _announce = announce;
-    _transport = DiscordVideoStreamTransport(
-      ssrc: ssrc,
-      rtxSsrc: rtxSsrc,
-      sink: sink,
-      groupEncryptor: groupEncryptor,
-      pacingBitsPerSecond: _capture.shareSettings.bitrate,
-    )..attach(_capture.frames);
-    _feedback = const _Feedback();
-    _bitrate = StreamBitrateAdapter(target: _capture.shareSettings.bitrate);
-    _bitrateRefused = false;
-    _startPaceLog();
-  }
-
-  /// The bitrate the share is running at, following the loss the far end
-  /// reports. Rebuilt with each transport, at the share's configured rate.
-  StreamBitrateAdapter? _bitrate;
-  bool _bitrateRefused = false;
-
-  /// Declares the picture's shape to Discord again, after it changed.
-  void Function(VideoEncoderSettings settings)? _announce;
-
   /// Brings a running share to what the quality setting says now.
   ///
   /// A bitrate alone changes on the running encoder. A new size or frame
   /// rate restarts the capture, because an encoder is built for one shape;
-  /// the transport stays attached (the frames stream outlives a restart),
-  /// the new shape is announced, and the timestamps carry on from where
-  /// the old encoder's stopped. Nothing to do when this controller has no
-  /// capture running: the next start reads the setting itself. A share
+  /// the connection stays up (the encoder's frames reach it across a
+  /// restart), the new shape is announced, and the timestamps carry on from
+  /// where the old encoder's stopped. Nothing to do when this controller has
+  /// no capture running: the next start reads the setting itself. A share
   /// still connecting counts, since it goes live with whatever the capture
   /// runs at by then.
   Future<void> applyQuality() async {
@@ -199,21 +144,22 @@ final class GoLiveController extends ChangeNotifier {
     final wanted = _capture.shareSettings.onSource(running.displayIndex);
     if (running == wanted) return;
     if (running.hasShapeOf(wanted)) {
-      _retarget(wanted.bitrate);
+      _media.retarget(wanted.bitrate);
+      _bitrateRefused = false;
       await _capture.setBitrate(wanted.bitrate);
       return;
     }
     try {
       await _capture.stop();
-      await _capture.startShare(displayIndex: running.displayIndex);
+      await _startCapture(running.displayIndex);
     } on Object catch (error) {
       _diagnose('quality change refused', error);
       _error = error;
       _notify();
       return;
     }
-    _announce?.call(wanted);
-    _retarget(wanted.bitrate);
+    _media.announce(wanted);
+    _bitrateRefused = false;
     _diagnose(
       'quality',
       '${wanted.width}x${wanted.height}@${wanted.framesPerSecond} '
@@ -221,104 +167,45 @@ final class GoLiveController extends ChangeNotifier {
     );
   }
 
-  /// A new target for the bitrate adapter and the pacer.
-  void _retarget(int bitrate) {
-    _bitrate = StreamBitrateAdapter(target: bitrate);
-    _bitrateRefused = false;
-    _transport?.pacingBitsPerSecond = bitrate;
-  }
+  /// An encoder that cannot change rate is logged once; the sender's pace
+  /// follows regardless, since spreading the same bytes thinner is still
+  /// less loss than bursting them.
+  bool _bitrateRefused = false;
 
-  /// One receiver report into the adapter; a change goes to the encoder
-  /// and to the pacer. An encoder that cannot change rate is logged once,
-  /// and the pacer follows regardless: spreading the same bytes thinner is
-  /// still less loss than bursting them.
-  void _adaptBitrate(double lossRatio) {
-    final next = _bitrate?.report(lossRatio);
-    if (next == null) return;
-    _transport?.pacingBitsPerSecond = next;
-    unawaited(
-      _capture.setBitrate(next).then((accepted) {
-        if (accepted || _bitrateRefused) return;
-        _bitrateRefused = true;
-        _diagnose('bitrate', 'encoder keeps its rate; only the pace follows');
-      }),
-    );
-  }
-
-  /// What the media server said about the picture: the packets it wants
-  /// again are sent again, and the rest is kept for the pace log.
-  void acceptFeedback(VoiceSignalingEvent event) {
-    switch (event) {
-      case VoiceRetransmitRequestedEvent(:final sequences):
-        _feedback = _feedback.copyWith(
-          nacked: _feedback.nacked + sequences.length,
+  void _applyEncoderCommand(GoLiveEncoderCommand command) {
+    switch (command) {
+      case GoLiveKeyframeCommand():
+        unawaited(_capture.requestKeyframe());
+      case GoLiveBitrateCommand(:final bitsPerSecond):
+        unawaited(
+          _capture.setBitrate(bitsPerSecond).then((accepted) {
+            if (accepted || _bitrateRefused) return;
+            _bitrateRefused = true;
+            _diagnose(
+              'bitrate',
+              'encoder keeps its rate; only the pace follows',
+            );
+          }),
         );
-        _transport?.retransmit(sequences);
-      case VoiceReceiverReportEvent(:final lossRatio):
-        _feedback = _feedback.copyWith(
-          lossRatio: lossRatio,
-          reports: _feedback.reports + 1,
-        );
-        _adaptBitrate(lossRatio);
-      case VoiceKeyframeRequestedEvent():
-        _feedback = _feedback.copyWith(
-          pictureLosses: _feedback.pictureLosses + 1,
-        );
-      default:
-        break;
     }
   }
 
-  _Feedback _feedback = const _Feedback();
+  /// The sender's line about the last few seconds, with the per-frame cost
+  /// of each native stage added: a slow frame rate then names its own
+  /// bottleneck, and a healthy one points past this machine.
+  VideoEncoderDiagnostics? _stage;
 
-  /// Says what the stream is actually sending, every few seconds.
-  ///
-  /// "A stream is slow" has three different culprits (the encoder, this
-  /// client, the server) and no way to tell them apart from a viewer's
-  /// impression. The numbers here split the path: the frame rate that left
-  /// this machine, and the per-frame cost of each native stage, so a slow
-  /// frame rate names its own bottleneck and a healthy one points past this
-  /// socket.
-  void _startPaceLog() {
-    _paceLog?.cancel();
-    var frames = _transport?.sentFrames ?? 0;
-    var packets = _transport?.sentPackets ?? 0;
-    var retransmitted = _transport?.retransmittedPackets ?? 0;
-    VideoEncoderDiagnostics? stage;
-    _paceLog = Timer.periodic(const Duration(seconds: 5), (_) {
-      final transport = _transport;
-      if (transport == null) return;
-      final nextFrames = transport.sentFrames;
-      final nextPackets = transport.sentPackets;
-      final nextRetransmitted = transport.retransmittedPackets;
-      final nextStage = _capture.diagnostics;
-      final feedback = _feedback;
-      _feedback = const _Feedback();
-      var line =
-          '${(nextFrames - frames) / 5} frames/s, '
-          '${(nextPackets - packets) / 5} packets/s, '
-          '${feedback.describe(retransmitted: nextRetransmitted - retransmitted)}';
-      final stages = _stageLine(stage, nextStage);
-      if (stages != null) line += ', $stages';
-      final window = transport.takeWindow();
-      line +=
-          ', gap ${window.maxSendGap.inMilliseconds}ms, '
-          'queue ${window.maxQueued}';
-      final bitrate = _bitrate;
-      if (bitrate != null && bitrate.isAdapted) {
-        line += ', bitrate ${bitrate.bitrate ~/ 1000}k';
-      }
-      _diagnose('pace', line);
-      frames = nextFrames;
-      packets = nextPackets;
-      retransmitted = nextRetransmitted;
-      stage = nextStage;
-    });
+  void _logPace(String line) {
+    final was = _stage;
+    final now = _capture.diagnostics;
+    _stage = now;
+    final stages = _stageLine(was, now);
+    _diagnose('pace', stages == null ? line : '$line, $stages');
   }
 
   /// The per-frame cost of each native stage over the window, or null when
   /// the platform has nothing to say or no frame went through.
-  String? _stageLine(
+  static String? _stageLine(
     VideoEncoderDiagnostics? was,
     VideoEncoderDiagnostics? now,
   ) {
@@ -376,10 +263,11 @@ final class GoLiveController extends ChangeNotifier {
       // nothing else in the client opens a duplication of its own. Windows
       // refuses the second with E_INVALIDARG, which is what the room used
       // to report as "that display is no longer attached".
-      await _capture.startShare(
-        displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
-      );
+      await _startCapture(GoLiveDisplay.displayIndexFor(sourceId));
       _captureStarted = true;
+      _bitrateRefused = false;
+      _stage = null;
+      await _startAudio();
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
@@ -404,6 +292,36 @@ final class GoLiveController extends ChangeNotifier {
     } finally {
       _notify();
     }
+  }
+
+  /// The display capture, delivering to the media plane when it can take
+  /// frames natively and to the hub's stream otherwise.
+  Future<void> _startCapture(int displayIndex) async {
+    await _capture.startShare(
+      displayIndex: displayIndex,
+      nativeFrameSink: await _media.nativeFrameSink,
+    );
+  }
+
+  /// The shared sound, when this build can capture and encode it. A machine
+  /// with no output device shares a silent picture rather than no picture.
+  Future<void> _startAudio() async {
+    final factory = _opusCodecFactory;
+    if (factory == null || !_systemAudio.isSupported) return;
+    final encoder = _audioEncoder = factory.createEncoder();
+    _audio = DiscordStreamAudioSender(
+      encoder: encoder,
+      sendOpus: _media.sendAudio,
+    )..attach(_systemAudio.chunks);
+    if (!await _systemAudio.start()) _diagnose('audio', 'no output to share');
+  }
+
+  Future<void> _stopAudio() async {
+    _audio?.stop();
+    _audio = null;
+    await _systemAudio.stop();
+    _audioEncoder?.dispose();
+    _audioEncoder = null;
   }
 
   /// Holds frames back without tearing the stream down.
@@ -467,8 +385,9 @@ final class GoLiveController extends ChangeNotifier {
     _disposed = true;
     _ping?.cancel();
     _ping = null;
-    _paceLog?.cancel();
-    _paceLog = null;
+    for (final subscription in _mediaSubscriptions) {
+      unawaited(subscription.cancel());
+    }
     unawaited(_updates?.cancel());
     unawaited(_servers?.cancel());
     super.dispose();
@@ -488,10 +407,7 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   Future<void> _stopCapture() async {
-    _paceLog?.cancel();
-    _paceLog = null;
-    await _transport?.stop();
-    _transport = null;
+    await _stopAudio();
     if (!_captureStarted) return;
     _captureStarted = false;
     try {

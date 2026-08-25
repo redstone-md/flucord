@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
+import 'package:flucord/src/data/discord/go_live_media_plane.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
@@ -66,9 +67,13 @@ const _session = VoiceTransportSession(
 final class _Wiring {
   _Wiring() {
     capture = VideoCaptureHub(encoder: encoder);
+    // The share's connection sends in-process here, where the production
+    // plane would send from its own isolate.
+    plane = InProcessGoLiveMediaPlane(frames: capture.frames);
     goLive = GoLiveController(
       repositoryProvider: () => repository,
       capture: capture,
+      media: plane,
     );
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
@@ -77,11 +82,14 @@ final class _Wiring {
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
       identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-      socketFactoryProvider: () => _StreamSocketFactory((_) {
-        final client = _FakeClient(log);
-        clients.add(client);
-        return client;
-      }),
+      socketFactoryProvider: () => GoLiveMediaSocketFactory(
+        inner: _StreamSocketFactory((_) {
+          final client = _FakeClient(log);
+          clients.add(client);
+          return client;
+        }),
+        plane: plane,
+      ),
     )..reconcile();
     router = StreamRouter(
       opened: service.opened,
@@ -97,6 +105,7 @@ final class _Wiring {
   final clients = <_FakeClient>[];
   final log = <String>[];
   late final VideoCaptureHub capture;
+  late final InProcessGoLiveMediaPlane plane;
   late final GoLiveController goLive;
   late final StreamViewerController viewer;
   late final DiscordStreamRtcService service;
@@ -160,6 +169,9 @@ void main() {
         client.announcements.single.settings,
         wiring.capture.shareSettings,
       );
+      // The encoder's first keyframe left long before the connection was
+      // ready, so the sender asks for one as soon as it is bound.
+      expect(wiring.encoder.keyframeRequests, 1);
 
       wiring.encoder.emitFrame();
       await Future<void>.delayed(Duration.zero);
@@ -190,7 +202,7 @@ void main() {
       // reaches the one capture that could produce one.
       client.announce(const VoiceKeyframeRequestedEvent());
       await Future<void>.delayed(Duration.zero);
-      expect(wiring.encoder.keyframeRequests, 1);
+      expect(wiring.encoder.keyframeRequests, 2);
 
       // And a NACK for a packet already sent is answered from the sender's
       // history: the missing sequence goes out again on the rtx SSRC (one
@@ -440,6 +452,9 @@ final class _StreamSocketFactory implements DiscordVoiceSocketFactory {
   _StreamSocketFactory(this._build);
 
   final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
+
+  @override
+  int get maxDaveProtocolVersion => 0;
 
   @override
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>

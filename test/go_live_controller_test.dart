@@ -1,6 +1,12 @@
 import 'dart:async';
 
+import 'dart:typed_data';
+
 import 'package:flucord/src/application/go_live_controller.dart';
+import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/data/discord/go_live_media_plane.dart';
+import 'package:flucord/src/domain/go_live_media.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
@@ -19,11 +25,13 @@ const _key = GoLiveStreamKey.guild(
 GoLiveController _controller(
   _FakeRepository? repository, {
   _FakeEncoder? encoder,
+  _FakePlane? plane,
   Duration pingInterval = const Duration(seconds: 30),
 }) {
   final controller = GoLiveController(
     repositoryProvider: () => repository,
     capture: VideoCaptureHub(encoder: encoder ?? _FakeEncoder()),
+    media: plane ?? _FakePlane(),
     pingInterval: pingInterval,
   )..reconcile();
   addTearDown(controller.dispose);
@@ -97,69 +105,49 @@ void main() {
     expect(repository.pings.length, pings);
   });
 
-  test(
-    'loss the server reports lowers the bitrate, a clean path restores it',
-    () async {
-      final repository = _FakeRepository();
-      addTearDown(repository.close);
-      final encoder = _FakeEncoder();
-      final controller = _controller(repository, encoder: encoder);
-      await controller.start(channelId: 'voice-1', guildId: 'guild-1');
-      controller.bindTransport(ssrc: 1, rtxSsrc: 2, sink: (frame) => 0);
+  test('what the sender asks of the encoder reaches the capture', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = _FakeEncoder();
+    final plane = _FakePlane();
+    final controller = _controller(repository, encoder: encoder, plane: plane);
+    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
 
-      controller.acceptFeedback(
-        const VoiceReceiverReportEvent(
-          ssrc: 1,
-          lossRatio: 0.2,
-          cumulativeLost: 9,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
+    // The capture was opened where the plane takes frames.
+    expect(encoder.frameSinks, [_FakePlane.sink]);
 
-      // 2.5 Mbit, the share default, backed off by half the loss.
-      expect(encoder.bitrates, [2250000]);
+    plane.commands.add(const GoLiveBitrateCommand(2250000));
+    plane.commands.add(const GoLiveKeyframeCommand());
+    await Future<void>.delayed(Duration.zero);
 
-      controller.acceptFeedback(
-        const VoiceReceiverReportEvent(
-          ssrc: 1,
-          lossRatio: 0.0,
-          cumulativeLost: 9,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(encoder.bitrates, [2250000, 2430000]);
-    },
-  );
+    expect(encoder.bitrates, [2250000]);
+    expect(encoder.keyframes, 1);
+  });
 
   test('a new shape restarts the running share and announces it', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
     final encoder = _FakeEncoder();
     final capture = VideoCaptureHub(encoder: encoder);
+    final plane = _FakePlane();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       capture: capture,
+      media: plane,
     )..reconcile();
     addTearDown(controller.dispose);
     await controller.start(channelId: 'voice-1', guildId: 'guild-1');
-    final announced = <VideoEncoderSettings>[];
-    controller.bindTransport(
-      ssrc: 1,
-      rtxSsrc: 2,
-      sink: (frame) => 0,
-      announce: announced.add,
-    );
 
     // Nothing changed: nothing restarts.
     await controller.applyQuality();
     expect(encoder.started, 1);
 
-    // A bitrate alone reaches the running encoder.
+    // A bitrate alone reaches the running encoder, and the sender's pace.
     capture.quality = const StreamQualitySettings(shareBitrate: 3000000);
     await controller.applyQuality();
     expect(encoder.started, 1);
     expect(encoder.bitrates, [3000000]);
+    expect(plane.retargeted, [3000000]);
 
     // A new shape is a new encoder, declared to Discord.
     capture.quality = const StreamQualitySettings(
@@ -171,7 +159,7 @@ void main() {
     expect(encoder.stopped, 1);
     expect(encoder.settings?.height, 1080);
     expect(encoder.settings?.framesPerSecond, 60);
-    expect(announced.single.height, 1080);
+    expect(plane.announced.single.height, 1080);
   });
 
   test('an encoder that fails leaves nothing announced', () async {
@@ -458,7 +446,48 @@ void main() {
   });
 }
 
-final class _FakeEncoder implements VideoEncoderService, VideoBitrateControl {
+/// What the controller steers on the encoder's behalf: the bitrate and the
+/// keyframes the sender asks for, and where each start delivers frames.
+final class _FakePlane implements GoLiveMediaPlane {
+  static const sink = 0xf00d;
+
+  final StreamController<GoLiveEncoderCommand> commands =
+      StreamController.broadcast();
+  final List<VideoEncoderSettings> announced = [];
+  final List<int> retargeted = [];
+
+  @override
+  Future<int?> get nativeFrameSink => Future.value(sink);
+
+  @override
+  Stream<GoLiveEncoderCommand> get encoderCommands => commands.stream;
+
+  @override
+  Stream<String> get paceLines => const Stream<String>.empty();
+
+  @override
+  Stream<EncodedVideoFrame> get relayedFrames =>
+      const Stream<EncodedVideoFrame>.empty();
+
+  @override
+  DiscordVoiceClient openSender({
+    required DiscordVoiceSocketFactory factory,
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) => throw UnsupportedError('the controller opens no connections');
+
+  @override
+  void announce(VideoEncoderSettings settings) => announced.add(settings);
+
+  @override
+  void retarget(int bitrate) => retargeted.add(bitrate);
+
+  @override
+  void sendAudio(Uint8List opus) {}
+}
+
+final class _FakeEncoder
+    implements VideoEncoderService, VideoBitrateControl, VideoFrameSinkControl {
   @override
   VideoEncoderDiagnostics? get diagnostics => null;
 
@@ -469,6 +498,14 @@ final class _FakeEncoder implements VideoEncoderService, VideoBitrateControl {
     bitrates.add(bitsPerSecond);
     return true;
   }
+
+  /// Where each start was told to deliver frames.
+  final List<int?> frameSinks = [];
+  int? _frameSink;
+  int keyframes = 0;
+
+  @override
+  set nativeFrameSink(int? address) => _frameSink = address;
 
   _FakeEncoder({this.cameras = const []});
 
@@ -500,13 +537,14 @@ final class _FakeEncoder implements VideoEncoderService, VideoBitrateControl {
     started++;
     settings = requested;
     startedSettings.add(requested);
+    frameSinks.add(_frameSink);
   }
 
   @override
   Future<void> setPaused({required bool paused}) async {}
 
   @override
-  Future<void> requestKeyframe() async {}
+  Future<void> requestKeyframe() async => keyframes++;
 
   @override
   Future<void> stop() async {

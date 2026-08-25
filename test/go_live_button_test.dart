@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/stream_quality_controller.dart';
@@ -246,42 +245,7 @@ void main() {
     expect(find.byKey(const ValueKey('go-live-error')), findsOne);
   });
 
-  test('binding a transport sends what the encoder produces', () async {
-    final repository = _FakeRepository();
-    final encoder = _FakeEncoder();
-    final controller = GoLiveController(
-      repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: encoder),
-    )..reconcile();
-    addTearDown(controller.dispose);
-    addTearDown(repository.close);
-    addTearDown(encoder.close);
-
-    var packets = 0;
-    controller.bindTransport(
-      ssrc: 7,
-      rtxSsrc: 9,
-      sink: (frame) {
-        packets++;
-        return frame.payload.length;
-      },
-    );
-    encoder.emit(
-      EncodedVideoFrame(
-        bytes: Uint8List.fromList([0, 0, 0, 1, 0x65, 1, 2, 3]),
-        timestamp: Duration.zero,
-        isKeyframe: true,
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-
-    expect(packets, 1);
-    expect(controller.sentPackets, 1);
-    expect(controller.transportError, isNull);
-    expect(controller.canEncode, isTrue);
-  });
-
-  test('a build without an encoder binds nothing', () async {
+  test('a build without an encoder says it cannot encode', () async {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
@@ -290,9 +254,6 @@ void main() {
     addTearDown(controller.dispose);
     addTearDown(repository.close);
 
-    controller.bindTransport(ssrc: 7, rtxSsrc: 9, sink: (frame) => 0);
-
-    expect(controller.sentPackets, 0);
     expect(controller.canEncode, isFalse);
   });
 }

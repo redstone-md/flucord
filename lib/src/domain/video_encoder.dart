@@ -226,6 +226,18 @@ abstract interface class VideoBitrateControl {
   Future<bool> setBitrate(int bitsPerSecond);
 }
 
+/// An encoder that can deliver its frames to another isolate.
+///
+/// The share is sent from an isolate of its own, and a picture that first
+/// crossed the main isolate would wait behind whatever the UI was doing. A
+/// native encoder calls back on its own thread and can be pointed at a
+/// listener any isolate owns; this is that pointer.
+abstract interface class VideoFrameSinkControl {
+  /// The address of a native frame listener the next start delivers to
+  /// instead of [VideoEncoderService.frames]. Null delivers in-process.
+  set nativeFrameSink(int? address);
+}
+
 abstract interface class VideoEncoderService {
   /// Whether this platform can encode at all.
   bool get isSupported;

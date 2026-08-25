@@ -390,14 +390,16 @@ void main() {
 
   test('carries video on the connection the call opened', () async {
     final gateway = _FakeMainGateway();
-    final client = _FakeVoiceClient(const VoiceServerCredentials(
-      guildId: 'guild-1',
-      channelId: 'voice-1',
-      userId: 'bot-1',
-      sessionId: 'session-1',
-      token: 'voice-token',
-      endpoint: 'voice.example.test',
-    ));
+    final client = _FakeVoiceClient(
+      const VoiceServerCredentials(
+        guildId: 'guild-1',
+        channelId: 'voice-1',
+        userId: 'bot-1',
+        sessionId: 'session-1',
+        token: 'voice-token',
+        endpoint: 'voice.example.test',
+      ),
+    );
     final service = DiscordVoiceSignalingService(
       mainGateway: gateway,
       socketFactory: _CallSocketFactory((credentials) => client),
@@ -564,6 +566,9 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
 /// not the sockets a join would dial.
 final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
   @override
+  int get maxDaveProtocolVersion => 0;
+
+  @override
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
       throw UnsupportedError('no test here dials a call socket');
 
@@ -575,6 +580,9 @@ final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
 }
 
 final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  @override
+  int get maxDaveProtocolVersion => 0;
+
   _CallSocketFactory(this._build);
 
   final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;

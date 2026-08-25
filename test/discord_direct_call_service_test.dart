@@ -361,6 +361,9 @@ final class _InertVoiceClient implements DiscordVoiceClient {
 }
 
 final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  @override
+  int get maxDaveProtocolVersion => 0;
+
   _CallSocketFactory(this._build);
 
   final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;

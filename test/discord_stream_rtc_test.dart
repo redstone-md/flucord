@@ -276,46 +276,53 @@ void main() {
       expect(clients.last.closed, isFalse);
     });
 
-    test("the account's own stream under a new key closes the old one", () async {
-      final repository = _FakeRepository();
-      final clients = <_FakeClient>[];
-      final service = DiscordStreamRtcService(
-        repositoryProvider: () => repository,
-        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        socketFactoryProvider: () => _StreamSocketFactory((_) {
-          final client = _FakeClient();
-          clients.add(client);
-          return client;
-        }),
-      );
-      addTearDown(service.close);
-      service.reconcile();
-
-      // A stream key names the channel it started in, so a share that
-      // follows the account into another channel arrives under a second key.
-      const moved = GoLiveStreamKey.guild(
-        guildId: 'guild-1',
-        channelId: 'voice-2',
-        userId: 'me',
-      );
-      for (final key in [
-        const GoLiveStreamKey.guild(
-          guildId: 'guild-1',
-          channelId: 'voice-1',
-          userId: 'me',
-        ),
-        moved,
-      ]) {
-        repository.announceServer(
-          GoLiveServer(key: key, endpoint: 'stream.discord.gg', token: 'token'),
+    test(
+      "the account's own stream under a new key closes the old one",
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
         );
-        await Future<void>.delayed(Duration.zero);
-      }
+        addTearDown(service.close);
+        service.reconcile();
 
-      expect(clients, hasLength(2));
-      expect(clients.first.closed, isTrue);
-      expect(service.sessionFor(moved), isNotNull);
-    });
+        // A stream key names the channel it started in, so a share that
+        // follows the account into another channel arrives under a second key.
+        const moved = GoLiveStreamKey.guild(
+          guildId: 'guild-1',
+          channelId: 'voice-2',
+          userId: 'me',
+        );
+        for (final key in [
+          const GoLiveStreamKey.guild(
+            guildId: 'guild-1',
+            channelId: 'voice-1',
+            userId: 'me',
+          ),
+          moved,
+        ]) {
+          repository.announceServer(
+            GoLiveServer(
+              key: key,
+              endpoint: 'stream.discord.gg',
+              token: 'token',
+            ),
+          );
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        expect(clients, hasLength(2));
+        expect(clients.first.closed, isTrue);
+        expect(service.sessionFor(moved), isNotNull);
+      },
+    );
 
     test('a stream that ends closes its connection', () async {
       final repository = _FakeRepository();
@@ -540,6 +547,9 @@ final class _StreamSocketFactory implements DiscordVoiceSocketFactory {
   _StreamSocketFactory(this._build);
 
   final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
+
+  @override
+  int get maxDaveProtocolVersion => 0;
 
   @override
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>

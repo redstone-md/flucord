@@ -445,6 +445,9 @@ final class _InertVoiceClient
 /// a call would dial.
 final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
   @override
+  int get maxDaveProtocolVersion => 0;
+
+  @override
   DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
       throw UnsupportedError('no test here dials a call socket');
 
@@ -456,6 +459,9 @@ final class _UnusedSocketFactory implements DiscordVoiceSocketFactory {
 }
 
 final class _CallSocketFactory implements DiscordVoiceSocketFactory {
+  @override
+  int get maxDaveProtocolVersion => 0;
+
   _CallSocketFactory(this._build);
 
   final DiscordVoiceClient Function(VoiceServerCredentials credentials) _build;
