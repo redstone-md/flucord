@@ -6,9 +6,10 @@
 // game into the voice channel instead, where everybody hears it whether they
 // opened the stream or not.
 //
-// WASAPI loopback: the render endpoint is opened for capture, which is the
-// documented way to read what is already going to the speakers and needs no
-// driver and no injection.
+// WASAPI loopback. Everything the machine plays except this process, when
+// Windows can do that (build 20348 and later): the room's voices come out of
+// this process, and a viewer who is in the room would hear themselves come
+// back otherwise. Older builds get the whole render endpoint.
 
 #ifndef FLUCORD_AUDIO_H_
 #define FLUCORD_AUDIO_H_
@@ -33,20 +34,28 @@ typedef enum {
 
 typedef struct FlucordAudioCapture FlucordAudioCapture;
 
-// Interleaved 16-bit PCM at the rate and channel count reported on open.
-// Valid for the duration of the callback only.
+// Interleaved 16-bit PCM. The buffer belongs to the receiver from here and is
+// given back with flucord_audio_release: the callback is delivered to Dart
+// after the capture thread has moved on.
 typedef void (*FlucordAudioCallback)(void* user_data,
                                      const int16_t* frames,
                                      int32_t frame_count,
                                      int32_t channels,
                                      int32_t sample_rate);
 
-// Opens the default render endpoint for loopback capture and starts a thread
-// that pumps it.
+// Opens the loopback capture and starts a thread that pumps it.
 FLUCORD_AUDIO_EXPORT FlucordAudioStatus
 flucord_audio_open_loopback(FlucordAudioCallback callback,
                             void* user_data,
                             FlucordAudioCapture** out_capture);
+
+// 1 when what this process plays is left out of the capture, 0 when the
+// whole endpoint is captured.
+FLUCORD_AUDIO_EXPORT int32_t
+flucord_audio_excludes_own_process(FlucordAudioCapture* capture);
+
+// Releases a buffer handed out by the callback.
+FLUCORD_AUDIO_EXPORT void flucord_audio_release(int16_t* frames);
 
 FLUCORD_AUDIO_EXPORT void flucord_audio_close(FlucordAudioCapture* capture);
 

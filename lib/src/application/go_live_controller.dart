@@ -313,7 +313,11 @@ final class GoLiveController extends ChangeNotifier {
       encoder: encoder,
       sendOpus: _media.sendAudio,
     )..attach(_systemAudio.chunks);
-    if (!await _systemAudio.start()) _diagnose('audio', 'no output to share');
+    if (!await _systemAudio.start()) {
+      _diagnose('audio', 'no output to share');
+    } else if (!_systemAudio.excludesOwnSound) {
+      _diagnose('audio', 'own sound included; viewers in the room hear back');
+    }
   }
 
   Future<void> _stopAudio() async {

@@ -35,6 +35,11 @@ abstract interface class SystemAudioCapture {
   bool get isSupported;
   bool get isRunning;
 
+  /// Whether what this app plays (the room's voices, notifications) is left
+  /// out of the capture. A viewer who is in the room would hear themselves
+  /// come back through the share otherwise. Meaningful once running.
+  bool get excludesOwnSound;
+
   /// Blocks as they arrive, until [stop].
   Stream<SystemAudioChunk> get chunks;
 
@@ -55,6 +60,9 @@ final class UnavailableSystemAudioCapture implements SystemAudioCapture {
 
   @override
   bool get isRunning => false;
+
+  @override
+  bool get excludesOwnSound => false;
 
   @override
   Stream<SystemAudioChunk> get chunks => const Stream<SystemAudioChunk>.empty();
@@ -97,6 +105,17 @@ final class WindowsSystemAudioCapture implements SystemAudioCapture {
 
   @override
   bool get isRunning => _handle != nullptr;
+
+  @override
+  bool get excludesOwnSound {
+    final library = _library;
+    if (library == null || _handle == nullptr) return false;
+    return library.lookupFunction<
+          Int32 Function(Pointer<Void>),
+          int Function(Pointer<Void>)
+        >('flucord_audio_excludes_own_process')(_handle) !=
+        0;
+  }
 
   @override
   Stream<SystemAudioChunk> get chunks => _chunks.stream;
@@ -157,16 +176,26 @@ final class WindowsSystemAudioCapture implements SystemAudioCapture {
     int channels,
     int sampleRate,
   ) {
-    if (frameCount <= 0 || channels <= 0 || _chunks.isClosed) return;
-    _chunks.add(
-      SystemAudioChunk(
-        // Copied: the buffer belongs to the endpoint and is released the
-        // moment the callback returns.
-        samples: Int16List.fromList(frames.asTypedList(frameCount * channels)),
-        channels: channels,
-        sampleRate: sampleRate,
-      ),
-    );
+    // The buffer is owned from here: the capture thread has moved on by the
+    // time a listener runs, so it hands over a copy of its own, released
+    // once the samples are in Dart memory.
+    try {
+      if (frameCount <= 0 || channels <= 0 || _chunks.isClosed) return;
+      _chunks.add(
+        SystemAudioChunk(
+          samples: Int16List.fromList(
+            frames.asTypedList(frameCount * channels),
+          ),
+          channels: channels,
+          sampleRate: sampleRate,
+        ),
+      );
+    } finally {
+      _library?.lookupFunction<
+        Void Function(Pointer<Int16>),
+        void Function(Pointer<Int16>)
+      >('flucord_audio_release')(frames);
+    }
   }
 
   Future<void> close() async {

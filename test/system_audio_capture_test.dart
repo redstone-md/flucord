@@ -99,12 +99,22 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       await subscription.cancel();
 
+      // Whether this Windows can leave the app's own sound out (build 20348
+      // and later). When it can, the capture asks for the transport's format
+      // directly and every block is 48 kHz stereo.
+      final excludesOwnSound = capture.excludesOwnSound;
+      printOnFailure('excludes own sound: $excludesOwnSound');
       await capture.stop();
       expect(capture.isRunning, isFalse);
+      expect(capture.excludesOwnSound, isFalse);
       for (final block in blocks) {
         expect(block.channels, greaterThan(0));
         expect(block.sampleRate, greaterThan(0));
         expect(block.samples.length, block.frameCount * block.channels);
+        if (excludesOwnSound) {
+          expect(block.channels, 2);
+          expect(block.sampleRate, 48000);
+        }
       }
     });
   });

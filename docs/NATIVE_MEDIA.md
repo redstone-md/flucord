@@ -56,7 +56,13 @@ The share's sound is captured from the machine's output (WASAPI loopback),
 framed into 20 ms stereo Opus on the main isolate, and handed to the share's
 connection, which sends it exactly as a call sends the microphone: encrypted
 for the group, on the connection's own audio SSRC, with the speaking state
-declared. A viewer hears the game, not the room.
+declared. A viewer hears the game, not the room. Flucord's own output (the
+room's voices, notifications) is left out of the capture, as Discord does, so
+a viewer who is in the room does not hear themselves come back; that needs
+Windows 10 build 20348 or later, and an older build captures the whole
+endpoint and logs `golive audio: own sound included`. Each captured block is
+handed to Dart in a buffer of its own and released after it is copied,
+because the callback is delivered after the capture thread has moved on.
 
 The capture runs on a fixed tick at the configured frame rate (any rate: the
 tick is one over it): sleep until the tick on a high-resolution timer, take
