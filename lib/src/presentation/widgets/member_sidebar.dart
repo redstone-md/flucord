@@ -80,6 +80,10 @@ class _MemberSidebarState extends State<MemberSidebar> {
         oldWidget.memberList != widget.memberList) {
       _watchChannel();
     }
+    if (!identical(oldWidget.members, widget.members)) {
+      final memberIds = {for (final member in widget.members) member.id};
+      _memberLinks.removeWhere((id, _) => !memberIds.contains(id));
+    }
     final selectedId = _selectedMember?.id;
     if (oldWidget.spaceId != widget.spaceId ||
         (selectedId != null &&
@@ -113,16 +117,6 @@ class _MemberSidebarState extends State<MemberSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleMembers = widget.members
-        .where(
-          (member) =>
-              member.spaceIds.isEmpty ||
-              member.spaceIds.contains(widget.spaceId),
-        )
-        .toList(growable: false);
-    _memberLinks.removeWhere(
-      (id, _) => !widget.members.any((member) => member.id == id),
-    );
     final roster = widget.memberList?.list;
     return OverlayPortal(
       controller: _overlayController,
@@ -135,10 +129,19 @@ class _MemberSidebarState extends State<MemberSidebar> {
         ),
         child: roster != null && roster.isLoaded
             ? _buildRoster(roster)
-            : _buildCachedMembers(visibleMembers),
+            : _buildCachedMembers(_visibleMembers()),
       ),
     );
   }
+
+  /// The cached members this space can show, walked only when the roster is
+  /// missing and the cached list is what actually gets rendered.
+  List<Member> _visibleMembers() => widget.members
+      .where(
+        (member) =>
+            member.spaceIds.isEmpty || member.spaceIds.contains(widget.spaceId),
+      )
+      .toList(growable: false);
 
   Widget _buildRoster(GuildMemberList roster) {
     final membersById = <String, Member>{

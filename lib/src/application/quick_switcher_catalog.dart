@@ -33,11 +33,20 @@ final class QuickSwitcherDestination {
   String get key => '${kind.name}:${channelId ?? spaceId}';
 }
 
+/// The last catalogue built for a workspace, so a rebuild can reuse it.
+final _quickSwitcherByWorkspace = Expando<QuickSwitcherCatalog>();
+
 final class QuickSwitcherCatalog {
   QuickSwitcherCatalog._(List<QuickSwitcherDestination> destinations)
     : _destinations = List.unmodifiable(destinations);
 
-  factory QuickSwitcherCatalog.fromWorkspace(ChatWorkspace workspace) {
+  /// Builds every destination in [workspace], reusing the last catalogue built
+  /// for it. A workspace never changes once created, so the previous catalogue
+  /// stays correct until a new workspace replaces it.
+  factory QuickSwitcherCatalog.fromWorkspace(ChatWorkspace workspace) =>
+      _quickSwitcherByWorkspace[workspace] ??= _build(workspace);
+
+  static QuickSwitcherCatalog _build(ChatWorkspace workspace) {
     final activity = workspace.activityBySpace();
     final guilds = workspace.spaces
         .where((space) => !space.isDirectMessages)

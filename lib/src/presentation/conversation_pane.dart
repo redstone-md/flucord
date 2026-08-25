@@ -378,7 +378,7 @@ class _ConversationPaneState extends State<ConversationPane> {
           showMembers: widget.showMembers,
           showPins: widget.showPins,
           showThreads: widget.showThreads,
-          inboxSummary: InboxCatalog.fromWorkspace(widget.workspace).summary,
+          inboxSummary: InboxSummary.fromWorkspace(widget.workspace),
           onSelectChannel: widget.onPickChannel,
           onSelectVoiceSurface: (surface) =>
               workspaceController.selectVoiceSurface(channel.id, surface),

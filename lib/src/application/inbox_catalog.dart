@@ -7,6 +7,27 @@ final class InboxSummary {
     required this.mentionCount,
   });
 
+  /// Counts the badge on its own, without building the rest of the inbox.
+  ///
+  /// One pass over the channels answers both numbers. Reading them off a full
+  /// [InboxCatalog] instead walks every message and every member, which is far
+  /// too much work for a header badge that rebuilds with the shell.
+  factory InboxSummary.fromWorkspace(ChatWorkspace workspace) {
+    var unreadChannelCount = 0;
+    var mentionCount = 0;
+    for (final channel in workspace.channels) {
+      if (channel.hasMessageTimeline &&
+          (channel.unread || channel.mentionCount > 0)) {
+        unreadChannelCount++;
+      }
+      mentionCount += channel.mentionCount;
+    }
+    return InboxSummary(
+      unreadChannelCount: unreadChannelCount,
+      mentionCount: mentionCount,
+    );
+  }
+
   static const empty = InboxSummary(unreadChannelCount: 0, mentionCount: 0);
 
   final int unreadChannelCount;
@@ -58,6 +79,9 @@ final class InboxMentionEntry {
   final Member author;
 }
 
+/// The last catalogue built for a workspace, so a rebuilt dialog can reuse it.
+final _inboxByWorkspace = Expando<({int mentionLimit, InboxCatalog catalog})>();
+
 final class InboxCatalog {
   InboxCatalog._({
     required this.summary,
@@ -66,11 +90,29 @@ final class InboxCatalog {
   }) : unread = List.unmodifiable(unread),
        mentions = List.unmodifiable(mentions);
 
+  /// Builds the inbox for [workspace], reusing the last catalogue built for it.
+  ///
+  /// The dialog rebuilds on every chat controller notification, and a workspace
+  /// never changes once created, so the previous catalogue stays correct until a
+  /// new workspace replaces it.
   factory InboxCatalog.fromWorkspace(
     ChatWorkspace workspace, {
     int maxMentions = 50,
   }) {
     final mentionLimit = maxMentions < 0 ? 0 : maxMentions;
+    final cached = _inboxByWorkspace[workspace];
+    if (cached != null && cached.mentionLimit == mentionLimit) {
+      return cached.catalog;
+    }
+    final catalog = _build(workspace, mentionLimit);
+    _inboxByWorkspace[workspace] = (
+      mentionLimit: mentionLimit,
+      catalog: catalog,
+    );
+    return catalog;
+  }
+
+  static InboxCatalog _build(ChatWorkspace workspace, int mentionLimit) {
     final paths = <String, String>{
       for (final destination in QuickSwitcherCatalog.fromWorkspace(
         workspace,
@@ -146,13 +188,7 @@ final class InboxCatalog {
         ? mentions.sublist(0, mentionLimit)
         : mentions;
     return InboxCatalog._(
-      summary: InboxSummary(
-        unreadChannelCount: unread.length,
-        mentionCount: workspace.channels.fold(
-          0,
-          (total, channel) => total + channel.mentionCount,
-        ),
-      ),
+      summary: InboxSummary.fromWorkspace(workspace),
       unread: unread,
       mentions: limitedMentions,
     );

@@ -68,47 +68,73 @@ final class ChatWorkspace {
   final List<GuildSticker> stickers;
   final String currentMemberId;
 
-  List<ConversationChannel> channelsFor(String spaceId) => channels
-      .where((channel) => channel.spaceId == spaceId)
-      .toList(growable: false);
+  /// Lookup tables over the lists above.
+  ///
+  /// The workspace never changes after construction, so each table is built on
+  /// first use and then answers every later lookup in constant time. Scanning
+  /// the lists instead costs a full pass per lookup, which an account with a
+  /// couple of hundred spaces pays thousands of times per frame.
+  late final Map<String, CommunitySpace> _spaceById = {
+    for (final space in spaces) space.id: space,
+  };
+  late final Map<String, ConversationChannel> _channelById = {
+    for (final channel in channels) channel.id: channel,
+  };
+  late final Map<String, Member> _memberById = {
+    for (final member in members) member.id: member,
+  };
+  late final Map<String, CommunityRole> _roleById = {
+    for (final role in roles) role.id: role,
+  };
+  late final Map<String, List<ConversationChannel>> _channelsBySpaceId =
+      _groupBy(channels, (channel) => channel.spaceId);
+  late final Map<String, List<ChatMessage>> _messagesByChannelId = _groupBy(
+    messages,
+    (message) => message.channelId,
+  );
+  late final Map<String, List<ChannelCategory>> _categoriesBySpaceId = _groupBy(
+    categories,
+    (category) => category.spaceId,
+  );
 
-  List<ChatMessage> messagesFor(String channelId) => messages
-      .where((message) => message.channelId == channelId)
-      .toList(growable: false);
-
-  List<ChannelCategory> categoriesFor(String spaceId) => categories
-      .where((category) => category.spaceId == spaceId)
-      .toList(growable: false);
-
-  CommunitySpace spaceById(String id) =>
-      spaces.firstWhere((space) => space.id == id);
-
-  ConversationChannel channelById(String id) =>
-      channels.firstWhere((channel) => channel.id == id);
-
-  Member memberById(String id) =>
-      members.firstWhere((member) => member.id == id);
-
-  Member? memberOrNull(String id) {
-    for (final member in members) {
-      if (member.id == id) return member;
+  static Map<String, List<T>> _groupBy<T>(
+    List<T> items,
+    String Function(T item) keyOf,
+  ) {
+    final grouped = <String, List<T>>{};
+    for (final item in items) {
+      grouped.putIfAbsent(keyOf(item), () => <T>[]).add(item);
     }
-    return null;
+    return grouped;
   }
 
-  ConversationChannel? channelOrNull(String id) {
-    for (final channel in channels) {
-      if (channel.id == id) return channel;
-    }
-    return null;
+  /// Copies the group so callers keep the fixed-length list they had before,
+  /// and so sorting the result in place cannot disturb the table.
+  static List<T> _group<T>(Map<String, List<T>> groups, String key) {
+    final group = groups[key];
+    return group == null ? const [] : List.of(group, growable: false);
   }
 
-  CommunityRole? roleOrNull(String id) {
-    for (final role in roles) {
-      if (role.id == id) return role;
-    }
-    return null;
-  }
+  List<ConversationChannel> channelsFor(String spaceId) =>
+      _group(_channelsBySpaceId, spaceId);
+
+  List<ChatMessage> messagesFor(String channelId) =>
+      _group(_messagesByChannelId, channelId);
+
+  List<ChannelCategory> categoriesFor(String spaceId) =>
+      _group(_categoriesBySpaceId, spaceId);
+
+  CommunitySpace spaceById(String id) => _spaceById[id]!;
+
+  ConversationChannel channelById(String id) => _channelById[id]!;
+
+  Member memberById(String id) => _memberById[id]!;
+
+  Member? memberOrNull(String id) => _memberById[id];
+
+  ConversationChannel? channelOrNull(String id) => _channelById[id];
+
+  CommunityRole? roleOrNull(String id) => _roleById[id];
 
   ChatWorkspace copyWith({
     List<CommunitySpace>? spaces,
