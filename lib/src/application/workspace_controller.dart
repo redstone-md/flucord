@@ -15,6 +15,7 @@ final class WorkspaceController extends ChangeNotifier {
   bool _showPins = false;
   bool _showThreads = false;
   bool _showSearch = false;
+  ChatWorkspace? _reconciledWorkspace;
   final Set<String> _collapsedCategoryIds = {};
   final VoiceChannelSurfaces _voiceSurfaces = VoiceChannelSurfaces();
 
@@ -33,7 +34,16 @@ final class WorkspaceController extends ChangeNotifier {
   VoiceChannelSurface voiceSurfaceOf(String channelId) =>
       _voiceSurfaces.of(channelId);
 
+  /// Drops selections the workspace no longer offers, and lands somewhere when
+  /// nothing is selected yet.
+  ///
+  /// Called from the shell's build, which runs on every frame the shell paints,
+  /// while the answer only moves when the workspace does. Selection changes made
+  /// from here land their own choice, so a repeat pass over the same workspace
+  /// has nothing left to fix.
   void reconcile(ChatWorkspace workspace) {
+    if (identical(_reconciledWorkspace, workspace)) return;
+    _reconciledWorkspace = workspace;
     final categoryIds = workspace.categories.map((category) => category.id);
     _collapsedCategoryIds.retainAll(categoryIds);
     _voiceSurfaces.retainAll(workspace.channels.map((channel) => channel.id));
@@ -127,11 +137,11 @@ final class WorkspaceController extends ChangeNotifier {
     final channelId = _selectedChannelId;
     if (channelId == null) return false;
     return _voiceSurfaces.select(
-      channelId,
-      _voiceSurfaces.of(channelId) == VoiceChannelSurface.chat
-          ? VoiceChannelSurface.room
-          : VoiceChannelSurface.chat,
-    ) &&
+          channelId,
+          _voiceSurfaces.of(channelId) == VoiceChannelSurface.chat
+              ? VoiceChannelSurface.room
+              : VoiceChannelSurface.chat,
+        ) &&
         _notified();
   }
 

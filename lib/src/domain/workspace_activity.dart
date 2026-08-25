@@ -19,6 +19,12 @@ final class SpaceActivity {
   bool get hasUnread => unread || mentionCount > 0;
 }
 
+/// The last roll-up built for a workspace, so a rebuilt rail can reuse it.
+final _activityByWorkspace =
+    Expando<
+      ({ReadStateSnapshot? readState, Map<String, SpaceActivity> activity})
+    >();
+
 extension WorkspaceActivity on ChatWorkspace {
   /// Rolls each space's channels up into one pip.
   ///
@@ -26,7 +32,21 @@ extension WorkspaceActivity on ChatWorkspace {
   /// per channel — a channel set to "only mentions" is unread on the server and
   /// silent in the rail — and a muted space keeps its mention badge while
   /// losing its pip, which is the distinction the official client draws.
+  ///
+  /// The rail rebuilds far more often than either input changes, so the last
+  /// roll-up is kept and handed back until a new workspace or read state
+  /// arrives.
   Map<String, SpaceActivity> activityBySpace({ReadStateSnapshot? readState}) {
+    final cached = _activityByWorkspace[this];
+    if (cached != null && identical(cached.readState, readState)) {
+      return cached.activity;
+    }
+    final activity = _rollUp(readState);
+    _activityByWorkspace[this] = (readState: readState, activity: activity);
+    return activity;
+  }
+
+  Map<String, SpaceActivity> _rollUp(ReadStateSnapshot? readState) {
     final snapshot = readState;
     final unreadSpaceIds = <String>{};
     final mentionsBySpaceId = <String, int>{};
