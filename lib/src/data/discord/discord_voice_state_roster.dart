@@ -26,15 +26,7 @@ final class DiscordVoiceStateRoster {
   List<VoiceParticipantStateEvent> accept({
     required String eventName,
     required Map<String, Object?> data,
-  }) {
-    _seatedByChannel = null;
-    return _accept(eventName, data);
-  }
-
-  List<VoiceParticipantStateEvent> _accept(
-    String eventName,
-    Map<String, Object?> data,
-  ) => switch (eventName) {
+  }) => switch (eventName) {
     'VOICE_STATE_UPDATE' => _apply([data], null),
     'VOICE_STATE_UPDATE_BATCH' => _apply(_objects(data['voice_states']), null),
     'GUILD_CREATE' => _replaceGuild(data),
@@ -95,6 +87,7 @@ final class DiscordVoiceStateRoster {
   }
 
   List<VoiceParticipantStateEvent> _clearOnReady() {
+    _seatedByChannel = null;
     final departures = [
       for (final guild in _byGuild.values)
         for (final event in guild.values) event.asDeparture(),
@@ -121,6 +114,7 @@ final class DiscordVoiceStateRoster {
   List<VoiceParticipantStateEvent> _replaceGuild(Map<String, Object?> guild) {
     final guildId = guild['id'];
     if (guildId is! String || guildId.isEmpty) return const [];
+    _seatedByChannel = null;
     final previous = _byGuild.remove(guildId) ?? const {};
     final applied = _apply(_objects(guild['voice_states']), guildId);
     // Dropping the old seats silently would leave anyone who left while the
@@ -144,6 +138,7 @@ final class DiscordVoiceStateRoster {
     List<Map<String, Object?>> states,
     String? fallbackGuildId,
   ) {
+    _seatedByChannel = null;
     final applied = <VoiceParticipantStateEvent>[];
     for (final state in states) {
       final event = DiscordVoiceStateReader.read(
