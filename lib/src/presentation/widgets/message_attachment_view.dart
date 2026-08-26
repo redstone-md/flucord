@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../domain/attachment_download.dart';
 import '../../domain/chat_models.dart';
@@ -168,6 +170,29 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
   }
 }
 
+/// Where preview bytes live between runs.
+///
+/// Bounded by how many previews are kept rather than by the space they take.
+/// That works because the address they are fetched from already asks the
+/// proxy for a preview-sized file, so one entry is tens of kilobytes and not
+/// the original photo. Discord bounds the same thing the same way: its own
+/// cache is whatever Chromium keeps, and what it controls is asking for a
+/// resized image in the first place.
+class _PreviewCache extends CacheManager with ImageCacheManager {
+  _PreviewCache._()
+    : super(
+        Config(
+          _storeKey,
+          stalePeriod: const Duration(days: 14),
+          maxNrOfCacheObjects: 1000,
+        ),
+      );
+
+  static const _storeKey = 'flucord_attachment_previews';
+
+  static final _PreviewCache instance = _PreviewCache._();
+}
+
 /// The box a preview of this shape is drawn in.
 ///
 /// The aspect ratio decides it: a portrait picture fills the height and stops
@@ -194,7 +219,10 @@ ImageProvider _previewImage(
   final width = (box.width * scale).round();
   final height = (box.height * scale).round();
   return ResizeImage(
-    NetworkImage(_previewUrl(attachment, width: width, height: height)),
+    CachedNetworkImageProvider(
+      _previewUrl(attachment, width: width, height: height),
+      cacheManager: _PreviewCache.instance,
+    ),
     width: width,
     height: height,
     policy: ResizeImagePolicy.fit,

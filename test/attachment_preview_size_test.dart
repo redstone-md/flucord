@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -12,7 +13,7 @@ void main() {
 
     final image = _previewImage(tester);
     final resized = image.image as ResizeImage;
-    final source = resized.imageProvider as NetworkImage;
+    final source = resized.imageProvider as CachedNetworkImageProvider;
     final requested = Uri.parse(source.url);
     final scale = tester.view.devicePixelRatio;
     // The photo is 4:3, so it fills the preview's height and stops short of
@@ -41,7 +42,7 @@ void main() {
 
     final image = _previewImage(tester);
     final resized = image.image as ResizeImage;
-    final source = resized.imageProvider as NetworkImage;
+    final source = resized.imageProvider as CachedNetworkImageProvider;
 
     expect(source.url, _photoWithoutProxy.url);
     expect(resized.width, isNotNull);
