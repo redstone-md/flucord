@@ -172,19 +172,25 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
 
 /// Where preview bytes live between runs.
 ///
-/// Bounded by how many previews are kept rather than by the space they take.
-/// That works because the address they are fetched from already asks the
-/// proxy for a preview-sized file, so one entry is tens of kilobytes and not
-/// the original photo. Discord bounds the same thing the same way: its own
-/// cache is whatever Chromium keeps, and what it controls is asking for a
-/// resized image in the first place.
+/// Bounded by how many previews are kept rather than by the space they take,
+/// because the cache manager counts entries and not bytes. That works here
+/// because the address they are fetched from already asks the proxy for a
+/// preview-sized file, so one entry is tens of kilobytes rather than the
+/// original photo, and this many of them land somewhere under half a gigabyte.
+/// Discord bounds the same thing the same way: its cache is whatever Chromium
+/// keeps, and what it controls is asking for a resized image in the first
+/// place.
+///
+/// The stale period runs from last use, not from download, so a preview goes
+/// only once it has been left alone for a fortnight. Losing one costs a single
+/// small request the next time it is scrolled past.
 class _PreviewCache extends CacheManager with ImageCacheManager {
   _PreviewCache._()
     : super(
         Config(
           _storeKey,
           stalePeriod: const Duration(days: 14),
-          maxNrOfCacheObjects: 1000,
+          maxNrOfCacheObjects: 4000,
         ),
       );
 
