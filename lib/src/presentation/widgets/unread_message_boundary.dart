@@ -31,6 +31,52 @@ class UnreadMessageBoundary extends StatelessWidget {
   );
 }
 
+/// Offers the way back to the end of the conversation.
+///
+/// Shown while the newest message is off screen, which is what opening on the
+/// unread boundary leaves behind: the reader is part way up their backlog and
+/// needs one press to catch up rather than a long scroll.
+class JumpToPresentButton extends StatelessWidget {
+  const JumpToPresentButton({required this.onPressed, super.key});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: context.surfaces.canvas,
+    shape: RoundedRectangleBorder(
+      side: BorderSide(color: context.surfaces.border),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: InkWell(
+      key: const ValueKey('jump-to-present'),
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(4),
+      child: SizedBox(
+        height: 30,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.arrow_downward,
+                size: 15,
+                color: context.surfaces.muted,
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Jump to present',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class JumpToUnreadButton extends StatelessWidget {
   const JumpToUnreadButton({required this.onPressed, super.key});
 
@@ -57,7 +103,7 @@ class JumpToUnreadButton extends StatelessWidget {
               Icon(Icons.arrow_upward, size: 15, color: FlucordColors.mention),
               SizedBox(width: 5),
               Text(
-                'Jump to new',
+                'Jump to unread',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
               ),
             ],

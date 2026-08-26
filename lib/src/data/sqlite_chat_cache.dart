@@ -138,13 +138,21 @@ final class SqliteChatCache
   Future<ChannelHistory> readChannelHistory(
     String channelId, {
     int? limit,
+    String? beforeMessageId,
   }) async {
+    // Times are stored as UTC in ISO form, so one sorts against another as
+    // text and the cursor needs no parsing.
+    final cursor = beforeMessageId == null
+        ? null
+        : await _sentAtOf(beforeMessageId);
     // Read newest first so a limit keeps the newest page, then turn the rows
     // back to oldest first, which is the order every caller expects.
     final rows = await _database.query(
       'messages',
-      where: 'channel_id = ?',
-      whereArgs: [channelId],
+      where: cursor == null
+          ? 'channel_id = ?'
+          : 'channel_id = ? AND sent_at < ?',
+      whereArgs: cursor == null ? [channelId] : [channelId, cursor],
       orderBy: 'sent_at DESC',
       limit: limit,
     );
@@ -158,6 +166,20 @@ final class SqliteChatCache
       messages: messages.map(_messageFromRow).toList(),
       members: members,
     );
+  }
+
+  /// When the named message was sent, as it is stored, or null where the
+  /// message is not held. A cursor pointing at nothing reads the channel from
+  /// its newest end rather than reading nothing at all.
+  Future<String?> _sentAtOf(String messageId) async {
+    final rows = await _database.query(
+      'messages',
+      columns: ['sent_at'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['sent_at'] as String?;
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -167,16 +168,31 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
   }
 }
 
+/// The box a preview of this shape is drawn in.
+///
+/// The aspect ratio decides it: a portrait picture fills the height and stops
+/// short of the width, so asking for the full width would fetch pixels that
+/// are never drawn.
+Size _previewBox(double ratio) {
+  final bounds = MessageAttachmentView.previewSize;
+  final width = math.min(bounds.width, bounds.height * ratio);
+  return Size(width, width / ratio);
+}
+
 /// The image a preview draws, fetched and decoded at the size it is shown at.
 ///
 /// Discord's media proxy resizes on request, so a photo taken on a phone costs
 /// its thumbnail rather than its original. An attachment Discord did not proxy
 /// keeps its own address and is still decoded down, which is the part that
 /// keeps a large picture out of the image cache at full size.
-ImageProvider _preview(MessageAttachment attachment, BuildContext context) {
+ImageProvider _previewImage(
+  BuildContext context,
+  MessageAttachment attachment,
+  Size box,
+) {
   final scale = MediaQuery.devicePixelRatioOf(context);
-  final width = (MessageAttachmentView.previewSize.width * scale).round();
-  final height = (MessageAttachmentView.previewSize.height * scale).round();
+  final width = (box.width * scale).round();
+  final height = (box.height * scale).round();
   return ResizeImage(
     NetworkImage(_previewUrl(attachment, width: width, height: height)),
     width: width,
@@ -211,9 +227,12 @@ class _ImageAttachment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = attachment.width != null && attachment.height != null
-        ? attachment.width! / attachment.height!
-        : 16 / 9;
+    final ratio =
+        (attachment.width != null && attachment.height != null
+                ? attachment.width! / attachment.height!
+                : 16 / 9)
+            .clamp(0.7, 2.2);
+    final box = _previewBox(ratio);
     return Semantics(
       button: true,
       label: 'Open image ${attachment.fileName}',
@@ -230,11 +249,11 @@ class _ImageAttachment extends StatelessWidget {
                 maxHeight: MessageAttachmentView.previewSize.height,
               ),
               child: AspectRatio(
-                aspectRatio: ratio.clamp(0.7, 2.2),
+                aspectRatio: ratio,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image(
-                    image: _preview(attachment, context),
+                    image: _previewImage(context, attachment, box),
                     fit: BoxFit.cover,
                     filterQuality: FilterQuality.medium,
                     errorBuilder: (_, _, _) =>

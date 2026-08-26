@@ -41,7 +41,6 @@ import 'discord_desktop_gateway_client.dart';
 import 'discord_direct_call_service.dart';
 import 'discord_gateway_client.dart';
 import 'discord_mapper.dart';
-import 'discord_restored_history.dart';
 import 'discord_member_list_handler.dart';
 import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
@@ -61,6 +60,8 @@ import 'discord_thread_membership_service.dart';
 import 'discord_voice_signaling_service.dart';
 import 'discord_voice_socket_factory.dart';
 import '../../app_log.dart';
+
+import 'discord_restored_history.dart';
 
 part 'discord_desktop_chat_events.dart';
 part 'discord_desktop_chat_session.dart';
@@ -360,14 +361,10 @@ final class DiscordDesktopChatRepository
   }) async {
     // The held page goes out first, so the conversation is readable while
     // Discord is still being asked for the same one.
-    if (beforeMessageId == null) {
-      final restored = await readRestoredHistory(
-        _cache,
-        channelId,
-        pageSize: _pageSize,
-      );
-      if (restored != null) _events.add(restored);
-    }
+    final restored = beforeMessageId == null
+        ? await readRestoredHistory(_cache, channelId, pageSize: _pageSize)
+        : null;
+    if (restored != null) _events.add(restored);
     try {
       final payloads = await _api.getChannelMessages(
         channelId,
@@ -386,9 +383,24 @@ final class DiscordDesktopChatRepository
       );
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readChannelHistory(channelId);
+      // The page already handed out is the answer; re-reading it would only
+      // decode the same rows again.
+      if (restored != null) {
+        return ChannelHistoryPage(
+          history: restored.history,
+          hasMore: restored.hasMore,
+        );
+      }
+      final cached = await _cache.readChannelHistory(
+        channelId,
+        limit: _pageSize,
+        beforeMessageId: beforeMessageId,
+      );
       if (cached.messages.isEmpty) rethrow;
-      return ChannelHistoryPage(history: cached, hasMore: false);
+      return ChannelHistoryPage(
+        history: cached,
+        hasMore: cached.messages.length >= _pageSize,
+      );
     }
   }
 

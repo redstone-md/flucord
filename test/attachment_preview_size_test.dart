@@ -15,24 +15,22 @@ void main() {
     final source = resized.imageProvider as NetworkImage;
     final requested = Uri.parse(source.url);
     final scale = tester.view.devicePixelRatio;
+    // The photo is 4:3, so it fills the preview's height and stops short of
+    // its full width.
+    final drawnHeight = MessageAttachmentView.previewSize.height;
+    final drawnWidth = drawnHeight * 4 / 3;
+    final width = (drawnWidth * scale).round();
+    final height = (drawnHeight * scale).round();
 
     expect(requested.host, 'media.discordapp.net');
     expect(requested.path, '/attachments/channel-1/photo-1/photo.png');
+    expect(requested.queryParameters['width'], '$width');
+    expect(requested.queryParameters['height'], '$height');
+    expect(resized.width, width);
+    expect(resized.height, height);
     expect(
-      requested.queryParameters['width'],
-      '${(MessageAttachmentView.previewSize.width * scale).round()}',
-    );
-    expect(
-      requested.queryParameters['height'],
-      '${(MessageAttachmentView.previewSize.height * scale).round()}',
-    );
-    expect(
-      resized.width,
-      (MessageAttachmentView.previewSize.width * scale).round(),
-    );
-    expect(
-      resized.height,
-      (MessageAttachmentView.previewSize.height * scale).round(),
+      width,
+      lessThan((MessageAttachmentView.previewSize.width * scale).round()),
     );
   });
 

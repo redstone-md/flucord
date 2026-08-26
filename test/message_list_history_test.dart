@@ -130,6 +130,42 @@ void main() {
     expect(tester.getTopLeft(unread).dy, inInclusiveRange(0, 400));
   });
 
+  testWidgets('offers the way back to the newest message and takes it', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm020');
+
+    await tester.pumpWidget(
+      _host(List.generate(60, _unevenMessage), channel: channel),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-m059')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+    await tester.pumpAndSettle();
+
+    final newest = find.byKey(const ValueKey('message-m059'));
+    expect(newest, findsOneWidget);
+    expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+    expect(find.byKey(const ValueKey('jump-to-present')), findsNothing);
+  });
+
+  testWidgets('a channel already at its newest offers no way back', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_host(List.generate(60, _unevenMessage)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('jump-to-present')), findsNothing);
+  });
+
   testWidgets('positions the timeline at an explicit inbox message', (
     tester,
   ) async {

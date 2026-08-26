@@ -29,14 +29,10 @@ final class DiscordHistoryLoader {
     String channelId, {
     String? beforeMessageId,
   }) async {
-    if (_onRestored case final onRestored? when beforeMessageId == null) {
-      final restored = await readRestoredHistory(
-        _cache,
-        channelId,
-        pageSize: pageSize,
-      );
-      if (restored != null) onRestored(restored);
-    }
+    final restored = beforeMessageId == null && _onRestored != null
+        ? await readRestoredHistory(_cache, channelId, pageSize: pageSize)
+        : null;
+    if (restored != null) _onRestored!(restored);
     try {
       final payloads = await _api.getChannelMessages(
         channelId,
@@ -55,41 +51,24 @@ final class DiscordHistoryLoader {
       );
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = _cachedPage(
-        await _cache.readChannelHistory(channelId),
-        beforeMessageId,
+      // The page already handed out is the answer; re-reading it would only
+      // decode the same rows again.
+      if (restored != null) {
+        return ChannelHistoryPage(
+          history: restored.history,
+          hasMore: restored.hasMore,
+        );
+      }
+      final cached = await _cache.readChannelHistory(
+        channelId,
+        limit: pageSize,
+        beforeMessageId: beforeMessageId,
       );
-      if (cached.history.messages.isNotEmpty) return cached;
-      rethrow;
-    }
-  }
-
-  ChannelHistoryPage _cachedPage(
-    ChannelHistory cached,
-    String? beforeMessageId,
-  ) {
-    final messages = cached.messages;
-    final end = beforeMessageId == null
-        ? messages.length
-        : messages.indexWhere((message) => message.id == beforeMessageId);
-    if (end <= 0) {
+      if (cached.messages.isEmpty) rethrow;
       return ChannelHistoryPage(
-        history: ChannelHistory(
-          channelId: cached.channelId,
-          messages: const [],
-          members: cached.members,
-        ),
-        hasMore: false,
+        history: cached,
+        hasMore: cached.messages.length >= pageSize,
       );
     }
-    final start = end > pageSize ? end - pageSize : 0;
-    return ChannelHistoryPage(
-      history: ChannelHistory(
-        channelId: cached.channelId,
-        messages: messages.sublist(start, end),
-        members: cached.members,
-      ),
-      hasMore: start > 0,
-    );
   }
 }

@@ -17,8 +17,14 @@ abstract interface class ChatCache {
   ///
   /// [limit] keeps only the newest that many, which is what opening a channel
   /// wants: a channel with years of history then costs the same to open as a
-  /// fresh one. Omit it to read the channel in full.
-  Future<ChannelHistory> readChannelHistory(String channelId, {int? limit});
+  /// fresh one. [beforeMessageId] moves that window back to the messages sent
+  /// before the one named, which is how the next page back is read. Omit both
+  /// to read the channel in full.
+  Future<ChannelHistory> readChannelHistory(
+    String channelId, {
+    int? limit,
+    String? beforeMessageId,
+  });
 
   Future<ChatMessage?> readMessage(String messageId);
 

@@ -92,6 +92,10 @@ class MessageList extends StatefulWidget {
 }
 
 class _MessageListState extends State<MessageList> {
+  /// Where the message the viewport is built around sits in it. Not flush
+  /// against the top edge: a little of what came before it reads as context.
+  static const double _anchorAlignment = 0.16;
+
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _messageKeys = {};
 
@@ -103,12 +107,21 @@ class _MessageListState extends State<MessageList> {
   /// A message this list was asked to jump to from inside itself, such as a
   /// system message pointing at the message it talks about.
   String? _pinnedMessageId;
+
+  /// Set once the reader asks to catch up, which outranks the boundary and
+  /// the message the host pointed at until either of those changes.
+  bool _pinnedToEnd = false;
   bool _didReachUnread = false;
+
+  /// Whether the newest message is on screen. Starts true so a channel that
+  /// opens at its end offers no way back to somewhere it already is.
+  bool _isAtEnd = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    _watchForEnd();
   }
 
   @override
@@ -117,16 +130,28 @@ class _MessageListState extends State<MessageList> {
     if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
       _pinnedMessageId = null;
+      _pinnedToEnd = false;
       _didReachUnread = false;
+      _isAtEnd = true;
+      _watchForEnd();
       return;
     }
     if (oldWidget.channel.firstUnreadMessageId !=
         widget.channel.firstUnreadMessageId) {
       _didReachUnread = false;
     }
+    // An arriving message lands past the end without scrolling anything, so
+    // whether the end is still on screen has to be asked again.
+    if (!identical(
+      oldWidget.workspace.messagesFor(oldWidget.channel.id),
+      widget.workspace.messagesFor(widget.channel.id),
+    )) {
+      _watchForEnd();
+    }
     if (oldWidget.targetMessageId != widget.targetMessageId &&
         widget.targetMessageId != null) {
       _pinnedMessageId = null;
+      _pinnedToEnd = false;
       _returnToCentre();
     }
   }
@@ -147,8 +172,9 @@ class _MessageListState extends State<MessageList> {
       widget.query.trim().isEmpty ? widget.targetMessageId : null;
 
   /// The message the viewport is built around, or null to sit at the newest.
-  String? get _anchorMessageId =>
-      _pinnedMessageId ?? _targetMessageId ?? _unreadMessageId;
+  String? get _anchorMessageId => _pinnedToEnd
+      ? null
+      : _pinnedMessageId ?? _targetMessageId ?? _unreadMessageId;
 
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
@@ -178,18 +204,50 @@ class _MessageListState extends State<MessageList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       _scrollController.jumpTo(0);
+      _watchForEnd();
     });
   }
 
   void _jumpToMessage(String messageId) {
-    setState(() => _pinnedMessageId = messageId);
+    setState(() {
+      _pinnedToEnd = false;
+      _pinnedMessageId = messageId;
+    });
     _returnToCentre();
+  }
+
+  /// Takes the reader to the end of the conversation.
+  void _jumpToPresent() {
+    setState(() {
+      _pinnedMessageId = null;
+      _pinnedToEnd = true;
+    });
+    _returnToCentre();
+  }
+
+  /// Answers whether the newest message is on screen once the frame that
+  /// would have moved it has been laid out.
+  ///
+  /// The scroll listener cannot answer this on its own: a list that opens on
+  /// the unread boundary never scrolls, so nothing would ever ask.
+  void _watchForEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recordWhetherAtEnd();
+    });
+  }
+
+  void _recordWhetherAtEnd() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final atEnd = position.pixels >= position.maxScrollExtent - 8;
+    if (atEnd != _isAtEnd) setState(() => _isAtEnd = atEnd);
   }
 
   void _handleScroll() {
     if (!_didReachUnread && _isUnreadBoundaryVisible()) {
       setState(() => _didReachUnread = true);
     }
+    _recordWhetherAtEnd();
     if (!_scrollController.hasClients ||
         !widget.canLoadOlder ||
         widget.isLoadingOlder ||
@@ -254,10 +312,11 @@ class _MessageListState extends State<MessageList> {
                   childCount: centreIndex + 1,
                 ),
               ),
-              SliverToBoxAdapter(
-                key: _centreKey,
-                child: SizedBox(height: atEnd ? 22 : 0),
-              ),
+              // The gap under the newest message sits above the centre when
+              // the centre is the end of the conversation, so that end stays
+              // at scroll offset zero and reads as reached.
+              SliverToBoxAdapter(child: SizedBox(height: atEnd ? 22 : 0)),
+              SliverToBoxAdapter(key: _centreKey, child: const SizedBox()),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => _messageAt(messages, centreIndex + index),
@@ -280,13 +339,15 @@ class _MessageListState extends State<MessageList> {
               onPressed: () => _jumpToMessage(_unreadMessageId!),
             ),
           ),
+        if (!_isAtEnd)
+          Positioned(
+            bottom: 10,
+            right: 16,
+            child: JumpToPresentButton(onPressed: _jumpToPresent),
+          ),
       ],
     );
   }
-
-  /// Where the message the viewport is built around sits in it. Not flush
-  /// against the top edge: a little of what came before it reads as context.
-  static const double _anchorAlignment = 0.16;
 
   /// What sits above the oldest held message: the start of the channel, or
   /// the control that asks for more of its history.
