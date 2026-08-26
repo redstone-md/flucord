@@ -223,6 +223,12 @@ class _MessageListState extends State<MessageList> {
     if (messages.isEmpty) {
       return _MessageEmptyState(hasQuery: widget.query.trim().isNotEmpty);
     }
+    // Keys outlive the messages they belong to when a refresh replaces the
+    // held history, so the table is swept once it has outgrown the channel.
+    if (_messageKeys.length > messages.length * 2) {
+      final held = {for (final message in messages) message.id};
+      _messageKeys.removeWhere((id, _) => !held.contains(id));
+    }
     final anchorId = _anchorMessageId;
     final anchorIndex = anchorId == null
         ? -1

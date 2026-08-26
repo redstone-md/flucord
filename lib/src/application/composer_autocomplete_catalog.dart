@@ -186,14 +186,15 @@ final class ComposerAutocompleteCatalog {
 
     final channelSuggestions = activeChannel.isDirectMessage
         ? const <ComposerAutocompleteSuggestion>[]
-        : (workspace.channelsFor(activeChannel.spaceId)..sort((left, right) {
-                final position = left.position.compareTo(right.position);
-                return position != 0
-                    ? position
-                    : left.name.toLowerCase().compareTo(
-                        right.name.toLowerCase(),
-                      );
-              }))
+        : ([...workspace.channelsFor(activeChannel.spaceId)]
+                ..sort((left, right) {
+                  final position = left.position.compareTo(right.position);
+                  return position != 0
+                      ? position
+                      : left.name.toLowerCase().compareTo(
+                          right.name.toLowerCase(),
+                        );
+                }))
               .map(
                 (channel) => ComposerAutocompleteSuggestion(
                   id: channel.id,

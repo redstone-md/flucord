@@ -23,6 +23,8 @@ import 'widgets/forum_channel_view.dart';
 import 'widgets/gif_picker_scope.dart';
 import 'widgets/go_live_button.dart';
 import 'widgets/go_live_display_dialog.dart';
+import '../application/workspace_controller.dart';
+import 'widgets/cached_subtree.dart';
 import 'widgets/go_live_scope.dart';
 import 'widgets/go_live_viewer.dart';
 import 'widgets/stream_quality_scope.dart';
@@ -163,9 +165,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       // Only a thread has a membership to point at; every other channel gets
       // null, which clears the button rather than offering a control with
       // nothing to act on.
-      ThreadMembershipScope.read(context).show(
-        channel.isThread ? channel.id : null,
-      );
+      ThreadMembershipScope.read(
+        context,
+      ).show(channel.isThread ? channel.id : null);
       StageScope.read(context).show(
         channel.isStage ? channel.id : null,
         canModerate: widget.capabilities.moderateStage,
@@ -177,9 +179,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       // A soundboard belongs to a server, and only a voice channel can play
       // one, so anything else clears the picker rather than offering sounds
       // with nowhere to send them.
-      SoundboardScope.read(context).show(
-        channel.kind == ChannelKind.voice ? channel.spaceId : null,
-      );
+      SoundboardScope.read(
+        context,
+      ).show(channel.kind == ChannelKind.voice ? channel.spaceId : null);
     });
   }
 
@@ -231,7 +233,10 @@ class _ConversationPaneState extends State<ConversationPane> {
     );
   }
 
-  Widget _buildPane(BuildContext context, DirectCallController? callController) {
+  Widget _buildPane(
+    BuildContext context,
+    DirectCallController? callController,
+  ) {
     final chat = ChatScope.of(context);
     final workspaceController = WorkspaceScope.of(context);
     final channel = widget.channel;
@@ -242,8 +247,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       voiceSurface,
       inCall: inCall,
     );
-    final locked =
-        channel.isThread && channel.isArchived && channel.isLocked;
+    final locked = channel.isThread && channel.isArchived && channel.isLocked;
     final viewer = StreamViewerScope.of(context);
     final cameras = RemoteCameraScope.of(context);
     final voice = VoiceScope.read(context);
@@ -293,9 +297,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                   channelId: channel.id,
                   quality: StreamQualityScope.maybeOf(context),
                   pickSource: () => _pickCaptureSource(context),
-                  guildId: channel.spaceId.isEmpty
-                      ? null
-                      : channel.spaceId,
+                  guildId: channel.spaceId.isEmpty ? null : channel.spaceId,
                 ),
               ),
               soundboard: ListenableBuilder(
@@ -329,24 +331,24 @@ class _ConversationPaneState extends State<ConversationPane> {
               onRefresh: () => unawaited(
                 chat.loadArchivedThreads(channel.id, refresh: true),
               ),
-              onLoadMore: () =>
-                  unawaited(chat.loadArchivedThreads(channel.id)),
+              onLoadMore: () => unawaited(chat.loadArchivedThreads(channel.id)),
               onOpenPost: widget.onSelectChannel,
               onLoadPostPreview: (postId) =>
                   unawaited(chat.loadForumPostPreview(postId)),
-              onCreatePost: (name, content, attachments, duration, tagIds) async {
-                final thread = await chat.createForumPost(
-                  channelId: channel.id,
-                  name: name,
-                  content: content,
-                  autoArchiveDurationMinutes: duration,
-                  attachments: attachments,
-                  appliedTagIds: tagIds,
-                );
-                if (thread == null) return false;
-                widget.onSelectChannel(thread.id);
-                return true;
-              },
+              onCreatePost:
+                  (name, content, attachments, duration, tagIds) async {
+                    final thread = await chat.createForumPost(
+                      channelId: channel.id,
+                      name: name,
+                      content: content,
+                      autoArchiveDurationMinutes: duration,
+                      attachments: attachments,
+                      appliedTagIds: tagIds,
+                    );
+                    if (thread == null) return false;
+                    widget.onSelectChannel(thread.id);
+                    return true;
+                  },
             ),
             ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
           };
@@ -359,9 +361,8 @@ class _ConversationPaneState extends State<ConversationPane> {
           threadMembership: channel.isThread
               ? ListenableBuilder(
                   listenable: threadMembership,
-                  builder: (_, _) => ThreadMembershipButton(
-                    controller: threadMembership,
-                  ),
+                  builder: (_, _) =>
+                      ThreadMembershipButton(controller: threadMembership),
                 )
               : null,
           channels: widget.channels,
@@ -421,10 +422,8 @@ class _ConversationPaneState extends State<ConversationPane> {
               widget.workspace,
               channel,
             ),
-            onSearchMembers: (query) => chat.searchGuildMembers(
-              spaceId: channel.spaceId,
-              query: query,
-            ),
+            onSearchMembers: (query) =>
+                chat.searchGuildMembers(spaceId: channel.spaceId, query: query),
             customEmojis: widget.workspace.emojisFor(channel.spaceId),
             guildStickers: widget.workspace.stickersFor(channel.spaceId),
             isSending: chat.isSending,
@@ -509,6 +508,34 @@ class _ConversationPaneState extends State<ConversationPane> {
       );
     }
     final workspaceController = WorkspaceScope.of(context);
+    // Kept across rebuilds that leave the conversation as it was, which is
+    // most of them: somebody typing, a voice seat filling and a presence
+    // arriving all redraw the pane without changing a message. Everything the
+    // timeline reads is listed here.
+    return CachedSubtree(
+      dependencies: [
+        widget.workspace.messagesFor(channel.id),
+        widget.workspace.members,
+        widget.workspace.roles,
+        widget.workspace.channels,
+        channel,
+        widget.capabilities,
+        workspaceController.query,
+        workspaceController.targetMessageId,
+        chat.canLoadOlderMessages(channel.id),
+        chat.isLoadingOlderMessages(channel.id),
+        chat.olderMessagesError(channel.id),
+      ],
+      builder: (_) => _timeline(context, chat, workspaceController),
+    );
+  }
+
+  Widget _timeline(
+    BuildContext context,
+    ChatController chat,
+    WorkspaceController workspaceController,
+  ) {
+    final channel = widget.channel;
     return MessageList(
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
@@ -569,10 +596,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       target: MessageReportTarget(
         channelId: message.channelId,
         messageId: message.id,
-        isFirstDirectMessage: _isFirstDirectMessage(
-          widget.workspace,
-          message,
-        ),
+        isFirstDirectMessage: _isFirstDirectMessage(widget.workspace, message),
       ),
     );
     try {

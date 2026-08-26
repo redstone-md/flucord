@@ -5,6 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 /// without re-sorting every message the client has cached. These pin the
 /// ordering that used to come from that sort.
 void main() {
+  test('a channel lookup answers with the same list every time', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('a-2', 'alpha', 3),
+    ]);
+
+    final first = workspace.messagesFor('alpha');
+    final second = workspace.messagesFor('alpha');
+
+    expect(identical(first, second), isTrue);
+    expect(
+      () => first.add(_message('a-3', 'alpha', 5)),
+      throwsUnsupportedError,
+    );
+  });
+
   test('places an arriving message after the ones its channel already had', () {
     final workspace = _workspaceWith([
       _message('a-1', 'alpha', 1),
@@ -74,7 +90,14 @@ ChatMessage _message(
 );
 
 ChatWorkspace _workspaceWith(List<ChatMessage> messages) => ChatWorkspace(
-  spaces: const [CommunitySpace(id: 'guild-1', name: 'Forge', monogram: 'F', colorValue: 0xFF5865F2)],
+  spaces: const [
+    CommunitySpace(
+      id: 'guild-1',
+      name: 'Forge',
+      monogram: 'F',
+      colorValue: 0xFF5865F2,
+    ),
+  ],
   channels: const [
     ConversationChannel(
       id: 'alpha',

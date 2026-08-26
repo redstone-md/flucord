@@ -146,15 +146,20 @@ final class ChatWorkspace {
     for (final item in items) {
       grouped.putIfAbsent(keyOf(item), () => <T>[]).add(item);
     }
-    return grouped;
+    return {
+      for (final entry in grouped.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
   }
 
-  /// Copies the group so callers keep the fixed-length list they had before,
-  /// and so sorting the result in place cannot disturb the table.
-  static List<T> _group<T>(Map<String, List<T>> groups, String key) {
-    final group = groups[key];
-    return group == null ? const [] : List.of(group, growable: false);
-  }
+  /// Hands out the group itself rather than a copy of it.
+  ///
+  /// A lookup runs several times per frame, so copying it made every one of
+  /// those cost the length of the channel. The group cannot be written to, so
+  /// sharing it is safe, and the same list coming back each time is what lets
+  /// a caller tell an unchanged channel by identity.
+  static List<T> _group<T>(Map<String, List<T>> groups, String key) =>
+      groups[key] ?? const [];
 
   List<ConversationChannel> channelsFor(String spaceId) =>
       _group(_channelsBySpaceId, spaceId);
