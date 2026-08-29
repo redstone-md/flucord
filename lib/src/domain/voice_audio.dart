@@ -82,7 +82,6 @@ abstract interface class VoiceOpusDecoderFactory {
   VoiceOpusDecoder createDecoder();
 }
 
-/// Creates the paired voice encoder and decoder implementations.
 abstract interface class VoiceOpusCodecFactory
     implements VoiceOpusDecoderFactory {
   VoiceOpusEncoder createEncoder();

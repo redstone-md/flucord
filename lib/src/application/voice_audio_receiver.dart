@@ -8,15 +8,12 @@ final class VoiceAudioReceiver {
   VoiceAudioReceiver({
     required VoiceOpusDecoderFactory decoderFactory,
     VoiceAudioReceiverTransport? transport,
-  }) : _codecFactory = decoderFactory,
-       _transport = transport {
-    _remoteSubscription = transport?.remoteAudio.listen(
-      _handleRemoteOpus,
-      onError: _emitError,
-    );
+  }) : _decoderFactory = decoderFactory {
+    _transport = transport;
+    _remoteSubscription = _subscribe(transport);
   }
 
-  final VoiceOpusDecoderFactory _codecFactory;
+  final VoiceOpusDecoderFactory _decoderFactory;
   final StreamController<VoiceRemotePcmFrame> _remotePcm =
       StreamController.broadcast();
   final StreamController<Object> _errors = StreamController.broadcast();
@@ -40,22 +37,26 @@ final class VoiceAudioReceiver {
     _remoteSubscription = null;
     _disposeDecoders();
     _transport = transport;
-    _remoteSubscription = transport?.remoteAudio.listen(
-      _handleRemoteOpus,
-      onError: _emitError,
-    );
+    _remoteSubscription = _subscribe(transport);
   }
+
+  StreamSubscription<VoiceRemoteOpusFrame>? _subscribe(
+    VoiceAudioReceiverTransport? transport,
+  ) => transport?.remoteAudio.listen(
+    _handleRemoteOpus,
+    onError: _emitError,
+  );
 
   void _handleRemoteOpus(VoiceRemoteOpusFrame frame) {
     if (_disposed) return;
     try {
       var decoder = _decoders.putIfAbsent(
         frame.userId,
-        _codecFactory.createDecoder,
+        _decoderFactory.createDecoder,
       );
       if (frame.missingFramesBefore > _maxConcealedFrames) {
         decoder.dispose();
-        decoder = _codecFactory.createDecoder();
+        decoder = _decoderFactory.createDecoder();
         _decoders[frame.userId] = decoder;
       } else if (frame.missingFramesBefore > 0) {
         for (var index = 1; index < frame.missingFramesBefore; index++) {
@@ -72,7 +73,7 @@ final class VoiceAudioReceiver {
       _emitRemotePcm(frame.userId, decoder.decode(frame.opus));
       _undecodableFrames.remove(frame.userId);
     } catch (error) {
-      // One refused packet is not a broken call. Report a persistent failure.
+      // One refused packet is not a broken room. Report a persistent failure.
       final failures = (_undecodableFrames[frame.userId] ?? 0) + 1;
       _undecodableFrames[frame.userId] = failures;
       if (failures == _undecodableLimit) _emitError(error);

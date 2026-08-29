@@ -6,7 +6,7 @@ import 'package:flucord/src/application/voice_audio_receiver.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 
 void main() {
-  test('decodes remote Opus without creating or reading a microphone', () async {
+  test('decodes remote Opus without an encoder or microphone', () async {
     final codecs = _FakeDecoderFactory();
     final transport = _FakeReceiverTransport();
     final receiver = VoiceAudioReceiver(
