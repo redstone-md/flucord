@@ -31,9 +31,14 @@ final class VoiceRemotePcmFrame {
   final Int16List samples;
 }
 
-abstract interface class VoiceAudioTransport {
+/// Carries decoded-from-transport Opus frames to a receiver.
+abstract interface class VoiceAudioReceiverTransport {
   Stream<VoiceRemoteOpusFrame> get remoteAudio;
+}
 
+/// Carries both remote audio and this account's microphone audio.
+abstract interface class VoiceAudioTransport
+    implements VoiceAudioReceiverTransport {
   void sendOpusFrame(Uint8List opusFrame);
   Future<void> finishSpeaking();
 }
@@ -72,9 +77,15 @@ abstract interface class VoiceOpusDecoder {
   void dispose();
 }
 
-abstract interface class VoiceOpusCodecFactory {
-  VoiceOpusEncoder createEncoder();
+/// Creates decoders without requiring an encoder or microphone.
+abstract interface class VoiceOpusDecoderFactory {
   VoiceOpusDecoder createDecoder();
+}
+
+/// Creates the paired voice encoder and decoder implementations.
+abstract interface class VoiceOpusCodecFactory
+    implements VoiceOpusDecoderFactory {
+  VoiceOpusEncoder createEncoder();
 }
 
 abstract interface class VoiceAudioPlaybackService {
