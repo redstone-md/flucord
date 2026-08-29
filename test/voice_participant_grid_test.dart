@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
+import 'package:flucord/src/presentation/widgets/voice_stream_controls.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
@@ -75,7 +76,7 @@ void main() {
       _TestApp(
         participants: const [participant],
         onWatchStream: watched.add,
-        openStreamUserId: 'member-2',
+        open: const {'member-2'},
       ),
     );
     await tester.pumpAndSettle();
@@ -85,6 +86,34 @@ void main() {
       find.byKey(const ValueKey('voice-on-stage-member-2')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('every open stream is marked, not just one of them', (
+    tester,
+  ) async {
+    // Several streams open at once: a single name for the room could only
+    // ever mark one tile.
+    await tester.pumpWidget(
+      _TestApp(
+        participants: [
+          VoiceParticipant(userId: 'member-2', isStreaming: true),
+          VoiceParticipant(userId: 'member-3', isStreaming: true),
+        ],
+        onWatchStream: (_) {},
+        open: const {'member-2', 'member-3'},
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-member-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-member-3')),
+      findsOneWidget,
+    );
+    expect(find.text('Watch'), findsNothing);
+    expect(find.text('Stop watching'), findsNWidgets(2));
   });
 
   testWidgets('this account is not offered its own share', (tester) async {
@@ -141,13 +170,15 @@ class _TestApp extends StatelessWidget {
     required this.participants,
     this.onWatchStream,
     this.onStopShare,
-    this.openStreamUserId,
+    this.open = const {},
   });
 
   final List<VoiceParticipant> participants;
   final void Function(String userId)? onWatchStream;
   final VoidCallback? onStopShare;
-  final String? openStreamUserId;
+
+  /// Whose stream this client has open, asked of the grid one tile at a time.
+  final Set<String> open;
 
   @override
   Widget build(BuildContext context) {
@@ -168,9 +199,11 @@ class _TestApp extends StatelessWidget {
           ],
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
-          onWatchStream: onWatchStream,
-          onStopShare: onStopShare,
-          openStreamUserId: openStreamUserId,
+          streams: VoiceStreamControls(
+            isOpen: open.contains,
+            onWatch: onWatchStream,
+            onStopShare: onStopShare,
+          ),
         ),
       ),
     );

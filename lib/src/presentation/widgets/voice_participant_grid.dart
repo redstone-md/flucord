@@ -6,6 +6,7 @@ import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import 'camera_picture.dart';
 import 'member_avatar.dart';
+import 'voice_stream_controls.dart';
 
 class VoiceParticipantGrid extends StatelessWidget {
   const VoiceParticipantGrid({
@@ -14,9 +15,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
-    this.onWatchStream,
-    this.onStopShare,
-    this.openStreamUserId,
+    this.streams,
     this.compact = false,
     super.key,
   });
@@ -29,20 +28,9 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// The latest picture from a participant's camera, when one is arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
 
-  /// Opens somebody's stream, or closes the one being watched. Null on a build
-  /// that cannot watch, which is one with no decoder: a call is a room like
-  /// any other and gets the same control.
-  final void Function(String userId)? onWatchStream;
-
-  /// Ends this account's own stream, or null while this account is not
-  /// sharing. The sender's own tile reads that: the roster reports a stream
-  /// only once Discord echoes one back.
-  final VoidCallback? onStopShare;
-
-  /// Whose stream the room has open, so the tile offers to leave it rather
-  /// than open it. Asked-for counts: the ask and the pictures are a second
-  /// apart, and the ask is the only half the grid is on screen for.
-  final String? openStreamUserId;
+  /// The streams this client has open, and the controls a tile offers for
+  /// them. Null where the room was drawn without a stream plane at all.
+  final VoiceStreamControls? streams;
 
   /// Whether the grid is a strip under a stream on the stage rather than the
   /// whole room. Same tiles, smaller, reading left to right.
@@ -106,9 +94,7 @@ class VoiceParticipantGrid extends StatelessWidget {
               _unknownMember(participant.userId),
           isCurrentUser: participant.userId == currentMemberId,
           spaceId: spaceId,
-          onWatchStream: onWatchStream,
-          onStopShare: onStopShare,
-          isOpen: participant.userId == openStreamUserId,
+          streams: streams,
           compact: compact,
         );
       },
@@ -137,9 +123,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.isCurrentUser,
     required this.spaceId,
     this.cameraFrame,
-    this.onWatchStream,
-    this.onStopShare,
-    this.isOpen = false,
+    this.streams,
     this.compact = false,
   });
 
@@ -148,10 +132,13 @@ class _ParticipantTile extends StatelessWidget {
   final Member member;
   final bool isCurrentUser;
   final String spaceId;
-  final void Function(String userId)? onWatchStream;
-  final VoidCallback? onStopShare;
-  final bool isOpen;
+  final VoiceStreamControls? streams;
   final bool compact;
+
+  /// Whether this participant's stream is open here, which is what the mark
+  /// and the control read. Asked of each tile rather than answered once for
+  /// the room, because several streams can be open at once.
+  bool get isOpen => streams?.isOpen(participant.userId) ?? false;
 
   /// Whether the tile carries a stream card rather than a plain name.
   ///
@@ -159,7 +146,8 @@ class _ParticipantTile extends StatelessWidget {
   /// client rather than from the roster: a share that is still starting has
   /// not been echoed back as a voice state yet.
   bool get hasStream =>
-      participant.isStreaming || (isCurrentUser && onStopShare != null);
+      participant.isStreaming ||
+      (isCurrentUser && streams?.onStopShare != null);
 
   /// What is wrong with the participant's microphone, if anything.
   List<Widget> get _stateIcons => [
@@ -224,8 +212,8 @@ class _ParticipantTile extends StatelessWidget {
                   name: member.displayName,
                   stateIcons: _stateIcons,
                   isOpen: isOpen,
-                  onWatch: isCurrentUser ? null : onWatchStream,
-                  onStopShare: isCurrentUser ? onStopShare : null,
+                  onWatch: isCurrentUser ? null : streams?.onWatch,
+                  onStopShare: isCurrentUser ? streams?.onStopShare : null,
                 ),
               )
             else

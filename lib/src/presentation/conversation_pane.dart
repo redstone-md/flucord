@@ -9,8 +9,10 @@ import '../application/go_live_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/voice_channel_surface.dart';
+import '../application/stream_viewer_controller.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
+import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
 import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
@@ -46,6 +48,7 @@ import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
 import 'widgets/voice_room_view.dart';
 import 'widgets/voice_scope.dart';
+import 'widgets/voice_stream_controls.dart';
 import 'widgets/workspace_scope.dart';
 
 /// The conversation surface for one channel: the header, the room or the
@@ -209,14 +212,32 @@ class _ConversationPaneState extends State<ConversationPane> {
   /// that ask rather than send a second one.
   void _toggleWatch(String userId) {
     final viewer = StreamViewerScope.read(context);
-    final opened = viewer.watching?.userId ?? viewer.requested?.userId;
-    if (opened == userId) {
-      unawaited(viewer.stop());
+    unawaited(_openOrClose(viewer, widget.channel.streamKeyFor(userId)));
+  }
+
+  Future<void> _openOrClose(
+    StreamViewerController viewer,
+    GoLiveStreamKey key,
+  ) async {
+    if (viewer.isOpen(key)) {
+      await viewer.stop(key);
       return;
     }
     // Only the ask goes out here. Discord answers with an endpoint, and the
     // connection that answer opens is what feeds the viewer.
-    unawaited(viewer.requestWatch(widget.channel.streamKeyFor(userId)));
+    if (await viewer.requestWatch(key)) return;
+    if (!mounted || viewer.refused != key) return;
+    // Turned down for want of room, which is a limit of ours and not
+    // Discord's: a control that does nothing when pressed reads as broken.
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'You can watch up to $maxWatchedStreams streams at once. Stop one first.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -257,13 +278,15 @@ class _ConversationPaneState extends State<ConversationPane> {
     Widget streamViewer() => ListenableBuilder(
       listenable: viewer,
       // Whoever is being watched takes the stage; the participant grid is
-      // what the room shows when nobody is.
-      builder: (_, _) => viewer.watching == null
-          ? const SizedBox.shrink()
-          : GoLiveViewer(
-              frames: viewer.frames,
-              label: viewer.watching!.userId,
-            ),
+      // what the room shows when nobody is. Asked-for is not on the stage:
+      // an endpoint that never comes must not take the room away.
+      builder: (_, _) => switch (viewer.watching) {
+        null => const SizedBox.shrink(),
+        final key => GoLiveViewer(
+          frames: viewer.framesFor(key),
+          label: key.userId,
+        ),
+      },
     );
 
     Widget goLiveControl() => ListenableBuilder(
@@ -282,6 +305,15 @@ class _ConversationPaneState extends State<ConversationPane> {
     VoidCallback? stopShare() =>
         goLive.isSharing ? () => unawaited(goLive.stop()) : null;
 
+    // What the tiles know about the streams this client is holding: which
+    // ones are open, and how to open or close one. One value rather than
+    // four arguments because the mark is asked of each tile now.
+    VoiceStreamControls streamControls() => VoiceStreamControls(
+      isOpen: (userId) => viewer.isOpen(widget.channel.streamKeyFor(userId)),
+      onWatch: _toggleWatch,
+      onStopShare: stopShare(),
+    );
+
     Widget room() => inCall && !showsMessages
         ? VoiceRoomView(
             // A call has no guild; the DM pseudo-space still supplies avatars.
@@ -291,13 +323,11 @@ class _ConversationPaneState extends State<ConversationPane> {
             // second connection Discord only opens when told to, and a room
             // that dialled every stream in it would be paying for pictures
             // nobody is looking at.
-            onWatchStream: _toggleWatch,
-            onStopShare: stopShare(),
+            streams: streamControls(),
+            hasStreamOnStage: viewer.watching != null,
             // What is on the stage, which is only a stream that is actually
             // arriving. Keying this on the ask meant a request Discord never
             // answered hid the participant grid for the rest of the call.
-            watchedUserId: viewer.watching?.userId,
-            pendingWatchUserId: viewer.requested?.userId,
             streamViewer: streamViewer(),
             goLive: goLiveControl(),
             channelId: channel.id,
@@ -309,10 +339,8 @@ class _ConversationPaneState extends State<ConversationPane> {
           )
         : switch (channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
-              onWatchStream: _toggleWatch,
-              onStopShare: stopShare(),
-              watchedUserId: viewer.watching?.userId,
-              pendingWatchUserId: viewer.requested?.userId,
+              streams: streamControls(),
+              hasStreamOnStage: viewer.watching != null,
               streamViewer: streamViewer(),
               goLive: goLiveControl(),
               soundboard: ListenableBuilder(

@@ -44,7 +44,7 @@ final class StreamRoomHarness {
     )..reconcileService();
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: StreamRoomDecoder(),
+      decoderFactory: StreamRoomDecoder.new,
     );
     goLive = GoLiveController(
       repositoryProvider: () => repository,

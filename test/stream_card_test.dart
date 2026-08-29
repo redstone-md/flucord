@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 
 import 'support/stream_room_harness.dart';
@@ -80,7 +81,12 @@ void main() {
     expect(harness.repository.watched, [
       const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1'),
     ]);
-    expect(harness.viewer.requested, isNull);
+    expect(
+      harness.viewer.isOpen(
+        const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1'),
+      ),
+      isFalse,
+    );
     expect(_onCard('friend-1', find.text('Watch')), findsOneWidget);
   });
 
@@ -107,6 +113,69 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('voice-on-stage-friend-2')), findsNothing);
+  });
+
+  testWidgets('a fifth stream is refused, and the room says why', (tester) async {
+    final harness = await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [
+        StreamRoomSeat('friend-1', isStreaming: true),
+        StreamRoomSeat('friend-2', isStreaming: true),
+      ],
+    );
+
+    // Four sessions already open, none of them this room's: the cap is this
+    // client's and not the channel's.
+    for (var index = 0; index < maxWatchedStreams; index++) {
+      await harness.viewer.requestWatch(
+        GoLiveStreamKey.call(channelId: 'other-$index', userId: 'u$index'),
+      );
+    }
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+    // Pumped, not settled: settling would wait out the notice's own timer.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.text('You can watch up to $maxWatchedStreams streams at once. Stop one first.'),
+      findsOneWidget,
+    );
+    // Turned down here, so Discord was never asked for a fifth.
+    expect(
+      harness.repository.watched,
+      isNot(
+        contains(const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1')),
+      ),
+    );
+  });
+
+  testWidgets('every open stream is marked on its tile', (tester) async {
+    await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [
+        StreamRoomSeat('friend-1', isStreaming: true),
+        StreamRoomSeat('friend-2', isStreaming: true),
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-2')));
+    await tester.pumpAndSettle();
+
+    // Two open at once, and both marked: the mark cannot name one user.
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-friend-2')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a participant who is not streaming has no card', (tester) async {

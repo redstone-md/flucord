@@ -8,6 +8,8 @@ import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'them');
+const _other = GoLiveStreamKey.guild(guildId: 'g', channelId: 'c', userId: 'u');
+const _ownKey = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
 
 /// The packets one small access unit becomes, as a stream connection would
 /// deliver them.
@@ -35,7 +37,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: _FakeDecoder(supported: false),
+      decoderFactory: () => _FakeDecoder(supported: false),
     );
     addTearDown(controller.dispose);
 
@@ -50,7 +52,7 @@ void main() {
   test('a transport with no stream plane watches nothing', () async {
     final controller = StreamViewerController(
       repositoryProvider: () => null,
-      decoder: _FakeDecoder(),
+      decoderFactory: () => _FakeDecoder(),
     );
     addTearDown(controller.dispose);
 
@@ -67,7 +69,7 @@ void main() {
     addTearDown(packets.close);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
 
@@ -101,7 +103,7 @@ void main() {
     addTearDown(packets.close);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
     await controller.watch(_key, packets: packets.stream);
@@ -121,7 +123,7 @@ void main() {
     addTearDown(packets.close);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
     await controller.watch(_key, packets: packets.stream);
@@ -147,7 +149,7 @@ void main() {
     expect(decoder.stopped, 1);
   });
 
-  test('watching a second stream replaces the first', () async {
+  test('the stream asked for last takes the stage, the other stays open', () async {
     final repository = _FakeRepository();
     final decoder = _FakeDecoder();
     final first = StreamController<IncomingVideoPacket>();
@@ -156,7 +158,7 @@ void main() {
     addTearDown(second.close);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
 
@@ -172,7 +174,11 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(controller.watching, other);
-    // The stream that was replaced is no longer read.
+    // Replaced on the stage, not closed: it is still read, its packets just
+    // are not the ones the stage is counting.
+    expect(controller.isWatching(_key), isTrue);
+    expect(controller.receivedPacketsFor(_key), 1);
+    expect(controller.receivedPacketsFor(other), 0);
     expect(controller.receivedPackets, 0);
   });
 
@@ -181,7 +187,7 @@ void main() {
     final decoder = _FakeDecoder();
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
 
@@ -200,7 +206,7 @@ void main() {
     final decoder = _FakeDecoder(failStart: true);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
 
@@ -218,7 +224,7 @@ void main() {
     addTearDown(packets.close);
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: _FakeDecoder(),
+      decoderFactory: () => _FakeDecoder(),
     );
     addTearDown(controller.dispose);
     await controller.watch(_key, packets: packets.stream);
@@ -230,16 +236,18 @@ void main() {
   });
 
   test('the frames it exposes are the decoder\'s own', () async {
+    final repository = _FakeRepository();
     final decoder = _FakeDecoder();
     final controller = StreamViewerController(
-      repositoryProvider: () => _FakeRepository(),
-      decoder: decoder,
+      repositoryProvider: () => repository,
+      decoderFactory: () => decoder,
     );
     addTearDown(controller.dispose);
     addTearDown(decoder.close);
+    await controller.watch(_key, packets: const Stream.empty());
 
     final seen = <DecodedVideoFrame>[];
-    final subscription = controller.frames.listen(seen.add);
+    final subscription = controller.framesFor(_key).listen(seen.add);
     addTearDown(subscription.cancel);
     decoder.emit(
       DecodedVideoFrame(
@@ -260,7 +268,7 @@ void main() {
       final decoder = _FakeDecoder();
       final controller = StreamViewerController(
         repositoryProvider: () => repository,
-        decoder: decoder,
+        decoderFactory: () => decoder,
       );
       addTearDown(controller.dispose);
 
@@ -279,7 +287,7 @@ void main() {
       final decoder = _FakeDecoder();
       final controller = StreamViewerController(
         repositoryProvider: () => repository,
-        decoder: decoder,
+        decoderFactory: () => decoder,
       );
       addTearDown(controller.dispose);
       final packets = StreamController<IncomingVideoPacket>();
@@ -304,7 +312,7 @@ void main() {
       final repository = _FakeRepository(failWatch: true);
       final controller = StreamViewerController(
         repositoryProvider: () => repository,
-        decoder: _FakeDecoder(),
+        decoderFactory: () => _FakeDecoder(),
       );
       addTearDown(controller.dispose);
 
@@ -318,7 +326,7 @@ void main() {
       final repository = _FakeRepository();
       final controller = StreamViewerController(
         repositoryProvider: () => repository,
-        decoder: _FakeDecoder(supported: false),
+        decoderFactory: () => _FakeDecoder(supported: false),
       );
       addTearDown(controller.dispose);
 
@@ -334,7 +342,7 @@ void main() {
       final repository = _FakeRepository();
       final controller = StreamViewerController(
         repositoryProvider: () => repository,
-        decoder: _FakeDecoder(),
+        decoderFactory: () => _FakeDecoder(),
       );
       addTearDown(controller.dispose);
 
@@ -350,7 +358,7 @@ void main() {
         final decoder = _FakeDecoder();
         final controller = StreamViewerController(
           repositoryProvider: () => _FakeRepository(),
-          decoder: decoder,
+          decoderFactory: () => decoder,
         );
         addTearDown(controller.dispose);
 
@@ -370,7 +378,7 @@ void main() {
       final decoder = _FakeDecoder();
       final controller = StreamViewerController(
         repositoryProvider: () => _FakeRepository(),
-        decoder: decoder,
+        decoderFactory: () => decoder,
       );
       addTearDown(controller.dispose);
 
@@ -390,7 +398,7 @@ void main() {
       () async {
         final controller = StreamViewerController(
           repositoryProvider: () => _FakeRepository(),
-          decoder: _FakeDecoder(failStart: true),
+          decoderFactory: () => _FakeDecoder(failStart: true),
         );
         addTearDown(controller.dispose);
 
@@ -403,7 +411,242 @@ void main() {
       },
     );
   });
+
+  group('several at once', () {
+    test('each session decodes through a decoder of its own', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: first.stream);
+      await controller.watch(_other, packets: second.stream);
+
+      // Two streams, two decoders: a decoder shared between them has
+      // nowhere to put the second one's pictures.
+      expect(made, hasLength(2));
+      expect(controller.isWatching(_key), isTrue);
+      expect(controller.isWatching(_other), isTrue);
+    });
+
+    test('one stream\'s packets do not land in another\'s picture', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: first.stream);
+      await controller.watch(_other, packets: second.stream);
+
+      for (final packet in _packetsFor()) {
+        first.add(packet);
+      }
+      second.add(_packetsFor().first);
+      await Future<void>.delayed(Duration.zero);
+
+      // Two packets are a whole access unit and one is half of one. A
+      // depacketiser shared between the two would splice the halves into one
+      // picture and count it against whichever stream came second.
+      expect(controller.receivedPacketsFor(_key), 2);
+      expect(controller.decodedUnitsFor(_key), 1);
+      expect(controller.receivedPacketsFor(_other), 1);
+      expect(controller.decodedUnitsFor(_other), 0);
+    });
+
+    test('stopping one leaves the others running', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: first.stream);
+      await controller.watch(_other, packets: second.stream);
+
+      await controller.stop(_key);
+
+      expect(controller.isWatching(_key), isFalse);
+      expect(controller.isWatching(_other), isTrue);
+      expect(made.first.stopped, 1);
+      expect(made.last.stopped, 0);
+
+      // The one still open is still read, and the one that was closed is not.
+      for (final packet in _packetsFor()) {
+        second.add(packet);
+        first.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_other), 1);
+      expect(controller.receivedPacketsFor(_key), 0);
+    });
+
+    test('the stage falls back to the one left open', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: first.stream);
+      await controller.watch(_other, packets: second.stream);
+      expect(controller.watching, _other);
+
+      await controller.stop(_other);
+
+      expect(controller.watching, _key);
+    });
+
+    test('stopping with no key ends everything', () async {
+      final repository = _FakeRepository();
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: const Stream.empty());
+      await controller.watch(_other, packets: const Stream.empty());
+
+      await controller.stop();
+
+      expect(controller.isWatching(_key), isFalse);
+      expect(controller.isWatching(_other), isFalse);
+      expect(controller.watching, isNull);
+      // Leaving a room ends every session, not just the one on the stage.
+      expect([for (final decoder in made) decoder.stopped], [1, 1]);
+    });
+
+    test('a fifth session is refused, and the refusal is reported', () async {
+      final repository = _FakeRepository();
+      final keys = _roomKeys();
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      for (final key in keys.take(4)) {
+        expect(await controller.requestWatch(key), isTrue, reason: '$key');
+      }
+      expect(controller.isFull, isTrue);
+
+      // The cap is ours and not Discord's, so the fifth is turned down here
+      // rather than asked for and dropped on their side.
+      expect(await controller.requestWatch(keys[4]), isFalse);
+      expect(controller.refused, keys[4]);
+      expect(repository.watched, [...keys.take(4)]);
+
+      await controller.stop(keys.first);
+      expect(await controller.requestWatch(keys[4]), isTrue);
+      expect(controller.refused, isNull);
+    });
+
+    test('this account\'s own share counts towards the cap', () async {
+      final repository = _FakeRepository();
+      final keys = _roomKeys();
+      GoLiveStreamKey? own = _ownKey;
+      final controller = _viewer(repository, ownKey: () => own);
+      addTearDown(controller.dispose);
+
+      // Three of somebody else's, and this account's own is the fourth.
+      for (final key in keys.take(3)) {
+        expect(await controller.requestWatch(key), isTrue, reason: '$key');
+      }
+      expect(controller.isFull, isTrue);
+      expect(await controller.requestWatch(keys[3]), isFalse);
+
+      // Not sharing any more: the fourth goes through.
+      own = null;
+      expect(controller.isFull, isFalse);
+      expect(await controller.requestWatch(keys[3]), isTrue);
+    });
+
+    test('a withdrawal is held per key', () async {
+      final repository = _FakeRepository();
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      await controller.requestWatch(_other);
+      await controller.stop(_key);
+
+      // One withdrawn, one still on its way: only the ask that was stopped
+      // is dropped when Discord answers.
+      expect(
+        await controller.attach(_key, packets: const Stream.empty()),
+        isFalse,
+      );
+      expect(
+        await controller.attach(_other, packets: const Stream.empty()),
+        isTrue,
+      );
+      expect(controller.isWatching(_key), isFalse);
+      expect(controller.isWatching(_other), isTrue);
+    });
+
+    test('two asks withdrawn in turn are both dropped', () async {
+      final repository = _FakeRepository();
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      await controller.requestWatch(_other);
+      await controller.stop(_key);
+      await controller.stop(_other);
+
+      // A single withdrawal remembered for the whole controller could only
+      // hold the last one, and the first would take the stage after its
+      // control had closed it.
+      expect(
+        await controller.attach(_key, packets: const Stream.empty()),
+        isFalse,
+      );
+      expect(
+        await controller.attach(_other, packets: const Stream.empty()),
+        isFalse,
+      );
+      expect(controller.watching, isNull);
+    });
+  });
 }
+
+/// A controller that makes one decoder per session, recording them in [made]
+/// when [made] is given.
+///
+/// Whether this build can decode at all is asked of a decoder that no session
+/// reads from, so the list is emptied once that has been asked: what a test
+/// counts afterwards is sessions only.
+StreamViewerController _viewer(
+  GoLiveRepository repository, {
+  List<_FakeDecoder>? made,
+  GoLiveStreamKey? Function()? ownKey,
+}) {
+  final controller = StreamViewerController(
+    repositoryProvider: () => repository,
+    decoderFactory: () {
+      final decoder = _FakeDecoder();
+      made?.add(decoder);
+      return decoder;
+    },
+    ownKeyProvider: ownKey,
+  );
+  expect(controller.isSupported, isTrue);
+  made?.clear();
+  return controller;
+}
+
+/// Five streams in one room, which is one more than this client will hold.
+List<GoLiveStreamKey> _roomKeys() => [
+  for (var index = 0; index < 5; index++)
+    GoLiveStreamKey.call(channelId: 'dm-1', userId: 'u$index'),
+];
 
 final class _FakeDecoder implements VideoDecoderService {
   _FakeDecoder({this.supported = true, this.failStart = false});

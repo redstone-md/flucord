@@ -97,6 +97,31 @@ void main() {
     expect(find.text('Watch'), findsOneWidget);
   });
 
+  testWidgets('an ask Discord has not answered does not take the stage', (
+    tester,
+  ) async {
+    final harness = await pumpStreamRoom(tester, streamRoomCall);
+
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+    await tester.pumpAndSettle();
+
+    // The ask is out and the tile says so, but no connection is carrying
+    // pictures yet: keying the stage on the ask hid the participant grid for
+    // the rest of every call Discord never answered.
+    expect(harness.repository.watched, hasLength(1));
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      findsOneWidget,
+    );
+    expect(find.byType(GoLiveViewer), findsNothing);
+    // The grid is still the room rather than the strip under a stream: the
+    // stage is what an arriving stream takes, and an ask takes nothing.
+    final grid = tester.widget<GridView>(
+      find.byKey(const ValueKey('voice-participant-grid')),
+    );
+    expect(grid.scrollDirection, Axis.vertical);
+  });
+
   testWidgets('a server voice room still asks for a guild stream key', (
     tester,
   ) async {

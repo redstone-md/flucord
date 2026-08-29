@@ -367,12 +367,18 @@ final class AppComposition {
     void applyQuality() => unawaited(goLive.applyQuality());
     streamQuality.addListener(applyQuality);
     _teardown.add(() => streamQuality.removeListener(applyQuality));
-    // Watching somebody else's share: the decoder and the depacketiser in
-    // front of it.
+    // Watching somebody else's share: a session per stream, each with the
+    // decoder and the depacketiser in front of it. The decoders are made
+    // through a factory for the same reason the cameras' are — a room where
+    // nobody is streaming opens none at all.
     streamViewer = _register(
       StreamViewerController(
         repositoryProvider: () => chat.goLive,
-        decoder: bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        decoderFactory: () =>
+            bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        // This account's own share is not watched here, but it is a session
+        // like any other and the cap counts it (ADR-0002).
+        ownKeyProvider: () => goLive.streamKey,
       ),
     );
     // The second RTC connection a stream lives on. Discord does not carry Go

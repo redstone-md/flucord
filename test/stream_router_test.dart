@@ -77,7 +77,7 @@ final class _Wiring {
     );
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
-      decoder: decoder,
+      decoderFactory: () => decoder,
     );
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,

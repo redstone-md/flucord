@@ -8,6 +8,7 @@ import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
+import 'voice_stream_controls.dart';
 import '../../domain/voice_connection.dart';
 import 'member_avatar.dart';
 
@@ -23,10 +24,8 @@ class VoiceRoomView extends StatefulWidget {
     this.soundboard,
     this.goLive,
     this.streamViewer,
-    this.onWatchStream,
-    this.onStopShare,
-    this.watchedUserId,
-    this.pendingWatchUserId,
+    this.hasStreamOnStage = false,
+    this.streams,
     this.cameraFrameFor,
     this._spaceId,
     super.key,
@@ -55,24 +54,22 @@ class VoiceRoomView extends StatefulWidget {
   /// The Go Live control, or null outside a server voice channel.
   final Widget? goLive;
 
-  /// Somebody else's stream, drawn in place of the participant grid while it
-  /// is being watched.
+  /// Somebody else's stream, drawn on the stage above the participant grid
+  /// while it is being watched.
   final Widget? streamViewer;
 
-  /// Opens or closes somebody else's screen share.
-  final void Function(String userId)? onWatchStream;
+  /// Whether a stream is being drawn on the stage, which is what shrinks the
+  /// grid into a strip beneath it.
+  ///
+  /// Asked for is not on the stage: an ask Discord never answers must not
+  /// take the room away. It is a fact about the stream rather than about the
+  /// widget, because a viewer that draws nothing cannot be told apart from
+  /// one that is showing a stream.
+  final bool hasStreamOnStage;
 
-  /// Ends this account's own share, from the tile it is being sent from. Null
-  /// while this account is not sharing.
-  final VoidCallback? onStopShare;
-
-  /// Whose share is on screen, so the tile offers to leave it.
-  final String? watchedUserId;
-
-  /// Whose share has been asked for but is not arriving yet. Kept apart from
-  /// [watchedUserId] because an ask Discord never answers must not take the
-  /// stage away from the room.
-  final String? pendingWatchUserId;
+  /// The streams this client has open, and the controls the tiles offer for
+  /// them.
+  final VoiceStreamControls? streams;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -130,10 +127,8 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             Expanded(
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
-                onWatchStream: widget.onWatchStream,
-                onStopShare: widget.onStopShare,
-                watchedUserId: widget.watchedUserId,
-                pendingWatchUserId: widget.pendingWatchUserId,
+                hasStreamOnStage: widget.hasStreamOnStage,
+                streams: widget.streams,
                 goLive: widget.goLive,
                 soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
@@ -237,10 +232,7 @@ class _VoiceStage extends StatelessWidget {
 
   const _VoiceStage({
     required this.streamViewer,
-    required this.onWatchStream,
-    required this.onStopShare,
-    required this.watchedUserId,
-    required this.pendingWatchUserId,
+    required this.hasStreamOnStage,
     required this.goLive,
     required this.soundboard,
     required this.stageControls,
@@ -250,6 +242,7 @@ class _VoiceStage extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
+    this.streams,
   });
 
   /// The latest picture from a participant's camera, when one is
@@ -265,10 +258,8 @@ class _VoiceStage extends StatelessWidget {
   final Widget? soundboard;
   final Widget? goLive;
   final Widget? streamViewer;
-  final void Function(String userId)? onWatchStream;
-  final VoidCallback? onStopShare;
-  final String? watchedUserId;
-  final String? pendingWatchUserId;
+  final bool hasStreamOnStage;
+  final VoiceStreamControls? streams;
 
   @override
   Widget build(BuildContext context) {
@@ -280,16 +271,13 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    final onStage = watchedUserId != null;
     Widget grid({required bool compact}) => VoiceParticipantGrid(
       participants: controller.participants,
       members: members,
       currentMemberId: currentMemberId,
       spaceId: spaceId,
       cameraFrameFor: cameraFrameFor,
-      onWatchStream: onWatchStream,
-      onStopShare: onStopShare,
-      openStreamUserId: watchedUserId ?? pendingWatchUserId,
+      streams: streams,
       compact: compact,
     );
     return Column(
@@ -363,9 +351,9 @@ class _VoiceStage extends StatelessWidget {
               // than off the screen: the tile is where the mark and the
               // control for that stream live, and a stage with no tiles has
               // nowhere to put either.
-              if (onStage)
+              if (hasStreamOnStage)
                 Expanded(child: streamViewer ?? const SizedBox.shrink()),
-              onStage
+              hasStreamOnStage
                   ? SizedBox(height: _stripHeight, child: grid(compact: true))
                   : Expanded(child: grid(compact: false)),
             ],
