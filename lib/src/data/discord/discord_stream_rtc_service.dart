@@ -55,6 +55,11 @@ final class DiscordStreamRtcService {
   /// The connection this account's share is sent on, when it is sharing.
   DiscordStreamRtcSession? _sending;
 
+  /// Watch commands for this account's own key that have not received an
+  /// endpoint yet. They identify a receiving connection without guessing from
+  /// endpoint arrival order.
+  final Map<String, int> _pendingWatches = {};
+
   /// Claims the first own endpoint before [_open] crosses an async close, so
   /// two near-simultaneous endpoint events cannot both become senders.
   bool _sendingOpening = false;
@@ -84,6 +89,19 @@ final class DiscordStreamRtcService {
     _servers = repository?.servers.listen(_acceptServer);
     _streamUpdates = repository?.updates.listen(_acceptStreamUpdate);
     return repository != null;
+  }
+
+  /// Records a watch command before its receiving endpoint arrives.
+  ///
+  /// Only the own key needs this intent. Other participants are always
+  /// receivers, and keeping their commands here would leave stale role hints.
+  void noteWatch(GoLiveStreamKey key) {
+    if (_identityProvider()?.userId != key.userId) return;
+    _pendingWatches.update(
+      key.value,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
   }
 
   /// The connection carrying [key], or null when there is none.
@@ -122,6 +140,7 @@ final class DiscordStreamRtcService {
     _closed = true;
     await _servers?.cancel();
     await _streamUpdates?.cancel();
+    _pendingWatches.clear();
     _sendingOpening = false;
     await _stopSending();
     for (final session in _sessions.values.toList(growable: false)) {
@@ -138,6 +157,7 @@ final class DiscordStreamRtcService {
   void _acceptStreamUpdate(GoLiveStream stream) {
     if (_closed) return;
     if (_repository?.streams.containsKey(stream.key.value) ?? true) return;
+    _pendingWatches.remove(stream.key.value);
     // A stream that ended takes both of its connections, the one it was sent
     // on and the one this client was watching it back on.
     if (_sending?.key == stream.key || _sendingOpening) {
@@ -163,11 +183,20 @@ final class DiscordStreamRtcService {
   }
 
   bool _claimSender(GoLiveStreamKey key, String userId) {
-    if (key.userId != userId || _sendingOpening) return false;
+    if (key.userId != userId) return false;
+    final pending = _pendingWatches[key.value] ?? 0;
+    if (pending > 0) {
+      if (pending == 1) {
+        _pendingWatches.remove(key.value);
+      } else {
+        _pendingWatches[key.value] = pending - 1;
+      }
+      return false;
+    }
+    if (_sendingOpening) return false;
     // A different key means the share moved or restarted, so it replaces the
-    // old sender connection. The same key is the receiving connection created
-    // by the self-watch ask.
-    if (_sending?.key == key) return false;
+    // old sender connection. A new endpoint for the same key is also the
+    // sender's replacement unless a pending watch marked it as receiving.
     _sendingOpening = true;
     return true;
   }
@@ -184,19 +213,10 @@ final class DiscordStreamRtcService {
     DiscordStreamIdentity identity, {
     required bool sending,
   }) async {
-    // Which end of the stream this connection is was claimed when the endpoint
-    // event arrived, before this async open began. Discord answers a create
-    // and a watch with the same endpoint shape, so the key does not say: the
-    // first endpoint this account's own key is given is the share's, and the
-    // second is this client watching that share back (ADR-0001). Anything else,
-    // and any later endpoint for a key already being watched, replaces the
-    // connection that key was being watched on.
+    // Role is resolved before opening: a pending own-key watch is receiving,
+    // otherwise an own endpoint is the sender connection (ADR-0001).
     if (sending) {
-      // A share that follows the account into another channel, or a restart
-      // from one, arrives under a second key with the first connection still
-      // live. Two sockets for one account would both be sending, and the
-      // first one's credentials are already dead. What this client was
-      // watching on the old key goes with it: that stream is over.
+      // A moved or restarted share replaces the old sender and own receiver.
       await _stopSending();
       for (final key in [
         for (final session in _sessions.values)

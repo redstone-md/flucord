@@ -340,6 +340,10 @@ class _StreamCard extends StatelessWidget {
   /// Ends this account's own share, and the reason its tile has a card.
   final VoidCallback? onStopShare;
 
+  /// The own stream is live as soon as Go Live is up, even while Discord is
+  /// still opening the receiving connection.
+  bool get showsLive => isOpen || (isOwn && onStopShare != null);
+
   @override
   Widget build(BuildContext context) {
     final accent = FlucordColors.danger;
@@ -347,7 +351,9 @@ class _StreamCard extends StatelessWidget {
       key: ValueKey('voice-stream-card-$userId'),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        border: Border.all(color: isOpen ? accent : context.surfaces.border),
+        border: Border.all(
+          color: showsLive ? accent : context.surfaces.border,
+        ),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Padding(
@@ -356,10 +362,9 @@ class _StreamCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Open here, which is not the same as on the stage: several
-            // streams are open at once and only the one asked for last is up
-            // there. The mark says what is true of this tile.
-            if (isOpen)
+            // The mark says what is true of this tile, not what is on the
+            // stage. The sender is live before its receiving connection opens.
+            if (showsLive)
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
                 child: Row(

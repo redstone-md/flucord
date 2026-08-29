@@ -213,12 +213,16 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
+    expect(_onCard('me', find.text('Live')), findsOneWidget);
     const key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
     await harness.viewer.requestWatch(key);
     await harness.viewer.attach(key, packets: const Stream.empty());
     await tester.pump();
 
+    // The sender tile is drawing the receive-side viewer, not the local
+    // capture. The router test covers the packet-to-decoder half.
     expect(find.byKey(const ValueKey('voice-self-preview')), findsOneWidget);
+    expect(find.byKey(const ValueKey('go-live-waiting')), findsOneWidget);
     expect(_onCard('me', find.text('Live')), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-stream-open-me')), findsOneWidget);
     await harness.goLive.stop();

@@ -35,12 +35,15 @@ final class StreamViewerController extends ChangeNotifier {
     required GoLiveRepository? Function() repositoryProvider,
     required VideoDecoderService Function() decoderFactory,
     GoLiveStreamKey? Function()? ownKeyProvider,
+    void Function(GoLiveStreamKey key)? onWatchRequested,
   }) : _repositoryProvider = repositoryProvider,
        _decoderFactory = decoderFactory,
-       _ownKeyProvider = ownKeyProvider;
+       _ownKeyProvider = ownKeyProvider,
+       _onWatchRequested = onWatchRequested;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
+  final void Function(GoLiveStreamKey key)? _onWatchRequested;
 
   /// This account's own share. A session like any other once the sender asks
   /// for it back, and counted towards the cap either way (ADR-0002).
@@ -183,7 +186,9 @@ final class StreamViewerController extends ChangeNotifier {
     _cancelled.remove(key);
     _requested(key);
     _notify();
-    return _ask(repository, key);
+    final asked = await _ask(repository, key);
+    if (asked) _onWatchRequested?.call(key);
+    return asked;
   }
 
   /// Starts decoding [packets] as [key], without asking Discord again.
@@ -266,6 +271,7 @@ final class StreamViewerController extends ChangeNotifier {
     _requested(key);
     _notify();
     if (!await _ask(repository, key)) return false;
+    _onWatchRequested?.call(key);
     return attach(key, packets: packets);
   }
 
@@ -331,7 +337,6 @@ final class StreamViewerController extends ChangeNotifier {
 
   /// Whether [key] is this account's own share.
   ///
-  /// Not watchable: it is the capture that feeds the stream and not a stream
   /// It is still a normal watched session: the sender asks Discord for it on a
   /// second connection and gets the same packets a watcher does (ADR-0001).
   bool _isOwn(GoLiveStreamKey key) => _ownKeyProvider?.call() == key;

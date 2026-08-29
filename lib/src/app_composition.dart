@@ -376,9 +376,10 @@ final class AppComposition {
         repositoryProvider: () => chat.goLive,
         decoderFactory: () =>
             bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
-        // This account's own share is not watched here, but it is a session
-        // like any other and the cap counts it (ADR-0002).
+        // This account's own share is watched back like any other stream, and
+        // its reserved session counts towards the cap (ADR-0002).
         ownKeyProvider: () => goLive.streamKey,
+        onWatchRequested: (key) => streamRtc.noteWatch(key),
       ),
     );
     // The second RTC connection a stream lives on. Discord does not carry Go

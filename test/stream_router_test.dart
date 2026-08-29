@@ -79,6 +79,7 @@ final class _Wiring {
       repositoryProvider: () => repository,
       decoderFactory: () => decoder,
       ownKeyProvider: () => goLive.streamKey,
+      onWatchRequested: (key) => service.noteWatch(key),
     );
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
@@ -270,6 +271,19 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(wiring.viewer.receivedPacketsFor(_key), 2);
       expect(wiring.viewer.decodedUnitsFor(_key), 1);
+
+      // A different stream can be watched while both own-key connections are
+      // alive; it gets its own receiving session and no sender announcement.
+      await wiring.viewer.requestWatch(_otherKey);
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.clients, hasLength(3));
+      final other = wiring.clients.last;
+      other.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(other.announcements, isEmpty);
+      expect(wiring.viewer.isWatching(_key), isTrue);
+      expect(wiring.viewer.isWatching(_otherKey), isTrue);
     },
   );
 
