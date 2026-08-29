@@ -15,7 +15,9 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.spaceId,
     this.cameraFrameFor,
     this.onWatchStream,
-    this.watchedUserId,
+    this.onStopShare,
+    this.openStreamUserId,
+    this.compact = false,
     super.key,
   });
 
@@ -32,8 +34,19 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// any other and gets the same control.
   final void Function(String userId)? onWatchStream;
 
-  /// Whose stream is on the stage, so the tile offers to leave rather than join.
-  final String? watchedUserId;
+  /// Ends this account's own stream, or null while this account is not
+  /// sharing. The sender's own tile reads that: the roster reports a stream
+  /// only once Discord echoes one back.
+  final VoidCallback? onStopShare;
+
+  /// Whose stream the room has open, so the tile offers to leave it rather
+  /// than open it. Asked-for counts: the ask and the pictures are a second
+  /// apart, and the ask is the only half the grid is on screen for.
+  final String? openStreamUserId;
+
+  /// Whether the grid is a strip under a stream on the stage rather than the
+  /// whole room. Same tiles, smaller, reading left to right.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -60,13 +73,28 @@ class VoiceParticipantGrid extends StatelessWidget {
     final memberById = {for (final member in members) member.id: member};
     return GridView.builder(
       key: const ValueKey('voice-participant-grid'),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 280,
-        mainAxisExtent: 184,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
+      // A strip reads left to right: the tiles it holds are what is left of
+      // the room once a stream has taken it, not a page of their own.
+      scrollDirection: compact ? Axis.horizontal : Axis.vertical,
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+          : const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      gridDelegate: compact
+          ? const SliverGridDelegateWithMaxCrossAxisExtent(
+              // Wide enough that the strip's height fits one row, so the
+              // tiles scroll sideways rather than stacking and clipping.
+              // The width carries a card's name and control side by side.
+              maxCrossAxisExtent: 200,
+              mainAxisExtent: 208,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            )
+          : const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 280,
+              mainAxisExtent: 184,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
       itemCount: participants.length,
       itemBuilder: (context, index) {
         final participant = participants[index];
@@ -79,7 +107,9 @@ class VoiceParticipantGrid extends StatelessWidget {
           isCurrentUser: participant.userId == currentMemberId,
           spaceId: spaceId,
           onWatchStream: onWatchStream,
-          isWatched: participant.userId == watchedUserId,
+          onStopShare: onStopShare,
+          isOpen: participant.userId == openStreamUserId,
+          compact: compact,
         );
       },
     );
@@ -108,7 +138,9 @@ class _ParticipantTile extends StatelessWidget {
     required this.spaceId,
     this.cameraFrame,
     this.onWatchStream,
-    this.isWatched = false,
+    this.onStopShare,
+    this.isOpen = false,
+    this.compact = false,
   });
 
   final DecodedVideoFrame? cameraFrame;
@@ -117,7 +149,25 @@ class _ParticipantTile extends StatelessWidget {
   final bool isCurrentUser;
   final String spaceId;
   final void Function(String userId)? onWatchStream;
-  final bool isWatched;
+  final VoidCallback? onStopShare;
+  final bool isOpen;
+  final bool compact;
+
+  /// Whether the tile carries a stream card rather than a plain name.
+  ///
+  /// This account's own tile is the one case where the card comes from the
+  /// client rather than from the roster: a share that is still starting has
+  /// not been echoed back as a voice state yet.
+  bool get hasStream =>
+      participant.isStreaming || (isCurrentUser && onStopShare != null);
+
+  /// What is wrong with the participant's microphone, if anything.
+  List<Widget> get _stateIcons => [
+    if (participant.isDeafened)
+      const _StateIcon(icon: Icons.headset_off_outlined, label: 'Deafened')
+    else if (participant.isMuted)
+      const _StateIcon(icon: Icons.mic_off_outlined, label: 'Muted'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -158,85 +208,198 @@ class _ParticipantTile extends StatelessWidget {
                   ),
                   child: MemberAvatar(
                     member: member,
-                    size: 64,
+                    size: compact ? 36 : 64,
                     showPresence: false,
                     spaceId: spaceId,
                   ),
                 ),
               ),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 9,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      member.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
+            if (hasStream)
+              Positioned(
+                left: 8,
+                right: 8,
+                bottom: 8,
+                child: _StreamCard(
+                  userId: participant.userId,
+                  name: member.displayName,
+                  stateIcons: _stateIcons,
+                  isOpen: isOpen,
+                  onWatch: isCurrentUser ? null : onWatchStream,
+                  onStopShare: isCurrentUser ? onStopShare : null,
+                ),
+              )
+            else
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 9,
+                child: Row(
+                  children: [
+                    Expanded(child: _TileName(member.displayName)),
+                    if (isCurrentUser) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        'You',
+                        style: TextStyle(
+                          color: context.surfaces.muted,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                    ..._stateIcons,
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The card a streaming participant's tile carries, in place of a name row.
+///
+/// A share is a connection Discord only opens when asked for, so opening one
+/// has to be something to press rather than something to notice.
+class _StreamCard extends StatelessWidget {
+  const _StreamCard({
+    required this.userId,
+    required this.name,
+    required this.stateIcons,
+    required this.isOpen,
+    this.onWatch,
+    this.onStopShare,
+  });
+
+  final String userId;
+  final String name;
+  final List<Widget> stateIcons;
+  final bool isOpen;
+
+  /// Opens this participant's stream, or closes it once it is open. Null where
+  /// the card has nothing to open one with.
+  final void Function(String userId)? onWatch;
+
+  /// Ends this account's own share, and the reason its tile has a card.
+  final VoidCallback? onStopShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = FlucordColors.danger;
+    return DecoratedBox(
+      key: ValueKey('voice-stream-card-$userId'),
+      decoration: BoxDecoration(
+        color: context.surfaces.raised,
+        border: Border.all(color: isOpen ? accent : context.surfaces.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // The grid gives way to the stage the moment pictures arrive, so
+            // the mark is only ever seen for the ask behind them.
+            if (isOpen)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.live_tv, size: 12, color: accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'On stage',
+                      key: ValueKey('voice-on-stage-$userId'),
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                  if (isCurrentUser) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      'You',
-                      style: TextStyle(
-                        color: context.surfaces.muted,
-                        fontSize: 10,
-                      ),
-                    ),
                   ],
-                  // A share nobody can open is only an icon. Discord puts a
-                  // button on the tile, and so does this: the stream is a
-                  // separate connection that is only dialled when asked for.
-                  if (participant.isStreaming)
-                    if (onWatchStream case final watch? when !isCurrentUser)
-                      IconButton(
-                        key: ValueKey('voice-watch-${participant.userId}'),
-                        tooltip: isWatched
-                            ? 'Stop watching'
-                            : 'Watch ${member.displayName}',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 26,
-                          minHeight: 26,
-                        ),
-                        onPressed: () => watch(participant.userId),
-                        icon: Icon(
-                          isWatched
-                              ? Icons.stop_screen_share
-                              : Icons.screen_share_outlined,
-                          size: 15,
-                          color: isWatched ? FlucordColors.danger : null,
-                        ),
-                      )
-                    else
-                      const _StateIcon(
-                        icon: Icons.screen_share_outlined,
-                        label: 'Streaming',
-                      ),
-                  if (participant.isDeafened)
-                    const _StateIcon(
-                      icon: Icons.headset_off_outlined,
-                      label: 'Deafened',
-                    )
-                  else if (participant.isMuted)
-                    const _StateIcon(
-                      icon: Icons.mic_off_outlined,
-                      label: 'Muted',
-                    ),
-                ],
+                ),
               ),
+            Row(
+              children: [
+                Expanded(child: _TileName(name)),
+                ...stateIcons,
+                const SizedBox(width: 4),
+                _control(context),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _control(BuildContext context) {
+    if (onStopShare case final stop?) {
+      return _button(
+        key: 'voice-stop-share-$userId',
+        label: 'Stop sharing',
+        tooltip: 'Stop sharing your stream',
+        onPressed: stop,
+        danger: true,
+      );
+    }
+    return switch (onWatch) {
+      // The card is how a stream is found, and a tile that said nothing is how
+      // it was missed.
+      null => Text(
+        'Streaming',
+        key: ValueKey('voice-stream-idle-$userId'),
+        style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+      ),
+      final watch => _button(
+        key: 'voice-watch-$userId',
+        label: isOpen ? 'Stop watching' : 'Watch',
+        // The name sits beside the button, not in it, so without this two
+        // cards read the same to a screen reader.
+        tooltip: '${isOpen ? 'Stop watching' : 'Watch'} $name',
+        onPressed: () => watch(userId),
+        danger: isOpen,
+      ),
+    };
+  }
+
+  Widget _button({
+    required String key,
+    required String label,
+    required String tooltip,
+    required VoidCallback onPressed,
+    required bool danger,
+  }) => Tooltip(
+    message: tooltip,
+    child: TextButton(
+      key: ValueKey(key),
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: danger ? FlucordColors.danger : null,
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+      child: Text(label),
+    ),
+  );
+}
+
+class _TileName extends StatelessWidget {
+  const _TileName(this.name);
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
     );
   }
 }

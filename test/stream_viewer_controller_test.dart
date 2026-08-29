@@ -345,6 +345,47 @@ void main() {
     });
 
     test(
+      'a withdrawn ask is not attached when Discord answers anyway',
+      () async {
+        final decoder = _FakeDecoder();
+        final controller = StreamViewerController(
+          repositoryProvider: () => _FakeRepository(),
+          decoder: decoder,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.requestWatch(_key);
+        await controller.stop();
+
+        expect(
+          await controller.attach(_key, packets: const Stream.empty()),
+          isFalse,
+        );
+        expect(controller.watching, isNull);
+        expect(decoder.started, 0);
+      },
+    );
+
+    test('asking again overrides a withdrawal', () async {
+      final decoder = _FakeDecoder();
+      final controller = StreamViewerController(
+        repositoryProvider: () => _FakeRepository(),
+        decoder: decoder,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      await controller.stop();
+      await controller.requestWatch(_key);
+
+      expect(
+        await controller.attach(_key, packets: const Stream.empty()),
+        isTrue,
+      );
+      expect(controller.watching, _key);
+    });
+
+    test(
       'a decoder that will not start reports rather than half-attaches',
       () async {
         final controller = StreamViewerController(

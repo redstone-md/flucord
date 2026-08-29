@@ -203,9 +203,14 @@ class _ConversationPaneState extends State<ConversationPane> {
   }
 
   /// Opens somebody's screen share, or closes the one already on screen.
+  ///
+  /// An ask that is still waiting counts as open: its control has read
+  /// "Stop watching" since the ask went out, so pressing it has to withdraw
+  /// that ask rather than send a second one.
   void _toggleWatch(String userId) {
     final viewer = StreamViewerScope.read(context);
-    if (viewer.watching?.userId == userId) {
+    final opened = viewer.watching?.userId ?? viewer.requested?.userId;
+    if (opened == userId) {
       unawaited(viewer.stop());
       return;
     }
@@ -272,7 +277,12 @@ class _ConversationPaneState extends State<ConversationPane> {
       ),
     );
 
-    final conversation = inCall && !showsMessages
+    // Null while there is no share. Go Live is the only authority: the roster
+    // reports a stream only once Discord echoes one back.
+    VoidCallback? stopShare() =>
+        goLive.isSharing ? () => unawaited(goLive.stop()) : null;
+
+    Widget room() => inCall && !showsMessages
         ? VoiceRoomView(
             // A call has no guild; the DM pseudo-space still supplies avatars.
             guildId: null,
@@ -282,6 +292,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             // that dialled every stream in it would be paying for pictures
             // nobody is looking at.
             onWatchStream: _toggleWatch,
+            onStopShare: stopShare(),
             // What is on the stage, which is only a stream that is actually
             // arriving. Keying this on the ask meant a request Discord never
             // answered hid the participant grid for the rest of the call.
@@ -299,6 +310,7 @@ class _ConversationPaneState extends State<ConversationPane> {
         : switch (channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
               onWatchStream: _toggleWatch,
+              onStopShare: stopShare(),
               watchedUserId: viewer.watching?.userId,
               pendingWatchUserId: viewer.requested?.userId,
               streamViewer: streamViewer(),
@@ -355,6 +367,14 @@ class _ConversationPaneState extends State<ConversationPane> {
             ),
             ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
           };
+
+    // Only the room is rebuilt when this account's own share starts or stops:
+    // a text channel has no tile to carry a share on.
+    final showsRoom =
+        !showsMessages && (inCall || channel.kind == ChannelKind.voice);
+    final conversation = showsRoom
+        ? ListenableBuilder(listenable: goLive, builder: (_, _) => room())
+        : room();
     return Column(
       children: [
         ChatHeader(

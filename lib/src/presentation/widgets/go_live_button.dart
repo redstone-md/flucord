@@ -47,10 +47,7 @@ class GoLiveButton extends StatelessWidget {
         icon: const Icon(Icons.screen_share_outlined),
       );
     }
-    final streaming =
-        controller.isStreaming ||
-        controller.status == GoLiveStatus.creating ||
-        controller.status == GoLiveStatus.connecting;
+    final streaming = controller.isSharing;
     return Row(
       key: const ValueKey('go-live-controls'),
       mainAxisSize: MainAxisSize.min,

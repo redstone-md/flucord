@@ -37,6 +37,13 @@ final class StreamViewerController extends ChangeNotifier {
   StreamSubscription<IncomingVideoPacket>? _packets;
   GoLiveStreamKey? _watching;
   GoLiveStreamKey? _requested;
+
+  /// An ask that was withdrawn before Discord answered it.
+  ///
+  /// Discord opens the connection whether this client still wants it or not,
+  /// and the router hands every connection here. Without this the stream
+  /// would take the stage right after its control said it was closed.
+  GoLiveStreamKey? _cancelled;
   int _receivedPackets = 0;
   int _decodedUnits = 0;
   Object? _error;
@@ -75,6 +82,9 @@ final class StreamViewerController extends ChangeNotifier {
     final repository = _repositoryProvider();
     if (repository == null || !_decoder.isSupported) return false;
     await stop();
+    // Asking again overrides a withdrawal: the key is only held against the
+    // connection that was already on its way.
+    _cancelled = null;
     _error = null;
     _requested = key;
     _notify();
@@ -98,6 +108,10 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
   }) async {
+    if (_cancelled == key) {
+      _cancelled = null;
+      return false;
+    }
     if (!_decoder.isSupported) return false;
     _error = null;
     try {
@@ -146,9 +160,20 @@ final class StreamViewerController extends ChangeNotifier {
   Future<void> stop() async {
     final packets = _packets;
     _packets = null;
+    final asked = _requested;
     _requested = null;
     await packets?.cancel();
-    if (_watching == null) return;
+    if (_watching == null) {
+      // Withdrawing an ask Discord never answered has to be both announced
+      // and remembered: announced so the tile's control goes back to opening
+      // the stream, remembered so the connection Discord opens anyway is
+      // dropped here instead of taking the stage.
+      if (asked != null) {
+        _cancelled = asked;
+        _notify();
+      }
+      return;
+    }
     await _decoder.stop();
     _watching = null;
     _receivedPackets = 0;

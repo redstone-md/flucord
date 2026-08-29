@@ -222,6 +222,15 @@ final class GoLiveController extends ChangeNotifier {
   bool get isStreaming =>
       _status == GoLiveStatus.live || _status == GoLiveStatus.paused;
 
+  /// Whether there is a share to end: one that is up, or one on its way up.
+  ///
+  /// A tile that waited for [isStreaming] would offer nothing to stop during
+  /// the seconds Discord takes to answer a create frame.
+  bool get isSharing =>
+      isStreaming ||
+      _status == GoLiveStatus.creating ||
+      _status == GoLiveStatus.connecting;
+
   Object? get error => _error;
 
   /// The displays this machine can share.

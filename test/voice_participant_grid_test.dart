@@ -52,7 +52,7 @@ void main() {
       find.byKey(const ValueKey('voice-participant-grid')),
       findsOneWidget,
     );
-    expect(find.byTooltip('Streaming'), findsOneWidget);
+    expect(find.text('Streaming'), findsOneWidget);
     expect(find.byTooltip('Deafened'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -75,12 +75,16 @@ void main() {
       _TestApp(
         participants: const [participant],
         onWatchStream: watched.add,
-        watchedUserId: 'member-2',
+        openStreamUserId: 'member-2',
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Stop watching'), findsOneWidget);
+    expect(find.text('Stop watching'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice-on-stage-member-2')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('this account is not offered its own share', (tester) async {
@@ -94,7 +98,41 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('voice-watch-member-1')), findsNothing);
-    expect(find.byTooltip('Streaming'), findsOneWidget);
+    expect(find.text('Streaming'), findsOneWidget);
+  });
+
+  testWidgets('this account ends its own share from its own tile', (
+    tester,
+  ) async {
+    var stopped = 0;
+    await tester.pumpWidget(
+      _TestApp(
+        participants: const [
+          VoiceParticipant(userId: 'member-1', isStreaming: true),
+        ],
+        onWatchStream: (_) {},
+        onStopShare: () => stopped++,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('voice-stop-share-member-1')));
+    await tester.pumpAndSettle();
+
+    expect(stopped, 1);
+  });
+
+  testWidgets('a participant who is not streaming has no card', (tester) async {
+    await tester.pumpWidget(
+      _TestApp(
+        participants: const [VoiceParticipant(userId: 'member-2')],
+        onWatchStream: (_) {},
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('voice-stream-card-member-2')),
+      findsNothing,
+    );
   });
 }
 
@@ -102,12 +140,14 @@ class _TestApp extends StatelessWidget {
   const _TestApp({
     required this.participants,
     this.onWatchStream,
-    this.watchedUserId,
+    this.onStopShare,
+    this.openStreamUserId,
   });
 
   final List<VoiceParticipant> participants;
   final void Function(String userId)? onWatchStream;
-  final String? watchedUserId;
+  final VoidCallback? onStopShare;
+  final String? openStreamUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -129,7 +169,8 @@ class _TestApp extends StatelessWidget {
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
           onWatchStream: onWatchStream,
-          watchedUserId: watchedUserId,
+          onStopShare: onStopShare,
+          openStreamUserId: openStreamUserId,
         ),
       ),
     );

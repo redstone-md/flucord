@@ -24,6 +24,7 @@ class VoiceRoomView extends StatefulWidget {
     this.goLive,
     this.streamViewer,
     this.onWatchStream,
+    this.onStopShare,
     this.watchedUserId,
     this.pendingWatchUserId,
     this.cameraFrameFor,
@@ -60,6 +61,10 @@ class VoiceRoomView extends StatefulWidget {
 
   /// Opens or closes somebody else's screen share.
   final void Function(String userId)? onWatchStream;
+
+  /// Ends this account's own share, from the tile it is being sent from. Null
+  /// while this account is not sharing.
+  final VoidCallback? onStopShare;
 
   /// Whose share is on screen, so the tile offers to leave it.
   final String? watchedUserId;
@@ -126,6 +131,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
                 onWatchStream: widget.onWatchStream,
+                onStopShare: widget.onStopShare,
                 watchedUserId: widget.watchedUserId,
                 pendingWatchUserId: widget.pendingWatchUserId,
                 goLive: widget.goLive,
@@ -225,9 +231,14 @@ class _VoiceChannelPreview extends StatelessWidget {
 }
 
 class _VoiceStage extends StatelessWidget {
+  /// How tall the strip of tiles under a stream on the stage is. One row,
+  /// small enough to leave the stream the room.
+  static const double _stripHeight = 128;
+
   const _VoiceStage({
     required this.streamViewer,
     required this.onWatchStream,
+    required this.onStopShare,
     required this.watchedUserId,
     required this.pendingWatchUserId,
     required this.goLive,
@@ -255,6 +266,7 @@ class _VoiceStage extends StatelessWidget {
   final Widget? goLive;
   final Widget? streamViewer;
   final void Function(String userId)? onWatchStream;
+  final VoidCallback? onStopShare;
   final String? watchedUserId;
   final String? pendingWatchUserId;
 
@@ -268,6 +280,18 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
+    final onStage = watchedUserId != null;
+    Widget grid({required bool compact}) => VoiceParticipantGrid(
+      participants: controller.participants,
+      members: members,
+      currentMemberId: currentMemberId,
+      spaceId: spaceId,
+      cameraFrameFor: cameraFrameFor,
+      onWatchStream: onWatchStream,
+      onStopShare: onStopShare,
+      openStreamUserId: watchedUserId ?? pendingWatchUserId,
+      compact: compact,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -332,21 +356,20 @@ class _VoiceStage extends StatelessWidget {
           ),
         ?stageControls,
         Expanded(
-          // The viewer only takes the stage while somebody is actually being
-          // watched. It used to be handed down as a widget that rendered
-          // nothing when idle, and `??` cannot see the difference — so the
-          // participant grid was never reached and the room looked empty.
-          child:
-              (watchedUserId != null ? streamViewer : null) ??
-              VoiceParticipantGrid(
-                participants: controller.participants,
-                members: members,
-                currentMemberId: currentMemberId,
-                spaceId: spaceId,
-                cameraFrameFor: cameraFrameFor,
-                onWatchStream: onWatchStream,
-                watchedUserId: watchedUserId ?? pendingWatchUserId,
-              ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // A stream on the stage pushes the grid into a strip rather
+              // than off the screen: the tile is where the mark and the
+              // control for that stream live, and a stage with no tiles has
+              // nowhere to put either.
+              if (onStage)
+                Expanded(child: streamViewer ?? const SizedBox.shrink()),
+              onStage
+                  ? SizedBox(height: _stripHeight, child: grid(compact: true))
+                  : Expanded(child: grid(compact: false)),
+            ],
+          ),
         ),
       ],
     );
