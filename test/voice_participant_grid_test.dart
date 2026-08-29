@@ -83,7 +83,7 @@ void main() {
 
     expect(find.text('Stop watching'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('voice-on-stage-member-2')),
+      find.byKey(const ValueKey('voice-stream-open-member-2')),
       findsOneWidget,
     );
   });
@@ -105,11 +105,11 @@ void main() {
     );
 
     expect(
-      find.byKey(const ValueKey('voice-on-stage-member-2')),
+      find.byKey(const ValueKey('voice-stream-open-member-2')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('voice-on-stage-member-3')),
+      find.byKey(const ValueKey('voice-stream-open-member-3')),
       findsOneWidget,
     );
     expect(find.text('Watch'), findsNothing);

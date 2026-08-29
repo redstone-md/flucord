@@ -138,6 +138,7 @@ final class StreamViewerController extends ChangeNotifier {
   /// Nothing is decoded yet: this is the ask, and the endpoint it is answered
   /// with is what opens the connection the pictures cross.
   Future<bool> requestWatch(GoLiveStreamKey key) async {
+    if (_disposed || _isOwn(key)) return false;
     final repository = _repositoryProvider();
     if (repository == null || !isSupported) return false;
     // Already held: asking again would open a second connection for one
@@ -165,6 +166,7 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
   }) async {
+    if (_disposed || _isOwn(key)) return false;
     if (_cancelled.remove(key)) return false;
     if (!isSupported) return false;
     if (!isOpen(key) && isFull) {
@@ -183,8 +185,22 @@ final class StreamViewerController extends ChangeNotifier {
       _notify();
       return false;
     }
-    _requested(key);
-    final session = _WatchedSession(key, decoder);
+    // Those awaits are crossings, and each leaves this decoder with nothing
+    // to decode for: the ask may have been withdrawn while it was opening,
+    // the controller may have been disposed, or Discord may have reopened the
+    // connection and another attach may already be reading it. A decoder
+    // nobody wants is handed back rather than left running, and a session
+    // installed over one already reading would splice this connection's
+    // packets into the other's picture.
+    if (_disposed || _cancelled.contains(key) || _sessions.containsKey(key)) {
+      await decoder.stop();
+      return false;
+    }
+    // Arrival is not an ask, so it does not move this key: the stage shows
+    // whichever was asked for last, and an endpoint Discord was slow to
+    // answer must not overtake a newer one on its way in.
+    _admitted(key);
+    final session = _WatchedSession(decoder);
     // In the map before it is listened to: a stream that already has a
     // packet in it delivers on subscription.
     _sessions[key] = session;
@@ -205,6 +221,7 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
   }) async {
+    if (_disposed || _isOwn(key)) return false;
     final repository = _repositoryProvider();
     if (repository == null || !isSupported) return false;
     if (isOpen(key)) await stop(key);
@@ -239,8 +256,10 @@ final class StreamViewerController extends ChangeNotifier {
         // dropped here instead of taking the stage.
         _cancelled.add(each);
       }
-      _notify();
     }
+    // Once for the whole stop, not once per session: the room is rebuilt
+    // either way, and it cannot be drawn between the two.
+    _notify();
   }
 
   @override
@@ -257,6 +276,16 @@ final class StreamViewerController extends ChangeNotifier {
     if (_refused == key) _refused = null;
   }
 
+  /// Notes that [key] is held, leaving its place alone.
+  ///
+  /// Split from [_requested] because arriving is not asking: the order is
+  /// what the stage reads, and an endpoint Discord took its time over says
+  /// nothing about when the stream behind it was wanted.
+  void _admitted(GoLiveStreamKey key) {
+    if (!_order.contains(key)) _order.add(key);
+    if (_refused == key) _refused = null;
+  }
+
   Future<bool> _ask(GoLiveRepository repository, GoLiveStreamKey key) async {
     try {
       await repository.watchStream(key);
@@ -269,6 +298,15 @@ final class StreamViewerController extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Whether [key] is this account's own share.
+  ///
+  /// Not watchable: it is the capture that feeds the stream and not a stream
+  /// this client is sent, and the router keeps it on the sending side of the
+  /// media plane. Asking for it would hold a slot no connection can fill and
+  /// leave the tile claiming to be watching something that never arrives
+  /// (ADR-0002).
+  bool _isOwn(GoLiveStreamKey key) => _ownKeyProvider?.call() == key;
 
   /// How many sessions this client is holding, own share included.
   int get _held {
@@ -331,10 +369,8 @@ final class StreamViewerController extends ChangeNotifier {
 
 /// One stream being watched: its own depacketiser, decoder and subscription.
 final class _WatchedSession {
-  _WatchedSession(this.key, this.decoder)
-    : depacketizer = DiscordH264Depacketizer();
+  _WatchedSession(this.decoder) : depacketizer = DiscordH264Depacketizer();
 
-  final GoLiveStreamKey key;
   final VideoDecoderService decoder;
   final DiscordH264Depacketizer depacketizer;
   StreamSubscription<IncomingVideoPacket>? packets;

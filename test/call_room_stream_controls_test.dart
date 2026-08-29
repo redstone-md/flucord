@@ -78,7 +78,15 @@ void main() {
     // stage shrinks the grid into a strip rather than dropping it.
     expect(find.byType(VoiceParticipantGrid), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      tester
+          .widget<GridView>(
+            find.byKey(const ValueKey('voice-participant-grid')),
+          )
+          .scrollDirection,
+      Axis.horizontal,
+    );
+    expect(
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsOneWidget,
     );
     expect(find.text('Stop watching'), findsOneWidget);
@@ -91,7 +99,7 @@ void main() {
     expect(find.byType(GoLiveViewer), findsNothing);
     expect(find.byType(VoiceParticipantGrid), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsNothing,
     );
     expect(find.text('Watch'), findsOneWidget);
@@ -110,7 +118,7 @@ void main() {
     // the rest of every call Discord never answered.
     expect(harness.repository.watched, hasLength(1));
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsOneWidget,
     );
     expect(find.byType(GoLiveViewer), findsNothing);

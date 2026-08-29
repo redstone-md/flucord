@@ -263,7 +263,11 @@ class _ConversationPaneState extends State<ConversationPane> {
     );
     final locked =
         channel.isThread && channel.isArchived && channel.isLocked;
-    final viewer = StreamViewerScope.of(context);
+    // Read and not watched: the viewer announces every decoded unit, and
+    // several streams at once announce one each. The room below is what
+    // rebuilds, and the timeline beside it has no business being laid out
+    // thirty times a second per stream.
+    final viewer = StreamViewerScope.read(context);
     final cameras = RemoteCameraScope.of(context);
     final voice = VoiceScope.read(context);
     final goLive = GoLiveScope.read(context);
@@ -275,19 +279,14 @@ class _ConversationPaneState extends State<ConversationPane> {
     // controls rather than two copies that could drift. Built on demand and
     // not up here: attaching the Go Live control binds it to the transport,
     // which a channel with no room on screen has no business doing.
-    Widget streamViewer() => ListenableBuilder(
-      listenable: viewer,
-      // Whoever is being watched takes the stage; the participant grid is
-      // what the room shows when nobody is. Asked-for is not on the stage:
-      // an endpoint that never comes must not take the room away.
-      builder: (_, _) => switch (viewer.watching) {
-        null => const SizedBox.shrink(),
-        final key => GoLiveViewer(
-          frames: viewer.framesFor(key),
-          label: key.userId,
-        ),
-      },
-    );
+    // Whoever is being watched takes the stage; the participant grid is what
+    // the room shows when nobody is, and null is how it is told. Asked-for is
+    // not on the stage: an endpoint that never comes must not take the room
+    // away.
+    Widget? streamViewer() => switch (viewer.watching) {
+      null => null,
+      final key => GoLiveViewer(frames: viewer.framesFor(key), label: key.userId),
+    };
 
     Widget goLiveControl() => ListenableBuilder(
       listenable: goLive,
@@ -324,7 +323,6 @@ class _ConversationPaneState extends State<ConversationPane> {
             // that dialled every stream in it would be paying for pictures
             // nobody is looking at.
             streams: streamControls(),
-            hasStreamOnStage: viewer.watching != null,
             // What is on the stage, which is only a stream that is actually
             // arriving. Keying this on the ask meant a request Discord never
             // answered hid the participant grid for the rest of the call.
@@ -340,7 +338,6 @@ class _ConversationPaneState extends State<ConversationPane> {
         : switch (channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
               streams: streamControls(),
-              hasStreamOnStage: viewer.watching != null,
               streamViewer: streamViewer(),
               goLive: goLiveControl(),
               soundboard: ListenableBuilder(
@@ -396,12 +393,16 @@ class _ConversationPaneState extends State<ConversationPane> {
             ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
           };
 
-    // Only the room is rebuilt when this account's own share starts or stops:
-    // a text channel has no tile to carry a share on.
+    // Only the room is rebuilt when this account's own share starts or stops,
+    // or when a stream opens, closes or hands the stage to another: a text
+    // channel has no tile to carry a share on.
     final showsRoom =
         !showsMessages && (inCall || channel.kind == ChannelKind.voice);
     final conversation = showsRoom
-        ? ListenableBuilder(listenable: goLive, builder: (_, _) => room())
+        ? ListenableBuilder(
+            listenable: Listenable.merge([goLive, viewer]),
+            builder: (_, _) => room(),
+          )
         : room();
     return Column(
       children: [

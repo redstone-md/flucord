@@ -287,8 +287,9 @@ class _StreamCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The grid gives way to the stage the moment pictures arrive, so
-            // the mark is only ever seen for the ask behind them.
+            // Open here, which is not the same as on the stage: several
+            // streams are open at once and only the one asked for last is up
+            // there. The mark says what is true of this tile.
             if (isOpen)
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
@@ -298,8 +299,8 @@ class _StreamCard extends StatelessWidget {
                     Icon(Icons.live_tv, size: 12, color: accent),
                     const SizedBox(width: 4),
                     Text(
-                      'On stage',
-                      key: ValueKey('voice-on-stage-$userId'),
+                      'Watching',
+                      key: ValueKey('voice-stream-open-$userId'),
                       style: TextStyle(
                         color: accent,
                         fontSize: 10,

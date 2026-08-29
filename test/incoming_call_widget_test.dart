@@ -101,10 +101,6 @@ void main() {
             controller: harness.voice,
             members: const [_jack],
             currentMemberId: 'me',
-            // A viewer widget that draws nothing while idle. `??` cannot tell
-            // it apart from one that is showing a stream, so the participant
-            // grid was never reached and the room looked empty.
-            streamViewer: const SizedBox.shrink(),
           ),
         ),
       ),
@@ -113,6 +109,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('voice-channel-join')));
     await tester.pumpAndSettle();
 
+    // The room gets as far as the grid: no stream is on the stage, and an
+    // empty box handed over as one would read as a stream and take the room.
     expect(find.byKey(const ValueKey('voice-participants-empty')), findsWidgets);
   });
 

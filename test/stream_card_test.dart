@@ -103,16 +103,16 @@ void main() {
       ],
     );
 
-    expect(find.byKey(const ValueKey('voice-on-stage-friend-1')), findsNothing);
+    expect(find.byKey(const ValueKey('voice-stream-open-friend-1')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('voice-on-stage-friend-2')), findsNothing);
+    expect(find.byKey(const ValueKey('voice-stream-open-friend-2')), findsNothing);
   });
 
   testWidgets('a fifth stream is refused, and the room says why', (tester) async {
@@ -139,8 +139,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
+    // Four, written out: reading the constant back into the expectation would
+    // agree with it whatever it said.
     expect(
-      find.text('You can watch up to $maxWatchedStreams streams at once. Stop one first.'),
+      find.text('You can watch up to 4 streams at once. Stop one first.'),
       findsOneWidget,
     );
     // Turned down here, so Discord was never asked for a fifth.
@@ -169,11 +171,11 @@ void main() {
 
     // Two open at once, and both marked: the mark cannot name one user.
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-1')),
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('voice-on-stage-friend-2')),
+      find.byKey(const ValueKey('voice-stream-open-friend-2')),
       findsOneWidget,
     );
   });

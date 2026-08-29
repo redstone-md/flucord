@@ -24,7 +24,6 @@ class VoiceRoomView extends StatefulWidget {
     this.soundboard,
     this.goLive,
     this.streamViewer,
-    this.hasStreamOnStage = false,
     this.streams,
     this.cameraFrameFor,
     this._spaceId,
@@ -55,17 +54,14 @@ class VoiceRoomView extends StatefulWidget {
   final Widget? goLive;
 
   /// Somebody else's stream, drawn on the stage above the participant grid
-  /// while it is being watched.
-  final Widget? streamViewer;
-
-  /// Whether a stream is being drawn on the stage, which is what shrinks the
-  /// grid into a strip beneath it.
+  /// while it is being watched, or null when there is none.
   ///
-  /// Asked for is not on the stage: an ask Discord never answers must not
-  /// take the room away. It is a fact about the stream rather than about the
-  /// widget, because a viewer that draws nothing cannot be told apart from
-  /// one that is showing a stream.
-  final bool hasStreamOnStage;
+  /// Null is what shrinks the grid into a strip, so it must be null and not
+  /// a viewer that draws nothing: an empty box cannot be told apart from one
+  /// showing a stream, and a room that thought it was always showing one
+  /// never reached the grid. Asked for is not on the stage either: an ask
+  /// Discord never answers must not take the room away.
+  final Widget? streamViewer;
 
   /// The streams this client has open, and the controls the tiles offer for
   /// them.
@@ -127,7 +123,6 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
             Expanded(
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
-                hasStreamOnStage: widget.hasStreamOnStage,
                 streams: widget.streams,
                 goLive: widget.goLive,
                 soundboard: widget.soundboard,
@@ -232,7 +227,6 @@ class _VoiceStage extends StatelessWidget {
 
   const _VoiceStage({
     required this.streamViewer,
-    required this.hasStreamOnStage,
     required this.goLive,
     required this.soundboard,
     required this.stageControls,
@@ -258,7 +252,6 @@ class _VoiceStage extends StatelessWidget {
   final Widget? soundboard;
   final Widget? goLive;
   final Widget? streamViewer;
-  final bool hasStreamOnStage;
   final VoiceStreamControls? streams;
 
   @override
@@ -351,11 +344,11 @@ class _VoiceStage extends StatelessWidget {
               // than off the screen: the tile is where the mark and the
               // control for that stream live, and a stage with no tiles has
               // nowhere to put either.
-              if (hasStreamOnStage)
-                Expanded(child: streamViewer ?? const SizedBox.shrink()),
-              hasStreamOnStage
-                  ? SizedBox(height: _stripHeight, child: grid(compact: true))
-                  : Expanded(child: grid(compact: false)),
+              if (streamViewer case final onStage?)
+                Expanded(child: onStage),
+              streamViewer == null
+                  ? Expanded(child: grid(compact: false))
+                  : SizedBox(height: _stripHeight, child: grid(compact: true)),
             ],
           ),
         ),

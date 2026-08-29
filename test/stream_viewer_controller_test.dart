@@ -568,6 +568,41 @@ void main() {
       expect(await controller.requestWatch(keys[3]), isTrue);
     });
 
+    test('this account\'s own share is not watchable', () async {
+      final repository = _FakeRepository();
+      final controller = _viewer(repository, ownKey: () => _ownKey);
+      addTearDown(controller.dispose);
+
+      // It is the capture that feeds the stream and not a stream this client
+      // is sent, so asking would hold a slot no connection can fill and leave
+      // the tile claiming to watch something that never arrives (ADR-0002).
+      expect(await controller.requestWatch(_ownKey), isFalse);
+      expect(repository.watched, isEmpty);
+      expect(controller.isOpen(_ownKey), isFalse);
+    });
+
+    test('an answer that arrives late does not overtake a newer ask', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final controller = _viewer(repository);
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      await controller.requestWatch(_other);
+
+      // Discord opens the newer ask's connection first, and the older one's
+      // second. Arriving is not asking: the stage belongs to whichever was
+      // asked for last, not to whichever connection was opened last.
+      await controller.attach(_other, packets: second.stream);
+      await controller.attach(_key, packets: first.stream);
+
+      expect(controller.watching, _other);
+      expect(controller.isWatching(_key), isTrue);
+    });
+
     test('a withdrawal is held per key', () async {
       final repository = _FakeRepository();
       final controller = _viewer(repository);
@@ -614,6 +649,64 @@ void main() {
       );
       expect(controller.watching, isNull);
     });
+
+    test('a stream stopped while its decoder is opening is not watched', () async {
+      final repository = _FakeRepository();
+      final gate = Completer<void>();
+      final decoder = _FakeDecoder(startGate: gate);
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () => decoder,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.requestWatch(_key);
+      final attaching = controller.attach(_key, packets: const Stream.empty());
+      await controller.stop(_key);
+      gate.complete();
+
+      expect(await attaching, isFalse);
+      expect(controller.isWatching(_key), isFalse);
+      expect(controller.watching, isNull);
+      // Opened for a stream that was closed while it opened, and shut rather
+      // than left running: one leaked decoder per withdrawal otherwise.
+      expect(decoder.stopped, 1);
+    });
+
+    test('a connection reopened while one is opening does not replace it', () async {
+      final repository = _FakeRepository();
+      // Both held shut, so the order they open in is chosen here rather than
+      // left to the microtask queue.
+      final gates = <Completer<void>>[Completer<void>(), Completer<void>()];
+      final made = <_FakeDecoder>[];
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () {
+          final decoder = _FakeDecoder(startGate: gates[made.length]);
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      expect(controller.isSupported, isTrue);
+      made.clear();
+
+      await controller.requestWatch(_key);
+      final reopened = controller.attach(_key, packets: const Stream.empty());
+      final reading = controller.attach(_key, packets: const Stream.empty());
+      gates[1].complete();
+      gates[0].complete();
+
+      // One connection reads the stream and the other is turned away: a
+      // second session for one key would splice this connection's packets
+      // into the other's picture and count them against it.
+      expect([await reopened, await reading].where((ok) => ok), hasLength(1));
+      expect(controller.isWatching(_key), isTrue);
+      // The decoder that lost is shut rather than left running with nothing
+      // of its own to decode.
+      final stopped = [for (final decoder in made) decoder.stopped];
+      expect(stopped.where((each) => each == 1), hasLength(1));
+    });
   });
 }
 
@@ -649,10 +742,14 @@ List<GoLiveStreamKey> _roomKeys() => [
 ];
 
 final class _FakeDecoder implements VideoDecoderService {
-  _FakeDecoder({this.supported = true, this.failStart = false});
+  _FakeDecoder({this.supported = true, this.failStart = false, this.startGate});
 
   final bool supported;
   final bool failStart;
+
+  /// Held shut so a test can act while a decoder is still opening, which is
+  /// the window every ask can be withdrawn in.
+  final Completer<void>? startGate;
   final StreamController<DecodedVideoFrame> _frames =
       StreamController.broadcast();
   final List<Uint8List> submitted = [];
@@ -672,6 +769,7 @@ final class _FakeDecoder implements VideoDecoderService {
   @override
   Future<void> start() async {
     if (failStart) throw StateError('no decoder');
+    await startGate?.future;
     started++;
   }
 
