@@ -88,8 +88,8 @@ void main() {
       // The stream credentials an endpoint hands over: the RTC server id as
       // the server, its channel as the channel.
       const credentials = VoiceServerCredentials(
-        guildId: '1541148819067248681',
-        channelId: '1541148819067248682',
+        guildId: '500000000000000002',
+        channelId: '500000000000000003',
         userId: 'me',
         sessionId: 'session-1',
         token: 'stream-token',
@@ -109,7 +109,7 @@ void main() {
       // group the server does not recognise, and the roster never names the
       // account. Discord's media stack keys a stream's group one below the
       // RTC server id.
-      expect(dave.groupIds.single, '1541148819067248680');
+      expect(dave.groupIds.single, '500000000000000001');
     });
 
     test('a session without DAVE offers version 0 on both kinds', () async {

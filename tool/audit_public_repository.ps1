@@ -63,7 +63,19 @@ class RepositoryPrivacyAudit {
       # value past the signed range. Both exist in tests to prove a snowflake
       # is read unsigned, and neither is a number Discord has ever minted.
       '18446744073709551615',
-      '9223372036854775808'
+      '9223372036854775808',
+      # The DAVE stream-key triple: an RTC server, its channel, and the group one
+      # below that server. Synthetic, and named here because the group is derived
+      # from the server instead of being a value a fixture can pick on its own.
+      '500000000000000001',
+      '500000000000000002',
+      '500000000000000003',
+      # Legacy: a realistic-looking triple that reached the history of
+      # test/discord_voice_socket_factory_test.dart before this list covered it.
+      # History keeps them forever, and rewriting it costs more than naming them.
+      '1541148819067248680',
+      '1541148819067248681',
+      '1541148819067248682'
     )) {
       [void] $this.AllowedSnowflakes.Add($value)
     }
