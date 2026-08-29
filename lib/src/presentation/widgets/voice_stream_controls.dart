@@ -1,4 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
+
+import '../../domain/video_decoder.dart';
+
+/// The receiving side of this account's own stream.
+///
+/// The sender's tile uses the same stream viewer as every other tile, but keeps
+/// the error visible instead of falling back to a local picture. That preserves
+/// the round trip Discord actually gave the room (ADR-0001).
+final class VoiceSelfPreview {
+  const VoiceSelfPreview({required this.frames, this.error});
+
+  final Stream<DecodedVideoFrame> frames;
+  final Object? error;
+}
 
 /// What the tiles need to know about the streams this client has open, and the
 /// controls they offer for them.
@@ -14,6 +30,7 @@ final class VoiceStreamControls {
     required this.isOpen,
     this.onWatch,
     this.onStopShare,
+    this.selfPreview,
   });
 
   /// Whether [userId]'s stream is open here: asked for, or arriving. Asked-for
@@ -30,4 +47,8 @@ final class VoiceStreamControls {
   /// sharing. The sender's own tile reads that: the roster reports a stream
   /// only once Discord echoes one back.
   final VoidCallback? onStopShare;
+
+  /// The stream this account receives back while sharing, or null before the
+  /// share has a key. It replaces the sender's avatar tile, not the room stage.
+  final VoiceSelfPreview? selfPreview;
 }

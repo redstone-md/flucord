@@ -25,12 +25,24 @@ final class DiscordStreamRtcSession {
     required this.key,
     required VoiceServerCredentials credentials,
     required DiscordVoiceSocketFactory socketFactory,
+
+    /// Whether this is the connection this account sends its share on, rather
+    /// than one it watches a stream on.
+    ///
+    /// One key carries two connections while this account previews itself: the
+    /// one the pictures go out on and the one they come back in on. Discord
+    /// answers a create and a watch with the same endpoint shape, so nothing
+    /// about the key tells them apart (ADR-0001).
+    this.sending = false,
   }) : _credentials = credentials,
        _socketFactory = socketFactory;
 
   final GoLiveStreamKey key;
   final VoiceServerCredentials _credentials;
   final DiscordVoiceSocketFactory _socketFactory;
+
+  /// Whether this account's share is sent on this connection.
+  final bool sending;
 
   final StreamController<(String, DiscordRtpFrame)> _video =
       StreamController.broadcast();

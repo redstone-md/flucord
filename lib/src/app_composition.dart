@@ -388,10 +388,13 @@ final class AppComposition {
     streamRtc = DiscordStreamRtcService(
       repositoryProvider: () => chat.goLive,
       identityProvider: () => liveVoiceSignaling?.streamIdentity,
-      // The stream plane dials through the same factory the call does, so
-      // the two agree about DAVE without this module knowing a version
-      // number; this account's own share is dialled by the media plane.
-      socketFactoryProvider: () {
+      // Receiving uses the same factory as the call, so the two agree about
+      // DAVE without this module knowing a version number. Only the connection
+      // the router will announce video on is handed to the media plane. The
+      // self-preview receiver must stay on the plain factory: opening it must
+      // not replace the sender's current encoder connection.
+      socketFactoryProvider: () => liveVoiceSignaling?.socketFactory,
+      sendingSocketFactoryProvider: () {
         final factory = liveVoiceSignaling?.socketFactory;
         if (factory == null) return null;
         return GoLiveMediaSocketFactory(inner: factory, plane: goLiveMedia);

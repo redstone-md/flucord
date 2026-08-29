@@ -5,6 +5,7 @@ import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
 import 'camera_picture.dart';
+import 'go_live_viewer.dart';
 import 'member_avatar.dart';
 import 'voice_stream_controls.dart';
 
@@ -94,6 +95,9 @@ class VoiceParticipantGrid extends StatelessWidget {
               _unknownMember(participant.userId),
           isCurrentUser: participant.userId == currentMemberId,
           spaceId: spaceId,
+          selfPreview: participant.userId == currentMemberId
+              ? streams?.selfPreview
+              : null,
           streams: streams,
           compact: compact,
         );
@@ -123,6 +127,7 @@ class _ParticipantTile extends StatelessWidget {
     required this.isCurrentUser,
     required this.spaceId,
     this.cameraFrame,
+    this.selfPreview,
     this.streams,
     this.compact = false,
   });
@@ -132,6 +137,7 @@ class _ParticipantTile extends StatelessWidget {
   final Member member;
   final bool isCurrentUser;
   final String spaceId;
+  final VoiceSelfPreview? selfPreview;
   final VoiceStreamControls? streams;
   final bool compact;
 
@@ -177,7 +183,15 @@ class _ParticipantTile extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (cameraFrame case final DecodedVideoFrame frame
+            if (selfPreview case final preview?)
+              Positioned.fill(
+                key: ValueKey('voice-self-preview-${participant.userId}'),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: _SelfPreview(preview: preview),
+                ),
+              )
+            else if (cameraFrame case final DecodedVideoFrame frame
                 when frame.hasPicture)
               Positioned.fill(
                 key: ValueKey('voice-camera-${participant.userId}'),
@@ -212,6 +226,7 @@ class _ParticipantTile extends StatelessWidget {
                   name: member.displayName,
                   stateIcons: _stateIcons,
                   isOpen: isOpen,
+                  isOwn: isCurrentUser,
                   onWatch: isCurrentUser ? null : streams?.onWatch,
                   onStopShare: isCurrentUser ? streams?.onStopShare : null,
                 ),
@@ -245,6 +260,58 @@ class _ParticipantTile extends StatelessWidget {
   }
 }
 
+/// The picture the sender receives back from Discord, in place of the avatar.
+///
+/// An error is a visible state, not a reason to quietly draw the local capture:
+/// that would make a broken sender-to-room round trip look healthy.
+class _SelfPreview extends StatelessWidget {
+  const _SelfPreview({required this.preview});
+
+  final VoiceSelfPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = preview.error;
+    if (error != null) {
+      return ColoredBox(
+        key: const ValueKey('voice-self-preview-error'),
+        color: context.surfaces.inset,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 24,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Self-preview unavailable',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return GoLiveViewer(
+      key: const ValueKey('voice-self-preview'),
+      frames: preview.frames,
+      label: 'your stream',
+      showProgress: false,
+    );
+  }
+}
+
 /// The card a streaming participant's tile carries, in place of a name row.
 ///
 /// A share is a connection Discord only opens when asked for, so opening one
@@ -255,6 +322,7 @@ class _StreamCard extends StatelessWidget {
     required this.name,
     required this.stateIcons,
     required this.isOpen,
+    required this.isOwn,
     this.onWatch,
     this.onStopShare,
   });
@@ -263,6 +331,7 @@ class _StreamCard extends StatelessWidget {
   final String name;
   final List<Widget> stateIcons;
   final bool isOpen;
+  final bool isOwn;
 
   /// Opens this participant's stream, or closes it once it is open. Null where
   /// the card has nothing to open one with.
@@ -299,7 +368,7 @@ class _StreamCard extends StatelessWidget {
                     Icon(Icons.live_tv, size: 12, color: accent),
                     const SizedBox(width: 4),
                     Text(
-                      'Watching',
+                      isOwn ? 'Live' : 'Watching',
                       key: ValueKey('voice-stream-open-$userId'),
                       style: TextStyle(
                         color: accent,

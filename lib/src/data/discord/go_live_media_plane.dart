@@ -122,13 +122,17 @@ final class InProcessGoLiveMediaPlane implements GoLiveMediaPlane {
   void sendAudio(Uint8List opus) => _current?.sendOpusFrame(opus);
 }
 
-/// The socket factory the stream plane dials through, with this account's
-/// own share handed to the media plane and everybody else's dialled as
-/// before.
+/// The socket factory the stream plane dials through.
 ///
-/// A share is the one connection that sends, so it is the one whose sending
-/// must not share a thread with the UI; a stream being watched is decoded on
-/// the main isolate as it always was.
+/// The sender's connection must not share a thread with the UI, so this
+/// factory hands this account's own key to the media plane. The second
+/// connection used by self-preview has that same key and is therefore wrapped
+/// too, but it remains receive-only until the router announces video on the
+/// sender connection. Somebody else's key stays on the plain factory.
+///
+/// The key is enough to choose the media plane, but not enough to choose which
+/// of two own-key connections sends. That decision belongs to the router and
+/// the connection's role (ADR-0001).
 final class GoLiveMediaSocketFactory implements DiscordVoiceSocketFactory {
   GoLiveMediaSocketFactory({
     required DiscordVoiceSocketFactory inner,

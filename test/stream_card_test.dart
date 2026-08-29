@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -195,6 +197,59 @@ void main() {
       find.byKey(const ValueKey('voice-stream-card-friend-2')),
       findsNothing,
     );
+  });
+
+  testWidgets('the sender tile shows its received self-preview as live', (
+    tester,
+  ) async {
+    final harness = await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [
+        StreamRoomSeat('me'),
+        StreamRoomSeat('friend-1', isStreaming: true),
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
+    await tester.pumpAndSettle();
+    const key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
+    await harness.viewer.requestWatch(key);
+    await harness.viewer.attach(key, packets: const Stream.empty());
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('voice-self-preview')), findsOneWidget);
+    expect(_onCard('me', find.text('Live')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-stream-open-me')), findsOneWidget);
+    await harness.goLive.stop();
+  });
+
+  testWidgets('a self-preview refusal is shown instead of a picture', (
+    tester,
+  ) async {
+    final harness = await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [
+        StreamRoomSeat('me'),
+        StreamRoomSeat('friend-1', isStreaming: true),
+      ],
+    );
+    final packets = StreamController<IncomingVideoPacket>();
+    addTearDown(packets.close);
+
+    await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
+    await tester.pumpAndSettle();
+    const key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
+    await harness.viewer.requestWatch(key);
+    await harness.viewer.attach(key, packets: packets.stream);
+    packets.addError(StateError('Discord refused the self-watch'));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('voice-self-preview-error')), findsOneWidget);
+    expect(find.text('Self-preview unavailable'), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-self-preview')), findsNothing);
+    await harness.goLive.stop();
   });
 
   testWidgets('this account ends its own share from its own tile', (

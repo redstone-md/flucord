@@ -304,6 +304,23 @@ class _ConversationPaneState extends State<ConversationPane> {
     VoidCallback? stopShare() =>
         goLive.isSharing ? () => unawaited(goLive.stop()) : null;
 
+    // The sender's own tile is a watcher too, but the room keeps it in the
+    // grid instead of putting it on the stage. A failed watch is passed down
+    // as an error so the tile cannot quietly replace it with a local capture.
+    VoiceSelfPreview? selfPreview() {
+      if (!goLive.isSharing) return null;
+      final key = goLive.streamKey;
+      if (key == null || key.channelId != channel.id) return null;
+      final error = viewer.errorFor(key);
+      return VoiceSelfPreview(
+        frames: viewer.framesFor(key),
+        error: error ??
+            (viewer.refused == key
+                ? StateError('The room refused the self-preview')
+                : null),
+      );
+    }
+
     // What the tiles know about the streams this client is holding: which
     // ones are open, and how to open or close one. One value rather than
     // four arguments because the mark is asked of each tile now.
@@ -311,6 +328,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       isOpen: (userId) => viewer.isOpen(widget.channel.streamKeyFor(userId)),
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
+      selfPreview: selfPreview(),
     );
 
     Widget room() => inCall && !showsMessages

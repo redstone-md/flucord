@@ -78,16 +78,14 @@ final class _Wiring {
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: () => decoder,
+      ownKeyProvider: () => goLive.streamKey,
     );
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
       identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-      socketFactoryProvider: () => GoLiveMediaSocketFactory(
-        inner: _StreamSocketFactory((_) {
-          final client = _FakeClient(log);
-          clients.add(client);
-          return client;
-        }),
+      socketFactoryProvider: _plainSocketFactory,
+      sendingSocketFactoryProvider: () => GoLiveMediaSocketFactory(
+        inner: _plainSocketFactory()!,
         plane: plane,
       ),
     )..reconcile();
@@ -110,6 +108,12 @@ final class _Wiring {
   late final StreamViewerController viewer;
   late final DiscordStreamRtcService service;
   late final StreamRouter router;
+
+  DiscordVoiceSocketFactory? _plainSocketFactory() => _StreamSocketFactory((_) {
+    final client = _FakeClient(log);
+    clients.add(client);
+    return client;
+  });
 
   Future<void> dispose() async {
     router.dispose();
@@ -214,6 +218,101 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(client.sentFrames.length, before + 1);
       expect(client.sentFrames.last.header.ssrc, 4244);
+    },
+  );
+
+  test(
+    'the own stream has one sending and one receiving connection',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
+
+      await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'send-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final sending = wiring.clients.single;
+      sending.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+
+      // The sender's ready connection triggers the ordinary watch request for
+      // the same key. Discord answers it with a second endpoint.
+      expect(wiring.repository.watched, [_key]);
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'receive-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.clients, hasLength(2));
+      final receiving = wiring.clients.last;
+      receiving.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+
+      // The role belongs to the connection. The receiving connection has the
+      // same key but must not announce or send anything.
+      expect(sending.announcements, hasLength(1));
+      expect(receiving.announcements, isEmpty);
+      expect(receiving.sentFrames, isEmpty);
+      expect(wiring.viewer.isWatching(_key), isTrue);
+      expect(wiring.viewer.watching, isNull);
+
+      for (final frame in _packetizedUnit()) {
+        receiving.emitVideo('me', frame);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.receivedPacketsFor(_key), 2);
+      expect(wiring.viewer.decodedUnitsFor(_key), 1);
+    },
+  );
+
+  test(
+    'a receiving refusal is logged and kept for the tile',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
+
+      await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'send-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      wiring.clients.single.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'receive-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final receiving = wiring.clients.last;
+      receiving.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+
+      receiving.announce(
+        VoiceSignalingStatusEvent(
+          VoiceConnectionStatus.failure,
+          error: StateError('watch denied'),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(wiring.viewer.errorFor(_key), isNotNull);
+      expect(wiring.viewer.isOpen(_key), isFalse);
+      await wiring.goLive.stop();
     },
   );
 
@@ -404,6 +503,7 @@ final class _FakeDecoder implements VideoDecoderService {
 final class _FakeRepository implements GoLiveRepository {
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
+  final List<GoLiveStreamKey> watched = [];
 
   void assign(GoLiveServer server) => _servers.add(server);
 
@@ -435,7 +535,7 @@ final class _FakeRepository implements GoLiveRepository {
         );
 
   @override
-  Future<void> watchStream(GoLiveStreamKey key) async {}
+  Future<void> watchStream(GoLiveStreamKey key) async => watched.add(key);
 
   @override
   Future<void> pingStream(GoLiveStreamKey key) async {}

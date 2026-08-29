@@ -45,6 +45,7 @@ final class StreamRoomHarness {
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: StreamRoomDecoder.new,
+      ownKeyProvider: () => goLive.streamKey,
     );
     goLive = GoLiveController(
       repositoryProvider: () => repository,

@@ -39,6 +39,7 @@ class GoLiveViewer extends StatefulWidget {
     required this.frames,
     this.label = '',
     this.converter = decodePictureWithEngine,
+    this.showProgress = true,
     super.key,
   });
 
@@ -48,6 +49,10 @@ class GoLiveViewer extends StatefulWidget {
   final String label;
 
   final PictureConverter converter;
+
+  /// A compact tile can use a static waiting state so a room settling does not
+  /// leave an animation running forever while Discord has not answered yet.
+  final bool showProgress;
 
   @override
   State<GoLiveViewer> createState() => _GoLiveViewerState();
@@ -112,10 +117,13 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              if (widget.showProgress)
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(Icons.live_tv_outlined, size: 24),
               if (widget.label.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text(

@@ -548,6 +548,20 @@ void main() {
       expect(controller.refused, isNull);
     });
 
+    test('the own watch consumes its reserved fourth slot', () async {
+      final repository = _FakeRepository();
+      final keys = _roomKeys();
+      final controller = _viewer(repository, ownKey: () => _ownKey);
+      addTearDown(controller.dispose);
+
+      for (final key in keys.take(3)) {
+        expect(await controller.requestWatch(key), isTrue, reason: '$key');
+      }
+      expect(await controller.requestWatch(_ownKey), isTrue);
+      expect(controller.isFull, isTrue);
+      expect(await controller.requestWatch(keys[3]), isFalse);
+    });
+
     test('this account\'s own share counts towards the cap', () async {
       final repository = _FakeRepository();
       final keys = _roomKeys();
@@ -568,17 +582,22 @@ void main() {
       expect(await controller.requestWatch(keys[3]), isTrue);
     });
 
-    test('this account\'s own share is not watchable', () async {
+    test('this account\'s own share is watched like any other stream', () async {
       final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
       final controller = _viewer(repository, ownKey: () => _ownKey);
       addTearDown(controller.dispose);
 
-      // It is the capture that feeds the stream and not a stream this client
-      // is sent, so asking would hold a slot no connection can fill and leave
-      // the tile claiming to watch something that never arrives (ADR-0002).
-      expect(await controller.requestWatch(_ownKey), isFalse);
-      expect(repository.watched, isEmpty);
-      expect(controller.isOpen(_ownKey), isFalse);
+      // The sender's preview is a second Discord watch, so it consumes the
+      // reservation the own key already holds against the four-session cap.
+      expect(await controller.requestWatch(_ownKey), isTrue);
+      expect(repository.watched, [_ownKey]);
+      expect(controller.isOpen(_ownKey), isTrue);
+      expect(await controller.attach(_ownKey, packets: packets.stream), isTrue);
+      expect(controller.isWatching(_ownKey), isTrue);
+      // The sender's tile draws this session; it must not take the room stage.
+      expect(controller.watching, isNull);
     });
 
     test('an answer that arrives late does not overtake a newer ask', () async {

@@ -14,26 +14,51 @@ import '../../app_log.dart';
 /// a stream is a second connection of the same session, not a second session.
 typedef DiscordStreamIdentity = ({String sessionId, String userId});
 
+/// Makes a socket factory for a stream connection.
+///
+/// The service asks the sending provider only for the connection that will
+/// announce video. The regular provider serves receivers, including the
+/// second connection for this account's own key (ADR-0001).
+typedef DiscordStreamSocketFactoryProvider =
+    DiscordVoiceSocketFactory? Function();
+
 /// Holds the RTC connections Go Live streams run on.
 ///
 /// One per stream, opened when Discord answers with an endpoint and closed
 /// when the stream ends or the viewer stops watching. Sending and watching are
 /// the same connection type, so both go through here: what differs is only who
 /// declares video on it.
+///
+/// This account's own key carries two of them while it shares, one to send on
+/// and one to watch the same stream back (ADR-0001). They are held apart
+/// rather than under one map entry, so opening the second does not close the
+/// share.
 final class DiscordStreamRtcService {
   DiscordStreamRtcService({
     required GoLiveRepository? Function() repositoryProvider,
     required DiscordStreamIdentity? Function() identityProvider,
-    DiscordVoiceSocketFactory? Function()? socketFactoryProvider,
+    DiscordStreamSocketFactoryProvider? socketFactoryProvider,
+    DiscordStreamSocketFactoryProvider? sendingSocketFactoryProvider,
   }) : _repositoryProvider = repositoryProvider,
        _identityProvider = identityProvider,
-       _socketFactoryProvider = socketFactoryProvider;
+       _socketFactoryProvider = socketFactoryProvider,
+       _sendingSocketFactoryProvider = sendingSocketFactoryProvider;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final DiscordStreamIdentity? Function() _identityProvider;
-  final DiscordVoiceSocketFactory? Function()? _socketFactoryProvider;
+  final DiscordStreamSocketFactoryProvider? _socketFactoryProvider;
+  final DiscordStreamSocketFactoryProvider? _sendingSocketFactoryProvider;
 
+  /// The connections streams are being watched on, by key.
   final Map<String, DiscordStreamRtcSession> _sessions = {};
+
+  /// The connection this account's share is sent on, when it is sharing.
+  DiscordStreamRtcSession? _sending;
+
+  /// Claims the first own endpoint before [_open] crosses an async close, so
+  /// two near-simultaneous endpoint events cannot both become senders.
+  bool _sendingOpening = false;
+
   final StreamController<DiscordStreamRtcSession> _opened =
       StreamController.broadcast();
 
@@ -62,18 +87,34 @@ final class DiscordStreamRtcService {
   }
 
   /// The connection carrying [key], or null when there is none.
-  DiscordStreamRtcSession? sessionFor(GoLiveStreamKey key) =>
-      _sessions[key.value];
+  ///
+  /// Where this account's own key carries two, this is the one it sends on:
+  /// a caller looking for the connection is looking for the sender's, and
+  /// what the other one receives is read through the viewer.
+  DiscordStreamRtcSession? sessionFor(GoLiveStreamKey key) {
+    final sending = _sending;
+    return sending?.key == key ? sending : _sessions[key.value];
+  }
 
   /// Pictures arriving for [key]. Empty until the endpoint has answered.
+  ///
+  /// The share's own connection has nothing to read: its pictures are drained
+  /// by whatever sends them, so this is the one being watched.
   Stream<(String, DiscordRtpFrame)> videoFor(GoLiveStreamKey key) =>
       _sessions[key.value]?.video ??
       const Stream<(String, DiscordRtpFrame)>.empty();
 
-  /// Drops the connection for [key], leaving any others alone.
+  /// Drops the connection [key] is being watched on, leaving any others alone.
   Future<void> stop(GoLiveStreamKey key) async {
     final session = _sessions.remove(key.value);
     await session?.close();
+  }
+
+  /// Ends the connection this account's share is sent on.
+  Future<void> _stopSending() async {
+    final sending = _sending;
+    _sending = null;
+    await sending?.close();
   }
 
   Future<void> close() async {
@@ -81,6 +122,8 @@ final class DiscordStreamRtcService {
     _closed = true;
     await _servers?.cancel();
     await _streamUpdates?.cancel();
+    _sendingOpening = false;
+    await _stopSending();
     for (final session in _sessions.values.toList(growable: false)) {
       await session.close();
     }
@@ -95,6 +138,12 @@ final class DiscordStreamRtcService {
   void _acceptStreamUpdate(GoLiveStream stream) {
     if (_closed) return;
     if (_repository?.streams.containsKey(stream.key.value) ?? true) return;
+    // A stream that ended takes both of its connections, the one it was sent
+    // on and the one this client was watching it back on.
+    if (_sending?.key == stream.key || _sendingOpening) {
+      _sendingOpening = false;
+      unawaited(_stopSending());
+    }
     unawaited(stop(stream.key));
   }
 
@@ -109,7 +158,18 @@ final class DiscordStreamRtcService {
     // endpoint is right: it is short-lived, and Discord reissues one on the
     // next watch or create rather than expecting the client to hold it.
     if (identity == null) return;
-    unawaited(_open(server, identity));
+    final sending = _claimSender(server.key, identity.userId);
+    unawaited(_open(server, identity, sending: sending));
+  }
+
+  bool _claimSender(GoLiveStreamKey key, String userId) {
+    if (key.userId != userId || _sendingOpening) return false;
+    // A different key means the share moved or restarted, so it replaces the
+    // old sender connection. The same key is the receiving connection created
+    // by the self-watch ask.
+    if (_sending?.key == key) return false;
+    _sendingOpening = true;
+    return true;
   }
 
   void _diagnose(String what, [Object? detail]) {
@@ -121,23 +181,32 @@ final class DiscordStreamRtcService {
 
   Future<void> _open(
     GoLiveServer server,
-    DiscordStreamIdentity identity,
-  ) async {
-    // A replaced endpoint closes what it replaces, and not only the same key:
-    // a stream key names the channel it started in, so a share that follows
-    // the account into another channel, or a restart from one, arrives under
-    // a second key with the first connection still live. Two sockets for one
-    // account would both be sending, and the first one's credentials are
-    // already dead.
-    await stop(server.key);
-    if (server.key.userId == identity.userId) {
-      final replaced = _sessions.values
-          .where((session) => session.key.userId == server.key.userId)
-          .map((session) => session.key)
-          .toList(growable: false);
-      for (final key in replaced) {
+    DiscordStreamIdentity identity, {
+    required bool sending,
+  }) async {
+    // Which end of the stream this connection is was claimed when the endpoint
+    // event arrived, before this async open began. Discord answers a create
+    // and a watch with the same endpoint shape, so the key does not say: the
+    // first endpoint this account's own key is given is the share's, and the
+    // second is this client watching that share back (ADR-0001). Anything else,
+    // and any later endpoint for a key already being watched, replaces the
+    // connection that key was being watched on.
+    if (sending) {
+      // A share that follows the account into another channel, or a restart
+      // from one, arrives under a second key with the first connection still
+      // live. Two sockets for one account would both be sending, and the
+      // first one's credentials are already dead. What this client was
+      // watching on the old key goes with it: that stream is over.
+      await _stopSending();
+      for (final key in [
+        for (final session in _sessions.values)
+          if (session.key.userId == identity.userId) session.key,
+      ]) {
         await stop(key);
       }
+      _sendingOpening = false;
+    } else {
+      await stop(server.key);
     }
     if (_closed) return;
     final session = DiscordStreamRtcSession(
@@ -160,10 +229,23 @@ final class DiscordStreamRtcService {
         endpoint: server.endpoint,
       ),
       // No call plane to agree with, so DAVE-less sockets: version 0, the
-      // transport cipher alone.
-      socketFactory: _socketFactoryProvider?.call() ?? DiscordVoiceGatewaySocketFactory(),
+      // transport cipher alone. The sender has its own media-plane factory;
+      // the receiver must use the plain factory so opening it cannot replace
+      // the sender's current encoder connection.
+      socketFactory:
+          (sending
+                  ? _sendingSocketFactoryProvider
+                  : _socketFactoryProvider)
+              ?.call() ??
+          _socketFactoryProvider?.call() ??
+          DiscordVoiceGatewaySocketFactory(),
+      sending: sending,
     );
-    _sessions[server.key.value] = session;
+    if (sending) {
+      _sending = session;
+    } else {
+      _sessions[server.key.value] = session;
+    }
     if (!_opened.isClosed) _opened.add(session);
     await session.connect();
   }

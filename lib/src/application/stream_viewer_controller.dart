@@ -42,9 +42,8 @@ final class StreamViewerController extends ChangeNotifier {
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
 
-  /// This account's own share. Not watched here — it is the capture that
-  /// feeds it — but it is a session like any other and counts towards the cap
-  /// (ADR-0002).
+  /// This account's own share. A session like any other once the sender asks
+  /// for it back, and counted towards the cap either way (ADR-0002).
   final GoLiveStreamKey? Function()? _ownKeyProvider;
 
   /// Every key this client is holding, in the order it asked for them: the
@@ -64,7 +63,12 @@ final class StreamViewerController extends ChangeNotifier {
 
   /// The ask turned down for want of room, if that is what happened last.
   GoLiveStreamKey? _refused;
-  Object? _error;
+
+  /// Why each key could not be opened, for as long as that is the last thing
+  /// that happened to it. Per key, because several sessions share this one
+  /// controller and a failure on one says nothing about another.
+  final Map<GoLiveStreamKey, Object?> _errors = {};
+
   bool _disposed = false;
 
   /// Whether this build can decode at all, which is a property of the build
@@ -77,7 +81,13 @@ final class StreamViewerController extends ChangeNotifier {
   ///
   /// An ask is not on the stage: the endpoint it is answered with may never
   /// come, and a request Discord never answered must not take the room away.
-  GoLiveStreamKey? get watching => _lastWhere(isWatching);
+  ///
+  /// This account's own stream is not on the stage either, however recently it
+  /// was asked for: a sender's own pictures are drawn on their tile, because
+  /// somebody sharing is watching who is in the room rather than themselves
+  /// full screen (ADR-0001).
+  GoLiveStreamKey? get watching =>
+      _lastWhere((key) => isWatching(key) && !_isOwn(key));
 
   /// Whose stream was asked for most recently and has not started arriving.
   ///
@@ -131,25 +141,43 @@ final class StreamViewerController extends ChangeNotifier {
     final key => decodedUnitsFor(key),
   };
 
-  Object? get error => _error;
+  /// The most recent failure, whichever session it was. [errorFor] is the
+  /// precise answer, and the one a caller acting on a single stream wants.
+  Object? get error => _errors.values.lastOrNull;
+
+  /// Why [key] could not be opened, or null when it was, or has been since.
+  Object? errorFor(GoLiveStreamKey key) => _errors[key];
+
+  /// Records a refusal from the RTC side, which can happen after the watch ask
+  /// itself already succeeded. The tile keeps this error while the next ask
+  /// gets a clean attempt.
+  void reportError(GoLiveStreamKey key, Object error) {
+    if (_disposed) return;
+    _errors[key] = error;
+    _diagnose('watch failed ${key.userId}: $error');
+    _order.remove(key);
+    _cancelled.add(key);
+    unawaited(_teardown(key));
+    _notify();
+  }
 
   /// Asks Discord to send [key]'s stream to this client.
   ///
   /// Nothing is decoded yet: this is the ask, and the endpoint it is answered
   /// with is what opens the connection the pictures cross.
   Future<bool> requestWatch(GoLiveStreamKey key) async {
-    if (_disposed || _isOwn(key)) return false;
+    if (_disposed) return false;
     final repository = _repositoryProvider();
     if (repository == null || !isSupported) return false;
     // Already held: asking again would open a second connection for one
     // stream.
     if (isOpen(key)) return true;
-    if (isFull) {
+    if (!_canHold(key)) {
       _refused = key;
       _notify();
       return false;
     }
-    _error = null;
+    _errors.remove(key);
     // Asking again overrides a withdrawal: the key is only held against the
     // connection that was already on its way.
     _cancelled.remove(key);
@@ -166,22 +194,22 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
   }) async {
-    if (_disposed || _isOwn(key)) return false;
+    if (_disposed) return false;
     if (_cancelled.remove(key)) return false;
     if (!isSupported) return false;
-    if (!isOpen(key) && isFull) {
+    if (!_canHold(key)) {
       _refused = key;
       _notify();
       return false;
     }
-    _error = null;
+    _errors.remove(key);
     // A connection reopened for a key already being read replaces it.
     await _teardown(key);
     final decoder = _decoderFactory();
     try {
       await decoder.start();
     } on Object catch (error) {
-      _error = error;
+      _errors[key] = error;
       _notify();
       return false;
     }
@@ -206,7 +234,8 @@ final class StreamViewerController extends ChangeNotifier {
     _sessions[key] = session;
     session.packets = packets.listen(
       (packet) => _accept(key, packet),
-      onError: _acceptError,
+      onError: (Object error, StackTrace stackTrace) =>
+          _acceptError(key, error),
     );
     _notify();
     return true;
@@ -221,16 +250,16 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
   }) async {
-    if (_disposed || _isOwn(key)) return false;
+    if (_disposed) return false;
     final repository = _repositoryProvider();
     if (repository == null || !isSupported) return false;
     if (isOpen(key)) await stop(key);
-    if (isFull) {
+    if (!_canHold(key)) {
       _refused = key;
       _notify();
       return false;
     }
-    _error = null;
+    _errors.remove(key);
     // A fresh ask for a key that was just closed: the withdrawal that closing
     // it recorded is against the connection on its way, not this one.
     _cancelled.remove(key);
@@ -292,7 +321,8 @@ final class StreamViewerController extends ChangeNotifier {
       _diagnose('asked to watch ${key.userId}');
       return true;
     } on Object catch (error) {
-      _error = error;
+      _errors[key] = error;
+      _diagnose('watch refused ${key.userId}: $error');
       _order.remove(key);
       _notify();
       return false;
@@ -302,11 +332,15 @@ final class StreamViewerController extends ChangeNotifier {
   /// Whether [key] is this account's own share.
   ///
   /// Not watchable: it is the capture that feeds the stream and not a stream
-  /// this client is sent, and the router keeps it on the sending side of the
-  /// media plane. Asking for it would hold a slot no connection can fill and
-  /// leave the tile claiming to be watching something that never arrives
-  /// (ADR-0002).
+  /// It is still a normal watched session: the sender asks Discord for it on a
+  /// second connection and gets the same packets a watcher does (ADR-0001).
   bool _isOwn(GoLiveStreamKey key) => _ownKeyProvider?.call() == key;
+
+  /// Whether [key] can take a slot now. The own key is reserved in [_held]
+  /// before its watch ask goes out, so it gets to consume that reservation
+  /// rather than being rejected for filling it.
+  bool _canHold(GoLiveStreamKey key) =>
+      isOpen(key) || (_isOwn(key) ? _held <= maxWatchedStreams : !isFull);
 
   /// How many sessions this client is holding, own share included.
   int get _held {
@@ -357,8 +391,9 @@ final class StreamViewerController extends ChangeNotifier {
     _notify();
   }
 
-  void _acceptError(Object error) {
-    _error = error;
+  void _acceptError(GoLiveStreamKey key, Object error) {
+    _errors[key] = error;
+    _diagnose('watch failed ${key.userId}: $error');
     _notify();
   }
 
