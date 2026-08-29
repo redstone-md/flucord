@@ -75,6 +75,31 @@ final class ConversationChannel {
 
   bool get isDirectMessage => recipientId != null;
 
+  /// The guild this channel belongs to, or null outside a server.
+  ///
+  /// Not simply [spaceId]: a private channel sits in the pseudo-space `@me`,
+  /// which names a server no account is in. Anything Discord addresses by
+  /// guild and channel, a stream key among them, needs the null.
+  String? get guildId =>
+      spaceId.isEmpty || spaceId == CommunitySpace.directMessagesId
+          ? null
+          : spaceId;
+
+  /// How a stream by [userId] in this channel's room is addressed.
+  ///
+  /// The key is the only thing that says call or guild; everything downstream,
+  /// watching and pausing and ending, carries the key rather than the channel.
+  GoLiveStreamKey streamKeyFor(String userId) {
+    final guildId = this.guildId;
+    return guildId == null
+        ? GoLiveStreamKey.call(channelId: id, userId: userId)
+        : GoLiveStreamKey.guild(
+            guildId: guildId,
+            channelId: id,
+            userId: userId,
+          );
+  }
+
   /// The channel whose thread browser this channel is browsed under: a thread
   /// under its parent, every other channel under itself.
   String? get threadParentId => isThread ? parentId : id;

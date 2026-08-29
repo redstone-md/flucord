@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'discord_snowflake.dart';
+import 'go_live_stream.dart';
 import 'message_component.dart';
 import 'guild_membership.dart';
 import 'message_embed.dart';

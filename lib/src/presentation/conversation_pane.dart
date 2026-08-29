@@ -11,7 +11,6 @@ import '../application/report_flow_controller.dart';
 import '../application/voice_channel_surface.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
-import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
 import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
@@ -210,17 +209,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       unawaited(viewer.stop());
       return;
     }
-    final spaceId = widget.channel.spaceId;
-    final key = spaceId.isEmpty
-        ? GoLiveStreamKey.call(channelId: widget.channel.id, userId: userId)
-        : GoLiveStreamKey.guild(
-            guildId: spaceId,
-            channelId: widget.channel.id,
-            userId: userId,
-          );
     // Only the ask goes out here. Discord answers with an endpoint, and the
     // connection that answer opens is what feeds the viewer.
-    unawaited(viewer.requestWatch(key));
+    unawaited(viewer.requestWatch(widget.channel.streamKeyFor(userId)));
   }
 
   @override
@@ -253,11 +244,51 @@ class _ConversationPaneState extends State<ConversationPane> {
     final soundboard = SoundboardScope.read(context);
     final stage = StageScope.read(context);
     final threadMembership = ThreadMembershipScope.read(context);
+    // A call is a room without a guild, and a stream is addressed by the room
+    // rather than by the server, so both rooms carry one and the same block of
+    // controls rather than two copies that could drift. Built on demand and
+    // not up here: attaching the Go Live control binds it to the transport,
+    // which a channel with no room on screen has no business doing.
+    Widget streamViewer() => ListenableBuilder(
+      listenable: viewer,
+      // Whoever is being watched takes the stage; the participant grid is
+      // what the room shows when nobody is.
+      builder: (_, _) => viewer.watching == null
+          ? const SizedBox.shrink()
+          : GoLiveViewer(
+              frames: viewer.frames,
+              label: viewer.watching!.userId,
+            ),
+    );
+
+    Widget goLiveControl() => ListenableBuilder(
+      listenable: goLive,
+      builder: (_, _) => GoLiveButton(
+        controller: goLive,
+        channelId: channel.id,
+        quality: StreamQualityScope.maybeOf(context),
+        pickSource: () => _pickCaptureSource(context),
+        guildId: channel.guildId,
+      ),
+    );
+
     final conversation = inCall && !showsMessages
         ? VoiceRoomView(
             // A call has no guild; the DM pseudo-space still supplies avatars.
             guildId: null,
             spaceId: channel.spaceId,
+            // Watching is asked for, never assumed: the pictures cross a
+            // second connection Discord only opens when told to, and a room
+            // that dialled every stream in it would be paying for pictures
+            // nobody is looking at.
+            onWatchStream: _toggleWatch,
+            // What is on the stage, which is only a stream that is actually
+            // arriving. Keying this on the ask meant a request Discord never
+            // answered hid the participant grid for the rest of the call.
+            watchedUserId: viewer.watching?.userId,
+            pendingWatchUserId: viewer.requested?.userId,
+            streamViewer: streamViewer(),
+            goLive: goLiveControl(),
             channelId: channel.id,
             channelName: channel.name,
             controller: voice,
@@ -267,39 +298,11 @@ class _ConversationPaneState extends State<ConversationPane> {
           )
         : switch (channel.kind) {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
-              // Watching is asked for, never assumed: the pictures cross a
-              // second connection Discord only opens when told to, and a room
-              // that dialled every share in it would be paying for streams
-              // nobody is looking at.
               onWatchStream: _toggleWatch,
-              // What is on the stage, which is only a stream that is actually
-              // arriving. Keying this on the ask meant a request Discord never
-              // answered hid the participant grid for the rest of the call.
               watchedUserId: viewer.watching?.userId,
               pendingWatchUserId: viewer.requested?.userId,
-              // Whoever is being watched takes the stage; the participant grid
-              // is what the room shows when nobody is.
-              streamViewer: ListenableBuilder(
-                listenable: viewer,
-                builder: (_, _) => viewer.watching == null
-                    ? const SizedBox.shrink()
-                    : GoLiveViewer(
-                        frames: viewer.frames,
-                        label: viewer.watching!.userId,
-                      ),
-              ),
-              goLive: ListenableBuilder(
-                listenable: goLive,
-                builder: (_, _) => GoLiveButton(
-                  controller: goLive,
-                  channelId: channel.id,
-                  quality: StreamQualityScope.maybeOf(context),
-                  pickSource: () => _pickCaptureSource(context),
-                  guildId: channel.spaceId.isEmpty
-                      ? null
-                      : channel.spaceId,
-                ),
-              ),
+              streamViewer: streamViewer(),
+              goLive: goLiveControl(),
               soundboard: ListenableBuilder(
                 listenable: soundboard,
                 builder: (_, _) => SoundboardButton(
@@ -313,7 +316,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                       builder: (_, _) => StageControls(controller: stage),
                     )
                   : null,
-              guildId: channel.spaceId,
+              guildId: channel.guildId,
               channelId: channel.id,
               channelName: channel.name,
               controller: voice,

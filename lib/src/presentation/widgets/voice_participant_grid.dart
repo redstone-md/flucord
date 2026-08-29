@@ -27,11 +27,12 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// The latest picture from a participant's camera, when one is arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
 
-  /// Opens somebody's screen share, or closes the one being watched. Null on a
-  /// surface that cannot watch — a build with no decoder, or a call.
+  /// Opens somebody's stream, or closes the one being watched. Null on a build
+  /// that cannot watch, which is one with no decoder: a call is a room like
+  /// any other and gets the same control.
   final void Function(String userId)? onWatchStream;
 
-  /// Whose share is on screen, so the tile offers to leave rather than join.
+  /// Whose stream is on the stage, so the tile offers to leave rather than join.
   final String? watchedUserId;
 
   @override
