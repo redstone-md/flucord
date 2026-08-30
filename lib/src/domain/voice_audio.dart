@@ -31,7 +31,7 @@ final class VoiceRemotePcmFrame {
   final Int16List samples;
 }
 
-/// Carries decoded-from-transport Opus frames to a receiver.
+/// Carries remote Opus frames to the receiving module.
 abstract interface class VoiceAudioReceiverTransport {
   Stream<VoiceRemoteOpusFrame> get remoteAudio;
 }

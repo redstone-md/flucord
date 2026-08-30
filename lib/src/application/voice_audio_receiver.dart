@@ -3,15 +3,10 @@ import 'dart:typed_data';
 
 import '../domain/voice_audio.dart';
 
-/// Decodes remote Opus frames into PCM without opening a microphone.
+/// Decodes remote Opus frames into PCM samples without opening a microphone.
 final class VoiceAudioReceiver {
-  VoiceAudioReceiver({
-    required VoiceOpusDecoderFactory decoderFactory,
-    VoiceAudioReceiverTransport? transport,
-  }) : _decoderFactory = decoderFactory {
-    _transport = transport;
-    _remoteSubscription = _subscribe(transport);
-  }
+  VoiceAudioReceiver({required VoiceOpusDecoderFactory decoderFactory})
+    : _decoderFactory = decoderFactory;
 
   final VoiceOpusDecoderFactory _decoderFactory;
   final StreamController<VoiceRemotePcmFrame> _remotePcm =
@@ -26,16 +21,27 @@ final class VoiceAudioReceiver {
 
   StreamSubscription<VoiceRemoteOpusFrame>? _remoteSubscription;
   VoiceAudioReceiverTransport? _transport;
+  Future<void> _binding = Future<void>.value();
   bool _disposed = false;
 
   Stream<VoiceRemotePcmFrame> get remotePcm => _remotePcm.stream;
   Stream<Object> get errors => _errors.stream;
 
-  Future<void> bindTransport(VoiceAudioReceiverTransport? transport) async {
+  Future<void> bindTransport(VoiceAudioReceiverTransport? transport) {
+    final operation = _binding.then<void>((_) => _bindTransport(transport));
+    _binding = operation.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {},
+    );
+    return operation;
+  }
+
+  Future<void> _bindTransport(VoiceAudioReceiverTransport? transport) async {
     if (_disposed || identical(_transport, transport)) return;
     await _remoteSubscription?.cancel();
     _remoteSubscription = null;
     _disposeDecoders();
+    if (_disposed) return;
     _transport = transport;
     _remoteSubscription = _subscribe(transport);
   }
@@ -94,6 +100,7 @@ final class VoiceAudioReceiver {
       decoder.dispose();
     }
     _decoders.clear();
+    _undecodableFrames.clear();
   }
 
   Future<void> dispose() async {
