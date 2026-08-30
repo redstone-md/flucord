@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/desktop_app_surface.dart';
+import 'package:flucord/src/application/window_foreground.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/platform/linux_desktop_integration.dart';
@@ -47,6 +48,7 @@ void main() {
     final surface = FlucordAppSurface(
       chat: chat,
       workspace: workspace,
+      foreground: WindowForeground(),
       onProtocolUri: received.add,
     );
     addTearDown(chat.dispose);

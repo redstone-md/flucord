@@ -8,6 +8,7 @@ import '../platform/desktop_integration.dart';
 import '../domain/channel_link.dart';
 import 'chat_controller.dart';
 import 'system_message_text.dart';
+import 'window_foreground.dart';
 import 'workspace_controller.dart';
 
 /// The application side of the desktop seam ([DesktopAppSurface]): the chat,
@@ -21,10 +22,12 @@ final class FlucordAppSurface extends ChangeNotifier
   FlucordAppSurface({
     required ChatController chat,
     required WorkspaceController workspace,
+    required WindowForeground foreground,
     required void Function(Uri uri) onProtocolUri,
     Stream<MessageUpsertedEvent>? incomingMessages,
   }) : _chat = chat,
        _workspace = workspace,
+       _foreground = foreground,
        _onProtocolUri = onProtocolUri {
     _chat.addListener(_chatChanged);
     _messages = incomingMessages ?? chat.incomingMessages;
@@ -35,6 +38,7 @@ final class FlucordAppSurface extends ChangeNotifier
 
   final ChatController _chat;
   final WorkspaceController _workspace;
+  final WindowForeground _foreground;
   final void Function(Uri uri) _onProtocolUri;
   late final Stream<MessageUpsertedEvent> _messages;
   late final StreamSubscription<MessageUpsertedEvent> _messageSubscription;
@@ -73,8 +77,15 @@ final class FlucordAppSurface extends ChangeNotifier
   @override
   void handleProtocolUri(Uri uri) => _onProtocolUri(uri);
 
+  /// One answer to two questions the desktop chrome asks on the window's
+  /// behalf: whether the room is being looked at, which decides what is read,
+  /// and whether the window is in the foreground, which decides what is drawn
+  /// (ADR-0003).
   @override
-  void setApplicationActive(bool value) => _chat.setApplicationActive(value);
+  void setApplicationActive(bool value) {
+    _chat.setApplicationActive(value);
+    _foreground.setInForeground(value);
+  }
 
   /// Re-checks whatever the desktop holds on the app's behalf, and tells the
   /// chrome (the tray, pending protocol links) that app state moved.

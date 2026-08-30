@@ -331,6 +331,85 @@ void main() {
   );
 
   test(
+    'a suspended client keeps receiving, and keeps sending',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
+
+      await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'send-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final sending = wiring.clients.single;
+      sending.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      wiring.repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'receive-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final receiving = wiring.clients.last;
+      receiving.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.isWatching(_key), isTrue);
+      expect(wiring.decoder.started, 1);
+
+      // The window goes away.
+      wiring.viewer.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.decoder.stopped, 1);
+
+      // Sending is not the viewer's to suspend: the capture goes on and the
+      // connection goes on carrying it.
+      final sentBefore = sending.sentFrames.length;
+      wiring.encoder.emitFrame();
+      await Future<void>.delayed(Duration.zero);
+      expect(sending.sentFrames.length, greaterThan(sentBefore));
+      expect(wiring.goLive.isStreaming, isTrue);
+
+      // A pause is the sender's own act, and it reaches Discord exactly as it
+      // did before suspension existed: this client being suspended is not the
+      // sender holding pictures back, and neither changes the other.
+      await wiring.goLive.setPaused(paused: true);
+      await Future<void>.delayed(Duration.zero);
+      // The create is followed by an unpause, and then by this pause.
+      expect(wiring.repository.pauses, [false, true]);
+      expect(wiring.viewer.isSuspended, isTrue);
+
+      // What this client is watching keeps arriving across the connection it
+      // already had: no second endpoint is asked for when the window comes
+      // back, so the picture does not wait on a handshake.
+      for (final frame in _packetizedUnit()) {
+        receiving.emitVideo('me', frame);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.receivedPacketsFor(_key), 2);
+      expect(wiring.viewer.decodedUnitsFor(_key), 0);
+
+      wiring.viewer.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.decoder.started, 2);
+      expect(wiring.repository.watched, [_key]);
+      expect(wiring.clients, hasLength(2));
+
+      for (final frame in _packetizedUnit()) {
+        receiving.emitVideo('me', frame);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.receivedPacketsFor(_key), 4);
+      expect(wiring.viewer.decodedUnitsFor(_key), 1);
+    },
+  );
+
+  test(
     'a ready stream of somebody else\'s is attached to the viewer',
     () async {
       final wiring = _Wiring();
@@ -495,6 +574,11 @@ final class _FakeDecoder implements VideoDecoderService {
       StreamController.broadcast();
   final List<Uint8List> submitted = [];
 
+  /// How many times this decoder was opened and shut: a session that is
+  /// suspended lets go of its decoder and opens another on the way back.
+  int started = 0;
+  int stopped = 0;
+
   Future<void> close() => _frames.close();
 
   @override
@@ -504,20 +588,24 @@ final class _FakeDecoder implements VideoDecoderService {
   Stream<DecodedVideoFrame> get frames => _frames.stream;
 
   @override
-  Future<void> start() async {}
+  Future<void> start() async => started++;
 
   @override
   Future<void> submit(Uint8List accessUnit, {Duration? timestamp}) async =>
       submitted.add(accessUnit);
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopped++;
 }
 
 final class _FakeRepository implements GoLiveRepository {
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
   final List<GoLiveStreamKey> watched = [];
+
+  /// What this client told Discord about holding pictures back, which is the
+  /// sender's own act and reaches everybody watching, suspended or not.
+  final List<bool> pauses = [];
 
   void assign(GoLiveServer server) => _servers.add(server);
 
@@ -555,7 +643,8 @@ final class _FakeRepository implements GoLiveRepository {
   Future<void> pingStream(GoLiveStreamKey key) async {}
 
   @override
-  Future<void> setPaused(GoLiveStreamKey key, {required bool paused}) async {}
+  Future<void> setPaused(GoLiveStreamKey key, {required bool paused}) async =>
+      pauses.add(paused);
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}

@@ -72,6 +72,11 @@ final class StreamViewerController extends ChangeNotifier {
   /// controller and a failure on one says nothing about another.
   final Map<GoLiveStreamKey, Object?> _errors = {};
 
+  /// Whether this client's window is out of the foreground, which is this
+  /// client's own business alone: sessions go on receiving and draw nothing
+  /// (ADR-0003).
+  bool _suspended = false;
+
   bool _disposed = false;
 
   /// Whether this build can decode at all, which is a property of the build
@@ -103,12 +108,18 @@ final class StreamViewerController extends ChangeNotifier {
   /// The ask turned down because this client is holding all it will hold.
   GoLiveStreamKey? get refused => _refused;
 
+  /// Whether this client's window is out of the foreground: what is on the
+  /// stage is still a stream that is arriving, and nothing is being drawn for
+  /// it until the window is back (ADR-0003).
+  bool get isSuspended => _suspended;
+
   /// Pictures from [key]'s stream.
   ///
   /// Per key rather than one stream for the room: the stage draws one session,
   /// and which one changes.
   Stream<DecodedVideoFrame> framesFor(GoLiveStreamKey key) =>
-      _sessions[key]?.decoder.frames ?? const Stream<DecodedVideoFrame>.empty();
+      _sessions[key]?.decoder?.frames ??
+      const Stream<DecodedVideoFrame>.empty();
 
   /// Whether this client is holding [key]: asked for, or arriving.
   bool isOpen(GoLiveStreamKey key) => _order.contains(key);
@@ -164,6 +175,23 @@ final class StreamViewerController extends ChangeNotifier {
     _notify();
   }
 
+  /// Suspends or resumes every watched session: what turns packets into
+  /// pictures is let go, and nothing else moves.
+  ///
+  /// Suspending is not pausing. A pause is a sender holding pictures back, and
+  /// everybody watching them loses them; suspension is this client's window
+  /// not being in the foreground, which is nobody's business but its own. The
+  /// connection is kept and read, so coming back does not wait on a handshake
+  /// or on Discord being asked again, and a stream this account is sending is
+  /// not touched at all (ADR-0003).
+  void setSuspended(bool value) {
+    if (_disposed || _suspended == value) return;
+    _suspended = value;
+    _diagnose(value ? 'suspended' : 'resumed');
+    unawaited(_applySuspension());
+    _notify();
+  }
+
   /// Asks Discord to send [key]'s stream to this client.
   ///
   /// Nothing is decoded yet: this is the ask, and the endpoint it is answered
@@ -210,6 +238,15 @@ final class StreamViewerController extends ChangeNotifier {
     _errors.remove(key);
     // A connection reopened for a key already being read replaces it.
     await _teardown(key);
+    // Suspended: the connection is read and counted, and nothing decodes it
+    // until the window is back. The session is installed either way, so the
+    // room goes on showing the stream it was holding (ADR-0003), and no
+    // decoder is opened for a window that is not looking at it.
+    if (_suspended) {
+      _install(key, packets);
+      _notify();
+      return true;
+    }
     final decoder = _decoderFactory();
     try {
       await decoder.start();
@@ -229,19 +266,17 @@ final class StreamViewerController extends ChangeNotifier {
       await decoder.stop();
       return false;
     }
-    // Arrival is not an ask, so it does not move this key: the stage shows
-    // whichever was asked for last, and an endpoint Discord was slow to
-    // answer must not overtake a newer one on its way in.
-    _admitted(key);
-    final session = _WatchedSession(decoder);
-    // In the map before it is listened to: a stream that already has a
-    // packet in it delivers on subscription.
-    _sessions[key] = session;
-    session.packets = packets.listen(
-      (packet) => _accept(key, packet),
-      onError: (Object error, StackTrace stackTrace) =>
-          _acceptError(key, error),
-    );
+    final session = _install(key, packets);
+    // The window may have gone away while the decoder was opening, which is a
+    // crossing the check above cannot see: this key was not in [_sessions]
+    // yet, so suspending did not reach it. The connection is kept and read,
+    // and a decoder nobody is looking at is handed straight back.
+    if (_suspended) {
+      await decoder.stop();
+      _notify();
+      return true;
+    }
+    session.attachDecoder(decoder);
     _notify();
     return true;
   }
@@ -370,7 +405,95 @@ final class StreamViewerController extends ChangeNotifier {
     final packets = session.packets;
     session.packets = null;
     await packets?.cancel();
-    await session.decoder.stop();
+    await _releaseDecoder(session);
+  }
+
+  /// Brings every session to what [_suspended] asks of it: decoding let go
+  /// when the window is away, and reopened when it is back.
+  ///
+  /// Nothing here touches Discord, and nothing here touches sending, so a
+  /// session comes back with the connection it already had (ADR-0003).
+  Future<void> _applySuspension() async {
+    // A copy: a session can be stopped while the others are being brought
+    // back, and the map is not theirs to hold still.
+    for (final entry in _sessions.entries.toList()) {
+      if (_suspended) {
+        await _releaseDecoder(entry.value);
+      } else {
+        await _openDecoder(entry.key);
+      }
+    }
+  }
+
+  /// Starts reading [packets] as [key], and records the session as held.
+  ///
+  /// Arrival is not an ask, so it does not move this key: the stage shows
+  /// whichever was asked for last, and an endpoint Discord was slow to answer
+  /// must not overtake a newer one on its way in.
+  _WatchedSession _install(
+    GoLiveStreamKey key,
+    Stream<IncomingVideoPacket> packets,
+  ) {
+    _admitted(key);
+    final session = _WatchedSession();
+    // In the map before it is listened to: a stream that already has a
+    // packet in it delivers on subscription.
+    _sessions[key] = session;
+    session.packets = packets.listen(
+      (packet) => _accept(key, packet),
+      onError: (Object error, StackTrace stackTrace) =>
+          _acceptError(key, error),
+    );
+    return session;
+  }
+
+  /// Opens [key]'s decoder, and hands the session a depacketiser to feed it
+  /// with.
+  ///
+  /// Also how a suspended session comes back. The depacketiser is made fresh
+  /// rather than kept: half a picture from before the window went away is not
+  /// the start of one, and the first picture back is a moment behind until
+  /// the sender sends a keyframe (ADR-0003).
+  Future<bool> _openDecoder(GoLiveStreamKey key) async {
+    final session = _sessions[key];
+    if (session == null || session.decoder != null) return false;
+    final decoder = _decoderFactory();
+    try {
+      await decoder.start();
+    } on Object catch (error) {
+      _errors[key] = error;
+      _diagnose('decoder failed for ${key.userId}: $error');
+      _notify();
+      return false;
+    }
+    // That await is a crossing, and each way across leaves this decoder with
+    // nothing to decode for: the window may have gone again, the session may
+    // have been stopped, the controller may have been disposed, or another
+    // decoder may have been opened for this session while this one was
+    // starting, which is what two resumes in a row do. A decoder nobody wants
+    // is handed back rather than left running, and one installed over another
+    // would leave the first decoding with nobody holding it.
+    if (_disposed ||
+        _suspended ||
+        session.decoder != null ||
+        !identical(_sessions[key], session)) {
+      await decoder.stop();
+      return false;
+    }
+    session.attachDecoder(decoder);
+    _errors.remove(key);
+    _notify();
+    return true;
+  }
+
+  /// Lets go of what turns [session]'s packets into pictures, keeping the
+  /// subscription that keeps the connection alive.
+  Future<void> _releaseDecoder(_WatchedSession session) async {
+    final decoder = session.decoder;
+    session.decoder = null;
+    session.depacketizer = null;
+    if (decoder == null) return;
+    await decoder.stop();
   }
 
   void _diagnose(String what) {
@@ -386,13 +509,15 @@ final class StreamViewerController extends ChangeNotifier {
       _diagnose('first packet from ${key.userId}');
     }
     session.receivedPackets++;
-    final unit = session.depacketizer.accept(
-      packet.payload,
-      marker: packet.marker,
-    );
+    final depacketizer = session.depacketizer;
+    final decoder = session.decoder;
+    // Suspended: the packet is counted, so a stream that is arriving still
+    // reads as arriving, and that is all that is done with it (ADR-0003).
+    if (depacketizer == null || decoder == null) return;
+    final unit = depacketizer.accept(packet.payload, marker: packet.marker);
     if (unit == null) return;
     session.decodedUnits++;
-    unawaited(session.decoder.submit(unit));
+    unawaited(decoder.submit(unit));
     _notify();
   }
 
@@ -408,12 +533,25 @@ final class StreamViewerController extends ChangeNotifier {
 }
 
 /// One stream being watched: its own depacketiser, decoder and subscription.
+///
+/// The decoder and the depacketiser are absent while this client is suspended,
+/// and the subscription is not: the connection stays up and its packets keep
+/// being counted, they just stop becoming pictures (ADR-0003).
 final class _WatchedSession {
-  _WatchedSession(this.decoder) : depacketizer = DiscordH264Depacketizer();
+  _WatchedSession();
 
-  final VideoDecoderService decoder;
-  final DiscordH264Depacketizer depacketizer;
+  VideoDecoderService? decoder;
+  DiscordH264Depacketizer? depacketizer;
   StreamSubscription<IncomingVideoPacket>? packets;
   int receivedPackets = 0;
   int decodedUnits = 0;
+
+  /// Gives the session what turns its packets into pictures.
+  ///
+  /// The depacketiser comes with the decoder rather than outliving it: half a
+  /// picture left over from before a gap is not the start of one.
+  void attachDecoder(VideoDecoderService opened) {
+    decoder = opened;
+    depacketizer = DiscordH264Depacketizer();
+  }
 }

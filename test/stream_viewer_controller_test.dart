@@ -11,6 +11,14 @@ const _key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'them');
 const _other = GoLiveStreamKey.guild(guildId: 'g', channelId: 'c', userId: 'u');
 const _ownKey = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
 
+/// One small picture, as a decoder hands it to whatever draws it.
+final DecodedVideoFrame _picture = DecodedVideoFrame(
+  pixels: Uint8List.fromList([1, 2, 3, 4]),
+  width: 1,
+  height: 1,
+  timestamp: Duration.zero,
+);
+
 /// The packets one small access unit becomes, as a stream connection would
 /// deliver them.
 List<IncomingVideoPacket> _packetsFor({int sliceLength = 8}) => [
@@ -727,6 +735,485 @@ void main() {
       expect(stopped.where((each) => each == 1), hasLength(1));
     });
   });
+
+  group('suspension', () {
+    test('a suspended session keeps its connection and draws nothing', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+      await controller.watch(_key, packets: packets.stream);
+      // Drawing, while the window is being looked at: what the room reads is
+      // this decoder's pictures.
+      final drawn = <DecodedVideoFrame>[];
+      final frames = controller.framesFor(_key).listen(drawn.add);
+      addTearDown(frames.cancel);
+      made.single.emit(_picture);
+      await Future<void>.delayed(Duration.zero);
+      expect(drawn, hasLength(1));
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnits, 1);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isSuspended, isTrue);
+
+      // Nothing on Discord's side is torn down and nothing is withdrawn: the
+      // room goes on showing the stream it was showing.
+      expect(controller.isWatching(_key), isTrue);
+      expect(controller.watching, _key);
+      expect(repository.watched, [_key]);
+      expect(repository.ended, isEmpty);
+      // What turns packets into pictures is what goes.
+      expect(made.single.stopped, 1);
+
+      // The room resubscribes when what it draws from changes, which is what
+      // being let go does to a decoder.
+      await frames.cancel();
+      drawn.clear();
+      final afterSuspension = controller.framesFor(_key).listen(drawn.add);
+      addTearDown(afterSuspension.cancel);
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      // Still arriving, and still counted, so a stream that is arriving reads
+      // as arriving. Drawn nothing: the packets stop at the subscription that
+      // keeps the connection alive.
+      expect(controller.receivedPacketsFor(_key), 4);
+      expect(controller.decodedUnitsFor(_key), 1);
+      expect(made.single.submitted, hasLength(1));
+      expect(drawn, isEmpty);
+
+      // Focus events arrive in bursts. A repeat is not news to the room, and
+      // a decoder cannot be let go twice.
+      var notified = 0;
+      controller.addListener(() => notified++);
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(notified, 0);
+      expect(made.single.stopped, 1);
+    });
+
+    test('every open session is suspended, and every one comes back', () async {
+      final repository = _FakeRepository();
+      final first = StreamController<IncomingVideoPacket>();
+      final second = StreamController<IncomingVideoPacket>();
+      addTearDown(first.close);
+      addTearDown(second.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+      await controller.watch(_key, packets: first.stream);
+      await controller.watch(_other, packets: second.stream);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect([for (final decoder in made) decoder.stopped], [1, 1]);
+
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      // Two let go, two opened in their place: one decoder per session, as
+      // before, and not one shared between them.
+      expect(made, hasLength(4));
+      expect([for (final decoder in made.skip(2)) decoder.started], [1, 1]);
+    });
+
+    test('coming back reattaches a decoder without asking again', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+      await controller.watch(_key, packets: packets.stream);
+      // Half a picture, as a window going away mid-picture leaves it: the
+      // parameter set and the first fragment of the slice behind it. A slice
+      // this size is what makes the packetiser fragment one at all.
+      for (final packet in _packetsFor(sliceLength: 1400).take(2)) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isSuspended, isFalse);
+
+      // A new decoder for the session that never went away. Discord was not
+      // asked again, so there is no handshake and no new endpoint: the
+      // connection was kept open the whole time.
+      expect(made, hasLength(2));
+      expect(made.last.started, 1);
+      expect(repository.watched, [_key]);
+      expect(controller.isRequested(_key), isFalse);
+      expect(controller.watching, _key);
+
+      // The rest of the picture that was arriving when the window went away.
+      // It is dropped: a depacketiser that remembered the first half would
+      // splice the two into one, and what comes back waits for the sender's
+      // next keyframe instead (ADR-0003).
+      packets.add(_packetsFor(sliceLength: 1400).last);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.receivedPacketsFor(_key), 3);
+      expect(controller.decodedUnitsFor(_key), 0);
+
+      // What the room draws from is the new decoder's pictures again.
+      final drawn = <DecodedVideoFrame>[];
+      final frames = controller.framesFor(_key).listen(drawn.add);
+      addTearDown(frames.cancel);
+      made.last.emit(_picture);
+      await Future<void>.delayed(Duration.zero);
+      expect(drawn, hasLength(1));
+
+      // A whole picture, and the session draws again.
+      for (final packet in _packetsFor(sliceLength: 1400)) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_key), 1);
+      expect(made.last.submitted, hasLength(1));
+      expect(made.first.submitted, isEmpty);
+
+      // A second focus event opens nothing further.
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(made, hasLength(2));
+    });
+
+    test('a connection that arrives while suspended waits for the window', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(await controller.watch(_key, packets: packets.stream), isTrue);
+
+      // Asked for and arriving, with nothing decoding it: a decoder opened
+      // for a window that is not looking would only be let go of again.
+      expect(controller.isWatching(_key), isTrue);
+      expect(made, isEmpty);
+
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.receivedPacketsFor(_key), 2);
+      expect(controller.decodedUnitsFor(_key), 0);
+
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(made, hasLength(1));
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_key), 1);
+    });
+
+    test('the window going away again shuts the decoder it was opening', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final gate = Completer<void>();
+      final made = <_FakeDecoder>[];
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () {
+          // The decoder a resume opens is held shut, so the window can go
+          // away again while it is opening. The first one is the session's.
+          final decoder = _FakeDecoder(startGate: made.isEmpty ? null : gate);
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      expect(controller.isSupported, isTrue);
+      made.clear();
+
+      await controller.watch(_key, packets: packets.stream);
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      controller.setSuspended(false);
+      // Gone again before the decoder has finished opening.
+      controller.setSuspended(true);
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      // Opened for a window that is not looking any more, and shut rather
+      // than left decoding into it.
+      expect(made, hasLength(2));
+      expect(made.last.started, 1);
+      expect(made.last.stopped, 1);
+      expect(controller.isSuspended, isTrue);
+    });
+
+    test(
+      'the window going away while a connection is arriving leaves it undecoded',
+      () async {
+        final repository = _FakeRepository();
+        final packets = StreamController<IncomingVideoPacket>();
+        addTearDown(packets.close);
+        final gate = Completer<void>();
+        final made = <_FakeDecoder>[];
+        final controller = StreamViewerController(
+          repositoryProvider: () => repository,
+          decoderFactory: () {
+            // The decoder the arriving connection opens is held shut, so the
+            // window can go away before it has finished opening.
+            final decoder = _FakeDecoder(startGate: made.isEmpty ? gate : null);
+            made.add(decoder);
+            return decoder;
+          },
+        );
+        addTearDown(controller.dispose);
+        expect(controller.isSupported, isTrue);
+        made.clear();
+
+        await controller.requestWatch(_key);
+        final attaching = controller.attach(_key, packets: packets.stream);
+        // Far enough in for the decoder to be opening, which is where the
+        // window going away catches it.
+        await Future<void>.delayed(Duration.zero);
+        controller.setSuspended(true);
+        gate.complete();
+        expect(await attaching, isTrue);
+
+        // Arriving, and not decoding. The session keeps the connection it was
+        // given, and the decoder that opened for it is handed straight back:
+        // suspending could not reach a key that was not being held yet.
+        expect(controller.isWatching(_key), isTrue);
+        expect(made, hasLength(1));
+        expect(made.single.started, 1);
+        expect(made.single.stopped, 1);
+
+        for (final packet in _packetsFor()) {
+          packets.add(packet);
+        }
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.receivedPacketsFor(_key), 2);
+        expect(controller.decodedUnitsFor(_key), 0);
+
+        // And it decodes as soon as the window is back.
+        controller.setSuspended(false);
+        await Future<void>.delayed(Duration.zero);
+        for (final packet in _packetsFor()) {
+          packets.add(packet);
+        }
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.decodedUnitsFor(_key), 1);
+      },
+    );
+
+    test('two resumes in a row leave one decoder, not two', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final gates = [Completer<void>(), Completer<void>()];
+      final made = <_FakeDecoder>[];
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () {
+          // The session's own decoder opens at once; the two a burst of focus
+          // events races to open are held shut, so both are in flight at the
+          // same moment.
+          final decoder = switch (made.length) {
+            0 => _FakeDecoder(),
+            1 => _FakeDecoder(startGate: gates[0]),
+            _ => _FakeDecoder(startGate: gates[1]),
+          };
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      expect(controller.isSupported, isTrue);
+      made.clear();
+
+      await controller.watch(_key, packets: packets.stream);
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      // A burst: away, back, away, back again. Each call starts its work at
+      // once and leaves it at the first await, so both openings are in flight
+      // here rather than one after the other.
+      controller.setSuspended(false);
+      controller.setSuspended(true);
+      controller.setSuspended(false);
+      // Both open, the second of them first.
+      gates[1].complete();
+      gates[0].complete();
+      await Future<void>.delayed(Duration.zero);
+
+      // One decoder for the session, and the one that lost is shut rather
+      // than left decoding with nobody holding it.
+      expect(made, hasLength(3));
+      expect([made[1].stopped, made[2].stopped], [1, 0]);
+
+      // The room draws from the one that is left, and nothing reaches it from
+      // the one that was shut.
+      final drawn = <DecodedVideoFrame>[];
+      final frames = controller.framesFor(_key).listen(drawn.add);
+      addTearDown(frames.cancel);
+      made[1].emit(_picture);
+      made[2].emit(_picture);
+      await Future<void>.delayed(Duration.zero);
+      expect(drawn, hasLength(1));
+
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_key), 1);
+      expect(made[1].submitted, isEmpty);
+      expect(made[2].submitted, hasLength(1));
+    });
+
+    test('stopping a suspended session shuts nothing twice', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made);
+      addTearDown(controller.dispose);
+      await controller.watch(_key, packets: packets.stream);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      await controller.stop(_key);
+
+      expect(controller.isOpen(_key), isFalse);
+      expect(controller.isWatching(_key), isFalse);
+      // Let go once, by the suspension. A stop that shut it again would be
+      // shutting a decoder this controller is no longer holding.
+      expect(made.single.stopped, 1);
+      expect(controller.watching, isNull);
+    });
+
+    test('this account\'s own preview suspends without leaving the room', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      final controller = _viewer(repository, made: made, ownKey: () => _ownKey);
+      addTearDown(controller.dispose);
+      await controller.watch(_ownKey, packets: packets.stream);
+
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+
+      // The preview is a watched session like any other, so it stops drawing.
+      // It is not the share: what this account is sending was never the
+      // viewer's to suspend, and nothing was ended on Discord's side.
+      expect(controller.isWatching(_ownKey), isTrue);
+      expect(made.single.stopped, 1);
+      expect(repository.ended, isEmpty);
+
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_ownKey), 1);
+      // The sender's own pictures belong on its tile, suspended or not
+      // (ADR-0001).
+      expect(controller.watching, isNull);
+    });
+
+    test('a decoder that will not reopen is reported, then retried', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final made = <_FakeDecoder>[];
+      var refuse = false;
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () {
+          final decoder = _FakeDecoder(failStart: refuse);
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      expect(controller.isSupported, isTrue);
+      made.clear();
+
+      await controller.watch(_key, packets: packets.stream);
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      refuse = true;
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+
+      // The session is not thrown away because a decoder would not open: the
+      // connection is still there, and the room is told why there is no
+      // picture.
+      expect(controller.errorFor(_key), isNotNull);
+      expect(controller.isWatching(_key), isTrue);
+      expect(made, hasLength(2));
+
+      // Another return to the window is a clean attempt.
+      refuse = false;
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.errorFor(_key), isNull);
+
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.decodedUnitsFor(_key), 1);
+    });
+
+    test('disposing while a decoder is reopening shuts it', () async {
+      final repository = _FakeRepository();
+      final packets = StreamController<IncomingVideoPacket>();
+      addTearDown(packets.close);
+      final gate = Completer<void>();
+      final made = <_FakeDecoder>[];
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () {
+          // The decoder the resume opens is held shut, so the controller can
+          // be disposed while it is opening.
+          final decoder = _FakeDecoder(startGate: made.isEmpty ? null : gate);
+          made.add(decoder);
+          return decoder;
+        },
+      );
+      expect(controller.isSupported, isTrue);
+      made.clear();
+
+      await controller.watch(_key, packets: packets.stream);
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      controller.setSuspended(false);
+      // Disposed here rather than in a teardown, because this test is about
+      // what the disposal itself does.
+      controller.dispose();
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      // Opened for a controller that is already gone, and handed back rather
+      // than left decoding with nobody holding it.
+      expect(made, hasLength(2));
+      expect(made.last.started, 1);
+      expect(made.last.stopped, 1);
+    });
+  });
 }
 
 /// A controller that makes one decoder per session, recording them in [made]
@@ -806,6 +1293,10 @@ final class _FakeRepository implements GoLiveRepository {
   final bool failWatch;
   final List<GoLiveStreamKey> watched = [];
 
+  /// What this client ended on Discord's side. Suspension must leave it
+  /// empty: what is let go is this client's decoder, not the stream.
+  final List<GoLiveStreamKey> ended = [];
+
   @override
   Map<String, GoLiveStream> get streams => const {};
 
@@ -835,5 +1326,5 @@ final class _FakeRepository implements GoLiveRepository {
   Future<void> setPaused(GoLiveStreamKey key, {required bool paused}) async {}
 
   @override
-  Future<void> endStream(GoLiveStreamKey key) async {}
+  Future<void> endStream(GoLiveStreamKey key) async => ended.add(key);
 }
