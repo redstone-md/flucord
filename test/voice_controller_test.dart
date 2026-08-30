@@ -229,12 +229,15 @@ void main() {
       final media = _FakeVoiceMediaService();
       final signaling = _FakeVoiceSignalingService();
       final playback = _FakeVoicePlaybackService();
+      final streamAudio = StreamController<VoiceRemotePcmFrame>.broadcast();
       final controller = VoiceController(
         media,
         signalingServiceProvider: () => signaling,
         audioCodecFactory: _FakeCodecFactory(),
         playbackService: playback,
+        streamAudio: streamAudio.stream,
       );
+      addTearDown(streamAudio.close);
       addTearDown(controller.dispose);
       addTearDown(signaling.close);
 
@@ -256,6 +259,18 @@ void main() {
       signaling.addRemote('user-1', [7]);
       await _flushEvents();
       expect(playback.frames.single.userId, 'user-1');
+
+      streamAudio.add(
+        VoiceRemotePcmFrame(
+          userId: 'stream-sender',
+          samples: Int16List.fromList([8]),
+        ),
+      );
+      await _flushEvents();
+      expect(playback.frames.map((frame) => frame.userId), [
+        'user-1',
+        'stream-sender',
+      ]);
 
       await controller.toggleMute();
       expect(controller.isAudioPlaybackActive, isTrue);
@@ -303,6 +318,32 @@ void main() {
     expect(signaling.joins.single.$2, 'forge-voice');
     expect(controller.microphoneError, isNotNull);
     expect(controller.joinBlockedReason, isNull);
+  });
+
+  test('a watched stream\'s sound plays on the room\'s output', () async {
+    final playback = _FakeVoicePlaybackService();
+    final streamAudio = StreamController<VoiceRemotePcmFrame>.broadcast();
+    addTearDown(streamAudio.close);
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      playbackService: playback,
+      streamAudio: streamAudio.stream,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    streamAudio.add(
+      VoiceRemotePcmFrame(
+        userId: 'them',
+        samples: Int16List.fromList([7, 8]),
+      ),
+    );
+    await _flushEvents();
+
+    // The stream source uses the room's existing output and keeps its sender
+    // id on the PCM frame (ADR-0004).
+    expect(playback.frames.single.userId, 'them');
+    expect(playback.frames.single.samples, [7, 8]);
   });
 
   test('a session with no voice transport says why it cannot join', () async {

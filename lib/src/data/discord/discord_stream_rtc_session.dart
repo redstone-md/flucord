@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 
 import '../../domain/go_live_stream.dart';
+import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/video_encoder.dart';
 import 'discord_rtp_packet.dart';
@@ -46,17 +47,27 @@ final class DiscordStreamRtcSession {
 
   final StreamController<(String, DiscordRtpFrame)> _video =
       StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _audio =
+      StreamController.broadcast();
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
 
   DiscordVoiceClient? _client;
   StreamSubscription<VoiceSignalingEvent>? _clientEvents;
   StreamSubscription<(String, DiscordRtpFrame)>? _videoPackets;
+  StreamSubscription<VoiceRemoteOpusFrame>? _audioFrames;
   int? _ssrc;
   bool _closed = false;
 
   /// Pictures arriving on this connection, tagged with whose SSRC carried them.
   Stream<(String, DiscordRtpFrame)> get video => _video.stream;
+
+  /// The sound of what is being shared, arriving on this connection rather
+  /// than on the room's voice one (ADR-0004).
+  ///
+  /// Tagged with the sender by the connection itself: a stream has exactly one
+  /// sender, and their opcode 12 is what attributes it.
+  Stream<VoiceRemoteOpusFrame> get audio => _audio.stream;
 
   /// What the connection is doing, in the same vocabulary voice uses.
   Stream<VoiceSignalingEvent> get events => _events.stream;
@@ -76,6 +87,10 @@ final class DiscordStreamRtcSession {
     _videoPackets = client.videoPackets.listen(
       _video.add,
       onError: _video.addError,
+    );
+    _audioFrames = client.remoteAudio.listen(
+      _audio.add,
+      onError: _audio.addError,
     );
     await client.connect();
   }
@@ -118,10 +133,12 @@ final class DiscordStreamRtcSession {
     if (_closed) return;
     _closed = true;
     await _videoPackets?.cancel();
+    await _audioFrames?.cancel();
     await _clientEvents?.cancel();
     await _client?.close();
     _client = null;
     await _video.close();
+    await _audio.close();
     await _events.close();
   }
 

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/stream_router.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
+import 'package:flucord/src/application/watched_stream_audio.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
@@ -14,8 +15,11 @@ import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_voice_audio.dart';
 
 const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
@@ -80,6 +84,9 @@ final class _Wiring {
       decoderFactory: () => decoder,
       ownKeyProvider: () => goLive.streamKey,
       onWatchRequested: (key) => service.noteWatch(key),
+      // The sound of what is being shared: a receiver per watched session,
+      // fed by the same connection the pictures arrive on (ADR-0004).
+      audio: WatchedStreamAudio(decoderFactory: audioCodecs),
     );
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
@@ -101,6 +108,7 @@ final class _Wiring {
   final repository = _FakeRepository();
   final decoder = _FakeDecoder();
   final encoder = _FakeEncoder();
+  final audioCodecs = FakeVoiceOpusDecoderFactory();
   final clients = <_FakeClient>[];
   final log = <String>[];
   late final VideoCaptureHub capture;
@@ -439,6 +447,41 @@ void main() {
     },
   );
 
+  test('a watched stream\'s sound comes off the stream connection', () async {
+    final wiring = _Wiring();
+    addTearDown(wiring.dispose);
+
+    await wiring.viewer.requestWatch(_otherKey);
+    wiring.repository.assign(_otherServer);
+    await Future<void>.delayed(Duration.zero);
+    final connection = wiring.clients.single;
+    connection.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+    expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+    final heard = <VoiceRemotePcmFrame>[];
+    final played = wiring.viewer.audio.listen(heard.add);
+    addTearDown(played.cancel);
+    await Future<void>.delayed(Duration.zero);
+
+    // The sender's screen-share audio, on the same connection their pictures
+    // cross rather than on the room's voice one.
+    connection.emitAudio('somebody-else', [7]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(wiring.audioCodecs.created, 1);
+    expect(heard.single.userId, 'somebody-else');
+    expect(heard.single.samples, [7]);
+
+    // Stopping the watch ends the sound with the session. The connection is
+    // Discord's to close, and it goes on delivering either way.
+    await wiring.viewer.stop(_otherKey);
+    expect(wiring.audioCodecs.disposed, 1);
+    connection.emitAudio('somebody-else', [8]);
+    await Future<void>.delayed(Duration.zero);
+    expect(heard, hasLength(1));
+  });
+
   test('a disposed router routes nothing', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
@@ -454,9 +497,9 @@ void main() {
   });
 }
 
-/// Carries pictures the same way the production client does, so the video half
-/// of a stream connection is testable without a socket. Says what it did into
-/// [log], in order, so a test can tell which side of the fork ran first.
+/// Carries pictures and sound like the production client, so both halves of a
+/// stream connection are testable without a live connection. Records actions
+/// in [log] so tests can check which side of the fork ran first.
 final class _FakeClient implements DiscordVoiceClient {
   _FakeClient(this.log);
 
@@ -464,6 +507,8 @@ final class _FakeClient implements DiscordVoiceClient {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final StreamController<(String, DiscordRtpFrame)> _video =
+      StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _audio =
       StreamController.broadcast();
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
@@ -475,6 +520,11 @@ final class _FakeClient implements DiscordVoiceClient {
   void emitVideo(String userId, DiscordRtpFrame frame) =>
       _video.add((userId, frame));
 
+  /// Delivers the sound of what is being shared, as the wire would.
+  void emitAudio(String userId, List<int> opus) => _audio.add(
+    VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
+  );
+
   @override
   int? get audioSsrc => null;
 
@@ -483,6 +533,9 @@ final class _FakeClient implements DiscordVoiceClient {
 
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _audio.stream;
 
   @override
   bool announceVideo({
@@ -521,6 +574,7 @@ final class _FakeClient implements DiscordVoiceClient {
   Future<void> close() async {
     await _events.close();
     await _video.close();
+    await _audio.close();
   }
 }
 

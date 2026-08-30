@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/stream_viewer_controller.dart';
+import 'package:flucord/src/application/watched_stream_audio.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_voice_audio.dart';
 
 const _key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'them');
 const _other = GoLiveStreamKey.guild(guildId: 'g', channelId: 'c', userId: 'u');
@@ -39,6 +43,18 @@ List<IncomingVideoPacket> _packetsFor({int sliceLength = 8}) => [
   ))
     IncomingVideoPacket(payload: payload.bytes, marker: payload.isLast),
 ];
+
+/// An arriving Opus frame, as a stream connection delivers one.
+VoiceRemoteOpusFrame _opusFrame(String userId, List<int> opus) =>
+    VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus));
+
+/// One stream connection's sound. Broadcast, so that the connection can go
+/// on delivering after the session that was listening is gone.
+StreamController<VoiceRemoteOpusFrame> _audioConnection() {
+  final controller = StreamController<VoiceRemoteOpusFrame>.broadcast();
+  addTearDown(controller.close);
+  return controller;
+}
 
 void main() {
   test('a build that cannot decode watches nothing', () async {
@@ -736,6 +752,144 @@ void main() {
     });
   });
 
+  group('screen-share audio', () {
+    test('a watched stream\'s sound plays', () async {
+      final repository = _FakeRepository();
+      final codecs = FakeVoiceOpusDecoderFactory();
+      final controller = _viewer(
+        repository,
+        audio: WatchedStreamAudio(decoderFactory: codecs),
+      );
+      addTearDown(controller.dispose);
+      final opus = _audioConnection();
+      final heard = <VoiceRemotePcmFrame>[];
+      final played = controller.audio.listen(heard.add);
+      addTearDown(played.cancel);
+
+      await controller.watch(
+        _key,
+        packets: const Stream.empty(),
+        audio: opus.stream,
+      );
+      await Future<void>.delayed(Duration.zero);
+      opus.add(_opusFrame('them', [7]));
+      await Future<void>.delayed(Duration.zero);
+
+      // One watched stream, one decoder: what decodes it is not shared with
+      // the room's voice, and not shared with another stream either.
+      expect(codecs.created, 1);
+      expect(heard.single.userId, 'them');
+      expect(heard.single.samples, [7]);
+    });
+
+    test('stopping the watch ends the sound with the session', () async {
+      final repository = _FakeRepository();
+      final codecs = FakeVoiceOpusDecoderFactory();
+      final controller = _viewer(
+        repository,
+        audio: WatchedStreamAudio(decoderFactory: codecs),
+      );
+      addTearDown(controller.dispose);
+      final opus = _audioConnection();
+      final heard = <VoiceRemotePcmFrame>[];
+      final played = controller.audio.listen(heard.add);
+      addTearDown(played.cancel);
+
+      await controller.watch(
+        _key,
+        packets: const Stream.empty(),
+        audio: opus.stream,
+      );
+      await Future<void>.delayed(Duration.zero);
+      opus.add(_opusFrame('them', [7]));
+      await Future<void>.delayed(Duration.zero);
+      expect(heard, hasLength(1));
+
+      await controller.stop(_key);
+      expect(codecs.disposed, 1);
+
+      // The connection outlives the session by as long as Discord likes;
+      // there is nothing left to play it into.
+      opus.add(_opusFrame('them', [8]));
+      await Future<void>.delayed(Duration.zero);
+      expect(heard, hasLength(1));
+    });
+
+    test('stopping one stream leaves the other audible', () async {
+      final repository = _FakeRepository();
+      final codecs = FakeVoiceOpusDecoderFactory();
+      final controller = _viewer(
+        repository,
+        audio: WatchedStreamAudio(decoderFactory: codecs),
+      );
+      addTearDown(controller.dispose);
+      final first = _audioConnection();
+      final second = _audioConnection();
+      final heard = <VoiceRemotePcmFrame>[];
+      final played = controller.audio.listen(heard.add);
+      addTearDown(played.cancel);
+
+      await controller.watch(
+        _key,
+        packets: const Stream.empty(),
+        audio: first.stream,
+      );
+      await controller.watch(
+        _other,
+        packets: const Stream.empty(),
+        audio: second.stream,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await controller.stop(_key);
+      first.add(_opusFrame('them', [1]));
+      second.add(_opusFrame('u', [2]));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(heard.map((frame) => frame.userId), ['u']);
+      expect(heard.single.samples, [2]);
+    });
+
+    test('a suspended client goes on listening', () async {
+      final repository = _FakeRepository();
+      final codecs = FakeVoiceOpusDecoderFactory();
+      final controller = _viewer(
+        repository,
+        audio: WatchedStreamAudio(decoderFactory: codecs),
+      );
+      addTearDown(controller.dispose);
+      final opus = _audioConnection();
+      final heard = <VoiceRemotePcmFrame>[];
+      final played = controller.audio.listen(heard.add);
+      addTearDown(played.cancel);
+
+      await controller.watch(
+        _key,
+        packets: const Stream.empty(),
+        audio: opus.stream,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // Suspension is this client not drawing. The window being in the
+      // background is nobody's reason to go deaf.
+      controller.setSuspended(true);
+      await Future<void>.delayed(Duration.zero);
+      opus.add(_opusFrame('them', [7]));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(heard.single.samples, [7]);
+
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      opus.add(_opusFrame('them', [8]));
+      await Future<void>.delayed(Duration.zero);
+      expect(heard.map((frame) => frame.samples.single), [7, 8]);
+      // Coming back reopens a picture decoder, never a second audio one.
+      expect(codecs.created, 1);
+    });
+
+  });
+
   group('suspension', () {
     test('a suspended session keeps its connection and draws nothing', () async {
       final repository = _FakeRepository();
@@ -1226,6 +1380,7 @@ StreamViewerController _viewer(
   GoLiveRepository repository, {
   List<_FakeDecoder>? made,
   GoLiveStreamKey? Function()? ownKey,
+  WatchedStreamAudio? audio,
 }) {
   final controller = StreamViewerController(
     repositoryProvider: () => repository,
@@ -1235,6 +1390,7 @@ StreamViewerController _viewer(
       return decoder;
     },
     ownKeyProvider: ownKey,
+    audio: audio,
   );
   expect(controller.isSupported, isTrue);
   made?.clear();

@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
 void main() {
@@ -523,6 +524,10 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
 
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
+      const Stream<VoiceRemoteOpusFrame>.empty();
 
   void emitStatus(VoiceConnectionStatus status) =>
       _events.add(VoiceSignalingStatusEvent(status));

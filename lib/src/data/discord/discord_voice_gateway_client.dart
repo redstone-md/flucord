@@ -35,6 +35,12 @@ abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
   /// carried them.
   Stream<(String, DiscordRtpFrame)> get videoPackets;
 
+  /// Somebody else's sound on this connection, tagged with whoever sent it.
+  ///
+  /// A stream's connection carries the sender's screen-share audio as well as
+  /// their pictures, and a watcher wants both (ADR-0004).
+  Stream<VoiceRemoteOpusFrame> get remoteAudio;
+
   /// Encrypts one whole picture for the room's group, when the connection has
   /// one, before it is packetised into RTP.
   Uint8List encryptVideoForGroup({

@@ -7,6 +7,7 @@ import '../../app_log.dart';
 import '../../domain/go_live_media.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/video_encoder.dart';
+import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
 import '../dave/native_dave_service.dart';
 import '../video/native_video_bindings.dart';
@@ -192,6 +193,11 @@ final class _IsolateSendingClient implements DiscordVoiceClient, GoLiveSender {
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets =>
       const Stream<(String, DiscordRtpFrame)>.empty();
+
+  /// A share sends its own sound; it receives nobody else's.
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
+      const Stream<VoiceRemoteOpusFrame>.empty();
 
   @override
   int? get audioSsrc => _audioSsrc;

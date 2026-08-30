@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import '../data/discord/discord_h264_depacketizer.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_decoder.dart';
+import '../domain/voice_audio.dart';
 import '../app_log.dart';
+import 'watched_stream_audio.dart';
 
 /// One RTP payload as it arrives from a stream connection.
 final class IncomingVideoPacket {
@@ -36,14 +38,24 @@ final class StreamViewerController extends ChangeNotifier {
     required VideoDecoderService Function() decoderFactory,
     GoLiveStreamKey? Function()? ownKeyProvider,
     void Function(GoLiveStreamKey key)? onWatchRequested,
+
+    /// Turns a stream's arriving sound into samples, or null in a build with
+    /// no Opus decoder, where a watched stream is silent.
+    WatchedStreamAudio? audio,
   }) : _repositoryProvider = repositoryProvider,
        _decoderFactory = decoderFactory,
        _ownKeyProvider = ownKeyProvider,
-       _onWatchRequested = onWatchRequested;
+       _onWatchRequested = onWatchRequested,
+       _audio = audio;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
   final void Function(GoLiveStreamKey key)? _onWatchRequested;
+
+  /// The sound of what is being watched, held apart from the pictures because
+  /// the two are not the same resource and do not end the same way: a decoder
+  /// per session, and a receiver per session (ADR-0004).
+  final WatchedStreamAudio? _audio;
 
   /// This account's own share. A session like any other once the sender asks
   /// for it back, and counted towards the cap either way (ADR-0002).
@@ -120,6 +132,14 @@ final class StreamViewerController extends ChangeNotifier {
   Stream<DecodedVideoFrame> framesFor(GoLiveStreamKey key) =>
       _sessions[key]?.decoder?.frames ??
       const Stream<DecodedVideoFrame>.empty();
+
+  /// The sound of every stream being watched, playable on the room's output.
+  ///
+  /// Nothing but the streams this client is holding is on it: sound is bound
+  /// when a session is, so a stream nobody opened is silent and stopping a
+  /// watch ends the sound with the session (ADR-0004).
+  Stream<VoiceRemotePcmFrame> get audio =>
+      _audio?.pcm ?? const Stream<VoiceRemotePcmFrame>.empty();
 
   /// Whether this client is holding [key]: asked for, or arriving.
   bool isOpen(GoLiveStreamKey key) => _order.contains(key);
@@ -226,6 +246,7 @@ final class StreamViewerController extends ChangeNotifier {
   Future<bool> attach(
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
+    Stream<VoiceRemoteOpusFrame>? audio,
   }) async {
     if (_disposed) return false;
     if (_cancelled.remove(key)) return false;
@@ -243,7 +264,7 @@ final class StreamViewerController extends ChangeNotifier {
     // room goes on showing the stream it was holding (ADR-0003), and no
     // decoder is opened for a window that is not looking at it.
     if (_suspended) {
-      _install(key, packets);
+      _install(key, packets, audio);
       _notify();
       return true;
     }
@@ -266,7 +287,7 @@ final class StreamViewerController extends ChangeNotifier {
       await decoder.stop();
       return false;
     }
-    final session = _install(key, packets);
+    final session = _install(key, packets, audio);
     // The window may have gone away while the decoder was opening, which is a
     // crossing the check above cannot see: this key was not in [_sessions]
     // yet, so suspending did not reach it. The connection is kept and read,
@@ -289,6 +310,7 @@ final class StreamViewerController extends ChangeNotifier {
   Future<bool> watch(
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
+    Stream<VoiceRemoteOpusFrame>? audio,
   }) async {
     if (_disposed) return false;
     final repository = _repositoryProvider();
@@ -307,7 +329,7 @@ final class StreamViewerController extends ChangeNotifier {
     _notify();
     if (!await _ask(repository, key)) return false;
     _onWatchRequested?.call(key);
-    return attach(key, packets: packets);
+    return attach(key, packets: packets, audio: audio);
   }
 
   /// Ends [key]'s session, or every session there is when no key is given.
@@ -400,6 +422,10 @@ final class StreamViewerController extends ChangeNotifier {
   /// Ends [key]'s decoder and subscription, leaving its place in the room
   /// alone.
   Future<void> _teardown(GoLiveStreamKey key) async {
+    // The sound goes with the session, not with the pictures: watching is what
+    // gives it somewhere to play, so once this key is gone there is nothing
+    // left to play it into (ADR-0004).
+    await _audio?.detach(key);
     final session = _sessions.remove(key);
     if (session == null) return;
     final packets = session.packets;
@@ -433,6 +459,7 @@ final class StreamViewerController extends ChangeNotifier {
   _WatchedSession _install(
     GoLiveStreamKey key,
     Stream<IncomingVideoPacket> packets,
+    Stream<VoiceRemoteOpusFrame>? audio,
   ) {
     _admitted(key);
     final session = _WatchedSession();
@@ -444,7 +471,26 @@ final class StreamViewerController extends ChangeNotifier {
       onError: (Object error, StackTrace stackTrace) =>
           _acceptError(key, error),
     );
+    // Bound with the session rather than with the decoder: suspension is this
+    // client not drawing, and a window nobody is looking at is still being
+    // listened to (ADR-0003).
+    if (audio != null) _bindAudio(key, audio);
     return session;
+  }
+
+  /// Gives [key]'s session its sound, without holding the session up for it.
+  ///
+  /// The pictures are what a session is for, and a stream with no sound is
+  /// still a stream; a failure here is worth saying, not worth failing the
+  /// watch over.
+  void _bindAudio(GoLiveStreamKey key, Stream<VoiceRemoteOpusFrame> audio) {
+    final binding = _audio?.attach(key, audio);
+    if (binding == null) return;
+    unawaited(
+      binding.catchError(
+        (Object error) => _diagnose('stream audio for ${key.userId}: $error'),
+      ),
+    );
   }
 
   /// Opens [key]'s decoder, and hands the session a depacketiser to feed it

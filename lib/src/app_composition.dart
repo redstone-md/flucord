@@ -57,6 +57,7 @@ import 'application/user_profile_controller.dart';
 import 'application/user_settings_controller.dart';
 import 'application/voice_controller.dart';
 import 'application/voice_overlay_controller.dart';
+import 'application/watched_stream_audio.dart';
 import 'application/window_foreground.dart';
 import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
@@ -375,6 +376,16 @@ final class AppComposition {
     void applyQuality() => unawaited(goLive.applyQuality());
     streamQuality.addListener(applyQuality);
     _teardown.add(() => streamQuality.removeListener(applyQuality));
+    // The sound of what is being shared, which travels on the stream's own
+    // connection rather than on the room's voice one. A receiver per watched
+    // session, and none at all while nothing is being watched (ADR-0004).
+    final codecFactory = bootstrap.voiceOpusCodecFactory;
+    final streamAudio = codecFactory == null
+        ? null
+        : WatchedStreamAudio(decoderFactory: codecFactory);
+    if (streamAudio != null) {
+      _teardown.add(() => unawaited(streamAudio.dispose()));
+    }
     // Watching somebody else's share: a session per stream, each with the
     // decoder and the depacketiser in front of it. The decoders are made
     // through a factory for the same reason the cameras' are — a room where
@@ -388,6 +399,7 @@ final class AppComposition {
         // its reserved session counts towards the cap (ADR-0002).
         ownKeyProvider: () => goLive.streamKey,
         onWatchRequested: (key) => streamRtc.noteWatch(key),
+        audio: streamAudio,
       ),
     );
     // The second RTC connection a stream lives on. Discord does not carry Go
@@ -433,6 +445,9 @@ final class AppComposition {
         callServiceProvider: () => chat.directCallService,
         audioCodecFactory: bootstrap.voiceOpusCodecFactory,
         playbackService: bootstrap.voicePlaybackService,
+        // A watched stream's sound plays on the room's output, alongside the
+        // call's own audio rather than instead of it (ADR-0004).
+        streamAudio: streamViewer.audio,
       ),
     );
     directCall = _register(

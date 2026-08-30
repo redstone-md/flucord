@@ -23,12 +23,17 @@ final class VoiceController extends ChangeNotifier {
     DirectCallServiceProvider? callServiceProvider,
     VoiceOpusCodecFactory? audioCodecFactory,
     VoiceAudioPlaybackService? playbackService,
+
+    /// Sound that arrived on a connection other than the room's voice one:
+    /// the screen-share audio of the streams being watched (ADR-0004).
+    Stream<VoiceRemotePcmFrame>? streamAudio,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
     callServiceProvider ?? _noCalls,
     audioCodecFactory,
     playbackService,
+    streamAudio,
   );
 
   VoiceController._(
@@ -37,6 +42,7 @@ final class VoiceController extends ChangeNotifier {
     this._callServiceProvider,
     VoiceOpusCodecFactory? audioCodecFactory,
     this._playbackService,
+    Stream<VoiceRemotePcmFrame>? streamAudio,
   ) : _audioPipeline = audioCodecFactory == null
           ? null
           : VoiceAudioPipeline(
@@ -48,6 +54,9 @@ final class VoiceController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     });
     _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
+    // Both sources use the room's existing playback path and keep the sender
+    // id on each PCM frame.
+    _streamAudioSubscription = streamAudio?.listen(_handleRemotePcm);
   }
 
   final VoiceMediaService _mediaService;
@@ -57,6 +66,7 @@ final class VoiceController extends ChangeNotifier {
   final VoiceAudioPipeline? _audioPipeline;
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
+  StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
   StreamSubscription<void>? _seatedSubscription;
@@ -619,6 +629,7 @@ final class VoiceController extends ChangeNotifier {
     _disposed = true;
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
+    unawaited(_streamAudioSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
     unawaited(_audioPipeline?.dispose());

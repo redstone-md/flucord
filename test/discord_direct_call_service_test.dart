@@ -11,6 +11,7 @@ import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
@@ -337,6 +338,10 @@ final class _InertVoiceClient implements DiscordVoiceClient {
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets =>
       const Stream<(String, DiscordRtpFrame)>.empty();
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
+      const Stream<VoiceRemoteOpusFrame>.empty();
 
   @override
   bool announceVideo({

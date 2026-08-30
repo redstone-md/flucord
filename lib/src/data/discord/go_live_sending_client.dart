@@ -77,6 +77,9 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   Stream<(String, DiscordRtpFrame)> get videoPackets => _inner.videoPackets;
 
   @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _inner.remoteAudio;
+
+  @override
   int? get audioSsrc => _inner.audioSsrc;
 
   @override

@@ -134,6 +134,10 @@ final class StreamRouter {
             marker: packet.$2.header.marker,
           ),
         ),
+        // The screen-share audio arriving on the same connection, which is
+        // the only place it travels: it is not on the room's voice
+        // connection (ADR-0004).
+        audio: session.audio,
       ),
     );
   }

@@ -9,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -128,6 +129,29 @@ void main() {
       expect(client.announcements.single.enabled, isTrue);
       expect(client.sentFrames, [_frame]);
       expect(received, [('somebody-else', _frame)]);
+    });
+
+    test('forwards the sound arriving on the connection', () async {
+      final client = _FakeClient();
+      final session = DiscordStreamRtcSession(
+        key: _key,
+        credentials: _credentials,
+        socketFactory: _StreamSocketFactory((_) => client),
+      );
+      addTearDown(session.close);
+      await session.connect();
+
+      final heard = <VoiceRemoteOpusFrame>[];
+      final subscription = session.audio.listen(heard.add);
+      addTearDown(subscription.cancel);
+
+      client.emitAudio('sender', [7, 8]);
+      await Future<void>.delayed(Duration.zero);
+
+      // The screen-share audio travels with the stream, not with the room's
+      // voice, and this is the door it comes in by (ADR-0004).
+      expect(heard.single.userId, 'sender');
+      expect(heard.single.opus, [7, 8]);
     });
   });
 
@@ -431,12 +455,14 @@ final _frame = DiscordRtpFrame(
   payload: Uint8List.fromList(const [1, 2, 3]),
 );
 
-/// Carries pictures the same way the production client does, so the video
-/// half of a stream connection is testable without a socket.
+/// Carries pictures and sound like the production client, so both halves of a
+/// stream connection are testable without a live connection.
 final class _FakeClient implements DiscordVoiceClient {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final StreamController<(String, DiscordRtpFrame)> _video =
+      StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _audio =
       StreamController.broadcast();
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
@@ -450,6 +476,11 @@ final class _FakeClient implements DiscordVoiceClient {
   void emitVideo(String userId, DiscordRtpFrame frame) =>
       _video.add((userId, frame));
 
+  /// Delivers the sound of what is being shared, as the wire would.
+  void emitAudio(String userId, List<int> opus) => _audio.add(
+    VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
+  );
+
   @override
   int? get audioSsrc => null;
 
@@ -458,6 +489,9 @@ final class _FakeClient implements DiscordVoiceClient {
 
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _audio.stream;
 
   @override
   bool announceVideo({
