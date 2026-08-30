@@ -52,6 +52,10 @@ _Avoid_: paused, backgrounded, minimized
 The machine's one source of pictures, a display or a camera. Only one runs at a time.
 _Avoid_: source, device, input, recorder
 
+**Picture**:
+One complete image a stream carries, from the sender's encoder to the watcher's decoder. Packets carry its pieces.
+_Avoid_: frame, access unit, image
+
 **Screen-share audio**:
 The sound of what is being shared, travelling with the stream rather than with the room's voice.
 _Avoid_: system audio, loopback audio, desktop audio
