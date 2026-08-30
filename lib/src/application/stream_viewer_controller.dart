@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/discord/discord_h264_depacketizer.dart';
+import '../data/discord/discord_video_picture_receiver.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_decoder.dart';
 import '../domain/voice_audio.dart';
@@ -28,10 +28,11 @@ const int maxWatchedStreams = 4;
 /// Watches several Go Live streams at once, one session apiece.
 ///
 /// Three things in a row that were each built and none of which were joined:
-/// packets arrive, the depacketiser turns them back into access units, and the
-/// decoder turns those into pictures. Each session owns one of each, because
-/// two senders interleaved on a single depacketiser splice one picture into
-/// another's, and a single decoder has nowhere to put a second stream's.
+/// packets arrive, the receiver turns them back into whole pictures and
+/// decrypts those once for the room's group, and the decoder turns the result
+/// into pictures. Each session owns one of each, because two senders
+/// interleaved on a single receiver splice one picture into another's, and a
+/// single decoder has nowhere to put a second stream's.
 final class StreamViewerController extends ChangeNotifier {
   StreamViewerController({
     required GoLiveRepository? Function() repositoryProvider,
@@ -244,6 +245,11 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
     Stream<VoiceRemoteOpusFrame>? audio,
+
+    /// Decrypts one whole picture for this stream's group, bound to whoever
+    /// is sending it. Per session rather than per controller because each
+    /// stream has a connection of its own, and its group with it.
+    VideoPictureGroupDecryptor? groupDecryptor,
   }) async {
     if (_disposed) return false;
     // A ready endpoint is not proof that this client still wants the stream.
@@ -264,7 +270,7 @@ final class StreamViewerController extends ChangeNotifier {
     // room goes on showing the stream it was holding (ADR-0003), and no
     // decoder is opened for a window that is not looking at it.
     if (_suspended) {
-      _install(key, packets, audio);
+      _install(key, packets, audio, groupDecryptor);
       _notify();
       return true;
     }
@@ -287,7 +293,7 @@ final class StreamViewerController extends ChangeNotifier {
       await decoder.stop();
       return false;
     }
-    final session = _install(key, packets, audio);
+    final session = _install(key, packets, audio, groupDecryptor);
     // The window may have gone away while the decoder was opening, which is a
     // crossing the check above cannot see: this key was not in [_sessions]
     // yet, so suspending did not reach it. The connection is kept and read,
@@ -311,6 +317,7 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
     Stream<VoiceRemoteOpusFrame>? audio,
+    VideoPictureGroupDecryptor? groupDecryptor,
   }) async {
     if (_disposed) return false;
     final repository = _repositoryProvider();
@@ -329,7 +336,12 @@ final class StreamViewerController extends ChangeNotifier {
     _notify();
     if (!await _ask(repository, key)) return false;
     _onWatchRequested?.call(key);
-    return attach(key, packets: packets, audio: audio);
+    return attach(
+      key,
+      packets: packets,
+      audio: audio,
+      groupDecryptor: groupDecryptor,
+    );
   }
 
   /// Ends [key]'s session, or every session there is when no key is given.
@@ -458,9 +470,10 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey key,
     Stream<IncomingVideoPacket> packets,
     Stream<VoiceRemoteOpusFrame>? audio,
+    VideoPictureGroupDecryptor? groupDecryptor,
   ) {
     _admitted(key);
-    final session = _WatchedSession();
+    final session = _WatchedSession(groupDecryptor: groupDecryptor);
     // In the map before it is listened to: a stream that already has a
     // packet in it delivers on subscription.
     _sessions[key] = session;
@@ -485,10 +498,9 @@ final class StreamViewerController extends ChangeNotifier {
     );
   }
 
-  /// Opens [key]'s decoder, and hands the session a depacketiser to feed it
-  /// with.
+  /// Opens [key]'s decoder, and hands the session a receiver to feed it with.
   ///
-  /// Also how a suspended session comes back. The depacketiser is made fresh
+  /// Also how a suspended session comes back. The receiver is made fresh
   /// rather than kept: half a picture from before the window went away is not
   /// the start of one, and the first picture back is a moment behind until
   /// the sender sends a keyframe (ADR-0003).
@@ -529,7 +541,7 @@ final class StreamViewerController extends ChangeNotifier {
   Future<void> _releaseDecoder(_WatchedSession session) async {
     final decoder = session.decoder;
     session.decoder = null;
-    session.depacketizer = null;
+    session.receiver = null;
     if (decoder == null) return;
     await decoder.stop();
   }
@@ -541,18 +553,13 @@ final class StreamViewerController extends ChangeNotifier {
   void _accept(GoLiveStreamKey key, IncomingVideoPacket packet) {
     final session = _sessions[key];
     if (session == null) return;
-    // The first one is worth saying: it is the difference between a stream
-    // that was asked for and one that is arriving.
-    if (session.receivedPackets == 0) {
-      _diagnose('first packet from ${key.userId}');
-    }
     session.receivedPackets++;
-    final depacketizer = session.depacketizer;
+    final receiver = session.receiver;
     final decoder = session.decoder;
     // Suspended: the packet is counted, so a stream that is arriving still
     // reads as arriving, and that is all that is done with it (ADR-0003).
-    if (depacketizer == null || decoder == null) return;
-    final unit = depacketizer.accept(packet.payload, marker: packet.marker);
+    if (receiver == null || decoder == null) return;
+    final unit = receiver.accept(packet.payload, marker: packet.marker);
     if (unit == null) return;
     session.decodedUnits++;
     unawaited(decoder.submit(unit));
@@ -570,26 +577,29 @@ final class StreamViewerController extends ChangeNotifier {
   }
 }
 
-/// One stream being watched: its own depacketiser, decoder and subscription.
+/// One stream being watched: its own receiver, decoder and subscription.
 ///
-/// The decoder and the depacketiser are absent while this client is suspended,
+/// The decoder and the receiver are absent while this client is suspended,
 /// and the subscription is not: the connection stays up and its packets keep
 /// being counted, they just stop becoming pictures (ADR-0003).
 final class _WatchedSession {
-  _WatchedSession();
+  _WatchedSession({required this.groupDecryptor});
+
+  /// Decrypts one whole picture for this stream's group, bound to its sender.
+  final VideoPictureGroupDecryptor? groupDecryptor;
 
   VideoDecoderService? decoder;
-  DiscordH264Depacketizer? depacketizer;
+  DiscordVideoPictureReceiver? receiver;
   StreamSubscription<IncomingVideoPacket>? packets;
   int receivedPackets = 0;
   int decodedUnits = 0;
 
   /// Gives the session what turns its packets into pictures.
   ///
-  /// The depacketiser comes with the decoder rather than outliving it: half a
+  /// The receiver comes with the decoder rather than outliving it: half a
   /// picture left over from before a gap is not the start of one.
   void attachDecoder(VideoDecoderService opened) {
     decoder = opened;
-    depacketizer = DiscordH264Depacketizer();
+    receiver = DiscordVideoPictureReceiver(decryptor: groupDecryptor);
   }
 }

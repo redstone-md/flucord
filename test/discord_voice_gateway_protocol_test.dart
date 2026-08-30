@@ -308,6 +308,40 @@ void main() {
     });
   });
 
+  group('media sink wants', () {
+    test('an empty argument leaves the payload empty but well-formed', () {
+      final payload = protocol().mediaSinkWants();
+
+      // The literal, not the constant: Discord's number for this opcode is
+      // the contract, and a constant wrong in either direction would pass
+      // against itself.
+      expect(payload['op'], 15);
+      expect(payload['d'], <String, Object?>{});
+    });
+
+    test('per-SSRC qualities go in as stringly-keyed entries', () {
+      final payload = protocol().mediaSinkWants(
+        perSsrc: {8964: 100, 9100: 50},
+      );
+
+      expect((payload['d'] as Map)['8964'], 100);
+      expect((payload['d'] as Map)['9100'], 50);
+      expect((payload['d'] as Map).containsKey('any'), isFalse);
+    });
+
+    test('any and pixelCounts are independent optional fields', () {
+      final payload = protocol().mediaSinkWants(
+        any: 50,
+        pixelCounts: {8964: 1189844.5769597634},
+      );
+
+      expect((payload['d'] as Map)['any'], 50);
+      expect((payload['d'] as Map)['pixelCounts'], {
+        '8964': 1189844.5769597634,
+      });
+    });
+  });
+
   group('the SSRC roster', () {
     test('speaking maps an SSRC to its user and dispatches the event', () {
       final actions = protocol().accept(

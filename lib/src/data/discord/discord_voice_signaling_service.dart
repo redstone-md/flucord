@@ -596,6 +596,24 @@ final class DiscordVoiceSignalingService
     );
   }
 
+  /// Decrypts one whole camera picture for the room's group on the active
+  /// session, after the caller has reassembled it from its packets.
+  ///
+  /// Looked up per call rather than bound once, for the same reason as
+  /// [encryptVideoGroupFrame]: a reconnect replaces the client, and a closure
+  /// over the old one would try to decrypt with a key from a session nobody
+  /// holds anymore.
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) {
+    final client = _activeClient;
+    if (client == null) {
+      throw StateError('Discord voice transport is not ready');
+    }
+    return client.decryptVideoGroupFrame(userId: userId, picture: picture);
+  }
+
   @override
   void sendOpusFrame(Uint8List opusFrame) {
     final client = _activeClient;

@@ -2,26 +2,40 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/discord/discord_h264_depacketizer.dart';
 import '../data/discord/discord_rtp_packet.dart';
+import '../data/discord/discord_video_picture_receiver.dart';
 import '../domain/video_decoder.dart';
+
+/// Decrypts one whole picture for the room's group, for the sender named.
+typedef CameraGroupDecryptor = Uint8List Function(
+  String userId,
+  Uint8List picture,
+);
 
 /// Everybody else's cameras in the voice room.
 ///
-/// One depacketiser and one decoder per person, not one shared pair: two
-/// senders interleave on the same socket, and a single depacketiser would
-/// splice one person's fragments into another's picture. The decoders are made
-/// through a factory for the same reason the encoder is — a test host has no
-/// H.264 decoder, and the controller has to be exercisable without one.
+/// One receiver and one decoder per person, not one shared pair: two senders
+/// interleave on the same socket, and a single receiver would splice one
+/// person's packets into another's picture. The decoders are made through a
+/// factory for the same reason the encoder is — a test host has no H.264
+/// decoder, and the controller has to be exercisable without one.
 final class RemoteCameraController extends ChangeNotifier {
   RemoteCameraController({
     required Stream<(String, DiscordRtpFrame)> Function() packetsProvider,
     required VideoDecoderService Function() decoderFactory,
+
+    /// Decrypts a whole picture for the room's group, when there is one.
+    /// Asked for on every picture rather than bound once: a reconnect
+    /// replaces the connection, and a closure over the old one would decrypt
+    /// with a key from a session nobody holds anymore.
+    CameraGroupDecryptor? Function()? groupDecryptorProvider,
   }) : _packetsProvider = packetsProvider,
-       _decoderFactory = decoderFactory;
+       _decoderFactory = decoderFactory,
+       _groupDecryptorProvider = groupDecryptorProvider;
 
   final Stream<(String, DiscordRtpFrame)> Function() _packetsProvider;
   final VideoDecoderService Function() _decoderFactory;
+  final CameraGroupDecryptor? Function()? _groupDecryptorProvider;
 
   final Map<String, _RemoteCamera> _cameras = {};
   StreamSubscription<(String, DiscordRtpFrame)>? _subscription;
@@ -71,7 +85,10 @@ final class RemoteCameraController extends ChangeNotifier {
     final (userId, frame) = packet;
     final camera = _cameras.putIfAbsent(userId, () {
       final decoder = _decoderFactory();
-      final created = _RemoteCamera(decoder);
+      final created = _RemoteCamera(decoder, decryptor: (picture) {
+        final decryptor = _groupDecryptorProvider?.call();
+        return decryptor == null ? picture : decryptor(userId, picture);
+      });
       // Started lazily: a room where nobody turns a camera on should not open
       // a decoder per participant.
       created.subscription = decoder.frames.listen((picture) {
@@ -82,7 +99,7 @@ final class RemoteCameraController extends ChangeNotifier {
       return created;
     });
     camera.packets++;
-    final unit = camera.depacketizer.accept(
+    final unit = camera.receiver.accept(
       Uint8List.fromList(frame.payload),
       marker: frame.header.marker,
     );
@@ -112,10 +129,14 @@ final class RemoteCameraController extends ChangeNotifier {
 }
 
 final class _RemoteCamera {
-  _RemoteCamera(this.decoder);
+  _RemoteCamera(this.decoder, {required VideoPictureGroupDecryptor decryptor})
+    : receiver = DiscordVideoPictureReceiver(decryptor: decryptor);
 
   final VideoDecoderService decoder;
-  final DiscordH264Depacketizer depacketizer = DiscordH264Depacketizer();
+
+  /// Puts this sender's packets back into whole pictures, and decrypts each
+  /// one once for the room's group.
+  final DiscordVideoPictureReceiver receiver;
   StreamSubscription<DecodedVideoFrame>? subscription;
   DecodedVideoFrame? frame;
   int packets = 0;

@@ -420,10 +420,23 @@ final class _InertVoiceClient
   int sendVideoFrame(DiscordRtpFrame frame) => 0;
 
   @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {}
+
+  @override
   Uint8List encryptVideoForGroup({
     required int ssrc,
     required Uint8List frame,
   }) => frame;
+
+  @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => picture;
 
   @override
   void sendOpusFrame(Uint8List opusFrame) => frames.add(opusFrame);

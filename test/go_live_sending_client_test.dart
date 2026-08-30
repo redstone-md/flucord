@@ -282,6 +282,13 @@ final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
   }
 
   @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {}
+
+  @override
   Uint8List encryptVideoForGroup({
     required int ssrc,
     required Uint8List frame,
@@ -289,6 +296,12 @@ final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
     groupEncryptions.add(ssrc);
     return frame;
   }
+
+  @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => picture;
 
   @override
   void sendOpusFrame(Uint8List opusFrame) => opus.add(opusFrame);

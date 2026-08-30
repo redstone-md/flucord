@@ -146,6 +146,32 @@ void main() {
       );
     });
 
+    test('a sink wants ask reaches the socket as opcode 15', () async {
+      final socket = _FakeVoiceWebSocket();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      addTearDown(client.close);
+
+      await client.connect();
+      // The identify went out on connect, so this is the frame after it.
+      expect(_jsonAt(socket.sent, 0)['op'], 0);
+      client.sendMediaSinkWants(any: 100, perSsrc: {8964: 50});
+
+      // The wiring, not just the payload: a method that built the right map
+      // and dropped it on the floor would pass every protocol test and still
+      // leave a viewer watching a black rectangle.
+      expect(socket.sent, hasLength(2));
+      expect(socket.sent.last, isA<String>());
+      expect(_jsonAt(socket.sent, 1), {
+        'op': 15,
+        'd': {'8964': 50, 'any': 100},
+      });
+    });
+
     test(
       'feedback and keepalives never count against the key',
       () async {

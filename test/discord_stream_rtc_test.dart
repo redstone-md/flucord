@@ -101,6 +101,48 @@ void main() {
       expect(session.ssrc, 4242);
     });
 
+    test(
+      'a viewer subscribes to the SFU through Media Sink Wants on ready',
+      () async {
+        final client = _FakeClient();
+        final session = DiscordStreamRtcSession(
+          key: _key,
+          credentials: _credentials,
+          socketFactory: _StreamSocketFactory((_) => client),
+        );
+        addTearDown(session.close);
+        await session.connect();
+
+        // Nothing before the connection is ready: the SFU is not listening.
+        expect(client.mediaSinkWants, isEmpty);
+        client.announce(const VoiceTransportReadyEvent(_session));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client.mediaSinkWants, hasLength(1));
+        expect(client.mediaSinkWants.single.any, 100);
+      },
+    );
+
+    test(
+      'a sender does not subscribe: it has nothing to receive',
+      () async {
+        final client = _FakeClient();
+        final session = DiscordStreamRtcSession(
+          key: _key,
+          credentials: _credentials,
+          socketFactory: _StreamSocketFactory((_) => client),
+          sending: true,
+        );
+        addTearDown(session.close);
+        await session.connect();
+
+        client.announce(const VoiceTransportReadyEvent(_session));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client.mediaSinkWants, isEmpty);
+      },
+    );
+
     test('announces, sends and forwards pictures on the connection', () async {
       final client = _FakeClient();
       final session = DiscordStreamRtcSession(
@@ -465,6 +507,14 @@ final class _FakeClient implements DiscordVoiceClient {
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
       [];
+  final List<
+    ({
+      Map<int, int> perSsrc,
+      int? any,
+      Map<int, double> pixelCounts,
+    })
+  >
+  mediaSinkWants = [];
   int connects = 0;
   bool closed = false;
 
@@ -507,10 +557,29 @@ final class _FakeClient implements DiscordVoiceClient {
   }
 
   @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {
+    mediaSinkWants.add((
+      perSsrc: perSsrc,
+      any: any,
+      pixelCounts: pixelCounts,
+    ));
+  }
+
+  @override
   Uint8List encryptVideoForGroup({
     required int ssrc,
     required Uint8List frame,
   }) => frame;
+
+  @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => picture;
 
   @override
   Future<void> connect() async => connects++;

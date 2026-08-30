@@ -571,6 +571,15 @@ final class _FakeClient implements DiscordVoiceClient {
     return frame.payload.length;
   }
 
+  @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {
+    log.add('mediaSinkWants');
+  }
+
   /// Recorded group encryptions: whole access units, with the SSRC they were
   /// encrypted for.
   final List<({int ssrc, Uint8List frame})> groupEncryptions = [];
@@ -583,6 +592,12 @@ final class _FakeClient implements DiscordVoiceClient {
     groupEncryptions.add((ssrc: ssrc, frame: frame));
     return frame;
   }
+
+  @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => picture;
 
   @override
   Future<void> connect() async {}

@@ -136,6 +136,13 @@ final class StreamRouter {
         ),
         // Forward audio from the stream connection (ADR-0004).
         audio: session.audio,
+        // A stream connection carries one sender's pictures, so the key names
+        // whose group decrypts them. Bound here rather than in the viewer,
+        // which holds sessions from several connections at once.
+        groupDecryptor: (picture) => session.decryptVideoGroupFrame(
+          userId: session.key.userId,
+          picture: picture,
+        ),
       ),
     );
   }

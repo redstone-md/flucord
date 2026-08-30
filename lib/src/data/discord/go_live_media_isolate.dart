@@ -229,8 +229,22 @@ final class _IsolateSendingClient implements DiscordVoiceClient, GoLiveSender {
   }) => throw UnsupportedError('the share is sent from the media isolate');
 
   @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => throw UnsupportedError('the share is sent from the media isolate');
+
+  @override
   int sendVideoFrame(DiscordRtpFrame frame) =>
       throw UnsupportedError('the share is sent from the media isolate');
+
+  /// Send-only: never subscribes to remote video.
+  @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {}
 
   @override
   Future<void> close() async {

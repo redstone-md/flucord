@@ -80,8 +80,9 @@ abstract final class DiscordVoiceGatewayOpcode {
   static const clientVideo = 12;
   static const clientDisconnect = 13;
 
-  /// What the media server wants of this client's video: sent whenever a
-  /// viewer's demand changes, and read only for the log so far.
+  /// The only video opcode that travels both ways: a receiver sends it to
+  /// subscribe, the server sends it to a sender to name the layer it wants.
+  /// This client reads the inbound half for the log only.
   static const mediaSinkWants = 15;
 }
 
@@ -504,6 +505,30 @@ final class DiscordVoiceGatewayProtocol {
         ],
       },
     };
+  }
+
+  /// Opcode 15. The SFU forwards no remote video until the receiver subscribes
+  /// here, and audio needs no subscription, which is why a missed send looks
+  /// like "audio without a picture".
+  ///
+  /// [Media Sink Wants]: https://discord.com/developers/docs/change-log#media-sink-wants
+  Map<String, Object?> mediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {
+    final data = <String, Object?>{};
+    for (final entry in perSsrc.entries) {
+      data[entry.key.toString()] = entry.value;
+    }
+    if (any != null) data['any'] = any;
+    if (pixelCounts.isNotEmpty) {
+      data['pixelCounts'] = {
+        for (final entry in pixelCounts.entries)
+          entry.key.toString(): entry.value,
+      };
+    }
+    return {'op': DiscordVoiceGatewayOpcode.mediaSinkWants, 'd': data};
   }
 
   /// The SSRC a camera's RTP goes out on, given the audio one.

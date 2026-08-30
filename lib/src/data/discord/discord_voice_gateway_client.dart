@@ -48,6 +48,27 @@ abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
   /// Sends one picture, already encrypted for the group when the connection
   /// has a group to encrypt for.
   int sendVideoFrame(DiscordRtpFrame frame);
+
+  /// Decrypts one whole picture for the room's group, after the caller has
+  /// reassembled it from its packets.
+  ///
+  /// The mirror of [encryptVideoForGroup], and the other half of the same
+  /// rule: a sender encrypts a whole picture and packetises that, so only the
+  /// reassembled picture is a ciphertext anybody can open.
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  });
+
+  /// Subscribes to remote video. The SFU forwards no picture until a receiver
+  /// asks, so a stream without this sends sound and draws nothing.
+  ///
+  /// [Media Sink Wants]: https://discord.com/developers/docs/change-log#media-sink-wants
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  });
 }
 
 /// The socket driver for a voice gateway connection.
@@ -149,6 +170,11 @@ final class DiscordVoiceGatewayClient
   /// A packet whose SSRC nobody has claimed is dropped: it belongs to a peer
   /// whose opcode 12 has not arrived, and guessing the owner would draw one
   /// person's face over another's tile.
+  ///
+  /// Still encrypted for the room, when the room has a group. The transport
+  /// cipher gets these packets off the wire; the group's cipher is a second
+  /// layer that covers a whole picture, so it is applied by whoever puts the
+  /// packets back together and not here, where only one packet is in hand.
   @override
   Stream<(String, DiscordRtpFrame)> get videoPackets => _decryptedPackets
       .where(
@@ -156,13 +182,13 @@ final class DiscordVoiceGatewayClient
             frame.header.payloadType !=
             DiscordRtpHeader.discordAudioPayloadType,
       )
-      .map((frame) => (_protocol.userIdForVideoSsrc(frame.header.ssrc), frame))
+      .map(
+        (frame) =>
+            (_protocol.userIdForVideoSsrc(frame.header.ssrc), frame),
+      )
       .where((pair) => pair.$1 != null)
-      // Through the group's decryptor as well, on a call that has one: the
-      // transport cipher gets the packet off the wire, and what is inside it
-      // is still encrypted for the room. A picture handed to the decoder in
-      // that state decodes to nothing.
-      .expand((pair) => _decryptVideoOrDrop(pair.$1!, pair.$2));
+      .map((pair) => (pair.$1!, pair.$2));
+
   VoiceTransportSession? get session => _protocol.session;
   String? userIdForSsrc(int ssrc) => _protocol.userIdForSsrc(ssrc);
 
@@ -243,17 +269,6 @@ final class DiscordVoiceGatewayClient
     }
     final data = payload['d'];
     final opcode = payload['op'];
-    // Only for a stream socket, and only the opcode: this is the handshake
-    // that keeps being refused, and knowing how far it got — hello, ready,
-    // nothing at all — is the difference between reading and guessing.
-    if (_protocol.carriesVideo) {
-      // With its body for the media server's wants: what it asks of the
-      // picture is the one demand this client does not yet follow.
-      _diagnose(
-        'received op $opcode',
-        opcode == DiscordVoiceGatewayOpcode.mediaSinkWants ? data : null,
-      );
-    }
     if (opcode is int && data is Map) {
       try {
         _executeDaveCommands(
@@ -477,6 +492,21 @@ final class DiscordVoiceGatewayClient
   @override
   int sendVideoFrame(DiscordRtpFrame frame) => sendAudioFrame(frame);
 
+  @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {
+    _send(
+      _protocol.mediaSinkWants(
+        perSsrc: perSsrc,
+        any: any,
+        pixelCounts: pixelCounts,
+      ),
+    );
+  }
+
   /// Encrypts one whole access unit for the room's group, when there is one.
   ///
   /// A frame that comes back unchanged is passthrough: a connection without
@@ -488,6 +518,18 @@ final class DiscordVoiceGatewayClient
     if (controller == null) return frame;
     return Uint8List.fromList(
       controller.encryptVideoFrame(ssrc: ssrc, frame: frame),
+    );
+  }
+
+  @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) {
+    final controller = _daveController;
+    if (controller == null) return picture;
+    return Uint8List.fromList(
+      controller.decryptVideoFrame(userId: userId, encryptedFrame: picture),
     );
   }
 
@@ -548,35 +590,6 @@ final class DiscordVoiceGatewayClient
           );
         }
       }
-      return const [];
-    }
-  }
-
-  /// One picture, decrypted for the group, or none when its key is missing.
-  ///
-  /// Dropped rather than raised: a frame arriving before the sender's key has
-  /// been distributed is ordinary at the start of a share, and the next one
-  /// usually decrypts.
-  Iterable<(String, DiscordRtpFrame)> _decryptVideoOrDrop(
-    String userId,
-    DiscordRtpFrame frame,
-  ) {
-    final controller = _daveController;
-    if (controller == null) return [(userId, frame)];
-    try {
-      return [
-        (
-          userId,
-          DiscordRtpFrame(
-            header: frame.header,
-            payload: controller.decryptVideoFrame(
-              userId: userId,
-              encryptedFrame: frame.payload,
-            ),
-          ),
-        ),
-      ];
-    } on Object {
       return const [];
     }
   }

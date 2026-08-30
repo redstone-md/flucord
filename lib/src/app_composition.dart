@@ -486,6 +486,15 @@ final class AppComposition {
             const Stream<(String, DiscordRtpFrame)>.empty(),
         decoderFactory: () =>
             bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        groupDecryptorProvider: () {
+          final signaling = liveVoiceSignaling;
+          if (signaling == null) return null;
+          return (String userId, Uint8List picture) =>
+              signaling.decryptVideoGroupFrame(
+                userId: userId,
+                picture: picture,
+              );
+        },
       ),
     );
   }

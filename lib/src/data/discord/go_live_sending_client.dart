@@ -187,7 +187,21 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
   }) => _inner.encryptVideoForGroup(ssrc: ssrc, frame: frame);
 
   @override
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) => _inner.decryptVideoGroupFrame(userId: userId, picture: picture);
+
+  @override
   int sendVideoFrame(DiscordRtpFrame frame) => _inner.sendVideoFrame(frame);
+
+  /// Send-only: never subscribes to remote video.
+  @override
+  void sendMediaSinkWants({
+    Map<int, int> perSsrc = const {},
+    int? any,
+    Map<int, double> pixelCounts = const {},
+  }) {}
 
   @override
   Future<void> close() async {

@@ -107,12 +107,28 @@ final class DiscordStreamRtcSession {
 
   /// Encrypts one whole picture for this stream's group, before the caller
   /// packetises it.
-  Uint8List encryptVideoGroupFrame({required int ssrc, required Uint8List frame}) {
+  Uint8List encryptVideoGroupFrame({
+    required int ssrc,
+    required Uint8List frame,
+  }) {
     final client = _client;
     if (client == null) {
       throw StateError('Discord stream transport is not ready');
     }
     return client.encryptVideoForGroup(ssrc: ssrc, frame: frame);
+  }
+
+  /// Decrypts one whole picture for this stream's group, after the caller has
+  /// put its packets back together.
+  Uint8List decryptVideoGroupFrame({
+    required String userId,
+    required Uint8List picture,
+  }) {
+    final client = _client;
+    if (client == null) {
+      throw StateError('Discord stream transport is not ready');
+    }
+    return client.decryptVideoGroupFrame(userId: userId, picture: picture);
   }
 
   /// Declares the video SSRCs on this connection.
@@ -146,6 +162,11 @@ final class DiscordStreamRtcSession {
         'ssrc ${event.session.ssrc} '
         'dave ${event.session.daveProtocolVersion}',
       );
+      // The SFU forwards no video until a receiver asks for it, so this goes
+      // out before any picture is expected on the connection.
+      if (!sending) {
+        _client?.sendMediaSinkWants(any: 100);
+      }
     }
     if (event is VoiceSignalingStatusEvent) {
       _diagnose(event.status.name, event.error);
