@@ -62,11 +62,7 @@ final class DiscordStreamRtcSession {
   /// Pictures arriving on this connection, tagged with whose SSRC carried them.
   Stream<(String, DiscordRtpFrame)> get video => _video.stream;
 
-  /// The sound of what is being shared, arriving on this connection rather
-  /// than on the room's voice one (ADR-0004).
-  ///
-  /// Tagged with the sender by the connection itself: a stream has exactly one
-  /// sender, and their opcode 12 is what attributes it.
+  /// Audio arriving with the stream connection (ADR-0004).
   Stream<VoiceRemoteOpusFrame> get audio => _audio.stream;
 
   /// What the connection is doing, in the same vocabulary voice uses.

@@ -148,8 +148,7 @@ void main() {
       client.emitAudio('sender', [7, 8]);
       await Future<void>.delayed(Duration.zero);
 
-      // The screen-share audio travels with the stream, not with the room's
-      // voice, and this is the door it comes in by (ADR-0004).
+      // Audio arrives through the stream connection (ADR-0004).
       expect(heard.single.userId, 'sender');
       expect(heard.single.opus, [7, 8]);
     });
@@ -455,8 +454,7 @@ final _frame = DiscordRtpFrame(
   payload: Uint8List.fromList(const [1, 2, 3]),
 );
 
-/// Carries pictures and sound like the production client, so both halves of a
-/// stream connection are testable without a live connection.
+/// Fake stream client with picture and audio inputs.
 final class _FakeClient implements DiscordVoiceClient {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
@@ -476,7 +474,7 @@ final class _FakeClient implements DiscordVoiceClient {
   void emitVideo(String userId, DiscordRtpFrame frame) =>
       _video.add((userId, frame));
 
-  /// Delivers the sound of what is being shared, as the wire would.
+  /// Delivers an audio frame.
   void emitAudio(String userId, List<int> opus) => _audio.add(
     VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
   );

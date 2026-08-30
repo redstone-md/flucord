@@ -24,10 +24,19 @@ final class VoiceRemoteOpusFrame {
 }
 
 final class VoiceRemotePcmFrame {
-  VoiceRemotePcmFrame({required this.userId, required Int16List samples})
-    : samples = Int16List.fromList(samples);
+  VoiceRemotePcmFrame({
+    required this.userId,
+    required Int16List samples,
+    String? sourceId,
+  }) : sourceId = sourceId ?? userId,
+       samples = Int16List.fromList(samples);
 
+  /// The participant who sent the audio.
   final String userId;
+
+  /// Playback source. Voice uses [userId]; streams use their stream key.
+  final String sourceId;
+
   final Int16List samples;
 }
 
@@ -93,5 +102,6 @@ abstract interface class VoiceAudioPlaybackService {
   Future<void> selectOutput(String deviceId);
   Future<void> setEnabled(bool enabled);
   void addPcmFrame(VoiceRemotePcmFrame frame);
+  Future<void> removeSource(String sourceId);
   Future<void> dispose();
 }

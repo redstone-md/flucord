@@ -5,10 +5,14 @@ import '../domain/voice_audio.dart';
 
 /// Decodes remote Opus frames into PCM samples without opening a microphone.
 final class VoiceAudioReceiver {
-  VoiceAudioReceiver({required VoiceOpusDecoderFactory decoderFactory})
-    : _decoderFactory = decoderFactory;
+  VoiceAudioReceiver({
+    required VoiceOpusDecoderFactory decoderFactory,
+    String? sourceId,
+  }) : _decoderFactory = decoderFactory,
+       _sourceId = sourceId;
 
   final VoiceOpusDecoderFactory _decoderFactory;
+  final String? _sourceId;
   final StreamController<VoiceRemotePcmFrame> _remotePcm =
       StreamController.broadcast();
   final StreamController<Object> _errors = StreamController.broadcast();
@@ -88,7 +92,13 @@ final class VoiceAudioReceiver {
 
   void _emitRemotePcm(String userId, Int16List samples) {
     if (_remotePcm.isClosed) return;
-    _remotePcm.add(VoiceRemotePcmFrame(userId: userId, samples: samples));
+    _remotePcm.add(
+      VoiceRemotePcmFrame(
+        userId: userId,
+        sourceId: _sourceId,
+        samples: samples,
+      ),
+    );
   }
 
   void _emitError(Object error) {

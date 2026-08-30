@@ -44,12 +44,11 @@ List<IncomingVideoPacket> _packetsFor({int sliceLength = 8}) => [
     IncomingVideoPacket(payload: payload.bytes, marker: payload.isLast),
 ];
 
-/// An arriving Opus frame, as a stream connection delivers one.
+/// Creates an Opus frame.
 VoiceRemoteOpusFrame _opusFrame(String userId, List<int> opus) =>
     VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus));
 
-/// One stream connection's sound. Broadcast, so that the connection can go
-/// on delivering after the session that was listening is gone.
+/// Creates an audio stream that can outlive a watched session.
 StreamController<VoiceRemoteOpusFrame> _audioConnection() {
   final controller = StreamController<VoiceRemoteOpusFrame>.broadcast();
   addTearDown(controller.close);
@@ -306,6 +305,40 @@ void main() {
       expect(decoder.started, 0);
     });
 
+    test('an unsolicited endpoint stays silent', () async {
+      final audioCodecs = FakeVoiceOpusDecoderFactory();
+      final streamAudio = WatchedStreamAudio(decoderFactory: audioCodecs);
+      addTearDown(streamAudio.dispose);
+      final controller = StreamViewerController(
+        repositoryProvider: () => _FakeRepository(),
+        decoderFactory: () => _FakeDecoder(),
+        audio: streamAudio,
+      );
+      addTearDown(controller.dispose);
+      final packets = StreamController<IncomingVideoPacket>.broadcast();
+      addTearDown(packets.close);
+      final audio = _audioConnection();
+      final heard = <VoiceRemotePcmFrame>[];
+      final playback = controller.audio.listen(heard.add);
+      addTearDown(playback.cancel);
+
+      expect(
+        await controller.attach(
+          _key,
+          packets: packets.stream,
+          audio: audio.stream,
+        ),
+        isFalse,
+      );
+      audio.add(_opusFrame('them', [7]));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isOpen(_key), isFalse);
+      expect(controller.isWatching(_key), isFalse);
+      expect(audioCodecs.created, 0);
+      expect(heard, isEmpty);
+    });
+
     test('attaching decodes without asking a second time', () async {
       final repository = _FakeRepository();
       final decoder = _FakeDecoder();
@@ -426,6 +459,7 @@ void main() {
         );
         addTearDown(controller.dispose);
 
+        await controller.requestWatch(_key);
         expect(
           await controller.attach(_key, packets: const Stream.empty()),
           isFalse,
@@ -740,13 +774,10 @@ void main() {
       gates[1].complete();
       gates[0].complete();
 
-      // One connection reads the stream and the other is turned away: a
-      // second session for one key would splice this connection's packets
-      // into the other's picture and count them against it.
+      // One attach wins and the other decoder is stopped.
       expect([await reopened, await reading].where((ok) => ok), hasLength(1));
       expect(controller.isWatching(_key), isTrue);
-      // The decoder that lost is shut rather than left running with nothing
-      // of its own to decode.
+      // The losing decoder is stopped.
       final stopped = [for (final decoder in made) decoder.stopped];
       expect(stopped.where((each) => each == 1), hasLength(1));
     });
@@ -775,8 +806,7 @@ void main() {
       opus.add(_opusFrame('them', [7]));
       await Future<void>.delayed(Duration.zero);
 
-      // One watched stream, one decoder: what decodes it is not shared with
-      // the room's voice, and not shared with another stream either.
+      // Each watched session has its own audio decoder.
       expect(codecs.created, 1);
       expect(heard.single.userId, 'them');
       expect(heard.single.samples, [7]);
@@ -808,8 +838,7 @@ void main() {
       await controller.stop(_key);
       expect(codecs.disposed, 1);
 
-      // The connection outlives the session by as long as Discord likes;
-      // there is nothing left to play it into.
+      // Audio stops with the watched session.
       opus.add(_opusFrame('them', [8]));
       await Future<void>.delayed(Duration.zero);
       expect(heard, hasLength(1));
@@ -870,8 +899,7 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      // Suspension is this client not drawing. The window being in the
-      // background is nobody's reason to go deaf.
+      // Suspension does not disable audio.
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
       opus.add(_opusFrame('them', [7]));

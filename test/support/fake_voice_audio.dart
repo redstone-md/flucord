@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flucord/src/domain/voice_audio.dart';
 
-/// A deterministic Opus decoder factory for receiver-boundary tests.
+/// Deterministic Opus decoder factory for audio tests.
 final class FakeVoiceOpusDecoderFactory implements VoiceOpusDecoderFactory {
   int created = 0;
   int disposed = 0;

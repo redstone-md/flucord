@@ -84,8 +84,7 @@ final class _Wiring {
       decoderFactory: () => decoder,
       ownKeyProvider: () => goLive.streamKey,
       onWatchRequested: (key) => service.noteWatch(key),
-      // The sound of what is being shared: a receiver per watched session,
-      // fed by the same connection the pictures arrive on (ADR-0004).
+      // One audio receiver per watched session (ADR-0004).
       audio: WatchedStreamAudio(decoderFactory: audioCodecs),
     );
     service = DiscordStreamRtcService(
@@ -447,6 +446,28 @@ void main() {
     },
   );
 
+  test('an unsolicited stream endpoint stays silent', () async {
+    final wiring = _Wiring();
+    addTearDown(wiring.dispose);
+
+    wiring.repository.assign(_otherServer);
+    await Future<void>.delayed(Duration.zero);
+    final connection = wiring.clients.single;
+    connection.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+
+    final heard = <VoiceRemotePcmFrame>[];
+    final played = wiring.viewer.audio.listen(heard.add);
+    addTearDown(played.cancel);
+    connection.emitAudio('somebody-else', [7]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(wiring.viewer.isOpen(_otherKey), isFalse);
+    expect(wiring.viewer.isWatching(_otherKey), isFalse);
+    expect(wiring.audioCodecs.created, 0);
+    expect(heard, isEmpty);
+  });
+
   test('a watched stream\'s sound comes off the stream connection', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
@@ -464,8 +485,7 @@ void main() {
     addTearDown(played.cancel);
     await Future<void>.delayed(Duration.zero);
 
-    // The sender's screen-share audio, on the same connection their pictures
-    // cross rather than on the room's voice one.
+    // Audio arrives through the stream connection.
     connection.emitAudio('somebody-else', [7]);
     await Future<void>.delayed(Duration.zero);
 
@@ -473,8 +493,7 @@ void main() {
     expect(heard.single.userId, 'somebody-else');
     expect(heard.single.samples, [7]);
 
-    // Stopping the watch ends the sound with the session. The connection is
-    // Discord's to close, and it goes on delivering either way.
+    // Audio stops with the watched session.
     await wiring.viewer.stop(_otherKey);
     expect(wiring.audioCodecs.disposed, 1);
     connection.emitAudio('somebody-else', [8]);
@@ -497,9 +516,7 @@ void main() {
   });
 }
 
-/// Carries pictures and sound like the production client, so both halves of a
-/// stream connection are testable without a live connection. Records actions
-/// in [log] so tests can check which side of the fork ran first.
+/// Fake stream client with picture and audio inputs.
 final class _FakeClient implements DiscordVoiceClient {
   _FakeClient(this.log);
 
@@ -520,7 +537,7 @@ final class _FakeClient implements DiscordVoiceClient {
   void emitVideo(String userId, DiscordRtpFrame frame) =>
       _video.add((userId, frame));
 
-  /// Delivers the sound of what is being shared, as the wire would.
+  /// Delivers an audio frame.
   void emitAudio(String userId, List<int> opus) => _audio.add(
     VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(opus)),
   );

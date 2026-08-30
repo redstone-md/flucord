@@ -274,6 +274,9 @@ final class _RefusingPlayback implements VoiceAudioPlaybackService {
   void addPcmFrame(VoiceRemotePcmFrame frame) {}
 
   @override
+  Future<void> removeSource(String sourceId) async {}
+
+  @override
   Future<void> dispose() async {}
 }
 

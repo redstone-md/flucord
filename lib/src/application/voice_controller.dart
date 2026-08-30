@@ -24,9 +24,9 @@ final class VoiceController extends ChangeNotifier {
     VoiceOpusCodecFactory? audioCodecFactory,
     VoiceAudioPlaybackService? playbackService,
 
-    /// Sound that arrived on a connection other than the room's voice one:
-    /// the screen-share audio of the streams being watched (ADR-0004).
+    /// Audio from watched streams (ADR-0004).
     Stream<VoiceRemotePcmFrame>? streamAudio,
+    Stream<String>? streamAudioEnded,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
@@ -34,6 +34,7 @@ final class VoiceController extends ChangeNotifier {
     audioCodecFactory,
     playbackService,
     streamAudio,
+    streamAudioEnded,
   );
 
   VoiceController._(
@@ -43,6 +44,7 @@ final class VoiceController extends ChangeNotifier {
     VoiceOpusCodecFactory? audioCodecFactory,
     this._playbackService,
     Stream<VoiceRemotePcmFrame>? streamAudio,
+    Stream<String>? streamAudioEnded,
   ) : _audioPipeline = audioCodecFactory == null
           ? null
           : VoiceAudioPipeline(
@@ -54,9 +56,11 @@ final class VoiceController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     });
     _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
-    // Both sources use the room's existing playback path and keep the sender
-    // id on each PCM frame.
+    // Voice and stream audio share the room playback path.
     _streamAudioSubscription = streamAudio?.listen(_handleRemotePcm);
+    _streamAudioEndedSubscription = streamAudioEnded?.listen(
+      _handleStreamAudioEnded,
+    );
   }
 
   final VoiceMediaService _mediaService;
@@ -67,6 +71,7 @@ final class VoiceController extends ChangeNotifier {
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
+  StreamSubscription<String>? _streamAudioEndedSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
   VoiceSignalingService? _signalingService;
   StreamSubscription<void>? _seatedSubscription;
@@ -90,8 +95,11 @@ final class VoiceController extends ChangeNotifier {
   bool _isDeafened = false;
   bool _isCameraOn = false;
   bool _isAudioPlaybackActive = false;
+  final List<VoiceRemotePcmFrame> _pendingPcmFrames = [];
   bool _isBusy = false;
   bool _disposed = false;
+
+  static const int _pendingPcmFrameLimit = 250;
 
   VoiceState get state => _state;
   VoiceConnectionStatus get connectionStatus => _connectionStatus;
@@ -584,9 +592,31 @@ final class VoiceController extends ChangeNotifier {
   Future<void> _setPlaybackEnabled(bool enabled) async {
     final playbackService = _playbackService;
     if (playbackService == null) return;
+    if (!enabled) {
+      _isAudioPlaybackActive = false;
+      _pendingPcmFrames.clear();
+    }
     await playbackService.setEnabled(enabled);
-    _isAudioPlaybackActive = enabled;
+    if (enabled) {
+      _isAudioPlaybackActive = true;
+      _flushPendingPcmFrames(playbackService);
+    } else {
+      _pendingPcmFrames.clear();
+    }
     if (!_disposed) notifyListeners();
+  }
+
+  void _flushPendingPcmFrames(VoiceAudioPlaybackService playbackService) {
+    final pending = List<VoiceRemotePcmFrame>.of(_pendingPcmFrames);
+    _pendingPcmFrames.clear();
+    for (final frame in pending) {
+      try {
+        playbackService.addPcmFrame(frame);
+      } catch (error) {
+        _reportBackgroundError(error);
+        return;
+      }
+    }
   }
 
   Future<void> _applyBackgroundAudioState({
@@ -615,10 +645,38 @@ final class VoiceController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  void _handleStreamAudioEnded(String sourceId) {
+    if (_disposed) return;
+    _pendingPcmFrames.removeWhere((frame) => frame.sourceId == sourceId);
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    unawaited(_removePlaybackSource(playbackService, sourceId));
+  }
+
+  Future<void> _removePlaybackSource(
+    VoiceAudioPlaybackService playbackService,
+    String sourceId,
+  ) async {
+    try {
+      await playbackService.removeSource(sourceId);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
   void _handleRemotePcm(VoiceRemotePcmFrame frame) {
     if (_disposed) return;
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    if (!_isAudioPlaybackActive) {
+      if (_pendingPcmFrames.length == _pendingPcmFrameLimit) {
+        _pendingPcmFrames.removeAt(0);
+      }
+      _pendingPcmFrames.add(frame);
+      return;
+    }
     try {
-      _playbackService?.addPcmFrame(frame);
+      playbackService.addPcmFrame(frame);
     } catch (error) {
       _reportBackgroundError(error);
     }
@@ -630,6 +688,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
     unawaited(_streamAudioSubscription?.cancel());
+    unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
     unawaited(_audioPipeline?.dispose());

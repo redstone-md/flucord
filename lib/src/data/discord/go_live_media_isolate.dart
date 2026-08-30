@@ -194,7 +194,7 @@ final class _IsolateSendingClient implements DiscordVoiceClient, GoLiveSender {
   Stream<(String, DiscordRtpFrame)> get videoPackets =>
       const Stream<(String, DiscordRtpFrame)>.empty();
 
-  /// A share sends its own sound; it receives nobody else's.
+  /// A sending stream has no remote sound.
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio =>
       const Stream<VoiceRemoteOpusFrame>.empty();

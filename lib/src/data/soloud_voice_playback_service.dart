@@ -84,8 +84,14 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
     if (frame.samples.length % _channels != 0) {
       throw StateError('Remote PCM frame is not stereo aligned');
     }
-    final source = _sources.putIfAbsent(frame.userId, _createSource);
+    final source = _sources.putIfAbsent(frame.sourceId, _createSource);
     _player.addAudioDataStream(source, _asBytes(frame.samples));
+  }
+
+  @override
+  Future<void> removeSource(String sourceId) async {
+    final source = _sources.remove(sourceId);
+    if (source != null) await _player.disposeSource(source);
   }
 
   AudioSource _createSource() {

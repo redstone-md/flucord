@@ -376,9 +376,7 @@ final class AppComposition {
     void applyQuality() => unawaited(goLive.applyQuality());
     streamQuality.addListener(applyQuality);
     _teardown.add(() => streamQuality.removeListener(applyQuality));
-    // The sound of what is being shared, which travels on the stream's own
-    // connection rather than on the room's voice one. A receiver per watched
-    // session, and none at all while nothing is being watched (ADR-0004).
+    // One audio receiver per watched session (ADR-0004).
     final codecFactory = bootstrap.voiceOpusCodecFactory;
     final streamAudio = codecFactory == null
         ? null
@@ -445,9 +443,9 @@ final class AppComposition {
         callServiceProvider: () => chat.directCallService,
         audioCodecFactory: bootstrap.voiceOpusCodecFactory,
         playbackService: bootstrap.voicePlaybackService,
-        // A watched stream's sound plays on the room's output, alongside the
-        // call's own audio rather than instead of it (ADR-0004).
+        // Use room playback for stream audio (ADR-0004).
         streamAudio: streamViewer.audio,
+        streamAudioEnded: streamViewer.audioEnded,
       ),
     );
     directCall = _register(

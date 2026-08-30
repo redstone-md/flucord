@@ -5,13 +5,7 @@ import '../domain/voice_audio.dart';
 import '../app_log.dart';
 import 'voice_audio_receiver.dart';
 
-/// The sound of the streams this client is watching.
-///
-/// One receiver per watched session, because an Opus decoder holds the state
-/// of one sender's stream and two senders sharing one is silence with extra
-/// steps. A stream nobody opened has no receiver at all, so it stays silent:
-/// what gives a stream's sound somewhere to play is watching it, and the
-/// sound ends when the session does (ADR-0004).
+/// Decodes audio for watched streams, one receiver per session (ADR-0004).
 final class WatchedStreamAudio {
   WatchedStreamAudio({required VoiceOpusDecoderFactory decoderFactory})
     : _decoderFactory = decoderFactory;
@@ -19,28 +13,23 @@ final class WatchedStreamAudio {
   final VoiceOpusDecoderFactory _decoderFactory;
   final StreamController<VoiceRemotePcmFrame> _pcm =
       StreamController<VoiceRemotePcmFrame>.broadcast();
+  final StreamController<String> _ended = StreamController<String>.broadcast();
   final Map<GoLiveStreamKey, _SessionAudio> _byKey = {};
 
-  /// Every attach and detach runs in the order it was asked for.
-  ///
-  /// A session can be stopped while the next one is opening, and two of them
-  /// interleaved would otherwise leave a receiver nobody holds.
   Future<void> _pending = Future<void>.value();
+  int _nextSourceId = 0;
 
   bool _disposed = false;
 
-  /// Sound from every stream being watched, tagged with its sender.
+  /// Decoded audio from all watched sessions.
   Stream<VoiceRemotePcmFrame> get pcm => _pcm.stream;
 
-  /// Starts turning [audio] into sound for [key]'s session.
-  ///
-  /// A session that is already receiving is rebound: the connection under it
-  /// was replaced, and the decoder for the old one is not the decoder for the
-  /// new.
+  /// Source ids that are no longer active.
+  Stream<String> get ended => _ended.stream;
+
   Future<void> attach(GoLiveStreamKey key, Stream<VoiceRemoteOpusFrame> audio) =>
       _enqueue(() => _attachNow(key, audio));
 
-  /// Ends [key]'s sound, which is what stopping a watch does.
   Future<void> detach(GoLiveStreamKey key) =>
       _enqueue(() => _detachNow(key));
 
@@ -51,14 +40,13 @@ final class WatchedStreamAudio {
       await _detachNow(key);
     }
     await _pcm.close();
+    await _ended.close();
   });
 
   Future<void> _enqueue(Future<void> Function() operation) {
     final queued = _pending.then<void>((_) => operation());
     _pending = queued.then<void>(
       (_) {},
-      // A stream's sound failing is not a reason to stop the next session
-      // from being bound; each operation is awaited where it was asked for.
       onError: (Object _, StackTrace _) {},
     );
     return queued;
@@ -71,8 +59,13 @@ final class WatchedStreamAudio {
     if (_disposed) return;
     await _detachNow(key);
     if (_disposed) return;
+    final sourceId = 'stream:${key.value}:${++_nextSourceId}';
     final session = _SessionAudio(
-      receiver: VoiceAudioReceiver(decoderFactory: _decoderFactory),
+      sourceId: sourceId,
+      receiver: VoiceAudioReceiver(
+        decoderFactory: _decoderFactory,
+        sourceId: sourceId,
+      ),
       transport: _StreamAudioTransport(audio),
     );
     _byKey[key] = session;
@@ -85,6 +78,7 @@ final class WatchedStreamAudio {
     final session = _byKey.remove(key);
     if (session == null) return;
     await session.close();
+    if (!_ended.isClosed) _ended.add(session.sourceId);
   }
 
   void _emit(VoiceRemotePcmFrame frame) {
@@ -97,17 +91,20 @@ final class WatchedStreamAudio {
   }
 }
 
-/// One watched session's sound: the decoder and the connection feeding it.
 final class _SessionAudio {
-  _SessionAudio({required this.receiver, required this.transport});
+  _SessionAudio({
+    required this.sourceId,
+    required this.receiver,
+    required this.transport,
+  });
 
+  final String sourceId;
   final VoiceAudioReceiver receiver;
   final _StreamAudioTransport transport;
   StreamSubscription<VoiceRemotePcmFrame>? pcm;
   StreamSubscription<Object>? errors;
 
   Future<void> close() async {
-    // Ours first: the receiver closes the very streams these are listening to.
     await pcm?.cancel();
     await errors?.cancel();
     pcm = null;
@@ -116,8 +113,6 @@ final class _SessionAudio {
   }
 }
 
-/// Presents one connection's arriving sound as a transport, which is what the
-/// receiving half of the call's audio pipeline already consumes.
 final class _StreamAudioTransport implements VoiceAudioReceiverTransport {
   const _StreamAudioTransport(this.remoteAudio);
 

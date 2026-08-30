@@ -329,7 +329,7 @@ void main() {
         'd': {
           'mode': 'aead_aes256_gcm_rtpsize',
           'secret_key': List<int>.generate(32, (index) => index),
-          'dave_protocol_version': 1,
+          'dave_protocol_version': 0,
         },
       });
       socket.addBinary([0, 12, 25, 7, 8, 9]);
@@ -376,6 +376,17 @@ void main() {
 
       expect(client.userIdForSsrc(91), 'remote-2');
       expect(events.whereType<VoiceUserDisconnectedEvent>(), isEmpty);
+
+      final remoteAudio = client.remoteAudio.first;
+      final remoteAudioFrame = DiscordRtpFrame(
+        header: DiscordRtpHeader(sequence: 2, timestamp: 3, ssrc: 91),
+        payload: const [6, 7, 8],
+      );
+      client.sendAudioFrame(remoteAudioFrame);
+      udp.addPacket(udp.sentPackets.last);
+      final decodedAudio = await remoteAudio;
+      expect(decodedAudio.userId, 'remote-2');
+      expect(decodedAudio.opus, [6, 7, 8]);
 
       socket.addJson({
         'op': 13,

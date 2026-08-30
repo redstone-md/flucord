@@ -262,14 +262,19 @@ void main() {
 
       streamAudio.add(
         VoiceRemotePcmFrame(
-          userId: 'stream-sender',
+          userId: 'user-1',
+          sourceId: 'stream:guild:guild-1:voice-1:user-1',
           samples: Int16List.fromList([8]),
         ),
       );
       await _flushEvents();
       expect(playback.frames.map((frame) => frame.userId), [
         'user-1',
-        'stream-sender',
+        'user-1',
+      ]);
+      expect(playback.frames.map((frame) => frame.sourceId), [
+        'user-1',
+        'stream:guild:guild-1:voice-1:user-1',
       ]);
 
       await controller.toggleMute();
@@ -320,28 +325,55 @@ void main() {
     expect(controller.joinBlockedReason, isNull);
   });
 
-  test('a watched stream\'s sound plays on the room\'s output', () async {
+  test('stopping a watched stream removes its playback source', () async {
     final playback = _FakeVoicePlaybackService();
-    final streamAudio = StreamController<VoiceRemotePcmFrame>.broadcast();
-    addTearDown(streamAudio.close);
+    final ended = StreamController<String>.broadcast();
+    addTearDown(ended.close);
     final controller = VoiceController(
       _FakeVoiceMediaService(),
+      playbackService: playback,
+      streamAudioEnded: ended.stream,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.initialize();
+    ended.add('stream:call:dm-1:them:1');
+    await _flushEvents();
+
+    expect(playback.removedSources, ['stream:call:dm-1:them:1']);
+  });
+
+  test('a stream frame waits for room playback to become ready', () async {
+    final playback = _FakeVoicePlaybackService();
+    final signaling = _FakeVoiceSignalingService();
+    final streamAudio = StreamController<VoiceRemotePcmFrame>.broadcast();
+    addTearDown(streamAudio.close);
+    addTearDown(signaling.close);
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
       playbackService: playback,
       streamAudio: streamAudio.stream,
     );
     addTearDown(controller.dispose);
-    await controller.initialize();
 
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
     streamAudio.add(
       VoiceRemotePcmFrame(
         userId: 'them',
+        sourceId: 'stream:guild:guild-1:voice-1:them',
         samples: Int16List.fromList([7, 8]),
       ),
     );
     await _flushEvents();
+    expect(playback.frames, isEmpty);
 
-    // The stream source uses the room's existing output and keeps its sender
-    // id on the PCM frame (ADR-0004).
+    signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+    await _flushEvents();
+    await _flushEvents();
+
+    // The stream can become ready before the room connection. The frame is
+    // retained until the shared playback service is enabled.
     expect(playback.frames.single.userId, 'them');
     expect(playback.frames.single.samples, [7, 8]);
   });
@@ -554,6 +586,7 @@ final class _FakeVoicePlaybackService implements VoiceAudioPlaybackService {
   bool failOnEnable = false;
   String? selectedOutput;
   final List<VoiceRemotePcmFrame> frames = [];
+  final List<String> removedSources = [];
 
   @override
   Future<void> initialize() async => initialized = true;
@@ -585,6 +618,9 @@ final class _FakeVoicePlaybackService implements VoiceAudioPlaybackService {
 
   @override
   void addPcmFrame(VoiceRemotePcmFrame frame) => frames.add(frame);
+
+  @override
+  Future<void> removeSource(String sourceId) async => removedSources.add(sourceId);
 
   @override
   Future<void> dispose() async => disposed = true;

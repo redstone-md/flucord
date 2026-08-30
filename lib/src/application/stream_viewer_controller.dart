@@ -39,8 +39,7 @@ final class StreamViewerController extends ChangeNotifier {
     GoLiveStreamKey? Function()? ownKeyProvider,
     void Function(GoLiveStreamKey key)? onWatchRequested,
 
-    /// Turns a stream's arriving sound into samples, or null in a build with
-    /// no Opus decoder, where a watched stream is silent.
+    /// Decodes audio for watched sessions, when supported.
     WatchedStreamAudio? audio,
   }) : _repositoryProvider = repositoryProvider,
        _decoderFactory = decoderFactory,
@@ -52,9 +51,7 @@ final class StreamViewerController extends ChangeNotifier {
   final VideoDecoderService Function() _decoderFactory;
   final void Function(GoLiveStreamKey key)? _onWatchRequested;
 
-  /// The sound of what is being watched, held apart from the pictures because
-  /// the two are not the same resource and do not end the same way: a decoder
-  /// per session, and a receiver per session (ADR-0004).
+  /// Audio receivers for watched sessions (ADR-0004).
   final WatchedStreamAudio? _audio;
 
   /// This account's own share. A session like any other once the sender asks
@@ -133,13 +130,13 @@ final class StreamViewerController extends ChangeNotifier {
       _sessions[key]?.decoder?.frames ??
       const Stream<DecodedVideoFrame>.empty();
 
-  /// The sound of every stream being watched, playable on the room's output.
-  ///
-  /// Nothing but the streams this client is holding is on it: sound is bound
-  /// when a session is, so a stream nobody opened is silent and stopping a
-  /// watch ends the sound with the session (ADR-0004).
+  /// Audio from watched sessions, for the room output (ADR-0004).
   Stream<VoiceRemotePcmFrame> get audio =>
       _audio?.pcm ?? const Stream<VoiceRemotePcmFrame>.empty();
+
+  /// Source ids released with watched sessions.
+  Stream<String> get audioEnded =>
+      _audio?.ended ?? const Stream<String>.empty();
 
   /// Whether this client is holding [key]: asked for, or arriving.
   bool isOpen(GoLiveStreamKey key) => _order.contains(key);
@@ -249,6 +246,9 @@ final class StreamViewerController extends ChangeNotifier {
     Stream<VoiceRemoteOpusFrame>? audio,
   }) async {
     if (_disposed) return false;
+    // A ready endpoint is not proof that this client still wants the stream.
+    // Discord can answer a withdrawn or stale request after the room changed.
+    if (!isOpen(key)) return false;
     if (_cancelled.remove(key)) return false;
     if (!isSupported) return false;
     if (!_canHold(key)) {
@@ -422,9 +422,7 @@ final class StreamViewerController extends ChangeNotifier {
   /// Ends [key]'s decoder and subscription, leaving its place in the room
   /// alone.
   Future<void> _teardown(GoLiveStreamKey key) async {
-    // The sound goes with the session, not with the pictures: watching is what
-    // gives it somewhere to play, so once this key is gone there is nothing
-    // left to play it into (ADR-0004).
+    // Audio ends with the watched session (ADR-0004).
     await _audio?.detach(key);
     final session = _sessions.remove(key);
     if (session == null) return;
@@ -471,18 +469,12 @@ final class StreamViewerController extends ChangeNotifier {
       onError: (Object error, StackTrace stackTrace) =>
           _acceptError(key, error),
     );
-    // Bound with the session rather than with the decoder: suspension is this
-    // client not drawing, and a window nobody is looking at is still being
-    // listened to (ADR-0003).
+    // Suspension keeps the audio receiver attached (ADR-0003).
     if (audio != null) _bindAudio(key, audio);
     return session;
   }
 
-  /// Gives [key]'s session its sound, without holding the session up for it.
-  ///
-  /// The pictures are what a session is for, and a stream with no sound is
-  /// still a stream; a failure here is worth saying, not worth failing the
-  /// watch over.
+  /// Binds audio without delaying the video session.
   void _bindAudio(GoLiveStreamKey key, Stream<VoiceRemoteOpusFrame> audio) {
     final binding = _audio?.attach(key, audio);
     if (binding == null) return;

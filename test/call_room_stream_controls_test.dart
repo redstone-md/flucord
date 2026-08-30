@@ -63,9 +63,14 @@ void main() {
   ) async {
     final harness = await pumpStreamRoom(tester, streamRoomCall);
 
+    const streamKey = GoLiveStreamKey.call(
+      channelId: 'dm-1',
+      userId: 'friend-1',
+    );
+    await tester.runAsync(() => harness.viewer.requestWatch(streamKey));
     await tester.runAsync(
       () => harness.viewer.attach(
-        const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1'),
+        streamKey,
         packets: const Stream.empty(),
       ),
     );
