@@ -157,8 +157,8 @@ final class StreamViewerController extends ChangeNotifier {
   int receivedPacketsFor(GoLiveStreamKey key) =>
       _sessions[key]?.receivedPackets ?? 0;
 
-  /// How many access units came back out of [key]'s depacketiser, which is
-  /// what separates "packets are arriving" from "pictures are arriving".
+  /// How many complete pictures [key] has produced, which separates
+  /// "packets are arriving" from "pictures are arriving".
   int decodedUnitsFor(GoLiveStreamKey key) => _sessions[key]?.decodedUnits ?? 0;
 
   /// How many packets the stream on the stage has received.

@@ -162,8 +162,8 @@ final class DiscordStreamRtcSession {
         'ssrc ${event.session.ssrc} '
         'dave ${event.session.daveProtocolVersion}',
       );
-      // The SFU forwards no video until a receiver asks for it, so this goes
-      // out before any picture is expected on the connection.
+      // The media server forwards no video until a receiver asks for it, so
+      // this goes out before any picture is expected on the connection.
       if (!sending) {
         _client?.sendMediaSinkWants(any: 100);
       }

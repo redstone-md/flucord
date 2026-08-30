@@ -80,9 +80,8 @@ abstract final class DiscordVoiceGatewayOpcode {
   static const clientVideo = 12;
   static const clientDisconnect = 13;
 
-  /// The only video opcode that travels both ways: a receiver sends it to
-  /// subscribe, the server sends it to a sender to name the layer it wants.
-  /// This client reads the inbound half for the log only.
+  /// The only video opcode that travels both ways. A receiver sends it to
+  /// subscribe, and a sender receives it to choose a layer.
   static const mediaSinkWants = 15;
 }
 
@@ -507,9 +506,9 @@ final class DiscordVoiceGatewayProtocol {
     };
   }
 
-  /// Opcode 15. The SFU forwards no remote video until the receiver subscribes
-  /// here, and audio needs no subscription, which is why a missed send looks
-  /// like "audio without a picture".
+  /// Opcode 15. The media server forwards no remote video until the receiver
+  /// subscribes here. Audio needs no subscription, which is why a missed send
+  /// looks like "audio without a picture".
   ///
   /// [Media Sink Wants]: https://discord.com/developers/docs/change-log#media-sink-wants
   Map<String, Object?> mediaSinkWants({

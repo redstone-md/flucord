@@ -17,10 +17,11 @@ typedef VideoPictureGroupDecryptor = Uint8List Function(Uint8List picture);
 /// packet as it lands cannot work, and it fails quietly, because every fragment
 /// is dropped for want of a whole picture to authenticate.
 ///
-/// Reassembly stays a pure RFC 6184 job inside the depacketiser and this class
-/// keeps only the policy about when the decryptor runs, so either can be tested
-/// alone. This one needs no socket and no group session: a fake decryptor that
-/// rejects anything less than a whole picture is enough to prove the boundary.
+/// Reassembly stays a pure RFC 6184 job in the H.264 packet reassembler. This
+/// class keeps only the policy about when the decryptor runs, so either can be
+/// tested alone. This one needs no socket and no group session: a fake decryptor
+/// that rejects anything less than a whole picture is enough to prove the
+/// boundary.
 final class DiscordVideoPictureReceiver {
   DiscordVideoPictureReceiver({
     VideoPictureGroupDecryptor? decryptor,

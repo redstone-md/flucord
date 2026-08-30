@@ -17,7 +17,7 @@ typedef CameraGroupDecryptor = Uint8List Function(
 /// One receiver and one decoder per person, not one shared pair: two senders
 /// interleave on the same socket, and a single receiver would splice one
 /// person's packets into another's picture. The decoders are made through a
-/// factory for the same reason the encoder is — a test host has no H.264
+/// factory for the same reason as the encoder. A test host has no H.264
 /// decoder, and the controller has to be exercisable without one.
 final class RemoteCameraController extends ChangeNotifier {
   RemoteCameraController({

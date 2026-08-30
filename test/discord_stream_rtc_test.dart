@@ -102,7 +102,7 @@ void main() {
     });
 
     test(
-      'a viewer subscribes to the SFU through Media Sink Wants on ready',
+      'a viewer subscribes to the media server through Media Sink Wants on ready',
       () async {
         final client = _FakeClient();
         final session = DiscordStreamRtcSession(
@@ -113,7 +113,8 @@ void main() {
         addTearDown(session.close);
         await session.connect();
 
-        // Nothing before the connection is ready: the SFU is not listening.
+        // Nothing before the connection is ready: the media server is not
+        // listening.
         expect(client.mediaSinkWants, isEmpty);
         client.announce(const VoiceTransportReadyEvent(_session));
         await Future<void>.delayed(Duration.zero);

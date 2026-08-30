@@ -110,6 +110,35 @@ void main() {
       expect(controller.packetsFrom('nobody'), 0);
     });
 
+    test('a group-encrypted camera picture decrypts after reassembly', () async {
+      final packets = StreamController<(String, DiscordRtpFrame)>();
+      final decoders = <_FakeDecoder>[];
+      final decryptions = <Uint8List>[];
+      final controller = RemoteCameraController(
+        packetsProvider: () => packets.stream,
+        decoderFactory: () {
+          final decoder = _FakeDecoder();
+          decoders.add(decoder);
+          return decoder;
+        },
+        groupDecryptorProvider: () => (String userId, Uint8List picture) {
+          decryptions.add(picture);
+          return picture;
+        },
+      );
+      addTearDown(controller.dispose);
+      controller.listen();
+
+      packets
+        ..add(('user-a', _frame([0x65, 1], marker: false)))
+        ..add(('user-a', _frame([2], marker: true)));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(decryptions, hasLength(1));
+      expect(decryptions.single, [0, 0, 0, 1, 0x65, 1, 0, 0, 1, 2]);
+      expect(decoders.single.submitted, [decryptions.single]);
+    });
+
     test('a decoded picture is held for whoever sent it', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
       final decoders = <_FakeDecoder>[];

@@ -441,8 +441,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(wiring.viewer.receivedPackets, 2);
-      // Two packets, one picture: the marker survived the mapping.
+      // Two packets, one picture: the marker survived the mapping, and the
+      // group decryptor saw the reassembled picture once.
       expect(wiring.viewer.decodedUnits, 1);
+      expect(client.groupDecryptions, [_keyframe]);
     },
   );
 
@@ -583,6 +585,7 @@ final class _FakeClient implements DiscordVoiceClient {
   /// Recorded group encryptions: whole access units, with the SSRC they were
   /// encrypted for.
   final List<({int ssrc, Uint8List frame})> groupEncryptions = [];
+  final List<Uint8List> groupDecryptions = [];
 
   @override
   Uint8List encryptVideoForGroup({
@@ -597,7 +600,10 @@ final class _FakeClient implements DiscordVoiceClient {
   Uint8List decryptVideoGroupFrame({
     required String userId,
     required Uint8List picture,
-  }) => picture;
+  }) {
+    groupDecryptions.add(picture);
+    return picture;
+  }
 
   @override
   Future<void> connect() async {}

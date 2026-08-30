@@ -384,10 +384,9 @@ final class AppComposition {
     if (streamAudio != null) {
       _teardown.add(() => unawaited(streamAudio.dispose()));
     }
-    // Watching somebody else's share: a session per stream, each with the
-    // decoder and the depacketiser in front of it. The decoders are made
-    // through a factory for the same reason the cameras' are — a room where
-    // nobody is streaming opens none at all.
+    // Watching somebody else's share: a session per stream, each with a
+    // picture receiver and decoder. Decoders are made on demand, so a room
+    // where nobody is streaming opens none.
     streamViewer = _register(
       StreamViewerController(
         repositoryProvider: () => chat.goLive,

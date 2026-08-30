@@ -60,8 +60,8 @@ abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
     required Uint8List picture,
   });
 
-  /// Subscribes to remote video. The SFU forwards no picture until a receiver
-  /// asks, so a stream without this sends sound and draws nothing.
+  /// Subscribes to remote video. The media server forwards no picture until
+  /// a receiver asks, so a stream without this sends sound and draws nothing.
   ///
   /// [Media Sink Wants]: https://discord.com/developers/docs/change-log#media-sink-wants
   void sendMediaSinkWants({
