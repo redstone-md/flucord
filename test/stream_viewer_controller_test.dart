@@ -612,6 +612,35 @@ void main() {
       expect([for (final decoder in made) decoder.stopped], [1, 1]);
     });
 
+    test('stopping one tells the connection layer which key', () async {
+      final repository = _FakeRepository();
+      final stopped = <GoLiveStreamKey>[];
+      final controller = _viewer(repository, onWatchStopped: stopped.add);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: const Stream.empty());
+      await controller.watch(_other, packets: const Stream.empty());
+
+      await controller.stop(_key);
+
+      // Once, for that key alone: the other connection stays up.
+      expect(stopped, [_key]);
+    });
+
+    test('stopping everything tells the connection layer each key', () async {
+      final repository = _FakeRepository();
+      final stopped = <GoLiveStreamKey>[];
+      final controller = _viewer(repository, onWatchStopped: stopped.add);
+      addTearDown(controller.dispose);
+
+      await controller.watch(_key, packets: const Stream.empty());
+      await controller.watch(_other, packets: const Stream.empty());
+
+      await controller.stop();
+
+      expect(stopped, unorderedEquals([_key, _other]));
+    });
+
     test('a fifth session is refused, and the refusal is reported', () async {
       final repository = _FakeRepository();
       final keys = _roomKeys();
@@ -1437,6 +1466,7 @@ StreamViewerController _viewer(
   List<_FakeDecoder>? made,
   GoLiveStreamKey? Function()? ownKey,
   WatchedStreamAudio? audio,
+  void Function(GoLiveStreamKey key)? onWatchStopped,
 }) {
   final controller = StreamViewerController(
     repositoryProvider: () => repository,
@@ -1446,6 +1476,7 @@ StreamViewerController _viewer(
       return decoder;
     },
     ownKeyProvider: ownKey,
+    onWatchStopped: onWatchStopped,
     audio: audio,
   );
   expect(controller.isSupported, isTrue);

@@ -51,6 +51,7 @@ final class StreamViewerController extends ChangeNotifier {
     required VideoDecoderService Function() decoderFactory,
     GoLiveStreamKey? Function()? ownKeyProvider,
     void Function(GoLiveStreamKey key)? onWatchRequested,
+    void Function(GoLiveStreamKey key)? onWatchStopped,
 
     /// Decodes audio for watched sessions, when supported.
     WatchedStreamAudio? audio,
@@ -58,11 +59,21 @@ final class StreamViewerController extends ChangeNotifier {
        _decoderFactory = decoderFactory,
        _ownKeyProvider = ownKeyProvider,
        _onWatchRequested = onWatchRequested,
+       _onWatchStopped = onWatchStopped,
        _audio = audio;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
   final void Function(GoLiveStreamKey key)? _onWatchRequested;
+
+  /// Told which key was stopped, so whoever holds the connection drops it.
+  ///
+  /// Tearing down the decoder and the subscription leaves the connection up:
+  /// the media server goes on sending, and the client goes on decrypting,
+  /// reordering and asking for retransmissions of pictures nobody draws. The
+  /// connection is not this controller's to close, so it says which key, the
+  /// way [_onWatchRequested] does for the ask.
+  final void Function(GoLiveStreamKey key)? _onWatchStopped;
 
   /// Audio receivers for watched sessions (ADR-0004).
   final WatchedStreamAudio? _audio;
@@ -401,6 +412,7 @@ final class StreamViewerController extends ChangeNotifier {
         );
       }
       await _teardown(each);
+      _onWatchStopped?.call(each);
       if (wasOpen && !arrived) {
         // Withdrawing an ask Discord never answered has to be both announced
         // and remembered: announced so the tile's control goes back to opening

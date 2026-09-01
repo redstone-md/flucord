@@ -396,6 +396,9 @@ final class AppComposition {
         // its reserved session counts towards the cap (ADR-0002).
         ownKeyProvider: () => goLive.streamKey,
         onWatchRequested: (key) => streamRtc.noteWatch(key),
+        // A stopped watch takes its connection with it. Only the receiving
+        // half: the share's own connection ends with the share (ADR-0001).
+        onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
         audio: streamAudio,
       ),
     );

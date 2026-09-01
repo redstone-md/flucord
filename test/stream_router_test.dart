@@ -84,6 +84,7 @@ final class _Wiring {
       decoderFactory: () => decoder,
       ownKeyProvider: () => goLive.streamKey,
       onWatchRequested: (key) => service.noteWatch(key),
+      onWatchStopped: (key) => unawaited(service.stop(key)),
       // One audio receiver per watched session (ADR-0004).
       audio: WatchedStreamAudio(decoderFactory: audioCodecs),
     );
@@ -503,6 +504,51 @@ void main() {
     expect(heard, hasLength(1));
   });
 
+  test('stopping a watched stream closes its connection, not the share',
+      () async {
+    final wiring = _Wiring();
+    addTearDown(wiring.dispose);
+
+    await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
+    wiring.repository.assign(
+      const GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: 's'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final sending = wiring.clients.single;
+    sending.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+    wiring.repository.assign(
+      const GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: 'r'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final receiving = wiring.clients.last;
+    receiving.announce(const VoiceTransportReadyEvent(_session));
+    await wiring.viewer.requestWatch(_otherKey);
+    wiring.repository.assign(_otherServer);
+    await Future<void>.delayed(Duration.zero);
+    final other = wiring.clients.last;
+    other.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+    expect(wiring.viewer.isWatching(_key), isTrue);
+    expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+    // Closing the self-preview drops the receiving half only (ADR-0001).
+    await wiring.viewer.stop(_key);
+    await Future<void>.delayed(Duration.zero);
+    expect(receiving.closed, isTrue);
+    expect(sending.closed, isFalse);
+    expect(wiring.service.sessionFor(_key)?.sending, isTrue);
+    expect(other.closed, isFalse);
+
+    // A stream somebody else sends goes with its connection: nothing is left
+    // decrypting and reordering packets for a picture nobody draws.
+    await wiring.viewer.stop(_otherKey);
+    await Future<void>.delayed(Duration.zero);
+    expect(other.closed, isTrue);
+    expect(wiring.service.sessionFor(_otherKey), isNull);
+    expect(sending.closed, isFalse);
+  });
+
   test('a disposed router routes nothing', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
@@ -532,6 +578,7 @@ final class _FakeClient implements DiscordVoiceClient {
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
       [];
+  bool closed = false;
 
   void announce(VoiceSignalingEvent event) => _events.add(event);
 
@@ -613,6 +660,7 @@ final class _FakeClient implements DiscordVoiceClient {
 
   @override
   Future<void> close() async {
+    closed = true;
     await _events.close();
     await _video.close();
     await _audio.close();
