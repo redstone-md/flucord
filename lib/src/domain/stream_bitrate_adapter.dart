@@ -28,9 +28,8 @@ final class StreamBitrateAdapter {
   int _target;
   int _bitrate;
 
-  /// Points the adapter at a new target, keeping the same fraction of it:
-  /// the loss the link reported still holds, and a settings change is no
-  /// reason to relearn it.
+  /// A new target. The loss the link reported still holds, so the adapted
+  /// fraction carries over rather than being relearnt.
   void retarget(int target) {
     _bitrate = (_bitrate / _target * target).round();
     _target = target;

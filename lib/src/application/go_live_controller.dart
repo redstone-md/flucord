@@ -97,9 +97,7 @@ final class GoLiveController extends ChangeNotifier {
   final GoLiveMediaPlane _media;
   final void Function(GoLiveStreamKey key)? _onSenderReady;
 
-  /// The Sender of the running stream, once its endpoint arrived. The one
-  /// place "current sender" is held: a moved or restarted stream replaces it
-  /// here, once.
+  /// The Sender of the running stream, once its endpoint arrived.
   GoLiveSender? _sender;
   List<StreamSubscription<Object?>> _senderSubscriptions = const [];
 
@@ -159,9 +157,9 @@ final class GoLiveController extends ChangeNotifier {
   /// Opens the Sender on the endpoint Discord handed out, with what the
   /// capture is running at.
   ///
-  /// An endpoint while nothing is being shared is stale: the stream it was
-  /// for has stopped, and announcing on it would bring a dead stream back as
-  /// a ghost.
+  /// An endpoint while no stream is running is stale: the stream it was for
+  /// has stopped, and announcing on it would bring a dead stream back as a
+  /// ghost.
   void _acceptSenderEndpoint(DiscordSenderEndpoint endpoint) {
     final lease = _lease;
     if (lease == null || endpoint.key != _key) {
@@ -176,8 +174,13 @@ final class GoLiveController extends ChangeNotifier {
     );
     _senderSubscriptions = [
       sender.statuses.listen((status) {
-        if (status == GoLiveSenderStatus.ready) {
-          _onSenderReady?.call(endpoint.key);
+        switch (status) {
+          case GoLiveSenderStatus.ready:
+            _onSenderReady?.call(endpoint.key);
+          case GoLiveSenderStatus.failed:
+            _diagnose('sender failed', endpoint.key);
+          default:
+            break;
         }
       }),
       sender.encoderCommands.listen(_applyEncoderCommand),

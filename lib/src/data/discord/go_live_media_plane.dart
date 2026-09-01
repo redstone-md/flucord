@@ -30,14 +30,11 @@ final class InProcessGoLiveMediaPlane implements GoLiveMediaPlane {
   InProcessGoLiveMediaPlane({
     required Stream<EncodedVideoFrame> frames,
     DiscordVoiceSocketFactory? socketFactory,
-    Duration paceInterval = const Duration(seconds: 5),
   }) : _frames = frames,
-       _socketFactory = socketFactory ?? DiscordVoiceGatewaySocketFactory(),
-       _paceInterval = paceInterval;
+       _socketFactory = socketFactory ?? DiscordVoiceGatewaySocketFactory();
 
   final Stream<EncodedVideoFrame> _frames;
   final DiscordVoiceSocketFactory _socketFactory;
-  final Duration _paceInterval;
 
   @override
   Future<int?> get nativeFrameSink => Future.value(null);
@@ -58,6 +55,5 @@ final class InProcessGoLiveMediaPlane implements GoLiveMediaPlane {
     ),
     frames: _frames,
     settings: settings,
-    paceInterval: _paceInterval,
   );
 }

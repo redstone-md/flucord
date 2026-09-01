@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/go_live_media_worker.dart';
@@ -10,9 +9,10 @@ import 'package:flucord/src/data/discord/go_live_sender.dart';
 import 'package:flucord/src/domain/go_live_media.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
-import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_stream_client.dart';
 
 const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
@@ -57,6 +57,7 @@ final class _Bench {
         daveVersions.add(maxDaveProtocolVersion);
         return _FakeSocketFactory(clients);
       },
+      paceInterval: const Duration(milliseconds: 5),
     );
     addTearDown(() async {
       await inbox.close();
@@ -67,7 +68,7 @@ final class _Bench {
   final toMain = ReceivePort();
   final inbox = StreamController<Object?>();
   final received = <Object?>[];
-  final clients = <_FakeClient>[];
+  final clients = <FakeStreamClient>[];
   final daveVersions = <int>[];
   late final GoLiveMediaWorker worker;
 
@@ -119,6 +120,10 @@ void main() {
       everyElement(isA<GoLiveKeyframeCommand>()),
     );
     expect(bench.received.whereType<MediaCommand>(), hasLength(2));
+    // And the pace line, once there is a transport to describe.
+    final pace = bench.received.whereType<MediaPaceLine>().first;
+    expect(pace.id, 7);
+    expect(pace.line, contains('1 keyframe req'));
   });
 
   test('a reshape and sound reach the Sender, a close closes it', () async {
@@ -185,7 +190,7 @@ void main() {
 final class _FakeSocketFactory implements DiscordVoiceSocketFactory {
   _FakeSocketFactory(this._clients);
 
-  final List<_FakeClient> _clients;
+  final List<FakeStreamClient> _clients;
 
   @override
   int get maxDaveProtocolVersion => 0;
@@ -199,87 +204,8 @@ final class _FakeSocketFactory implements DiscordVoiceSocketFactory {
     required VoiceServerCredentials credentials,
     required GoLiveStreamKey streamKey,
   }) {
-    final client = _FakeClient();
+    final client = FakeStreamClient();
     _clients.add(client);
     return client;
-  }
-}
-
-final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
-  final StreamController<VoiceSignalingEvent> _events =
-      StreamController.broadcast(sync: true);
-  final List<({bool enabled, VideoEncoderSettings settings})> announcements =
-      [];
-  final List<Uint8List> opus = [];
-  int connects = 0;
-  bool closed = false;
-  bool throwOnOpus = false;
-
-  void emit(VoiceSignalingEvent event) => _events.add(event);
-
-  @override
-  int? get audioSsrc => 4242;
-
-  @override
-  Stream<VoiceSignalingEvent> get events => _events.stream;
-
-  @override
-  Stream<(String, DiscordRtpFrame)> get videoPackets =>
-      const Stream<(String, DiscordRtpFrame)>.empty();
-
-  @override
-  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
-      const Stream<VoiceRemoteOpusFrame>.empty();
-
-  @override
-  bool announceVideo({
-    required bool enabled,
-    required VideoEncoderSettings settings,
-  }) {
-    announcements.add((enabled: enabled, settings: settings));
-    return true;
-  }
-
-  @override
-  int sendVideoFrame(DiscordRtpFrame frame) => frame.payload.length;
-
-  @override
-  void sendMediaSinkWants({
-    Map<int, int> perSsrc = const {},
-    int? any,
-    Map<int, double> pixelCounts = const {},
-  }) {}
-
-  @override
-  Uint8List encryptVideoForGroup({
-    required int ssrc,
-    required Uint8List frame,
-  }) => frame;
-
-  @override
-  void sendPictureLoss({required int mediaSsrc}) {}
-
-  @override
-  Uint8List decryptVideoGroupFrame({
-    required String userId,
-    required Uint8List picture,
-  }) => picture;
-
-  @override
-  void sendOpusFrame(Uint8List opusFrame) {
-    if (throwOnOpus) throw StateError('no audio path');
-    opus.add(opusFrame);
-  }
-
-  @override
-  Future<void> finishSpeaking() async {}
-
-  @override
-  Future<void> connect() async => connects++;
-
-  @override
-  Future<void> close() async {
-    closed = true;
-    await _events.close();
   }
 }

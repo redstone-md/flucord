@@ -37,8 +37,6 @@ enum GoLiveSenderStatus {
 /// runs (the media isolate in the app, in-process in tests) is the plane's
 /// decision.
 abstract interface class GoLiveSender {
-  GoLiveSenderStatus get status;
-
   Stream<GoLiveSenderStatus> get statuses;
 
   /// What the far end's feedback asks of the encoder.
@@ -103,12 +101,10 @@ final class GoLiveWireSender implements GoLiveSender {
 
   GoLiveSenderStatus _status = GoLiveSenderStatus.dialling;
 
-  /// Whether the transport is up: set on ready, cleared on any lesser status.
-  /// Audio and video are held while it is false so a reconnect does not throw
-  /// a frame at a torn-down cipher.
+  /// Audio and video are held while the transport is down so a reconnect
+  /// does not throw a picture at a torn-down cipher.
   bool get _ready => _status == GoLiveSenderStatus.ready;
 
-  @override
   GoLiveSenderStatus get status => _status;
 
   @override
@@ -163,7 +159,7 @@ final class GoLiveWireSender implements GoLiveSender {
         ssrc: videoSsrc,
         rtxSsrc: DiscordVoiceGatewayProtocol.rtxSsrcFor(ssrc),
         // Gated on readiness: during a reconnect the transport cipher is gone,
-        // and a frame pushed through then throws, which the transport treats
+        // and a picture pushed through then throws, which the transport treats
         // as a dead socket and stops for good. Dropped instead, the stream
         // resumes when the connection comes back.
         sink: (frame) => _ready ? _client.sendVideoFrame(frame) : 0,
@@ -231,7 +227,7 @@ final class GoLiveWireSender implements GoLiveSender {
   ///
   /// Dropped until the transport is ready: the capture starts producing sound
   /// the moment the stream does, well before the endpoint answered, and the
-  /// audio path throws on a frame sent before then.
+  /// audio path throws on sound sent before then.
   @override
   void sendOpusFrame(Uint8List opus) {
     if (!_ready) return;

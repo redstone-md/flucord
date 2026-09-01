@@ -75,12 +75,24 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
         settings: settings,
         maxDaveProtocolVersion: _maxDaveProtocolVersion(),
       ),
+      // A worker that never came up must not leave the Sender dialling for
+      // good: the stream controller hears failed like any other refusal.
+      onUnavailable: () => sender.accept(GoLiveSenderStatus.failed),
     );
     return sender;
   }
 
+  /// How long the teardown waits for a worker still coming up: the shutdown
+  /// needs its inbox, and a spawn that hangs must not hang the app's exit.
+  static const _helloTimeout = Duration(seconds: 3);
+
   Future<void> dispose() async {
-    _post(const MediaShutdown());
+    if (_spawning != null) {
+      _post(const MediaShutdown());
+      await _hello.future
+          .timeout(_helloTimeout)
+          .then<void>((_) {}, onError: (Object _) {});
+    }
     for (final sender in _senders.values.toList(growable: false)) {
       sender.finishClose();
     }
@@ -116,12 +128,14 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
     }
   }
 
-  void _post(Object message) {
+  void _post(Object message, {void Function()? onUnavailable}) {
     unawaited(
       _worker().then(
         (hello) => hello.port.send(message),
-        onError: (Object error) =>
-            AppLog.error(_scope, 'worker unavailable', error: error),
+        onError: (Object error) {
+          AppLog.error(_scope, 'worker unavailable', error: error);
+          onUnavailable?.call();
+        },
       ),
     );
   }
@@ -133,9 +147,9 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
       case MediaStatus(:final id, :final status):
         _senders[id]?.accept(status);
       case MediaCommand(:final id, :final command):
-        _senders[id]?._commands.add(command);
+        _senders[id]?.acceptCommand(command);
       case MediaPaceLine(:final id, :final line):
-        _senders[id]?._paceLines.add(line);
+        _senders[id]?.acceptPaceLine(line);
       case MediaFrame(:final bytes, :final timestampUs, :final isKeyframe):
         _frames.add(
           EncodedVideoFrame(
@@ -172,9 +186,6 @@ final class _IsolateSender implements GoLiveSender {
   Completer<void>? _closing;
 
   @override
-  GoLiveSenderStatus get status => _status;
-
-  @override
   Stream<GoLiveSenderStatus> get statuses => _statuses.stream;
 
   @override
@@ -198,6 +209,7 @@ final class _IsolateSender implements GoLiveSender {
     final completer = _closing = Completer<void>();
     _plane._post(MediaClose(id));
     await completer.future.timeout(_closeTimeout, onTimeout: () {});
+    _plane._senders.remove(id);
     accept(GoLiveSenderStatus.closed);
     await _statuses.close();
     await _commands.close();
@@ -208,6 +220,14 @@ final class _IsolateSender implements GoLiveSender {
     if (_statuses.isClosed || _status == status) return;
     _status = status;
     _statuses.add(status);
+  }
+
+  void acceptCommand(GoLiveEncoderCommand command) {
+    if (!_commands.isClosed) _commands.add(command);
+  }
+
+  void acceptPaceLine(String line) {
+    if (!_paceLines.isClosed) _paceLines.add(line);
   }
 
   void finishClose() {

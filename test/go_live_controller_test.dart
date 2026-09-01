@@ -611,7 +611,6 @@ final class _FakeSender implements GoLiveSender {
       StreamController.broadcast();
   bool closed = false;
 
-  @override
   GoLiveSenderStatus status = GoLiveSenderStatus.dialling;
 
   void ready() {

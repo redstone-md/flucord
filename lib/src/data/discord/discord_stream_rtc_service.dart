@@ -147,6 +147,12 @@ final class DiscordStreamRtcService {
     if (identity == null) return;
     final credentials = _credentialsFor(server, identity);
     if (_isSender(server.key, identity.userId)) {
+      // A moved or restarted stream replaces the self-preview too: the
+      // watched session on the old connection would otherwise stand in the
+      // way of the new ask.
+      for (final session in _sessions.values.toList(growable: false)) {
+        if (session.key.userId == identity.userId) unawaited(stop(session.key));
+      }
       _senderEndpoints.add((key: server.key, credentials: credentials));
       return;
     }

@@ -141,7 +141,7 @@ final class GoLiveMediaWorker {
   final DiscordVoiceSocketFactory Function(int maxDaveProtocolVersion)
   _socketFactory;
   final Duration _paceInterval;
-  final Map<int, _Held> _senders = {};
+  final Map<int, _HeldSender> _senders = {};
 
   /// Handles [inbox] until a [MediaShutdown], then closes every Sender.
   ///
@@ -197,7 +197,7 @@ final class GoLiveMediaWorker {
       _toMain.send(MediaStatus(id: open.id, status: GoLiveSenderStatus.failed));
       return;
     }
-    _senders[open.id] = _Held(
+    _senders[open.id] = _HeldSender(
       sender: sender,
       subscriptions: [
         sender.statuses.listen(
@@ -214,8 +214,14 @@ final class GoLiveMediaWorker {
     );
   }
 
+  /// Runs off the loop, so its own failure is logged here rather than
+  /// escaping to the isolate's error port.
   Future<void> _close(int id) async {
-    await _senders.remove(id)?.close();
+    try {
+      await _senders.remove(id)?.close();
+    } on Object catch (error) {
+      AppLog.error(_scope, 'close failed', error: error);
+    }
     _toMain.send(MediaClosed(id));
   }
 
@@ -226,8 +232,8 @@ final class GoLiveMediaWorker {
   }
 }
 
-final class _Held {
-  _Held({required this.sender, required this.subscriptions});
+final class _HeldSender {
+  _HeldSender({required this.sender, required this.subscriptions});
 
   final GoLiveWireSender sender;
   final List<StreamSubscription<Object?>> subscriptions;

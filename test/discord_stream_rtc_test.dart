@@ -407,7 +407,9 @@ void main() {
       expect(clients, hasLength(1));
       expect(service.sessionFor(_ownKey), isNotNull);
 
-      // The watch is consumed: the next own endpoint is the sender's again.
+      // The watch is consumed: the next own endpoint is the sender's again,
+      // and a restarted stream takes the old self-preview with it, so the
+      // new ask is not refused as already open.
       repository.announceServer(
         const GoLiveServer(
           key: _ownKey,
@@ -418,6 +420,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(endpoints, hasLength(1));
       expect(clients, hasLength(1));
+      expect(clients.single.closed, isTrue);
+      expect(service.sessionFor(_ownKey), isNull);
     });
 
     test('a stream that ends closes its connection', () async {
