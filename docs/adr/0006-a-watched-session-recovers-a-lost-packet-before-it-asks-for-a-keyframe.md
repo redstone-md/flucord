@@ -16,7 +16,7 @@ Accepted.
 
 - The receive path holds packets behind a hole for up to half a second. A stream with steady loss carries that much more latency than one without, which is the price of not asking for a keyframe.
 - A hole is asked for the moment a packet lands past it. There is no first-ask delay to trade against.
-- The reorder buffer and the retransmission asks belong to the connection, not to a subscriber (one packet pipeline per gateway client). Suspension (ADR-0003) lets go of the decoder and the picture receiver; the buffer and the asks stay with the connection.
+- The reorder buffer and the retransmission asks belong to the connection, not to a subscriber (one packet pipeline per gateway client). Suspension (ADR-0003) lets go of the decoder and the picture receiver; the buffer and the asks stay with the connection. Both live in the picture-loss recovery (`discord_picture_loss_recovery.dart`), a module the client owns. Decrypted packets go in; ordered packets and typed feedback requests come out. The client encrypts and sends what the module asks for. Its own interface is unchanged.
 - Nothing decrypts before reassembly (ADR-0005). The wait for a retransmission happens before reassembly closes the picture.
 - The broken-references verdict lives in the watched session pipeline that owns the picture receiver, fed alike by a picture that will not decrypt, a pacer overflow with no keyframe queued, and a decoder drop; the gateway client's gate on when the ask may leave is unchanged.
 - The pacer treats a slot too far in the future as a clock jump and re-anchors on it, and an overflow keeps the newest keyframe it holds. Neither asks the sender for anything; only a queue with no keyframe in it does.

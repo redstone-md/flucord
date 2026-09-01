@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtcp_packet.dart';
@@ -22,7 +21,7 @@ part 'discord_voice_transport_handshake_cases.dart';
 
 void main() {
   _handshakeCases();
-  _recoveryCases();
+  _feedbackCases();
 
   group('Discord Voice Gateway v8', () {
     test('a screen share declares the stream it carries', () {
@@ -176,80 +175,74 @@ void main() {
       });
     });
 
-    test(
-      'feedback and keepalives never count against the key',
-      () async {
-        final socket = _FakeVoiceWebSocket();
-        final udp = _FakeVoiceUdpTransport();
-        final client = DiscordVoiceGatewayClient(
-          credentials: _credentials,
-          maxDaveProtocolVersion: 1,
-          socketConnector: _FakeVoiceSocketConnector(socket),
-          udpTransport: udp,
-        );
-        final statuses = <VoiceSignalingStatusEvent>[];
-        final subscription = client.events.listen((event) {
-          if (event is VoiceSignalingStatusEvent) statuses.add(event);
-        });
-        addTearDown(subscription.cancel);
-        addTearDown(client.close);
+    test('feedback and keepalives never count against the key', () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 1,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      final statuses = <VoiceSignalingStatusEvent>[];
+      final subscription = client.events.listen((event) {
+        if (event is VoiceSignalingStatusEvent) statuses.add(event);
+      });
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
 
-        await client.connect();
-        socket.addJson({
-          'op': 2,
-          'd': {
-            'ssrc': 42,
-            'ip': '127.0.0.1',
-            'port': 5000,
-            'modes': ['aead_aes256_gcm_rtpsize'],
-          },
-        });
-        await _flushEvents();
-        socket.addJson({
-          'op': 4,
-          'd': {
-            'mode': 'aead_aes256_gcm_rtpsize',
-            'secret_key': List<int>.generate(32, (index) => index),
-            'dave_protocol_version': 0,
-          },
-        });
-        await _flushEvents();
-        expect(
-          statuses.last.status,
-          VoiceConnectionStatus.ready,
-        );
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'd': {
+          'ssrc': 42,
+          'ip': '127.0.0.1',
+          'port': 5000,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+      expect(statuses.last.status, VoiceConnectionStatus.ready);
 
-        // A send-only socket receives no media, only what a sender's pictures
-        // generate: receiver reports (packet types 192-223) and the
-        // eight-byte keepalives. None of it can authenticate, and none of it
-        // ever said the key was wrong.
-        final receiverReport = Uint8List(64);
-        receiverReport[0] = 0x80;
-        receiverReport[1] = 201;
-        final keepalive = Uint8List(8);
-        for (var i = 0; i < 60; i++) {
-          udp.addPacket(i.isEven ? receiverReport : keepalive);
-        }
-        await _flushEvents();
+      // A send-only socket receives no media, only what a sender's pictures
+      // generate: receiver reports (packet types 192-223) and the
+      // eight-byte keepalives. None of it can authenticate, and none of it
+      // ever said the key was wrong.
+      final receiverReport = Uint8List(64);
+      receiverReport[0] = 0x80;
+      receiverReport[1] = 201;
+      final keepalive = Uint8List(8);
+      for (var i = 0; i < 60; i++) {
+        udp.addPacket(i.isEven ? receiverReport : keepalive);
+      }
+      await _flushEvents();
 
-        expect(
-          statuses.where(
-            (status) => status.status == VoiceConnectionStatus.reconnecting,
-          ),
-          isEmpty,
-        );
+      expect(
+        statuses.where(
+          (status) => status.status == VoiceConnectionStatus.reconnecting,
+        ),
+        isEmpty,
+      );
 
-        // And genuine media still comes through after the storm.
-        final receivedFrame = client.audioPackets.first;
-        final frame = DiscordRtpFrame(
-          header: DiscordRtpHeader(sequence: 3, timestamp: 4, ssrc: 42),
-          payload: [9, 9, 9],
-        );
-        client.sendAudioFrame(frame);
-        udp.addPacket(udp.sentPackets.last);
-        expect((await receivedFrame).payload, frame.payload);
-      },
-    );
+      // And genuine media still comes through after the storm.
+      final receivedFrame = client.audioPackets.first;
+      final frame = DiscordRtpFrame(
+        header: DiscordRtpHeader(sequence: 3, timestamp: 4, ssrc: 42),
+        payload: [9, 9, 9],
+      );
+      client.sendAudioFrame(frame);
+      udp.addPacket(udp.sentPackets.last);
+      expect((await receivedFrame).payload, frame.payload);
+    });
 
     test(
       'a picture-loss indication becomes a keyframe request, once per burst',
@@ -1008,194 +1001,85 @@ void main() {
 
 /// Loss recovery on a watched stream: what goes back to the media server,
 /// and what reaches the picture stream, driven by packets and a clock.
-void _recoveryCases() {
-  group('a watched session recovers a lost packet', () {
-    test('a hole is asked for at once, and again each round trip', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final video = harness.watch();
-
-        harness.deliver(_video(1));
-        harness.deliver(_video(3));
-        async.elapse(Duration.zero);
-        expect(video, [1]);
-        // Asked the moment the packet past it landed, not on a timer.
-        expect(harness.nacks(), [
-          [2],
-        ]);
-
-        // Repeated at the floor interval while nothing is measured.
-        async.elapse(const Duration(milliseconds: 45));
-        expect(harness.nacks(), hasLength(2));
-
-        // The retransmission lands inside the window: the stream is whole,
-        // nothing was skipped, and the asking stops.
-        harness.deliver(_retransmission(2));
-        async.elapse(Duration.zero);
-        expect(video, [1, 2, 3]);
-        async.elapse(const Duration(milliseconds: 200));
-        expect(harness.nacks(), hasLength(2));
-        expect(harness.keyframeAsks(), 0);
-        harness.close();
-      });
+void _feedbackCases() {
+  test('a feedback request leaves as encrypted RTCP, or not at all', () async {
+    final socket = _FakeVoiceWebSocket();
+    final udp = _FakeVoiceUdpTransport();
+    final client = DiscordVoiceGatewayClient(
+      credentials: _credentials,
+      maxDaveProtocolVersion: 0,
+      socketConnector: _FakeVoiceSocketConnector(socket),
+      udpTransport: udp,
+    );
+    addTearDown(client.close);
+    final secretKey = List<int>.generate(32, (index) => index);
+    await client.connect();
+    socket.addJson({
+      'op': 2,
+      'd': {
+        'ssrc': 42,
+        'ip': '198.51.100.4',
+        'port': 50001,
+        'modes': ['aead_aes256_gcm_rtpsize'],
+      },
     });
-
-    test('a keyframe is asked for only after the window closed', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final video = harness.watch();
-
-        harness.deliver(_video(1));
-        harness.deliver(_video(3));
-        async.elapse(Duration.zero);
-        // The picture failed to open and the receiver asks for a keyframe
-        // while the retransmission is still expected: held, not sent.
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        expect(harness.keyframeAsks(), 0);
-        async.elapse(const Duration(milliseconds: 60));
-        expect(harness.keyframeAsks(), 0);
-        expect(video, [1]);
-
-        // Past the window without an answer: the hole is given up, what
-        // waited behind it is released, and the held ask goes out, once.
-        async.elapse(const Duration(milliseconds: 100));
-        expect(video, [1, 3]);
-        expect(harness.keyframeAsks(), 1);
-        // The retransmission arriving now is too late to be used, and does
-        // not put a stale packet into the picture stream.
-        harness.deliver(_retransmission(2));
-        async.elapse(Duration.zero);
-        expect(video, [1, 3]);
-        // No more asks are repeated for a hole that was given up.
-        final asked = harness.nacks().length;
-        async.elapse(const Duration(milliseconds: 200));
-        expect(harness.nacks(), hasLength(asked));
-        harness.close();
-      });
+    await _flushEvents();
+    socket.addJson({
+      'op': 4,
+      'd': {
+        'mode': 'aead_aes256_gcm_rtpsize',
+        'secret_key': secretKey,
+        'dave_protocol_version': 0,
+      },
     });
-
-    test('a held keyframe ask outlives the rate limit', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final video = harness.watch();
-        harness.deliver(_video(1));
-        async.elapse(Duration.zero);
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        expect(harness.keyframeAsks(), 1);
-
-        // A hole opens and closes within the second: the ask is held by the
-        // hole, then refused by the limit, and still owed.
-        harness.deliver(_video(3));
-        async.elapse(Duration.zero);
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        harness.deliver(_retransmission(2));
-        async.elapse(const Duration(milliseconds: 500));
-        expect(video, [1, 2, 3]);
-        expect(harness.keyframeAsks(), 1);
-
-        // Paid on the first packet after the second is up.
-        async.elapse(const Duration(milliseconds: 600));
-        harness.deliver(_video(4));
-        async.elapse(Duration.zero);
-        expect(harness.keyframeAsks(), 2);
-        harness.close();
-      });
+    await _flushEvents();
+    socket.addJson({
+      'op': 12,
+      'd': {'user_id': 'remote-2', 'audio_ssrc': 91, 'video_ssrc': _videoSsrc},
     });
+    await _flushEvents();
+    udp.sentPackets.clear();
 
-    test('keyframe asks are rate limited to one a second', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        harness.watch();
-        harness.deliver(_video(1));
-        async.elapse(Duration.zero);
+    // A hole on the announced sender: the recovery's ask reaches the wire
+    // as RTCP encrypted for this session.
+    for (final frame in [_video(1), _video(3)]) {
+      client.sendAudioFrame(frame);
+      udp.addPacket(udp.sentPackets.removeLast());
+    }
+    await _flushEvents();
+    final cipher = DiscordVoiceTransportCipher(
+      mode: 'aead_aes256_gcm_rtpsize',
+      secretKey: secretKey,
+    );
+    addTearDown(cipher.dispose);
+    final feedback = [
+      for (final packet in udp.sentPackets)
+        if (DiscordRtcpPacket.isRtcp(packet))
+          ...DiscordRtcpPacket.parse(cipher.decryptRtcp(packet)),
+    ];
+    expect(feedback, hasLength(1));
+    expect(feedback.single, isA<DiscordRtcpNack>());
+    expect((feedback.single as DiscordRtcpNack).sequences, [2]);
+    // Fill the hole so a keyframe ask has nothing to wait for; it leaves as
+    // a picture-loss indication and a full intra request.
+    client.sendAudioFrame(_retransmission(2));
+    udp.addPacket(udp.sentPackets.removeLast());
+    await _flushEvents();
+    udp.sentPackets.clear();
+    client.sendPictureLoss(mediaSsrc: _videoSsrc);
+    expect(udp.sentPackets, hasLength(2));
+    expect(DiscordRtcpPacket.parse(cipher.decryptRtcp(udp.sentPackets.first)), [
+      isA<DiscordRtcpPictureLoss>(),
+    ]);
+    udp.sentPackets.clear();
 
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        async.elapse(const Duration(milliseconds: 500));
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        expect(harness.keyframeAsks(), 1);
-        async.elapse(const Duration(milliseconds: 600));
-        harness.client.sendPictureLoss(mediaSsrc: _videoSsrc);
-        expect(harness.keyframeAsks(), 2);
-        harness.close();
-      });
-    });
-
-    test('the window follows the measured round trip', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final video = harness.watch();
-        // A 150 ms round trip on the heartbeat: the window becomes 300 ms.
-        harness.socket.addJson({
-          'op': 8,
-          'd': {'heartbeat_interval': 10000},
-        });
-        async.elapse(const Duration(seconds: 10));
-        async.elapse(const Duration(milliseconds: 150));
-        harness.socket.addJson({
-          'op': 6,
-          'd': {'t': 1},
-        });
-        async.elapse(Duration.zero);
-
-        harness.deliver(_video(1));
-        harness.deliver(_video(3));
-        async.elapse(const Duration(milliseconds: 200));
-        // Inside a window a fixed 100 ms would have closed already.
-        expect(video, [1]);
-        // And the ask is repeated per round trip, not per 40 ms.
-        expect(harness.nacks().length, inInclusiveRange(2, 3));
-        harness.deliver(_retransmission(2));
-        async.elapse(Duration.zero);
-        expect(video, [1, 2, 3]);
-        harness.close();
-      });
-    });
-
-    test('the retransmission stream never opens a picture stream', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final video = harness.watch();
-
-        // Packets on the retransmission SSRC that are not retransmissions:
-        // whatever they are, they carry no picture, and asking the server
-        // to resend that stream's own sequence numbers gets nothing back.
-        harness.deliver(_onRtxSsrc(1));
-        harness.deliver(_onRtxSsrc(4));
-        async.elapse(const Duration(milliseconds: 100));
-        expect(video, isEmpty);
-        expect(harness.nacks(), isEmpty);
-
-        // While the real stream still recovers as usual.
-        harness.deliver(_video(1));
-        harness.deliver(_video(3));
-        async.elapse(Duration.zero);
-        expect(harness.nacks(), [
-          [2],
-        ]);
-        harness.close();
-      });
-    });
-
-    test('two subscribers see each packet once, restored once', () {
-      fakeAsync((async) {
-        final harness = _RecoveryHarness(async);
-        final first = harness.watch();
-        final second = harness.watch();
-
-        harness.deliver(_video(1));
-        harness.deliver(_video(3));
-        harness.deliver(_retransmission(2));
-        async.elapse(Duration.zero);
-        expect(first, [1, 2, 3]);
-        expect(second, [1, 2, 3]);
-        // One pipeline: one hole, one ask, however many are listening.
-        expect(harness.nacks(), [
-          [2],
-        ]);
-        harness.close();
-      });
-    });
+    // Discord ended the session: the cipher is gone, and a request that
+    // cannot be encrypted is dropped rather than sent in the clear.
+    await socket.closeFromServer(4006);
+    await _flushEvents();
+    client.sendPictureLoss(mediaSsrc: 200);
+    await _flushEvents();
+    expect(udp.sentPackets, isEmpty);
   });
 }
 
@@ -1224,111 +1108,6 @@ DiscordRtpFrame _retransmission(int sequence) => DiscordRtpFrame(
   ),
   payload: [sequence >> 8, sequence & 0xff, sequence],
 );
-
-/// A packet on the retransmission SSRC that is not a retransmission.
-DiscordRtpFrame _onRtxSsrc(int sequence) => DiscordRtpFrame(
-  header: DiscordRtpHeader(
-    sequence: sequence,
-    timestamp: sequence * 3000,
-    ssrc: _videoSsrc + 1,
-    payloadType: DiscordRtpHeader.discordVideoPayloadType,
-  ),
-  payload: [0, 0, 0],
-);
-
-/// A ready connection with one announced sender, on a fake clock.
-final class _RecoveryHarness {
-  _RecoveryHarness(this.async)
-    : socket = _FakeVoiceWebSocket(),
-      udp = _FakeVoiceUdpTransport() {
-    client = DiscordVoiceGatewayClient(
-      credentials: _credentials,
-      maxDaveProtocolVersion: 0,
-      socketConnector: _FakeVoiceSocketConnector(socket),
-      udpTransport: udp,
-      now: () => async.elapsed,
-    );
-    unawaited(client.connect());
-    async.elapse(Duration.zero);
-    socket.addJson({
-      'op': 2,
-      'd': {
-        'ssrc': 42,
-        'ip': '198.51.100.4',
-        'port': 50001,
-        'modes': ['aead_aes256_gcm_rtpsize'],
-      },
-    });
-    async.elapse(Duration.zero);
-    socket.addJson({
-      'op': 4,
-      'd': {
-        'mode': 'aead_aes256_gcm_rtpsize',
-        'secret_key': _secretKey,
-        'dave_protocol_version': 0,
-      },
-    });
-    async.elapse(Duration.zero);
-    socket.addJson({
-      'op': 12,
-      'd': {'user_id': 'remote-2', 'audio_ssrc': 91, 'video_ssrc': _videoSsrc},
-    });
-    async.elapse(Duration.zero);
-    // Only feedback from here on: the handshake left nothing on the wire
-    // this needs to read back.
-    udp.sentPackets.clear();
-  }
-
-  static final _secretKey = List<int>.generate(32, (index) => index);
-
-  final FakeAsync async;
-  final _FakeVoiceWebSocket socket;
-  final _FakeVoiceUdpTransport udp;
-  late final DiscordVoiceGatewayClient client;
-
-  /// Subscribes to the picture stream, answering the sequences it delivers.
-  List<int> watch() {
-    final sequences = <int>[];
-    client.videoPackets.listen((packet) {
-      expect(packet.$1, 'remote-2');
-      sequences.add(packet.$2.header.sequence);
-    });
-    return sequences;
-  }
-
-  /// Puts [frame] on the wire as the media server would: encrypted for
-  /// this session, without leaving it among the feedback.
-  void deliver(DiscordRtpFrame frame) {
-    client.sendAudioFrame(frame);
-    udp.addPacket(udp.sentPackets.removeLast());
-  }
-
-  /// The sequences asked for, one list per NACK that left the socket.
-  List<List<int>> nacks() => [
-    for (final report in _feedback().whereType<DiscordRtcpNack>())
-      if (report.mediaSsrc == _videoSsrc) report.sequences,
-  ];
-
-  int keyframeAsks() =>
-      _feedback().whereType<DiscordRtcpPictureLoss>().length;
-
-  List<DiscordRtcpReport> _feedback() {
-    final cipher = DiscordVoiceTransportCipher(
-      mode: 'aead_aes256_gcm_rtpsize',
-      secretKey: _secretKey,
-    );
-    return [
-      for (final packet in udp.sentPackets)
-        if (DiscordRtcpPacket.isRtcp(packet))
-          ...DiscordRtcpPacket.parse(cipher.decryptRtcp(packet)),
-    ];
-  }
-
-  void close() {
-    unawaited(client.close());
-    async.elapse(Duration.zero);
-  }
-}
 
 (String, Map<String, Object?>) _voiceServer() => (
   'VOICE_SERVER_UPDATE',
