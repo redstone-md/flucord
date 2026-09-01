@@ -1,0 +1,71 @@
+name: Set up Flutter
+description: >
+  A pinned, checksum-verified Flutter SDK with its engine artifacts and the
+  pub cache restored from the Actions cache. One place for CI and the release,
+  so the two cannot drift apart on the SDK version.
+
+inputs:
+  precache-windows:
+    description: Also download the Windows desktop engine artifacts (needed to build, not to test).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Pin the SDK
+      shell: pwsh
+      run: |
+        # Bump these two together. The checksum is the one Flutter publishes
+        # next to the archive; a mismatch fails the job rather than running
+        # an SDK nobody vouched for.
+        "FLUTTER_VERSION=3.44.7" >> $env:GITHUB_ENV
+        "FLUTTER_SHA256=327b89c2ff612418c1d756efc9636d7811c50e4b50a916d07bc3bdc317ba25e5" >> $env:GITHUB_ENV
+        "FLUTTER_ROOT=$env:RUNNER_TEMP\flutter-sdk\flutter" >> $env:GITHUB_ENV
+        "PUB_CACHE=$env:RUNNER_TEMP\pub-cache" >> $env:GITHUB_ENV
+
+    # The SDK directory after first use, engine artifacts included: the
+    # download is ~1 GB and the first `flutter` run fetches as much again.
+    - name: Restore the Flutter SDK
+      id: sdk
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}\flutter-sdk
+        key: flutter-sdk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-precache-${{ inputs.precache-windows }}-v1
+
+    - name: Install checksum-verified Flutter
+      if: steps.sdk.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $archiveUri = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_$env:FLUTTER_VERSION-stable.zip"
+        $archivePath = Join-Path $env:RUNNER_TEMP "flutter_windows_$env:FLUTTER_VERSION-stable.zip"
+        $sdkRoot = Join-Path $env:RUNNER_TEMP 'flutter-sdk'
+        Invoke-WebRequest -Uri $archiveUri -OutFile $archivePath
+        $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+        if ($actualSha256 -ne $env:FLUTTER_SHA256) {
+          throw "Flutter archive checksum mismatch: $actualSha256"
+        }
+        New-Item -ItemType Directory -Path $sdkRoot -Force | Out-Null
+        Expand-Archive -LiteralPath $archivePath -DestinationPath $sdkRoot
+        Remove-Item -LiteralPath $archivePath
+
+    - name: Put Flutter on the path
+      shell: pwsh
+      run: |
+        (Join-Path $env:FLUTTER_ROOT 'bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Restore the pub cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}\pub-cache
+        key: pub-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
+        restore-keys: |
+          pub-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
+
+    - name: Resolve dependencies
+      shell: pwsh
+      run: |
+        flutter config --no-analytics --no-cli-animations
+        flutter --version
+        if ('${{ inputs.precache-windows }}' -eq 'true') { flutter precache --windows }
+        flutter pub get

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   windows-release:
     name: Build and publish Windows x64
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 90
     defaults:
       run:
@@ -46,26 +46,10 @@ jobs:
             throw "Tag $tag does not resolve to a Git tag or commit."
           }
 
-      - name: Install checksum-verified Flutter
-        run: |
-          $archiveUri = 'https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.7-stable.zip'
-          $expectedSha256 = '327b89c2ff612418c1d756efc9636d7811c50e4b50a916d07bc3bdc317ba25e5'
-          $archivePath = Join-Path $env:RUNNER_TEMP 'flutter_windows_3.44.7-stable.zip'
-          $sdkRoot = Join-Path $env:RUNNER_TEMP 'flutter-sdk'
-          Invoke-WebRequest -Uri $archiveUri -OutFile $archivePath
-          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
-          if ($actualSha256 -ne $expectedSha256) {
-            throw "Flutter archive checksum mismatch: $actualSha256"
-          }
-          New-Item -ItemType Directory -Path $sdkRoot -Force | Out-Null
-          Expand-Archive -LiteralPath $archivePath -DestinationPath $sdkRoot
-          (Join-Path $sdkRoot 'flutter\bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Resolve dependencies
-        run: |
-          flutter config --no-analytics
-          flutter --version
-          flutter pub get
+      - name: Set up Flutter
+        uses: ./.github/actions/setup-flutter
+        with:
+          precache-windows: "true"
 
       - name: Audit public repository history
         run: ./tool/audit_public_repository.ps1
