@@ -178,7 +178,8 @@ final class StreamViewerController extends ChangeNotifier {
       _sessions[key]?.receivedPackets ?? 0;
 
   /// How many complete pictures [key] has produced, which separates
-  /// "packets are arriving" from "pictures are arriving".
+  /// "packets are arriving" from "pictures are arriving". Read on demand:
+  /// listeners are not told about each one.
   int decodedUnitsFor(GoLiveStreamKey key) => _sessions[key]?.decodedUnits ?? 0;
 
   /// How many packets the stream on the stage has received.
@@ -621,11 +622,6 @@ final class StreamViewerController extends ChangeNotifier {
     );
     if (picture == null) return;
     session.decodedUnits++;
-    // TEMP DIAGNOSTICS (remove after the live picture check): proves the
-    // decrypted picture actually reaches the decoder.
-    if (session.decodedUnits == 1) {
-      _diagnose('first picture handed to the decoder for ${key.userId}');
-    }
     // The pacer owns the decode schedule (a picture with no timestamp decodes
     // at once), and it is absent exactly when the decoder is, so the direct
     // call only covers the window before the pacer is installed.
@@ -635,7 +631,14 @@ final class StreamViewerController extends ChangeNotifier {
     } else {
       pacer.submit(picture.bytes, picture.rtpTimestamp);
     }
-    _notify();
+    // The first picture is news to the room: the stream went from arriving
+    // to showing. Every picture after it is not, and telling the room about
+    // each one rebuilt its widget tree at the stream's frame rate. The
+    // pictures themselves travel on [framesFor].
+    if (session.decodedUnits == 1) {
+      _diagnose('first picture handed to the decoder for ${key.userId}');
+      _notify();
+    }
   }
 
   void _acceptError(GoLiveStreamKey key, Object error) {
@@ -731,6 +734,10 @@ final class _WatchedSession {
           timestamp: Duration(microseconds: rtpTimestamp * 1000000 ~/ 90000),
         ),
       ),
+      // The pacer keeps the newest keyframe through an overflow; only a
+      // queue with none in it is dropped whole, and that is what breaks
+      // the references.
+      isKeyframe: DiscordVideoPictureReceiver.carriesIdrSlice,
       onOverflow: () {
         pacerOverflows++;
         if (pacerOverflows <= 3 || pacerOverflows % 20 == 0) {

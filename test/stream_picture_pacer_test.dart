@@ -101,6 +101,85 @@ void main() {
     });
   });
 
+  test('a picture whose slot is far ahead decodes now and re-anchors', () {
+    fakeAsync((async) {
+      final decoded = <int>[];
+      var overflowAsked = 0;
+      final pacer = StreamPicturePacer(
+        submit: (unit, _) => decoded.add(unit.length),
+        now: () => async.elapsed,
+        onOverflow: () => overflowAsked++,
+      );
+      pacer.submit(_unit(1), 0);
+      pacer.submit(_unit(2), _frameTicks);
+      // The sender's clock jumped a second ahead of ours. Queueing this for
+      // a slot a second out, and everything after it behind that, is what
+      // filled the queue and looped the overflow.
+      pacer.submit(_unit(3), 90000);
+      expect(decoded, [1, 2, 3]);
+      // Measured from here: the next picture waits one frame, not a second.
+      pacer.submit(_unit(4), 90000 + _frameTicks);
+      expect(decoded, hasLength(3));
+      async.elapse(const Duration(milliseconds: 60));
+      expect(decoded, [1, 2, 3, 4]);
+      expect(overflowAsked, 0);
+      pacer.dispose();
+    });
+  });
+
+  test('an overflow keeps the newest keyframe and what follows it', () {
+    fakeAsync((async) {
+      final decoded = <int>[];
+      var overflowAsked = 0;
+      final pacer = StreamPicturePacer(
+        submit: (unit, _) => decoded.add(unit.length),
+        now: () => async.elapsed,
+        maxQueue: 5,
+        maxDelay: const Duration(seconds: 1),
+        isKeyframe: (unit) => unit.length == 3,
+        onOverflow: () => overflowAsked++,
+      );
+      pacer.submit(_unit(10), 0);
+      for (var index = 1; index <= 5; index++) {
+        pacer.submit(_unit(index), index * _frameTicks);
+      }
+      pacer.submit(_unit(6), 6 * _frameTicks);
+      // Everything before the keyframe went; the keyframe decodes now and
+      // the rest follow it at their pace. The decoder's references are whole,
+      // so nobody has to ask the sender for anything.
+      expect(decoded, [10, 3]);
+      expect(overflowAsked, 0);
+      async.elapse(const Duration(seconds: 1));
+      expect(decoded, [10, 3, 4, 5, 6]);
+      pacer.dispose();
+    });
+  });
+
+  test('an overflow met by a keyframe in hand asks for nothing', () {
+    fakeAsync((async) {
+      final decoded = <int>[];
+      var overflowAsked = 0;
+      final pacer = StreamPicturePacer(
+        submit: (unit, _) => decoded.add(unit.length),
+        now: () => async.elapsed,
+        maxQueue: 3,
+        maxDelay: const Duration(seconds: 1),
+        isKeyframe: (unit) => unit.length == 9,
+        onOverflow: () => overflowAsked++,
+      );
+      pacer.submit(_unit(1), 0);
+      for (var index = 1; index <= 3; index++) {
+        pacer.submit(_unit(2), index * _frameTicks);
+      }
+      // The queue held no keyframe, but the picture that overflowed it is
+      // one: the references it leaves behind are whole.
+      pacer.submit(_unit(9), 4 * _frameTicks);
+      expect(decoded, [1, 9]);
+      expect(overflowAsked, 0);
+      pacer.dispose();
+    });
+  });
+
   test('a buffer that overflows drops the queue and asks for a keyframe', () {
     fakeAsync((async) {
       final decoded = <int>[];
@@ -109,6 +188,8 @@ void main() {
         submit: (unit, _) => decoded.add(unit.length),
         now: () => async.elapsed,
         maxQueue: 5,
+        maxDelay: const Duration(seconds: 1),
+        isKeyframe: (_) => false,
         onOverflow: () => overflowAsked++,
       );
       pacer.submit(_unit(0), 0);

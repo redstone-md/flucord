@@ -119,6 +119,34 @@ void main() {
     );
   });
 
+  test('the room is told about the first picture, not about every one', () async {
+    final repository = _FakeRepository();
+    final decoder = _FakeDecoder();
+    final packets = StreamController<IncomingVideoPacket>();
+    addTearDown(packets.close);
+    final controller = StreamViewerController(
+      repositoryProvider: () => repository,
+      decoderFactory: () => decoder,
+    );
+    addTearDown(controller.dispose);
+    await controller.watch(_key, packets: packets.stream);
+
+    var notified = 0;
+    controller.addListener(() => notified++);
+    for (var picture = 0; picture < 100; picture++) {
+      for (final packet in _packetsFor()) {
+        packets.add(packet);
+      }
+    }
+    await Future<void>.delayed(Duration.zero);
+
+    // A stream that started showing is news; a stream that is still showing
+    // is not, and a room rebuilt per picture follows the frame rate.
+    expect(decoder.submitted, hasLength(100));
+    expect(controller.decodedUnits, 100);
+    expect(notified, 1);
+  });
+
   test('a picture still arriving is not submitted yet', () async {
     final repository = _FakeRepository();
     final decoder = _FakeDecoder();

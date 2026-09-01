@@ -18,6 +18,7 @@ import 'discord_voice_transport_cipher.dart';
 import 'discord_voice_udp_transport.dart';
 import 'discord_voice_websocket.dart';
 import '../../app_log.dart';
+import '../../monotonic_clock.dart';
 
 /// A connection on Discord's voice plane.
 ///
@@ -93,6 +94,7 @@ final class DiscordVoiceGatewayClient
     DiscordVoiceUdpTransport? udpTransport,
     bool carriesVideo = false,
     String? streamKey,
+    Duration Function()? now,
   }) : _protocol = DiscordVoiceGatewayProtocol(
          credentials: credentials,
          maxDaveProtocolVersion: maxDaveProtocolVersion,
@@ -111,7 +113,8 @@ final class DiscordVoiceGatewayClient
              ),
        _socketConnector =
            socketConnector ?? const IoDiscordVoiceSocketConnector(),
-       _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport() {
+       _udpTransport = udpTransport ?? IoDiscordVoiceUdpTransport(),
+       _now = now ?? monotonicNow {
     _mediaTransport = DiscordVoiceMediaTransport(
       incomingFrames: audioPackets,
       encryptDave: encryptDaveAudioFrame,
@@ -121,6 +124,15 @@ final class DiscordVoiceGatewayClient
       sendSpeaking: setSpeaking,
       userForSsrc: userIdForSsrc,
     );
+    // Read from the start, whoever is listening: the reorder state and the
+    // retransmission asks belong to the connection, not to a subscriber.
+    _videoIntake = _decryptedPackets
+        .where(
+          (frame) =>
+              frame.header.payloadType !=
+              DiscordRtpHeader.discordAudioPayloadType,
+        )
+        .listen(_acceptVideoPacket);
   }
 
   final DiscordVoiceGatewayProtocol _protocol;
@@ -171,118 +183,98 @@ final class DiscordVoiceGatewayClient
         frame.header.payloadType == DiscordRtpHeader.discordAudioPayloadType,
   );
 
-  /// Somebody else's camera, paired with whoever is sending it.
+  /// Somebody else's pictures, put back in order and paired with whoever is
+  /// sending them.
   ///
-  /// A packet whose SSRC nobody has claimed is dropped: it belongs to a peer
-  /// whose opcode 12 has not arrived, and guessing the owner would draw one
-  /// person's face over another's tile.
+  /// Built once and shared: every subscriber reads the same ordered stream,
+  /// so a retransmission is restored once and the reorder state is touched
+  /// once per packet, however many are listening.
   ///
   /// Still encrypted for the room, when the room has a group. The transport
   /// cipher gets these packets off the wire; the group's cipher is a second
   /// layer that covers a whole picture, so it is applied by whoever puts the
   /// packets back together and not here, where only one packet is in hand.
   @override
-  Stream<(String, DiscordRtpFrame)> get videoPackets => _decryptedPackets
-      .where(
-        (frame) =>
-            frame.header.payloadType !=
-            DiscordRtpHeader.discordAudioPayloadType,
-      )
-      .expand(_reorderVideo)
-      .map(
-        (frame) =>
-            (_protocol.userIdForVideoSsrc(frame.header.ssrc), frame),
-      )
-      .where((pair) => pair.$1 != null)
-      .map((pair) => (pair.$1!, pair.$2));
+  Stream<(String, DiscordRtpFrame)> get videoPackets => _orderedVideo.stream;
 
-  /// Puts a sender's video packets back into RTP sequence order.
+  final StreamController<(String, DiscordRtpFrame)> _orderedVideo =
+      StreamController.broadcast();
+  StreamSubscription<DiscordRtpFrame>? _videoIntake;
+
+  /// One sender's receive state per video SSRC.
+  final Map<int, _VideoReceive> _video = {};
+  Timer? _recoveryTimer;
+
+  /// The clock the recovery runs on: a hole's age, the ask interval, the
+  /// keyframe rate limit and the round trip are all measured on it.
+  final Duration Function() _now;
+
+  /// How long the last heartbeat took to be acknowledged, once one has been.
+  Duration? _roundTrip;
+  Duration? _heartbeatSentAt;
+
+  /// How often open holes are looked at: the floor of the ask interval, and
+  /// the granularity the retransmission window closes at.
+  static const _recoveryTick = Duration(milliseconds: 40);
+
+  /// How long a hole waits for its retransmission: two round trips, so a
+  /// NACK lost once still has time to be answered.
+  Duration get _retransmitWindow {
+    const floor = Duration(milliseconds: 100);
+    const ceiling = Duration(milliseconds: 500);
+    final roundTrip = _roundTrip;
+    if (roundTrip == null) return floor;
+    final window = roundTrip * 2;
+    if (window < floor) return floor;
+    return window > ceiling ? ceiling : window;
+  }
+
+  /// How often an unanswered ask is repeated: once a round trip, no faster
+  /// than the recovery tick.
+  Duration get _nackInterval {
+    final roundTrip = _roundTrip;
+    return roundTrip == null || roundTrip < _recoveryTick
+        ? _recoveryTick
+        : roundTrip;
+  }
+
+  /// Accepts one packet that is not audio.
   ///
-  /// A picture is one sender's fragments in one sequence, and UDP does not
-  /// promise to keep the order: a keyframe arrives as a burst of a dozen
-  /// fragments, and one swap scrambles bytes the group cipher will not open.
-  /// Audio reorders inside the media transport; video does it here. In-order
-  /// frames pass straight through, so nothing is added to their latency.
-  Iterable<DiscordRtpFrame> _reorderVideo(DiscordRtpFrame frame) {
+  /// A retransmission (RFC 4588) is put back in its original's place first.
+  /// After that a packet is owned or dropped. An SSRC nobody has claimed with
+  /// opcode 12 belongs to a participant whose announcement has not arrived,
+  /// or is the retransmission SSRC carrying something that is not one.
+  /// Neither opens a reorder buffer: guessing the owner would draw one
+  /// person's face over another's tile, and a buffer on the retransmission
+  /// stream asks the server for sequence numbers that carry no picture.
+  void _acceptVideoPacket(DiscordRtpFrame frame) {
+    var retransmitted = false;
     if (frame.header.payloadType ==
         DiscordRtpHeader.discordVideoRtxPayloadType) {
       final restored = _restoreRetransmission(frame);
-      if (restored == null) return const [];
+      if (restored == null) return;
       frame = restored;
-      // TEMP DIAGNOSTICS (remove after the live picture check).
-      if (_rtxRestored++ < 5) {
-        _diagnose(
-          'video retransmission restored: seq ${frame.header.sequence} '
-          'ssrc ${frame.header.ssrc} len ${frame.payload.length}',
-        );
-      }
+      retransmitted = true;
     }
-    // TEMP DIAGNOSTICS (remove after the live picture check): the sender
-    // rounds some packets up with RTP padding, which used to ride along and
-    // break the group cipher's byte count.
-    if (frame.header.padding && _paddedPackets++ < 5) {
-      _diagnose(
-        'video packet carried RTP padding: seq ${frame.header.sequence} '
-        'len ${frame.payload.length}',
-      );
-    }
-    final buffer = _videoReorder.putIfAbsent(
-      frame.header.ssrc,
-      // Wider than audio's: one dropped fragment costs a whole picture, and
-      // holding a few packets longer costs nothing on an in-order stream.
-      () => DiscordRtpReorderBuffer(maxReorderDistance: 8),
-    );
-    // A packet that jumped ahead of the expected one just exposed a hole.
-    // Ask for it now, while the hole is still inside the buffer's window and
-    // a retransmission can still be spliced in: asking only when the buffer
-    // finally gives up on the gap is asking too late, because by then it has
-    // moved its waiting point past the hole and a restored packet cannot be
-    // accepted any more. That used to turn every small loss into a whole
-    // lost picture, and every lost picture into a keyframe request.
-    final expected = buffer.nextSequence;
-    if (expected != null &&
-        frame.header.payloadType !=
-            DiscordRtpHeader.discordVideoRtxPayloadType) {
-      final ahead = (frame.header.sequence - expected) & 0xffff;
-      if (ahead > 0 && ahead < 0x8000) {
-        final pending = _nackPending.putIfAbsent(frame.header.ssrc, () => {});
-        for (var missing = expected;
-            missing != frame.header.sequence;
-            missing = (missing + 1) & 0xffff) {
-          pending.putIfAbsent(missing, () => 0);
-        }
-        _ensureNackTimer();
+    final ssrc = frame.header.ssrc;
+    if (_protocol.userIdForVideoSsrc(ssrc) == null) return;
+    final receive = _video.putIfAbsent(ssrc, () => _newVideoReceive(ssrc));
+    receive.packets++;
+    if (retransmitted) {
+      if (!receive.buffer.wants(frame.header.sequence)) {
+        receive.retransmissionsLate++;
+        return;
       }
+      receive.retransmissionsUsed++;
     }
-    final ordered = buffer.add(frame);
-    // TEMP DIAGNOSTICS (remove after the live picture check): they show how
-    // often the network really swaps or loses video packets.
-    if (ordered.isEmpty) {
-      if (_reorderDrops++ < 5) {
-        _diagnose(
-          'video packet too late to order: '
-          'seq ${frame.header.sequence} ssrc ${frame.header.ssrc}',
-        );
-      }
-    } else {
-      if (ordered.first.missingFramesBefore > 0 && _reorderGaps < 5) {
-        _reorderGaps++;
-        _diagnose(
-          'video gap of ${ordered.first.missingFramesBefore} before '
-          'seq ${ordered.first.frame.header.sequence}',
-        );
-      }
-      _askForLostPackets(ordered.first);
-    }
-    // What arrived is no longer owed, even if a NACK for it is still in
-    // flight.
-    _nackPending[frame.header.ssrc]?.removeWhere(
-      (sequence, _) => ordered.any(
-        (entry) => entry.frame.header.sequence == sequence,
-      ),
-    );
-    return [for (final entry in ordered) entry.frame];
+    _release(receive, receive.buffer.add(frame));
+    _askForHoles(receive);
   }
+
+  _VideoReceive _newVideoReceive(int ssrc) => _VideoReceive(
+    ssrc,
+    DiscordRtpReorderBuffer(holdTime: () => _retransmitWindow, now: _now),
+  );
 
   /// Puts a retransmission back in the original packet's place.
   ///
@@ -303,94 +295,119 @@ final class DiscordVoiceGatewayClient
     );
   }
 
-  /// Asks the media server to send again what never arrived (RFC 4585): the
-  /// hole before [first]'s sequence number, where the reorder buffer skipped
-  /// over packets the network dropped.
-  void _askForLostPackets(DiscordOrderedRtpFrame first) {
-    if (first.missingFramesBefore <= 0) return;
-    final ssrc = first.frame.header.ssrc;
-    final sequence = first.frame.header.sequence;
-    final pending = _nackPending.putIfAbsent(ssrc, () => {});
-    for (var missing = (sequence - first.missingFramesBefore) & 0xffff;
-        missing != sequence;
-        missing = (missing + 1) & 0xffff) {
-      pending.putIfAbsent(missing, () => 0);
+  /// Hands ordered packets on, and pays a keyframe ask that was held back
+  /// once no hole is open any more. An ask the rate limit refuses stays
+  /// owed, and is paid on a later packet.
+  void _release(_VideoReceive receive, List<DiscordOrderedRtpFrame> ordered) {
+    final userId = _protocol.userIdForVideoSsrc(receive.ssrc);
+    for (final entry in ordered) {
+      receive.holesGivenUp += entry.missingFramesBefore;
+      if (userId != null && !_orderedVideo.isClosed) {
+        _orderedVideo.add((userId, entry.frame));
+      }
     }
-    _ensureNackTimer();
+    if (receive.keyframeOwed &&
+        !receive.buffer.hasHoles &&
+        _sendKeyframeAsk(receive)) {
+      receive.keyframeOwed = false;
+    }
   }
 
-  void _ensureNackTimer() {
-    _nackTimer ??= Timer.periodic(
-      // Faster than a human notices, slower than the wire needs to answer.
-      const Duration(milliseconds: 40),
-      (_) => _flushNacks(),
-    );
+  /// Asks the media server for what is missing (RFC 4585): at once for a
+  /// hole a packet just exposed, then every hole again each round trip
+  /// while any stays open. Stops by itself: a hole closes when its packet
+  /// lands or when the window gives up on it.
+  void _askForHoles(_VideoReceive receive) {
+    final holes = receive.buffer.missingSequences;
+    if (holes.isEmpty) {
+      receive.asked.clear();
+      return;
+    }
+    final now = _now();
+    final fresh = holes.where((hole) => !receive.asked.contains(hole)).toList();
+    receive.holes += fresh.length;
+    if (now >= receive.nextAsk) {
+      receive.nextAsk = now + _nackInterval;
+      receive.asked
+        ..clear()
+        ..addAll(holes);
+      _sendNack(receive.ssrc, holes);
+    } else if (fresh.isNotEmpty) {
+      receive.asked.addAll(fresh);
+      _sendNack(receive.ssrc, fresh);
+    }
+    _recoveryTimer ??= Timer.periodic(_recoveryTick, (_) => _recover());
   }
 
-  /// Sends what is still owed, and gives up on sequences the server has not
-  /// answered after a few asks: a packet lost that hard is lost.
-  void _flushNacks() {
+  /// Runs while any hole is open: gives up on holes past their window, and
+  /// repeats the asks that are due.
+  void _recover() {
+    var anyHoles = false;
+    for (final receive in _video.values) {
+      if (!receive.buffer.hasHoles) continue;
+      _release(receive, receive.buffer.releaseExpired());
+      _askForHoles(receive);
+      anyHoles |= receive.buffer.hasHoles;
+    }
+    if (!anyHoles) {
+      _recoveryTimer?.cancel();
+      _recoveryTimer = null;
+    }
+  }
+
+  /// How many sequences one ask names. A hole wider than this is a sender
+  /// restart or a whole burst gone, not something a retransmission mends,
+  /// and an ask sized to it would not fit a datagram.
+  static const _maxNackedSequences = 128;
+
+  void _sendNack(int ssrc, List<int> sequences) {
     final cipher = _transportCipher;
     final session = _protocol.session;
     if (cipher == null || session == null || _closing || _failed) return;
-    var anythingPending = false;
-    for (final ssrc in _nackPending.keys.toList()) {
-      final pending = _nackPending[ssrc]!;
-      if (pending.isEmpty) {
-        _nackPending.remove(ssrc);
-        continue;
-      }
-      anythingPending = true;
-      // One increasing run: the pending window is small, so unwrapping it
-      // around any one member puts it in order.
-      final anchor = pending.keys.first;
-      final ordered = pending.keys.toList()
-        ..sort(
-          (a, b) => ((a - anchor) & 0xffff).compareTo((b - anchor) & 0xffff),
-        );
-      final asked = ordered.take(32).toList();
-      final packet = DiscordRtcpPacket.nack(
-        senderSsrc: session.ssrc,
-        mediaSsrc: ssrc,
-        sequences: asked,
-      );
-      // TEMP DIAGNOSTICS (remove after the live picture check).
-      if (_nacksSent++ < 5) {
-        _diagnose('nack sent for ${asked.join(',')} (ssrc $ssrc)');
-      }
-      try {
-        _udpTransport.send(cipher.encryptRtcp(packet));
-      } on Object {
-        // A feedback packet that cannot go out is a dead socket, and the
-        // socket's own path says so when the real media fails too.
-        return;
-      }
-      for (final sequence in asked) {
-        final tries = pending[sequence]! + 1;
-        if (tries >= 8) {
-          pending.remove(sequence);
-        } else {
-          pending[sequence] = tries;
-        }
-      }
-    }
-    if (!anythingPending) {
-      _nackTimer?.cancel();
-      _nackTimer = null;
+    final packet = DiscordRtcpPacket.nack(
+      senderSsrc: session.ssrc,
+      mediaSsrc: ssrc,
+      sequences: sequences.take(_maxNackedSequences).toList(),
+    );
+    try {
+      _udpTransport.send(cipher.encryptRtcp(packet));
+    } on Object {
+      // A feedback packet that cannot go out is a dead socket, and the
+      // socket's own path says so when the real media fails too.
     }
   }
 
-  final Map<int, DiscordRtpReorderBuffer> _videoReorder = {};
-  final Map<int, Map<int, int>> _nackPending = {};
-  Timer? _nackTimer;
-  int _reorderDrops = 0;
-  int _plisSent = 0;
+  /// One line per sender every keepalive: what the recovery did since the
+  /// last one, so a log answers whether it worked without per-packet noise.
+  void _reportVideoRecovery() {
+    for (final receive in _video.values) {
+      if (receive.packets == 0 && receive.keyframeAsks == 0) continue;
+      _diagnose(
+        'video ${receive.ssrc}: ${receive.packets} packets, '
+        '${receive.holes} holes, retransmissions '
+        '${receive.retransmissionsUsed} used ${receive.retransmissionsLate} '
+        'late, ${receive.holesGivenUp} given up, keyframe asks '
+        '${receive.keyframeAsks} sent ${receive.keyframesHeld} held',
+      );
+      receive.resetCounters();
+    }
+  }
+
+  /// Measures the round trip from the heartbeat this client sends to the
+  /// acknowledgement Discord answers it with. No probe of its own: the
+  /// heartbeat is already there, and one measurement every interval is
+  /// enough for a window that only needs the order of magnitude.
+  void _measureRoundTrip() {
+    final sentAt = _heartbeatSentAt;
+    if (sentAt == null) return;
+    _heartbeatSentAt = null;
+    _roundTrip = _now() - sentAt;
+  }
+
+  /// The full intra request's command sequence: one more per ask, never
+  /// reset, so the sender can tell a repeat from a new one (RFC 5104).
+  int _fullIntraRequests = 0;
   int _pliBlocked = 0;
-  int _reorderGaps = 0;
-  // TEMP DIAGNOSTICS (remove after the live picture check).
-  int _paddedPackets = 0;
-  int _rtxRestored = 0;
-  int _nacksSent = 0;
 
   VoiceTransportSession? get session => _protocol.session;
   String? userIdForSsrc(int ssrc) => _protocol.userIdForSsrc(ssrc);
@@ -472,6 +489,7 @@ final class DiscordVoiceGatewayClient
     }
     final data = payload['d'];
     final opcode = payload['op'];
+    if (opcode == DiscordVoiceGatewayOpcode.heartbeatAck) _measureRoundTrip();
     if (opcode is int && data is Map) {
       try {
         _executeDaveCommands(
@@ -578,8 +596,9 @@ final class DiscordVoiceGatewayClient
       return;
     }
     _executeDaveCommands(daveCommands);
-    _videoReorder.clear();
-    _nackPending.clear();
+    _video.clear();
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
     _mediaTransport.configure(
       ssrc: session.ssrc,
       daveEnabled: session.daveProtocolVersion > 0,
@@ -626,10 +645,10 @@ final class DiscordVoiceGatewayClient
   /// counter on the same socket for exactly this.
   void _startUdpKeepalive() {
     _keepaliveTimer?.cancel();
-    _keepaliveTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _sendKeepalive(),
-    );
+    _keepaliveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _sendKeepalive();
+      _reportVideoRecovery();
+    });
   }
 
   void _sendKeepalive() {
@@ -712,8 +731,28 @@ final class DiscordVoiceGatewayClient
     );
   }
 
+  /// Asks the sender for a keyframe, unless a retransmission is still
+  /// expected on that stream: a hole inside its window may yet be filled,
+  /// and the ask is paid when the last hole closes instead, either way it
+  /// closes. Rate limited to one a second per stream, so a burst of loss
+  /// does not become a burst of asks.
   @override
   void sendPictureLoss({required int mediaSsrc}) {
+    final receive = _video.putIfAbsent(
+      mediaSsrc,
+      () => _newVideoReceive(mediaSsrc),
+    );
+    if (receive.buffer.hasHoles) {
+      receive.keyframeOwed = true;
+      receive.keyframesHeld++;
+      return;
+    }
+    _sendKeyframeAsk(receive);
+  }
+
+  /// Answers whether the ask left: the rate limit refuses one inside a
+  /// second of the last.
+  bool _sendKeyframeAsk(_VideoReceive receive) {
     final cipher = _transportCipher;
     final session = _protocol.session;
     if (cipher == null || session == null) {
@@ -721,26 +760,27 @@ final class DiscordVoiceGatewayClient
         _diagnose('picture loss blocked: cipher ${cipher != null}, '
             'session ${session != null}');
       }
-      return;
+      return true;
     }
-    // TEMP DIAGNOSTICS: proves the keyframe ask leaves at all. A sender that
-    // never answers it leaves references broken and the picture smeared.
-    if (_plisSent++ < 3 || _plisSent % 10 == 0) {
-      _diagnose('picture loss indication sent for $mediaSsrc ($_plisSent)');
-    }
+    final now = _now();
+    final last = receive.lastKeyframeAsk;
+    if (last != null && now - last < const Duration(seconds: 1)) return false;
+    receive.lastKeyframeAsk = now;
+    receive.keyframeAsks++;
+    _fullIntraRequests++;
     try {
       final feedback = [
         cipher.encryptRtcp(
           DiscordRtcpPacket.pictureLoss(
             senderSsrc: session.ssrc,
-            mediaSsrc: mediaSsrc,
+            mediaSsrc: receive.ssrc,
           ),
         ),
         cipher.encryptRtcp(
           DiscordRtcpPacket.fullIntraRequest(
             senderSsrc: session.ssrc,
-            mediaSsrc: mediaSsrc,
-            commandSequence: _plisSent,
+            mediaSsrc: receive.ssrc,
+            commandSequence: _fullIntraRequests,
           ),
         ),
       ];
@@ -751,6 +791,7 @@ final class DiscordVoiceGatewayClient
       // Feedback that cannot leave is a dead socket, and the media path
       // reports that when the real media fails too.
     }
+    return true;
   }
 
   /// Encrypts one whole access unit for the room's group, when there is one.
@@ -1067,6 +1108,9 @@ final class DiscordVoiceGatewayClient
             'host=${_protocol.credentials.endpoint}',
       );
     }
+    if (payload['op'] == DiscordVoiceGatewayOpcode.heartbeat) {
+      _heartbeatSentAt = _now();
+    }
     try {
       socket.send(jsonEncode(payload));
     } on Object catch (error) {
@@ -1095,14 +1139,55 @@ final class DiscordVoiceGatewayClient
     _heartbeatTimer?.cancel();
     _keepaliveTimer?.cancel();
     _reconnectTimer?.cancel();
+    _recoveryTimer?.cancel();
+    await _videoIntake?.cancel();
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();
+    await _orderedVideo.close();
     _protocol.dropSession();
     _mediaTransport.reset();
     _replaceTransportCipher(null);
     _daveController?.dispose();
     _emitStatus(VoiceConnectionStatus.disconnected);
     await _events.close();
+  }
+}
+
+/// What one sender's stream needs to recover a lost packet: the buffer that
+/// waits for the retransmission, the asks in flight, and the counts the
+/// recovery line reports.
+final class _VideoReceive {
+  _VideoReceive(this.ssrc, this.buffer);
+
+  final int ssrc;
+  final DiscordRtpReorderBuffer buffer;
+
+  /// Holes already asked for, so a packet that exposes nothing new does not
+  /// ask again ahead of the round trip.
+  final Set<int> asked = {};
+  Duration nextAsk = Duration.zero;
+
+  /// A keyframe ask held back while a hole was open, or by the rate limit,
+  /// to be paid when the last hole has closed and the limit allows.
+  bool keyframeOwed = false;
+  Duration? lastKeyframeAsk;
+
+  int packets = 0;
+  int holes = 0;
+  int retransmissionsUsed = 0;
+  int retransmissionsLate = 0;
+  int holesGivenUp = 0;
+  int keyframeAsks = 0;
+  int keyframesHeld = 0;
+
+  void resetCounters() {
+    packets = 0;
+    holes = 0;
+    retransmissionsUsed = 0;
+    retransmissionsLate = 0;
+    holesGivenUp = 0;
+    keyframeAsks = 0;
+    keyframesHeld = 0;
   }
 }

@@ -136,7 +136,7 @@ final class DiscordVideoPictureReceiver {
         // keyframe proves the references are whole again, so the keyframe
         // ask keeps going until one arrives.
         if (_referencesBroken) {
-          if (_carriesIdrSlice(plain)) {
+          if (carriesIdrSlice(plain)) {
             _referencesBroken = false;
             _keyframesRecovered++;
             if (_keyframesRecovered <= 3 || _keyframesRecovered % 10 == 0) {
@@ -205,8 +205,9 @@ final class DiscordVideoPictureReceiver {
   /// Whether the access unit carries an IDR slice, the only thing that
   /// restarts a decoder's references (ITU-T H.264 Table 7-1, nal_unit_type 5).
   /// A keyframe usually leads with parameter sets, so a few NALs are looked
-  /// at, not just the first.
-  static bool _carriesIdrSlice(Uint8List unit) {
+  /// at, not just the first. Public because the pacer needs the same verdict
+  /// to keep a keyframe through an overflow.
+  static bool carriesIdrSlice(Uint8List unit) {
     var index = 0;
     var nals = 0;
     while (index < unit.length && nals < 8) {
