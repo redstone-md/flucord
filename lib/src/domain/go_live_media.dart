@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 /// What the far end's feedback asks of the encoder.
 ///
 /// The share is sent from wherever its connection runs, and the encoder runs
@@ -19,13 +17,4 @@ final class GoLiveBitrateCommand extends GoLiveEncoderCommand {
   const GoLiveBitrateCommand(this.bitsPerSecond);
 
   final int bitsPerSecond;
-}
-
-/// The share's live connection, as far as the rest of the client steers it.
-abstract interface class GoLiveSender {
-  /// A new bitrate target, from a quality setting rather than from loss.
-  void retarget(int bitrate);
-
-  /// One 20 ms Opus frame of the shared sound.
-  void sendOpusFrame(Uint8List opus);
 }

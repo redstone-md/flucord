@@ -25,8 +25,16 @@ final class StreamBitrateAdapter {
   /// The lowest the bitrate goes, as a fraction of the target.
   static const floorRatio = 0.2;
 
-  final int _target;
+  int _target;
   int _bitrate;
+
+  /// Points the adapter at a new target, keeping the same fraction of it:
+  /// the loss the link reported still holds, and a settings change is no
+  /// reason to relearn it.
+  void retarget(int target) {
+    _bitrate = (_bitrate / _target * target).round();
+    _target = target;
+  }
 
   int get target => _target;
 

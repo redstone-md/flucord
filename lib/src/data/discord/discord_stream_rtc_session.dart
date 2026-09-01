@@ -1,22 +1,19 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-
 import '../../domain/go_live_stream.dart';
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
-import '../../domain/video_encoder.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_socket_factory.dart';
 import '../../app_log.dart';
 
-/// One Go Live stream's RTC connection.
+/// The connection one watched stream arrives on.
 ///
 /// A stream is not carried on the call's connection. Discord answers
-/// `STREAM_CREATE` and `STREAM_WATCH` with an endpoint and a token of their
-/// own, and the pictures — sent or received — only ever cross that second
-/// socket. Everything below the endpoint is the voice transport already in
+/// `STREAM_WATCH` with an endpoint and a token of its own, and the pictures
+/// only ever cross that second socket. Everything below the endpoint is the voice transport already in
 /// place: the same handshake, the same UDP discovery, the same cipher.
 ///
 /// Which DAVE configuration the socket identifies with is not decided here:
@@ -26,24 +23,12 @@ final class DiscordStreamRtcSession {
     required this.key,
     required VoiceServerCredentials credentials,
     required DiscordVoiceSocketFactory socketFactory,
-
-    /// Whether this is the connection this account sends its share on, rather
-    /// than one it watches a stream on.
-    ///
-    /// One key carries two connections while this account previews itself: the
-    /// one the pictures go out on and the one they come back in on. Discord
-    /// answers a create and a watch with the same endpoint shape, so nothing
-    /// about the key tells them apart (ADR-0001).
-    this.sending = false,
   }) : _credentials = credentials,
        _socketFactory = socketFactory;
 
   final GoLiveStreamKey key;
   final VoiceServerCredentials _credentials;
   final DiscordVoiceSocketFactory _socketFactory;
-
-  /// Whether this account's share is sent on this connection.
-  final bool sending;
 
   final StreamController<(String, DiscordRtpFrame)> _video =
       StreamController.broadcast();
@@ -107,7 +92,6 @@ final class DiscordStreamRtcSession {
   /// the connection a fresh state, and its earlier wants are not assumed to
   /// have survived.
   void _askQuality() {
-    if (sending) return;
     final ssrc = _wantsSsrc;
     _client?.sendMediaSinkWants(
       perSsrc: ssrc == null ? const {} : {ssrc: _wantedQuality},
@@ -125,53 +109,23 @@ final class DiscordStreamRtcSession {
     );
     _client = client;
     _clientEvents = client.events.listen(_onEvent);
-    _videoPackets = client.videoPackets.listen(
-      (packet) {
-        final ssrc = packet.$2.header.ssrc;
-        _videoSsrc = ssrc;
-        // A picture names the sender's video SSRC, and the ask on ready
-        // could only say "any", which does not cover a stream the server
-        // already knows. The first picture is where the ask gets specific.
-        if (_wantsSsrc != ssrc) {
-          _wantsSsrc = ssrc;
-          _askQuality();
-        }
-        _video.add(packet);
-      },
-      onError: _video.addError,
-    );
+    _videoPackets = client.videoPackets.listen((packet) {
+      final ssrc = packet.$2.header.ssrc;
+      _videoSsrc = ssrc;
+      // A picture names the sender's video SSRC, and the ask on ready
+      // could only say "any", which does not cover a stream the server
+      // already knows. The first picture is where the ask gets specific.
+      if (_wantsSsrc != ssrc) {
+        _wantsSsrc = ssrc;
+        _askQuality();
+      }
+      _video.add(packet);
+    }, onError: _video.addError);
     _audioFrames = client.remoteAudio.listen(
       _audio.add,
       onError: _audio.addError,
     );
     await client.connect();
-  }
-
-  /// Sends one encrypted video frame, answering how many bytes went out.
-  ///
-  /// Throws when the connection is not up: a caller that sends before the
-  /// endpoint answered would be encrypting against a cipher that does not
-  /// exist yet, and silently dropping the frame would look like a stream that
-  /// opened and showed nothing.
-  int sendVideoFrame(DiscordRtpFrame frame) {
-    final client = _client;
-    if (client == null) {
-      throw StateError('Discord stream transport is not ready');
-    }
-    return client.sendVideoFrame(frame);
-  }
-
-  /// Encrypts one whole picture for this stream's group, before the caller
-  /// packetises it.
-  Uint8List encryptVideoGroupFrame({
-    required int ssrc,
-    required Uint8List frame,
-  }) {
-    final client = _client;
-    if (client == null) {
-      throw StateError('Discord stream transport is not ready');
-    }
-    return client.encryptVideoForGroup(ssrc: ssrc, frame: frame);
   }
 
   /// Decrypts one whole picture for this stream's group, after the caller has
@@ -185,16 +139,6 @@ final class DiscordStreamRtcSession {
       throw StateError('Discord stream transport is not ready');
     }
     return client.decryptVideoGroupFrame(userId: userId, picture: picture);
-  }
-
-  /// Declares the video SSRCs on this connection.
-  bool announceVideo({
-    required bool enabled,
-    required VideoEncoderSettings settings,
-  }) {
-    final client = _client;
-    if (client == null) return false;
-    return client.announceVideo(enabled: enabled, settings: settings);
   }
 
   Future<void> close() async {
@@ -216,7 +160,7 @@ final class DiscordStreamRtcSession {
       _diagnose(
         'ready',
         'ssrc ${event.session.ssrc} '
-        'dave ${event.session.daveProtocolVersion}',
+            'dave ${event.session.daveProtocolVersion}',
       );
       // The media server forwards no video until a receiver asks for it, so
       // the ask goes out before any picture is expected on the connection.

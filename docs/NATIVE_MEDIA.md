@@ -40,21 +40,32 @@ every report and announces a new shape to Discord; the transport keeps the
 RTP clock running forward across the restart.
 
 The share is sent from an isolate of its own, the way Discord runs media on a
-thread of its own. `GoLiveMediaIsolate` hosts the share's whole connection on
-a worker: the signalling socket, the DAVE group, the packetiser, the pacer,
-the transport cipher and the UDP socket, wrapped by `GoLiveSendingClient`,
-which announces the share and then sends the encoder's pictures on it by
-itself. The native encoder delivers straight to that isolate
-(`VideoFrameSinkControl`; the hub is built with the isolate as its share frame
-destination, so no address passes through the application layer), and the
-main isolate keeps a proxy per connection
-that speaks the client interface the stream plane already dials. Only what
-the encoder must do crosses back: a keyframe a viewer needs, a bitrate the
-loss allows. Before this, every stage from the frame copy to the per-packet
-AES-GCM ran on the UI isolate, and a long build or a garbage collection held
-the send path for hundreds of milliseconds at a time, which reached the
-viewer as a freeze followed by a burst. The worker echoes each frame back to
-the hub, so the clip buffer keeps recording a share.
+thread of its own. One module, the Sender (`GoLiveSender`, implemented by
+`GoLiveWireSender`), owns the whole of sending: opened once per sender
+endpoint with the connection's credentials, the stream key and the settings
+the capture runs at, it dials, announces the share on its own ready, builds
+the transport on the announced SSRC (and rebuilds it when a reconnect hands
+out a new one), answers retransmission asks and picture-loss indications,
+follows the loss the media server reports with the bitrate adapter, gates the
+share's sound on readiness, and writes the pace line. `GoLiveMediaIsolate` is
+the Sender factory in the app: it hosts each Sender on a worker isolate (the
+signalling socket, the DAVE group, the packetiser, the pacer, the transport
+cipher and the UDP socket), and the native encoder delivers straight to that
+isolate (`VideoFrameSinkControl`; the hub is built with the isolate as its
+share frame destination, so no address passes through the application
+layer). The main isolate keeps a proxy per Sender that speaks the Sender
+interface and nothing else; only what the encoder must do crosses back: a
+keyframe a viewer needs, a bitrate the loss allows. The tests run the same
+Sender in-process (`InProcessGoLiveMediaPlane`). Which endpoint is the
+sender's is decided by the RTC service from the pending own-key watches
+(ADR-0001); the stream controller opens the Sender on it with the running
+settings, forwards each settings change as a reshape, and asks for the
+self-preview when the Sender reports ready. Before the isolate, every stage
+from the frame copy to the per-packet AES-GCM ran on the UI isolate, and a
+long build or a garbage collection held the send path for hundreds of
+milliseconds at a time, which reached the viewer as a freeze followed by a
+burst. The worker echoes each frame back to the hub, so the clip buffer keeps
+recording a share.
 
 The share's sound is captured from the machine's output (WASAPI loopback),
 framed into 20 ms stereo Opus on the main isolate, and handed to the share's

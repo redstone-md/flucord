@@ -62,7 +62,6 @@ import 'application/window_visible.dart';
 import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'data/discord/go_live_media_isolate.dart';
-import 'data/discord/go_live_media_plane.dart';
 import 'data/video/system_audio_capture.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
@@ -340,13 +339,18 @@ final class AppComposition {
   }
 
   void _buildStreamPlane() {
-    // The share is sent from an isolate of its own, so that nothing the UI
-    // does on this one can hold a picture back.
-    goLiveMedia = GoLiveMediaIsolate();
+    // The stream is sent from an isolate of its own, so that nothing the UI
+    // does on this one can hold a picture back. The worker offers the DAVE
+    // version the call's sockets do, so a stream of a call says the same
+    // thing the call did.
+    goLiveMedia = GoLiveMediaIsolate(
+      maxDaveProtocolVersion: () =>
+          liveVoiceSignaling?.socketFactory.maxDaveProtocolVersion ?? 0,
+    );
     _teardown.add(() => unawaited(goLiveMedia.dispose()));
     // Go Live: the stream plane and the transport binding behind it. The
     // picture comes from the capture module shared with the camera and the
-    // clip buffer; a share's frames go straight to the media isolate.
+    // clip buffer; a stream's frames go straight to the media isolate.
     videoCapture = VideoCaptureHub(
       encoder: bootstrap.videoEncoderService ?? NativeVideoEncoderService(),
       shareFrames: goLiveMedia,
@@ -361,18 +365,34 @@ final class AppComposition {
       ),
     );
     unawaited(streamQuality.load());
+    // The second RTC connection a stream lives on. Discord does not carry Go
+    // Live over the call's socket: it answers create and watch with an
+    // endpoint of their own. Which of them is the sender's is decided here
+    // (ADR-0001); the watched ones are opened here too.
+    streamRtc = DiscordStreamRtcService(
+      repositoryProvider: () => chat.goLive,
+      identityProvider: () => liveVoiceSignaling?.streamIdentity,
+      // Receiving uses the same factory as the call, so the two agree about
+      // DAVE without this module knowing a version number.
+      socketFactoryProvider: () => liveVoiceSignaling?.socketFactory,
+    );
+    _teardown.add(() => unawaited(streamRtc.close()));
     goLive = _register(
       GoLiveController(
         repositoryProvider: () => chat.goLive,
         capture: videoCapture,
         media: goLiveMedia,
+        senderEndpoints: streamRtc.senderEndpoints,
+        // Once the sending connection is ready, ask Discord for the same key
+        // on a receiving connection. That round trip is the self-preview.
+        onSenderReady: (key) => unawaited(streamViewer.requestWatch(key)),
         systemAudio: Platform.isWindows
             ? WindowsSystemAudioCapture()
             : const UnavailableSystemAudioCapture(),
         opusCodecFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
-    // Watching somebody else's share: a session per stream, each with a
+    // Watching somebody else's stream: a session per stream, each with a
     // pipeline of its own. Decoders are made on demand, so a room where
     // nobody is streaming opens none.
     streamViewer = _register(
@@ -380,46 +400,20 @@ final class AppComposition {
         repositoryProvider: () => chat.goLive,
         decoderFactory: () =>
             bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
-        // This account's own share is watched back like any other stream, and
-        // its reserved session counts towards the cap (ADR-0002).
+        // This account's own stream is watched back like any other, and its
+        // reserved session counts towards the cap (ADR-0002).
         ownKeyProvider: () => goLive.streamKey,
         onWatchRequested: (key) => streamRtc.noteWatch(key),
         // A stopped watch takes its connection with it. Only the receiving
-        // half: the share's own connection ends with the share (ADR-0001).
+        // half: the Sender's own connection ends with the stream (ADR-0001).
         onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
         // One audio receiver per watched session (ADR-0004).
         audioDecoderFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
-    // The second RTC connection a stream lives on. Discord does not carry Go
-    // Live over the call's socket: it answers create and watch with an
-    // endpoint of their own, and until something dialled it a stream opened,
-    // announced itself, and sent nothing.
-    streamRtc = DiscordStreamRtcService(
-      repositoryProvider: () => chat.goLive,
-      identityProvider: () => liveVoiceSignaling?.streamIdentity,
-      // Receiving uses the same factory as the call, so the two agree about
-      // DAVE without this module knowing a version number. Only the connection
-      // the router will announce video on is handed to the media plane. The
-      // self-preview receiver must stay on the plain factory: opening it must
-      // not replace the sender's current encoder connection.
-      socketFactoryProvider: () => liveVoiceSignaling?.socketFactory,
-      sendingSocketFactoryProvider: () {
-        final factory = liveVoiceSignaling?.socketFactory;
-        if (factory == null) return null;
-        return GoLiveMediaSocketFactory(inner: factory, plane: goLiveMedia);
-      },
-    );
-    _teardown.add(() => unawaited(streamRtc.close()));
-    // Where a ready stream connection goes. The fork between this account's
-    // own share and everybody else's lives here rather than in the widget, so
-    // the riskiest wiring in the stream plane has tests of its own.
-    streamRouter = StreamRouter(
-      opened: streamRtc.opened,
-      goLive: goLive,
-      viewer: streamViewer,
-      capture: videoCapture,
-    );
+    // Where a ready watched connection goes. Lives here rather than in the
+    // widget, so the wiring has tests of its own.
+    streamRouter = StreamRouter(opened: streamRtc.opened, viewer: streamViewer);
     _teardown.add(streamRouter.dispose);
   }
 

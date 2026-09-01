@@ -3,9 +3,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
-import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
-import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/go_live_media_plane.dart';
+import 'package:flucord/src/data/discord/go_live_sender.dart';
 import 'package:flucord/src/domain/go_live_media.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
@@ -22,12 +22,23 @@ const _key = GoLiveStreamKey.guild(
   userId: 'me',
 );
 
+const _credentials = VoiceServerCredentials(
+  guildId: 'guild-1',
+  channelId: 'voice-1',
+  userId: 'me',
+  sessionId: 'session-1',
+  token: 'stream-token',
+  endpoint: 'stream.discord.gg',
+);
+
 /// The controller over the machine's one capture module, with the fake
-/// encoder behind it.
+/// encoder behind it and the sender endpoints under the test's control.
 GoLiveController _controller(
   _FakeRepository? repository, {
   FakeVideoEncoder? encoder,
   _FakePlane? plane,
+  StreamController<DiscordSenderEndpoint>? endpoints,
+  List<GoLiveStreamKey>? ready,
   Duration pingInterval = const Duration(seconds: 30),
 }) {
   final media = plane ?? _FakePlane();
@@ -38,10 +49,24 @@ GoLiveController _controller(
       shareFrames: media,
     ),
     media: media,
+    senderEndpoints: endpoints?.stream,
+    onSenderReady: ready?.add,
     pingInterval: pingInterval,
   )..reconcile();
   addTearDown(controller.dispose);
   return controller;
+}
+
+/// Starts a stream and hands the controller its sender endpoint.
+Future<_FakeSender> _sending(
+  GoLiveController controller,
+  _FakePlane plane,
+  StreamController<DiscordSenderEndpoint> endpoints,
+) async {
+  await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+  endpoints.add((key: _key, credentials: _credentials));
+  await Future<void>.delayed(Duration.zero);
+  return plane.opened.single;
 }
 
 void main() {
@@ -111,67 +136,132 @@ void main() {
     expect(repository.pings.length, pings);
   });
 
-  test('what the sender asks of the encoder reaches the capture', () async {
-    final repository = _FakeRepository();
-    addTearDown(repository.close);
-    final encoder = FakeVideoEncoder(displays: 2);
-    final plane = _FakePlane();
-    final controller = _controller(repository, encoder: encoder, plane: plane);
-    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
-
-    // The capture was opened where the plane takes frames.
-    expect(encoder.frameSinks, [_FakePlane.sink]);
-
-    plane.commands.add(const GoLiveBitrateCommand(2250000));
-    plane.commands.add(const GoLiveKeyframeCommand());
-    await Future<void>.delayed(Duration.zero);
-
-    expect(encoder.bitrates, [2250000]);
-    expect(encoder.keyframes, 1);
-  });
-
   test(
-    'a reported settings change is paced, and a new shape announced',
+    'the sender endpoint opens a Sender with the running settings',
     () async {
       final repository = _FakeRepository();
       addTearDown(repository.close);
+      final encoder = FakeVideoEncoder(displays: 2);
       final plane = _FakePlane();
-      final capture = VideoCaptureHub(
-        encoder: FakeVideoEncoder(),
-        shareFrames: plane,
+      final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+      final ready = <GoLiveStreamKey>[];
+      final controller = _controller(
+        repository,
+        encoder: encoder,
+        plane: plane,
+        endpoints: endpoints,
+        ready: ready,
       );
-      final controller = GoLiveController(
-        repositoryProvider: () => repository,
-        capture: capture,
-        media: plane,
-      )..reconcile();
-      addTearDown(controller.dispose);
-      await controller.start(channelId: 'voice-1', guildId: 'guild-1');
 
-      // A bitrate alone reaches the sender's pace. Discord hears nothing: the
-      // shape it was told about still holds.
-      await capture.setQuality(
-        const StreamQualitySettings(shareBitrate: 3000000),
-      );
-      await pumpEventQueue();
-      expect(plane.retargeted, [3000000]);
-      expect(plane.announced, isEmpty);
+      final sender = await _sending(controller, plane, endpoints);
 
-      // A new shape is declared before its first packet leaves.
-      await capture.setQuality(
-        const StreamQualitySettings(
-          shareResolution: StreamResolution.p1080,
-          shareFrameRate: 60,
-        ),
-      );
-      await pumpEventQueue();
-      expect(plane.announced.single.height, 1080);
-      expect(plane.announced.single.framesPerSecond, 60);
-      expect(plane.retargeted, hasLength(2));
-      expect(controller.status, GoLiveStatus.creating);
-      expect(controller.error, isNull);
+      // The capture was opened where the plane takes frames, and the Sender
+      // with what the capture is running at.
+      expect(encoder.frameSinks, [_FakePlane.sink]);
+      expect(sender.openedWith, encoder.started.single);
+      expect(sender.credentials, _credentials);
+
+      // A ready Sender is when the self-preview can be asked for.
+      sender.ready();
+      await Future<void>.delayed(Duration.zero);
+      expect(ready, [_key]);
+
+      // What the Sender asks of the encoder reaches the capture.
+      sender.commands.add(const GoLiveBitrateCommand(2250000));
+      sender.commands.add(const GoLiveKeyframeCommand());
+      await Future<void>.delayed(Duration.zero);
+      expect(encoder.bitrates, [2250000]);
+      expect(encoder.keyframes, 1);
+
+      // The stream's end takes its Sender with it.
+      await controller.stop();
+      expect(sender.closed, isTrue);
     },
   );
+
+  test('a sender endpoint while nothing is shared is ignored', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final plane = _FakePlane();
+    final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+    final controller = _controller(
+      repository,
+      plane: plane,
+      endpoints: endpoints,
+    );
+
+    // The endpoint of a stream that already stopped: announcing on it would
+    // bring the stream back as a ghost.
+    endpoints.add((key: _key, credentials: _credentials));
+    await Future<void>.delayed(Duration.zero);
+    expect(plane.opened, isEmpty);
+
+    // And one for a key that is not this stream's.
+    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+    endpoints.add((
+      key: const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me'),
+      credentials: _credentials,
+    ));
+    await Future<void>.delayed(Duration.zero);
+    expect(plane.opened, isEmpty);
+  });
+
+  test('a replaced endpoint replaces the Sender once', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final plane = _FakePlane();
+    final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+    final controller = _controller(
+      repository,
+      plane: plane,
+      endpoints: endpoints,
+    );
+    final first = await _sending(controller, plane, endpoints);
+
+    endpoints.add((key: _key, credentials: _credentials));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(plane.opened, hasLength(2));
+    expect(first.closed, isTrue);
+    expect(plane.opened.last.closed, isFalse);
+  });
+
+  test('a reported settings change reaches the Sender', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final plane = _FakePlane();
+    final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+    final capture = VideoCaptureHub(
+      encoder: FakeVideoEncoder(),
+      shareFrames: plane,
+    );
+    final controller = GoLiveController(
+      repositoryProvider: () => repository,
+      capture: capture,
+      media: plane,
+      senderEndpoints: endpoints.stream,
+    )..reconcile();
+    addTearDown(controller.dispose);
+    final sender = await _sending(controller, plane, endpoints);
+
+    await capture.setQuality(
+      const StreamQualitySettings(shareBitrate: 3000000),
+    );
+    await pumpEventQueue();
+    expect(sender.reshaped.single.bitrate, 3000000);
+
+    await capture.setQuality(
+      const StreamQualitySettings(
+        shareResolution: StreamResolution.p1080,
+        shareFrameRate: 60,
+      ),
+    );
+    await pumpEventQueue();
+    expect(sender.reshaped.last.height, 1080);
+    expect(sender.reshaped.last.framesPerSecond, 60);
+    expect(controller.status, GoLiveStatus.creating);
+    expect(controller.error, isNull);
+  });
 
   test('a shape the encoder will not restart into is reported', () async {
     final repository = _FakeRepository();
@@ -194,7 +284,6 @@ void main() {
     await pumpEventQueue();
 
     expect(controller.error, isA<StateError>());
-    expect(plane.announced, isEmpty);
     // The stream itself is still up; ending it is the user's call.
     expect(controller.isSharing, isTrue);
   });
@@ -483,18 +572,55 @@ void main() {
   });
 }
 
-/// What the controller steers on the encoder's behalf: the bitrate and the
-/// keyframes the sender asks for, and where each start delivers frames.
+/// Where each start delivers frames, and the Senders opened through it.
 final class _FakePlane implements GoLiveMediaPlane {
   static const sink = 0xf00d;
 
-  final StreamController<GoLiveEncoderCommand> commands =
-      StreamController.broadcast();
-  final List<VideoEncoderSettings> announced = [];
-  final List<int> retargeted = [];
+  final List<_FakeSender> opened = [];
 
   @override
   Future<int?> get nativeFrameSink => Future.value(sink);
+
+  @override
+  Stream<EncodedVideoFrame> get relayedFrames =>
+      const Stream<EncodedVideoFrame>.empty();
+
+  @override
+  GoLiveSender openSender({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+    required VideoEncoderSettings settings,
+  }) {
+    final sender = _FakeSender(credentials: credentials, openedWith: settings);
+    opened.add(sender);
+    return sender;
+  }
+}
+
+/// A Sender that records what it was told and lets the test speak for the
+/// far end: the bitrate and the keyframes it asks for, and its readiness.
+final class _FakeSender implements GoLiveSender {
+  _FakeSender({required this.credentials, required this.openedWith});
+
+  final VoiceServerCredentials credentials;
+  final VideoEncoderSettings openedWith;
+  final List<VideoEncoderSettings> reshaped = [];
+  final StreamController<GoLiveEncoderCommand> commands =
+      StreamController.broadcast();
+  final StreamController<GoLiveSenderStatus> _statuses =
+      StreamController.broadcast();
+  bool closed = false;
+
+  @override
+  GoLiveSenderStatus status = GoLiveSenderStatus.dialling;
+
+  void ready() {
+    status = GoLiveSenderStatus.ready;
+    _statuses.add(status);
+  }
+
+  @override
+  Stream<GoLiveSenderStatus> get statuses => _statuses.stream;
 
   @override
   Stream<GoLiveEncoderCommand> get encoderCommands => commands.stream;
@@ -503,24 +629,13 @@ final class _FakePlane implements GoLiveMediaPlane {
   Stream<String> get paceLines => const Stream<String>.empty();
 
   @override
-  Stream<EncodedVideoFrame> get relayedFrames =>
-      const Stream<EncodedVideoFrame>.empty();
+  void reshape(VideoEncoderSettings settings) => reshaped.add(settings);
 
   @override
-  DiscordVoiceClient openSender({
-    required DiscordVoiceSocketFactory factory,
-    required VoiceServerCredentials credentials,
-    required GoLiveStreamKey streamKey,
-  }) => throw UnsupportedError('the controller opens no connections');
+  void sendOpusFrame(Uint8List opus) {}
 
   @override
-  void announce(VideoEncoderSettings settings) => announced.add(settings);
-
-  @override
-  void retarget(int bitrate) => retargeted.add(bitrate);
-
-  @override
-  void sendAudio(Uint8List opus) {}
+  Future<void> close() async => closed = true;
 }
 
 final class _FakeRepository implements GoLiveRepository {

@@ -27,4 +27,17 @@ void main() {
     }
     expect(adapter.bitrate, 200000);
   });
+
+  test('a new target keeps what the link taught the adapter', () {
+    final adapter = StreamBitrateAdapter(target: 2000000)..report(0.2);
+    expect(adapter.bitrate, 1800000);
+
+    // Adapted to 90% of the target: a new target starts at 90% of itself
+    // rather than re-learning the loss the last report already named.
+    adapter.retarget(3000000);
+
+    expect(adapter.target, 3000000);
+    expect(adapter.bitrate, 2700000);
+    expect(adapter.isAdapted, isTrue);
+  });
 }

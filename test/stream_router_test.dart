@@ -73,13 +73,23 @@ const _session = VoiceTransportSession(
 final class _Wiring {
   _Wiring() {
     capture = VideoCaptureHub(encoder: encoder);
-    // The share's connection sends in-process here, where the production
-    // plane would send from its own isolate.
-    plane = InProcessGoLiveMediaPlane(frames: capture.frames);
+    service = DiscordStreamRtcService(
+      repositoryProvider: () => repository,
+      identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+      socketFactoryProvider: _plainSocketFactory,
+    )..reconcile();
+    // The Sender runs in-process here, where the production plane would run
+    // it on its own isolate.
+    plane = InProcessGoLiveMediaPlane(
+      frames: capture.frames,
+      socketFactory: _plainSocketFactory(),
+    );
     goLive = GoLiveController(
       repositoryProvider: () => repository,
       capture: capture,
       media: plane,
+      senderEndpoints: service.senderEndpoints,
+      onSenderReady: (key) => unawaited(viewer.requestWatch(key)),
     );
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
@@ -90,19 +100,7 @@ final class _Wiring {
       // One audio receiver per watched session (ADR-0004).
       audioDecoderFactory: audioCodecs,
     );
-    service = DiscordStreamRtcService(
-      repositoryProvider: () => repository,
-      identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-      socketFactoryProvider: _plainSocketFactory,
-      sendingSocketFactoryProvider: () =>
-          GoLiveMediaSocketFactory(inner: _plainSocketFactory()!, plane: plane),
-    )..reconcile();
-    router = StreamRouter(
-      opened: service.opened,
-      goLive: goLive,
-      viewer: viewer,
-      capture: capture,
-    );
+    router = StreamRouter(opened: service.opened, viewer: viewer);
   }
 
   final repository = _FakeRepository();
@@ -127,7 +125,7 @@ final class _Wiring {
     ),
   );
 
-  DiscordVoiceSocketFactory? _plainSocketFactory() => _StreamSocketFactory((_) {
+  DiscordVoiceSocketFactory _plainSocketFactory() => _StreamSocketFactory((_) {
     final client = _FakeClient(log);
     clients.add(client);
     return client;
@@ -161,84 +159,6 @@ List<DiscordRtpFrame> _packetizedUnit() => [
 ];
 
 void main() {
-  test(
-    'a ready stream of ours is declared, then the encoder sends on it',
-    () async {
-      final wiring = _Wiring();
-      addTearDown(wiring.dispose);
-
-      await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
-      // The endpoint arrives long after the button was pressed, and the session
-      // it opens is the one this fork decides about.
-      wiring.repository.assign(
-        const GoLiveServer(
-          key: _key,
-          endpoint: 'stream.discord.gg',
-          token: 't',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(wiring.clients, hasLength(1));
-      final client = wiring.clients.single;
-
-      client.announce(const VoiceTransportReadyEvent(_session));
-      await Future<void>.delayed(Duration.zero);
-
-      // Declared with what the capture is actually running at, and bound to the
-      // SSRC the connection was given.
-      expect(client.announcements.single.enabled, isTrue);
-      expect(
-        client.announcements.single.settings,
-        wiring.capture.shareSettings,
-      );
-      // The encoder's first keyframe left long before the connection was
-      // ready, so the sender asks for one as soon as it is bound.
-      expect(wiring.encoder.keyframes, 1);
-
-      wiring.emitFrame();
-      await Future<void>.delayed(Duration.zero);
-
-      // Declared before the first packet leaves: Discord drops a packet whose
-      // SSRC was never announced. The picture takes two packets, which is what
-      // the packetiser does with a keyframe of this size; the second is paced
-      // out a few milliseconds behind the first.
-      expect(wiring.log, ['announce', 'send']);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      expect(wiring.log, ['announce', 'send', 'send']);
-      expect(client.sentFrames, isNotEmpty);
-      // One above the connection's own SSRC: the announce declared the
-      // pictures as audio + 1, and a frame on any other SSRC is dropped —
-      // a stream that opens, says it is live, and shows a viewer nothing.
-      expect(
-        client.sentFrames.every((frame) => frame.header.ssrc == 4243),
-        isTrue,
-      );
-      // The group encryption ran once on the whole picture, before it became
-      // two RTP packets: receivers decrypt a frame, not a fragment.
-      expect(client.groupEncryptions, hasLength(1));
-      expect(client.groupEncryptions.single.ssrc, 4243);
-      // The viewer is the other side of the fork, and this was not it.
-      expect(wiring.viewer.watching, isNull);
-
-      // A viewer who cannot decode asks for a keyframe, and the request
-      // reaches the one capture that could produce one.
-      client.announce(const VoiceKeyframeRequestedEvent());
-      await Future<void>.delayed(Duration.zero);
-      expect(wiring.encoder.keyframes, 2);
-
-      // And a NACK for a packet already sent is answered from the sender's
-      // history: the missing sequence goes out again on the rtx SSRC (one
-      // above the video's), not the encoder being asked to redraw.
-      final before = client.sentFrames.length;
-      client.announce(
-        const VoiceRetransmitRequestedEvent(ssrc: 4243, sequences: [1]),
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(client.sentFrames.length, before + 1);
-      expect(client.sentFrames.last.header.ssrc, 4244);
-    },
-  );
-
   test('the own stream has one sending and one receiving connection', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
@@ -256,8 +176,8 @@ void main() {
     sending.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
 
-    // The sender's ready connection triggers the ordinary watch request for
-    // the same key. Discord answers it with a second endpoint.
+    // The Sender announced on its ready and, ready, asked for the ordinary
+    // watch of the same key. Discord answers it with a second endpoint.
     expect(wiring.repository.watched, [_key]);
     wiring.repository.assign(
       const GoLiveServer(
@@ -546,7 +466,6 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(receiving.closed, isTrue);
       expect(sending.closed, isFalse);
-      expect(wiring.service.sessionFor(_key)?.sending, isTrue);
       expect(other.closed, isFalse);
 
       // A stream somebody else sends goes with its connection: nothing is left

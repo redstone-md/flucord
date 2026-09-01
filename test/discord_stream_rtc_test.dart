@@ -7,7 +7,6 @@ import 'package:flucord/src/data/discord/discord_stream_rtc_session.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
-import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -17,13 +16,6 @@ const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
   channelId: 'voice-1',
   userId: 'streamer',
-);
-
-/// The share profile as announce payload: these tests exercise the session's
-/// announce path, so any settings answer, and the bitrate comes from the
-/// quality home rather than being named again here.
-const _shareProfile = VideoEncoderSettings(
-  bitrate: StreamQualitySettings.defaultShareBitrate,
 );
 
 void main() {
@@ -65,23 +57,6 @@ void main() {
       await session.connect();
 
       expect(client.connects, 1);
-    });
-
-    test('sending before the connection is up says so', () async {
-      final session = DiscordStreamRtcSession(
-        key: _key,
-        credentials: _credentials,
-        socketFactory: _StreamSocketFactory((_) => _FakeClient()),
-      );
-      addTearDown(session.close);
-
-      // Silently dropping the frame would look like a stream that opened and
-      // showed a black rectangle.
-      expect(() => session.sendVideoFrame(_frame), throwsA(isA<StateError>()));
-      expect(
-        session.announceVideo(enabled: true, settings: _shareProfile),
-        isFalse,
-      );
     });
 
     test('remembers the SSRC the connection was given', () async {
@@ -177,27 +152,7 @@ void main() {
       },
     );
 
-    test(
-      'a sender does not subscribe: it has nothing to receive',
-      () async {
-        final client = _FakeClient();
-        final session = DiscordStreamRtcSession(
-          key: _key,
-          credentials: _credentials,
-          socketFactory: _StreamSocketFactory((_) => client),
-          sending: true,
-        );
-        addTearDown(session.close);
-        await session.connect();
-
-        client.announce(const VoiceTransportReadyEvent(_session));
-        await Future<void>.delayed(Duration.zero);
-
-        expect(client.mediaSinkWants, isEmpty);
-      },
-    );
-
-    test('announces, sends and forwards pictures on the connection', () async {
+    test('forwards the pictures arriving on the connection', () async {
       final client = _FakeClient();
       final session = DiscordStreamRtcSession(
         key: _key,
@@ -211,19 +166,9 @@ void main() {
       final subscription = session.video.listen(received.add);
       addTearDown(subscription.cancel);
 
-      expect(
-        session.announceVideo(enabled: true, settings: _shareProfile),
-        isTrue,
-      );
-      session.sendVideoFrame(_frame);
-
-      // A viewer's pictures arrive off the same connection the sender's went
-      // out on, which is the whole of what a stream connection carries.
       client.emitVideo('somebody-else', _frame);
       await Future<void>.delayed(Duration.zero);
 
-      expect(client.announcements.single.enabled, isTrue);
-      expect(client.sentFrames, [_frame]);
       expect(received, [('somebody-else', _frame)]);
     });
 
@@ -395,53 +340,85 @@ void main() {
       expect(clients.last.closed, isFalse);
     });
 
-    test(
-      "the account's own stream under a new key closes the old one",
-      () async {
-        final repository = _FakeRepository();
-        final clients = <_FakeClient>[];
-        final service = DiscordStreamRtcService(
-          repositoryProvider: () => repository,
-          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-          socketFactoryProvider: () => _StreamSocketFactory((_) {
-            final client = _FakeClient();
-            clients.add(client);
-            return client;
-          }),
-        );
-        addTearDown(service.close);
-        service.reconcile();
+    test("an own endpoint with no watch pending is the sender's", () async {
+      final repository = _FakeRepository();
+      var made = 0;
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          made++;
+          return _FakeClient();
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+      final endpoints = <DiscordSenderEndpoint>[];
+      service.senderEndpoints.listen(endpoints.add);
 
-        // A stream key names the channel it started in, so a share that
-        // follows the account into another channel arrives under a second key.
-        const moved = GoLiveStreamKey.guild(
-          guildId: 'guild-1',
-          channelId: 'voice-2',
-          userId: 'me',
-        );
-        for (final key in [
-          const GoLiveStreamKey.guild(
-            guildId: 'guild-1',
-            channelId: 'voice-1',
-            userId: 'me',
-          ),
-          moved,
-        ]) {
-          repository.announceServer(
-            GoLiveServer(
-              key: key,
-              endpoint: 'stream.discord.gg',
-              token: 'token',
-            ),
-          );
-          await Future<void>.delayed(Duration.zero);
-        }
+      repository.announceServer(
+        const GoLiveServer(
+          key: _ownKey,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+          rtcServerId: 'rtc-77',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-        expect(clients, hasLength(2));
-        expect(clients.first.closed, isTrue);
-        expect(service.sessionFor(moved), isNotNull);
-      },
-    );
+      // Handed out to be sent on, with the credentials to dial it; nothing
+      // is opened here (ADR-0001).
+      expect(made, 0);
+      expect(service.sessionFor(_ownKey), isNull);
+      expect(endpoints.single.key, _ownKey);
+      expect(endpoints.single.credentials.serverId, 'rtc-77');
+      expect(endpoints.single.credentials.token, 'stream-token');
+    });
+
+    test('an own endpoint answering a watch is watched', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+      final endpoints = <DiscordSenderEndpoint>[];
+      service.senderEndpoints.listen(endpoints.add);
+
+      // The self-preview's ask, noted before Discord answers it.
+      service.noteWatch(_ownKey);
+      repository.announceServer(
+        const GoLiveServer(
+          key: _ownKey,
+          endpoint: 'stream.discord.gg',
+          token: 'watch-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(endpoints, isEmpty);
+      expect(clients, hasLength(1));
+      expect(service.sessionFor(_ownKey), isNotNull);
+
+      // The watch is consumed: the next own endpoint is the sender's again.
+      repository.announceServer(
+        const GoLiveServer(
+          key: _ownKey,
+          endpoint: 'stream.discord.gg',
+          token: 'send-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(endpoints, hasLength(1));
+      expect(clients, hasLength(1));
+    });
 
     test('a stream that ends closes its connection', () async {
       final repository = _FakeRepository();
@@ -521,6 +498,12 @@ void main() {
   });
 }
 
+const _ownKey = GoLiveStreamKey.guild(
+  guildId: 'guild-1',
+  channelId: 'voice-1',
+  userId: 'me',
+);
+
 const _credentials = VoiceServerCredentials(
   guildId: 'guild-1',
   channelId: 'voice-1',
@@ -561,13 +544,7 @@ final class _FakeClient implements DiscordVoiceClient {
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
       [];
-  final List<
-    ({
-      Map<int, int> perSsrc,
-      int? any,
-      Map<int, double> pixelCounts,
-    })
-  >
+  final List<({Map<int, int> perSsrc, int? any, Map<int, double> pixelCounts})>
   mediaSinkWants = [];
   int connects = 0;
   bool closed = false;
@@ -616,11 +593,7 @@ final class _FakeClient implements DiscordVoiceClient {
     int? any,
     Map<int, double> pixelCounts = const {},
   }) {
-    mediaSinkWants.add((
-      perSsrc: perSsrc,
-      any: any,
-      pixelCounts: pixelCounts,
-    ));
+    mediaSinkWants.add((perSsrc: perSsrc, any: any, pixelCounts: pixelCounts));
   }
 
   @override

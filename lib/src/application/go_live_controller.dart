@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_stream_audio_sender.dart';
+import '../data/discord/discord_stream_rtc_service.dart';
 import '../data/discord/go_live_media_plane.dart';
+import '../data/discord/go_live_sender.dart';
 import '../data/video/system_audio_capture.dart';
 import '../domain/go_live_media.dart';
 import '../domain/go_live_stream.dart';
@@ -47,31 +49,38 @@ final class GoLiveDisplay {
 /// controller of its own rather than a mode of the voice controller: ending a
 /// stream must not disturb the call it is inside.
 ///
-/// The pictures are not sent from here. The media plane opens the share's
-/// connection and sends on it from wherever it runs; this controller runs
-/// the capture and the sound on the main isolate, and does for the encoder
+/// The pictures are not sent from here. When Discord hands out the endpoint
+/// the stream is to be sent on, this controller opens a [GoLiveSender] on it
+/// through the media plane, and that Sender sends from wherever it runs.
+/// This controller runs the capture and the sound on the main isolate,
+/// steers the Sender with what the capture runs at, and does for the encoder
 /// what the far end's feedback asks of it.
 final class GoLiveController extends ChangeNotifier {
   GoLiveController({
     required GoLiveRepository? Function() repositoryProvider,
     required VideoCaptureHub capture,
 
-    /// Where the share is sent from. In-process unless told otherwise, which
+    /// Where the stream is sent from. In-process unless told otherwise, which
     /// is what a test wants; the app hands over its media isolate.
     GoLiveMediaPlane? media,
+
+    /// The endpoints this account's own stream is to be sent on.
+    Stream<DiscordSenderEndpoint>? senderEndpoints,
+
+    /// Told when the Sender's connection is ready, which is when the
+    /// self-preview can be asked for (ADR-0001).
+    void Function(GoLiveStreamKey key)? onSenderReady,
     SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
     VoiceOpusCodecFactory? opusCodecFactory,
     Duration pingInterval = const Duration(seconds: 30),
   }) : _repositoryProvider = repositoryProvider,
        _capture = capture,
        _media = media ?? InProcessGoLiveMediaPlane(frames: capture.frames),
+       _onSenderReady = onSenderReady,
        _systemAudio = systemAudio,
        _opusCodecFactory = opusCodecFactory,
        _pingInterval = pingInterval {
-    _mediaSubscriptions = [
-      _media.encoderCommands.listen(_applyEncoderCommand),
-      _media.paceLines.listen(_logPace),
-    ];
+    _senderEndpoints = senderEndpoints?.listen(_acceptSenderEndpoint);
   }
 
   final GoLiveRepository? Function() _repositoryProvider;
@@ -84,8 +93,15 @@ final class GoLiveController extends ChangeNotifier {
   VideoCaptureLease? _lease;
   StreamSubscription<VideoEncoderSettings>? _leaseChanges;
 
-  /// Where the share is sent from.
+  /// Where the stream is sent from.
   final GoLiveMediaPlane _media;
+  final void Function(GoLiveStreamKey key)? _onSenderReady;
+
+  /// The Sender of the running stream, once its endpoint arrived. The one
+  /// place "current sender" is held: a moved or restarted stream replaces it
+  /// here, once.
+  GoLiveSender? _sender;
+  List<StreamSubscription<Object?>> _senderSubscriptions = const [];
 
   /// The sound of what is being shared, and what encodes it. Without an
   /// encoder the share is silent, which is what a build without Opus can do.
@@ -94,7 +110,7 @@ final class GoLiveController extends ChangeNotifier {
 
   final Duration _pingInterval;
 
-  late final List<StreamSubscription<Object?>> _mediaSubscriptions;
+  StreamSubscription<DiscordSenderEndpoint>? _senderEndpoints;
 
   GoLiveRepository? _repository;
   StreamSubscription<GoLiveStream>? _updates;
@@ -129,15 +145,10 @@ final class GoLiveController extends ChangeNotifier {
   /// Whether this build can send pictures at all.
   bool get canEncode => _capture.isSupported;
 
-  /// What the capture runs at after a quality change reached it: the sender's
-  /// pace follows the bitrate, and a new shape is declared to Discord so that
-  /// no packet is dropped for an SSRC announced at the old numbers.
+  /// What the capture runs at after a quality change reached it. The Sender
+  /// decides what of it Discord needs to hear.
   void _follow(VideoEncoderSettings settings) {
-    final declared = _declared;
-    _declared = settings;
-    _media.retarget(settings.bitrate);
-    if (declared != null && declared.hasShapeOf(settings)) return;
-    _media.announce(settings);
+    _sender?.reshape(settings);
     _diagnose(
       'quality',
       '${settings.width}x${settings.height}@${settings.framesPerSecond} '
@@ -145,8 +156,45 @@ final class GoLiveController extends ChangeNotifier {
     );
   }
 
-  /// The shape Discord was last told about, to know when it changes.
-  VideoEncoderSettings? _declared;
+  /// Opens the Sender on the endpoint Discord handed out, with what the
+  /// capture is running at.
+  ///
+  /// An endpoint while nothing is being shared is stale: the stream it was
+  /// for has stopped, and announcing on it would bring a dead stream back as
+  /// a ghost.
+  void _acceptSenderEndpoint(DiscordSenderEndpoint endpoint) {
+    final lease = _lease;
+    if (lease == null || endpoint.key != _key) {
+      _diagnose('stale sender endpoint ignored', endpoint.key);
+      return;
+    }
+    unawaited(_closeSender());
+    final sender = _sender = _media.openSender(
+      credentials: endpoint.credentials,
+      streamKey: endpoint.key,
+      settings: lease.settings,
+    );
+    _senderSubscriptions = [
+      sender.statuses.listen((status) {
+        if (status == GoLiveSenderStatus.ready) {
+          _onSenderReady?.call(endpoint.key);
+        }
+      }),
+      sender.encoderCommands.listen(_applyEncoderCommand),
+      sender.paceLines.listen(_logPace),
+    ];
+  }
+
+  Future<void> _closeSender() async {
+    final sender = _sender;
+    final subscriptions = _senderSubscriptions;
+    _sender = null;
+    _senderSubscriptions = const [];
+    for (final subscription in subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    await sender?.close();
+  }
 
   void _qualityRefused(Object error) {
     _diagnose('quality change refused', error);
@@ -244,7 +292,6 @@ final class GoLiveController extends ChangeNotifier {
       final lease = _lease = await _capture.startShare(
         displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
       );
-      _declared = lease.settings;
       _leaseChanges = lease.settingsChanges.listen(
         _follow,
         onError: _qualityRefused,
@@ -285,7 +332,7 @@ final class GoLiveController extends ChangeNotifier {
     final encoder = _audioEncoder = factory.createEncoder();
     _audio = DiscordStreamAudioSender(
       encoder: encoder,
-      sendOpus: _media.sendAudio,
+      sendOpus: (opus) => _sender?.sendOpusFrame(opus),
     )..attach(_systemAudio.chunks);
     if (!await _systemAudio.start()) {
       _diagnose('audio', 'no output to share');
@@ -363,9 +410,8 @@ final class GoLiveController extends ChangeNotifier {
     _disposed = true;
     _ping?.cancel();
     _ping = null;
-    for (final subscription in _mediaSubscriptions) {
-      unawaited(subscription.cancel());
-    }
+    unawaited(_senderEndpoints?.cancel());
+    unawaited(_closeSender());
     unawaited(_leaseChanges?.cancel());
     unawaited(_updates?.cancel());
     unawaited(_servers?.cancel());
@@ -386,11 +432,11 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   Future<void> _stopCapture() async {
+    await _closeSender();
     await _stopAudio();
     final lease = _lease;
     if (lease == null) return;
     _lease = null;
-    _declared = null;
     unawaited(_leaseChanges?.cancel());
     _leaseChanges = null;
     try {
