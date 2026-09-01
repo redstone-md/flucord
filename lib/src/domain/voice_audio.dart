@@ -40,14 +40,9 @@ final class VoiceRemotePcmFrame {
   final Int16List samples;
 }
 
-/// Carries remote Opus frames to the receiving module.
-abstract interface class VoiceAudioReceiverTransport {
-  Stream<VoiceRemoteOpusFrame> get remoteAudio;
-}
-
 /// Carries both remote audio and this account's microphone audio.
-abstract interface class VoiceAudioTransport
-    implements VoiceAudioReceiverTransport {
+abstract interface class VoiceAudioTransport {
+  Stream<VoiceRemoteOpusFrame> get remoteAudio;
   void sendOpusFrame(Uint8List opusFrame);
   Future<void> finishSpeaking();
 }

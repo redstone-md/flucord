@@ -8,6 +8,7 @@ import '../domain/video_capture_hub.dart';
 import '../domain/voice_connection.dart';
 import 'go_live_controller.dart';
 import 'stream_viewer_controller.dart';
+import 'watched_session_pipeline.dart';
 
 /// Routes each stream connection to the end of it this client is.
 ///

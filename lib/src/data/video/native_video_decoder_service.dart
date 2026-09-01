@@ -33,6 +33,7 @@ final class NativeVideoDecoderService implements VideoDecoderService {
   final NativeVideoBindings? _bindings;
   final StreamController<DecodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<int> _dropped = StreamController.broadcast();
 
   Pointer<Void> _handle = nullptr;
   NativeCallable<NativePictureCallback>? _callback;
@@ -43,16 +44,16 @@ final class NativeVideoDecoderService implements VideoDecoderService {
   int _reportedSubmitted = -1;
   int _reportedDropped = 0;
 
-  /// Told when the decoder's own queue had to drop an access unit: a dropped
-  /// one breaks the reference chain, so the caller asks for a keyframe and
-  /// stops drawing until it lands.
-  void Function(int dropped)? onDecoderDrop;
-
   @override
   bool get isSupported => _bindings != null;
 
   @override
   Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  /// Read from the stats the decoder is polled for anyway: the DLL counts
+  /// what its queue dropped, and the count is reported when it grows.
+  @override
+  Stream<int> get droppedAccessUnits => _dropped.stream;
 
   @override
   Future<void> start() async {
@@ -131,7 +132,7 @@ final class NativeVideoDecoderService implements VideoDecoderService {
       );
       if (totalDropped > _reportedDropped) {
         _reportedDropped = totalDropped;
-        onDecoderDrop?.call(totalDropped);
+        if (!_dropped.isClosed) _dropped.add(totalDropped);
       }
     } finally {
       calloc.free(submitted);
@@ -255,5 +256,6 @@ final class NativeVideoDecoderService implements VideoDecoderService {
   Future<void> close() async {
     await stop();
     if (!_frames.isClosed) await _frames.close();
+    if (!_dropped.isClosed) await _dropped.close();
   }
 }

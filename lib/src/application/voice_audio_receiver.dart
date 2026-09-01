@@ -24,15 +24,17 @@ final class VoiceAudioReceiver {
   static const int _undecodableLimit = 50;
 
   StreamSubscription<VoiceRemoteOpusFrame>? _remoteSubscription;
-  VoiceAudioReceiverTransport? _transport;
   Future<void> _binding = Future<void>.value();
   bool _disposed = false;
 
   Stream<VoiceRemotePcmFrame> get remotePcm => _remotePcm.stream;
   Stream<Object> get errors => _errors.stream;
 
-  Future<void> bindTransport(VoiceAudioReceiverTransport? transport) {
-    final operation = _binding.then<void>((_) => _bindTransport(transport));
+  /// Decodes [remoteAudio] from here on, dropping whatever was bound before
+  /// and the decoder state that went with it. Binds are applied in order,
+  /// so the last one asked for is the one that stays.
+  Future<void> bind(Stream<VoiceRemoteOpusFrame>? remoteAudio) {
+    final operation = _binding.then<void>((_) => _bind(remoteAudio));
     _binding = operation.then<void>(
       (_) {},
       onError: (Object error, StackTrace stack) {},
@@ -40,22 +42,17 @@ final class VoiceAudioReceiver {
     return operation;
   }
 
-  Future<void> _bindTransport(VoiceAudioReceiverTransport? transport) async {
-    if (_disposed || identical(_transport, transport)) return;
+  Future<void> _bind(Stream<VoiceRemoteOpusFrame>? remoteAudio) async {
+    if (_disposed) return;
     await _remoteSubscription?.cancel();
     _remoteSubscription = null;
     _disposeDecoders();
     if (_disposed) return;
-    _transport = transport;
-    _remoteSubscription = _subscribe(transport);
+    _remoteSubscription = remoteAudio?.listen(
+      _handleRemoteOpus,
+      onError: _emitError,
+    );
   }
-
-  StreamSubscription<VoiceRemoteOpusFrame>? _subscribe(
-    VoiceAudioReceiverTransport? transport,
-  ) => transport?.remoteAudio.listen(
-    _handleRemoteOpus,
-    onError: _emitError,
-  );
 
   void _handleRemoteOpus(VoiceRemoteOpusFrame frame) {
     if (_disposed) return;

@@ -36,7 +36,7 @@ final class VoiceAudioPipeline {
     if (identical(_transport, transport)) return;
     await setEnabled(false);
     _transport = transport;
-    await _receiver.bindTransport(transport);
+    await _receiver.bind(transport?.remoteAudio);
   }
 
   Future<void> setEnabled(bool enabled) async {

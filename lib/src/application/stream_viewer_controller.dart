@@ -3,33 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/discord/discord_video_picture_receiver.dart';
-import '../data/video/native_video_decoder_service.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_decoder.dart';
 import '../domain/voice_audio.dart';
 import '../app_log.dart';
-import 'stream_picture_pacer.dart';
-import 'watched_stream_audio.dart';
-
-/// One RTP payload as it arrives from a stream connection.
-final class IncomingVideoPacket {
-  const IncomingVideoPacket({
-    required this.payload,
-    required this.marker,
-    this.rtpTimestamp = 0,
-  });
-
-  final Uint8List payload;
-
-  /// Whether this payload ends a picture.
-  final bool marker;
-
-  /// The sender's picture timestamp, 90 kHz ticks (RFC 3550). Zero means the
-  /// caller has none, and the picture is then decoded as it lands rather than
-  /// paced: a stream that never says when its frames are due cannot be
-  /// buffered against its own bursts.
-  final int rtpTimestamp;
-}
+import 'watched_session_pipeline.dart';
 
 /// How many streams this client holds at once.
 ///
@@ -39,10 +17,10 @@ const int maxWatchedStreams = 4;
 
 /// Watches several Go Live streams at once, one session apiece.
 ///
-/// Three things in a row that were each built and none of which were joined:
-/// packets arrive, the receiver turns them back into whole pictures and
-/// decrypts those once for the room's group, and the decoder turns the result
-/// into pictures. Each session owns one of each, because two senders
+/// Room policy only: which streams are asked for, the cap, the own key's
+/// reserved slot, the stage, withdrawn and refused asks, and telling the
+/// connection layer when a watch stops. What happens between a packet and a
+/// picture is each session's [WatchedSessionPipeline], because two senders
 /// interleaved on a single receiver splice one picture into another's, and a
 /// single decoder has nowhere to put a second stream's.
 final class StreamViewerController extends ChangeNotifier {
@@ -53,14 +31,14 @@ final class StreamViewerController extends ChangeNotifier {
     void Function(GoLiveStreamKey key)? onWatchRequested,
     void Function(GoLiveStreamKey key)? onWatchStopped,
 
-    /// Decodes audio for watched sessions, when supported.
-    WatchedStreamAudio? audio,
+    /// Decodes screen-share audio for watched sessions, when the build can.
+    VoiceOpusDecoderFactory? audioDecoderFactory,
   }) : _repositoryProvider = repositoryProvider,
        _decoderFactory = decoderFactory,
        _ownKeyProvider = ownKeyProvider,
        _onWatchRequested = onWatchRequested,
        _onWatchStopped = onWatchStopped,
-       _audio = audio;
+       _audioDecoderFactory = audioDecoderFactory;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
@@ -68,15 +46,15 @@ final class StreamViewerController extends ChangeNotifier {
 
   /// Told which key was stopped, so whoever holds the connection drops it.
   ///
-  /// Tearing down the decoder and the subscription leaves the connection up:
-  /// the media server goes on sending, and the client goes on decrypting,
-  /// reordering and asking for retransmissions of pictures nobody draws. The
-  /// connection is not this controller's to close, so it says which key, the
-  /// way [_onWatchRequested] does for the ask.
+  /// Closing the session leaves the connection up: the media server goes on
+  /// sending, and the client goes on decrypting, reordering and asking for
+  /// retransmissions of pictures nobody draws. The connection is not this
+  /// controller's to close, so it says which key, the way
+  /// [_onWatchRequested] does for the ask.
   final void Function(GoLiveStreamKey key)? _onWatchStopped;
 
-  /// Audio receivers for watched sessions (ADR-0004).
-  final WatchedStreamAudio? _audio;
+  /// One audio receiver per watched session (ADR-0004).
+  final VoiceOpusDecoderFactory? _audioDecoderFactory;
 
   /// This account's own share. A session like any other once the sender asks
   /// for it back, and counted towards the cap either way (ADR-0002).
@@ -104,6 +82,13 @@ final class StreamViewerController extends ChangeNotifier {
   /// that happened to it. Per key, because several sessions share this one
   /// controller and a failure on one says nothing about another.
   final Map<GoLiveStreamKey, Object?> _errors = {};
+
+  /// The sessions' sound, merged for the room's output (ADR-0004).
+  final StreamController<VoiceRemotePcmFrame> _pcm =
+      StreamController<VoiceRemotePcmFrame>.broadcast();
+  final StreamController<String> _audioEnded =
+      StreamController<String>.broadcast();
+  int _audioSources = 0;
 
   /// Whether anything of this client's window is on screen, which is this
   /// client's own business alone: sessions go on receiving and draw nothing
@@ -159,16 +144,14 @@ final class StreamViewerController extends ChangeNotifier {
   /// Per key rather than one stream for the room: the stage draws one session,
   /// and which one changes.
   Stream<DecodedVideoFrame> framesFor(GoLiveStreamKey key) =>
-      _sessions[key]?.decoder?.frames ??
+      _sessions[key]?.pipeline.frames ??
       const Stream<DecodedVideoFrame>.empty();
 
   /// Audio from watched sessions, for the room output (ADR-0004).
-  Stream<VoiceRemotePcmFrame> get audio =>
-      _audio?.pcm ?? const Stream<VoiceRemotePcmFrame>.empty();
+  Stream<VoiceRemotePcmFrame> get audio => _pcm.stream;
 
   /// Source ids released with watched sessions.
-  Stream<String> get audioEnded =>
-      _audio?.ended ?? const Stream<String>.empty();
+  Stream<String> get audioEnded => _audioEnded.stream;
 
   /// Whether this client is holding [key]: asked for, or arriving.
   bool isOpen(GoLiveStreamKey key) => _order.contains(key);
@@ -186,12 +169,13 @@ final class StreamViewerController extends ChangeNotifier {
   /// How many packets [key] has received, which is what separates "Discord
   /// was asked" from "something is arriving".
   int receivedPacketsFor(GoLiveStreamKey key) =>
-      _sessions[key]?.receivedPackets ?? 0;
+      _sessions[key]?.pipeline.stats.receivedPackets ?? 0;
 
   /// How many complete pictures [key] has produced, which separates
   /// "packets are arriving" from "pictures are arriving". Read on demand:
   /// listeners are not told about each one.
-  int decodedUnitsFor(GoLiveStreamKey key) => _sessions[key]?.decodedUnits ?? 0;
+  int decodedUnitsFor(GoLiveStreamKey key) =>
+      _sessions[key]?.pipeline.stats.pictures ?? 0;
 
   /// How many packets the stream on the stage has received.
   int get receivedPackets => switch (watching) {
@@ -297,9 +281,8 @@ final class StreamViewerController extends ChangeNotifier {
     /// stream has a connection of its own, and its group with it.
     VideoPictureGroupDecryptor? groupDecryptor,
 
-    /// Asked when the stream's pictures keep failing to open: the receiver
-    /// holds the broken-references verdict, and the session is what can ask
-    /// the sender for a keyframe.
+    /// Asked when the stream's references are broken: the session's
+    /// connection is what can ask the sender for a keyframe.
     void Function()? requestKeyframe,
   }) async {
     if (_disposed) return false;
@@ -314,49 +297,46 @@ final class StreamViewerController extends ChangeNotifier {
       return false;
     }
     _errors.remove(key);
-    // A connection reopened for a key already being read replaces it.
-    await _teardown(key);
+    // A connection reopened for a key already being read replaces it. That
+    // await is a crossing: the ask may have been withdrawn meanwhile, or
+    // another reopened connection may already have been installed, and a
+    // session put over that one would leave it reading with nobody holding
+    // it. Only awaited when there is something to replace, so the plain case
+    // installs without a gap.
+    if (_sessions.containsKey(key)) {
+      await _teardown(key);
+      if (_disposed || !isOpen(key) || _sessions.containsKey(key)) {
+        return false;
+      }
+    }
+    final session = _install(
+      key,
+      packets,
+      audio,
+      groupDecryptor,
+      requestKeyframe,
+    );
+    _notify();
     // Suspended: the connection is read and counted, and nothing decodes it
     // until the window is back. The session is installed either way, so the
     // room goes on showing the stream it was holding (ADR-0003), and no
     // decoder is opened for a window that is not looking at it.
-    if (_suspended) {
-      _install(key, packets, audio, groupDecryptor, requestKeyframe);
-      _notify();
-      return true;
-    }
-    final decoder = _decoderFactory();
+    if (_suspended) return true;
     try {
-      await decoder.start();
+      await session.pipeline.setDecoding(true);
     } on Object catch (error) {
-      _errors[key] = error;
-      _notify();
+      if (identical(_sessions[key], session)) {
+        _errors[key] = error;
+        await _teardown(key);
+        _notify();
+      }
       return false;
     }
-    // Those awaits are crossings, and each leaves this decoder with nothing
-    // to decode for: the ask may have been withdrawn while it was opening,
-    // the controller may have been disposed, or Discord may have reopened the
-    // connection and another attach may already be reading it. A decoder
-    // nobody wants is handed back rather than left running, and a session
-    // installed over one already reading would splice this connection's
-    // packets into the other's picture.
-    if (_disposed || _cancelled.contains(key) || _sessions.containsKey(key)) {
-      await decoder.stop();
-      return false;
-    }
-    final session = _install(key, packets, audio, groupDecryptor, requestKeyframe);
-    // The window may have gone away while the decoder was opening, which is a
-    // crossing the check above cannot see: this key was not in [_sessions]
-    // yet, so suspending did not reach it. The connection is kept and read,
-    // and a decoder nobody is looking at is handed straight back.
-    if (_suspended) {
-      await decoder.stop();
-      _notify();
-      return true;
-    }
-    session.attachDecoder(decoder);
-    _notify();
-    return true;
+    // That await is a crossing: the ask may have been withdrawn, the
+    // controller disposed, or the connection reopened and another session
+    // installed over this one. The pipeline handed its decoder back in each
+    // case; this only answers whether the session is still the one held.
+    return identical(_sessions[key], session);
   }
 
   /// Starts watching [key], reading packets from [packets].
@@ -403,8 +383,8 @@ final class StreamViewerController extends ChangeNotifier {
     for (final each in key == null ? [..._order] : [key]) {
       final wasOpen = _order.remove(each);
       final arrived = _sessions.containsKey(each);
-      // TEMP DIAGNOSTICS: a control that answers a press by withdrawing a
-      // held ask looks exactly like a button that does nothing. Say so.
+      // A control that answers a press by withdrawing a held ask looks
+      // exactly like a button that does nothing. Say so.
       if (key != null) {
         _diagnose(
           'watch stop for ${each.userId}: was held $wasOpen, '
@@ -429,7 +409,12 @@ final class StreamViewerController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    unawaited(stop());
+    unawaited(
+      stop().then((_) async {
+        await _pcm.close();
+        await _audioEnded.close();
+      }),
+    );
     super.dispose();
   }
 
@@ -491,17 +476,12 @@ final class StreamViewerController extends ChangeNotifier {
     return null;
   }
 
-  /// Ends [key]'s decoder and subscription, leaving its place in the room
-  /// alone.
+  /// Ends [key]'s session, leaving its place in the room alone. Its decoder,
+  /// pacer and audio go in one step (ADR-0004).
   Future<void> _teardown(GoLiveStreamKey key) async {
-    // Audio ends with the watched session (ADR-0004).
-    await _audio?.detach(key);
     final session = _sessions.remove(key);
     if (session == null) return;
-    final packets = session.packets;
-    session.packets = null;
-    await packets?.cancel();
-    await _releaseDecoder(session);
+    await session.close();
   }
 
   /// Brings every session to what [_suspended] asks of it: decoding let go
@@ -513,11 +493,21 @@ final class StreamViewerController extends ChangeNotifier {
     // A copy: a session can be stopped while the others are being brought
     // back, and the map is not theirs to hold still.
     for (final entry in _sessions.entries.toList()) {
-      if (_suspended) {
-        await _releaseDecoder(entry.value);
-      } else {
-        await _openDecoder(entry.key);
+      final key = entry.key;
+      final decoding = !_suspended;
+      try {
+        await entry.value.pipeline.setDecoding(decoding);
+      } on Object catch (error) {
+        // The session is not thrown away because a decoder would not open:
+        // the connection is still there, and the room is told why there is
+        // no picture.
+        _errors[key] = error;
+        _diagnose('decoder failed for ${key.userId}: $error');
+        _notify();
+        continue;
       }
+      // A decoder that opened clears the failure of one that would not.
+      if (decoding && _errors.remove(key) != null) _notify();
     }
   }
 
@@ -534,123 +524,47 @@ final class StreamViewerController extends ChangeNotifier {
     void Function()? requestKeyframe,
   ) {
     _admitted(key);
-    final session = _WatchedSession(
+    final audioDecoders = _audioDecoderFactory;
+    final pipeline = WatchedSessionPipeline(
+      decoderFactory: _decoderFactory,
       groupDecryptor: groupDecryptor,
       requestKeyframe: requestKeyframe,
+      audio: audio == null || audioDecoders == null
+          ? null
+          : (
+              frames: audio,
+              decoderFactory: audioDecoders,
+              sourceId: 'stream:${key.value}:${++_audioSources}',
+            ),
+      // The first picture is news to the room: the stream went from arriving
+      // to showing. Every picture after it is not, and telling the room about
+      // each one rebuilt its widget tree at the stream's frame rate. The
+      // pictures themselves travel on [framesFor].
+      onFirstPicture: () {
+        _diagnose('first picture handed to the decoder for ${key.userId}');
+        _notify();
+      },
     );
+    final session = _WatchedSession(pipeline);
     // In the map before it is listened to: a stream that already has a
     // packet in it delivers on subscription.
     _sessions[key] = session;
     session.packets = packets.listen(
-      (packet) => _accept(key, packet),
+      pipeline.accept,
       onError: (Object error, StackTrace stackTrace) =>
           _acceptError(key, error),
     );
-    // Suspension keeps the audio receiver attached (ADR-0003).
-    if (audio != null) _bindAudio(key, audio);
+    session.pcm = pipeline.pcm.listen((frame) {
+      if (!_pcm.isClosed) _pcm.add(frame);
+    });
+    session.audioEnded = pipeline.audioEnded.listen((sourceId) {
+      if (!_audioEnded.isClosed) _audioEnded.add(sourceId);
+    });
     return session;
-  }
-
-  /// Binds audio without delaying the video session.
-  void _bindAudio(GoLiveStreamKey key, Stream<VoiceRemoteOpusFrame> audio) {
-    final binding = _audio?.attach(key, audio);
-    if (binding == null) return;
-    unawaited(
-      binding.catchError(
-        (Object error) => _diagnose('stream audio for ${key.userId}: $error'),
-      ),
-    );
-  }
-
-  /// Opens [key]'s decoder, and hands the session a receiver to feed it with.
-  ///
-  /// Also how a suspended session comes back. The receiver is made fresh
-  /// rather than kept: half a picture from before the window went away is not
-  /// the start of one, and the first picture back is a moment behind until
-  /// the sender sends a keyframe (ADR-0003).
-  Future<bool> _openDecoder(GoLiveStreamKey key) async {
-    final session = _sessions[key];
-    if (session == null || session.decoder != null) return false;
-    final decoder = _decoderFactory();
-    try {
-      await decoder.start();
-    } on Object catch (error) {
-      _errors[key] = error;
-      _diagnose('decoder failed for ${key.userId}: $error');
-      _notify();
-      return false;
-    }
-    // That await is a crossing, and each way across leaves this decoder with
-    // nothing to decode for: the window may have gone again, the session may
-    // have been stopped, the controller may have been disposed, or another
-    // decoder may have been opened for this session while this one was
-    // starting, which is what two resumes in a row do. A decoder nobody wants
-    // is handed back rather than left running, and one installed over another
-    // would leave the first decoding with nobody holding it.
-    if (_disposed ||
-        _suspended ||
-        session.decoder != null ||
-        !identical(_sessions[key], session)) {
-      await decoder.stop();
-      return false;
-    }
-    session.attachDecoder(decoder);
-    _errors.remove(key);
-    _notify();
-    return true;
-  }
-
-  /// Lets go of what turns [session]'s packets into pictures, keeping the
-  /// subscription that keeps the connection alive.
-  Future<void> _releaseDecoder(_WatchedSession session) async {
-    final decoder = session.decoder;
-    session.decoder = null;
-    session.receiver = null;
-    await session.frames?.cancel();
-    session.frames = null;
-    session.pacer?.dispose();
-    session.pacer = null;
-    if (decoder == null) return;
-    await decoder.stop();
   }
 
   void _diagnose(String what) {
     AppLog.warning('stream', what);
-  }
-
-  void _accept(GoLiveStreamKey key, IncomingVideoPacket packet) {
-    final session = _sessions[key];
-    if (session == null) return;
-    session.receivedPackets++;
-    final receiver = session.receiver;
-    final decoder = session.decoder;
-    // Suspended: the packet is counted, so a stream that is arriving still
-    // reads as arriving, and that is all that is done with it (ADR-0003).
-    if (receiver == null || decoder == null) return;
-    final picture = receiver.accept(
-      packet.payload,
-      marker: packet.marker,
-      rtpTimestamp: packet.rtpTimestamp,
-    );
-    if (picture == null) return;
-    session.decodedUnits++;
-    // The pacer owns the decode schedule (a picture with no timestamp decodes
-    // at once), and it is absent exactly when the decoder is, so the direct
-    // call only covers the window before the pacer is installed.
-    final pacer = session.pacer;
-    if (pacer == null) {
-      unawaited(decoder.submit(picture.bytes));
-    } else {
-      pacer.submit(picture.bytes, picture.rtpTimestamp);
-    }
-    // The first picture is news to the room: the stream went from arriving
-    // to showing. Every picture after it is not, and telling the room about
-    // each one rebuilt its widget tree at the stream's frame rate. The
-    // pictures themselves travel on [framesFor].
-    if (session.decodedUnits == 1) {
-      _diagnose('first picture handed to the decoder for ${key.userId}');
-      _notify();
-    }
   }
 
   void _acceptError(GoLiveStreamKey key, Object error) {
@@ -664,102 +578,22 @@ final class StreamViewerController extends ChangeNotifier {
   }
 }
 
-/// One stream being watched: its own receiver, decoder and subscription.
-///
-/// The decoder and the receiver are absent while this client is suspended,
-/// and the subscription is not: the connection stays up and its packets keep
-/// being counted, they just stop becoming pictures (ADR-0003).
+/// One stream being watched: its pipeline, and the subscriptions that feed
+/// it packets and carry its sound into the room's.
 final class _WatchedSession {
-  _WatchedSession({
-    required this.groupDecryptor,
-    this.requestKeyframe,
-  });
+  _WatchedSession(this.pipeline);
 
-  /// Decrypts one whole picture for this stream's group, bound to its sender.
-  final VideoPictureGroupDecryptor? groupDecryptor;
-
-  /// Asked when pictures keep failing to open, so the sender sends a
-  /// keyframe the decoder can start from again.
-  final void Function()? requestKeyframe;
-
-  VideoDecoderService? decoder;
-  DiscordVideoPictureReceiver? receiver;
-
-  /// Keeps the decode on the stream's own clock (see [StreamPicturePacer]).
-  /// Absent while suspended or before a decoder exists, like the receiver.
-  StreamPicturePacer? pacer;
+  final WatchedSessionPipeline pipeline;
   StreamSubscription<IncomingVideoPacket>? packets;
-  StreamSubscription<DecodedVideoFrame>? frames;
-  int receivedPackets = 0;
-  int decodedUnits = 0;
-  int pacerOverflows = 0;
+  StreamSubscription<VoiceRemotePcmFrame>? pcm;
+  StreamSubscription<String>? audioEnded;
 
-  void _diagnose(String what) => AppLog.warning('stream', what);
-
-  /// Pictures the decoder actually produced. Compared against [decodedUnits]
-  /// this separates "the decoder got everything and drew nothing" from "the
-  /// pictures never arrived", which is the whole difference between a decoder
-  /// problem and a delivery one.
-  int decodedFrames = 0;
-
-  /// Gives the session what turns its packets into pictures.
-  ///
-  /// The receiver comes with the decoder rather than outliving it: half a
-  /// picture left over from before a gap is not the start of one.
-  void attachDecoder(VideoDecoderService opened) {
-    decoder = opened;
-    receiver = DiscordVideoPictureReceiver(
-      decryptor: groupDecryptor,
-      onPictureLoss: requestKeyframe,
-    );
-    // The decoder knows when it had to drop an access unit, and a dropped
-    // one breaks the reference chain just like a lost picture: everything
-    // after it decodes against references that do not exist, which is what
-    // draws as smeared colour. Marked here, so the mush is held back and a
-    // keyframe asked for instead.
-    if (opened is NativeVideoDecoderService) {
-      opened.onDecoderDrop = (dropped) {
-        _diagnose(
-          'decoder queue dropped an access unit ($dropped total): '
-          'references broken, holding back until a keyframe',
-        );
-        receiver?.markReferencesBroken();
-      };
-    }
-    unawaited(frames?.cancel());
-    frames = opened.frames.listen((frame) {
-      decodedFrames++;
-      if (decodedFrames == 1 || decodedFrames % 300 == 0) {
-        AppLog.warning(
-          'stream',
-          'decoder frames: $decodedFrames (units $decodedUnits)',
-        );
-      }
-    });
-    pacer?.dispose();
-    pacer = StreamPicturePacer(
-      submit: (unit, rtpTimestamp) => unawaited(
-        opened.submit(
-          unit,
-          // The RTP clock runs at 90 kHz; the decoder wants microseconds so
-          // its own pacing has a schedule that moves.
-          timestamp: Duration(microseconds: rtpTimestamp * 1000000 ~/ 90000),
-        ),
-      ),
-      // The pacer keeps the newest keyframe through an overflow; only a
-      // queue with none in it is dropped whole, and that is what breaks
-      // the references.
-      isKeyframe: DiscordVideoPictureReceiver.carriesIdrSlice,
-      onOverflow: () {
-        pacerOverflows++;
-        if (pacerOverflows <= 3 || pacerOverflows % 20 == 0) {
-          _diagnose(
-            'pacer overflow #$pacerOverflows: queued pictures dropped, '
-            'references broken, holding back until a keyframe',
-          );
-        }
-        receiver?.markReferencesBroken();
-      },
-    );
+  Future<void> close() async {
+    await packets?.cancel();
+    // Closed before the audio subscriptions go: the ended signal travels on
+    // them.
+    await pipeline.close();
+    await pcm?.cancel();
+    await audioEnded?.cancel();
   }
 }

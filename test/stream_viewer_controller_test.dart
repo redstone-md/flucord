@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/stream_viewer_controller.dart';
-import 'package:flucord/src/application/watched_stream_audio.dart';
+import 'package:flucord/src/application/watched_session_pipeline.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
@@ -117,54 +117,6 @@ void main() {
       DiscordH264Packetizer.splitAnnexB(decoder.submitted.single).length,
       2,
     );
-  });
-
-  test('the room is told about the first picture, not about every one', () async {
-    final repository = _FakeRepository();
-    final decoder = _FakeDecoder();
-    final packets = StreamController<IncomingVideoPacket>();
-    addTearDown(packets.close);
-    final controller = StreamViewerController(
-      repositoryProvider: () => repository,
-      decoderFactory: () => decoder,
-    );
-    addTearDown(controller.dispose);
-    await controller.watch(_key, packets: packets.stream);
-
-    var notified = 0;
-    controller.addListener(() => notified++);
-    for (var picture = 0; picture < 100; picture++) {
-      for (final packet in _packetsFor()) {
-        packets.add(packet);
-      }
-    }
-    await Future<void>.delayed(Duration.zero);
-
-    // A stream that started showing is news; a stream that is still showing
-    // is not, and a room rebuilt per picture follows the frame rate.
-    expect(decoder.submitted, hasLength(100));
-    expect(controller.decodedUnits, 100);
-    expect(notified, 1);
-  });
-
-  test('a picture still arriving is not submitted yet', () async {
-    final repository = _FakeRepository();
-    final decoder = _FakeDecoder();
-    final packets = StreamController<IncomingVideoPacket>();
-    addTearDown(packets.close);
-    final controller = StreamViewerController(
-      repositoryProvider: () => repository,
-      decoderFactory: () => decoder,
-    );
-    addTearDown(controller.dispose);
-    await controller.watch(_key, packets: packets.stream);
-
-    packets.add(_packetsFor().first);
-    await Future<void>.delayed(Duration.zero);
-
-    expect(controller.receivedPackets, 1);
-    expect(controller.decodedUnits, 0);
-    expect(decoder.submitted, isEmpty);
   });
 
   test('stopping releases the decoder and forgets the counts', () async {
@@ -335,12 +287,10 @@ void main() {
 
     test('an unsolicited endpoint stays silent', () async {
       final audioCodecs = FakeVoiceOpusDecoderFactory();
-      final streamAudio = WatchedStreamAudio(decoderFactory: audioCodecs);
-      addTearDown(streamAudio.dispose);
       final controller = StreamViewerController(
         repositoryProvider: () => _FakeRepository(),
         decoderFactory: () => _FakeDecoder(),
-        audio: streamAudio,
+        audioDecoderFactory: audioCodecs,
       );
       addTearDown(controller.dispose);
       final packets = StreamController<IncomingVideoPacket>.broadcast();
@@ -844,10 +794,7 @@ void main() {
     test('a watched stream\'s sound plays', () async {
       final repository = _FakeRepository();
       final codecs = FakeVoiceOpusDecoderFactory();
-      final controller = _viewer(
-        repository,
-        audio: WatchedStreamAudio(decoderFactory: codecs),
-      );
+      final controller = _viewer(repository, audioDecoderFactory: codecs);
       addTearDown(controller.dispose);
       final opus = _audioConnection();
       final heard = <VoiceRemotePcmFrame>[];
@@ -872,10 +819,7 @@ void main() {
     test('stopping the watch ends the sound with the session', () async {
       final repository = _FakeRepository();
       final codecs = FakeVoiceOpusDecoderFactory();
-      final controller = _viewer(
-        repository,
-        audio: WatchedStreamAudio(decoderFactory: codecs),
-      );
+      final controller = _viewer(repository, audioDecoderFactory: codecs);
       addTearDown(controller.dispose);
       final opus = _audioConnection();
       final heard = <VoiceRemotePcmFrame>[];
@@ -904,10 +848,7 @@ void main() {
     test('stopping one stream leaves the other audible', () async {
       final repository = _FakeRepository();
       final codecs = FakeVoiceOpusDecoderFactory();
-      final controller = _viewer(
-        repository,
-        audio: WatchedStreamAudio(decoderFactory: codecs),
-      );
+      final controller = _viewer(repository, audioDecoderFactory: codecs);
       addTearDown(controller.dispose);
       final first = _audioConnection();
       final second = _audioConnection();
@@ -939,10 +880,7 @@ void main() {
     test('a suspended client goes on listening', () async {
       final repository = _FakeRepository();
       final codecs = FakeVoiceOpusDecoderFactory();
-      final controller = _viewer(
-        repository,
-        audio: WatchedStreamAudio(decoderFactory: codecs),
-      );
+      final controller = _viewer(repository, audioDecoderFactory: codecs);
       addTearDown(controller.dispose);
       final opus = _audioConnection();
       final heard = <VoiceRemotePcmFrame>[];
@@ -1465,7 +1403,7 @@ StreamViewerController _viewer(
   GoLiveRepository repository, {
   List<_FakeDecoder>? made,
   GoLiveStreamKey? Function()? ownKey,
-  WatchedStreamAudio? audio,
+  VoiceOpusDecoderFactory? audioDecoderFactory,
   void Function(GoLiveStreamKey key)? onWatchStopped,
 }) {
   final controller = StreamViewerController(
@@ -1477,7 +1415,7 @@ StreamViewerController _viewer(
     },
     ownKeyProvider: ownKey,
     onWatchStopped: onWatchStopped,
-    audio: audio,
+    audioDecoderFactory: audioDecoderFactory,
   );
   expect(controller.isSupported, isTrue);
   made?.clear();
@@ -1514,6 +1452,9 @@ final class _FakeDecoder implements VideoDecoderService {
 
   @override
   Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<int> get droppedAccessUnits => const Stream.empty();
 
   @override
   Future<void> start() async {

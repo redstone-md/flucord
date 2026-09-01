@@ -53,6 +53,12 @@ abstract interface class VideoDecoderService {
   /// Pictures, in the order they decode.
   Stream<DecodedVideoFrame> get frames;
 
+  /// The running total of access units the decoder had to drop, reported
+  /// whenever it grows. A dropped unit breaks the reference chain like a lost
+  /// picture: everything after it decodes against references that do not
+  /// exist, so whoever feeds the decoder asks for a keyframe.
+  Stream<int> get droppedAccessUnits;
+
   Future<void> start();
 
   /// Feeds one Annex B access unit in.

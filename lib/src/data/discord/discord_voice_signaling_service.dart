@@ -614,6 +614,11 @@ final class DiscordVoiceSignalingService
     return client.decryptVideoGroupFrame(userId: userId, picture: picture);
   }
 
+  /// Asks whoever sends pictures on [mediaSsrc] for a keyframe (RFC 4585),
+  /// on the session currently joined. Nothing to ask when there is none.
+  void sendPictureLoss({required int mediaSsrc}) =>
+      _activeClient?.sendPictureLoss(mediaSsrc: mediaSsrc);
+
   @override
   void sendOpusFrame(Uint8List opusFrame) {
     final client = _activeClient;

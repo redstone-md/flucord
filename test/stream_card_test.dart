@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/stream_viewer_controller.dart';
+import 'package:flucord/src/application/watched_session_pipeline.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 
 import 'support/stream_room_harness.dart';

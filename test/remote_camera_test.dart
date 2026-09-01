@@ -88,56 +88,51 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(decoders.length, 2);
-      // A four-byte start code opens the access unit; inside it the
-      // parameter sets keep four bytes and everything else takes three, which
-      // is the rule the depacketiser writes by. The second sender ends on NAL
-      // type 8 — a picture parameter set — and so keeps the long one.
-      expect(decoders[0].submitted.single, [0, 0, 0, 1, 0x65, 1, 0, 0, 1, 2]);
+      // Every NAL gets the four-byte start code the sender encrypted with
+      // (ADR-0005).
+      expect(decoders[0].submitted.single, [
+        0, 0, 0, 1, 0x65, 1, //
+        0, 0, 0, 1, 2,
+      ]);
       expect(decoders[1].submitted.single, [
-        0,
-        0,
-        0,
-        1,
-        0x65,
-        9,
-        0,
-        0,
-        0,
-        1,
-        8,
+        0, 0, 0, 1, 0x65, 9, //
+        0, 0, 0, 1, 8,
       ]);
       expect(controller.packetsFrom('user-a'), 2);
       expect(controller.packetsFrom('nobody'), 0);
     });
 
-    test('a group-encrypted camera picture decrypts after reassembly', () async {
-      final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <_FakeDecoder>[];
-      final decryptions = <Uint8List>[];
-      final controller = RemoteCameraController(
-        packetsProvider: () => packets.stream,
-        decoderFactory: () {
-          final decoder = _FakeDecoder();
-          decoders.add(decoder);
-          return decoder;
-        },
-        groupDecryptorProvider: () => (String userId, Uint8List picture) {
-          decryptions.add(picture);
-          return picture;
-        },
-      );
-      addTearDown(controller.dispose);
-      controller.listen();
+    test(
+      'a group-encrypted camera picture decrypts after reassembly',
+      () async {
+        final packets = StreamController<(String, DiscordRtpFrame)>();
+        final decoders = <_FakeDecoder>[];
+        final decryptions = <Uint8List>[];
+        final controller = RemoteCameraController(
+          packetsProvider: () => packets.stream,
+          decoderFactory: () {
+            final decoder = _FakeDecoder();
+            decoders.add(decoder);
+            return decoder;
+          },
+          groupDecryptorProvider: () => (String userId, Uint8List picture) {
+            decryptions.add(picture);
+            return picture;
+          },
+        );
+        addTearDown(controller.dispose);
+        controller.listen();
 
-      packets
-        ..add(('user-a', _frame([0x65, 1], marker: false)))
-        ..add(('user-a', _frame([2], marker: true)));
-      await Future<void>.delayed(Duration.zero);
+        packets
+          ..add(('user-a', _frame([0x65, 1], marker: false)))
+          ..add(('user-a', _frame([2], marker: true)));
+        await Future<void>.delayed(Duration.zero);
 
-      expect(decryptions, hasLength(1));
-      expect(decryptions.single, [0, 0, 0, 1, 0x65, 1, 0, 0, 1, 2]);
-      expect(decoders.single.submitted, [decryptions.single]);
-    });
+        expect(decryptions, hasLength(1));
+        expect(decryptions.single, [0, 0, 0, 1, 0x65, 1, 0, 0, 0, 1, 2]);
+        expect(decoders.single.submitted, [decryptions.single]);
+      },
+    );
 
     test('a decoded picture is held for whoever sent it', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
@@ -224,6 +219,42 @@ void main() {
       expect(controller.isListening, isFalse);
       expect(controller.senders, isEmpty);
     });
+
+    test(
+      'a camera that loses a picture asks for a keyframe and waits for an IDR',
+      () async {
+        final packets = StreamController<(String, DiscordRtpFrame)>();
+        final decoder = _FakeDecoder();
+        final asked = <int>[];
+        var reject = true;
+        final controller = RemoteCameraController(
+          packetsProvider: () => packets.stream,
+          decoderFactory: () => decoder,
+          groupDecryptorProvider: () => (String userId, Uint8List picture) {
+            if (reject) throw StateError('no key yet');
+            return picture;
+          },
+          requestKeyframe: asked.add,
+        );
+        addTearDown(controller.dispose);
+        controller.listen();
+
+        // A picture that will not open, then one that references it: smeared
+        // colour until the sender chooses to send a keyframe, unless asked.
+        packets.add(('user-a', _frame([0x65, 1], marker: true)));
+        await Future<void>.delayed(Duration.zero);
+        reject = false;
+        packets.add(('user-a', _frame([0x41, 2], marker: true)));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(decoder.submitted, isEmpty);
+        expect(asked, [41]);
+
+        packets.add(('user-a', _frame([0x65, 3], marker: true)));
+        await Future<void>.delayed(Duration.zero);
+        expect(decoder.submitted, hasLength(1));
+      },
+    );
 
     test('a room where nobody sends opens no decoder at all', () async {
       var made = 0;
@@ -463,6 +494,9 @@ final class _FakeDecoder implements VideoDecoderService {
 
   @override
   Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<int> get droppedAccessUnits => const Stream.empty();
 
   @override
   Future<void> start() async {}

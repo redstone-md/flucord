@@ -1,8 +1,5 @@
 import 'dart:typed_data';
 
-// TEMP DIAGNOSTICS (remove after the live picture check).
-import '../../app_log.dart';
-
 /// Rebuilds Annex B access units from RTP payloads.
 ///
 /// The receiving half of RFC 6184, and the only way this client can check its
@@ -17,14 +14,6 @@ final class DiscordH264Depacketizer {
   int _fragmentHeader = 0;
   bool _dropping = false;
 
-  // TEMP DIAGNOSTICS (remove after the live picture check).
-  int _tracedNals = 0;
-  bool _tracingNal = false;
-  final List<String> _trace = [];
-  int _stapLogged = 0;
-  int _orphanContinuations = 0;
-  int _cutNals = 0;
-
   /// Feeds one RTP payload in.
   ///
   /// Returns the completed access unit when [marker] closes one, or `null`
@@ -38,14 +27,6 @@ final class DiscordH264Depacketizer {
       // STAP-A: several whole NALs behind one payload header, each preceded by
       // its 16-bit length. Not produced here, but a sender on the other side
       // may use it and a viewer that ignored it would lose parameter sets.
-      // TEMP DIAGNOSTICS (remove after the live picture check).
-      if (_stapLogged < 2) {
-        _stapLogged++;
-        AppLog.warning(
-          'stream',
-          'picture diagnostic: STAP-A payload len ${payload.length}',
-        );
-      }
       _acceptAggregate(payload);
     } else {
       _appendNal(payload);
@@ -65,16 +46,6 @@ final class DiscordH264Depacketizer {
     final isFirst = header & 0x80 != 0;
     final isFinal = header & 0x40 != 0;
     if (isFirst) {
-      // TEMP DIAGNOSTICS (remove after the live picture check): a new NAL
-      // starting while one is still open means its final fragment was lost
-      // or arrived out of order.
-      if (_fragment.isNotEmpty && ++_cutNals <= 3) {
-        AppLog.warning(
-          'stream',
-          'picture diagnostic: fragment anomaly: a new NAL started while '
-          'the previous held ${_fragment.length} bytes',
-        );
-      }
       _fragment
         ..clear()
         // The original NAL header is the indicator's importance bits and the
@@ -82,40 +53,16 @@ final class DiscordH264Depacketizer {
         ..add((indicator & 0xe0) | (header & 0x1f));
       _fragmentHeader = _fragment.first;
       _dropping = false;
-      _tracingNal = _tracedNals < 2;
-      if (_tracingNal) {
-        _trace
-          ..clear()
-          ..add('start(type ${header & 0x1f}, ${payload.length}B)');
-      }
     } else if (_fragment.isEmpty) {
       // A continuation with no start means the first packet was lost. The
       // whole NAL is unusable, so the rest of it is dropped rather than
       // producing a slice that begins in the middle.
-      if (++_orphanContinuations <= 3) {
-        AppLog.warning(
-          'stream',
-          'picture diagnostic: fragment anomaly: continuation without a '
-          'start fragment',
-        );
-      }
       _dropping = true;
       return;
     }
     if (_dropping) return;
-    if (_tracingNal && !isFirst) {
-      _trace.add('${isFinal ? 'end' : 'mid'}(${payload.length}B)');
-    }
     _fragment.addAll(payload.sublist(2));
     if (isFinal) {
-      if (_tracingNal) {
-        _tracedNals++;
-        AppLog.warning(
-          'stream',
-          'picture diagnostic: NAL trace: ${_trace.join(' ')}',
-        );
-        _tracingNal = false;
-      }
       _appendNal(Uint8List.fromList(_fragment));
       _fragment.clear();
       _fragmentHeader = 0;
@@ -133,17 +80,13 @@ final class DiscordH264Depacketizer {
     }
   }
 
-  /// Parameter sets take the four-byte start code and everything else the
-  /// three-byte one, which is what the encoder emits and what a decoder is
-  /// least surprised by.
+  /// Every NAL gets the four-byte start code. That is the shape the official
+  /// sender encrypts before it packetises (ADR-0005), and the group cipher
+  /// authenticates those exact bytes: a picture reassembled with three-byte
+  /// codes anywhere differs from the ciphertext and will not decrypt.
   void _appendNal(Uint8List nal) {
     if (nal.isEmpty) return;
-    final type = nal[0] & 0x1f;
-    if (type == 7 || type == 8 || _accessUnit.isEmpty) {
-      _accessUnit.addAll(const [0, 0, 0, 1]);
-    } else {
-      _accessUnit.addAll(const [0, 0, 1]);
-    }
+    _accessUnit.addAll(const [0, 0, 0, 1]);
     _accessUnit.addAll(nal);
   }
 

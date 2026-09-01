@@ -57,7 +57,6 @@ import 'application/user_profile_controller.dart';
 import 'application/user_settings_controller.dart';
 import 'application/voice_controller.dart';
 import 'application/voice_overlay_controller.dart';
-import 'application/watched_stream_audio.dart';
 import 'application/window_visible.dart';
 import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
@@ -376,17 +375,9 @@ final class AppComposition {
     void applyQuality() => unawaited(goLive.applyQuality());
     streamQuality.addListener(applyQuality);
     _teardown.add(() => streamQuality.removeListener(applyQuality));
-    // One audio receiver per watched session (ADR-0004).
-    final codecFactory = bootstrap.voiceOpusCodecFactory;
-    final streamAudio = codecFactory == null
-        ? null
-        : WatchedStreamAudio(decoderFactory: codecFactory);
-    if (streamAudio != null) {
-      _teardown.add(() => unawaited(streamAudio.dispose()));
-    }
     // Watching somebody else's share: a session per stream, each with a
-    // picture receiver and decoder. Decoders are made on demand, so a room
-    // where nobody is streaming opens none.
+    // pipeline of its own. Decoders are made on demand, so a room where
+    // nobody is streaming opens none.
     streamViewer = _register(
       StreamViewerController(
         repositoryProvider: () => chat.goLive,
@@ -399,7 +390,8 @@ final class AppComposition {
         // A stopped watch takes its connection with it. Only the receiving
         // half: the share's own connection ends with the share (ADR-0001).
         onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
-        audio: streamAudio,
+        // One audio receiver per watched session (ADR-0004).
+        audioDecoderFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
     // The second RTC connection a stream lives on. Discord does not carry Go
@@ -491,12 +483,13 @@ final class AppComposition {
         groupDecryptorProvider: () {
           final signaling = liveVoiceSignaling;
           if (signaling == null) return null;
-          return (String userId, Uint8List picture) =>
-              signaling.decryptVideoGroupFrame(
-                userId: userId,
-                picture: picture,
-              );
+          return (String userId, Uint8List picture) => signaling
+              .decryptVideoGroupFrame(userId: userId, picture: picture);
         },
+        // A camera that lost a picture asks its sender for a keyframe over
+        // the call's own connection, the way a watched stream does over its.
+        requestKeyframe: (mediaSsrc) =>
+            liveVoiceSignaling?.sendPictureLoss(mediaSsrc: mediaSsrc),
       ),
     );
   }

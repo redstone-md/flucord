@@ -2,21 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../app_log.dart';
 import '../data/discord/discord_rtp_packet.dart';
-import '../data/discord/discord_video_picture_receiver.dart';
 import '../domain/video_decoder.dart';
+import 'watched_session_pipeline.dart';
 
 /// Decrypts one whole picture for the room's group, for the sender named.
-typedef CameraGroupDecryptor = Uint8List Function(
-  String userId,
-  Uint8List picture,
-);
+typedef CameraGroupDecryptor =
+    Uint8List Function(String userId, Uint8List picture);
 
 /// Everybody else's cameras in the voice room.
 ///
-/// One receiver and one decoder per person, not one shared pair: two senders
-/// interleave on the same socket, and a single receiver would splice one
-/// person's packets into another's picture. The decoders are made through a
+/// One pipeline per person, not one shared: two senders interleave on the
+/// same socket, and a single receiver would splice one person's packets into
+/// another's picture. The same pipeline a watched stream uses, with pacing
+/// off: a camera tile is small and expected to be live, and it recovers from
+/// a lost picture the way a stream does. The decoders are made through a
 /// factory for the same reason as the encoder. A test host has no H.264
 /// decoder, and the controller has to be exercisable without one.
 final class RemoteCameraController extends ChangeNotifier {
@@ -29,13 +30,19 @@ final class RemoteCameraController extends ChangeNotifier {
     /// replaces the connection, and a closure over the old one would decrypt
     /// with a key from a session nobody holds anymore.
     CameraGroupDecryptor? Function()? groupDecryptorProvider,
+
+    /// Asks whoever sends on [mediaSsrc] for a keyframe, over the call's
+    /// connection (RFC 4585).
+    void Function(int mediaSsrc)? requestKeyframe,
   }) : _packetsProvider = packetsProvider,
        _decoderFactory = decoderFactory,
-       _groupDecryptorProvider = groupDecryptorProvider;
+       _groupDecryptorProvider = groupDecryptorProvider,
+       _requestKeyframe = requestKeyframe;
 
   final Stream<(String, DiscordRtpFrame)> Function() _packetsProvider;
   final VideoDecoderService Function() _decoderFactory;
   final CameraGroupDecryptor? Function()? _groupDecryptorProvider;
+  final void Function(int mediaSsrc)? _requestKeyframe;
 
   final Map<String, _RemoteCamera> _cameras = {};
   StreamSubscription<(String, DiscordRtpFrame)>? _subscription;
@@ -53,7 +60,8 @@ final class RemoteCameraController extends ChangeNotifier {
 
   /// How many payloads have arrived from [userId], which separates "somebody
   /// is sending" from "something has decoded".
-  int packetsFrom(String userId) => _cameras[userId]?.packets ?? 0;
+  int packetsFrom(String userId) =>
+      _cameras[userId]?.pipeline.stats.receivedPackets ?? 0;
 
   bool get isReceiving => _cameras.values.any((camera) => camera.frame != null);
 
@@ -83,37 +91,57 @@ final class RemoteCameraController extends ChangeNotifier {
 
   void _accept((String, DiscordRtpFrame) packet) {
     final (userId, frame) = packet;
-    final camera = _cameras.putIfAbsent(userId, () {
-      final decoder = _decoderFactory();
-      final created = _RemoteCamera(decoder, decryptor: (picture) {
-        final decryptor = _groupDecryptorProvider?.call();
-        return decryptor == null ? picture : decryptor(userId, picture);
-      });
-      // Started lazily: a room where nobody turns a camera on should not open
-      // a decoder per participant.
-      created.subscription = decoder.frames.listen((picture) {
-        created.frame = picture;
-        _notify();
-      });
-      unawaited(decoder.start());
-      return created;
-    });
-    camera.packets++;
-    final unit = camera.receiver.accept(
-      Uint8List.fromList(frame.payload),
-      marker: frame.header.marker,
-      rtpTimestamp: frame.header.timestamp,
+    // Opened lazily: a room where nobody turns a camera on should not open
+    // a decoder per participant.
+    final camera = _cameras.putIfAbsent(userId, () => _open(userId));
+    camera.ssrc = frame.header.ssrc;
+    camera.pipeline.accept(
+      IncomingVideoPacket(
+        payload: Uint8List.fromList(frame.payload),
+        marker: frame.header.marker,
+        rtpTimestamp: frame.header.timestamp,
+      ),
     );
-    if (unit == null) return;
-    // Camera tiles are small and few: their pictures decode as they land,
-    // without the stream viewer's playout buffer.
-    unawaited(camera.decoder.submit(unit.bytes));
+  }
+
+  _RemoteCamera _open(String userId) {
+    final camera = _RemoteCamera(
+      WatchedSessionPipeline(
+        decoderFactory: _decoderFactory,
+        groupDecryptor: (picture) {
+          final decryptor = _groupDecryptorProvider?.call();
+          return decryptor == null ? picture : decryptor(userId, picture);
+        },
+        requestKeyframe: _requestKeyframe == null
+            ? null
+            : () => _askForKeyframe(userId),
+        paced: false,
+      ),
+    );
+    camera.frames = camera.pipeline.frames.listen((picture) {
+      camera.frame = picture;
+      _notify();
+    });
+    unawaited(
+      camera.pipeline
+          .setDecoding(true)
+          .catchError(
+            (Object error) =>
+                AppLog.warning('camera', 'decoder failed for $userId: $error'),
+          ),
+    );
+    return camera;
+  }
+
+  void _askForKeyframe(String userId) {
+    final ssrc = _cameras[userId]?.ssrc;
+    if (ssrc != null) _requestKeyframe?.call(ssrc);
   }
 
   void _clearCameras() {
     for (final camera in _cameras.values) {
-      unawaited(camera.subscription?.cancel());
-      unawaited(camera.decoder.stop());
+      unawaited(camera.frames?.cancel());
+      unawaited(camera.pipeline.close());
     }
     _cameras.clear();
   }
@@ -132,15 +160,13 @@ final class RemoteCameraController extends ChangeNotifier {
 }
 
 final class _RemoteCamera {
-  _RemoteCamera(this.decoder, {required VideoPictureGroupDecryptor decryptor})
-    : receiver = DiscordVideoPictureReceiver(decryptor: decryptor);
+  _RemoteCamera(this.pipeline);
 
-  final VideoDecoderService decoder;
-
-  /// Puts this sender's packets back into whole pictures, and decrypts each
-  /// one once for the room's group.
-  final DiscordVideoPictureReceiver receiver;
-  StreamSubscription<DecodedVideoFrame>? subscription;
+  final WatchedSessionPipeline pipeline;
+  StreamSubscription<DecodedVideoFrame>? frames;
   DecodedVideoFrame? frame;
-  int packets = 0;
+
+  /// The SSRC this sender's pictures arrive on, which is what a keyframe ask
+  /// names.
+  int? ssrc;
 }

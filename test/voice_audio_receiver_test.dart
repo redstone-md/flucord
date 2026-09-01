@@ -17,7 +17,7 @@ void main() {
     addTearDown(subscription.cancel);
     transport.onListen = () => transport.addRemote('participant-1', [7]);
 
-    await receiver.bindTransport(transport);
+    await receiver.bind(transport.remoteAudio);
     await _flushEvents();
 
     expect(codecs.decoderCreations, 1);
@@ -30,7 +30,7 @@ void main() {
     final transport = _FakeReceiverTransport();
     final receiver = VoiceAudioReceiver(decoderFactory: codecs);
     addTearDown(receiver.dispose);
-    await receiver.bindTransport(transport);
+    await receiver.bind(transport.remoteAudio);
 
     final received = <VoiceRemotePcmFrame>[];
     final subscription = receiver.remotePcm.listen(received.add);
@@ -61,8 +61,8 @@ void main() {
     final second = _FakeReceiverTransport();
 
     await Future.wait([
-      receiver.bindTransport(first),
-      receiver.bindTransport(second),
+      receiver.bind(first.remoteAudio),
+      receiver.bind(second.remoteAudio),
     ]);
     first.addRemote('participant-1', [1]);
     second.addRemote('participant-2', [2]);
@@ -81,11 +81,11 @@ void main() {
     final errorSubscription = receiver.errors.listen(errors.add);
     addTearDown(errorSubscription.cancel);
 
-    await receiver.bindTransport(transport);
+    await receiver.bind(transport.remoteAudio);
     for (var index = 0; index < 49; index++) {
       transport.addRemote('participant-1', [index]);
     }
-    await receiver.bindTransport(replacement);
+    await receiver.bind(replacement.remoteAudio);
     replacement.addRemote('participant-1', [50]);
     await _flushEvents();
 
@@ -129,7 +129,8 @@ final class _FakeDecoder implements VoiceOpusDecoder {
   void dispose() {}
 }
 
-final class _FakeReceiverTransport implements VoiceAudioReceiverTransport {
+/// A connection's audio, as the stream a receiver is bound to.
+final class _FakeReceiverTransport {
   _FakeReceiverTransport() {
     _remote = StreamController.broadcast(onListen: () => onListen?.call());
   }
@@ -137,7 +138,6 @@ final class _FakeReceiverTransport implements VoiceAudioReceiverTransport {
   late final StreamController<VoiceRemoteOpusFrame> _remote;
   void Function()? onListen;
 
-  @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio => _remote.stream;
 
   void addRemote(

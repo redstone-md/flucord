@@ -332,6 +332,9 @@ final class StreamRoomDecoder implements VideoDecoderService {
   Stream<DecodedVideoFrame> get frames => _frames.stream;
 
   @override
+  Stream<int> get droppedAccessUnits => const Stream.empty();
+
+  @override
   Future<void> start() async {}
 
   @override

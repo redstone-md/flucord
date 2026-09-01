@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/stream_router.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
-import 'package:flucord/src/application/watched_stream_audio.dart';
 import 'package:flucord/src/data/discord/discord_h264_packetizer.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
@@ -49,6 +48,7 @@ final Uint8List _keyframe = Uint8List.fromList([
   0x42,
   0,
   0,
+  0,
   1,
   0x65,
   ...List.filled(8, 0xaa),
@@ -86,7 +86,7 @@ final class _Wiring {
       onWatchRequested: (key) => service.noteWatch(key),
       onWatchStopped: (key) => unawaited(service.stop(key)),
       // One audio receiver per watched session (ADR-0004).
-      audio: WatchedStreamAudio(decoderFactory: audioCodecs),
+      audioDecoderFactory: audioCodecs,
     );
     service = DiscordStreamRtcService(
       repositoryProvider: () => repository,
@@ -729,6 +729,9 @@ final class _FakeDecoder implements VideoDecoderService {
 
   @override
   Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<int> get droppedAccessUnits => const Stream.empty();
 
   @override
   Future<void> start() async => started++;

@@ -18,7 +18,7 @@ Accepted.
 - A hole is asked for the moment a packet lands past it. There is no first-ask delay to trade against.
 - The reorder buffer and the retransmission asks belong to the connection, not to a subscriber (one packet pipeline per gateway client). Suspension (ADR-0003) lets go of the decoder and the picture receiver; the buffer and the asks stay with the connection.
 - Nothing decrypts before reassembly (ADR-0005). The wait for a retransmission happens before reassembly closes the picture.
-- The picture receiver still decides that references are broken; the gateway client decides when the ask may leave.
+- The broken-references verdict lives in the watched session pipeline that owns the picture receiver, fed alike by a picture that will not decrypt, a pacer overflow with no keyframe queued, and a decoder drop; the gateway client's gate on when the ask may leave is unchanged.
 - The pacer treats a slot too far in the future as a clock jump and re-anchors on it, and an overflow keeps the newest keyframe it holds. Neither asks the sender for anything; only a queue with no keyframe in it does.
 - The room is redrawn when a stream starts or stops, not per picture. The pictures travel on the stream's own picture stream.
 - Not decided here: receiver reports and bandwidth estimation feedback to the media server, and the sender side (pacing, bitrate adaptation, keyframe answering).

@@ -40,26 +40,12 @@ bool _endsWith(Uint8List bytes, List<int> tail) {
   return true;
 }
 
-/// A parameter set and a slice, long enough to span several packets.
+/// A parameter set and a slice, long enough to span several packets, in the
+/// shape the sender encrypts: a four-byte start code before every NAL.
 Uint8List _accessUnit({required int sliceLength}) => _bytes([
-  0,
-  0,
-  0,
-  1,
-  0x67,
-  0x42,
-  0x00,
-  0,
-  0,
-  0,
-  1,
-  0x68,
-  0xce,
-  0,
-  0,
-  1,
-  0x65,
-  ...List.filled(sliceLength, 0xaa),
+  0, 0, 0, 1, 0x67, 0x42, 0x00, //
+  0, 0, 0, 1, 0x68, 0xce, //
+  0, 0, 0, 1, 0x65, ...List.filled(sliceLength, 0xaa),
 ]);
 
 /// Feeds every payload of one access unit through, and returns the last thing
@@ -85,29 +71,6 @@ DiscordPicture? _feed(
   }
   return result;
 }
-
-/// A picture that references an earlier one: no IDR slice inside.
-Uint8List _nonIdrAccessUnit({required int sliceLength}) => _bytes([
-  0,
-  0,
-  0,
-  1,
-  0x67,
-  0x42,
-  0x00,
-  0,
-  0,
-  0,
-  1,
-  0x68,
-  0xce,
-  0,
-  0,
-  0,
-  1,
-  0x41,
-  ...List.filled(sliceLength, 0xaa),
-]);
 
 void main() {
   test('a picture spanning several packets is decrypted once, as a whole', () {
@@ -167,50 +130,25 @@ void main() {
     );
   });
 
-  test('a picture that will not decrypt is dropped, and does not jam the next',
-      () {
-        final cipher = _FakeGroupCipher();
-        final receiver = DiscordVideoPictureReceiver(decryptor: cipher.open);
-        final unit = _accessUnit(sliceLength: 40);
+  test(
+    'a picture that will not decrypt is dropped, and does not jam the next',
+    () {
+      final cipher = _FakeGroupCipher();
+      final receiver = DiscordVideoPictureReceiver(decryptor: cipher.open);
+      final unit = _accessUnit(sliceLength: 40);
 
-        // A picture from before this client had a key for it.
-        expect(_feed(receiver, unit), isNull);
+      // A picture from before this client had a key for it. Dropped, and
+      // the verdict is kept as state for whoever feeds the decoder.
+      expect(_feed(receiver, unit), isNull);
+      expect(receiver.decryptFailures, 1);
 
-        final next = _feed(receiver, cipher.seal(unit));
+      final next = _feed(receiver, cipher.seal(unit));
+      expect(receiver.decryptFailures, 1);
 
-        expect(
-          DiscordH264Packetizer.splitAnnexB(next!.bytes),
-          DiscordH264Packetizer.splitAnnexB(unit),
-        );
-      });
-
-  test('a lost picture keeps the keyframe ask going until an IDR arrives', () {
-    var clock = DateTime(2026, 1, 1);
-    var asks = 0;
-    final cipher = _FakeGroupCipher();
-    final receiver = DiscordVideoPictureReceiver(
-      decryptor: cipher.open,
-      onPictureLoss: () => asks++,
-      now: () => clock,
-    );
-    final pFrame = _nonIdrAccessUnit(sliceLength: 40);
-    final idrFrame = _accessUnit(sliceLength: 40);
-
-    // The lost picture: it fails to open, and that alone breaks the chain.
-    expect(_feed(receiver, pFrame), isNull);
-    expect(asks, 1);
-
-    // Later pictures open fine and still draw garbage: the ask must go on.
-    clock = clock.add(const Duration(seconds: 2));
-    _feed(receiver, cipher.seal(pFrame));
-    expect(asks, 2);
-
-    // A real keyframe proves the references are whole; the asking stops.
-    clock = clock.add(const Duration(seconds: 2));
-    _feed(receiver, cipher.seal(idrFrame));
-    expect(asks, 2);
-    clock = clock.add(const Duration(seconds: 2));
-    _feed(receiver, cipher.seal(pFrame));
-    expect(asks, 2);
-  });
+      expect(
+        DiscordH264Packetizer.splitAnnexB(next!.bytes),
+        DiscordH264Packetizer.splitAnnexB(unit),
+      );
+    },
+  );
 }

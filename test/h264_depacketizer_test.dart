@@ -147,7 +147,7 @@ void main() {
     expect(depacketizer.hasPendingUnit, isFalse);
   });
 
-  test('parameter sets take the long start code, slices the short one', () {
+  test('every NAL takes the four-byte start code the sender encrypted', () {
     final depacketizer = DiscordH264Depacketizer();
 
     final rebuilt = depacketizer.accept(
@@ -159,9 +159,9 @@ void main() {
       marker: true,
     )!;
 
-    expect(rebuilt.take(4), [0, 0, 0, 1]);
-    // The slice that follows gets the three-byte code.
-    expect(rebuilt.skip(6).take(3), [0, 0, 1]);
+    // The group cipher authenticates the sender's exact bytes, so the slice
+    // gets the long code too (ADR-0005).
+    expect(rebuilt, [0, 0, 0, 1, 0x67, 0x42, 0, 0, 0, 1, 0x65, 0x01]);
   });
 
   test('resetting throws away a half-assembled picture', () {
