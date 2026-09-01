@@ -57,6 +57,11 @@ final class DiscordStreamRtcSession {
   StreamSubscription<(String, DiscordRtpFrame)>? _videoPackets;
   StreamSubscription<VoiceRemoteOpusFrame>? _audioFrames;
   int? _ssrc;
+  int? _videoSsrc;
+
+  /// The video SSRC the quality ask last named: packets re-answer it, and
+  /// only a change asks again.
+  int? _wantsSsrc;
   bool _closed = false;
 
   /// Pictures arriving on this connection, tagged with whose SSRC carried them.
@@ -71,6 +76,46 @@ final class DiscordStreamRtcSession {
   /// The SSRC Discord assigned, once the connection is ready.
   int? get ssrc => _ssrc;
 
+  /// The SSRC the stream's pictures arrive on, once they do.
+  int? get videoSsrc => _videoSsrc;
+
+  /// Asks the sender for a fresh keyframe (RFC 4585): pictures that keep
+  /// failing to open mean the references behind them were lost, and only a
+  /// new keyframe starts the stream over from something whole.
+  void requestKeyframe() {
+    final ssrc = _videoSsrc;
+    if (ssrc == null) return;
+    _client?.sendPictureLoss(mediaSsrc: ssrc);
+  }
+
+  /// What a watching connection asks for (opcode 15): the highest layer the
+  /// sender offers, on Discord's 0-100 quality scale.
+  static const int _wantedQuality = 100;
+
+  /// The rendered area the ask claims, in pixels, which is what the media
+  /// server weighs a layer choice against. A watched stream is drawn as
+  /// large as the window, and a maximised 16:9 window shows about this much,
+  /// so this is the honest claim; a one-layer stream ignores it, a simulcast
+  /// one answers it with its best fit.
+  static const double _wantedPixels = 1920 * 1080.0;
+
+  /// Names what this connection wants to receive, and at what quality.
+  ///
+  /// `any` covers streams whose SSRC is not known yet. Once a picture has
+  /// named its sender, that SSRC is asked for explicitly with the pixel
+  /// count to match, and every ready after that asks again: a resume hands
+  /// the connection a fresh state, and its earlier wants are not assumed to
+  /// have survived.
+  void _askQuality() {
+    if (sending) return;
+    final ssrc = _wantsSsrc;
+    _client?.sendMediaSinkWants(
+      perSsrc: ssrc == null ? const {} : {ssrc: _wantedQuality},
+      any: _wantedQuality,
+      pixelCounts: ssrc == null ? const {} : {ssrc: _wantedPixels},
+    );
+  }
+
   Future<void> connect() async {
     if (_closed || _client != null) return;
     _diagnose('dialling');
@@ -81,7 +126,18 @@ final class DiscordStreamRtcSession {
     _client = client;
     _clientEvents = client.events.listen(_onEvent);
     _videoPackets = client.videoPackets.listen(
-      _video.add,
+      (packet) {
+        final ssrc = packet.$2.header.ssrc;
+        _videoSsrc = ssrc;
+        // A picture names the sender's video SSRC, and the ask on ready
+        // could only say "any", which does not cover a stream the server
+        // already knows. The first picture is where the ask gets specific.
+        if (_wantsSsrc != ssrc) {
+          _wantsSsrc = ssrc;
+          _askQuality();
+        }
+        _video.add(packet);
+      },
       onError: _video.addError,
     );
     _audioFrames = client.remoteAudio.listen(
@@ -163,10 +219,8 @@ final class DiscordStreamRtcSession {
         'dave ${event.session.daveProtocolVersion}',
       );
       // The media server forwards no video until a receiver asks for it, so
-      // this goes out before any picture is expected on the connection.
-      if (!sending) {
-        _client?.sendMediaSinkWants(any: 100);
-      }
+      // the ask goes out before any picture is expected on the connection.
+      _askQuality();
     }
     if (event is VoiceSignalingStatusEvent) {
       _diagnose(event.status.name, event.error);

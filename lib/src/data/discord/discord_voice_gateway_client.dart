@@ -9,6 +9,7 @@ import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_rtcp_packet.dart';
 import 'discord_rtp_packet.dart';
+import 'discord_rtp_reorder_buffer.dart';
 import 'discord_voice_dave_controller.dart';
 import 'discord_voice_gateway_protocol.dart';
 import 'discord_voice_media_transport.dart';
@@ -69,6 +70,11 @@ abstract interface class DiscordVoiceClient implements VoiceVideoTransport {
     int? any,
     Map<int, double> pixelCounts = const {},
   });
+
+  /// Asks whoever sends [mediaSsrc] for a fresh keyframe (RFC 4585): the
+  /// pictures a viewer holds references to are gone, and only a new keyframe
+  /// starts the stream over from something whole.
+  void sendPictureLoss({required int mediaSsrc});
 }
 
 /// The socket driver for a voice gateway connection.
@@ -182,12 +188,209 @@ final class DiscordVoiceGatewayClient
             frame.header.payloadType !=
             DiscordRtpHeader.discordAudioPayloadType,
       )
+      .expand(_reorderVideo)
       .map(
         (frame) =>
             (_protocol.userIdForVideoSsrc(frame.header.ssrc), frame),
       )
       .where((pair) => pair.$1 != null)
       .map((pair) => (pair.$1!, pair.$2));
+
+  /// Puts a sender's video packets back into RTP sequence order.
+  ///
+  /// A picture is one sender's fragments in one sequence, and UDP does not
+  /// promise to keep the order: a keyframe arrives as a burst of a dozen
+  /// fragments, and one swap scrambles bytes the group cipher will not open.
+  /// Audio reorders inside the media transport; video does it here. In-order
+  /// frames pass straight through, so nothing is added to their latency.
+  Iterable<DiscordRtpFrame> _reorderVideo(DiscordRtpFrame frame) {
+    if (frame.header.payloadType ==
+        DiscordRtpHeader.discordVideoRtxPayloadType) {
+      final restored = _restoreRetransmission(frame);
+      if (restored == null) return const [];
+      frame = restored;
+      // TEMP DIAGNOSTICS (remove after the live picture check).
+      if (_rtxRestored++ < 5) {
+        _diagnose(
+          'video retransmission restored: seq ${frame.header.sequence} '
+          'ssrc ${frame.header.ssrc} len ${frame.payload.length}',
+        );
+      }
+    }
+    // TEMP DIAGNOSTICS (remove after the live picture check): the sender
+    // rounds some packets up with RTP padding, which used to ride along and
+    // break the group cipher's byte count.
+    if (frame.header.padding && _paddedPackets++ < 5) {
+      _diagnose(
+        'video packet carried RTP padding: seq ${frame.header.sequence} '
+        'len ${frame.payload.length}',
+      );
+    }
+    final buffer = _videoReorder.putIfAbsent(
+      frame.header.ssrc,
+      // Wider than audio's: one dropped fragment costs a whole picture, and
+      // holding a few packets longer costs nothing on an in-order stream.
+      () => DiscordRtpReorderBuffer(maxReorderDistance: 8),
+    );
+    // A packet that jumped ahead of the expected one just exposed a hole.
+    // Ask for it now, while the hole is still inside the buffer's window and
+    // a retransmission can still be spliced in: asking only when the buffer
+    // finally gives up on the gap is asking too late, because by then it has
+    // moved its waiting point past the hole and a restored packet cannot be
+    // accepted any more. That used to turn every small loss into a whole
+    // lost picture, and every lost picture into a keyframe request.
+    final expected = buffer.nextSequence;
+    if (expected != null &&
+        frame.header.payloadType !=
+            DiscordRtpHeader.discordVideoRtxPayloadType) {
+      final ahead = (frame.header.sequence - expected) & 0xffff;
+      if (ahead > 0 && ahead < 0x8000) {
+        final pending = _nackPending.putIfAbsent(frame.header.ssrc, () => {});
+        for (var missing = expected;
+            missing != frame.header.sequence;
+            missing = (missing + 1) & 0xffff) {
+          pending.putIfAbsent(missing, () => 0);
+        }
+        _ensureNackTimer();
+      }
+    }
+    final ordered = buffer.add(frame);
+    // TEMP DIAGNOSTICS (remove after the live picture check): they show how
+    // often the network really swaps or loses video packets.
+    if (ordered.isEmpty) {
+      if (_reorderDrops++ < 5) {
+        _diagnose(
+          'video packet too late to order: '
+          'seq ${frame.header.sequence} ssrc ${frame.header.ssrc}',
+        );
+      }
+    } else {
+      if (ordered.first.missingFramesBefore > 0 && _reorderGaps < 5) {
+        _reorderGaps++;
+        _diagnose(
+          'video gap of ${ordered.first.missingFramesBefore} before '
+          'seq ${ordered.first.frame.header.sequence}',
+        );
+      }
+      _askForLostPackets(ordered.first);
+    }
+    // What arrived is no longer owed, even if a NACK for it is still in
+    // flight.
+    _nackPending[frame.header.ssrc]?.removeWhere(
+      (sequence, _) => ordered.any(
+        (entry) => entry.frame.header.sequence == sequence,
+      ),
+    );
+    return [for (final entry in ordered) entry.frame];
+  }
+
+  /// Puts a retransmission back in the original packet's place.
+  ///
+  /// Retransmissions ride the video SSRC one above their original's (RFC
+  /// 4588), with the original sequence number ahead of the original payload.
+  DiscordRtpFrame? _restoreRetransmission(DiscordRtpFrame frame) {
+    final payload = frame.payload;
+    if (payload.length <= 2) return null;
+    return DiscordRtpFrame(
+      header: DiscordRtpHeader(
+        sequence: (payload[0] << 8) | payload[1],
+        timestamp: frame.header.timestamp,
+        ssrc: (frame.header.ssrc - 1) & 0xffffffff,
+        payloadType: DiscordRtpHeader.discordVideoPayloadType,
+        marker: frame.header.marker,
+      ),
+      payload: payload.sublist(2),
+    );
+  }
+
+  /// Asks the media server to send again what never arrived (RFC 4585): the
+  /// hole before [first]'s sequence number, where the reorder buffer skipped
+  /// over packets the network dropped.
+  void _askForLostPackets(DiscordOrderedRtpFrame first) {
+    if (first.missingFramesBefore <= 0) return;
+    final ssrc = first.frame.header.ssrc;
+    final sequence = first.frame.header.sequence;
+    final pending = _nackPending.putIfAbsent(ssrc, () => {});
+    for (var missing = (sequence - first.missingFramesBefore) & 0xffff;
+        missing != sequence;
+        missing = (missing + 1) & 0xffff) {
+      pending.putIfAbsent(missing, () => 0);
+    }
+    _ensureNackTimer();
+  }
+
+  void _ensureNackTimer() {
+    _nackTimer ??= Timer.periodic(
+      // Faster than a human notices, slower than the wire needs to answer.
+      const Duration(milliseconds: 40),
+      (_) => _flushNacks(),
+    );
+  }
+
+  /// Sends what is still owed, and gives up on sequences the server has not
+  /// answered after a few asks: a packet lost that hard is lost.
+  void _flushNacks() {
+    final cipher = _transportCipher;
+    final session = _protocol.session;
+    if (cipher == null || session == null || _closing || _failed) return;
+    var anythingPending = false;
+    for (final ssrc in _nackPending.keys.toList()) {
+      final pending = _nackPending[ssrc]!;
+      if (pending.isEmpty) {
+        _nackPending.remove(ssrc);
+        continue;
+      }
+      anythingPending = true;
+      // One increasing run: the pending window is small, so unwrapping it
+      // around any one member puts it in order.
+      final anchor = pending.keys.first;
+      final ordered = pending.keys.toList()
+        ..sort(
+          (a, b) => ((a - anchor) & 0xffff).compareTo((b - anchor) & 0xffff),
+        );
+      final asked = ordered.take(32).toList();
+      final packet = DiscordRtcpPacket.nack(
+        senderSsrc: session.ssrc,
+        mediaSsrc: ssrc,
+        sequences: asked,
+      );
+      // TEMP DIAGNOSTICS (remove after the live picture check).
+      if (_nacksSent++ < 5) {
+        _diagnose('nack sent for ${asked.join(',')} (ssrc $ssrc)');
+      }
+      try {
+        _udpTransport.send(cipher.encryptRtcp(packet));
+      } on Object {
+        // A feedback packet that cannot go out is a dead socket, and the
+        // socket's own path says so when the real media fails too.
+        return;
+      }
+      for (final sequence in asked) {
+        final tries = pending[sequence]! + 1;
+        if (tries >= 8) {
+          pending.remove(sequence);
+        } else {
+          pending[sequence] = tries;
+        }
+      }
+    }
+    if (!anythingPending) {
+      _nackTimer?.cancel();
+      _nackTimer = null;
+    }
+  }
+
+  final Map<int, DiscordRtpReorderBuffer> _videoReorder = {};
+  final Map<int, Map<int, int>> _nackPending = {};
+  Timer? _nackTimer;
+  int _reorderDrops = 0;
+  int _plisSent = 0;
+  int _pliBlocked = 0;
+  int _reorderGaps = 0;
+  // TEMP DIAGNOSTICS (remove after the live picture check).
+  int _paddedPackets = 0;
+  int _rtxRestored = 0;
+  int _nacksSent = 0;
 
   VoiceTransportSession? get session => _protocol.session;
   String? userIdForSsrc(int ssrc) => _protocol.userIdForSsrc(ssrc);
@@ -375,6 +578,8 @@ final class DiscordVoiceGatewayClient
       return;
     }
     _executeDaveCommands(daveCommands);
+    _videoReorder.clear();
+    _nackPending.clear();
     _mediaTransport.configure(
       ssrc: session.ssrc,
       daveEnabled: session.daveProtocolVersion > 0,
@@ -505,6 +710,47 @@ final class DiscordVoiceGatewayClient
         pixelCounts: pixelCounts,
       ),
     );
+  }
+
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {
+    final cipher = _transportCipher;
+    final session = _protocol.session;
+    if (cipher == null || session == null) {
+      if (_pliBlocked++ < 3) {
+        _diagnose('picture loss blocked: cipher ${cipher != null}, '
+            'session ${session != null}');
+      }
+      return;
+    }
+    // TEMP DIAGNOSTICS: proves the keyframe ask leaves at all. A sender that
+    // never answers it leaves references broken and the picture smeared.
+    if (_plisSent++ < 3 || _plisSent % 10 == 0) {
+      _diagnose('picture loss indication sent for $mediaSsrc ($_plisSent)');
+    }
+    try {
+      final feedback = [
+        cipher.encryptRtcp(
+          DiscordRtcpPacket.pictureLoss(
+            senderSsrc: session.ssrc,
+            mediaSsrc: mediaSsrc,
+          ),
+        ),
+        cipher.encryptRtcp(
+          DiscordRtcpPacket.fullIntraRequest(
+            senderSsrc: session.ssrc,
+            mediaSsrc: mediaSsrc,
+            commandSequence: _plisSent,
+          ),
+        ),
+      ];
+      for (final packet in feedback) {
+        _udpTransport.send(packet);
+      }
+    } on Object {
+      // Feedback that cannot leave is a dead socket, and the media path
+      // reports that when the real media fails too.
+    }
   }
 
   /// Encrypts one whole access unit for the room's group, when there is one.

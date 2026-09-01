@@ -102,6 +102,82 @@ abstract final class DiscordRtcpPacket {
     return reports;
   }
 
+  /// Writes a transport-feedback generic NACK (RFC 4585 §6.2.1): the
+  /// sequence numbers this receiver is still owed, packed as packet ids with
+  /// a bitmask of the fifteen behind each.
+  static Uint8List nack({
+    required int senderSsrc,
+    required int mediaSsrc,
+    required List<int> sequences,
+  }) {
+    final entries = <int, int>{};
+    for (final sequence in sequences) {
+      var placed = false;
+      for (final id in entries.keys.toList()) {
+        final bit = (sequence - id - 1) & 0xffff;
+        if (bit < 16 && entries[id]! & (1 << bit) == 0) {
+          entries[id] = entries[id]! | (1 << bit);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) entries[sequence] = 0;
+    }
+    final packet = Uint8List(12 + 4 * entries.length);
+    final data = ByteData.sublistView(packet);
+    packet[0] = 0x81; // version 2, FMT 1: generic NACK
+    packet[1] = transportFeedback;
+    data.setUint16(2, (packet.length ~/ 4) - 1, Endian.big);
+    data.setUint32(4, senderSsrc, Endian.big);
+    data.setUint32(8, mediaSsrc, Endian.big);
+    var offset = 12;
+    for (final id in entries.keys) {
+      data.setUint16(offset, id, Endian.big);
+      data.setUint16(offset + 2, entries[id]!, Endian.big);
+      offset += 4;
+    }
+    return packet;
+  }
+
+  /// Writes a picture-loss indication (RFC 4585 §6.3.1): a request that the
+  /// sender send a keyframe, because the references this receiver holds are
+  /// broken.
+  static Uint8List pictureLoss({
+    required int senderSsrc,
+    required int mediaSsrc,
+  }) {
+    final packet = Uint8List(12);
+    final data = ByteData.sublistView(packet);
+    packet[0] = 0x81; // version 2, FMT 1: PLI
+    packet[1] = payloadFeedback;
+    data.setUint16(2, 2, Endian.big);
+    data.setUint32(4, senderSsrc, Endian.big);
+    data.setUint32(8, mediaSsrc, Endian.big);
+    return packet;
+  }
+
+  /// Writes a Full Intra Request (RFC 5104 §4.3.1): the same ask as PLI in
+  /// the other payload-specific feedback format. Sent alongside PLI because
+  /// implementations answer one or the other, and a stream that keeps
+  /// smearing cannot afford to find out which only by waiting.
+  static Uint8List fullIntraRequest({
+    required int senderSsrc,
+    required int mediaSsrc,
+    required int commandSequence,
+  }) {
+    final packet = Uint8List(20);
+    final data = ByteData.sublistView(packet);
+    packet[0] = 0x84; // version 2, FMT 4: FIR
+    packet[1] = payloadFeedback;
+    data.setUint16(2, 4, Endian.big);
+    data.setUint32(4, senderSsrc, Endian.big);
+    data.setUint32(8, mediaSsrc, Endian.big);
+    // FCI: the media source asked for, then its command sequence number.
+    data.setUint32(12, mediaSsrc, Endian.big);
+    data.setUint32(16, commandSequence & 0xff, Endian.big);
+    return packet;
+  }
+
   static void _readReportBlocks(
     ByteData data,
     int offset,

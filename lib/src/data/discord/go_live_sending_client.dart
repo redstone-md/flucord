@@ -213,6 +213,9 @@ final class GoLiveSendingClient implements DiscordVoiceClient, GoLiveSender {
     onClosed?.call();
   }
 
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
   void _onEvent(VoiceSignalingEvent event) {
     switch (event) {
       case VoiceTransportReadyEvent(:final session):

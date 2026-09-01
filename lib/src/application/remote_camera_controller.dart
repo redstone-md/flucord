@@ -102,9 +102,12 @@ final class RemoteCameraController extends ChangeNotifier {
     final unit = camera.receiver.accept(
       Uint8List.fromList(frame.payload),
       marker: frame.header.marker,
+      rtpTimestamp: frame.header.timestamp,
     );
     if (unit == null) return;
-    unawaited(camera.decoder.submit(unit));
+    // Camera tiles are small and few: their pictures decode as they land,
+    // without the stream viewer's playout buffer.
+    unawaited(camera.decoder.submit(unit.bytes));
   }
 
   void _clearCameras() {

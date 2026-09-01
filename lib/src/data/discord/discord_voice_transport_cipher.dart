@@ -89,10 +89,19 @@ final class DiscordVoiceTransportCipher {
     if (extensionLength > clearText.length) {
       throw const FormatException('Truncated encrypted RTP extension payload');
     }
-    return DiscordRtpFrame(
-      header: header,
-      payload: clearText.sublist(extensionLength),
-    );
+    var payload = clearText.sublist(extensionLength);
+    // RFC 3550 §5.1: when the padding bit is set, the payload's last byte
+    // says how many padding bytes sit behind the real payload, itself
+    // included. A sender rounds some packets up, and a picture reassembled
+    // with the round-up still attached is a byte count the group cipher
+    // refuses, so the padding comes off where the payload is learned.
+    if (header.padding && payload.isNotEmpty) {
+      final count = payload.last;
+      if (count > 0 && count <= payload.length) {
+        payload = payload.sublist(0, payload.length - count);
+      }
+    }
+    return DiscordRtpFrame(header: header, payload: payload);
   }
 
   /// Encrypts one RTCP packet the way Discord's transport does: the eight-byte

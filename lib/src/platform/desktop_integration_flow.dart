@@ -111,6 +111,7 @@ final class DesktopIntegrationFlow
     await windowManager.show();
     await windowManager.focus();
     _surface?.setApplicationActive(true);
+    _surface?.setWindowVisible(true);
   }
 
   @override
@@ -120,9 +121,16 @@ final class DesktopIntegrationFlow
   void onWindowBlur() => _surface?.setApplicationActive(false);
 
   @override
+  void onWindowMinimize() => _surface?.setWindowVisible(false);
+
+  @override
+  void onWindowRestore() => _surface?.setWindowVisible(true);
+
+  @override
   void onWindowClose() {
     if (!_allowClose && _desktopTray.isReady) {
       _surface?.setApplicationActive(false);
+      _surface?.setWindowVisible(false);
       unawaited(windowManager.hide());
     }
   }

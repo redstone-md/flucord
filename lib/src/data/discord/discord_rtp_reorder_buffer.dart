@@ -31,6 +31,13 @@ final class DiscordRtpReorderBuffer {
 
   int get pendingCount => _pending.length;
 
+  /// The sequence the buffer is waiting for, or null before the first packet.
+  ///
+  /// A caller that wants to retransmit lost packets needs this: the hole is
+  /// visible the moment a packet arrives ahead of it, while everything the
+  /// buffer could still accept is what it has not passed yet.
+  int? get nextSequence => _nextSequence;
+
   List<DiscordOrderedRtpFrame> add(DiscordRtpFrame frame) {
     _nextSequence ??= frame.header.sequence;
     final distance = _forwardDistance(_nextSequence!, frame.header.sequence);

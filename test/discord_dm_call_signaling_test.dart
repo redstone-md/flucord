@@ -452,6 +452,9 @@ final class _InertVoiceClient
     await _events.close();
     await _remoteAudio.close();
   }
+
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {}
 }
 
 /// The seam this file does not reach: the DM-call behaviour, not the sockets

@@ -573,6 +573,9 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
   }
 
   @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
+  @override
   Future<void> close() async {
     closed = true;
     await _events.close();

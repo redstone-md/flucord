@@ -257,6 +257,9 @@ final class _IsolateSendingClient implements DiscordVoiceClient, GoLiveSender {
     if (!_events.isClosed) await _events.close();
   }
 
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
   void accept(VoiceSignalingEvent event) {
     if (event is VoiceTransportReadyEvent) _audioSsrc = event.session.ssrc;
     if (!_events.isClosed) _events.add(event);

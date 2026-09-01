@@ -125,6 +125,59 @@ void main() {
     );
 
     test(
+      'a viewer asks for the sender by name once its video SSRC is known',
+      () async {
+        final client = _FakeClient();
+        final session = DiscordStreamRtcSession(
+          key: _key,
+          credentials: _credentials,
+          socketFactory: _StreamSocketFactory((_) => client),
+        );
+        addTearDown(session.close);
+        await session.connect();
+        client.announce(const VoiceTransportReadyEvent(_session));
+        await Future<void>.delayed(Duration.zero);
+        expect(client.mediaSinkWants, hasLength(1));
+
+        // The ready ask could only say "any". A picture is what names the
+        // sender's video SSRC, and from then on the ask carries it with the
+        // pixel count of the view behind it.
+        client.emitVideo('somebody-else', _frame);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client.mediaSinkWants, hasLength(2));
+        final ask = client.mediaSinkWants.last;
+        expect(ask.perSsrc, {1: 100});
+        expect(ask.any, 100);
+        expect(ask.pixelCounts.keys.single, 1);
+        expect(ask.pixelCounts.values.single, 1920 * 1080.0);
+
+        // Packets keep coming sixty to the second; the ask is not one of
+        // them.
+        client.emitVideo('somebody-else', _frame);
+        client.emitVideo('somebody-else', _frame);
+        await Future<void>.delayed(Duration.zero);
+        expect(client.mediaSinkWants, hasLength(2));
+
+        // A sender that comes back on a new SSRC is asked for again.
+        final reconnected = DiscordRtpFrame(
+          header: DiscordRtpHeader(
+            payloadType: DiscordRtpHeader.discordVideoPayloadType,
+            sequence: 2,
+            timestamp: 2,
+            ssrc: 2,
+          ),
+          payload: Uint8List.fromList(const [4, 5]),
+        );
+        client.emitVideo('somebody-else', reconnected);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(client.mediaSinkWants, hasLength(3));
+        expect(client.mediaSinkWants.last.perSsrc, {2: 100});
+      },
+    );
+
+    test(
       'a sender does not subscribe: it has nothing to receive',
       () async {
         final client = _FakeClient();
@@ -569,6 +622,9 @@ final class _FakeClient implements DiscordVoiceClient {
       pixelCounts: pixelCounts,
     ));
   }
+
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {}
 
   @override
   Uint8List encryptVideoForGroup({

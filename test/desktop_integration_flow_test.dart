@@ -165,6 +165,7 @@ final class _FakeIntake implements DesktopProtocolIntake {
 final class _RecordingSurface extends ChangeNotifier
     implements DesktopAppSurface {
   final List<bool> activeCalls = [];
+  final List<bool> visibilityCalls = [];
   final List<String> openedChannels = [];
   final List<Uri> protocolUris = [];
 
@@ -186,4 +187,7 @@ final class _RecordingSurface extends ChangeNotifier
 
   @override
   void setApplicationActive(bool value) => activeCalls.add(value);
+
+  @override
+  void setWindowVisible(bool value) => visibilityCalls.add(value);
 }

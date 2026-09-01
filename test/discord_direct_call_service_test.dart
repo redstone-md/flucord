@@ -360,6 +360,9 @@ final class _InertVoiceClient implements DiscordVoiceClient {
   }) {}
 
   @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
+  @override
   Uint8List encryptVideoForGroup({
     required int ssrc,
     required Uint8List frame,

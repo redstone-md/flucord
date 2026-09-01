@@ -167,18 +167,60 @@ typedef void (*FlucordVideoPictureCallback)(void* user_data,
 
 // Opens a decoder for somebody else's stream. Frames are fed in as Annex B
 // access units and come back out as pictures.
+//
+// The decode runs on the decoder's own thread: a 1080p60 picture costs more
+// to decode and convert than the frame budget allows, and the thread that
+// feeds it is the one that draws the whole interface. Pictures arrive on the
+// callback from that thread, each carrying its own heap buffer that the
+// callee releases with flucord_video_decoder_release_picture once copied.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_decoder_open(FlucordVideoPictureCallback callback,
                            void* user_data,
                            FlucordVideoDecoder** out_decoder);
 
-// Feeds one access unit in. Pictures arrive on the callback, synchronously,
-// before this returns.
+// Feeds one access unit in. Returns at once; the decode happens on the
+// decoder's thread, and pictures reach the callback from there.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
                              const uint8_t* annex_b,
                              int32_t length,
                              int64_t timestamp_us);
+
+// Releases one picture buffer the callback delivered. Every picture the
+// callback receives owns its memory until this is called on it.
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_release_picture(
+    void* picture);
+
+// How many access units were dropped because the decode could not keep up.
+// Each dropped one breaks the reference chain until a keyframe arrives.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decoder_dropped(FlucordVideoDecoder* decoder);
+
+// The decoder's own accounting, for telling a delivery problem from a decode
+// one: how many access units were submitted, how many the transform refused
+// (and with which HRESULT), how many pictures came out, and how many queued
+// units were dropped when the decode fell behind.
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_stats(
+    FlucordVideoDecoder* decoder,
+    int64_t* submitted,
+    int64_t* not_accepting,
+    int64_t* input_errors,
+    int64_t* last_input_error,
+    int64_t* outputs,
+    int64_t* output_errors,
+    int64_t* last_output_error,
+    int32_t* dropped);
+
+// Describes the output the decoder has settled on: the FOURCC of the pixel
+// format, the frame size, and the row pitch it writes with. A decoder that
+// was assumed to produce tightly packed NV12 while it produces something
+// else draws a picture that only looks like one.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_info(FlucordVideoDecoder* decoder,
+                           int32_t* out_fourcc,
+                           int32_t* out_width,
+                           int32_t* out_height,
+                           int32_t* out_stride);
 
 FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
     FlucordVideoDecoder* decoder);

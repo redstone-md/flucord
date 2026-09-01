@@ -39,6 +39,24 @@ void main() {
     expect((reports.single as DiscordRtcpPictureLoss).mediaSsrc, 0x2222);
   });
 
+  test('a full intra request names the media source it asks', () {
+    final packet = DiscordRtcpPacket.fullIntraRequest(
+      senderSsrc: 0x1111,
+      mediaSsrc: 0x2222,
+      commandSequence: 7,
+    );
+
+    // Version 2, FMT 4, payload-specific feedback, one word of FCI.
+    expect(packet[0], 0x84);
+    expect(packet[1], DiscordRtcpPacket.payloadFeedback);
+    expect((packet[2] << 8) | packet[3], 4);
+    final data = ByteData.sublistView(packet);
+    expect(data.getUint32(4, Endian.big), 0x1111);
+    expect(data.getUint32(8, Endian.big), 0x2222);
+    expect(data.getUint32(12, Endian.big), 0x2222);
+    expect(data.getUint32(16, Endian.big), 7);
+  });
+
   test('a NACK names the packet and the fifteen after it by bitmask', () {
     final reports = DiscordRtcpPacket.parse(
       _packet(1, DiscordRtcpPacket.transportFeedback, [
@@ -123,6 +141,22 @@ void main() {
     ]);
 
     expect(DiscordRtcpPacket.parse(report), isEmpty);
+  });
+
+  test('a written NACK reads back as the sequences it asked for', () {
+    final packet = DiscordRtcpPacket.nack(
+      senderSsrc: 0x1111,
+      mediaSsrc: 0x2222,
+      sequences: [100, 101, 103, 200],
+    );
+
+    // The writer speaks the same grammar the reader does.
+    expect(DiscordRtcpPacket.isRtcp(packet), isTrue);
+    final reports = DiscordRtcpPacket.parse(packet);
+    expect(reports, hasLength(1));
+    final nack = reports.single as DiscordRtcpNack;
+    expect(nack.mediaSsrc, 0x2222);
+    expect(nack.sequences, [100, 101, 103, 200]);
   });
 
   test('isRtcp accepts the feedback types and rejects RTP', () {

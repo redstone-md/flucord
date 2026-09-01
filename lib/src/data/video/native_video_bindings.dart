@@ -46,6 +46,51 @@ typedef _DecoderSubmitNative =
 typedef VideoDecoderSubmitDart =
     int Function(Pointer<Void>, Pointer<Uint8>, int, int);
 
+typedef _DecoderInfoNative =
+    Int32 Function(
+      Pointer<Void>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+    );
+
+typedef VideoDecoderInfoDart =
+    int Function(Pointer<Void>, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>,
+        Pointer<Int32>);
+
+typedef _DecoderReleasePictureNative = Void Function(Pointer<Void>);
+
+typedef DecoderReleasePictureDart = void Function(Pointer<Void>);
+
+typedef _DecoderDroppedNative = Int32 Function(Pointer<Void>);
+
+typedef DecoderDroppedDart = int Function(Pointer<Void>);
+
+typedef _DecoderStatsNative = Void Function(
+  Pointer<Void>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int32>,
+);
+
+typedef DecoderStatsDart = void Function(
+  Pointer<Void>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int64>,
+  Pointer<Int32>,
+);
+
 typedef VideoOpenNative =
     Int32 Function(
       Pointer<NativeVideoConfig>,
@@ -114,6 +159,20 @@ final class NativeVideoBindings {
           .lookupFunction<_DecoderSubmitNative, VideoDecoderSubmitDart>(
             'flucord_video_decoder_submit',
           ),
+      decoderInfo = library
+          .lookupFunction<_DecoderInfoNative, VideoDecoderInfoDart>(
+            'flucord_video_decoder_info',
+          ),
+      decoderReleasePicture = library
+          .lookupFunction<_DecoderReleasePictureNative,
+              DecoderReleasePictureDart>(
+            'flucord_video_decoder_release_picture',
+          ),
+      decoderDropped = library
+          .lookupFunction<_DecoderDroppedNative, DecoderDroppedDart>(
+            'flucord_video_decoder_dropped',
+          ),
+      decoderStats = _lookUpDecoderStats(library),
       decoderClose = library
           .lookupFunction<
             Void Function(Pointer<Void>),
@@ -195,6 +254,17 @@ final class NativeVideoBindings {
     }
   }
 
+  /// Absent in a module built before the decoder kept its own accounting.
+  static DecoderStatsDart? _lookUpDecoderStats(DynamicLibrary library) {
+    try {
+      return library.lookupFunction<_DecoderStatsNative, DecoderStatsDart>(
+        'flucord_video_decoder_stats',
+      );
+    } on Object {
+      return null;
+    }
+  }
+
   /// Absent in a module built before screenshots existed, which is a build
   /// that must still run rather than fail to load.
   static ScreenshotCaptureDart? _lookUpCaptureScreen(DynamicLibrary library) {
@@ -221,6 +291,22 @@ final class NativeVideoBindings {
   /// Opens a decoder for somebody else's stream.
   final VideoDecoderOpenDart decoderOpen;
   final VideoDecoderSubmitDart decoderSubmit;
+
+  /// The decoder's settled output description, or null in a module built
+  /// before it existed.
+  final VideoDecoderInfoDart? decoderInfo;
+
+  /// Releases a picture buffer the callback delivered; null in a module
+  /// built before pictures owned their memory.
+  final DecoderReleasePictureDart? decoderReleasePicture;
+
+  /// How many access units the decode dropped for being behind; null in a
+  /// module built before it counted.
+  final DecoderDroppedDart? decoderDropped;
+
+  /// Reads the decoder's counters (submitted, refused, produced), or null in
+  /// a module built before it kept them.
+  final DecoderStatsDart? decoderStats;
   final void Function(Pointer<Void>) decoderClose;
   final int Function() displayCount;
 

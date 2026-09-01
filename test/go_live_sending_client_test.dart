@@ -298,6 +298,9 @@ final class _FakeClient implements DiscordVoiceClient, VoiceAudioTransport {
   }
 
   @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
+  @override
   Uint8List decryptVideoGroupFrame({
     required String userId,
     required Uint8List picture,

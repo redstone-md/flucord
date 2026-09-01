@@ -132,6 +132,7 @@ final class StreamRouter {
           (packet) => IncomingVideoPacket(
             payload: Uint8List.fromList(packet.$2.payload),
             marker: packet.$2.header.marker,
+            rtpTimestamp: packet.$2.header.timestamp,
           ),
         ),
         // Forward audio from the stream connection (ADR-0004).
@@ -143,6 +144,9 @@ final class StreamRouter {
           userId: session.key.userId,
           picture: picture,
         ),
+        // The receiver knows when the stream is broken; the session is what
+        // can ask the sender for a keyframe over its connection.
+        requestKeyframe: session.requestKeyframe,
       ),
     );
   }

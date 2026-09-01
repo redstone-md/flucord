@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/desktop_app_surface.dart';
-import 'package:flucord/src/application/window_foreground.dart';
+import 'package:flucord/src/application/window_visible.dart';
 import 'package:flucord/src/application/workspace_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -255,7 +255,7 @@ void main() {
       final surface = FlucordAppSurface(
         chat: chat,
         workspace: workspace,
-        foreground: WindowForeground(),
+        visible: WindowVisible(),
         onProtocolUri: (_) {},
         incomingMessages: messages.stream,
       );
@@ -300,22 +300,34 @@ void main() {
     expect(mounted.surface.activeChannelId, mounted.chat.activeChannelId);
   });
 
-  test('the window losing the foreground reaches what suspends on it', () {
+  test('the window leaving the screen reaches what suspends on it', () {
     final mounted = _MountedSurface(
       ChatController(MockChatRepository(latency: Duration.zero)),
     );
     var notified = 0;
-    mounted.foreground.addListener(() => notified++);
+    mounted.visible.addListener(() => notified++);
 
-    // A focus event repeated for a window that never lost it says nothing:
-    // the desktop chrome sends these in bursts.
-    mounted.surface.setApplicationActive(true);
-    expect(mounted.foreground.inForeground, isTrue);
+    // A visibility event repeated for a window that never left the screen
+    // says nothing: the desktop chrome sends these in bursts.
+    mounted.surface.setWindowVisible(true);
+    expect(mounted.visible.inView, isTrue);
     expect(notified, 0);
 
-    mounted.surface.setApplicationActive(false);
-    expect(mounted.foreground.inForeground, isFalse);
+    mounted.surface.setWindowVisible(false);
+    expect(mounted.visible.inView, isFalse);
     expect(notified, 1);
+  });
+
+  test('losing the focus does not take a visible window off the screen', () {
+    final mounted = _MountedSurface(
+      ChatController(MockChatRepository(latency: Duration.zero)),
+    );
+
+    mounted.surface.setApplicationActive(false);
+
+    // An unfocused window is still on screen, and still watched: the chat's
+    // read state follows the focus, suspension follows the screen.
+    expect(mounted.visible.inView, isTrue);
   });
 }
 
@@ -325,12 +337,12 @@ void main() {
 class _MountedSurface {
   _MountedSurface(this.chat)
     : workspace = WorkspaceController(),
-      foreground = WindowForeground(),
+      visible = WindowVisible(),
       messages = StreamController<MessageUpsertedEvent>() {
     surface = FlucordAppSurface(
       chat: chat,
       workspace: workspace,
-      foreground: foreground,
+      visible: visible,
       onProtocolUri: (_) {},
       incomingMessages: messages.stream,
     );
@@ -341,7 +353,7 @@ class _MountedSurface {
 
   final ChatController chat;
   final WorkspaceController workspace;
-  final WindowForeground foreground;
+  final WindowVisible visible;
   final StreamController<MessageUpsertedEvent> messages;
   late final FlucordAppSurface surface;
   final List<DesktopMessageNotification> notifications = [];

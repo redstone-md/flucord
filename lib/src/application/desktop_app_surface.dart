@@ -8,7 +8,7 @@ import '../platform/desktop_integration.dart';
 import '../domain/channel_link.dart';
 import 'chat_controller.dart';
 import 'system_message_text.dart';
-import 'window_foreground.dart';
+import 'window_visible.dart';
 import 'workspace_controller.dart';
 
 /// The application side of the desktop seam ([DesktopAppSurface]): the chat,
@@ -22,12 +22,12 @@ final class FlucordAppSurface extends ChangeNotifier
   FlucordAppSurface({
     required ChatController chat,
     required WorkspaceController workspace,
-    required WindowForeground foreground,
+    required WindowVisible visible,
     required void Function(Uri uri) onProtocolUri,
     Stream<MessageUpsertedEvent>? incomingMessages,
   }) : _chat = chat,
        _workspace = workspace,
-       _foreground = foreground,
+       _visible = visible,
        _onProtocolUri = onProtocolUri {
     _chat.addListener(_chatChanged);
     _messages = incomingMessages ?? chat.incomingMessages;
@@ -38,7 +38,7 @@ final class FlucordAppSurface extends ChangeNotifier
 
   final ChatController _chat;
   final WorkspaceController _workspace;
-  final WindowForeground _foreground;
+  final WindowVisible _visible;
   final void Function(Uri uri) _onProtocolUri;
   late final Stream<MessageUpsertedEvent> _messages;
   late final StreamSubscription<MessageUpsertedEvent> _messageSubscription;
@@ -77,14 +77,19 @@ final class FlucordAppSurface extends ChangeNotifier
   @override
   void handleProtocolUri(Uri uri) => _onProtocolUri(uri);
 
-  /// One answer to two questions the desktop chrome asks on the window's
-  /// behalf: whether the room is being looked at, which decides what is read,
-  /// and whether the window is in the foreground, which decides what is drawn
-  /// (ADR-0003).
+  /// Marks the app active or inactive for the chat: whether the room is being
+  /// looked at decides what is read. Focus is the platform fact behind it.
   @override
   void setApplicationActive(bool value) {
     _chat.setApplicationActive(value);
-    _foreground.setInForeground(value);
+  }
+
+  /// Tells whether anything of the window is on screen, which watched
+  /// sessions read to suspend (ADR-0003). A window that only lost the focus
+  /// is still on screen, and still watched.
+  @override
+  void setWindowVisible(bool value) {
+    _visible.setInView(value);
   }
 
   /// Re-checks whatever the desktop holds on the app's behalf, and tells the

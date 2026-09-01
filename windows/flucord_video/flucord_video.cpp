@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <condition_variable>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -1357,9 +1359,37 @@ struct FlucordVideoDecoder {
   ComPtr<IMFTransform> transform;
   FlucordVideoPictureCallback callback = nullptr;
   void* user_data = nullptr;
-  std::vector<uint8_t> bgra;
+  // Scratch for the NV12 the transform hands back, decode thread only.
+  std::vector<uint8_t> nv12;
   int32_t width = 0;
   int32_t height = 0;
+  // The row pitch the decoder actually writes, which a padded width makes
+  // larger than the frame width. Reading with the width instead shears every
+  // row against the one above it.
+  int32_t stride = 0;
+  int32_t fourcc = 0;
+
+  // The decode runs off the caller's thread: a 1080p60 picture costs more to
+  // decode and convert than the frame budget of the thread that draws the
+  // whole interface, which is the thread that used to pay for it.
+  std::thread worker;
+  std::mutex mutex;
+  std::condition_variable ready;
+  std::deque<std::pair<std::vector<uint8_t>, int64_t>> queue;
+  bool stopping = false;
+  int32_t dropped = 0;
+
+  // The wire's own accounting, read through flucord_video_decoder_stats:
+  // where the access units that go in fail to become pictures that come out.
+  // Atomics, because submit is called from the Dart thread while the loop
+  // runs on the worker.
+  std::atomic<int64_t> submitted{0};
+  std::atomic<int64_t> notAccepting{0};
+  std::atomic<int64_t> inputErrors{0};
+  std::atomic<int64_t> lastInputError{0};
+  std::atomic<int64_t> outputs{0};
+  std::atomic<int64_t> outputErrors{0};
+  std::atomic<int64_t> lastOutputError{0};
 };
 
 namespace {
@@ -1392,15 +1422,24 @@ void Nv12ToBgra(const uint8_t* source,
   }
 }
 
-void ReadDecoderSize(FlucordVideoDecoder* decoder) {
-  ComPtr<IMFMediaType> type;
-  if (FAILED(decoder->transform->GetOutputCurrentType(0, &type))) return;
+void RecordOutputType(FlucordVideoDecoder* decoder, IMFMediaType* type) {
+  GUID subtype;
+  if (SUCCEEDED(type->GetGUID(MF_MT_SUBTYPE, &subtype))) {
+    decoder->fourcc = static_cast<int32_t>(subtype.Data1);
+  }
   UINT32 width = 0;
   UINT32 height = 0;
-  if (SUCCEEDED(
-          MFGetAttributeSize(type.Get(), MF_MT_FRAME_SIZE, &width, &height))) {
+  if (SUCCEEDED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &width, &height))) {
     decoder->width = static_cast<int32_t>(width);
     decoder->height = static_cast<int32_t>(height);
+  }
+  // The decoder picks its own row pitch, padded to whatever alignment it
+  // likes; the type is where it says what that is.
+  UINT32 stride = 0;
+  if (SUCCEEDED(type->GetUINT32(MF_MT_DEFAULT_STRIDE, &stride)) && stride > 0) {
+    decoder->stride = static_cast<int32_t>(stride);
+  } else {
+    decoder->stride = decoder->width;
   }
 }
 
@@ -1410,11 +1449,17 @@ void TakeAvailableOutputType(FlucordVideoDecoder* decoder) {
        SUCCEEDED(decoder->transform->GetOutputAvailableType(0, index, &type));
        ++index) {
     if (SUCCEEDED(decoder->transform->SetOutputType(0, type.Get(), 0))) {
-      ReadDecoderSize(decoder);
+      RecordOutputType(decoder, type.Get());
       return;
     }
     type.Reset();
   }
+}
+
+void ReadCurrentOutputType(FlucordVideoDecoder* decoder) {
+  ComPtr<IMFMediaType> type;
+  if (FAILED(decoder->transform->GetOutputCurrentType(0, &type))) return;
+  RecordOutputType(decoder, type.Get());
 }
 
 void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
@@ -1443,11 +1488,18 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
       TakeAvailableOutputType(decoder);
       continue;
     }
-    if (FAILED(hr)) return;
+    if (FAILED(hr)) {
+      decoder->outputErrors.fetch_add(1);
+      decoder->lastOutputError.store(static_cast<int64_t>(hr));
+      return;
+    }
 
     ComPtr<IMFSample> produced = allocates ? out.pSample : sample;
     if (!produced) return;
-    if (decoder->width <= 0 || decoder->height <= 0) ReadDecoderSize(decoder);
+    decoder->outputs.fetch_add(1);
+    if (decoder->width <= 0 || decoder->height <= 0) {
+      ReadCurrentOutputType(decoder);
+    }
 
     ComPtr<IMFMediaBuffer> contiguous;
     if (SUCCEEDED(produced->ConvertToContiguousBuffer(&contiguous)) &&
@@ -1455,16 +1507,24 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
       BYTE* data = nullptr;
       DWORD length = 0;
       if (SUCCEEDED(contiguous->Lock(&data, nullptr, &length))) {
+        if (decoder->stride <= 0) decoder->stride = decoder->width;
         const size_t needed =
             static_cast<size_t>(decoder->width) * decoder->height * 4;
-        if (decoder->bgra.size() != needed) decoder->bgra.resize(needed);
-        Nv12ToBgra(data, decoder->width, decoder->width, decoder->height,
-                   decoder->bgra.data());
+        // Every picture owns its buffer: the callback is delivered on the
+        // caller's isolate some time after this returns, so nothing shared
+        // would survive the next picture.
+        std::unique_ptr<uint8_t[]> picture(new uint8_t[needed]);
+        Nv12ToBgra(data, decoder->stride, decoder->width, decoder->height,
+                   picture.get());
         LONGLONG sample_time = 0;
         produced->GetSampleTime(&sample_time);
-        decoder->callback(decoder->user_data, decoder->bgra.data(),
-                          decoder->width, decoder->height, decoder->width * 4,
+        decoder->callback(decoder->user_data, picture.get(), decoder->width,
+                          decoder->height, decoder->width * 4,
                           sample_time != 0 ? sample_time / 10 : timestamp_us);
+        // Ownership went with the callback; a picture posted after the
+        // listener closed leaks, which is the price of a teardown racing a
+        // decode and costs one frame at most.
+        picture.release();
         contiguous->Unlock();
       }
     }
@@ -1472,6 +1532,100 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
   }
 }
 
+void SubmitToTransform(FlucordVideoDecoder* decoder,
+                       const std::vector<uint8_t>& annex_b,
+                       int64_t timestamp_us) {
+  ComPtr<IMFMediaBuffer> buffer;
+  if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(annex_b.size()), &buffer))) {
+    return;
+  }
+  BYTE* target = nullptr;
+  if (FAILED(buffer->Lock(&target, nullptr, nullptr))) return;
+  memcpy(target, annex_b.data(), annex_b.size());
+  buffer->Unlock();
+  buffer->SetCurrentLength(static_cast<DWORD>(annex_b.size()));
+
+  ComPtr<IMFSample> sample;
+  if (FAILED(MFCreateSample(&sample))) return;
+  sample->AddBuffer(buffer.Get());
+  sample->SetSampleTime(timestamp_us * 10);
+
+  HRESULT hr = decoder->transform->ProcessInput(0, sample.Get(), 0);
+  if (hr == MF_E_NOTACCEPTING) {
+    // The decoder is still holding finished frames. Pull them out and ask
+    // again: dropping this input would hand the decoder a gap in the
+    // reference chain, and every picture after it would smear.
+    decoder->notAccepting.fetch_add(1);
+    DrainDecoder(decoder, timestamp_us);
+    hr = decoder->transform->ProcessInput(0, sample.Get(), 0);
+  }
+  if (FAILED(hr)) {
+    decoder->inputErrors.fetch_add(1);
+    decoder->lastInputError.store(static_cast<int64_t>(hr));
+    return;
+  }
+  DrainDecoder(decoder, timestamp_us);
+}
+
+// Decodes and converts on the decoder's own thread. A failed input is
+// dropped here, where a counter can say so; nothing ever reaches the
+// caller's thread but finished pictures.
+void DecoderLoop(FlucordVideoDecoder* decoder) {
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    HRESULT hr = CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr,
+                                  CLSCTX_INPROC_SERVER,
+                                  IID_PPV_ARGS(&decoder->transform));
+    if (SUCCEEDED(hr)) {
+      ComPtr<IMFMediaType> input;
+      if (SUCCEEDED(MFCreateMediaType(&input))) {
+        input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+        input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+        input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+        if (SUCCEEDED(decoder->transform->SetInputType(0, input.Get(), 0))) {
+          // Low latency is what makes a live stream live. Without it the
+          // decoder holds frames in its internal reorder buffer and emits
+          // them in bursts. Two mechanisms carry the same request because a
+          // silently ignored one cost an evening.
+          ComPtr<ICodecAPI> codecApi;
+          if (SUCCEEDED(decoder->transform.As(&codecApi))) {
+            VARIANT lowLatency;
+            VariantInit(&lowLatency);
+            lowLatency.vt = VT_BOOL;
+            lowLatency.boolVal = VARIANT_TRUE;
+            codecApi->SetValue(&CODECAPI_AVLowLatencyMode, &lowLatency);
+          }
+          ComPtr<IMFAttributes> attributes;
+          if (SUCCEEDED(decoder->transform->GetAttributes(&attributes))) {
+            attributes->SetUINT32(MF_LOW_LATENCY, TRUE);
+          }
+          decoder->transform->ProcessMessage(
+              MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+          decoder->transform->ProcessMessage(
+              MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+          TakeAvailableOutputType(decoder);
+
+          while (true) {
+            std::pair<std::vector<uint8_t>, int64_t> unit;
+            {
+              std::unique_lock lock(decoder->mutex);
+              decoder->ready.wait(lock, [&] {
+                return decoder->stopping || !decoder->queue.empty();
+              });
+              if (decoder->stopping) break;
+              unit = std::move(decoder->queue.front());
+              decoder->queue.pop_front();
+            }
+            SubmitToTransform(decoder, unit.first, unit.second);
+          }
+        }
+      }
+    }
+  }
+  decoder->transform.Reset();
+  CoUninitialize();
+  MFShutdown();
+}
 }  // namespace
 
 extern "C" {
@@ -1483,35 +1637,10 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
   if (callback == nullptr || out_decoder == nullptr) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
-    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
-  }
-
   auto decoder = std::make_unique<FlucordVideoDecoder>();
   decoder->callback = callback;
   decoder->user_data = user_data;
-
-  HRESULT hr =
-      CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr, CLSCTX_INPROC_SERVER,
-                       IID_PPV_ARGS(&decoder->transform));
-  if (FAILED(hr)) {
-    MFShutdown();
-    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
-  }
-
-  ComPtr<IMFMediaType> input;
-  MFCreateMediaType(&input);
-  input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-  input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-  input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
-  hr = decoder->transform->SetInputType(0, input.Get(), 0);
-  if (FAILED(hr)) {
-    MFShutdown();
-    return FLUCORD_VIDEO_ERROR_ENCODER;
-  }
-  TakeAvailableOutputType(decoder.get());
-  decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+  decoder->worker = std::thread(DecoderLoop, decoder.get());
   *out_decoder = decoder.release();
   return FLUCORD_VIDEO_OK;
 }
@@ -1524,45 +1653,91 @@ flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
   if (decoder == nullptr || annex_b == nullptr || length <= 0) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  ComPtr<IMFMediaBuffer> buffer;
-  if (FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(length), &buffer))) {
-    return FLUCORD_VIDEO_ERROR_ENCODER;
+  // The queue is bounded: a decode that falls further behind than this is
+  // not catching up, and an unbounded one turns a slow decode into an
+  // ever-growing memory bill. The oldest frame goes first, and the counter
+  // says so, because a dropped frame breaks the reference chain.
+  std::vector<uint8_t> unit(annex_b, annex_b + length);
+  decoder->submitted.fetch_add(1);
+  {
+    std::lock_guard lock(decoder->mutex);
+    if (decoder->queue.size() >= 24) {
+      decoder->queue.pop_front();
+      decoder->dropped++;
+    }
+    decoder->queue.emplace_back(std::move(unit), timestamp_us);
   }
-  BYTE* target = nullptr;
-  if (FAILED(buffer->Lock(&target, nullptr, nullptr))) {
-    return FLUCORD_VIDEO_ERROR_ENCODER;
+  decoder->ready.notify_one();
+  return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_stats(
+    FlucordVideoDecoder* decoder,
+    int64_t* submitted,
+    int64_t* not_accepting,
+    int64_t* input_errors,
+    int64_t* last_input_error,
+    int64_t* outputs,
+    int64_t* output_errors,
+    int64_t* last_output_error,
+    int32_t* dropped) {
+  if (decoder == nullptr) return;
+  if (submitted != nullptr) *submitted = decoder->submitted.load();
+  if (not_accepting != nullptr) *not_accepting = decoder->notAccepting.load();
+  if (input_errors != nullptr) *input_errors = decoder->inputErrors.load();
+  if (last_input_error != nullptr) {
+    *last_input_error = decoder->lastInputError.load();
   }
-  memcpy(target, annex_b, static_cast<size_t>(length));
-  buffer->Unlock();
-  buffer->SetCurrentLength(static_cast<DWORD>(length));
+  if (outputs != nullptr) *outputs = decoder->outputs.load();
+  if (output_errors != nullptr) *output_errors = decoder->outputErrors.load();
+  if (last_output_error != nullptr) {
+    *last_output_error = decoder->lastOutputError.load();
+  }
+  if (dropped != nullptr) *dropped = decoder->dropped;
+}
 
-  ComPtr<IMFSample> sample;
-  if (FAILED(MFCreateSample(&sample))) return FLUCORD_VIDEO_ERROR_ENCODER;
-  sample->AddBuffer(buffer.Get());
-  sample->SetSampleTime(timestamp_us * 10);
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_release_picture(
+    void* picture) {
+  delete[] static_cast<uint8_t*>(picture);
+}
 
-  const HRESULT hr = decoder->transform->ProcessInput(0, sample.Get(), 0);
-  if (FAILED(hr)) return FLUCORD_VIDEO_ERROR_ENCODER;
-  DrainDecoder(decoder, timestamp_us);
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decoder_dropped(FlucordVideoDecoder* decoder) {
+  if (decoder == nullptr) return 0;
+  std::lock_guard lock(decoder->mutex);
+  return decoder->dropped;
+}
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_info(FlucordVideoDecoder* decoder,
+                           int32_t* out_fourcc,
+                           int32_t* out_width,
+                           int32_t* out_height,
+                           int32_t* out_stride) {
+  if (decoder == nullptr || out_fourcc == nullptr || out_width == nullptr ||
+      out_height == nullptr || out_stride == nullptr) {
+    return FLUCORD_VIDEO_ERROR_STATE;
+  }
+  std::lock_guard lock(decoder->mutex);
+  if (decoder->width <= 0) return FLUCORD_VIDEO_ERROR_STATE;
+  *out_fourcc = decoder->fourcc;
+  *out_width = decoder->width;
+  *out_height = decoder->height;
+  *out_stride = decoder->stride;
   return FLUCORD_VIDEO_OK;
 }
 
 FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
     FlucordVideoDecoder* decoder) {
   if (decoder == nullptr) return;
-  if (decoder->transform) {
-    decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
-    decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+  {
+    std::lock_guard lock(decoder->mutex);
+    decoder->stopping = true;
   }
-  decoder->transform.Reset();
+  decoder->ready.notify_all();
+  if (decoder->worker.joinable()) decoder->worker.join();
   delete decoder;
-  MFShutdown();
 }
-
-}  // extern "C"
-
-extern "C" {
-
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_open(const FlucordVideoConfig* config,
                    FlucordVideoFrameCallback callback,
@@ -1576,10 +1751,7 @@ flucord_video_open(const FlucordVideoConfig* config,
     return FLUCORD_VIDEO_ERROR_STATE;
   }
 
-  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) &&
-      GetLastError() != 0) {
-    // Already initialised on this thread is fine; anything else is not.
-  }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }

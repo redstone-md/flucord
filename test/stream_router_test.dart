@@ -582,6 +582,9 @@ final class _FakeClient implements DiscordVoiceClient {
     log.add('mediaSinkWants');
   }
 
+  @override
+  void sendPictureLoss({required int mediaSsrc}) {}
+
   /// Recorded group encryptions: whole access units, with the SSRC they were
   /// encrypted for.
   final List<({int ssrc, Uint8List frame})> groupEncryptions = [];

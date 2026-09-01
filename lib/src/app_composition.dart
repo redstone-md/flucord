@@ -58,7 +58,7 @@ import 'application/user_settings_controller.dart';
 import 'application/voice_controller.dart';
 import 'application/voice_overlay_controller.dart';
 import 'application/watched_stream_audio.dart';
-import 'application/window_foreground.dart';
+import 'application/window_visible.dart';
 import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'data/discord/go_live_media_isolate.dart';
@@ -133,7 +133,7 @@ final class AppComposition {
 
   late final ChatController chat;
   late final ConnectionController connection;
-  late final WindowForeground foreground;
+  late final WindowVisible windowVisible;
   late final FlucordAppSurface desktopSurface;
   late final DiscordDesktopLoginController desktopLogin;
   late final ExternalLinkLauncher externalLinkLauncher;
@@ -236,10 +236,10 @@ final class AppComposition {
     );
     externalLinkLauncher =
         bootstrap.externalLinkLauncher ?? const NativeExternalLinkLauncher();
-    // Whether the window is in the foreground, which the desktop chrome is
-    // the only thing that can say. Built before the stream plane, which is
-    // what suspends on it (ADR-0003).
-    foreground = _register(WindowForeground());
+    // Whether anything of the window is on screen, which the desktop chrome
+    // is the only thing that can say. Built before the stream plane, which
+    // is what suspends on it (ADR-0003).
+    windowVisible = _register(WindowVisible());
   }
 
   void _buildAccountPlane() {
@@ -577,7 +577,7 @@ final class AppComposition {
       FlucordAppSurface(
         chat: chat,
         workspace: workspace,
-        foreground: foreground,
+        visible: windowVisible,
         onProtocolUri: (uri) => unawaited(oauth.handleProtocolUri(uri)),
       ),
     );
@@ -601,12 +601,12 @@ final class AppComposition {
       goLive: goLive,
     );
     _teardown.add(voiceRoomCoordination.dispose);
-    // A window that is not in the foreground stops drawing what it is
-    // watching, and keeps receiving it (ADR-0003). Registered after the
-    // stream plane, so it stops listening to the window before the viewer
-    // it suspends goes away.
+    // A window nothing of is on screen stops drawing what it is watching,
+    // and keeps receiving it (ADR-0003). Registered after the stream plane,
+    // so it stops listening to the window before the viewer it suspends goes
+    // away.
     streamSuspension = StreamSuspension(
-      foreground: foreground,
+      visible: windowVisible,
       viewer: streamViewer,
     );
     _teardown.add(streamSuspension.dispose);

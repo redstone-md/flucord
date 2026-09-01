@@ -51,8 +51,14 @@ abstract interface class DesktopAppSurface implements Listenable {
   /// callback.
   void handleProtocolUri(Uri uri);
 
-  /// Marks the app active or inactive. Window focus and visibility drive it.
+  /// Marks the app active or inactive for the chat's read state. Window
+  /// focus drives it.
   void setApplicationActive(bool value);
+
+  /// Tells whether anything of the window is on screen: minimized or hidden
+  /// windows are not, unfocused ones still are. Watched sessions suspend on
+  /// it (ADR-0003).
+  void setWindowVisible(bool value);
 }
 
 abstract interface class DesktopIntegration {
