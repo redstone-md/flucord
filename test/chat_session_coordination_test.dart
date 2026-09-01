@@ -18,8 +18,9 @@ import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/domain/soundboard_playback.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   test('a ready session rebinds the voice plane', () async {
@@ -44,26 +45,28 @@ void main() {
     coordination.dispose();
   });
 
-  test('every session notification reconciles the session-bound planes',
-      () async {
-    final chat = ChatController(MockChatRepository());
-    final userSettings = UserSettingsController(() => _ReadySettings());
-    final coordination = _buildCoordination(
-      chat: chat,
-      userSettings: userSettings,
-    );
+  test(
+    'every session notification reconciles the session-bound planes',
+    () async {
+      final chat = ChatController(MockChatRepository());
+      final userSettings = UserSettingsController(() => _ReadySettings());
+      final coordination = _buildCoordination(
+        chat: chat,
+        userSettings: userSettings,
+      );
 
-    expect(userSettings.isAvailable, isFalse);
-    await chat.load();
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      userSettings.isAvailable,
-      isTrue,
-      reason: 'nothing but the session rule binds the settings plane',
-    );
+      expect(userSettings.isAvailable, isFalse);
+      await chat.load();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        userSettings.isAvailable,
+        isTrue,
+        reason: 'nothing but the session rule binds the settings plane',
+      );
 
-    coordination.dispose();
-  });
+      coordination.dispose();
+    },
+  );
 }
 
 ChatSessionCoordination _buildCoordination({
@@ -98,7 +101,7 @@ ChatSessionCoordination _buildCoordination({
     ),
     goLive: GoLiveController(
       repositoryProvider: () => null,
-      capture: VideoCaptureHub(encoder: _FakeEncoderService()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
     ),
     selfPresence: SelfPresenceController(() => null),
   );
@@ -162,35 +165,6 @@ class _ReadySettings implements UserSettingsRepository {
 
   @override
   Future<void> flush() async {}
-}
-
-class _FakeEncoderService implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  @override
-  bool get isSupported => false;
-
-  @override
-  List<String> get cameraNames => const [];
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => const Stream.empty();
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 class _SilentSoundboardPlayer implements SoundboardAudioPlayer {

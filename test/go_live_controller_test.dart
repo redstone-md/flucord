@@ -14,6 +14,8 @@ import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_video_encoder.dart';
+
 const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
   channelId: 'voice-1',
@@ -24,14 +26,18 @@ const _key = GoLiveStreamKey.guild(
 /// encoder behind it.
 GoLiveController _controller(
   _FakeRepository? repository, {
-  _FakeEncoder? encoder,
+  FakeVideoEncoder? encoder,
   _FakePlane? plane,
   Duration pingInterval = const Duration(seconds: 30),
 }) {
+  final media = plane ?? _FakePlane();
   final controller = GoLiveController(
     repositoryProvider: () => repository,
-    capture: VideoCaptureHub(encoder: encoder ?? _FakeEncoder()),
-    media: plane ?? _FakePlane(),
+    capture: VideoCaptureHub(
+      encoder: encoder ?? FakeVideoEncoder(displays: 2),
+      shareFrames: media,
+    ),
+    media: media,
     pingInterval: pingInterval,
   )..reconcile();
   addTearDown(controller.dispose);
@@ -53,7 +59,7 @@ void main() {
   test('captures before announcing, and pings while live', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder(displays: 2);
     final controller = _controller(
       repository,
       encoder: encoder,
@@ -72,7 +78,7 @@ void main() {
     // A stream announced with nothing behind it shows viewers a black
     // rectangle, so the capture goes first. And the capture is the capture
     // module's, which is the only thing that duplicates the display.
-    expect(encoder.started, 1);
+    expect(encoder.started, hasLength(1));
     expect(controller.streamKey, _key);
     expect(controller.status, GoLiveStatus.creating);
 
@@ -108,7 +114,7 @@ void main() {
   test('what the sender asks of the encoder reaches the capture', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder(displays: 2);
     final plane = _FakePlane();
     final controller = _controller(repository, encoder: encoder, plane: plane);
     await controller.start(channelId: 'voice-1', guildId: 'guild-1');
@@ -124,12 +130,55 @@ void main() {
     expect(encoder.keyframes, 1);
   });
 
-  test('a new shape restarts the running share and announces it', () async {
+  test(
+    'a reported settings change is paced, and a new shape announced',
+    () async {
+      final repository = _FakeRepository();
+      addTearDown(repository.close);
+      final plane = _FakePlane();
+      final capture = VideoCaptureHub(
+        encoder: FakeVideoEncoder(),
+        shareFrames: plane,
+      );
+      final controller = GoLiveController(
+        repositoryProvider: () => repository,
+        capture: capture,
+        media: plane,
+      )..reconcile();
+      addTearDown(controller.dispose);
+      await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+
+      // A bitrate alone reaches the sender's pace. Discord hears nothing: the
+      // shape it was told about still holds.
+      await capture.setQuality(
+        const StreamQualitySettings(shareBitrate: 3000000),
+      );
+      await pumpEventQueue();
+      expect(plane.retargeted, [3000000]);
+      expect(plane.announced, isEmpty);
+
+      // A new shape is declared before its first packet leaves.
+      await capture.setQuality(
+        const StreamQualitySettings(
+          shareResolution: StreamResolution.p1080,
+          shareFrameRate: 60,
+        ),
+      );
+      await pumpEventQueue();
+      expect(plane.announced.single.height, 1080);
+      expect(plane.announced.single.framesPerSecond, 60);
+      expect(plane.retargeted, hasLength(2));
+      expect(controller.status, GoLiveStatus.creating);
+      expect(controller.error, isNull);
+    },
+  );
+
+  test('a shape the encoder will not restart into is reported', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
-    final capture = VideoCaptureHub(encoder: encoder);
+    final encoder = FakeVideoEncoder();
     final plane = _FakePlane();
+    final capture = VideoCaptureHub(encoder: encoder, shareFrames: plane);
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       capture: capture,
@@ -138,28 +187,16 @@ void main() {
     addTearDown(controller.dispose);
     await controller.start(channelId: 'voice-1', guildId: 'guild-1');
 
-    // Nothing changed: nothing restarts.
-    await controller.applyQuality();
-    expect(encoder.started, 1);
-
-    // A bitrate alone reaches the running encoder, and the sender's pace.
-    capture.quality = const StreamQualitySettings(shareBitrate: 3000000);
-    await controller.applyQuality();
-    expect(encoder.started, 1);
-    expect(encoder.bitrates, [3000000]);
-    expect(plane.retargeted, [3000000]);
-
-    // A new shape is a new encoder, declared to Discord.
-    capture.quality = const StreamQualitySettings(
-      shareResolution: StreamResolution.p1080,
-      shareFrameRate: 60,
+    encoder.startFailure = StateError('no encoder');
+    await capture.setQuality(
+      const StreamQualitySettings(shareResolution: StreamResolution.p1080),
     );
-    await controller.applyQuality();
-    expect(encoder.started, 2);
-    expect(encoder.stopped, 1);
-    expect(encoder.settings?.height, 1080);
-    expect(encoder.settings?.framesPerSecond, 60);
-    expect(plane.announced.single.height, 1080);
+    await pumpEventQueue();
+
+    expect(controller.error, isA<StateError>());
+    expect(plane.announced, isEmpty);
+    // The stream itself is still up; ending it is the user's call.
+    expect(controller.isSharing, isTrue);
   });
 
   test('an encoder that fails leaves nothing announced', () async {
@@ -167,7 +204,7 @@ void main() {
     addTearDown(repository.close);
     final controller = _controller(
       repository,
-      encoder: _FakeEncoder()..failStart = true,
+      encoder: FakeVideoEncoder()..startFailure = StateError('no encoder'),
     );
 
     expect(
@@ -185,7 +222,7 @@ void main() {
   test('a refused stream stops the capture behind it', () async {
     final repository = _FakeRepository(failStart: true);
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder(displays: 2);
     final controller = _controller(repository, encoder: encoder);
 
     expect(
@@ -200,7 +237,7 @@ void main() {
   test('a second start while one is running is refused', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder(displays: 2);
     final controller = _controller(repository, encoder: encoder);
 
     await controller.start(sourceId: 'screen-1', channelId: 'voice-1');
@@ -210,7 +247,7 @@ void main() {
     );
 
     // One capture, still the first one's.
-    expect(encoder.started, 1);
+    expect(encoder.started, hasLength(1));
   });
 
   test('a share while the camera holds the capture is refused', () async {
@@ -218,9 +255,9 @@ void main() {
     addTearDown(repository.close);
     // One capture module, shared the way the app shares it: the camera and
     // the share are clients of the same one.
-    final encoder = _FakeEncoder(cameras: const ['Webcam']);
+    final encoder = FakeVideoEncoder(cameras: const ['Webcam']);
     final capture = VideoCaptureHub(encoder: encoder);
-    await capture.startCamera();
+    final camera = await capture.startCamera();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       capture: capture,
@@ -231,8 +268,8 @@ void main() {
 
     // The capture module is the arbiter: with the camera on it, a share is
     // not started on the side and nothing is announced.
-    expect(encoder.started, 1);
-    expect(encoder.startedSettings.single.source, VideoCaptureSource.camera);
+    expect(encoder.started, hasLength(1));
+    expect(encoder.started.single.source, VideoCaptureSource.camera);
     expect(repository.started, isEmpty);
     expect(controller.status, GoLiveStatus.failure);
     expect(controller.error, isA<VideoEncoderException>());
@@ -240,7 +277,7 @@ void main() {
     // And the camera itself is undisturbed.
     expect(capture.isCapturing, isTrue);
     expect(capture.settings!.source, VideoCaptureSource.camera);
-    await capture.stop();
+    await camera.release();
   });
 
   test('pausing and resuming report themselves', () async {
@@ -359,7 +396,7 @@ void main() {
   test('an end Discord refuses still releases the capture', () async {
     final repository = _FakeRepository(failEnd: true);
     addTearDown(repository.close);
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder(displays: 2);
     final controller = _controller(repository, encoder: encoder);
     await controller.start(
       sourceId: 'screen-1',
@@ -379,7 +416,7 @@ void main() {
     addTearDown(repository.close);
     final controller = _controller(
       repository,
-      encoder: _FakeEncoder()..failStop = true,
+      encoder: FakeVideoEncoder(displays: 2)..failStop = true,
     );
     await controller.start(
       sourceId: 'screen-1',
@@ -410,15 +447,15 @@ void main() {
 
   group('sharing without picking a source', () {
     test('shares the primary display the capture takes by default', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder(displays: 2);
       final controller = _controller(_FakeRepository(), encoder: encoder);
 
       expect(await controller.start(channelId: 'voice-1'), isTrue);
 
       // Nothing is named, and the capture module takes the primary display
       // for itself.
-      expect(encoder.started, 1);
-      expect(encoder.startedSettings.single.displayIndex, 0);
+      expect(encoder.started, hasLength(1));
+      expect(encoder.started.single.displayIndex, 0);
     });
 
     test('offers a screen per display the capture module can capture', () {
@@ -433,7 +470,7 @@ void main() {
     });
 
     test('a chosen screen is the one the capture takes', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder(displays: 2);
       final controller = _controller(_FakeRepository(), encoder: encoder);
 
       await controller.start(channelId: 'voice-1', sourceId: 'screen:2:0');
@@ -441,7 +478,7 @@ void main() {
       // The picker names a screen by its index; the capture addresses
       // displays by the same index, and sharing the second monitor used to
       // encode the first.
-      expect(encoder.startedSettings.single.displayIndex, 2);
+      expect(encoder.started.single.displayIndex, 2);
     });
   });
 }
@@ -484,73 +521,6 @@ final class _FakePlane implements GoLiveMediaPlane {
 
   @override
   void sendAudio(Uint8List opus) {}
-}
-
-final class _FakeEncoder
-    implements VideoEncoderService, VideoBitrateControl, VideoFrameSinkControl {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  final List<int> bitrates = [];
-
-  @override
-  Future<bool> setBitrate(int bitsPerSecond) async {
-    bitrates.add(bitsPerSecond);
-    return true;
-  }
-
-  /// Where each start was told to deliver frames.
-  final List<int?> frameSinks = [];
-  int? _frameSink;
-  int keyframes = 0;
-
-  @override
-  set nativeFrameSink(int? address) => _frameSink = address;
-
-  _FakeEncoder({this.cameras = const []});
-
-  final StreamController<EncodedVideoFrame> _frames =
-      StreamController.broadcast();
-  final List<String> cameras;
-  final List<VideoEncoderSettings> startedSettings = [];
-  VideoEncoderSettings? settings;
-  bool failStart = false;
-  bool failStop = false;
-  int started = 0;
-  int stopped = 0;
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  int get displayCount => 2;
-
-  @override
-  List<String> get cameraNames => cameras;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Future<void> start(VideoEncoderSettings requested) async {
-    if (failStart) throw StateError('no encoder');
-    started++;
-    settings = requested;
-    startedSettings.add(requested);
-    frameSinks.add(_frameSink);
-  }
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> requestKeyframe() async => keyframes++;
-
-  @override
-  Future<void> stop() async {
-    if (failStop) throw StateError('already gone');
-    stopped++;
-  }
 }
 
 final class _FakeRepository implements GoLiveRepository {

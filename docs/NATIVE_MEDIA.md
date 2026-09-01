@@ -14,28 +14,30 @@ second capture path is exactly what used to refuse a share outright.
 One capture and encode module owns the machine's video. `VideoCaptureHub` wraps
 the single native encoder behind `flucord_video.dll` (Desktop Duplication into a
 Media Foundation H.264 encoder, run in low-latency mode so no picture waits on
-frame reordering), and anyone who wants local pictures attaches to it: a Go Live
-share, the camera, the clip buffer. Only one capture can run at a time, refused
-rather than queued, which is what makes a double capture of a display impossible.
-The share and the camera run at the bitrates the stream quality setting says
-(2.5 Mbit and 1.2 Mbit by default, Discord's web-client numbers), kept in the
-`StreamQualitySettings` object and changed from the settings window; a capture
-that is already running keeps what it started with, and the next one takes
-whatever the setting says then. The clip buffer follows the module's frames and
-writes them out as they were encoded, so a clip is the recording that was already
-running. The native lifecycle is owned by the encoder service: frame buffers are
-copied before release, the callback closes only after the capture thread joins,
-and a finalizer closes a handle nobody stopped.
+frame reordering). Only one capture can run at a time, refused rather than
+queued, which is what makes a double capture of a display impossible. Starting
+a share or a camera hands the starter a `VideoCaptureLease`, and only the lease
+can pause, retune, ask a keyframe or release what it started (ADR-0007): the
+stream controller and the camera controller each hold their own lease and
+neither can stop the other's capture. The share and the camera run at the
+bitrates the stream quality setting says (2.5 Mbit and 1.2 Mbit by default,
+Discord's web-client numbers), kept in the `StreamQualitySettings` object and
+changed from the settings window; the hub starts the next capture at it. The
+clip buffer follows the hub's frames and writes them out as they were encoded,
+so a clip is the recording that was already running. The native lifecycle is
+owned by the encoder service: frame buffers are copied before release, the
+callback closes only after the capture thread joins, and a finalizer closes a
+handle nobody stopped.
 
 A share's size (480p to 1440p) and frame rate (15, 30, 60) are picked from
 the menu next to the share button and kept in `StreamQualitySettings` with
 the bitrates; the bitrate slider names a 720p30 share and other shapes scale
 from it (by pixels, and by frame rate less than proportionally). A pick while
-sharing reaches the running share through `GoLiveController.applyQuality`: a
-bitrate alone changes on the running encoder, a new shape restarts the capture
-(the connection outlives it, so the sender stays attached), announces the new
-shape to Discord, and the transport keeps the RTP clock running forward across
-the restart.
+sharing is the hub's to apply: a bitrate alone changes on the running encoder,
+a new shape restarts the encoder under the same lease, and the lease reports
+what it runs at now. The stream controller retargets the sender's pace on
+every report and announces a new shape to Discord; the transport keeps the
+RTP clock running forward across the restart.
 
 The share is sent from an isolate of its own, the way Discord runs media on a
 thread of its own. `GoLiveMediaIsolate` hosts the share's whole connection on
@@ -43,7 +45,9 @@ a worker: the signalling socket, the DAVE group, the packetiser, the pacer,
 the transport cipher and the UDP socket, wrapped by `GoLiveSendingClient`,
 which announces the share and then sends the encoder's pictures on it by
 itself. The native encoder delivers straight to that isolate
-(`VideoFrameSinkControl`), and the main isolate keeps a proxy per connection
+(`VideoFrameSinkControl`; the hub is built with the isolate as its share frame
+destination, so no address passes through the application layer), and the
+main isolate keeps a proxy per connection
 that speaks the client interface the stream plane already dials. Only what
 the encoder must do crosses back: a keyframe a viewer needs, a bitrate the
 loss allows. Before this, every stage from the frame copy to the per-packet

@@ -52,6 +52,7 @@ final class SelfVideoController extends ChangeNotifier {
   /// Which camera the next start will use.
   int _selectedCamera = 0;
   DiscordVideoStreamTransport? _transport;
+  VideoCaptureLease? _lease;
   bool _isOn = false;
   bool _isBusy = false;
   Object? _error;
@@ -101,16 +102,15 @@ final class SelfVideoController extends ChangeNotifier {
     _isBusy = true;
     _error = null;
     notifyListeners();
-    VideoEncoderSettings settings;
     try {
-      settings = await _capture.startCamera(cameraIndex: _selectedCamera);
+      _lease = await _capture.startCamera(cameraIndex: _selectedCamera);
     } on Object catch (error) {
       _fail(error);
       return false;
     }
     // Declared before the first packet: a receiver that saw RTP on an
     // undeclared SSRC would drop it.
-    transport.announceVideo(enabled: true, settings: settings);
+    transport.announceVideo(enabled: true, settings: _lease!.settings);
     _transport?.stop();
     _transport = DiscordVideoStreamTransport(
       ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
@@ -150,7 +150,7 @@ final class SelfVideoController extends ChangeNotifier {
     _transport?.stop();
     _transport = null;
     if (!_isOn) return;
-    await _capture.stop();
+    await _releaseCapture();
     _isOn = false;
     notifyListeners();
   }
@@ -166,11 +166,17 @@ final class SelfVideoController extends ChangeNotifier {
     // renderer marks the stream inactive rather than forgetting its numbers.
     transport?.announceVideo(
       enabled: false,
-      settings: _capture.settings ?? _capture.cameraSettings,
+      settings: _lease?.settings ?? _capture.cameraSettings,
     );
     _transport?.stop();
     _transport = null;
-    await _capture.stop();
+    await _releaseCapture();
+  }
+
+  Future<void> _releaseCapture() async {
+    final lease = _lease;
+    _lease = null;
+    await lease?.release();
   }
 
   void _fail(Object error) {
@@ -183,9 +189,7 @@ final class SelfVideoController extends ChangeNotifier {
   void dispose() {
     _transport?.stop();
     _transport = null;
-    // Only the camera's own capture: the module is shared, and a share that
-    // is running must outlive this controller being torn down.
-    if (_isOn) unawaited(_capture.stop());
+    unawaited(_releaseCapture());
     super.dispose();
   }
 }

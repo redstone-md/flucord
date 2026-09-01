@@ -14,12 +14,13 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'pane_harness.dart';
+
+import 'fake_video_encoder.dart';
 
 /// A room with streams in it: the pane the app builds, over controllers that
 /// record what was asked for.
@@ -49,7 +50,7 @@ final class StreamRoomHarness {
     );
     goLive = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: StreamRoomEncoder()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(cameras: const [])),
     )..reconcile();
     composition = AppComposition(AppBootstrap.demo());
     composition.workspace
@@ -339,35 +340,6 @@ final class StreamRoomDecoder implements VideoDecoderService {
 
   @override
   Future<void> submit(List<int> accessUnit, {Duration? timestamp}) async {}
-
-  @override
-  Future<void> stop() async {}
-}
-
-final class StreamRoomEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  List<String> get cameraNames => const [];
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => const Stream.empty();
-
-  @override
-  Future<void> start(VideoEncoderSettings requested) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
 
   @override
   Future<void> stop() async {}

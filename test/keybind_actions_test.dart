@@ -14,9 +14,10 @@ import 'package:flucord/src/data/video/screenshot_service.dart';
 import 'package:flucord/src/domain/keybind.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   late VoiceController voice;
@@ -35,7 +36,7 @@ void main() {
     actions = KeybindActions(
       voice: voice,
       selfVideo: SelfVideoController(
-        capture: VideoCaptureHub(encoder: _FakeEncoderService()),
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
         transportProvider: () => null,
         sinkProvider: () => null,
         announceSelfVideo: ({required bool enabled}) async => true,
@@ -157,35 +158,6 @@ class _CountingVoiceOverlay implements VoiceOverlay {
 
   @override
   void close() {}
-}
-
-class _FakeEncoderService implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  @override
-  bool get isSupported => false;
-
-  @override
-  List<String> get cameraNames => const [];
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => const Stream.empty();
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 class _NoSettings implements StreamerModeRepository {

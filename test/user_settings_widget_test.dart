@@ -9,12 +9,13 @@ import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   testWidgets('renders every category and applies an appearance edit', (
@@ -345,7 +346,7 @@ void main() {
     await voice.initialize();
     final quality = StreamQualityController(
       _InMemoryQualityRepository(),
-      capture: VideoCaptureHub(encoder: _UnusedEncoder()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
     );
     await quality.load();
     addTearDown(quality.dispose);
@@ -557,35 +558,4 @@ final class _InMemoryQualityRepository implements StreamQualityRepository {
   @override
   Future<void> save(StreamQualitySettings settings) async =>
       _settings = settings;
-}
-
-/// Answers nothing: the capture module is only the quality's destination in
-/// these tests, and no capture is ever started.
-final class _UnusedEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  @override
-  bool get isSupported => false;
-
-  @override
-  int get displayCount => 0;
-
-  @override
-  List<String> get cameraNames => const [];
-
-  @override
-  Stream<EncodedVideoFrame> get frames => const Stream.empty();
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }

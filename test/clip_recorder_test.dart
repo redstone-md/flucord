@@ -10,6 +10,8 @@ import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_video_encoder.dart';
+
 void main() {
   group('the ring buffer', () {
     test('a clip starts on a keyframe, never on a difference', () async {
@@ -62,20 +64,20 @@ void main() {
         window: const Duration(seconds: 30),
       );
       final capture = _attachedCapture(recorder);
-      await capture.hub.startShare();
+      final share = await capture.hub.startShare();
       capture.emit(_frame(0, isKeyframe: true));
       await Future<void>.delayed(Duration.zero);
       expect(recorder.clipFrames, isNotEmpty);
 
-      await capture.hub.stop();
-      await capture.hub.startCamera();
+      await share.release();
+      final camera = await capture.hub.startCamera();
 
       // A share's frames and a camera's frames cannot sit in one file: they
       // were encoded at different rates, and the writer is told one header.
       capture.emit(_frame(50000000, isKeyframe: true));
       await Future<void>.delayed(Duration.zero);
       expect(recorder.clipFrames, hasLength(1));
-      await capture.hub.stop();
+      await camera.release();
     });
 
     test('detaching forgets what was held', () async {
@@ -100,7 +102,7 @@ void main() {
       expect(recorder.isSupported, isFalse);
       expect(recorder.buffered, Duration.zero);
       recorder
-        ..attach(VideoCaptureHub(encoder: _FakeEncoder()))
+        ..attach(VideoCaptureHub(encoder: FakeVideoEncoder()))
         ..detach();
       expect((await recorder.save()).failure, ClipFailure.unsupported);
     });
@@ -117,7 +119,7 @@ void main() {
 
     test('an empty buffer is not a failure to write', () async {
       final recorder = NativeClipRecorder(writer: _stubWriter());
-      recorder.attach(VideoCaptureHub(encoder: _FakeEncoder()));
+      recorder.attach(VideoCaptureHub(encoder: FakeVideoEncoder()));
       addTearDown(recorder.detach);
 
       expect((await recorder.save()).failure, ClipFailure.empty);
@@ -232,10 +234,9 @@ void main() {
           frames.add(frame);
           if (frames.length >= 8 && !done.isCompleted) done.complete();
         });
-        bool opened = false;
+        VideoCaptureLease? share;
         try {
-          await capture.startShare();
-          opened = true;
+          share = await capture.startShare();
           await Future.any([
             done.future,
             Future<void>.delayed(const Duration(seconds: 4)),
@@ -246,7 +247,7 @@ void main() {
           return;
         } finally {
           await collected.cancel();
-          if (opened) await capture.stop();
+          await share?.release();
         }
 
         // Real H.264 rather than made-up bytes: the file sink parses what it is
@@ -274,7 +275,7 @@ final class _AttachedCapture {
   _AttachedCapture(this.hub, this._encoder);
 
   final VideoCaptureHub hub;
-  final _FakeEncoder _encoder;
+  final FakeVideoEncoder _encoder;
 
   /// Starts a share capture, which is what every one-capture test wants.
   Future<void> start() => hub.startShare();
@@ -283,45 +284,10 @@ final class _AttachedCapture {
 }
 
 _AttachedCapture _attachedCapture(NativeClipRecorder recorder) {
-  final encoder = _FakeEncoder();
+  final encoder = FakeVideoEncoder();
   final hub = VideoCaptureHub(encoder: encoder);
   recorder.attach(hub);
   return _AttachedCapture(hub, encoder);
-}
-
-/// A fake encoder whose frames a test emits by hand.
-final class _FakeEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  final StreamController<EncodedVideoFrame> _frames =
-      StreamController.broadcast();
-
-  void emit(EncodedVideoFrame frame) => _frames.add(frame);
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  List<String> get cameraNames => const ['Webcam'];
-
-  @override
-  Stream<EncodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 EncodedVideoFrame _frame(int microseconds, {required bool isKeyframe}) =>

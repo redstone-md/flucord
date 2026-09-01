@@ -1,14 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../domain/stream_quality.dart';
 import '../domain/video_capture_hub.dart';
 
 /// Stream quality as the settings plane sees it: kept between runs, and fed
-/// to the capture module so the next share or camera runs at it.
-///
-/// A change does not touch a capture that is already running: the encoder can
-/// only run one set of settings, and re-encoding mid-stream is a restart of
-/// the picture. What is on screen keeps what it started with.
+/// to the capture module, which brings a running share to it and starts the
+/// next capture at it.
 final class StreamQualityController extends ChangeNotifier {
   StreamQualityController(this._repository, {required VideoCaptureHub capture})
     : _capture = capture;
@@ -41,7 +40,7 @@ final class StreamQualityController extends ChangeNotifier {
     if (_loaded) return;
     _settings = await _repository.load();
     _loaded = true;
-    _capture.quality = _settings;
+    unawaited(_capture.setQuality(_settings));
     _notify();
   }
 
@@ -60,7 +59,7 @@ final class StreamQualityController extends ChangeNotifier {
   Future<void> _set(StreamQualitySettings settings) async {
     if (!settings.isValid || settings == _settings) return;
     _settings = settings;
-    _capture.quality = settings;
+    unawaited(_capture.setQuality(settings));
     _notify();
     try {
       await _repository.save(settings);

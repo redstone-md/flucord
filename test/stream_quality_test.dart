@@ -1,15 +1,16 @@
-import 'dart:async';
 import 'dart:io';
+ 
 
 import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/data/file_stream_quality_repository.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/presentation/widgets/stream_quality_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   group('StreamQualitySettings', () {
@@ -152,28 +153,29 @@ void main() {
           cameraBitrate: 640000,
         ),
       );
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final hub = VideoCaptureHub(encoder: encoder);
       final controller = StreamQualityController(repository, capture: hub);
 
       await controller.load();
 
       expect(controller.shareBitrate, 5000000);
-      expect((await hub.startShare()).bitrate, 5000000);
-      await hub.stop();
-      expect((await hub.startCamera()).bitrate, 640000);
+      final share = await hub.startShare();
+      expect(share.settings.bitrate, 5000000);
+      await share.release();
+      expect((await hub.startCamera()).settings.bitrate, 640000);
     });
 
     test('a change applies to the next start and is kept', () async {
       final repository = _StoredRepository();
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final hub = VideoCaptureHub(encoder: encoder);
       final controller = StreamQualityController(repository, capture: hub);
       await controller.load();
 
       await controller.setShareBitrate(8000000);
 
-      expect((await hub.startShare()).bitrate, 8000000);
+      expect((await hub.startShare()).settings.bitrate, 8000000);
       expect(repository.saved?.shareBitrate, 8000000);
       // The camera side is untouched by a share change.
       expect(repository.saved?.cameraBitrate, 1200000);
@@ -183,7 +185,7 @@ void main() {
       final repository = _StoredRepository();
       final controller = StreamQualityController(
         repository,
-        capture: VideoCaptureHub(encoder: _FakeEncoder()),
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
       );
       await controller.load();
 
@@ -194,7 +196,7 @@ void main() {
 
     test('a save that fails still applies, and says it was not kept', () async {
       final repository = _RefusingSaveRepository();
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final hub = VideoCaptureHub(encoder: encoder);
       final controller = StreamQualityController(repository, capture: hub);
       await controller.load();
@@ -204,7 +206,7 @@ void main() {
       // The change is applied either way: what is lost is the next restart,
       // not this session.
       expect(controller.shareBitrate, 4000000);
-      expect((await hub.startShare()).bitrate, 4000000);
+      expect((await hub.startShare()).settings.bitrate, 4000000);
       expect(controller.writeError, isNotNull);
 
       repository.refuse = false;
@@ -216,7 +218,7 @@ void main() {
       final repository = _StoredRepository();
       final controller = StreamQualityController(
         repository,
-        capture: VideoCaptureHub(encoder: _FakeEncoder()),
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
       );
       await controller.load();
 
@@ -233,7 +235,7 @@ void main() {
     ) async {
       final controller = StreamQualityController(
         _StoredRepository(),
-        capture: VideoCaptureHub(encoder: _FakeEncoder()),
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
       );
       await controller.load();
       addTearDown(controller.dispose);
@@ -292,36 +294,4 @@ final class _RefusingSaveRepository implements StreamQualityRepository {
   Future<void> save(StreamQualitySettings settings) async {
     if (refuse) throw const FileSystemException('disk full');
   }
-}
-
-final class _FakeEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  final StreamController<EncodedVideoFrame> _frames =
-      StreamController.broadcast();
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  List<String> get cameraNames => const ['Camera'];
-
-  @override
-  Stream<EncodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }

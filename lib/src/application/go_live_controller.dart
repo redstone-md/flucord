@@ -71,7 +71,6 @@ final class GoLiveController extends ChangeNotifier {
     _mediaSubscriptions = [
       _media.encoderCommands.listen(_applyEncoderCommand),
       _media.paceLines.listen(_logPace),
-      _media.relayedFrames.listen(capture.relay),
     ];
   }
 
@@ -81,6 +80,9 @@ final class GoLiveController extends ChangeNotifier {
   /// clients: the camera and the clip buffer draw on it too, and only one of
   /// the three can capture at a time.
   final VideoCaptureHub _capture;
+
+  VideoCaptureLease? _lease;
+  StreamSubscription<VideoEncoderSettings>? _leaseChanges;
 
   /// Where the share is sent from.
   final GoLiveMediaPlane _media;
@@ -127,66 +129,39 @@ final class GoLiveController extends ChangeNotifier {
   /// Whether this build can send pictures at all.
   bool get canEncode => _capture.isSupported;
 
-  /// Brings a running share to what the quality setting says now.
-  ///
-  /// A bitrate alone changes on the running encoder. A new size or frame
-  /// rate restarts the capture, because an encoder is built for one shape;
-  /// the connection stays up (the encoder's frames reach it across a
-  /// restart), the new shape is announced, and the timestamps carry on from
-  /// where the old encoder's stopped. Nothing to do when this controller has
-  /// no capture running: the next start reads the setting itself. A share
-  /// still connecting counts, since it goes live with whatever the capture
-  /// runs at by then.
-  Future<void> applyQuality() async {
-    if (!_captureStarted) return;
-    final running = _capture.settings;
-    if (running == null) return;
-    final wanted = _capture.shareSettings.onSource(running.displayIndex);
-    if (running == wanted) return;
-    if (running.hasShapeOf(wanted)) {
-      _media.retarget(wanted.bitrate);
-      _bitrateRefused = false;
-      await _capture.setBitrate(wanted.bitrate);
-      return;
-    }
-    try {
-      await _capture.stop();
-      await _startCapture(running.displayIndex);
-    } on Object catch (error) {
-      _diagnose('quality change refused', error);
-      _error = error;
-      _notify();
-      return;
-    }
-    _media.announce(wanted);
-    _bitrateRefused = false;
+  /// What the capture runs at after a quality change reached it: the sender's
+  /// pace follows the bitrate, and a new shape is declared to Discord so that
+  /// no packet is dropped for an SSRC announced at the old numbers.
+  void _follow(VideoEncoderSettings settings) {
+    final declared = _declared;
+    _declared = settings;
+    _media.retarget(settings.bitrate);
+    if (declared != null && declared.hasShapeOf(settings)) return;
+    _media.announce(settings);
     _diagnose(
       'quality',
-      '${wanted.width}x${wanted.height}@${wanted.framesPerSecond} '
-          '${wanted.bitrate ~/ 1000}k',
+      '${settings.width}x${settings.height}@${settings.framesPerSecond} '
+          '${settings.bitrate ~/ 1000}k',
     );
   }
 
-  /// An encoder that cannot change rate is logged once; the sender's pace
-  /// follows regardless, since spreading the same bytes thinner is still
-  /// less loss than bursting them.
-  bool _bitrateRefused = false;
+  /// The shape Discord was last told about, to know when it changes.
+  VideoEncoderSettings? _declared;
+
+  void _qualityRefused(Object error) {
+    _diagnose('quality change refused', error);
+    _error = error;
+    _notify();
+  }
 
   void _applyEncoderCommand(GoLiveEncoderCommand command) {
+    final lease = _lease;
+    if (lease == null) return;
     switch (command) {
       case GoLiveKeyframeCommand():
-        unawaited(_capture.requestKeyframe());
+        unawaited(lease.requestKeyframe());
       case GoLiveBitrateCommand(:final bitsPerSecond):
-        unawaited(
-          _capture.setBitrate(bitsPerSecond).then((accepted) {
-            if (accepted || _bitrateRefused) return;
-            _bitrateRefused = true;
-            _diagnose(
-              'bitrate',
-              'encoder keeps its rate; only the pace follows',
-            );
-          }),
-        );
+        unawaited(lease.setBitrate(bitsPerSecond));
     }
   }
 
@@ -249,12 +224,6 @@ final class GoLiveController extends ChangeNotifier {
   /// screen from a list read earlier is what failed with "that display is no
   /// longer attached"; the invented "0" before it failed with "source not
   /// found".
-  // Whether the capture behind this stream is the stream's to stop: the
-  // module is shared, and stopping what another client is running (the
-  // camera's session, when a share was refused) would tear down somebody
-  // else's picture on the way out.
-  bool _captureStarted = false;
-
   Future<bool> start({
     required String channelId,
     String? sourceId,
@@ -272,9 +241,14 @@ final class GoLiveController extends ChangeNotifier {
       // nothing else in the client opens a duplication of its own. Windows
       // refuses the second with E_INVALIDARG, which is what the room used
       // to report as "that display is no longer attached".
-      await _startCapture(GoLiveDisplay.displayIndexFor(sourceId));
-      _captureStarted = true;
-      _bitrateRefused = false;
+      final lease = _lease = await _capture.startShare(
+        displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
+      );
+      _declared = lease.settings;
+      _leaseChanges = lease.settingsChanges.listen(
+        _follow,
+        onError: _qualityRefused,
+      );
       _stage = null;
       await _startAudio();
       _key = await repository.startStream(
@@ -301,15 +275,6 @@ final class GoLiveController extends ChangeNotifier {
     } finally {
       _notify();
     }
-  }
-
-  /// The display capture, delivering to the media plane when it can take
-  /// frames natively and to the hub's stream otherwise.
-  Future<void> _startCapture(int displayIndex) async {
-    await _capture.startShare(
-      displayIndex: displayIndex,
-      nativeFrameSink: await _media.nativeFrameSink,
-    );
   }
 
   /// The shared sound, when this build can capture and encode it. A machine
@@ -346,7 +311,7 @@ final class GoLiveController extends ChangeNotifier {
       await repository.setPaused(key, paused: paused);
       // The capture stops producing too: pausing that only told Discord would
       // keep burning the CPU on frames nobody receives.
-      await _capture.setPaused(paused: paused);
+      await _lease?.setPaused(paused: paused);
       _status = paused ? GoLiveStatus.paused : GoLiveStatus.live;
       return true;
     } on Object catch (error) {
@@ -401,6 +366,7 @@ final class GoLiveController extends ChangeNotifier {
     for (final subscription in _mediaSubscriptions) {
       unawaited(subscription.cancel());
     }
+    unawaited(_leaseChanges?.cancel());
     unawaited(_updates?.cancel());
     unawaited(_servers?.cancel());
     super.dispose();
@@ -421,10 +387,14 @@ final class GoLiveController extends ChangeNotifier {
 
   Future<void> _stopCapture() async {
     await _stopAudio();
-    if (!_captureStarted) return;
-    _captureStarted = false;
+    final lease = _lease;
+    if (lease == null) return;
+    _lease = null;
+    _declared = null;
+    unawaited(_leaseChanges?.cancel());
+    _leaseChanges = null;
     try {
-      await _capture.stop();
+      await lease.release();
     } on Object catch (_) {
       // Already stopped. Not worth reporting over whatever ended the stream.
     }

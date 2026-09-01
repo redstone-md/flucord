@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart';
 
 import 'app_bootstrap.dart';
+import 'app_log.dart';
 import 'application/voice_room_coordination.dart';
 import 'application/account_connection_coordination.dart';
 import 'application/account_standing_controller.dart';
@@ -339,11 +340,17 @@ final class AppComposition {
   }
 
   void _buildStreamPlane() {
+    // The share is sent from an isolate of its own, so that nothing the UI
+    // does on this one can hold a picture back.
+    goLiveMedia = GoLiveMediaIsolate();
+    _teardown.add(() => unawaited(goLiveMedia.dispose()));
     // Go Live: the stream plane and the transport binding behind it. The
     // picture comes from the capture module shared with the camera and the
-    // clip buffer.
+    // clip buffer; a share's frames go straight to the media isolate.
     videoCapture = VideoCaptureHub(
       encoder: bootstrap.videoEncoderService ?? NativeVideoEncoderService(),
+      shareFrames: goLiveMedia,
+      onDiagnostic: (line) => AppLog.warning('capture', line),
     );
     // The bitrates the capture runs at, loaded from the machine's own file and
     // kept there: they describe this machine's connection, not the account.
@@ -354,10 +361,6 @@ final class AppComposition {
       ),
     );
     unawaited(streamQuality.load());
-    // The share is sent from an isolate of its own, so that nothing the UI
-    // does on this one can hold a picture back.
-    goLiveMedia = GoLiveMediaIsolate();
-    _teardown.add(() => unawaited(goLiveMedia.dispose()));
     goLive = _register(
       GoLiveController(
         repositoryProvider: () => chat.goLive,
@@ -369,12 +372,6 @@ final class AppComposition {
         opusCodecFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
-    // A quality picked while sharing reaches the running share: the
-    // setting writes the hub, and the share brings itself to what the hub
-    // says. Idle, it does nothing; the next start reads the hub itself.
-    void applyQuality() => unawaited(goLive.applyQuality());
-    streamQuality.addListener(applyQuality);
-    _teardown.add(() => streamQuality.removeListener(applyQuality));
     // Watching somebody else's share: a session per stream, each with a
     // pipeline of its own. Decoders are made on demand, so a room where
     // nobody is streaming opens none.

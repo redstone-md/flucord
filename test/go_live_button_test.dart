@@ -5,11 +5,12 @@ import 'package:flucord/src/application/stream_quality_controller.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/stream_quality.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/presentation/widgets/go_live_button.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_video_encoder.dart';
 
 const _key = GoLiveStreamKey.guild(
   guildId: 'guild-1',
@@ -40,7 +41,7 @@ void main() {
   ) async {
     final controller = GoLiveController(
       repositoryProvider: () => null,
-      capture: VideoCaptureHub(encoder: _FakeEncoder()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
 
@@ -58,7 +59,7 @@ void main() {
   testWidgets('the menu next to the button picks frame rate and size', (
     tester,
   ) async {
-    final capture = VideoCaptureHub(encoder: _FakeEncoder());
+    final capture = VideoCaptureHub(encoder: FakeVideoEncoder());
     final controller = GoLiveController(
       repositoryProvider: _FakeRepository.new,
       capture: capture,
@@ -103,7 +104,7 @@ void main() {
   testWidgets('shares what the picker chose, and nothing when dismissed', (
     tester,
   ) async {
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder();
     final controller = GoLiveController(
       repositoryProvider: _FakeRepository.new,
       capture: VideoCaptureHub(encoder: encoder),
@@ -133,26 +134,25 @@ void main() {
 
     // Handed to the capture module, which is the only thing that captures: a
     // second duplication of the same display is refused by Windows.
-    expect(encoder.settings?.displayIndex, 1);
+    expect(encoder.started.single.displayIndex, 1);
 
     await controller.stop();
     await tester.pumpAndSettle();
     answer = null;
 
-    encoder.settings = null;
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
 
     // Dismissed. Sharing the primary screen because somebody closed a picker
     // would put the wrong thing in the channel, which is worse than nothing.
-    expect(encoder.settings, isNull);
+    expect(encoder.started, hasLength(1));
   });
 
   testWidgets('starts and stops a stream, driving the encoder with it', (
     tester,
   ) async {
     final repository = _FakeRepository();
-    final encoder = _FakeEncoder();
+    final encoder = FakeVideoEncoder();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
       capture: VideoCaptureHub(encoder: encoder),
@@ -165,7 +165,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The capture module captures the primary display for itself.
-    expect(encoder.started, 1);
+    expect(encoder.started, hasLength(1));
     expect(repository.started, ['voice-1']);
 
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
@@ -179,7 +179,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: _FakeEncoder(supported: false)),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -200,7 +200,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: _FakeEncoder()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -233,7 +233,7 @@ void main() {
     final repository = _FakeRepository(failStart: true);
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: _FakeEncoder()),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder()),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -249,7 +249,7 @@ void main() {
     final repository = _FakeRepository();
     final controller = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: _FakeEncoder(supported: false)),
+      capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
     )..reconcile();
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -268,53 +268,6 @@ final class _MemoryQualityRepository implements StreamQualityRepository {
   Future<void> save(StreamQualitySettings settings) async {
     _settings = settings;
   }
-}
-
-final class _FakeEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  _FakeEncoder({this.supported = true});
-
-  final bool supported;
-  final StreamController<EncodedVideoFrame> _frames =
-      StreamController.broadcast();
-  int started = 0;
-  VideoEncoderSettings? settings;
-  int stopped = 0;
-  final List<bool> pauses = [];
-  List<String> cameras = const [];
-
-  @override
-  List<String> get cameraNames => cameras;
-
-  void emit(EncodedVideoFrame frame) => _frames.add(frame);
-
-  Future<void> close() => _frames.close();
-
-  @override
-  bool get isSupported => supported;
-
-  @override
-  int get displayCount => supported ? 1 : 0;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Future<void> start(VideoEncoderSettings requested) async {
-    started++;
-    settings = requested;
-  }
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async => pauses.add(paused);
-
-  @override
-  Future<void> stop() async => stopped++;
 }
 
 final class _FakeRepository implements GoLiveRepository {

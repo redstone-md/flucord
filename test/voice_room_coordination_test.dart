@@ -12,9 +12,10 @@ import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
+
+import 'support/fake_video_encoder.dart';
 
 void main() {
   test('remote cameras follow the room connection', () async {
@@ -32,7 +33,9 @@ void main() {
     await voice.refreshSignalingService();
     expect(cameras.isListening, isFalse);
 
-    signaling.emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready));
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+    );
     await Future<void>.delayed(Duration.zero);
     expect(cameras.isListening, isTrue);
 
@@ -43,7 +46,9 @@ void main() {
     expect(cameras.isListening, isFalse);
 
     room.dispose();
-    signaling.emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready));
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+    );
     await Future<void>.delayed(Duration.zero);
     expect(cameras.isListening, isFalse, reason: 'rules die with the room');
   });
@@ -60,19 +65,14 @@ void main() {
       roster: () => const [],
       isHiddenByStreamerMode: () => false,
     );
-    final room = _buildRoom(
-      voice: voice,
-      overlayController: overlayController,
-    );
+    final room = _buildRoom(voice: voice, overlayController: overlayController);
 
     await voice.refreshSignalingService();
     await overlayController.toggle();
     expect(overlay.shows, 1);
 
     signaling.emit(
-      const VoiceSignalingStatusEvent(
-        VoiceConnectionStatus.reconnecting,
-      ),
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.reconnecting),
     );
     await Future<void>.delayed(Duration.zero);
     expect(overlay.shows, 2, reason: 'a roster change redraws the overlay');
@@ -80,31 +80,35 @@ void main() {
     room.dispose();
   });
 
-  test("streamer mode's automatic switch follows this client's share",
-      () async {
-    final repository = _FakeGoLiveRepository();
-    final goLive = GoLiveController(
-      repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: _FakeEncoderService()),
-    );
-    final settings = _MemoryStreamerModeSettings();
-    final streamerMode = StreamerModeController(settings);
-    await streamerMode.load();
-    expect(streamerMode.isEnabled, isFalse);
+  test(
+    "streamer mode's automatic switch follows this client's share",
+    () async {
+      final repository = _FakeGoLiveRepository();
+      final goLive = GoLiveController(
+        repositoryProvider: () => repository,
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+      );
+      final settings = _MemoryStreamerModeSettings();
+      final streamerMode = StreamerModeController(settings);
+      await streamerMode.load();
+      expect(streamerMode.isEnabled, isFalse);
 
-    final room = _buildRoom(streamerMode: streamerMode, goLive: goLive);
-    const key = GoLiveStreamKey.call(channelId: 'c', userId: 'me');
-    await goLive.start(channelId: 'c');
+      final room = _buildRoom(streamerMode: streamerMode, goLive: goLive);
+      const key = GoLiveStreamKey.call(channelId: 'c', userId: 'me');
+      await goLive.start(channelId: 'c');
 
-    repository.announce(const GoLiveStream(key: key));
-    await Future<void>.delayed(Duration.zero);
-    repository.assign(const GoLiveServer(key: key, endpoint: 'e', token: 't'));
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    expect(goLive.isStreaming, isTrue);
-    expect(streamerMode.isEnabled, isTrue);
+      repository.announce(const GoLiveStream(key: key));
+      await Future<void>.delayed(Duration.zero);
+      repository.assign(
+        const GoLiveServer(key: key, endpoint: 'e', token: 't'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(goLive.isStreaming, isTrue);
+      expect(streamerMode.isEnabled, isTrue);
 
-    room.dispose();
-  });
+      room.dispose();
+    },
+  );
 }
 
 /// Wires one [VoiceRoomCoordination] with whatever the test cares about;
@@ -142,7 +146,7 @@ VoiceRoomCoordination _buildRoom({
         goLive ??
         GoLiveController(
           repositoryProvider: () => null,
-          capture: VideoCaptureHub(encoder: _FakeEncoderService()),
+          capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
         ),
   );
   return room;
@@ -206,8 +210,7 @@ class _CountingVoiceOverlay implements VoiceOverlay {
 }
 
 class _FakeGoLiveRepository implements GoLiveRepository {
-  final StreamController<GoLiveStream> _updates =
-      StreamController.broadcast();
+  final StreamController<GoLiveStream> _updates = StreamController.broadcast();
 
   void announce(GoLiveStream stream) => _updates.add(stream);
 
@@ -217,8 +220,7 @@ class _FakeGoLiveRepository implements GoLiveRepository {
   @override
   Stream<GoLiveStream> get updates => _updates.stream;
 
-  final StreamController<GoLiveServer> _servers =
-      StreamController.broadcast();
+  final StreamController<GoLiveServer> _servers = StreamController.broadcast();
 
   void assign(GoLiveServer server) => _servers.add(server);
 
@@ -230,8 +232,7 @@ class _FakeGoLiveRepository implements GoLiveRepository {
     required String channelId,
     String? guildId,
     String? preferredRegion,
-  }) async =>
-      GoLiveStreamKey.call(channelId: channelId, userId: 'me');
+  }) async => GoLiveStreamKey.call(channelId: channelId, userId: 'me');
 
   @override
   Future<void> watchStream(GoLiveStreamKey key) async {}
@@ -244,35 +245,6 @@ class _FakeGoLiveRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
-}
-
-class _FakeEncoderService implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  @override
-  bool get isSupported => false;
-
-  @override
-  List<String> get cameraNames => const [];
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => const Stream.empty();
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {}
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 class _MemoryStreamerModeSettings implements StreamerModeRepository {

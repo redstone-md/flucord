@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../../domain/go_live_media.dart';
 import '../../domain/go_live_stream.dart';
+import '../../domain/video_capture_hub.dart';
 import '../../domain/video_encoder.dart';
 import '../../domain/voice_connection.dart';
 import 'discord_voice_gateway_client.dart';
@@ -15,21 +16,15 @@ import 'go_live_sending_client.dart';
 /// socket factory directly, because where it runs is the plane's decision:
 /// the app runs it on an isolate of its own ([GoLiveMediaIsolate]), and the
 /// tests run it in-process. Either way the encoder, which stays on the main
-/// isolate, is steered through the same three streams.
-abstract interface class GoLiveMediaPlane {
-  /// A native address the encoder can deliver frames to directly, or null
-  /// when frames should stay in-process and reach the plane as a stream.
-  Future<int?> get nativeFrameSink;
-
+/// isolate, is steered through the same streams. As the capture hub's share
+/// destination, the plane says where the encoder delivers a share's frames
+/// and echoes them back for the clip buffer.
+abstract interface class GoLiveMediaPlane implements ShareFrameDestination {
   /// What the far end's feedback asks of the encoder.
   Stream<GoLiveEncoderCommand> get encoderCommands;
 
   /// One line every few seconds about what the share is sending.
   Stream<String> get paceLines;
-
-  /// The share's frames, echoed back for whoever on the main isolate wants
-  /// them too (the clip buffer). Empty when frames never left it.
-  Stream<EncodedVideoFrame> get relayedFrames;
 
   /// Opens the share's connection. Dialled by the caller, like any other.
   DiscordVoiceClient openSender({

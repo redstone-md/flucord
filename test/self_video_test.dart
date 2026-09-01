@@ -21,6 +21,8 @@ import 'package:flutter/material.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_video_encoder.dart';
+
 void main() {
   group('what opcode 12 says', () {
     test('the SSRCs are derived from the audio one, not invented', () {
@@ -179,7 +181,7 @@ void main() {
 
   group('the camera', () {
     test('a build with no encoder offers nothing', () async {
-      final controller = _controllerFor(_FakeEncoder(supported: false));
+      final controller = _controllerFor(FakeVideoEncoder(supported: false));
       addTearDown(controller.dispose);
 
       expect(controller.isSupported, isFalse);
@@ -188,7 +190,7 @@ void main() {
     });
 
     test('a machine with no camera attached says so', () async {
-      final controller = _controllerFor(_FakeEncoder(cameras: const []));
+      final controller = _controllerFor(FakeVideoEncoder(cameras: const []));
       addTearDown(controller.dispose);
 
       expect(controller.isSupported, isTrue);
@@ -201,7 +203,7 @@ void main() {
     });
 
     test('turning on declares, sends and announces', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final transport = _FakeVoiceVideoTransport();
       final announcements = <bool>[];
       final controller = _controllerFor(
@@ -227,7 +229,7 @@ void main() {
     });
 
     test('a camera asked for twice is only started once', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final controller = _controllerFor(
         encoder,
         transport: _FakeVoiceVideoTransport(),
@@ -241,7 +243,7 @@ void main() {
     });
 
     test('a voice connection that is not ready refuses the camera', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final controller = _controllerFor(encoder);
       addTearDown(controller.dispose);
 
@@ -252,7 +254,7 @@ void main() {
     });
 
     test('a transport with no SSRC yet refuses the camera', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final controller = _controllerFor(
         encoder,
         transport: _FakeVoiceVideoTransport(audioSsrc: null),
@@ -264,7 +266,10 @@ void main() {
     });
 
     test('an encoder that will not open is reported, not thrown', () async {
-      final encoder = _FakeEncoder()..failStart = true;
+      final encoder = FakeVideoEncoder()
+        ..startFailure = const VideoEncoderException(
+          VideoEncoderFailure.encoder,
+        );
       final controller = _controllerFor(
         encoder,
         transport: _FakeVoiceVideoTransport(),
@@ -278,7 +283,7 @@ void main() {
     });
 
     test('a gateway that refuses the flag stops the camera again', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final transport = _FakeVoiceVideoTransport();
       final controller = _controllerFor(
         encoder,
@@ -298,7 +303,7 @@ void main() {
     });
 
     test('turning off tells the room before it stops encoding', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final transport = _FakeVoiceVideoTransport();
       final announcements = <bool>[];
       final controller = _controllerFor(
@@ -323,7 +328,7 @@ void main() {
 
     test('toggle answers what the camera ended up as', () async {
       final controller = _controllerFor(
-        _FakeEncoder(),
+        FakeVideoEncoder(),
         transport: _FakeVoiceVideoTransport(),
       );
       addTearDown(controller.dispose);
@@ -333,7 +338,7 @@ void main() {
     });
 
     test('a dropped connection is forgotten rather than announced', () async {
-      final encoder = _FakeEncoder();
+      final encoder = FakeVideoEncoder();
       final transport = _FakeVoiceVideoTransport();
       final controller = _controllerFor(encoder, transport: transport);
       addTearDown(controller.dispose);
@@ -351,8 +356,44 @@ void main() {
       expect(encoder.stopped, 1);
     });
 
+    test('disposing with the camera on releases its capture', () async {
+      final encoder = FakeVideoEncoder();
+      final controller = _controllerFor(
+        encoder,
+        transport: _FakeVoiceVideoTransport(),
+      );
+      await controller.turnOn();
+
+      controller.dispose();
+      await pumpEventQueue();
+
+      expect(encoder.stopped, 1);
+    });
+
+    test(
+      'disposing while a share holds the capture leaves it running',
+      () async {
+        final encoder = FakeVideoEncoder();
+        final hub = VideoCaptureHub(encoder: encoder);
+        final share = await hub.startShare();
+        final controller = SelfVideoController(
+          capture: hub,
+          transportProvider: _FakeVoiceVideoTransport.new,
+          sinkProvider: () => null,
+          announceSelfVideo: ({required bool enabled}) async => true,
+        );
+
+        controller.dispose();
+        await pumpEventQueue();
+
+        expect(encoder.stopped, 0);
+        expect(hub.isCapturing, isTrue);
+        await share.release();
+      },
+    );
+
     test('a second camera can be chosen', () async {
-      final encoder = _FakeEncoder(cameras: const ['Front', 'Back']);
+      final encoder = FakeVideoEncoder(cameras: const ['Front', 'Back']);
       final controller = _controllerFor(
         encoder,
         transport: _FakeVoiceVideoTransport(),
@@ -410,7 +451,10 @@ void main() {
     testWidgets('a build with no encoder draws no camera button', (
       tester,
     ) async {
-      await _pumpBar(tester, _controllerFor(_FakeEncoder(supported: false)));
+      await _pumpBar(
+        tester,
+        _controllerFor(FakeVideoEncoder(supported: false)),
+      );
 
       expect(find.byKey(const ValueKey('voice-bar-camera')), findsNothing);
     });
@@ -418,7 +462,10 @@ void main() {
     testWidgets('a machine with no camera keeps the button and disables it', (
       tester,
     ) async {
-      await _pumpBar(tester, _controllerFor(_FakeEncoder(cameras: const [])));
+      await _pumpBar(
+        tester,
+        _controllerFor(FakeVideoEncoder(cameras: const [])),
+      );
 
       final button = find.byKey(const ValueKey('voice-bar-camera'));
       expect(button, findsOneWidget);
@@ -433,7 +480,7 @@ void main() {
 
     testWidgets('the button turns the camera on and back off', (tester) async {
       final camera = _controllerFor(
-        _FakeEncoder(),
+        FakeVideoEncoder(),
         transport: _FakeVoiceVideoTransport(),
       );
       await _pumpBar(tester, camera);
@@ -468,7 +515,7 @@ const _cameraProfile = VideoEncoderSettings.camera(
 );
 
 SelfVideoController _controllerFor(
-  _FakeEncoder encoder, {
+  FakeVideoEncoder encoder, {
   _FakeVoiceVideoTransport? transport,
   bool accept = true,
   void Function(bool)? onAnnounce,
@@ -508,60 +555,6 @@ Future<void> _pumpBar(WidgetTester tester, SelfVideoController camera) async {
     ),
   );
   await tester.pumpAndSettle();
-}
-
-final class _FakeEncoder implements VideoEncoderService {
-  @override
-  VideoEncoderDiagnostics? get diagnostics => null;
-
-  _FakeEncoder({this.supported = true, this.cameras = const ['Webcam']});
-
-  final bool supported;
-  final List<String> cameras;
-  final List<VideoEncoderSettings> started = [];
-  final StreamController<EncodedVideoFrame> _frames =
-      StreamController.broadcast();
-  int stopped = 0;
-  bool failStart = false;
-
-  void emit() => _frames.add(
-    EncodedVideoFrame(
-      // A start code and a NAL header: enough for the packetiser to build one
-      // single-unit packet from.
-      bytes: Uint8List.fromList([0, 0, 0, 1, 0x65, 1, 2, 3]),
-      timestamp: Duration.zero,
-      isKeyframe: true,
-    ),
-  );
-
-  @override
-  bool get isSupported => supported;
-
-  @override
-  int get displayCount => 1;
-
-  @override
-  List<String> get cameraNames => cameras;
-
-  @override
-  Stream<EncodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Future<void> start(VideoEncoderSettings settings) async {
-    if (failStart) {
-      throw const VideoEncoderException(VideoEncoderFailure.encoder);
-    }
-    started.add(settings);
-  }
-
-  @override
-  Future<void> requestKeyframe() async {}
-
-  @override
-  Future<void> setPaused({required bool paused}) async {}
-
-  @override
-  Future<void> stop() async => stopped++;
 }
 
 final class _FakeVoiceVideoTransport implements VoiceVideoTransport {
