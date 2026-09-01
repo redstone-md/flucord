@@ -12,6 +12,7 @@ on:
       - "**.md"
       - "docs/**"
       - ".github/release.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -44,13 +45,13 @@ jobs:
         run: flutter analyze --fatal-infos
 
   test:
-    name: Test (shard ${{ matrix.shard }} of 2)
+    name: Test (shard ${{ matrix.shard }} of 4)
     runs-on: windows-2025
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-flutter
@@ -58,7 +59,7 @@ jobs:
         run: >
           flutter test
           --reporter github
-          --total-shards 2
+          --total-shards 4
           --shard-index ${{ matrix.shard }}
 
   build:
