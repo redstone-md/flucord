@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -67,12 +68,11 @@ void main() {
       channelId: 'dm-1',
       userId: 'friend-1',
     );
-    await tester.runAsync(() => harness.viewer.requestWatch(streamKey));
+    // Pressing "Watch" is wanting to look: it asks, and it focuses.
+    await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
+    await tester.pump();
     await tester.runAsync(
-      () => harness.viewer.attach(
-        streamKey,
-        packets: const Stream.empty(),
-      ),
+      () => harness.viewer.attach(streamKey, packets: const Stream.empty()),
     );
     // Not settled: the stage keeps a spinner up until the first picture
     // arrives, and this stream is deliberately silent.
@@ -101,13 +101,55 @@ void main() {
     await tester.runAsync(harness.viewer.stop);
     await tester.pump();
 
+    // Stopping the watch leaves the focus where it was: the sender's tile
+    // is the stage now, with the card to open the stream again.
     expect(find.byType(GoLiveViewer), findsNothing);
-    expect(find.byType(VoiceParticipantGrid), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-stage-tile')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsNothing,
     );
     expect(find.text('Watch'), findsOneWidget);
+  });
+
+  testWidgets('a click puts a tile on the stage, and Escape takes it off', (
+    tester,
+  ) async {
+    final harness = await pumpStreamRoom(
+      tester,
+      streamRoomCall,
+      seats: const [StreamRoomSeat('friend-1'), StreamRoomSeat('friend-2')],
+    );
+    expect(find.byKey(const ValueKey('voice-stage-tile')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('voice-participant-friend-1')));
+    await tester.pumpAndSettle();
+
+    // Somebody who is not streaming can still be looked at large, and the
+    // strip under them holds the rest of the room, not them twice.
+    expect(harness.focus.userId, 'friend-1');
+    expect(find.byKey(const ValueKey('voice-stage-tile')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice-participant-friend-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('voice-participant-friend-2')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<GridView>(
+            find.byKey(const ValueKey('voice-participant-grid')),
+          )
+          .scrollDirection,
+      Axis.horizontal,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(harness.focus.userId, isNull);
+    expect(find.byKey(const ValueKey('voice-stage-tile')), findsNothing);
   });
 
   testWidgets('an ask Discord has not answered does not take the stage', (
@@ -127,12 +169,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(GoLiveViewer), findsNothing);
-    // The grid is still the room rather than the strip under a stream: the
-    // stage is what an arriving stream takes, and an ask takes nothing.
-    final grid = tester.widget<GridView>(
-      find.byKey(const ValueKey('voice-participant-grid')),
-    );
-    expect(grid.scrollDirection, Axis.vertical);
+    // The ask focused the sender, so their tile is the stage, saying the ask
+    // is out; the stream itself takes the stage only once it arrives.
+    expect(find.byKey(const ValueKey('voice-stage-tile')), findsOneWidget);
   });
 
   testWidgets('a server voice room still asks for a guild stream key', (

@@ -40,6 +40,7 @@ import 'widgets/soundboard_scope.dart';
 import 'widgets/stage_controls.dart';
 import 'widgets/stage_scope.dart';
 import 'widgets/status_views.dart';
+import 'widgets/room_focus_scope.dart';
 import 'widgets/stream_viewer_scope.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/thread_membership_button.dart';
@@ -224,7 +225,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       return;
     }
     // Only the ask goes out here. Discord answers with an endpoint, and the
-    // connection that answer opens is what feeds the viewer.
+    // connection that answer opens is what feeds the viewer. Asking is
+    // wanting to look: the stream takes the stage as soon as it arrives.
+    if (mounted) RoomFocusScope.read(context).focus(key.userId);
     if (await viewer.requestWatch(key)) return;
     if (!mounted || viewer.refused != key) return;
     // Turned down for want of room, which is a limit of ours and not
@@ -281,17 +284,18 @@ class _ConversationPaneState extends State<ConversationPane> {
     // controls rather than two copies that could drift. Built on demand and
     // not up here: attaching the Go Live control binds it to the transport,
     // which a channel with no room on screen has no business doing.
-    // Whoever is being watched takes the stage; the participant grid is what
-    // the room shows when nobody is, and null is how it is told. Asked-for is
-    // not on the stage: an endpoint that never comes must not take the room
-    // away.
-    Widget? streamViewer() => switch (viewer.watching) {
-      null => null,
-      final key => GoLiveViewer(
-        frames: viewer.framesFor(key),
-        label: key.userId,
-      ),
-    };
+    // The focused participant's stream takes the stage while it is arriving;
+    // otherwise the room draws their tile large, and null is how it is told.
+    // Asked-for is not on the stage: an endpoint that never comes must not
+    // take the room away.
+    final focus = RoomFocusScope.of(context);
+    Widget? streamViewer() {
+      final userId = focus.userId;
+      if (userId == null) return null;
+      final key = channel.streamKeyFor(userId);
+      if (!viewer.isWatching(key)) return null;
+      return GoLiveViewer(frames: viewer.framesFor(key), label: userId);
+    }
 
     Widget goLiveControl() => ListenableBuilder(
       listenable: goLive,
@@ -346,6 +350,9 @@ class _ConversationPaneState extends State<ConversationPane> {
             // arriving. Keying this on the ask meant a request Discord never
             // answered hid the participant grid for the rest of the call.
             streamViewer: streamViewer(),
+            focusedUserId: focus.userId,
+            onTapParticipant: focus.toggle,
+            onClearFocus: focus.clear,
             goLive: goLiveControl(),
             channelId: channel.id,
             channelName: channel.name,
@@ -358,6 +365,9 @@ class _ConversationPaneState extends State<ConversationPane> {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
               streams: streamControls(),
               streamViewer: streamViewer(),
+              focusedUserId: focus.userId,
+              onTapParticipant: focus.toggle,
+              onClearFocus: focus.clear,
               goLive: goLiveControl(),
               soundboard: ListenableBuilder(
                 listenable: soundboard,

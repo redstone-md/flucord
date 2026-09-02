@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flucord/src/app_composition.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
+import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/channel_capabilities.dart';
@@ -18,6 +19,7 @@ import 'package:flucord/src/presentation/widgets/gif_picker_scope.dart';
 import 'package:flucord/src/presentation/widgets/go_live_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_component_scope.dart';
 import 'package:flucord/src/presentation/widgets/remote_camera_scope.dart';
+import 'package:flucord/src/presentation/widgets/room_focus_scope.dart';
 import 'package:flucord/src/presentation/widgets/slash_command_scope.dart';
 import 'package:flucord/src/presentation/widgets/soundboard_scope.dart';
 import 'package:flucord/src/presentation/widgets/stage_scope.dart';
@@ -43,56 +45,60 @@ Widget paneHarness(
   DirectCallController? directCall,
   GoLiveController? goLive,
   StreamViewerController? streamViewer,
-}) => ChatScope(
-  controller: composition.chat,
-  child: WorkspaceScope(
-    controller: composition.workspace,
-    child: DirectCallScope(
-      controller: directCall ?? composition.directCall,
-      child: ExternalLinkLauncherScope(
-        launcher: composition.externalLinkLauncher,
-        child: AttachmentDownloadScope(
-          service: composition.attachmentDownload,
-          child: VoiceMessageRecorderScope(
-            recorder: composition.voiceMessageRecorder,
-            child: ThreadMembershipScope(
-              controller: composition.threadMembership,
-              child: StageScope(
-                controller: composition.stage,
-                child: SoundboardScope(
-                  controller: composition.soundboard,
-                  child: GoLiveScope(
-                    controller: goLive ?? composition.goLive,
-                    child: StreamViewerScope(
-                      controller: streamViewer ?? composition.streamViewer,
-                      child: RemoteCameraScope(
-                        controller: composition.remoteCameras,
-                        child: GifPickerScope(
-                          controller: composition.gifPicker,
-                          child: ExpressionFavoritesScope(
-                            controller: composition.expressionFavorites,
-                            child: SlashCommandScope(
-                              controller: composition.slashCommand,
-                              child: MessageComponentScope(
-                                controller: composition.messageComponent,
-                                child: VoiceScope(
-                                  controller: voice ?? composition.voice,
-                                  child: ConversationPane(
-                                    workspace: workspace,
-                                    capabilities: capabilities,
-                                    channel: channel,
-                                    channels: WorkspacePermissions(
-                                      workspace,
-                                    ).visibleChannelsFor(channel.spaceId),
-                                    compact: false,
-                                    allowMemberPanel: true,
-                                    allowThreadPanel: true,
-                                    showMembers: false,
-                                    showPins: false,
-                                    showThreads: false,
-                                    onPickChannel: (_) {},
-                                    onSelectChannel: (_) {},
-                                    onOpenInbox: () {},
+  RoomFocus? focus,
+}) => RoomFocusScope(
+  focus: focus ?? composition.roomFocus,
+  child: ChatScope(
+    controller: composition.chat,
+    child: WorkspaceScope(
+      controller: composition.workspace,
+      child: DirectCallScope(
+        controller: directCall ?? composition.directCall,
+        child: ExternalLinkLauncherScope(
+          launcher: composition.externalLinkLauncher,
+          child: AttachmentDownloadScope(
+            service: composition.attachmentDownload,
+            child: VoiceMessageRecorderScope(
+              recorder: composition.voiceMessageRecorder,
+              child: ThreadMembershipScope(
+                controller: composition.threadMembership,
+                child: StageScope(
+                  controller: composition.stage,
+                  child: SoundboardScope(
+                    controller: composition.soundboard,
+                    child: GoLiveScope(
+                      controller: goLive ?? composition.goLive,
+                      child: StreamViewerScope(
+                        controller: streamViewer ?? composition.streamViewer,
+                        child: RemoteCameraScope(
+                          controller: composition.remoteCameras,
+                          child: GifPickerScope(
+                            controller: composition.gifPicker,
+                            child: ExpressionFavoritesScope(
+                              controller: composition.expressionFavorites,
+                              child: SlashCommandScope(
+                                controller: composition.slashCommand,
+                                child: MessageComponentScope(
+                                  controller: composition.messageComponent,
+                                  child: VoiceScope(
+                                    controller: voice ?? composition.voice,
+                                    child: ConversationPane(
+                                      workspace: workspace,
+                                      capabilities: capabilities,
+                                      channel: channel,
+                                      channels: WorkspacePermissions(
+                                        workspace,
+                                      ).visibleChannelsFor(channel.spaceId),
+                                      compact: false,
+                                      allowMemberPanel: true,
+                                      allowThreadPanel: true,
+                                      showMembers: false,
+                                      showPins: false,
+                                      showThreads: false,
+                                      onPickChannel: (_) {},
+                                      onSelectChannel: (_) {},
+                                      onOpenInbox: () {},
+                                    ),
                                   ),
                                 ),
                               ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
@@ -26,6 +27,9 @@ class VoiceRoomView extends StatefulWidget {
     this.streamViewer,
     this.streams,
     this.cameraFrameFor,
+    this.focusedUserId,
+    this.onTapParticipant,
+    this.onClearFocus,
     this._spaceId,
     super.key,
   });
@@ -62,6 +66,12 @@ class VoiceRoomView extends StatefulWidget {
   /// never reached the grid. Asked for is not on the stage either: an ask
   /// Discord never answers must not take the room away.
   final Widget? streamViewer;
+
+  /// Whose tile the stage draws large when no stream of theirs is on it, and
+  /// what a click on a tile, or Escape, does about it.
+  final String? focusedUserId;
+  final void Function(String userId)? onTapParticipant;
+  final VoidCallback? onClearFocus;
 
   /// The streams this client has open, and the controls the tiles offer for
   /// them.
@@ -124,6 +134,9 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
                 streams: widget.streams,
+                focusedUserId: widget.focusedUserId,
+                onTapParticipant: widget.onTapParticipant,
+                onClearFocus: widget.onClearFocus,
                 goLive: widget.goLive,
                 soundboard: widget.soundboard,
                 stageControls: widget.stageControls,
@@ -237,11 +250,17 @@ class _VoiceStage extends StatelessWidget {
     required this.spaceId,
     this.cameraFrameFor,
     this.streams,
+    this.focusedUserId,
+    this.onTapParticipant,
+    this.onClearFocus,
   });
 
   /// The latest picture from a participant's camera, when one is
   /// arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+  final String? focusedUserId;
+  final void Function(String userId)? onTapParticipant;
+  final VoidCallback? onClearFocus;
 
   final String channelName;
   final VoiceController controller;
@@ -264,16 +283,52 @@ class _VoiceStage extends StatelessWidget {
         ),
       );
     }
-    Widget grid({required bool compact}) => VoiceParticipantGrid(
-      participants: controller.participants,
-      members: members,
-      currentMemberId: currentMemberId,
-      spaceId: spaceId,
-      cameraFrameFor: cameraFrameFor,
-      streams: streams,
-      compact: compact,
-    );
-    return Column(
+    Widget grid(List<VoiceParticipant> participants, {required bool compact}) =>
+        VoiceParticipantGrid(
+          participants: participants,
+          members: members,
+          currentMemberId: currentMemberId,
+          spaceId: spaceId,
+          cameraFrameFor: cameraFrameFor,
+          streams: streams,
+          onTapParticipant: onTapParticipant,
+          compact: compact,
+        );
+    // What the stage draws: the focused participant's stream when it is
+    // arriving, else their tile large (their preview, camera, or avatar, with
+    // the card to open their stream). A focus on somebody who has just left
+    // draws nothing until the room catches up.
+    final focused = controller.participants
+        .where((participant) => participant.userId == focusedUserId)
+        .firstOrNull;
+    final onStage =
+        streamViewer ??
+        (focused == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: VoiceParticipantTile(
+                  key: const ValueKey('voice-stage-tile'),
+                  participant: focused,
+                  members: members,
+                  currentMemberId: currentMemberId,
+                  spaceId: spaceId,
+                  cameraFrameFor: cameraFrameFor,
+                  streams: streams,
+                  onTap: onTapParticipant,
+                  size: VoiceParticipantTileSize.stage,
+                ),
+              ));
+    // A tile on the stage carries its own card, so it leaves the strip; a
+    // stream on the stage does not, and its tile stays where "Stop watching"
+    // lives. A strip with nobody left in it is not drawn at all.
+    final strippedOf = streamViewer == null ? focused?.userId : null;
+    final strip = [
+      for (final participant in controller.participants)
+        if (participant.userId != strippedOf) participant,
+    ];
+    final onClearFocus = this.onClearFocus;
+    final room = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
@@ -344,15 +399,26 @@ class _VoiceStage extends StatelessWidget {
               // than off the screen: the tile is where the mark and the
               // control for that stream live, and a stage with no tiles has
               // nowhere to put either.
-              if (streamViewer case final onStage?)
-                Expanded(child: onStage),
-              streamViewer == null
-                  ? Expanded(child: grid(compact: false))
-                  : SizedBox(height: _stripHeight, child: grid(compact: true)),
+              if (onStage case final stage?) Expanded(child: stage),
+              if (onStage == null)
+                Expanded(child: grid(controller.participants, compact: false))
+              else if (strip.isNotEmpty)
+                SizedBox(
+                  height: _stripHeight,
+                  child: grid(strip, compact: true),
+                ),
             ],
           ),
         ),
       ],
+    );
+    if (onStage == null || onClearFocus == null) return room;
+    // Takes the keyboard focus as the stage appears, so Escape reaches it.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): onClearFocus,
+      },
+      child: Focus(autofocus: true, child: room),
     );
   }
 }

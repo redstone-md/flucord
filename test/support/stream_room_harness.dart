@@ -8,6 +8,7 @@ import 'package:flucord/src/app_composition.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
+import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
@@ -98,6 +99,9 @@ final class StreamRoomHarness {
   late final StreamViewerController viewer;
   late final GoLiveController goLive;
   late final AppComposition composition;
+
+  /// Whose tile is on the stage, as the pane reads it.
+  RoomFocus get focus => composition.roomFocus;
 
   /// Walks into the room, which is where the grid and its stream controls
   /// live. Left to a test that wants the unjoined preview instead.

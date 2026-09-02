@@ -17,6 +17,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.spaceId,
     this.cameraFrameFor,
     this.streams,
+    this.onTapParticipant,
     this.compact = false,
     super.key,
   });
@@ -25,6 +26,10 @@ class VoiceParticipantGrid extends StatelessWidget {
   final List<Member> members;
   final String currentMemberId;
   final String spaceId;
+
+  /// A tile was clicked: what puts a participant on the stage and takes them
+  /// off it. Null where the room has no stage to put them on.
+  final void Function(String userId)? onTapParticipant;
 
   /// The latest picture from a participant's camera, when one is arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
@@ -59,7 +64,6 @@ class VoiceParticipantGrid extends StatelessWidget {
         ),
       );
     }
-    final memberById = {for (final member in members) member.id: member};
     return GridView.builder(
       key: const ValueKey('voice-participant-grid'),
       // A strip reads left to right: the tiles it holds are what is left of
@@ -87,25 +91,73 @@ class VoiceParticipantGrid extends StatelessWidget {
       itemCount: participants.length,
       itemBuilder: (context, index) {
         final participant = participants[index];
-        return _ParticipantTile(
-          cameraFrame: cameraFrameFor?.call(participant.userId),
+        return VoiceParticipantTile(
+          cameraFrameFor: cameraFrameFor,
           participant: participant,
-          member:
-              memberById[participant.userId] ??
-              _unknownMember(participant.userId),
-          isCurrentUser: participant.userId == currentMemberId,
+          members: members,
+          currentMemberId: currentMemberId,
           spaceId: spaceId,
-          selfPreview: participant.userId == currentMemberId
-              ? streams?.selfPreview
-              : null,
           streams: streams,
-          compact: compact,
+          onTap: onTapParticipant,
+          size: compact
+              ? VoiceParticipantTileSize.compact
+              : VoiceParticipantTileSize.regular,
         );
       },
     );
   }
+}
 
-  Member _unknownMember(String userId) {
+/// How large a tile is drawn, which is where it is drawn: in the room's
+/// grid, in the strip under the stage, or as the stage itself.
+enum VoiceParticipantTileSize { compact, regular, stage }
+
+/// One participant: their picture (self-preview, camera, or avatar), their
+/// name or stream card, and whether they are speaking.
+class VoiceParticipantTile extends StatelessWidget {
+  const VoiceParticipantTile({
+    required this.participant,
+    required this.members,
+    required this.currentMemberId,
+    required this.spaceId,
+    this.cameraFrameFor,
+    this.streams,
+    this.onTap,
+    this.size = VoiceParticipantTileSize.regular,
+    super.key,
+  });
+
+  final VoiceParticipant participant;
+  final List<Member> members;
+  final String currentMemberId;
+  final String spaceId;
+  final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+  final VoiceStreamControls? streams;
+  final void Function(String userId)? onTap;
+  final VoiceParticipantTileSize size;
+
+  bool get isCurrentUser => participant.userId == currentMemberId;
+
+  bool get compact => size == VoiceParticipantTileSize.compact;
+
+  Member get member =>
+      members.where((member) => member.id == participant.userId).firstOrNull ??
+      _unknownMember(participant.userId);
+
+  DecodedVideoFrame? get cameraFrame =>
+      cameraFrameFor?.call(participant.userId);
+
+  /// The sender's own picture, on the sender's own tile only (ADR-0001).
+  VoiceSelfPreview? get selfPreview =>
+      isCurrentUser ? streams?.selfPreview : null;
+
+  double get _avatarSize => switch (size) {
+    VoiceParticipantTileSize.compact => 36,
+    VoiceParticipantTileSize.regular => 64,
+    VoiceParticipantTileSize.stage => 128,
+  };
+
+  static Member _unknownMember(String userId) {
     final suffix = userId.length <= 6
         ? userId
         : userId.substring(userId.length - 6);
@@ -118,28 +170,6 @@ class VoiceParticipantGrid extends StatelessWidget {
       colorValue: 0xff4a4e50,
     );
   }
-}
-
-class _ParticipantTile extends StatelessWidget {
-  const _ParticipantTile({
-    required this.participant,
-    required this.member,
-    required this.isCurrentUser,
-    required this.spaceId,
-    this.cameraFrame,
-    this.selfPreview,
-    this.streams,
-    this.compact = false,
-  });
-
-  final DecodedVideoFrame? cameraFrame;
-  final VoiceParticipant participant;
-  final Member member;
-  final bool isCurrentUser;
-  final String spaceId;
-  final VoiceSelfPreview? selfPreview;
-  final VoiceStreamControls? streams;
-  final bool compact;
 
   /// Whether this participant's stream is open here, which is what the mark
   /// and the control read. Asked of each tile rather than answered once for
@@ -168,92 +198,99 @@ class _ParticipantTile extends StatelessWidget {
     final borderColor = participant.isSpeaking
         ? FlucordColors.success
         : context.surfaces.border;
-    return Semantics(
-      selected: participant.isSpeaking,
-      label: '${member.displayName}, voice participant',
-      child: DecoratedBox(
-        key: ValueKey('voice-participant-${participant.userId}'),
-        decoration: BoxDecoration(
-          color: context.surfaces.inset,
-          border: Border.all(
-            color: borderColor,
-            width: participant.isSpeaking ? 2 : 1,
+    final onTap = this.onTap;
+    return GestureDetector(
+      // The card's buttons sit on top and take their own presses; anywhere
+      // else on the tile is the tile.
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap == null ? null : () => onTap(participant.userId),
+      child: Semantics(
+        selected: participant.isSpeaking,
+        label: '${member.displayName}, voice participant',
+        child: DecoratedBox(
+          key: ValueKey('voice-participant-${participant.userId}'),
+          decoration: BoxDecoration(
+            color: context.surfaces.inset,
+            border: Border.all(
+              color: borderColor,
+              width: participant.isSpeaking ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(6),
           ),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Stack(
-          children: [
-            if (selfPreview case final preview?)
-              Positioned.fill(
-                key: ValueKey('voice-self-preview-${participant.userId}'),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(5),
-                  child: _SelfPreview(preview: preview),
-                ),
-              )
-            else if (cameraFrame case final DecodedVideoFrame frame
-                when frame.hasPicture)
-              Positioned.fill(
-                key: ValueKey('voice-camera-${participant.userId}'),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(5),
-                  child: CameraPicture(frame: frame),
-                ),
-              )
-            else
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: borderColor, width: 2),
+          child: Stack(
+            children: [
+              if (selfPreview case final preview?)
+                Positioned.fill(
+                  key: ValueKey('voice-self-preview-${participant.userId}'),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: _SelfPreview(preview: preview),
                   ),
-                  child: MemberAvatar(
-                    member: member,
-                    size: compact ? 36 : 64,
-                    showPresence: false,
-                    spaceId: spaceId,
+                )
+              else if (cameraFrame case final DecodedVideoFrame frame
+                  when frame.hasPicture)
+                Positioned.fill(
+                  key: ValueKey('voice-camera-${participant.userId}'),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: CameraPicture(frame: frame),
+                  ),
+                )
+              else
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: borderColor, width: 2),
+                    ),
+                    child: MemberAvatar(
+                      member: member,
+                      size: _avatarSize,
+                      showPresence: false,
+                      spaceId: spaceId,
+                    ),
                   ),
                 ),
-              ),
-            if (hasStream)
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 8,
-                child: _StreamCard(
-                  userId: participant.userId,
-                  name: member.displayName,
-                  stateIcons: _stateIcons,
-                  isOpen: isOpen,
-                  isOwn: isCurrentUser,
-                  onWatch: isCurrentUser ? null : streams?.onWatch,
-                  onStopShare: isCurrentUser ? streams?.onStopShare : null,
-                ),
-              )
-            else
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 9,
-                child: Row(
-                  children: [
-                    Expanded(child: _TileName(member.displayName)),
-                    if (isCurrentUser) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        'You',
-                        style: TextStyle(
-                          color: context.surfaces.muted,
-                          fontSize: 10,
+              if (hasStream)
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 8,
+                  child: _StreamCard(
+                    userId: participant.userId,
+                    name: member.displayName,
+                    stateIcons: _stateIcons,
+                    isOpen: isOpen,
+                    isOwn: isCurrentUser,
+                    onWatch: isCurrentUser ? null : streams?.onWatch,
+                    onStopShare: isCurrentUser ? streams?.onStopShare : null,
+                  ),
+                )
+              else
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 9,
+                  child: Row(
+                    children: [
+                      Expanded(child: _TileName(member.displayName)),
+                      if (isCurrentUser) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          'You',
+                          style: TextStyle(
+                            color: context.surfaces.muted,
+                            fontSize: 10,
+                          ),
                         ),
-                      ),
+                      ],
+                      ..._stateIcons,
                     ],
-                    ..._stateIcons,
-                  ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

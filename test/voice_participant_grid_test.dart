@@ -150,6 +150,27 @@ void main() {
     expect(stopped, 1);
   });
 
+  testWidgets('a click on a tile is the tile, not its buttons', (tester) async {
+    final tapped = <String>[];
+    final watched = <String>[];
+    await tester.pumpWidget(
+      _TestApp(
+        participants: const [
+          VoiceParticipant(userId: 'member-1'),
+          VoiceParticipant(userId: 'member-2', isStreaming: true),
+        ],
+        onTapParticipant: tapped.add,
+        onWatchStream: watched.add,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('voice-participant-member-1')));
+    await tester.tap(find.byKey(const ValueKey('voice-watch-member-2')));
+
+    expect(tapped, ['member-1']);
+    expect(watched, ['member-2']);
+  });
+
   testWidgets('a participant who is not streaming has no card', (tester) async {
     await tester.pumpWidget(
       _TestApp(
@@ -170,11 +191,13 @@ class _TestApp extends StatelessWidget {
     required this.participants,
     this.onWatchStream,
     this.onStopShare,
+    this.onTapParticipant,
     this.open = const {},
   });
 
   final List<VoiceParticipant> participants;
   final void Function(String userId)? onWatchStream;
+  final void Function(String userId)? onTapParticipant;
   final VoidCallback? onStopShare;
 
   /// Whose stream this client has open, asked of the grid one tile at a time.
@@ -199,6 +222,7 @@ class _TestApp extends StatelessWidget {
           ],
           currentMemberId: 'member-1',
           spaceId: 'guild-1',
+          onTapParticipant: onTapParticipant,
           streams: VoiceStreamControls(
             isOpen: open.contains,
             onWatch: onWatchStream,

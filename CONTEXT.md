@@ -33,20 +33,28 @@ One stream this client is receiving, from the ask to the last picture. Somebody 
 _Avoid_: connection, socket, channel
 
 **Self-preview**:
-The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine. Not a watched session.
+The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine. Not a watched session. Drawn only while its tile is on screen and the window is focused.
 _Avoid_: thumbnail, monitor, mirror
 
 **Stage**:
-Where one stream is drawn large, in place of the participant grid.
+Where one tile is drawn large and the rest of the room is drawn small beside it. The tile can carry a stream, a self-preview, or only a participant.
 _Avoid_: focus view, main view, theatre, spotlight
+
+**Focused**:
+The participant, or the stream, whose tile is on the stage. Focusing a stream does not start watching it; that is a separate ask.
+_Avoid_: selected, pinned, enlarged, maximized
 
 **Pause**:
 A sender holding pictures back while the stream stays up.
 _Avoid_: freeze, stop, suspend
 
 **Suspended**:
-This client's window is not in the foreground: watched sessions go on receiving and draw nothing.
+This client's window is minimized or hidden to the tray: watched sessions go on receiving and draw nothing. A window that is merely behind another still draws them.
 _Avoid_: paused, backgrounded, minimized
+
+**Unfocused**:
+Another window has the keyboard focus. The self-preview is not decoded while the window is unfocused or suspended; watched sessions are unaffected.
+_Avoid_: inactive, background, blurred
 
 **Capture**:
 The machine's one source of pictures, a display or a camera. Only one runs at a time.
