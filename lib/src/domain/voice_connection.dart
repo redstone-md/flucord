@@ -196,7 +196,7 @@ final class VoiceParticipant {
   const VoiceParticipant({
     required this.userId,
     this.ssrc,
-    this.speakingFlags = 0,
+    this.isSpeaking = false,
     this.selfMuted = false,
     this.selfDeafened = false,
     this.serverMuted = false,
@@ -207,7 +207,11 @@ final class VoiceParticipant {
 
   final String userId;
   final int? ssrc;
-  final int speakingFlags;
+
+  /// Whether this participant's voice is arriving right now. Read off the
+  /// audio itself, not off the speaking opcode: Discord announces who started
+  /// and never reliably who stopped.
+  final bool isSpeaking;
   final bool selfMuted;
   final bool selfDeafened;
   final bool serverMuted;
@@ -215,13 +219,12 @@ final class VoiceParticipant {
   final bool isStreaming;
   final bool isVideoEnabled;
 
-  bool get isSpeaking => speakingFlags != 0;
   bool get isMuted => selfMuted || serverMuted;
   bool get isDeafened => selfDeafened || serverDeafened;
 
   VoiceParticipant copyWith({
     int? ssrc,
-    int? speakingFlags,
+    bool? isSpeaking,
     bool? selfMuted,
     bool? selfDeafened,
     bool? serverMuted,
@@ -231,7 +234,7 @@ final class VoiceParticipant {
   }) => VoiceParticipant(
     userId: userId,
     ssrc: ssrc ?? this.ssrc,
-    speakingFlags: speakingFlags ?? this.speakingFlags,
+    isSpeaking: isSpeaking ?? this.isSpeaking,
     selfMuted: selfMuted ?? this.selfMuted,
     selfDeafened: selfDeafened ?? this.selfDeafened,
     serverMuted: serverMuted ?? this.serverMuted,
@@ -317,6 +320,7 @@ abstract interface class VoiceSignalingService {
     required String channelId,
     bool selfMute = false,
     bool selfDeaf = false,
+
     /// Whether the account's camera is on. Part of the same whole-state frame,
     /// so a join that forgot it would turn the camera off.
     bool selfVideo = false,

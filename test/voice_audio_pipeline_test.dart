@@ -9,6 +9,16 @@ import 'package:flucord/src/domain/voice_processing.dart';
 
 import 'support/fake_voice_audio.dart';
 
+/// One 20 ms frame of something that is clearly not silence: a sawtooth at
+/// about -35 dBFS, well above the gate.
+final Int16List _speech = Int16List.fromList(
+  List.generate(1920, (index) => (index * 37) % 2000 - 1000),
+);
+final Uint8List _speechBytes = _speech.buffer.asUint8List();
+
+/// One 20 ms frame of nothing.
+final Uint8List _silence = Uint8List(3840);
+
 void main() {
   test(
     'frames microphone PCM, encodes, and finishes speaking on disable',
@@ -25,8 +35,8 @@ void main() {
 
       await pipeline.bindTransport(transport);
       await pipeline.setEnabled(true);
-      media.addPcm(Uint8List(1000));
-      media.addPcm(Uint8List(2840));
+      media.addPcm(_speechBytes.sublist(0, 1000));
+      media.addPcm(_speechBytes.sublist(1000));
       await _flushEvents();
 
       expect(codecs.encoder.inputs.single.length, 1920);
@@ -36,6 +46,69 @@ void main() {
 
       await pipeline.setEnabled(false);
       expect(transport.finishCount, 1);
+    },
+  );
+
+  test('a quiet microphone sends nothing', () async {
+    final media = _FakeMediaService();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: _FakeCodecFactory(),
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+    await pipeline.setEnabled(true);
+
+    media.addPcm(_silence);
+    media.addPcm(_silence);
+    await _flushEvents();
+
+    expect(transport.sent, isEmpty);
+    expect(transport.finishCount, 0);
+    expect(pipeline.isSpeaking, isFalse);
+  });
+
+  test(
+    'speech opens the uplink, silence closes it after the hangover',
+    () async {
+      final media = _FakeMediaService();
+      final transport = _FakeAudioTransport();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: _FakeCodecFactory(),
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      final speaking = <bool>[];
+      pipeline.speaking.listen(speaking.add);
+      await pipeline.bindTransport(transport);
+      await pipeline.setEnabled(true);
+
+      media.addPcm(_speechBytes);
+      for (var i = 0; i < VoiceAudioPipeline.hangoverFrames; i++) {
+        media.addPcm(_silence);
+      }
+      await _flushEvents();
+
+      // The pause after a word goes out with it, so the tail is not clipped.
+      expect(transport.sent, hasLength(1 + VoiceAudioPipeline.hangoverFrames));
+      expect(transport.finishCount, 0);
+      expect(speaking, [true]);
+
+      media.addPcm(_silence);
+      await _flushEvents();
+
+      // One frame past the hangover: the burst is finished, which is what the
+      // room reads as this participant going quiet, and nothing more is sent.
+      expect(transport.sent, hasLength(1 + VoiceAudioPipeline.hangoverFrames));
+      expect(transport.finishCount, 1);
+      expect(speaking, [true, false]);
+
+      media.addPcm(_speechBytes);
+      await _flushEvents();
+      expect(speaking, [true, false, true]);
     },
   );
 
@@ -110,10 +183,8 @@ void main() {
   });
 
   group('noise suppression', () {
-    final samples = Int16List.fromList(
-      List.generate(1920, (index) => (index * 37) % 2000 - 1000),
-    );
-    final bytes = samples.buffer.asUint8List();
+    final samples = _speech;
+    final bytes = _speechBytes;
 
     Future<(VoiceAudioPipeline, _FakeCodecFactory, List<Object>)> pump(
       _FakeMediaService media, {
@@ -175,7 +246,10 @@ void main() {
       expect(opened, 1);
       expect(suppressor.frames, hasLength(2));
       expect(suppressor.channels, 2);
-      expect(codecs.encoder.inputs.last, everyElement(0));
+      expect(
+        codecs.encoder.inputs.last,
+        everyElement(FakeNoiseSuppressor.cleaned),
+      );
 
       await pipeline.dispose();
       expect(suppressor.disposed, isTrue);
@@ -205,7 +279,10 @@ void main() {
       await opening;
       media.addPcm(bytes);
       await _flushEvents();
-      expect(codecs.encoder.inputs.last, everyElement(0));
+      expect(
+        codecs.encoder.inputs.last,
+        everyElement(FakeNoiseSuppressor.cleaned),
+      );
     });
 
     test(

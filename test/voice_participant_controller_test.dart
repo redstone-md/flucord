@@ -6,7 +6,7 @@ import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
 void main() {
-  test('tracks participant state, speaking, and departure', () async {
+  test('tracks participant state, SSRC, and departure', () async {
     final signaling = _ParticipantSignalingService();
     final controller = VoiceController(
       const NoopVoiceMediaService(),
@@ -21,17 +21,14 @@ void main() {
     expect(controller.participants.single.userId, 'member-1');
     expect(controller.participants.single.isMuted, isTrue);
 
+    // The speaking opcode maps the SSRC and nothing more: Discord announces
+    // who started sending and never reliably who stopped, so a flag taken
+    // from it would stay lit for the rest of the call.
     signaling.emit(
       const VoiceSpeakingEvent(userId: 'member-1', ssrc: 42, speakingFlags: 1),
     );
     await _flushEvents();
-    expect(controller.participants.single.isSpeaking, isTrue);
     expect(controller.participants.single.ssrc, 42);
-
-    signaling.emit(
-      const VoiceSpeakingEvent(userId: 'member-1', ssrc: 42, speakingFlags: 0),
-    );
-    await _flushEvents();
     expect(controller.participants.single.isSpeaking, isFalse);
 
     signaling.emit(const VoiceUserDisconnectedEvent('member-1'));

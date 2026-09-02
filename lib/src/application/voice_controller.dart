@@ -68,6 +68,9 @@ final class VoiceController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     });
     _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
+    _ownSpeakingSubscription = _audioPipeline?.speaking.listen(
+      _handleOwnSpeaking,
+    );
     // Voice and stream audio share the room playback path.
     _streamAudioSubscription = streamAudio?.listen(_handleRemotePcm);
     _streamAudioEndedSubscription = streamAudioEnded?.listen(
@@ -88,6 +91,7 @@ final class VoiceController extends ChangeNotifier {
   bool _processingTouched = false;
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
+  StreamSubscription<bool>? _ownSpeakingSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
   StreamSubscription<String>? _streamAudioEndedSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
@@ -103,6 +107,10 @@ final class VoiceController extends ChangeNotifier {
   bool _isCallSession = false;
   VoiceTransportSession? _transportSession;
   final Map<String, VoiceParticipant> _participants = {};
+  String? _selfUserId;
+
+  /// Runs out [speakingHangover] after a participant's last voice frame.
+  final Map<String, Timer> _speakingTimers = {};
   Object? _error;
 
   /// Why the audio devices could not be opened, kept apart from [_error] so
@@ -117,6 +125,12 @@ final class VoiceController extends ChangeNotifier {
 
   /// When each source's last frame arrived, for the gap diagnostic.
   final Map<String, int> _lastPcmMicros = {};
+
+  /// How long a participant still counts as speaking after their last voice
+  /// frame. A sender closes a burst with five silence frames, 100 ms; this is
+  /// long enough to ride over those and a lost packet, short enough that the
+  /// ring goes out with the voice.
+  static const Duration speakingHangover = Duration(milliseconds: 250);
   bool _isBusy = false;
   bool _disposed = false;
 
@@ -522,7 +536,7 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
-          _participants.clear();
+          _clearParticipants();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
       case VoiceTransportReadyEvent():
@@ -531,6 +545,7 @@ final class VoiceController extends ChangeNotifier {
           _applyBackgroundAudioState(uplink: !_isMuted, playback: true),
         );
       case VoiceCredentialsReadyEvent():
+        _selfUserId = event.credentials.userId;
         _participants.putIfAbsent(
           event.credentials.userId,
           () => VoiceParticipant(userId: event.credentials.userId),
@@ -538,15 +553,15 @@ final class VoiceController extends ChangeNotifier {
       case VoiceParticipantStateEvent():
         _applyParticipantState(event);
       case VoiceSpeakingEvent():
+        // Only the SSRC is taken: the opcode says who started sending and
+        // never reliably who stopped, so speaking is read off the audio.
         final participant =
             _participants[event.userId] ??
             VoiceParticipant(userId: event.userId);
-        _participants[event.userId] = participant.copyWith(
-          ssrc: event.ssrc,
-          speakingFlags: event.speakingFlags,
-        );
+        _participants[event.userId] = participant.copyWith(ssrc: event.ssrc);
       case VoiceUserDisconnectedEvent():
         _participants.remove(event.userId);
+        _speakingTimers.remove(event.userId)?.cancel();
       case VoiceDaveBinaryEvent():
         break;
       case VoiceKeyframeRequestedEvent():
@@ -576,7 +591,7 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
-    _participants.clear();
+    _clearParticipants();
     unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();
   }
@@ -694,9 +709,44 @@ final class VoiceController extends ChangeNotifier {
     }
   }
 
+  void _clearParticipants() {
+    _participants.clear();
+    for (final timer in _speakingTimers.values) {
+      timer.cancel();
+    }
+    _speakingTimers.clear();
+  }
+
+  /// A voice frame is the participant speaking; the ring goes out
+  /// [speakingHangover] after the last one. Screen-share audio is somebody's
+  /// game, not their voice, and is left out.
+  void _heard(String userId) {
+    _speakingTimers.remove(userId)?.cancel();
+    _speakingTimers[userId] = Timer(speakingHangover, () {
+      _speakingTimers.remove(userId);
+      _setSpeaking(userId, false);
+    });
+    _setSpeaking(userId, true);
+  }
+
+  void _handleOwnSpeaking(bool speaking) {
+    final userId = _selfUserId;
+    if (userId == null || _disposed) return;
+    _setSpeaking(userId, speaking);
+  }
+
+  void _setSpeaking(String userId, bool speaking) {
+    final participant =
+        _participants[userId] ?? VoiceParticipant(userId: userId);
+    if (participant.isSpeaking == speaking) return;
+    _participants[userId] = participant.copyWith(isSpeaking: speaking);
+    _notify();
+  }
+
   void _handleRemotePcm(VoiceRemotePcmFrame frame) {
     if (_disposed) return;
     _noteArrival(frame);
+    if (frame.sourceId == frame.userId) _heard(frame.userId);
     final playbackService = _playbackService;
     if (playbackService == null) return;
     if (!_isAudioPlaybackActive) {
@@ -731,8 +781,12 @@ final class VoiceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    for (final timer in _speakingTimers.values) {
+      timer.cancel();
+    }
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
+    unawaited(_ownSpeakingSubscription?.cancel());
     unawaited(_streamAudioSubscription?.cancel());
     unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());

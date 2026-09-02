@@ -15,7 +15,7 @@ void main() {
     await tester.pumpWidget(
       _TestApp(
         participants: const [
-          VoiceParticipant(userId: 'member-1', speakingFlags: 1),
+          VoiceParticipant(userId: 'member-1', isSpeaking: true),
           VoiceParticipant(userId: 'missing-123456', selfMuted: true),
         ],
       ),

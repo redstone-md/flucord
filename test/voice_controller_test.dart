@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
@@ -183,14 +184,14 @@ void main() {
       await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
       signaling.emit(const VoiceTransportReadyEvent(_transportSession));
       await _flushEvents();
-      media.addPcm(Uint8List(3840));
+      media.addPcm(_speech);
       await _flushEvents();
       expect(suppressor.frames, hasLength(1));
 
       await controller.setNoiseSuppression(false);
       expect(controller.noiseSuppression, isFalse);
       expect(repository.saved, const VoiceProcessingSettings());
-      media.addPcm(Uint8List(3840));
+      media.addPcm(_speech);
       await _flushEvents();
       expect(suppressor.frames, hasLength(1));
       expect(signaling.sentFrames, hasLength(2));
@@ -259,7 +260,7 @@ void main() {
     // everything said into it.
     expect(controller.isMuted, isTrue);
     expect(controller.isAudioUplinkActive, isFalse);
-    media.addPcm(Uint8List(3840));
+    media.addPcm(_speech);
     await _flushEvents();
     expect(signaling.sentFrames, isEmpty);
   });
@@ -279,14 +280,14 @@ void main() {
       addTearDown(signaling.close);
 
       await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
-      media.addPcm(Uint8List(3840));
+      media.addPcm(_speech);
       await _flushEvents();
       expect(signaling.sentFrames, isEmpty);
 
       signaling.emit(const VoiceTransportReadyEvent(_transportSession));
       await _flushEvents();
       expect(controller.isAudioUplinkActive, isTrue);
-      media.addPcm(Uint8List(3840));
+      media.addPcm(_speech);
       await _flushEvents();
       expect(signaling.sentFrames, hasLength(1));
 
@@ -298,12 +299,62 @@ void main() {
       expect(controller.isAudioUplinkActive, isFalse);
 
       await controller.toggleMute();
-      media.addPcm(Uint8List(3840));
+      media.addPcm(_speech);
       await _flushEvents();
       operations.clear();
       await controller.disconnect();
       expect(operations.take(2), ['finish', 'leave']);
       expect(controller.isAudioUplinkActive, isFalse);
+    },
+  );
+
+  test(
+    'a participant speaks while their voice arrives, and a little after',
+    () {
+      fakeAsync((async) {
+        final signaling = _FakeVoiceSignalingService();
+        final playback = _FakeVoicePlaybackService();
+        final streamAudio = StreamController<VoiceRemotePcmFrame>.broadcast();
+        final controller = VoiceController(
+          _FakeVoiceMediaService(),
+          signalingServiceProvider: () => signaling,
+          audioCodecFactory: _FakeCodecFactory(),
+          playbackService: playback,
+          streamAudio: streamAudio.stream,
+        );
+        addTearDown(streamAudio.close);
+        addTearDown(controller.dispose);
+        addTearDown(signaling.close);
+        controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+        async.flushMicrotasks();
+        signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+        async.flushMicrotasks();
+
+        signaling.addRemote('user-1', [7]);
+        async.flushMicrotasks();
+        expect(controller.participants.single.isSpeaking, isTrue);
+
+        // Frames keep coming: the ring stays on for as long as they do.
+        const almost = Duration(milliseconds: 240);
+        async.elapse(almost);
+        signaling.addRemote('user-1', [7]);
+        async.elapse(almost);
+        expect(controller.participants.single.isSpeaking, isTrue);
+
+        async.elapse(const Duration(milliseconds: 20));
+        expect(controller.participants.single.isSpeaking, isFalse);
+
+        // Screen-share audio is a game, not a voice.
+        streamAudio.add(
+          VoiceRemotePcmFrame(
+            userId: 'user-1',
+            sourceId: 'stream:guild:guild-1:voice-1:user-1',
+            samples: Int16List.fromList([8]),
+          ),
+        );
+        async.flushMicrotasks();
+        expect(controller.participants.single.isSpeaking, isFalse);
+      });
     },
   );
 
@@ -472,6 +523,11 @@ void main() {
     expect(controller.joinBlockedReason, isNotNull);
   });
 }
+
+/// One 20 ms microphone frame loud enough to pass the uplink's gate.
+final Uint8List _speech = Int16List.fromList(
+  List.generate(1920, (index) => (index * 37) % 2000 - 1000),
+).buffer.asUint8List();
 
 const _transportSession = VoiceTransportSession(
   guildId: 'guild-1',

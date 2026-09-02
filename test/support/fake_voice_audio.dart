@@ -37,6 +37,10 @@ final class _FakeVoiceOpusEncoder implements VoiceOpusEncoder {
 /// A suppressor that records the frames it was handed and silences them, so
 /// a test can tell filtered frames from raw ones by their samples.
 class FakeNoiseSuppressor implements VoiceNoiseSuppressor {
+  /// What every sample becomes: loud enough to pass the uplink's gate, and
+  /// unlike anything a test feeds in.
+  static const int cleaned = 5000;
+
   final List<Int16List> frames = [];
   int? channels;
   bool disposed = false;
@@ -48,7 +52,7 @@ class FakeNoiseSuppressor implements VoiceNoiseSuppressor {
   void process(Int16List frame, {required int channels}) {
     this.channels = channels;
     frames.add(Int16List.fromList(frame));
-    frame.fillRange(0, frame.length, 0);
+    frame.fillRange(0, frame.length, cleaned);
   }
 
   @override
