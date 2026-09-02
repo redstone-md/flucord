@@ -56,16 +56,18 @@ with the isolate as its frame destination, so no address passes through the
 application layer). The main isolate keeps a proxy per Sender that speaks the
 Sender interface and nothing else. Only what the encoder must do crosses
 back: a keyframe a watcher needs, a bitrate the loss allows. The tests run
-the same Sender in-process (`InProcessGoLiveMediaPlane`). Which endpoint is
-the sender's is decided by the RTC service from the pending own-key watches
-(ADR-0001). The stream controller opens the Sender on it with the running
-settings, forwards each settings change as a reshape, and asks for the
-self-preview when the Sender reports ready. Before the isolate, every stage
+the same Sender in-process (`InProcessGoLiveMediaPlane`). An endpoint on this
+account's own key is the sender's; the RTC service hands it out rather than
+opening it. The stream controller opens the Sender on it with the running
+settings and forwards each settings change as a reshape. The sender's own
+picture never crosses Discord: `GoLiveSelfPreview` decodes the encoder's
+echoed access units on the main isolate for the sender's tile (ADR-0001).
+Before the isolate, every stage
 from the picture copy to the per-packet AES-GCM ran on the UI isolate, and a
 long build or a garbage collection held the send path for hundreds of
 milliseconds at a time, which reached the watcher as a freeze followed by a
 burst. The worker echoes each picture back to the hub, so the clip buffer
-keeps recording a stream.
+keeps recording a stream and the self-preview has something to decode.
 
 The share's sound is captured from the machine's output (WASAPI loopback),
 framed into 20 ms stereo Opus on the main isolate, and handed to the share's

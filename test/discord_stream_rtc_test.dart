@@ -375,55 +375,6 @@ void main() {
       expect(endpoints.single.credentials.token, 'stream-token');
     });
 
-    test('an own endpoint answering a watch is watched', () async {
-      final repository = _FakeRepository();
-      final clients = <_FakeClient>[];
-      final service = DiscordStreamRtcService(
-        repositoryProvider: () => repository,
-        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        socketFactoryProvider: () => _StreamSocketFactory((_) {
-          final client = _FakeClient();
-          clients.add(client);
-          return client;
-        }),
-      );
-      addTearDown(service.close);
-      service.reconcile();
-      final endpoints = <DiscordSenderEndpoint>[];
-      service.senderEndpoints.listen(endpoints.add);
-
-      // The self-preview's ask, noted before Discord answers it.
-      service.noteWatch(_ownKey);
-      repository.announceServer(
-        const GoLiveServer(
-          key: _ownKey,
-          endpoint: 'stream.discord.gg',
-          token: 'watch-token',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(endpoints, isEmpty);
-      expect(clients, hasLength(1));
-      expect(service.sessionFor(_ownKey), isNotNull);
-
-      // The watch is consumed: the next own endpoint is the sender's again,
-      // and a restarted stream takes the old self-preview with it, so the
-      // new ask is not refused as already open.
-      repository.announceServer(
-        const GoLiveServer(
-          key: _ownKey,
-          endpoint: 'stream.discord.gg',
-          token: 'send-token',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(endpoints, hasLength(1));
-      expect(clients, hasLength(1));
-      expect(clients.single.closed, isTrue);
-      expect(service.sessionFor(_ownKey), isNull);
-    });
-
     test('a stream that ends closes its connection', () async {
       final repository = _FakeRepository();
       final clients = <_FakeClient>[];

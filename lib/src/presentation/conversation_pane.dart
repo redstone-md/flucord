@@ -167,9 +167,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       // Only a thread has a membership to point at; every other channel gets
       // null, which clears the button rather than offering a control with
       // nothing to act on.
-      ThreadMembershipScope.read(context).show(
-        channel.isThread ? channel.id : null,
-      );
+      ThreadMembershipScope.read(
+        context,
+      ).show(channel.isThread ? channel.id : null);
       StageScope.read(context).show(
         channel.isStage ? channel.id : null,
         canModerate: widget.capabilities.moderateStage,
@@ -181,9 +181,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       // A soundboard belongs to a server, and only a voice channel can play
       // one, so anything else clears the picker rather than offering sounds
       // with nowhere to send them.
-      SoundboardScope.read(context).show(
-        channel.kind == ChannelKind.voice ? channel.spaceId : null,
-      );
+      SoundboardScope.read(
+        context,
+      ).show(channel.kind == ChannelKind.voice ? channel.spaceId : null);
     });
   }
 
@@ -250,7 +250,10 @@ class _ConversationPaneState extends State<ConversationPane> {
     );
   }
 
-  Widget _buildPane(BuildContext context, DirectCallController? callController) {
+  Widget _buildPane(
+    BuildContext context,
+    DirectCallController? callController,
+  ) {
     final chat = ChatScope.of(context);
     final workspaceController = WorkspaceScope.of(context);
     final channel = widget.channel;
@@ -261,8 +264,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       voiceSurface,
       inCall: inCall,
     );
-    final locked =
-        channel.isThread && channel.isArchived && channel.isLocked;
+    final locked = channel.isThread && channel.isArchived && channel.isLocked;
     // Read and not watched: the viewer announces every decoded unit, and
     // several streams at once announce one each. The room below is what
     // rebuilds, and the timeline beside it has no business being laid out
@@ -285,7 +287,10 @@ class _ConversationPaneState extends State<ConversationPane> {
     // away.
     Widget? streamViewer() => switch (viewer.watching) {
       null => null,
-      final key => GoLiveViewer(frames: viewer.framesFor(key), label: key.userId),
+      final key => GoLiveViewer(
+        frames: viewer.framesFor(key),
+        label: key.userId,
+      ),
     };
 
     Widget goLiveControl() => ListenableBuilder(
@@ -304,20 +309,16 @@ class _ConversationPaneState extends State<ConversationPane> {
     VoidCallback? stopShare() =>
         goLive.isSharing ? () => unawaited(goLive.stop()) : null;
 
-    // The sender's own tile is a watcher too, but the room keeps it in the
-    // grid instead of putting it on the stage. A failed watch is passed down
-    // as an error so the tile cannot quietly replace it with a local capture.
+    // The sender's own picture stays on their tile in the grid, never on the
+    // stage: somebody sharing is watching the room, not themselves. Its
+    // pictures are the encoder's, decoded locally (ADR-0001).
     VoiceSelfPreview? selfPreview() {
       if (!goLive.isSharing) return null;
       final key = goLive.streamKey;
       if (key == null || key.channelId != channel.id) return null;
-      final error = viewer.errorFor(key);
       return VoiceSelfPreview(
-        frames: viewer.framesFor(key),
-        error: error ??
-            (viewer.refused == key
-                ? StateError('The room refused the self-preview')
-                : null),
+        frames: goLive.previewFrames,
+        error: goLive.previewError,
       );
     }
 
@@ -389,24 +390,24 @@ class _ConversationPaneState extends State<ConversationPane> {
               onRefresh: () => unawaited(
                 chat.loadArchivedThreads(channel.id, refresh: true),
               ),
-              onLoadMore: () =>
-                  unawaited(chat.loadArchivedThreads(channel.id)),
+              onLoadMore: () => unawaited(chat.loadArchivedThreads(channel.id)),
               onOpenPost: widget.onSelectChannel,
               onLoadPostPreview: (postId) =>
                   unawaited(chat.loadForumPostPreview(postId)),
-              onCreatePost: (name, content, attachments, duration, tagIds) async {
-                final thread = await chat.createForumPost(
-                  channelId: channel.id,
-                  name: name,
-                  content: content,
-                  autoArchiveDurationMinutes: duration,
-                  attachments: attachments,
-                  appliedTagIds: tagIds,
-                );
-                if (thread == null) return false;
-                widget.onSelectChannel(thread.id);
-                return true;
-              },
+              onCreatePost:
+                  (name, content, attachments, duration, tagIds) async {
+                    final thread = await chat.createForumPost(
+                      channelId: channel.id,
+                      name: name,
+                      content: content,
+                      autoArchiveDurationMinutes: duration,
+                      attachments: attachments,
+                      appliedTagIds: tagIds,
+                    );
+                    if (thread == null) return false;
+                    widget.onSelectChannel(thread.id);
+                    return true;
+                  },
             ),
             ChannelKind.text || ChannelKind.voice => _buildTimeline(context),
           };
@@ -431,9 +432,8 @@ class _ConversationPaneState extends State<ConversationPane> {
           threadMembership: channel.isThread
               ? ListenableBuilder(
                   listenable: threadMembership,
-                  builder: (_, _) => ThreadMembershipButton(
-                    controller: threadMembership,
-                  ),
+                  builder: (_, _) =>
+                      ThreadMembershipButton(controller: threadMembership),
                 )
               : null,
           channels: widget.channels,
@@ -493,10 +493,8 @@ class _ConversationPaneState extends State<ConversationPane> {
               widget.workspace,
               channel,
             ),
-            onSearchMembers: (query) => chat.searchGuildMembers(
-              spaceId: channel.spaceId,
-              query: query,
-            ),
+            onSearchMembers: (query) =>
+                chat.searchGuildMembers(spaceId: channel.spaceId, query: query),
             customEmojis: widget.workspace.emojisFor(channel.spaceId),
             guildStickers: widget.workspace.stickersFor(channel.spaceId),
             isSending: chat.isSending,
@@ -674,10 +672,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       target: MessageReportTarget(
         channelId: message.channelId,
         messageId: message.id,
-        isFirstDirectMessage: _isFirstDirectMessage(
-          widget.workspace,
-          message,
-        ),
+        isFirstDirectMessage: _isFirstDirectMessage(widget.workspace, message),
       ),
     );
     try {

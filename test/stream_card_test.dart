@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/stream_viewer_controller.dart';
-import 'package:flucord/src/application/watched_session_pipeline.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 
 import 'support/stream_room_harness.dart';
@@ -106,7 +103,10 @@ void main() {
       ],
     );
 
-    expect(find.byKey(const ValueKey('voice-stream-open-friend-1')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('voice-stream-open-friend-1')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('voice-watch-friend-1')));
     await tester.pumpAndSettle();
@@ -115,10 +115,15 @@ void main() {
       find.byKey(const ValueKey('voice-stream-open-friend-1')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('voice-stream-open-friend-2')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('voice-stream-open-friend-2')),
+      findsNothing,
+    );
   });
 
-  testWidgets('a fifth stream is refused, and the room says why', (tester) async {
+  testWidgets('a fifth stream is refused, and the room says why', (
+    tester,
+  ) async {
     final harness = await pumpStreamRoom(
       tester,
       streamRoomCall,
@@ -152,7 +157,9 @@ void main() {
     expect(
       harness.repository.watched,
       isNot(
-        contains(const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1')),
+        contains(
+          const GoLiveStreamKey.call(channelId: 'dm-1', userId: 'friend-1'),
+        ),
       ),
     );
   });
@@ -200,9 +207,7 @@ void main() {
     );
   });
 
-  testWidgets('the sender tile shows its received self-preview as live', (
-    tester,
-  ) async {
+  testWidgets('the sender tile shows its own picture as live', (tester) async {
     final harness = await pumpStreamRoom(
       tester,
       streamRoomCall,
@@ -214,14 +219,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
-    expect(_onCard('me', find.text('Live')), findsOneWidget);
-    const key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
-    await harness.viewer.requestWatch(key);
-    await harness.viewer.attach(key, packets: const Stream.empty());
-    await tester.pump();
 
-    // The sender tile is drawing the receive-side viewer, not the local
-    // capture. The router test covers the packet-to-decoder half.
+    // The sender tile draws the share's own pictures, decoded locally; no
+    // watch goes to Discord for it (ADR-0001).
+    expect(harness.selfPreviewDecoder.started, 1);
+    expect(harness.repository.watched, isEmpty);
     expect(find.byKey(const ValueKey('voice-self-preview')), findsOneWidget);
     expect(find.byKey(const ValueKey('go-live-waiting')), findsOneWidget);
     expect(_onCard('me', find.text('Live')), findsOneWidget);
@@ -229,7 +231,7 @@ void main() {
     await harness.goLive.stop();
   });
 
-  testWidgets('a self-preview refusal is shown instead of a picture', (
+  testWidgets('a preview that cannot decode says so instead of a picture', (
     tester,
   ) async {
     final harness = await pumpStreamRoom(
@@ -239,21 +241,20 @@ void main() {
         StreamRoomSeat('me'),
         StreamRoomSeat('friend-1', isStreaming: true),
       ],
+      selfPreviewOpens: false,
     );
-    final packets = StreamController<IncomingVideoPacket>();
-    addTearDown(packets.close);
 
     await tester.tap(find.byKey(const ValueKey('go-live-toggle')));
     await tester.pumpAndSettle();
-    const key = GoLiveStreamKey.call(channelId: 'dm-1', userId: 'me');
-    await harness.viewer.requestWatch(key);
-    await harness.viewer.attach(key, packets: packets.stream);
-    packets.addError(StateError('Discord refused the self-watch'));
-    await tester.pump();
 
-    expect(find.byKey(const ValueKey('voice-self-preview-error')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice-self-preview-error')),
+      findsOneWidget,
+    );
     expect(find.text('Self-preview unavailable'), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-self-preview')), findsNothing);
+    // The share itself is fine.
+    expect(_onCard('me', find.text('Live')), findsOneWidget);
     await harness.goLive.stop();
   });
 

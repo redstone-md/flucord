@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_controller.dart';
+import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
 import 'package:flucord/src/data/discord/go_live_media_plane.dart';
 import 'package:flucord/src/data/discord/go_live_sender.dart';
@@ -14,6 +15,7 @@ import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fake_video_decoder.dart';
 import 'support/fake_video_encoder.dart';
 
 const _key = GoLiveStreamKey.guild(
@@ -38,7 +40,7 @@ GoLiveController _controller(
   FakeVideoEncoder? encoder,
   _FakePlane? plane,
   StreamController<DiscordSenderEndpoint>? endpoints,
-  List<GoLiveStreamKey>? ready,
+  GoLiveSelfPreview? preview,
   Duration pingInterval = const Duration(seconds: 30),
 }) {
   final media = plane ?? _FakePlane();
@@ -50,7 +52,7 @@ GoLiveController _controller(
     ),
     media: media,
     senderEndpoints: endpoints?.stream,
-    onSenderReady: ready?.add,
+    selfPreview: preview,
     pingInterval: pingInterval,
   )..reconcile();
   addTearDown(controller.dispose);
@@ -144,13 +146,11 @@ void main() {
       final encoder = FakeVideoEncoder(displays: 2);
       final plane = _FakePlane();
       final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
-      final ready = <GoLiveStreamKey>[];
       final controller = _controller(
         repository,
         encoder: encoder,
         plane: plane,
         endpoints: endpoints,
-        ready: ready,
       );
 
       final sender = await _sending(controller, plane, endpoints);
@@ -160,11 +160,6 @@ void main() {
       expect(encoder.frameSinks, [_FakePlane.sink]);
       expect(sender.openedWith, encoder.started.single);
       expect(sender.credentials, _credentials);
-
-      // A ready Sender is when the self-preview can be asked for.
-      sender.ready();
-      await Future<void>.delayed(Duration.zero);
-      expect(ready, [_key]);
 
       // What the Sender asks of the encoder reaches the capture.
       sender.commands.add(const GoLiveBitrateCommand(2250000));
@@ -178,6 +173,34 @@ void main() {
       expect(sender.closed, isTrue);
     },
   );
+
+  test('the share decodes its own pictures for the sender', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = FakeVideoEncoder(displays: 2);
+    final decoder = FakeVideoDecoder();
+    final controller = _controller(
+      repository,
+      encoder: encoder,
+      preview: GoLiveSelfPreview(decoderFactory: () => decoder),
+    );
+
+    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+    expect(decoder.started, 1);
+    expect(controller.previewError, isNull);
+
+    // What the encoder produces is what the sender sees (ADR-0001).
+    encoder.emit();
+    await Future<void>.delayed(Duration.zero);
+    expect(decoder.submitted, hasLength(1));
+
+    // The preview ends with the share, not with the controller.
+    await controller.stop();
+    expect(decoder.stopped, 1);
+    encoder.emit();
+    await Future<void>.delayed(Duration.zero);
+    expect(decoder.submitted, hasLength(1));
+  });
 
   test('a sender endpoint while nothing is shared is ignored', () async {
     final repository = _FakeRepository();

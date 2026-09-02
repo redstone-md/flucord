@@ -32,6 +32,7 @@ import 'application/family_centre_controller.dart';
 import 'application/friends_controller.dart';
 import 'application/gif_picker_controller.dart';
 import 'application/go_live_controller.dart';
+import 'application/go_live_self_preview.dart';
 import 'application/guild_member_list_controller.dart';
 import 'application/keybind_actions.dart';
 import 'application/keybind_controller.dart';
@@ -369,8 +370,8 @@ final class AppComposition {
     unawaited(streamQuality.load());
     // The second RTC connection a stream lives on. Discord does not carry Go
     // Live over the call's socket: it answers create and watch with an
-    // endpoint of their own. Which of them is the sender's is decided here
-    // (ADR-0001); the watched ones are opened here too.
+    // endpoint of their own. The own key's is the sender's (ADR-0001); the
+    // watched ones are opened here too.
     streamRtc = DiscordStreamRtcService(
       repositoryProvider: () => chat.goLive,
       identityProvider: () => liveVoiceSignaling?.streamIdentity,
@@ -385,9 +386,12 @@ final class AppComposition {
         capture: videoCapture,
         media: goLiveMedia,
         senderEndpoints: streamRtc.senderEndpoints,
-        // Once the sending connection is ready, ask Discord for the same key
-        // on a receiving connection. That round trip is the self-preview.
-        onSenderReady: (key) => unawaited(streamViewer.requestWatch(key)),
+        // The sender's own picture is the encoder's output decoded here;
+        // Discord never answers a watch on the sender's own key (ADR-0001).
+        selfPreview: GoLiveSelfPreview(
+          decoderFactory: () =>
+              bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+        ),
         systemAudio: Platform.isWindows
             ? WindowsSystemAudioCapture()
             : const UnavailableSystemAudioCapture(),
@@ -402,12 +406,7 @@ final class AppComposition {
         repositoryProvider: () => chat.goLive,
         decoderFactory: () =>
             bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
-        // This account's own stream is watched back like any other, and its
-        // reserved session counts towards the cap (ADR-0002).
-        ownKeyProvider: () => goLive.streamKey,
-        onWatchRequested: (key) => streamRtc.noteWatch(key),
-        // A stopped watch takes its connection with it. Only the receiving
-        // half: the Sender's own connection ends with the stream (ADR-0001).
+        // A stopped watch takes its connection with it.
         onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
         // One audio receiver per watched session (ADR-0004).
         audioDecoderFactory: bootstrap.voiceOpusCodecFactory,

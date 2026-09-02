@@ -10,9 +10,11 @@ import '../data/video/system_audio_capture.dart';
 import '../domain/go_live_media.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/video_capture_hub.dart';
+import '../domain/video_decoder.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
 import '../app_log.dart';
+import 'go_live_self_preview.dart';
 
 /// A display this machine can share.
 ///
@@ -67,16 +69,16 @@ final class GoLiveController extends ChangeNotifier {
     /// The endpoints this account's own stream is to be sent on.
     Stream<DiscordSenderEndpoint>? senderEndpoints,
 
-    /// Told when the Sender's connection is ready, which is when the
-    /// self-preview can be asked for (ADR-0001).
-    void Function(GoLiveStreamKey key)? onSenderReady,
+    /// What draws the sender their own picture (ADR-0001). Null on a build
+    /// that cannot decode, whose sender tile says so.
+    GoLiveSelfPreview? selfPreview,
     SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
     VoiceOpusCodecFactory? opusCodecFactory,
     Duration pingInterval = const Duration(seconds: 30),
   }) : _repositoryProvider = repositoryProvider,
        _capture = capture,
        _media = media ?? InProcessGoLiveMediaPlane(frames: capture.frames),
-       _onSenderReady = onSenderReady,
+       _preview = selfPreview,
        _systemAudio = systemAudio,
        _opusCodecFactory = opusCodecFactory,
        _pingInterval = pingInterval {
@@ -95,7 +97,10 @@ final class GoLiveController extends ChangeNotifier {
 
   /// Where the stream is sent from.
   final GoLiveMediaPlane _media;
-  final void Function(GoLiveStreamKey key)? _onSenderReady;
+
+  /// Owned here: it lives exactly as long as this controller does, and runs
+  /// exactly while a share does.
+  final GoLiveSelfPreview? _preview;
 
   /// The Sender of the running stream, once its endpoint arrived.
   GoLiveSender? _sender;
@@ -143,6 +148,18 @@ final class GoLiveController extends ChangeNotifier {
   /// Whether this build can send pictures at all.
   bool get canEncode => _capture.isSupported;
 
+  /// The sender's own picture, decoded from what the encoder produces
+  /// (ADR-0001). Empty between shares, and on a build that cannot decode.
+  Stream<DecodedVideoFrame> get previewFrames =>
+      _preview?.frames ?? const Stream<DecodedVideoFrame>.empty();
+
+  /// Why the sender has no picture of their own share, or null while they
+  /// have or could have one.
+  Object? get previewError => switch (_preview) {
+    null => StateError('This build cannot decode video'),
+    final preview => preview.error,
+  };
+
   /// What the capture runs at after a quality change reached it. The Sender
   /// decides what of it Discord needs to hear.
   void _follow(VideoEncoderSettings settings) {
@@ -174,13 +191,8 @@ final class GoLiveController extends ChangeNotifier {
     );
     _senderSubscriptions = [
       sender.statuses.listen((status) {
-        switch (status) {
-          case GoLiveSenderStatus.ready:
-            _onSenderReady?.call(endpoint.key);
-          case GoLiveSenderStatus.failed:
-            _diagnose('sender failed', endpoint.key);
-          default:
-            break;
+        if (status == GoLiveSenderStatus.failed) {
+          _diagnose('sender failed', endpoint.key);
         }
       }),
       sender.encoderCommands.listen(_applyEncoderCommand),
@@ -292,6 +304,14 @@ final class GoLiveController extends ChangeNotifier {
       // nothing else in the client opens a duplication of its own. Windows
       // refuses the second with E_INVALIDARG, which is what the room used
       // to report as "that display is no longer attached".
+      //
+      // The preview listens before the capture starts, so the encoder's
+      // first keyframe is not missed; a decoder that will not open is the
+      // preview's to report, not the share's.
+      await _preview?.start(
+        _capture.frames,
+        requestKeyframe: () async => await _lease?.requestKeyframe(),
+      );
       final lease = _lease = await _capture.startShare(
         displayIndex: GoLiveDisplay.displayIndexFor(sourceId),
       );
@@ -414,6 +434,7 @@ final class GoLiveController extends ChangeNotifier {
     _ping?.cancel();
     _ping = null;
     unawaited(_senderEndpoints?.cancel());
+    unawaited(_preview?.dispose());
     unawaited(_closeSender());
     unawaited(_leaseChanges?.cancel());
     unawaited(_updates?.cancel());
@@ -435,6 +456,7 @@ final class GoLiveController extends ChangeNotifier {
   }
 
   Future<void> _stopCapture() async {
+    await _preview?.stop();
     await _closeSender();
     await _stopAudio();
     final lease = _lease;

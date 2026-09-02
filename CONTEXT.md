@@ -29,12 +29,12 @@ A participant receiving somebody else's stream.
 _Avoid_: viewer, spectator, audience
 
 **Watched session**:
-One stream this client is receiving, from the ask to the last picture. A sender watching their own stream holds one too.
+One stream this client is receiving, from the ask to the last picture. Somebody else's stream, never this account's own.
 _Avoid_: connection, socket, channel
 
 **Self-preview**:
-The picture a sender gets of their own stream, watched back the way a watcher would.
-_Avoid_: local preview, thumbnail, monitor, mirror
+The picture a sender gets of their own stream: the encoder's own output, decoded on the sender's machine. Not a watched session.
+_Avoid_: thumbnail, monitor, mirror
 
 **Stage**:
 Where one stream is drawn large, in place of the participant grid.

@@ -89,13 +89,10 @@ final class _Wiring {
       capture: capture,
       media: plane,
       senderEndpoints: service.senderEndpoints,
-      onSenderReady: (key) => unawaited(viewer.requestWatch(key)),
     );
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: () => decoder,
-      ownKeyProvider: () => goLive.streamKey,
-      onWatchRequested: (key) => service.noteWatch(key),
       onWatchStopped: (key) => unawaited(service.stop(key)),
       // One audio receiver per watched session (ADR-0004).
       audioDecoderFactory: audioCodecs,
@@ -159,7 +156,7 @@ List<DiscordRtpFrame> _packetizedUnit() => [
 ];
 
 void main() {
-  test('the own stream has one sending and one receiving connection', () async {
+  test('the own stream has one connection, the sending one', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
 
@@ -176,75 +173,35 @@ void main() {
     sending.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
 
-    // The Sender announced on its ready and, ready, asked for the ordinary
-    // watch of the same key. Discord answers it with a second endpoint.
-    expect(wiring.repository.watched, [_key]);
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _key,
-        endpoint: 'stream.discord.gg',
-        token: 'receive-token',
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(wiring.clients, hasLength(2));
-    final receiving = wiring.clients.last;
-    receiving.announce(const VoiceTransportReadyEvent(_session));
-    await Future<void>.delayed(Duration.zero);
-
-    // The role belongs to the connection. The receiving connection has the
-    // same key but must not announce or send anything.
+    // The Sender announced on its ready. Nothing asked Discord to watch the
+    // own key back: the sender's picture is decoded locally (ADR-0001).
     expect(sending.announcements, hasLength(1));
-    expect(receiving.announcements, isEmpty);
-    expect(receiving.sentFrames, isEmpty);
-    expect(wiring.viewer.isWatching(_key), isTrue);
+    expect(wiring.repository.watched, isEmpty);
+    expect(wiring.viewer.isOpen(_key), isFalse);
     expect(wiring.viewer.watching, isNull);
 
-    for (final frame in _packetizedUnit()) {
-      receiving.emitVideo('me', frame);
-    }
-    await Future<void>.delayed(Duration.zero);
-    expect(wiring.viewer.receivedPacketsFor(_key), 2);
-    expect(wiring.viewer.decodedUnitsFor(_key), 1);
-
-    // A different stream can be watched while both own-key connections are
-    // alive; it gets its own receiving session and no sender announcement.
+    // A different stream gets its own receiving session and no sender
+    // announcement.
     await wiring.viewer.requestWatch(_otherKey);
     wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
-    expect(wiring.clients, hasLength(3));
+    expect(wiring.clients, hasLength(2));
     final other = wiring.clients.last;
     other.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
     expect(other.announcements, isEmpty);
-    expect(wiring.viewer.isWatching(_key), isTrue);
     expect(wiring.viewer.isWatching(_otherKey), isTrue);
+    expect(wiring.viewer.watching, _otherKey);
   });
 
   test('a receiving refusal is logged and kept for the tile', () async {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
 
-    await wiring.goLive.start(channelId: 'voice-1', guildId: 'guild-1');
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _key,
-        endpoint: 'stream.discord.gg',
-        token: 'send-token',
-      ),
-    );
+    await wiring.viewer.requestWatch(_otherKey);
+    wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
-    wiring.clients.single.announce(const VoiceTransportReadyEvent(_session));
-    await Future<void>.delayed(Duration.zero);
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _key,
-        endpoint: 'stream.discord.gg',
-        token: 'receive-token',
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-    final receiving = wiring.clients.last;
+    final receiving = wiring.clients.single;
     receiving.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
 
@@ -256,9 +213,8 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
 
-    expect(wiring.viewer.errorFor(_key), isNotNull);
-    expect(wiring.viewer.isOpen(_key), isFalse);
-    await wiring.goLive.stop();
+    expect(wiring.viewer.errorFor(_otherKey), isNotNull);
+    expect(wiring.viewer.isOpen(_otherKey), isFalse);
   });
 
   test('a suspended client keeps receiving, and keeps sending', () async {
@@ -277,18 +233,13 @@ void main() {
     final sending = wiring.clients.single;
     sending.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
-    wiring.repository.assign(
-      const GoLiveServer(
-        key: _key,
-        endpoint: 'stream.discord.gg',
-        token: 'receive-token',
-      ),
-    );
+    await wiring.viewer.requestWatch(_otherKey);
+    wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
     final receiving = wiring.clients.last;
     receiving.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
-    expect(wiring.viewer.isWatching(_key), isTrue);
+    expect(wiring.viewer.isWatching(_otherKey), isTrue);
     expect(wiring.decoder.started, 1);
 
     // The window goes away.
@@ -317,24 +268,24 @@ void main() {
     // already had: no second endpoint is asked for when the window comes
     // back, so the picture does not wait on a handshake.
     for (final frame in _packetizedUnit()) {
-      receiving.emitVideo('me', frame);
+      receiving.emitVideo(_otherKey.userId, frame);
     }
     await Future<void>.delayed(Duration.zero);
-    expect(wiring.viewer.receivedPacketsFor(_key), 2);
-    expect(wiring.viewer.decodedUnitsFor(_key), 0);
+    expect(wiring.viewer.receivedPacketsFor(_otherKey), 2);
+    expect(wiring.viewer.decodedUnitsFor(_otherKey), 0);
 
     wiring.viewer.setSuspended(false);
     await Future<void>.delayed(Duration.zero);
     expect(wiring.decoder.started, 2);
-    expect(wiring.repository.watched, [_key]);
+    expect(wiring.repository.watched, [_otherKey]);
     expect(wiring.clients, hasLength(2));
 
     for (final frame in _packetizedUnit()) {
-      receiving.emitVideo('me', frame);
+      receiving.emitVideo(_otherKey.userId, frame);
     }
     await Future<void>.delayed(Duration.zero);
-    expect(wiring.viewer.receivedPacketsFor(_key), 4);
-    expect(wiring.viewer.decodedUnitsFor(_key), 1);
+    expect(wiring.viewer.receivedPacketsFor(_otherKey), 4);
+    expect(wiring.viewer.decodedUnitsFor(_otherKey), 1);
   });
 
   test(
@@ -442,31 +393,16 @@ void main() {
       final sending = wiring.clients.single;
       sending.announce(const VoiceTransportReadyEvent(_session));
       await Future<void>.delayed(Duration.zero);
-      wiring.repository.assign(
-        const GoLiveServer(
-          key: _key,
-          endpoint: 'stream.discord.gg',
-          token: 'r',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      final receiving = wiring.clients.last;
-      receiving.announce(const VoiceTransportReadyEvent(_session));
       await wiring.viewer.requestWatch(_otherKey);
       wiring.repository.assign(_otherServer);
       await Future<void>.delayed(Duration.zero);
       final other = wiring.clients.last;
       other.announce(const VoiceTransportReadyEvent(_session));
       await Future<void>.delayed(Duration.zero);
-      expect(wiring.viewer.isWatching(_key), isTrue);
+      // The own key is never watched: the sender's connection is the only
+      // one it has (ADR-0001).
+      expect(wiring.viewer.isOpen(_key), isFalse);
       expect(wiring.viewer.isWatching(_otherKey), isTrue);
-
-      // Closing the self-preview drops the receiving half only (ADR-0001).
-      await wiring.viewer.stop(_key);
-      await Future<void>.delayed(Duration.zero);
-      expect(receiving.closed, isTrue);
-      expect(sending.closed, isFalse);
-      expect(other.closed, isFalse);
 
       // A stream somebody else sends goes with its connection: nothing is left
       // decrypting and reordering packets for a picture nobody draws.

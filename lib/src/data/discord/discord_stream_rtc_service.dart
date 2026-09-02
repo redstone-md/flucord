@@ -26,12 +26,10 @@ typedef DiscordSenderEndpoint = ({
 
 /// Decides what each stream endpoint is for, and holds the watched ones.
 ///
-/// Discord answers a create and a watch with the same endpoint shape, so
-/// nothing about the key tells a sender's endpoint from a watcher's. The
-/// role is decided here, from the pending watches (ADR-0001): an own-key
-/// endpoint with a watch pending is a watched session; one without is the
-/// sender's, and is handed out on [senderEndpoints] for the Sender to be
-/// opened on. Somebody else's key is always watched.
+/// Discord answers a create and a watch with the same endpoint shape, so the
+/// key decides the role: this account's own key is the sender's endpoint, and
+/// is handed out on [senderEndpoints] for the Sender to be opened on; anybody
+/// else's is watched here. Nothing is ever watched on the own key (ADR-0001).
 final class DiscordStreamRtcService {
   DiscordStreamRtcService({
     required GoLiveRepository? Function() repositoryProvider,
@@ -47,11 +45,6 @@ final class DiscordStreamRtcService {
 
   /// The connections streams are being watched on, by key.
   final Map<String, DiscordStreamRtcSession> _sessions = {};
-
-  /// Watch commands for this account's own key that have not received an
-  /// endpoint yet. They identify a receiving connection without guessing from
-  /// endpoint arrival order.
-  final Map<String, int> _pendingWatches = {};
 
   final StreamController<DiscordStreamRtcSession> _opened =
       StreamController.broadcast();
@@ -85,15 +78,6 @@ final class DiscordStreamRtcService {
     return repository != null;
   }
 
-  /// Records a watch command before its receiving endpoint arrives.
-  ///
-  /// Only the own key needs this intent. Other participants are always
-  /// watched, and keeping their commands here would leave stale role hints.
-  void noteWatch(GoLiveStreamKey key) {
-    if (_identityProvider()?.userId != key.userId) return;
-    _pendingWatches.update(key.value, (count) => count + 1, ifAbsent: () => 1);
-  }
-
   /// The connection [key] is being watched on, or null when there is none.
   DiscordStreamRtcSession? sessionFor(GoLiveStreamKey key) =>
       _sessions[key.value];
@@ -114,7 +98,6 @@ final class DiscordStreamRtcService {
     _closed = true;
     await _servers?.cancel();
     await _streamUpdates?.cancel();
-    _pendingWatches.clear();
     for (final session in _sessions.values.toList(growable: false)) {
       await session.close();
     }
@@ -130,7 +113,6 @@ final class DiscordStreamRtcService {
   void _acceptStreamUpdate(GoLiveStream stream) {
     if (_closed) return;
     if (_repository?.streams.containsKey(stream.key.value) ?? true) return;
-    _pendingWatches.remove(stream.key.value);
     unawaited(stop(stream.key));
   }
 
@@ -146,32 +128,11 @@ final class DiscordStreamRtcService {
     // next watch or create rather than expecting the client to hold it.
     if (identity == null) return;
     final credentials = _credentialsFor(server, identity);
-    if (_isSender(server.key, identity.userId)) {
-      // A moved or restarted stream replaces the self-preview too: the
-      // watched session on the old connection would otherwise stand in the
-      // way of the new ask.
-      for (final session in _sessions.values.toList(growable: false)) {
-        if (session.key.userId == identity.userId) unawaited(stop(session.key));
-      }
+    if (server.key.userId == identity.userId) {
       _senderEndpoints.add((key: server.key, credentials: credentials));
       return;
     }
     unawaited(_open(server.key, credentials));
-  }
-
-  /// Whether an endpoint for [key] is the sender's: this account's own key
-  /// with no watch pending. A pending watch is consumed by the endpoint that
-  /// answers it.
-  bool _isSender(GoLiveStreamKey key, String userId) {
-    if (key.userId != userId) return false;
-    final pending = _pendingWatches[key.value] ?? 0;
-    if (pending == 0) return true;
-    if (pending == 1) {
-      _pendingWatches.remove(key.value);
-    } else {
-      _pendingWatches[key.value] = pending - 1;
-    }
-    return false;
   }
 
   static VoiceServerCredentials _credentialsFor(

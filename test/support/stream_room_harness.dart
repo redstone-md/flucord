@@ -7,6 +7,7 @@ import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/app_composition.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
+import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
@@ -33,6 +34,9 @@ final class StreamRoomHarness {
     // Who else is in the room. Somebody streaming by default, which is the
     // case every stream control exists for.
     this.seats = const [StreamRoomSeat('friend-1', isStreaming: true)],
+    // Whether the sender's own picture can be decoded: off is the tile
+    // showing why not.
+    this.selfPreviewOpens = true,
   }) {
     voice = VoiceController(
       const NoopVoiceMediaService(),
@@ -46,11 +50,15 @@ final class StreamRoomHarness {
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: StreamRoomDecoder.new,
-      ownKeyProvider: () => goLive.streamKey,
     );
     goLive = GoLiveController(
       repositoryProvider: () => repository,
       capture: VideoCaptureHub(encoder: FakeVideoEncoder(cameras: const [])),
+      selfPreview: GoLiveSelfPreview(
+        decoderFactory: () => selfPreviewDecoder = StreamRoomDecoder(
+          failStart: !selfPreviewOpens,
+        ),
+      ),
     )..reconcile();
     composition = AppComposition(AppBootstrap.demo());
     composition.workspace
@@ -76,6 +84,12 @@ final class StreamRoomHarness {
 
   final ConversationChannel channel;
   final List<StreamRoomSeat> seats;
+
+  /// Whether the sender's own picture can be decoded.
+  final bool selfPreviewOpens;
+
+  /// The decoder the running share's preview was opened on.
+  late StreamRoomDecoder selfPreviewDecoder;
   final StreamRoomSignaling signaling = StreamRoomSignaling();
   final StreamRoomCallService callService = StreamRoomCallService();
   final StreamRoomStreamRepository repository = StreamRoomStreamRepository();
@@ -123,8 +137,13 @@ Future<StreamRoomHarness> pumpStreamRoom(
     StreamRoomSeat('friend-1', isStreaming: true),
   ],
   bool join = true,
+  bool selfPreviewOpens = true,
 }) async {
-  final harness = StreamRoomHarness(channel: channel, seats: seats);
+  final harness = StreamRoomHarness(
+    channel: channel,
+    seats: seats,
+    selfPreviewOpens: selfPreviewOpens,
+  );
   addTearDown(harness.dispose);
   addTearDown(() => expect(tester.takeException(), isNull));
   if (join) await harness.joinRoom();
@@ -323,8 +342,12 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
 }
 
 final class StreamRoomDecoder implements VideoDecoderService {
+  StreamRoomDecoder({this.failStart = false});
+
+  final bool failStart;
   final StreamController<DecodedVideoFrame> _frames =
       StreamController.broadcast();
+  int started = 0;
 
   @override
   bool get isSupported => true;
@@ -336,7 +359,10 @@ final class StreamRoomDecoder implements VideoDecoderService {
   Stream<int> get droppedAccessUnits => const Stream.empty();
 
   @override
-  Future<void> start() async {}
+  Future<void> start() async {
+    if (failStart) throw StateError('no decoder');
+    started++;
+  }
 
   @override
   Future<void> submit(List<int> accessUnit, {Duration? timestamp}) async {}

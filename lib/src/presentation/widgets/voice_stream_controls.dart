@@ -4,11 +4,11 @@ import 'package:flutter/widgets.dart';
 
 import '../../domain/video_decoder.dart';
 
-/// The receiving side of this account's own stream.
+/// The picture this account sees of its own stream.
 ///
-/// The sender's tile uses the same stream viewer as every other tile, but keeps
-/// the error visible instead of falling back to a local picture. That preserves
-/// the round trip Discord actually gave the room (ADR-0001).
+/// The sender's tile uses the same stream viewer as every other tile, drawing
+/// the encoder's own pictures decoded locally (ADR-0001). A decoder that would
+/// not open is shown as such rather than as an empty tile.
 final class VoiceSelfPreview {
   const VoiceSelfPreview({required this.frames, this.error});
 

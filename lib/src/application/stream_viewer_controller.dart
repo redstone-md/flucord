@@ -17,8 +17,8 @@ const int maxWatchedStreams = 4;
 
 /// Watches several Go Live streams at once, one session apiece.
 ///
-/// Room policy only: which streams are asked for, the cap, the own key's
-/// reserved slot, the stage, withdrawn and refused asks, and telling the
+/// Room policy only: which streams are asked for, the cap, the stage,
+/// withdrawn and refused asks, and telling the
 /// connection layer when a watch stops. What happens between a packet and a
 /// picture is each session's [WatchedSessionPipeline], because two senders
 /// interleaved on a single receiver splice one picture into another's, and a
@@ -27,38 +27,28 @@ final class StreamViewerController extends ChangeNotifier {
   StreamViewerController({
     required GoLiveRepository? Function() repositoryProvider,
     required VideoDecoderService Function() decoderFactory,
-    GoLiveStreamKey? Function()? ownKeyProvider,
-    void Function(GoLiveStreamKey key)? onWatchRequested,
     void Function(GoLiveStreamKey key)? onWatchStopped,
 
     /// Decodes screen-share audio for watched sessions, when the build can.
     VoiceOpusDecoderFactory? audioDecoderFactory,
   }) : _repositoryProvider = repositoryProvider,
        _decoderFactory = decoderFactory,
-       _ownKeyProvider = ownKeyProvider,
-       _onWatchRequested = onWatchRequested,
        _onWatchStopped = onWatchStopped,
        _audioDecoderFactory = audioDecoderFactory;
 
   final GoLiveRepository? Function() _repositoryProvider;
   final VideoDecoderService Function() _decoderFactory;
-  final void Function(GoLiveStreamKey key)? _onWatchRequested;
 
   /// Told which key was stopped, so whoever holds the connection drops it.
   ///
   /// Closing the session leaves the connection up: the media server goes on
   /// sending, and the client goes on decrypting, reordering and asking for
   /// retransmissions of pictures nobody draws. The connection is not this
-  /// controller's to close, so it says which key, the way
-  /// [_onWatchRequested] does for the ask.
+  /// controller's to close, so it says which key.
   final void Function(GoLiveStreamKey key)? _onWatchStopped;
 
   /// One audio receiver per watched session (ADR-0004).
   final VoiceOpusDecoderFactory? _audioDecoderFactory;
-
-  /// This account's own share. A session like any other once the sender asks
-  /// for it back, and counted towards the cap either way (ADR-0002).
-  final GoLiveStreamKey? Function()? _ownKeyProvider;
 
   /// Every key this client is holding, in the order it asked for them: the
   /// stage shows whichever of them was asked for last.
@@ -115,13 +105,7 @@ final class StreamViewerController extends ChangeNotifier {
   ///
   /// An ask is not on the stage: the endpoint it is answered with may never
   /// come, and a request Discord never answered must not take the room away.
-  ///
-  /// This account's own stream is not on the stage either, however recently it
-  /// was asked for: a sender's own pictures are drawn on their tile, because
-  /// somebody sharing is watching who is in the room rather than themselves
-  /// full screen (ADR-0001).
-  GoLiveStreamKey? get watching =>
-      _lastWhere((key) => isWatching(key) && !_isOwn(key));
+  GoLiveStreamKey? get watching => _lastWhere(isWatching);
 
   /// Whose stream was asked for most recently and has not started arriving.
   ///
@@ -164,7 +148,7 @@ final class StreamViewerController extends ChangeNotifier {
       _order.contains(key) && !_sessions.containsKey(key);
 
   /// Whether there is room for one more session.
-  bool get isFull => _held >= maxWatchedStreams;
+  bool get isFull => _order.length >= maxWatchedStreams;
 
   /// How many packets [key] has received, which is what separates "Discord
   /// was asked" from "something is arriving".
@@ -262,9 +246,7 @@ final class StreamViewerController extends ChangeNotifier {
     _cancelled.remove(key);
     _requested(key);
     _notify();
-    final asked = await _ask(repository, key);
-    if (asked) _onWatchRequested?.call(key);
-    return asked;
+    return _ask(repository, key);
   }
 
   /// Starts decoding [packets] as [key], without asking Discord again.
@@ -366,7 +348,6 @@ final class StreamViewerController extends ChangeNotifier {
     _requested(key);
     _notify();
     if (!await _ask(repository, key)) return false;
-    _onWatchRequested?.call(key);
     return attach(
       key,
       packets: packets,
@@ -449,23 +430,8 @@ final class StreamViewerController extends ChangeNotifier {
     }
   }
 
-  /// Whether [key] is this account's own share.
-  ///
-  /// It is still a normal watched session: the sender asks Discord for it on a
-  /// second connection and gets the same packets a watcher does (ADR-0001).
-  bool _isOwn(GoLiveStreamKey key) => _ownKeyProvider?.call() == key;
-
-  /// Whether [key] can take a slot now. The own key is reserved in [_held]
-  /// before its watch ask goes out, so it gets to consume that reservation
-  /// rather than being rejected for filling it.
-  bool _canHold(GoLiveStreamKey key) =>
-      isOpen(key) || (_isOwn(key) ? _held <= maxWatchedStreams : !isFull);
-
-  /// How many sessions this client is holding, own share included.
-  int get _held {
-    final own = _ownKeyProvider?.call();
-    return own == null || isOpen(own) ? _order.length : _order.length + 1;
-  }
+  /// Whether [key] can take a slot now: it holds one already, or one is free.
+  bool _canHold(GoLiveStreamKey key) => isOpen(key) || !isFull;
 
   /// The key asked for most recently of those [test] accepts.
   GoLiveStreamKey? _lastWhere(bool Function(GoLiveStreamKey key) test) {

@@ -260,10 +260,10 @@ class _ParticipantTile extends StatelessWidget {
   }
 }
 
-/// The picture the sender receives back from Discord, in place of the avatar.
+/// The sender's own picture, in place of the avatar.
 ///
-/// An error is a visible state, not a reason to quietly draw the local capture:
-/// that would make a broken sender-to-room round trip look healthy.
+/// An error is a visible state: a tile that quietly showed nothing would read
+/// as a share that is not producing pictures.
 class _SelfPreview extends StatelessWidget {
   const _SelfPreview({required this.preview});
 
@@ -351,9 +351,7 @@ class _StreamCard extends StatelessWidget {
       key: ValueKey('voice-stream-card-$userId'),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        border: Border.all(
-          color: showsLive ? accent : context.surfaces.border,
-        ),
+        border: Border.all(color: showsLive ? accent : context.surfaces.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Padding(
