@@ -336,6 +336,34 @@ void main() {
     expect(repository.started, isEmpty);
   });
 
+  test('a capture that dies ends the share and says why', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = FakeVideoEncoder(displays: 2);
+    final controller = _controller(repository, encoder: encoder);
+    expect(
+      await controller.start(channelId: 'voice-1', guildId: 'guild-1'),
+      isTrue,
+    );
+
+    encoder.fail();
+    await Future<void>.delayed(Duration.zero);
+
+    // A share left "live" over a dead capture froze for every viewer with
+    // nothing on the sender's side to say so.
+    expect(controller.status, GoLiveStatus.failure);
+    expect(
+      controller.error,
+      isA<VideoEncoderException>().having(
+        (e) => e.failure,
+        'failure',
+        VideoEncoderFailure.captureLost,
+      ),
+    );
+    expect(repository.ended, [_key]);
+    expect(encoder.stopped, 1);
+  });
+
   test('a refused stream stops the capture behind it', () async {
     final repository = _FakeRepository(failStart: true);
     addTearDown(repository.close);

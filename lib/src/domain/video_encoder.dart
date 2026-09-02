@@ -140,6 +140,11 @@ enum VideoEncoderFailure {
 
   /// The call itself was wrong — bad settings, or already running.
   state,
+
+  /// The running capture lost its source and could not get it back: the
+  /// display duplication was invalidated (a mode change, a driver reset) and
+  /// reopening it kept failing.
+  captureLost,
 }
 
 final class VideoEncoderException implements Exception {
@@ -168,6 +173,8 @@ final class VideoEncoderException implements Exception {
       'That camera is not there, or another application is using it.',
     VideoEncoderFailure.encoder => 'The encoder refused those settings.',
     VideoEncoderFailure.state => 'The encoder is already running.',
+    VideoEncoderFailure.captureLost =>
+      'The screen capture stopped and could not be reopened.',
   };
 
   String get _platformSuffix {
@@ -254,6 +261,10 @@ abstract interface class VideoEncoderService {
 
   /// Encoded frames, from the moment [start] returns until [stop].
   Stream<EncodedVideoFrame> get frames;
+
+  /// A running capture that ended on its own, with why. Nothing more arrives
+  /// on [frames] after one; the caller decides what to do with the share.
+  Stream<VideoEncoderException> get failures;
 
   /// The native pipeline's own account of itself, for the pace log. Null
   /// while nothing is capturing, and on platforms with nothing to say.

@@ -1173,6 +1173,29 @@ struct GpuScaler {
   int height = 0;
 };
 
+// Reopens the desktop duplication after AcquireNextFrame refused, retrying
+// while the capture is running. Returns false once the reopen has kept
+// failing for kReopenGiveUpNs, or the capture was closed meanwhile; the
+// refusal OpenDuplication recorded says which step.
+//
+// The retry is unbounded within that window because the common causes clear
+// themselves: a mode switch takes a second, the secure desktop goes away
+// when the prompt is answered.
+bool ReopenDuplication(FlucordVideoEncoder* state) {
+  // ponytail: one minute, then the share fails. Long enough for a UAC prompt;
+  // a driver that never comes back is reported rather than waited on forever.
+  constexpr int64_t kReopenGiveUpNs = 60LL * 1000 * 1000 * 1000;
+  constexpr DWORD kRetryMs = 250;
+  const int64_t deadline_ns = NowNs() + kReopenGiveUpNs;
+  state->duplication.Reset();
+  while (state->running.load()) {
+    if (SUCCEEDED(OpenDuplication(state))) return true;
+    if (NowNs() >= deadline_ns) return false;
+    Sleep(kRetryMs);
+  }
+  return false;
+}
+
 void CaptureLoop(FlucordVideoEncoder* state) {
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   const int frame_interval_ms = 1000 / state->config.frames_per_second;
@@ -1268,7 +1291,29 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       }
       continue;
     }
-    if (FAILED(hr)) break;
+    if (FAILED(hr)) {
+      // The duplication is invalid: a display mode change, a fullscreen
+      // exclusive game, a driver reset, the secure desktop. That is routine,
+      // and Discord's own client reopens and carries on. Exiting here left
+      // the share "live" with nothing behind it, and nobody told.
+      if (!ReopenDuplication(state)) {
+        // Given up: an empty frame is the callback's word for it, and the
+        // recorded failure says which step kept refusing. Not while closing,
+        // when the loop is leaving anyway.
+        if (state->running.load()) {
+          state->callback(state->user_data, nullptr, 0, 0, 0);
+        }
+        break;
+      }
+      // Whatever was built on the old device is rebuilt on the next frame.
+      gpu.Reset();
+      gpu_available = true;
+      staging.Reset();
+      staging_width = 0;
+      staging_height = 0;
+      next_tick_ns = NowNs();
+      continue;
+    }
 
     ComPtr<ID3D11Texture2D> texture;
     if (SUCCEEDED(resource.As(&texture))) {

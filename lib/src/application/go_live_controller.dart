@@ -84,6 +84,7 @@ final class GoLiveController extends ChangeNotifier {
        _opusCodecFactory = opusCodecFactory,
        _pingInterval = pingInterval {
     _senderEndpoints = senderEndpoints?.listen(_acceptSenderEndpoint);
+    _captureFailures = capture.failures.listen(_captureLost);
     // The preview opens and fails on its own clock, when a tile starts
     // watching; the room is told through this controller.
     _preview?.addListener(_notify);
@@ -98,6 +99,7 @@ final class GoLiveController extends ChangeNotifier {
 
   VideoCaptureLease? _lease;
   StreamSubscription<VideoEncoderSettings>? _leaseChanges;
+  StreamSubscription<VideoEncoderException>? _captureFailures;
 
   /// Where the stream is sent from.
   final GoLiveMediaPlane _media;
@@ -396,6 +398,18 @@ final class GoLiveController extends ChangeNotifier {
     }
   }
 
+  /// The capture behind the share died and could not be brought back. The
+  /// share is ended rather than left up: a stream that stays "live" while
+  /// sending nothing is what every viewer, and the sender's own preview, saw
+  /// as a picture that silently froze.
+  void _captureLost(VideoEncoderException failure) {
+    if (_lease == null || _disposed) return;
+    _diagnose('capture lost', failure);
+    _error = failure;
+    _status = GoLiveStatus.failure;
+    unawaited(stop());
+  }
+
   /// Ends the stream and stops the capture behind it.
   Future<void> stop() async {
     final repository = _repository;
@@ -438,6 +452,7 @@ final class GoLiveController extends ChangeNotifier {
     _ping?.cancel();
     _ping = null;
     unawaited(_senderEndpoints?.cancel());
+    unawaited(_captureFailures?.cancel());
     _preview?.removeListener(_notify);
     _preview?.dispose();
     unawaited(_closeSender());

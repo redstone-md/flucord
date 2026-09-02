@@ -96,6 +96,10 @@ final class VideoCaptureHub {
   /// or the ones the share's destination echoes back.
   Stream<EncodedVideoFrame> get frames => _frames.stream;
 
+  /// A capture that ended on its own. The lease is still held: whoever holds
+  /// it decides whether to release it or start again.
+  Stream<VideoEncoderException> get failures => _encoder.failures;
+
   /// The native pipeline's own account of itself, for the pace log.
   VideoEncoderDiagnostics? get diagnostics => _encoder.diagnostics;
 

@@ -45,6 +45,8 @@ final class FakeVideoEncoder
   int? _frameSink;
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<VideoEncoderException> _failures =
+      StreamController.broadcast();
 
   /// A start code and a NAL header: enough for the packetiser to build one
   /// single-unit packet from.
@@ -69,7 +71,17 @@ final class FakeVideoEncoder
         ),
   );
 
-  Future<void> close() => _frames.close();
+  /// Ends the running capture from the inside, as a lost display does.
+  void fail([
+    VideoEncoderException failure = const VideoEncoderException(
+      VideoEncoderFailure.captureLost,
+    ),
+  ]) => _failures.add(failure);
+
+  Future<void> close() async {
+    await _frames.close();
+    await _failures.close();
+  }
 
   @override
   VideoEncoderDiagnostics? get diagnostics => null;
@@ -85,6 +97,9 @@ final class FakeVideoEncoder
 
   @override
   Stream<EncodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<VideoEncoderException> get failures => _failures.stream;
 
   @override
   set nativeFrameSink(int? address) => _frameSink = address;

@@ -68,6 +68,8 @@ final class NativeVideoEncoderService
   final NativeFinalizer? _finalizer;
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<VideoEncoderException> _failures =
+      StreamController.broadcast();
 
   Pointer<Void> _handle = nullptr;
   NativeCallable<NativeFrameCallback>? _callback;
@@ -84,6 +86,9 @@ final class NativeVideoEncoderService
 
   @override
   Stream<EncodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<VideoEncoderException> get failures => _failures.stream;
 
   @override
   VideoEncoderDiagnostics? get diagnostics {
@@ -229,6 +234,17 @@ final class NativeVideoEncoderService
     // The buffer is owned from here: the encoder allocated it precisely
     // because this listener runs after the capture thread has moved on.
     try {
+      // An empty frame is the capture thread's last word: its source is gone
+      // and it gave up reopening it. The native error says which step refused.
+      if (length == 0 && !_failures.isClosed) {
+        _failures.add(
+          VideoEncoderException(
+            VideoEncoderFailure.captureLost,
+            platformCode: _bindings?.lastError?.call(),
+            platformStage: _bindings?.lastErrorStage?.call(),
+          ),
+        );
+      }
       if (length > 0 && !_frames.isClosed) {
         _frames.add(
           EncodedVideoFrame(
@@ -264,5 +280,6 @@ final class NativeVideoEncoderService
   Future<void> close() async {
     await stop();
     if (!_frames.isClosed) await _frames.close();
+    if (!_failures.isClosed) await _failures.close();
   }
 }
