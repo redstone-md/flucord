@@ -63,10 +63,32 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
+      # Inno Setup ships on the hosted Windows images; the script wraps the
+      # complete runtime directory the step above produced.
+      - name: Build Windows installer
+        id: installer
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup compiler not found at $iscc."
+          }
+          $installerName = "flucord-windows-x64-setup-$tag"
+          & $iscc "/DAppVersion=$($tag.TrimStart('v'))" "/DOutputName=$installerName" 'windows/installer/flucord.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "ISCC failed with exit code $LASTEXITCODE."
+          }
+          $installerPath = Join-Path $PWD "build/distribution/$installerName.exe"
+          if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+            throw "Installer was not produced at $installerPath."
+          }
+          "installer=$installerPath" >> $env:GITHUB_OUTPUT
+
       - name: Package release and checksums
         id: package
         run: |
           $tag = '${{ github.ref_name }}'
+          $installerPath = '${{ steps.installer.outputs.installer }}'
           $releaseDirectory = Resolve-Path 'build/windows/x64/runner/Release'
           $distributionDirectory = Join-Path $PWD 'build/distribution'
           $packageDirectory = Join-Path $distributionDirectory "flucord-windows-x64-$tag"
@@ -92,11 +114,15 @@ jobs:
           $archiveName = "flucord-windows-x64-$tag.zip"
           $archivePath = Join-Path $distributionDirectory $archiveName
           Compress-Archive -Path (Join-Path $packageDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          $checksums = ''
+          foreach ($asset in @($installerPath, $archivePath)) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLowerInvariant()
+            $checksums += "$hash  $(Split-Path -Leaf $asset)`n"
+          }
           $checksumPath = Join-Path $distributionDirectory 'SHA256SUMS.txt'
           [System.IO.File]::WriteAllText(
             $checksumPath,
-            "$hash  $archiveName`n",
+            $checksums,
             [System.Text.UTF8Encoding]::new($false)
           )
           "archive=$archivePath" >> $env:GITHUB_OUTPUT
@@ -115,6 +141,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ github.ref_name }}'
+          $installer = '${{ steps.installer.outputs.installer }}'
           $archive = '${{ steps.package.outputs.archive }}'
           $checksums = '${{ steps.package.outputs.checksums }}'
           $notes = 'build/distribution/RELEASE_NOTES.md'
@@ -129,9 +156,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to update release $tag."
             }
-            gh release upload $tag $archive $checksums --clobber
+            gh release upload $tag $installer $archive $checksums --clobber
           } else {
-            gh release create $tag $archive $checksums `
+            gh release create $tag $installer $archive $checksums `
               --verify-tag `
               --latest `
               --title "Flucord $tag" `

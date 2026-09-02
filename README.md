@@ -111,18 +111,22 @@ build/windows/x64/runner/Release/
 ### Published releases
 
 Windows x64 releases are published from semantic version tags such as
-`v0.0.4`. Each release contains the complete runtime directory as a ZIP and a
-`SHA256SUMS.txt` file. Verify the archive before extracting it:
+`v0.0.8`. Each release carries an installer, the complete runtime directory as
+a ZIP for a portable install, and a `SHA256SUMS.txt` file covering both. The
+installer (Inno Setup, `windows/installer/flucord.iss`) installs per user by
+default and upgrades an earlier install in place; `/VERYSILENT /NORESTART`
+runs it unattended. Verify an asset before running or extracting it:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-v0.0.4.zip
+Get-FileHash -Algorithm SHA256 .\flucord-windows-x64-setup-v0.0.8.exe
 Get-Content .\SHA256SUMS.txt
 ```
 
 Maintainers publish a release by updating the `pubspec.yaml` version, creating
 an annotated matching tag, and pushing it. GitHub Actions audits the complete
 repository history, analyzes and tests the project, builds Windows, generates
-detailed notes from GitHub and Git history, and publishes the assets.
+detailed notes from GitHub and Git history, compiles the installer, and
+publishes the assets.
 
 ## Architecture
 

@@ -49,5 +49,9 @@ The checked-in `dsa_pub.pem` verifies Windows update signatures. The matching
 each installer before adding its signature to the appcast:
 
 ```powershell
-dart run auto_updater:sign_update .\dist\flucord-setup.exe
+dart run auto_updater:sign_update .\build\distribution\flucord-windows-x64-setup-v0.0.8.exe
 ```
+
+The installer is the release workflow's Inno Setup build of
+`windows/installer/flucord.iss`; WinSparkle runs it with `/VERYSILENT`, which
+the script accepts.
