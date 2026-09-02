@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_soloud/flutter_soloud.dart';
 
+import '../app_log.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
 
@@ -85,7 +86,10 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
     if (frame.samples.length % _channels != 0) {
       throw StateError('Remote PCM frame is not stereo aligned');
     }
-    final source = _sources.putIfAbsent(frame.sourceId, _createSource);
+    final source = _sources.putIfAbsent(
+      frame.sourceId,
+      () => _createSource(frame.sourceId),
+    );
     try {
       _player.addAudioDataStream(source, _asBytes(frame.samples));
     } on SoLoudPcmBufferFullCppException {
@@ -112,7 +116,7 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
     if (source != null) await _player.disposeSource(source);
   }
 
-  AudioSource _createSource() {
+  AudioSource _createSource(String sourceId) {
     final source = _player.setBufferStream(
       maxBufferSizeDuration: const Duration(seconds: 5),
       bufferingType: BufferingType.released,
@@ -120,6 +124,14 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
       sampleRate: _sampleRate,
       channels: Channels.stereo,
       format: BufferType.s16le,
+      // An underrun is the playback side of a crackle: the voice pauses
+      // until [_bufferingSeconds] of sound is queued again. Logged so a gap
+      // heard in the room can be matched against the frames that fed it.
+      onBuffering: (isBuffering, handle, time) => AppLog.warning(
+        'voice.playback',
+        '$sourceId ${isBuffering ? 'underrun, buffering' : 'playing again'} '
+            'at ${time.toStringAsFixed(2)}s',
+      ),
     );
     _player.play(source);
     return source;

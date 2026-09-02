@@ -114,6 +114,9 @@ final class VoiceController extends ChangeNotifier {
   bool _isCameraOn = false;
   bool _isAudioPlaybackActive = false;
   final List<VoiceRemotePcmFrame> _pendingPcmFrames = [];
+
+  /// When each source's last frame arrived, for the gap diagnostic.
+  final Map<String, int> _lastPcmMicros = {};
   bool _isBusy = false;
   bool _disposed = false;
 
@@ -674,6 +677,7 @@ final class VoiceController extends ChangeNotifier {
   void _handleStreamAudioEnded(String sourceId) {
     if (_disposed) return;
     _pendingPcmFrames.removeWhere((frame) => frame.sourceId == sourceId);
+    _lastPcmMicros.remove(sourceId);
     final playbackService = _playbackService;
     if (playbackService == null) return;
     unawaited(_removePlaybackSource(playbackService, sourceId));
@@ -692,6 +696,7 @@ final class VoiceController extends ChangeNotifier {
 
   void _handleRemotePcm(VoiceRemotePcmFrame frame) {
     if (_disposed) return;
+    _noteArrival(frame);
     final playbackService = _playbackService;
     if (playbackService == null) return;
     if (!_isAudioPlaybackActive) {
@@ -705,6 +710,21 @@ final class VoiceController extends ChangeNotifier {
       playbackService.addPcmFrame(frame);
     } catch (error) {
       _reportBackgroundError(error);
+    }
+  }
+
+  /// A hole in a source's frames, as it reaches playback: two 20 ms frames
+  /// late is more than the 60 ms the playback buffer holds, so it is heard.
+  /// Logged with the size, so a crackle can be blamed on the frames that
+  /// stopped arriving rather than on the device that stopped playing them.
+  void _noteArrival(VoiceRemotePcmFrame frame) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final last = _lastPcmMicros[frame.sourceId];
+    _lastPcmMicros[frame.sourceId] = now;
+    if (last == null) return;
+    final gapMs = (now - last) ~/ 1000;
+    if (gapMs >= 40) {
+      AppLog.warning('voice.playback', 'pcm gap ${frame.sourceId}: ${gapMs}ms');
     }
   }
 
