@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
 import '../domain/voice_processing.dart';
+import 'voice_activity_gate.dart';
 import 'voice_audio_receiver.dart';
 import 'voice_pcm_framer.dart';
 
@@ -17,11 +18,11 @@ import 'voice_pcm_framer.dart';
 /// goes on; frames pass through as captured until it is ready, and a
 /// suppressor that fails to open or run turns the switch off and reports why.
 ///
-/// Only speech goes out. A frame is sent while the cleaned microphone is
-/// above [voiceThresholdDbfs], and for [hangoverFrames] after it last was;
-/// then the uplink finishes speaking, which is what tells the room this
-/// participant went quiet. A client that sent every frame was heard as
-/// speaking without pause by everybody else.
+/// Only speech goes out. A frame is sent while the [VoiceActivityGate] hears
+/// the cleaned microphone above the room's noise floor, and for the gate's
+/// hangover after it last did; then the uplink finishes speaking, which is
+/// what tells the room this participant went quiet. A client that sent every
+/// frame was heard as speaking without pause by everybody else.
 final class VoiceAudioPipeline {
   VoiceAudioPipeline({
     required VoiceMediaService mediaService,
@@ -42,15 +43,8 @@ final class VoiceAudioPipeline {
   /// when the microphone went quiet.
   static const int _flushFrames = 2;
 
-  /// Below this the frame counts as silence: RMS of the cleaned frame, in dB
-  /// relative to full scale. A quiet room with a decent microphone sits near
-  /// -60; speech peaks well above -30. Discord exposes this as the input
-  /// sensitivity slider; here it is one value until a slider is wanted.
-  static const double voiceThresholdDbfs = -50;
-
-  /// How many quiet frames the uplink stays open after the last loud one:
-  /// 400 ms, which carries a word's tail and the pause between two.
-  static const int hangoverFrames = 20;
+  /// How many quiet frames the uplink stays open after the last loud one.
+  static const int hangoverFrames = VoiceActivityGate.defaultHangoverFrames;
 
   final VoiceOpusEncoder _encoder;
   final VoiceAudioReceiver _receiver;
@@ -66,8 +60,8 @@ final class VoiceAudioPipeline {
   bool _enabled = false;
   bool _disposed = false;
   final StreamController<bool> _speaking = StreamController.broadcast();
+  final VoiceActivityGate _gate = VoiceActivityGate();
   bool _isSpeaking = false;
-  int _quietFrames = 0;
 
   Stream<VoiceRemotePcmFrame> get remotePcm => _receiver.remotePcm;
   Stream<Object> get errors => _errors.stream;
@@ -77,6 +71,10 @@ final class VoiceAudioPipeline {
   /// the uplink, false when the hangover runs out or the uplink is disabled.
   Stream<bool> get speaking => _speaking.stream;
   bool get isSpeaking => _isSpeaking;
+
+  /// The level the microphone has to reach to be sent, in dB relative to
+  /// full scale, as the gate has it now.
+  double get inputThresholdDbfs => _gate.threshold;
 
   /// Whether this build has a suppressor to switch on at all.
   bool get isNoiseSuppressionAvailable => _noiseSuppressorFactory != null;
@@ -92,6 +90,8 @@ final class VoiceAudioPipeline {
     final factory = _noiseSuppressorFactory;
     if (factory == null || _disposed) return;
     _noiseSuppression = enabled;
+    // Cleaned and raw frames have different floors.
+    _gate.reset();
     if (!enabled || _noiseSuppressor != null) return;
     if (_noiseSuppressorOpening case final opening?) return opening;
     final opening = _noiseSuppressorOpening = _openNoiseSuppressor(factory);
@@ -130,6 +130,7 @@ final class VoiceAudioPipeline {
     if (_disposed || _enabled == enabled) return;
     _enabled = enabled;
     _framer.reset();
+    _gate.reset();
     if (!enabled) {
       _flushNoiseSuppressor();
       _setSpeaking(false);
@@ -143,14 +144,14 @@ final class VoiceAudioPipeline {
     try {
       for (final frame in _framer.add(chunk)) {
         _suppressNoise(frame);
-        if (_rmsDbfs(frame) >= voiceThresholdDbfs) {
-          _quietFrames = 0;
+        final speech = _gate.accept(_rmsDbfs(frame));
+        if (speech) {
           _setSpeaking(true);
-        } else if (_isSpeaking && ++_quietFrames > hangoverFrames) {
+          transport.sendOpusFrame(_encoder.encode(frame));
+        } else if (_isSpeaking) {
           _setSpeaking(false);
           unawaited(_finishSpeaking(transport));
         }
-        if (_isSpeaking) transport.sendOpusFrame(_encoder.encode(frame));
       }
     } catch (error) {
       _emitError(error);
@@ -168,7 +169,6 @@ final class VoiceAudioPipeline {
   }
 
   void _setSpeaking(bool value) {
-    _quietFrames = 0;
     if (_isSpeaking == value) return;
     _isSpeaking = value;
     if (!_speaking.isClosed) _speaking.add(value);
