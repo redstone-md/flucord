@@ -12,20 +12,31 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: pwsh
+
+# Three jobs where there was one: the checks are CI's own (audit, analyze,
+# four test shards), the build runs beside them rather than after them, and
+# only publishing waits for both. Measured against the single job: about
+# nine minutes instead of seventeen.
 jobs:
-  windows-release:
-    name: Build and publish Windows x64
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+    with:
+      build: false
+    permissions:
+      contents: read
+
+  build:
+    name: Build and package Windows x64
     runs-on: windows-2025
-    timeout-minutes: 90
-    defaults:
-      run:
-        shell: pwsh
+    timeout-minutes: 60
 
     steps:
-      - name: Check out complete history
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - name: Validate tag and project version
         run: |
@@ -51,22 +62,12 @@ jobs:
         with:
           precache-windows: "true"
 
-      - name: Audit public repository history
-        run: ./tool/audit_public_repository.ps1
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
       - name: Build Windows release
         run: flutter build windows --release
 
       # Inno Setup ships on the hosted Windows images; the script wraps the
       # complete runtime directory the step above produced.
       - name: Build Windows installer
-        id: installer
         run: |
           $tag = '${{ github.ref_name }}'
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
@@ -82,17 +83,13 @@ jobs:
           if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
             throw "Installer was not produced at $installerPath."
           }
-          "installer=$installerPath" >> $env:GITHUB_OUTPUT
 
       - name: Package release and checksums
-        id: package
         run: |
           $tag = '${{ github.ref_name }}'
-          $installerPath = '${{ steps.installer.outputs.installer }}'
           $releaseDirectory = Resolve-Path 'build/windows/x64/runner/Release'
           $distributionDirectory = Join-Path $PWD 'build/distribution'
           $packageDirectory = Join-Path $distributionDirectory "flucord-windows-x64-$tag"
-          New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
           New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
           Copy-Item -Path (Join-Path $releaseDirectory '*') -Destination $packageDirectory -Recurse -Force
           Copy-Item -LiteralPath 'LICENSE', 'NOTICE' -Destination $packageDirectory -Force
@@ -111,22 +108,51 @@ jobs:
             }
           }
 
-          $archiveName = "flucord-windows-x64-$tag.zip"
-          $archivePath = Join-Path $distributionDirectory $archiveName
+          $archivePath = Join-Path $distributionDirectory "flucord-windows-x64-$tag.zip"
           Compress-Archive -Path (Join-Path $packageDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+          $installerPath = Join-Path $distributionDirectory "flucord-windows-x64-setup-$tag.exe"
           $checksums = ''
           foreach ($asset in @($installerPath, $archivePath)) {
             $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLowerInvariant()
             $checksums += "$hash  $(Split-Path -Leaf $asset)`n"
           }
-          $checksumPath = Join-Path $distributionDirectory 'SHA256SUMS.txt'
           [System.IO.File]::WriteAllText(
-            $checksumPath,
+            (Join-Path $distributionDirectory 'SHA256SUMS.txt'),
             $checksums,
             [System.Text.UTF8Encoding]::new($false)
           )
-          "archive=$archivePath" >> $env:GITHUB_OUTPUT
-          "checksums=$checksumPath" >> $env:GITHUB_OUTPUT
+
+      # Only the three assets: the unpacked package directory is the ZIP's
+      # content twice over.
+      - name: Keep the release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            build/distribution/flucord-windows-x64-setup-${{ github.ref_name }}.exe
+            build/distribution/flucord-windows-x64-${{ github.ref_name }}.zip
+            build/distribution/SHA256SUMS.txt
+
+  publish:
+    name: Publish GitHub release
+    needs: [checks, build]
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      # The notes read the tag's history, so this job checks out all of it.
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: build/distribution
 
       - name: Generate detailed release notes
         env:
@@ -141,10 +167,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ github.ref_name }}'
-          $installer = '${{ steps.installer.outputs.installer }}'
-          $archive = '${{ steps.package.outputs.archive }}'
-          $checksums = '${{ steps.package.outputs.checksums }}'
+          $installer = "build/distribution/flucord-windows-x64-setup-$tag.exe"
+          $archive = "build/distribution/flucord-windows-x64-$tag.zip"
+          $checksums = 'build/distribution/SHA256SUMS.txt'
           $notes = 'build/distribution/RELEASE_NOTES.md'
+          foreach ($asset in @($installer, $archive, $checksums)) {
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Release asset is missing: $asset"
+            }
+          }
           gh release view $tag --json id *> $null
           $releaseExists = $LASTEXITCODE -eq 0
           if ($releaseExists) {

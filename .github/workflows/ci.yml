@@ -13,6 +13,15 @@ on:
       - "docs/**"
       - ".github/release.yml"
   workflow_dispatch:
+  # The release calls this for its checks, so a tag is tested by exactly the
+  # workflow main is.
+  workflow_call:
+    inputs:
+      build:
+        description: Whether to build Windows too; the release builds on its own.
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -66,8 +75,8 @@ jobs:
     name: Build Windows x64
     # A build break should surface on main, not at the release tag; pull
     # requests get analyze and tests, which is where nearly everything fails;
-    # a manual dispatch builds too.
-    if: github.event_name != 'pull_request'
+    # a manual dispatch builds too. A caller that builds for itself opts out.
+    if: github.event_name != 'pull_request' && inputs.build != false
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
