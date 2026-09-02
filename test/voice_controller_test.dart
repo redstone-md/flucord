@@ -328,6 +328,19 @@ void main() {
         controller.connect(guildId: 'guild-1', channelId: 'voice-1');
         async.flushMicrotasks();
         signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+        signaling.emit(
+          const VoiceParticipantStateEvent(
+            userId: 'user-1',
+            guildId: 'guild-1',
+            channelId: 'voice-1',
+            selfMuted: false,
+            selfDeafened: false,
+            serverMuted: false,
+            serverDeafened: false,
+            isStreaming: false,
+            isVideoEnabled: false,
+          ),
+        );
         async.flushMicrotasks();
 
         signaling.addRemote('user-1', [7]);

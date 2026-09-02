@@ -68,6 +68,10 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   StreamSubscription<EncodedVideoFrame>? _encoded;
   StreamSubscription<DecodedVideoFrame>? _decoded;
   bool _awaitingKeyframe = true;
+
+  /// Asked once per share, when the tile first opens: a decoder reopened
+  /// after the window came back waits for the next natural keyframe instead
+  /// of costing every viewer a full picture at the sender's bitrate.
   bool _askedForKeyframe = false;
   Object? _error;
 
@@ -87,6 +91,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     await _close();
     _source = (encoded: encoded, requestKeyframe: requestKeyframe);
     _error = null;
+    _askedForKeyframe = false;
     if (_shown) await _open();
   }
 
@@ -131,7 +136,6 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _decoder = decoder;
     _error = null;
     _awaitingKeyframe = true;
-    _askedForKeyframe = false;
     try {
       await decoder.start();
     } on Object catch (error) {

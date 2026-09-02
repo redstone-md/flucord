@@ -553,12 +553,15 @@ final class VoiceController extends ChangeNotifier {
       case VoiceParticipantStateEvent():
         _applyParticipantState(event);
       case VoiceSpeakingEvent():
-        // Only the SSRC is taken: the opcode says who started sending and
-        // never reliably who stopped, so speaking is read off the audio.
+        // The opcode maps the SSRC, and says who started sending, never
+        // reliably who stopped: so it lights the ring the way a frame does,
+        // and the hangover takes it down. That is also all a deafened
+        // client gets, since no audio is sent to it.
         final participant =
             _participants[event.userId] ??
             VoiceParticipant(userId: event.userId);
         _participants[event.userId] = participant.copyWith(ssrc: event.ssrc);
+        if (event.speakingFlags != 0) _heard(event.userId);
       case VoiceUserDisconnectedEvent():
         _participants.remove(event.userId);
         _speakingTimers.remove(event.userId)?.cancel();
@@ -736,9 +739,10 @@ final class VoiceController extends ChangeNotifier {
   }
 
   void _setSpeaking(String userId, bool speaking) {
-    final participant =
-        _participants[userId] ?? VoiceParticipant(userId: userId);
-    if (participant.isSpeaking == speaking) return;
+    // Somebody not in the roster is somebody who left: their last frames
+    // arrive after the roster said so, and must not put them back.
+    final participant = _participants[userId];
+    if (participant == null || participant.isSpeaking == speaking) return;
     _participants[userId] = participant.copyWith(isSpeaking: speaking);
     _notify();
   }

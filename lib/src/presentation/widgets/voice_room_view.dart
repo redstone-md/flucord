@@ -412,11 +412,14 @@ class _VoiceStage extends StatelessWidget {
         ),
       ],
     );
-    if (onStage == null || onClearFocus == null) return room;
-    // Takes the keyboard focus as the stage appears, so Escape reaches it.
+    // The same wrapper whether or not there is a stage: a root that changed
+    // shape remounted every tile and viewer on each click. Escape reaches
+    // the binding while the room holds the keyboard focus, which it takes
+    // when it appears.
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): onClearFocus,
+        if (onStage != null && onClearFocus != null)
+          const SingleActivator(LogicalKeyboardKey.escape): onClearFocus,
       },
       child: Focus(autofocus: true, child: room),
     );

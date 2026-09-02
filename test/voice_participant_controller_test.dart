@@ -21,15 +21,15 @@ void main() {
     expect(controller.participants.single.userId, 'member-1');
     expect(controller.participants.single.isMuted, isTrue);
 
-    // The speaking opcode maps the SSRC and nothing more: Discord announces
-    // who started sending and never reliably who stopped, so a flag taken
-    // from it would stay lit for the rest of the call.
+    // The speaking opcode maps the SSRC and lights the ring the way a voice
+    // frame does: Discord announces who started sending and never reliably
+    // who stopped, so the hangover, not the opcode, takes it down.
     signaling.emit(
       const VoiceSpeakingEvent(userId: 'member-1', ssrc: 42, speakingFlags: 1),
     );
     await _flushEvents();
     expect(controller.participants.single.ssrc, 42);
-    expect(controller.participants.single.isSpeaking, isFalse);
+    expect(controller.participants.single.isSpeaking, isTrue);
 
     signaling.emit(const VoiceUserDisconnectedEvent('member-1'));
     await _flushEvents();

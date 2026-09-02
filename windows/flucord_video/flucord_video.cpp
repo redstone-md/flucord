@@ -673,6 +673,12 @@ void DeliverEncodedSample(FlucordVideoEncoder* state, IMFSample* produced) {
   BYTE* data = nullptr;
   DWORD length = 0;
   if (FAILED(contiguous->Lock(&data, nullptr, &length))) return;
+  if (length == 0) {
+    // Nothing to send, and a null buffer with no length is the end-of-capture
+    // word to Dart; an empty sample must not say it.
+    contiguous->Unlock();
+    return;
+  }
   LONGLONG timestamp = 0;
   produced->GetSampleTime(&timestamp);
   auto* owned = static_cast<uint8_t*>(malloc(length));
@@ -1191,7 +1197,12 @@ bool ReopenDuplication(FlucordVideoEncoder* state) {
   while (state->running.load()) {
     if (SUCCEEDED(OpenDuplication(state))) return true;
     if (NowNs() >= deadline_ns) return false;
-    Sleep(kRetryMs);
+    // In steps, so a close during the wait is answered within one step
+    // rather than after the whole retry interval.
+    for (DWORD slept = 0; slept < kRetryMs && state->running.load();
+         slept += 50) {
+      Sleep(50);
+    }
   }
   return false;
 }

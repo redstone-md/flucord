@@ -148,11 +148,21 @@ final class VoiceAudioPipeline {
           _setSpeaking(true);
         } else if (_isSpeaking && ++_quietFrames > hangoverFrames) {
           _setSpeaking(false);
-          unawaited(transport.finishSpeaking());
+          unawaited(_finishSpeaking(transport));
         }
         if (_isSpeaking) transport.sendOpusFrame(_encoder.encode(frame));
       }
     } catch (error) {
+      _emitError(error);
+    }
+  }
+
+  /// Ends the burst; a transport that refuses is reported like any other
+  /// frame-path failure rather than thrown out of an unawaited future.
+  Future<void> _finishSpeaking(VoiceAudioTransport transport) async {
+    try {
+      await transport.finishSpeaking();
+    } on Object catch (error) {
       _emitError(error);
     }
   }
@@ -201,7 +211,12 @@ final class VoiceAudioPipeline {
   /// actually being sent: a filter that is still loading has nothing inside.
   void _flushNoiseSuppressor() {
     final transport = _transport;
-    if (transport == null || _noiseSuppressor == null || !_noiseSuppression) {
+    // Only mid-burst: a closed gate has already pushed silence through the
+    // model, and a frame sent now would open a burst just to end it.
+    if (transport == null ||
+        _noiseSuppressor == null ||
+        !_noiseSuppression ||
+        !_isSpeaking) {
       return;
     }
     try {

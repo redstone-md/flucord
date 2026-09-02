@@ -77,17 +77,26 @@ final class VoiceRoomCoordination {
   /// asks would offer "Stop watching" on streams it no longer holds, and
   /// carry withdrawals into the next room.
   void _endWatchesWithRoom() {
-    if (_voice.connectionStatus != VoiceConnectionStatus.disconnected) return;
+    if (_roomIsUp) return;
     unawaited(_streamViewer.stop());
   }
+
+  /// A connection that failed ends the room the same as one that was left:
+  /// the voice controller drops its roster and transport on both.
+  bool get _roomIsUp => switch (_voice.connectionStatus) {
+    VoiceConnectionStatus.disconnected ||
+    VoiceConnectionStatus.failure => false,
+    _ => true,
+  };
 
   /// A stage showing somebody who left, or a room this client left, is a
   /// stage showing nothing.
   void _keepFocusInRoom() {
-    if (_voice.connectionStatus == VoiceConnectionStatus.disconnected) {
+    if (!_roomIsUp) {
       _focus.clear();
       return;
     }
+    if (_focus.userId == null) return;
     _focus.keepAmong(_voice.participants.map((p) => p.userId));
   }
 

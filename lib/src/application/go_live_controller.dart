@@ -300,7 +300,11 @@ final class GoLiveController extends ChangeNotifier {
   }) async {
     _bind();
     final repository = _repository;
-    if (repository == null || _status != GoLiveStatus.idle) return false;
+    // A failure is over once the next attempt starts; nothing else is.
+    if (repository == null ||
+        (_status != GoLiveStatus.idle && _status != GoLiveStatus.failure)) {
+      return false;
+    }
     _status = GoLiveStatus.creating;
     _error = null;
     _notify();

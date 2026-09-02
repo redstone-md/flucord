@@ -234,9 +234,10 @@ final class NativeVideoEncoderService
     // The buffer is owned from here: the encoder allocated it precisely
     // because this listener runs after the capture thread has moved on.
     try {
-      // An empty frame is the capture thread's last word: its source is gone
-      // and it gave up reopening it. The native error says which step refused.
-      if (length == 0 && !_failures.isClosed) {
+      // No buffer at all is the capture thread's last word: its source is
+      // gone and it gave up reopening it. The native error says which step
+      // refused. An encoder sample that happens to be empty carries a buffer.
+      if (data == nullptr && length == 0 && !_failures.isClosed) {
         _failures.add(
           VideoEncoderException(
             VideoEncoderFailure.captureLost,
