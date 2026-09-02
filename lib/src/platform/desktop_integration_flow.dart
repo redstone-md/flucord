@@ -114,8 +114,16 @@ final class DesktopIntegrationFlow
     _surface?.setWindowVisible(true);
   }
 
+  /// A focused window is on screen, whatever else the plugin said about it:
+  /// on Windows a maximized window that was minimized comes back with
+  /// `SIZE_MAXIMIZED`, which window_manager reports as `maximize`, never as
+  /// `restore`. Read only from `restore`, the window stayed "off screen" until
+  /// the next launch and every watched stream stayed suspended (ADR-0003).
   @override
-  void onWindowFocus() => _surface?.setApplicationActive(true);
+  void onWindowFocus() {
+    _surface?.setApplicationActive(true);
+    _surface?.setWindowVisible(true);
+  }
 
   @override
   void onWindowBlur() => _surface?.setApplicationActive(false);
@@ -125,6 +133,12 @@ final class DesktopIntegrationFlow
 
   @override
   void onWindowRestore() => _surface?.setWindowVisible(true);
+
+  @override
+  void onWindowMaximize() => _surface?.setWindowVisible(true);
+
+  @override
+  void onWindowUnmaximize() => _surface?.setWindowVisible(true);
 
   @override
   void onWindowClose() {

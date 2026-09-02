@@ -116,6 +116,26 @@ void main() {
     expect(surface.activeCalls, [true, false]);
   });
 
+  test('coming back from minimized is visible however the window returns', () async {
+    final intake = _FakeIntake(const []);
+    final flow = DesktopIntegrationFlow(protocolIntake: intake);
+    addTearDown(flow.dispose);
+    await flow.initialize();
+
+    final surface = _RecordingSurface();
+    flow.attach(surface);
+
+    // A maximized window minimized and brought back reports `maximize`, not
+    // `restore`, and whatever brought it back gave it the focus. Either is
+    // on screen again.
+    await sendWindowEvent('minimize');
+    await sendWindowEvent('maximize');
+    await sendWindowEvent('minimize');
+    await sendWindowEvent('focus');
+
+    expect(surface.visibilityCalls, [false, true, false, true]);
+  });
+
   test('closing the window hides to tray and marks the app inactive', () async {
     final intake = _FakeIntake(const []);
     final flow = DesktopIntegrationFlow(protocolIntake: intake);
