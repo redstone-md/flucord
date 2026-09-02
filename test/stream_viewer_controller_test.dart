@@ -151,6 +151,83 @@ void main() {
     expect(decoder.stopped, 1);
   });
 
+  test('stopping a watch tells Discord, so the next ask is answered', () async {
+    final repository = _FakeRepository();
+    final controller = StreamViewerController(
+      repositoryProvider: () => repository,
+      decoderFactory: () => _FakeDecoder(),
+    );
+    addTearDown(controller.dispose);
+    await controller.watch(_key, packets: const Stream.empty());
+
+    await controller.stop(_key);
+
+    // Discord keeps this client on the viewer list until it is told
+    // otherwise, and answers no second STREAM_WATCH for a stream it thinks
+    // is already being watched.
+    expect(repository.stoppedWatching, [_key]);
+    expect(repository.ended, isEmpty, reason: 'the stream is not ours to end');
+
+    expect(await controller.requestWatch(_key), isTrue);
+    expect(repository.watched, [_key, _key]);
+  });
+
+  test('an ask withdrawn before it arrived is told to Discord too', () async {
+    final repository = _FakeRepository();
+    final controller = StreamViewerController(
+      repositoryProvider: () => repository,
+      decoderFactory: () => _FakeDecoder(),
+    );
+    addTearDown(controller.dispose);
+    await controller.requestWatch(_key);
+
+    await controller.stop(_key);
+
+    expect(repository.stoppedWatching, [_key]);
+  });
+
+  test(
+    'asking again while the previous watch closes is not withdrawn',
+    () async {
+      final repository = _FakeRepository();
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () => _FakeDecoder(),
+      );
+      addTearDown(controller.dispose);
+      await controller.requestWatch(_key);
+
+      // Stop and re-ask in the same turn, the way a double press lands.
+      final stopping = controller.stop(_key);
+      final asking = controller.requestWatch(_key);
+      await stopping;
+      expect(await asking, isTrue);
+
+      expect(
+        await controller.attach(_key, packets: const Stream.empty()),
+        isTrue,
+        reason: 'the withdrawal was against the first ask, not this one',
+      );
+    },
+  );
+
+  test('the connection is told to drop before the decoder is let go', () {
+    final stopped = <GoLiveStreamKey>[];
+    final controller = StreamViewerController(
+      repositoryProvider: () => _FakeRepository(),
+      decoderFactory: () => _FakeDecoder(),
+      onWatchStopped: stopped.add,
+    );
+    addTearDown(controller.dispose);
+    unawaited(controller.watch(_key, packets: const Stream.empty()));
+
+    unawaited(controller.stop(_key));
+
+    // Synchronous with the decision: a connection Discord reopens for a new
+    // ask meanwhile must not be the one this stop takes down.
+    expect(stopped, [_key]);
+  });
+
   test(
     'the stream asked for last takes the stage, the other stays open',
     () async {
@@ -1443,6 +1520,9 @@ final class _FakeRepository implements GoLiveRepository {
   /// empty: what is let go is this client's decoder, not the stream.
   final List<GoLiveStreamKey> ended = [];
 
+  /// Watches this client withdrew on Discord's side.
+  final List<GoLiveStreamKey> stoppedWatching = [];
+
   @override
   Map<String, GoLiveStream> get streams => const {};
 
@@ -1473,4 +1553,8 @@ final class _FakeRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async => ended.add(key);
+
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async =>
+      stoppedWatching.add(key);
 }

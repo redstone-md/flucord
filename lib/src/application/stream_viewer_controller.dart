@@ -361,7 +361,11 @@ final class StreamViewerController extends ChangeNotifier {
   /// Without a key is what leaving a room needs: everything this client is
   /// holding goes.
   Future<void> stop([GoLiveStreamKey? key]) async {
-    for (final each in key == null ? [..._order] : [key]) {
+    final targets = key == null ? [..._order] : [key];
+    // The room is left far more often than a watch is held through it.
+    if (targets.isEmpty) return;
+    final repository = _repositoryProvider();
+    for (final each in targets) {
       final wasOpen = _order.remove(each);
       final arrived = _sessions.containsKey(each);
       // A control that answers a press by withdrawing a held ask looks
@@ -372,7 +376,9 @@ final class StreamViewerController extends ChangeNotifier {
           'arrived $arrived',
         );
       }
-      await _teardown(each);
+      // Everything decided about this stop is recorded before the first
+      // await: an ask made again meanwhile is a new one, and must find
+      // neither a withdrawal filed against it nor its connection taken down.
       _onWatchStopped?.call(each);
       if (wasOpen && !arrived) {
         // Withdrawing an ask Discord never answered has to be both announced
@@ -381,6 +387,13 @@ final class StreamViewerController extends ChangeNotifier {
         // dropped here instead of taking the stage.
         _cancelled.add(each);
       }
+      // Discord keeps a watcher on its list until told, and then answers no
+      // second ask for that stream. Told for a held ask that never arrived
+      // too: the answer may still be on its way.
+      if (wasOpen && repository != null) {
+        unawaited(_withdraw(repository, each));
+      }
+      await _teardown(each);
     }
     // Once for the whole stop, not once per session: the room is rebuilt
     // either way, and it cannot be drawn between the two.
@@ -414,6 +427,19 @@ final class StreamViewerController extends ChangeNotifier {
   void _admitted(GoLiveStreamKey key) {
     if (!_order.contains(key)) _order.add(key);
     if (_refused == key) _refused = null;
+  }
+
+  Future<void> _withdraw(
+    GoLiveRepository repository,
+    GoLiveStreamKey key,
+  ) async {
+    try {
+      await repository.stopWatching(key);
+    } on Object catch (error) {
+      // The gateway may already be gone when a room is left; the watch is
+      // over on Discord's side either way.
+      _diagnose('watch withdrawal not sent ${key.userId}: $error');
+    }
   }
 
   Future<bool> _ask(GoLiveRepository repository, GoLiveStreamKey key) async {

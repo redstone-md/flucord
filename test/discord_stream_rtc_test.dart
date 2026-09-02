@@ -625,6 +625,9 @@ final class _FakeRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
+
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async {}
 }
 
 /// The socket factory seam, faked on the stream side only: hands back the

@@ -594,6 +594,7 @@ final class AppComposition {
       overlay: voiceOverlay,
       streamerMode: streamerMode,
       goLive: goLive,
+      streamViewer: streamViewer,
     );
     _teardown.add(voiceRoomCoordination.dispose);
     // A window nothing of is on screen stops drawing what it is watching,

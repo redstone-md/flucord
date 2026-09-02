@@ -1,6 +1,5 @@
 import 'dart:async';
 
-
 import '../../domain/go_live_stream.dart';
 import '../../app_log.dart';
 
@@ -91,6 +90,10 @@ final class DiscordGoLiveService implements GoLiveRepository {
       _gateway.sendStreamWatch(key.value);
 
   @override
+  Future<void> stopWatching(GoLiveStreamKey key) async =>
+      _gateway.sendStreamDelete(key.value);
+
+  @override
   Future<void> pingStream(GoLiveStreamKey key) async =>
       _gateway.sendStreamPing(key.value);
 
@@ -145,9 +148,9 @@ final class DiscordGoLiveService implements GoLiveRepository {
     AppLog.warning(
       'stream',
       '$name fields: ${data.keys.join(', ')}'
-      '${name == 'STREAM_CREATE' ? ' rtc types: '
-                '${data['rtc_server_id'].runtimeType}/'
-                '${data['rtc_channel_id'].runtimeType}' : ''}',
+          '${name == 'STREAM_CREATE' ? ' rtc types: '
+                    '${data['rtc_server_id'].runtimeType}/'
+                    '${data['rtc_channel_id'].runtimeType}' : ''}',
     );
     return accept(data);
   }
@@ -201,9 +204,9 @@ final class DiscordGoLiveService implements GoLiveRepository {
       AppLog.warning(
         'stream',
         'server update: create seen=${created != null} '
-        'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
-        'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false} '
-        'token=…$tokenTail',
+            'rtc server=${created?.rtcServerId.isNotEmpty ?? false} '
+            'rtc channel=${created?.rtcChannelId.isNotEmpty ?? false} '
+            'token=…$tokenTail',
       );
       _servers.add(
         GoLiveServer(

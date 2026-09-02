@@ -367,11 +367,11 @@ void main() {
     expect(heard.single.userId, 'somebody-else');
     expect(heard.single.samples, [7]);
 
-    // Audio stops with the watched session.
+    // Audio stops with the watched session: its decoder is let go, and the
+    // connection it came off is closed with it.
     await wiring.viewer.stop(_otherKey);
     expect(wiring.audioCodecs.disposed, 1);
-    connection.emitAudio('somebody-else', [8]);
-    await Future<void>.delayed(Duration.zero);
+    expect(connection.closed, isTrue);
     expect(heard, hasLength(1));
   });
 
@@ -614,6 +614,9 @@ final class _FakeRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
+
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async {}
 }
 
 /// The socket factory seam, faked on the stream side only.

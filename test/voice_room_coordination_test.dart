@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/remote_camera_controller.dart';
+import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/streamer_mode_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/voice_overlay_controller.dart';
@@ -16,6 +17,7 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
 
 import 'support/fake_video_encoder.dart';
+import 'support/stream_room_harness.dart';
 
 void main() {
   test('remote cameras follow the room connection', () async {
@@ -51,6 +53,37 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     expect(cameras.isListening, isFalse, reason: 'rules die with the room');
+  });
+
+  test('watched streams end with the room', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final voice = VoiceController(
+      const NoopVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    final viewer = StreamViewerController(
+      repositoryProvider: _FakeGoLiveRepository.new,
+      decoderFactory: StreamRoomDecoder.new,
+    );
+    addTearDown(viewer.dispose);
+    final room = _buildRoom(voice: voice, streamViewer: viewer);
+    addTearDown(room.dispose);
+    await voice.refreshSignalingService();
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+    );
+    const key = GoLiveStreamKey.call(channelId: 'c', userId: 'them');
+    await viewer.requestWatch(key);
+    expect(viewer.isOpen(key), isTrue);
+
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    // Discord forgets the room's watchers with the room; a client that did
+    // not would offer "Stop watching" on a stream it no longer holds.
+    expect(viewer.isOpen(key), isFalse);
   });
 
   test('the overlay redraws whenever the room changes', () async {
@@ -119,6 +152,7 @@ VoiceRoomCoordination _buildRoom({
   VoiceOverlayController? overlayController,
   StreamerModeController? streamerMode,
   GoLiveController? goLive,
+  StreamViewerController? streamViewer,
 }) {
   final resolvedVoice =
       voice ??
@@ -147,6 +181,12 @@ VoiceRoomCoordination _buildRoom({
         GoLiveController(
           repositoryProvider: () => null,
           capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+        ),
+    streamViewer:
+        streamViewer ??
+        StreamViewerController(
+          repositoryProvider: () => null,
+          decoderFactory: () => throw StateError('unused'),
         ),
   );
   return room;
@@ -245,6 +285,9 @@ class _FakeGoLiveRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async {}
+
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async {}
 }
 
 class _MemoryStreamerModeSettings implements StreamerModeRepository {

@@ -172,6 +172,10 @@ abstract interface class GoLiveRepository {
   /// Asks to watch somebody else's stream.
   Future<void> watchStream(GoLiveStreamKey key);
 
+  /// Withdraws this client from a stream's watchers. Discord answers no
+  /// second [watchStream] for a stream it still counts this client under.
+  Future<void> stopWatching(GoLiveStreamKey key);
+
   /// Tells Discord the stream is still alive. Sent on a timer while live.
   Future<void> pingStream(GoLiveStreamKey key);
 

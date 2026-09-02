@@ -321,6 +321,9 @@ final class _FakeRepository implements GoLiveRepository {
   @override
   Future<void> endStream(GoLiveStreamKey key) async => ended.add(key);
 
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async {}
+
   Future<void> close() async {
     await _updates.close();
     await _servers.close();

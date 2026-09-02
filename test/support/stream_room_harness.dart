@@ -339,6 +339,9 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
 
   @override
   Future<void> endStream(GoLiveStreamKey key) async => ended.add(key);
+
+  @override
+  Future<void> stopWatching(GoLiveStreamKey key) async {}
 }
 
 final class StreamRoomDecoder implements VideoDecoderService {
