@@ -69,8 +69,9 @@ final class GoLiveController extends ChangeNotifier {
     /// The endpoints this account's own stream is to be sent on.
     Stream<DiscordSenderEndpoint>? senderEndpoints,
 
-    /// What draws the sender their own picture (ADR-0001). Null on a build
-    /// that cannot decode, whose sender tile says so.
+    /// What draws the sender their own picture, while their tile is on
+    /// screen (ADR-0001). Null on a build that cannot decode, whose sender
+    /// tile says so.
     GoLiveSelfPreview? selfPreview,
     SystemAudioCapture systemAudio = const UnavailableSystemAudioCapture(),
     VoiceOpusCodecFactory? opusCodecFactory,
@@ -83,6 +84,9 @@ final class GoLiveController extends ChangeNotifier {
        _opusCodecFactory = opusCodecFactory,
        _pingInterval = pingInterval {
     _senderEndpoints = senderEndpoints?.listen(_acceptSenderEndpoint);
+    // The preview opens and fails on its own clock, when a tile starts
+    // watching; the room is told through this controller.
+    _preview?.addListener(_notify);
   }
 
   final GoLiveRepository? Function() _repositoryProvider;
@@ -305,9 +309,9 @@ final class GoLiveController extends ChangeNotifier {
       // refuses the second with E_INVALIDARG, which is what the room used
       // to report as "that display is no longer attached".
       //
-      // The preview listens before the capture starts, so the encoder's
-      // first keyframe is not missed; a decoder that will not open is the
-      // preview's to report, not the share's.
+      // The preview is told before the capture starts, so a tile already on
+      // screen sees the encoder's first keyframe; a decoder that will not
+      // open is the preview's to report, not the share's.
       await _preview?.start(
         _capture.frames,
         requestKeyframe: () async => await _lease?.requestKeyframe(),
@@ -434,7 +438,8 @@ final class GoLiveController extends ChangeNotifier {
     _ping?.cancel();
     _ping = null;
     unawaited(_senderEndpoints?.cancel());
-    unawaited(_preview?.dispose());
+    _preview?.removeListener(_notify);
+    _preview?.dispose();
     unawaited(_closeSender());
     unawaited(_leaseChanges?.cancel());
     unawaited(_updates?.cancel());

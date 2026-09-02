@@ -186,6 +186,11 @@ void main() {
     );
 
     await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+    // Nobody is looking yet: the share runs, the decoder does not.
+    expect(decoder.started, 0);
+    final tile = controller.previewFrames.listen((_) {});
+    addTearDown(tile.cancel);
+    await Future<void>.delayed(Duration.zero);
     expect(decoder.started, 1);
     expect(controller.previewError, isNull);
 
