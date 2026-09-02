@@ -391,6 +391,8 @@ final class AppComposition {
         selfPreview: GoLiveSelfPreview(
           decoderFactory: () =>
               bootstrap.videoDecoderService ?? NativeVideoDecoderService(),
+          // Not decoded while the window is behind the game or minimized.
+          window: windowVisible,
         ),
         systemAudio: Platform.isWindows
             ? WindowsSystemAudioCapture()

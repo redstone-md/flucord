@@ -77,11 +77,13 @@ final class FlucordAppSurface extends ChangeNotifier
   @override
   void handleProtocolUri(Uri uri) => _onProtocolUri(uri);
 
-  /// Marks the app active or inactive for the chat: whether the room is being
-  /// looked at decides what is read. Focus is the platform fact behind it.
+  /// Marks the app active or inactive: whether the room is being looked at
+  /// decides what the chat reads, and whether the sender's own preview is
+  /// worth decoding. Focus is the platform fact behind it.
   @override
   void setApplicationActive(bool value) {
     _chat.setApplicationActive(value);
+    _visible.setFocused(value);
   }
 
   /// Tells whether anything of the window is on screen, which watched

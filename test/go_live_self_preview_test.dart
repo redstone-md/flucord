@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flucord/src/application/go_live_self_preview.dart';
+import 'package:flucord/src/application/window_visible.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,6 +90,44 @@ void main() {
       expect(decoder.submitted, hasLength(2));
     },
   );
+
+  test('a window behind the game, or minimized, pays no decoder', () async {
+    final decoder = FakeVideoDecoder();
+    final window = WindowVisible();
+    final preview = GoLiveSelfPreview(
+      decoderFactory: () => decoder,
+      window: window,
+    );
+    addTearDown(preview.dispose);
+    final encoded = StreamController<EncodedVideoFrame>.broadcast();
+    addTearDown(encoded.close);
+    await preview.start(encoded.stream);
+    final watching = preview.frames.listen((_) {});
+    addTearDown(watching.cancel);
+    await Future<void>.delayed(Duration.zero);
+    expect(decoder.started, 1);
+
+    // The sender clicks into their game: the tile is still mounted, and
+    // nobody is looking at it.
+    window.setFocused(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(preview.isRunning, isFalse);
+    expect(decoder.stopped, 1);
+    encoded.add(_frame(keyframe: true));
+    await Future<void>.delayed(Duration.zero);
+    expect(decoder.submitted, isEmpty);
+
+    // Back to the window: a fresh decoder, fed from the next keyframe.
+    window.setFocused(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(preview.isRunning, isTrue);
+    expect(decoder.started, 2);
+
+    // Minimized while focused is still nobody looking.
+    window.setInView(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(preview.isRunning, isFalse);
+  });
 
   test('the share ending stops the decoder under a watching tile', () async {
     final decoder = FakeVideoDecoder();

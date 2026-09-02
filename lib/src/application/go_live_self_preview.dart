@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/video_decoder.dart';
 import '../domain/video_encoder.dart';
+import 'window_visible.dart';
 
 /// The picture a sender sees of their own share.
 ///
@@ -12,25 +13,34 @@ import '../domain/video_encoder.dart';
 /// never answered, so the preview is what left the encoder, and the pace line
 /// is what says whether it also left the machine.
 ///
-/// Decoded only while somebody is listening on [frames], which is the tile
-/// being on screen: a sender who has moved to another channel is not paying a
+/// Decoded only while somebody is listening on [frames] and the window is
+/// being looked at: a sender who has moved to another channel, or who is in
+/// their game with this window behind it or minimized, is not paying a
 /// decoder for a picture nobody draws. [start] and [stop] follow the share;
-/// the listener decides whether the decoder is open in between.
+/// the listener and the window decide whether the decoder is open in between.
 ///
 /// A decoder needs a keyframe to start from, so frames are held back until one
 /// passes; if the first frame seen is not one, the encoder is asked for one
 /// rather than waiting a whole group of pictures for the next.
 final class GoLiveSelfPreview extends ChangeNotifier {
-  GoLiveSelfPreview({required VideoDecoderService Function() decoderFactory})
-    : _decoderFactory = decoderFactory {
+  GoLiveSelfPreview({
+    required VideoDecoderService Function() decoderFactory,
+
+    /// The window the tile is drawn in. Without one, the listener alone
+    /// decides.
+    WindowVisible? window,
+  }) : _decoderFactory = decoderFactory,
+       _window = window {
     _frames = StreamController.broadcast(
       onListen: _wanted,
       onCancel: _unwanted,
     );
     frames = _frames.stream;
+    _window?.addListener(_windowChanged);
   }
 
   final VideoDecoderService Function() _decoderFactory;
+  final WindowVisible? _window;
   late final StreamController<DecodedVideoFrame> _frames;
 
   /// Decoded pictures of the running share. Empty between shares, and while
@@ -49,6 +59,10 @@ final class GoLiveSelfPreview extends ChangeNotifier {
 
   /// Whether anything is listening on [frames].
   bool _watched = false;
+
+  /// Whether the picture would be seen: a tile is listening, and the window
+  /// it is in is on screen and focused.
+  bool get _shown => _watched && (_window?.isLookedAt ?? true);
 
   VideoDecoderService? _decoder;
   StreamSubscription<EncodedVideoFrame>? _encoded;
@@ -73,7 +87,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     await _close();
     _source = (encoded: encoded, requestKeyframe: requestKeyframe);
     _error = null;
-    if (_watched) await _open();
+    if (_shown) await _open();
   }
 
   /// Follows the share ending.
@@ -84,12 +98,25 @@ final class GoLiveSelfPreview extends ChangeNotifier {
 
   void _wanted() {
     _watched = true;
-    if (_source != null) unawaited(_open());
+    _reconcile();
   }
 
   void _unwanted() {
     _watched = false;
-    unawaited(_close());
+    _reconcile();
+  }
+
+  void _windowChanged() => _reconcile();
+
+  /// Opens or closes the decoder to match whether the picture is seen. Going
+  /// dark and coming back reopen it from a keyframe, which is what a decoder
+  /// that missed a stretch of the stream needs anyway.
+  void _reconcile() {
+    if (_shown) {
+      if (_source != null) unawaited(_open());
+    } else {
+      unawaited(_close());
+    }
   }
 
   Future<void> _open() async {
@@ -154,6 +181,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
 
   @override
   void dispose() {
+    _window?.removeListener(_windowChanged);
     _source = null;
     unawaited(_close());
     unawaited(_frames.close());
