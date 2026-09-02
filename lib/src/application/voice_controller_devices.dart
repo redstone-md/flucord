@@ -83,6 +83,48 @@ extension VoiceControllerDevices on VoiceController {
     });
   }
 
+  /// Whether this build can clean the microphone at all.
+  bool get isNoiseSuppressionAvailable =>
+      _audioPipeline?.isNoiseSuppressionAvailable ?? false;
+
+  /// Whether the microphone is being cleaned.
+  ///
+  /// Read from the pipeline, which turns itself off when the filter fails,
+  /// so the switch shows what is happening rather than what was saved.
+  bool get noiseSuppression =>
+      _audioPipeline?.isNoiseSuppressionEnabled ?? _processing.noiseSuppression;
+
+  /// Reads the processing switches from the machine's file and applies them,
+  /// unless the user has already chosen since.
+  Future<void> loadProcessingSettings() async {
+    final repository = _processingRepository;
+    if (repository == null) return;
+    final loaded = await repository.load();
+    if (_processingTouched || _disposed) return;
+    _processing = loaded;
+    unawaited(_audioPipeline?.setNoiseSuppression(loaded.noiseSuppression));
+    _notify();
+  }
+
+  /// Switches the microphone filter, for this session and the next.
+  ///
+  /// Applied before it is saved: a file that will not write loses the next
+  /// restart, not this call, and the failure is reported rather than hidden.
+  /// The filter itself opens in the background; the pipeline reports if it
+  /// cannot, and [noiseSuppression] falls back to off with it.
+  Future<void> setNoiseSuppression(bool enabled) async {
+    _processingTouched = true;
+    if (_processing.noiseSuppression == enabled) return;
+    _processing = _processing.copyWith(noiseSuppression: enabled);
+    unawaited(_audioPipeline?.setNoiseSuppression(enabled));
+    _notify();
+    try {
+      await _processingRepository?.save(_processing);
+    } on Object catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
   /// Deafening also mutes, which is what Discord does: somebody who cannot
   /// hear the room should not still be speaking into it.
   Future<void> toggleDeafen() async {

@@ -181,6 +181,17 @@ endif()
 install(FILES "${LIBDAVE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# DeepFilterNet (libDF C API) and its model, for microphone noise suppression.
+set(DEEPFILTERNET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/deepfilternet")
+foreach(DEEPFILTERNET_FILE "df.dll" "DeepFilterNet3_onnx.tar.gz")
+  if(NOT EXISTS "${DEEPFILTERNET_DIR}/${DEEPFILTERNET_FILE}")
+    message(FATAL_ERROR
+      "Missing ${DEEPFILTERNET_DIR}/${DEEPFILTERNET_FILE}; run tool/build_deepfilternet.ps1")
+  endif()
+  install(FILES "${DEEPFILTERNET_DIR}/${DEEPFILTERNET_FILE}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+endforeach()
+
 if(FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME)
   install(FILES "${FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)

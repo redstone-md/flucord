@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
-
 import '../domain/keybind.dart';
+import 'json_settings_file.dart';
 
 /// Keybinds, kept in a file beside the client's other local state.
 ///
@@ -14,19 +12,17 @@ import '../domain/keybind.dart';
 /// keyring for something it has no business guarding.
 final class FileKeybindRepository implements KeybindRepository {
   FileKeybindRepository({Future<Directory> Function()? directory})
-    : _directory = directory ?? getApplicationSupportDirectory;
+    : _file = JsonSettingsFile(fileName, directory: directory);
 
   static const fileName = 'keybinds.json';
 
-  final Future<Directory> Function() _directory;
+  final JsonSettingsFile _file;
 
   @override
   Future<Map<KeybindAction, Keybind>> load() async {
+    final decoded = await _file.read();
+    if (decoded is! Map) return {};
     try {
-      final file = await _file();
-      if (!file.existsSync()) return {};
-      final decoded = jsonDecode(await file.readAsString());
-      if (decoded is! Map) return {};
       return {
         for (final entry in decoded.entries)
           ?KeybindAction.fromCode('${entry.key}'): ?Keybind.fromJson(
@@ -34,25 +30,14 @@ final class FileKeybindRepository implements KeybindRepository {
           ),
       };
     } on Object {
-      // A file that cannot be read or parsed leaves the client with no
-      // bindings rather than no client: nothing here is worth failing to
-      // start over.
+      // A file that cannot be parsed leaves the client with no bindings
+      // rather than no client: nothing here is worth failing to start over.
       return {};
     }
   }
 
   @override
-  Future<void> save(Map<KeybindAction, Keybind> bindings) async {
-    final file = await _file();
-    await file.parent.create(recursive: true);
-    await file.writeAsString(
-      jsonEncode({
-        for (final entry in bindings.entries)
-          entry.key.code: entry.value.toJson(),
-      }),
-    );
-  }
-
-  Future<File> _file() async =>
-      File('${(await _directory()).path}${Platform.pathSeparator}$fileName');
+  Future<void> save(Map<KeybindAction, Keybind> bindings) => _file.write({
+    for (final entry in bindings.entries) entry.key.code: entry.value.toJson(),
+  });
 }

@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
-
 import '../domain/stream_quality.dart';
+import 'json_settings_file.dart';
 
 /// Stream quality, kept in a file beside the streamer mode switches.
 ///
@@ -12,34 +10,17 @@ import '../domain/stream_quality.dart';
 /// signed in on it.
 final class FileStreamQualityRepository implements StreamQualityRepository {
   FileStreamQualityRepository({Future<Directory> Function()? directory})
-    : _directory = directory ?? getApplicationSupportDirectory;
+    : _file = JsonSettingsFile(fileName, directory: directory);
 
   static const fileName = 'stream_quality.json';
 
-  final Future<Directory> Function() _directory;
+  final JsonSettingsFile _file;
 
   @override
-  Future<StreamQualitySettings> load() async {
-    try {
-      final file = await _file();
-      if (!file.existsSync()) return const StreamQualitySettings();
-      return StreamQualitySettings.fromJson(
-        jsonDecode(await file.readAsString()),
-      );
-    } on Object {
-      // Defaults rather than a failure to start: nothing here is worth
-      // refusing to open the client over.
-      return const StreamQualitySettings();
-    }
-  }
+  Future<StreamQualitySettings> load() async =>
+      StreamQualitySettings.fromJson(await _file.read());
 
   @override
-  Future<void> save(StreamQualitySettings settings) async {
-    final file = await _file();
-    await file.parent.create(recursive: true);
-    await file.writeAsString(jsonEncode(settings.toJson()));
-  }
-
-  Future<File> _file() async =>
-      File('${(await _directory()).path}${Platform.pathSeparator}$fileName');
+  Future<void> save(StreamQualitySettings settings) =>
+      _file.write(settings.toJson());
 }

@@ -63,9 +63,11 @@ import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'data/discord/go_live_media_isolate.dart';
 import 'data/video/system_audio_capture.dart';
+import 'data/audio/deep_filter_noise_suppressor.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/disconnected_chat_repository.dart';
+import 'data/file_voice_processing_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/native_attachment_download_service.dart';
@@ -431,8 +433,15 @@ final class AppComposition {
         // Use room playback for stream audio (ADR-0004).
         streamAudio: streamViewer.audio,
         streamAudioEnded: streamViewer.audioEnded,
+        // Null where the bundle has no filter to switch on, and the switch
+        // is hidden with it.
+        noiseSuppressorFactory: DeepFilterNoiseSuppressor.bundledFactory(),
+        processingRepository:
+            bootstrap.voiceProcessingRepository ??
+            FileVoiceProcessingRepository(),
       ),
     );
+    unawaited(voice.loadProcessingSettings());
     directCall = _register(
       DirectCallController(
         serviceProvider: () => chat.directCallService,

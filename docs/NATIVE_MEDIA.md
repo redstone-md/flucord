@@ -129,6 +129,26 @@ encodes Opus with bundled native libopus, applies DAVE and RTP, then sends it
 through Discord's AES-256-GCM or XChaCha20-Poly1305 RTP-size UDP transport. Mute
 and disconnect finish the speaking burst before tearing down the microphone.
 
+Between the framer and the encoder the microphone can be cleaned by
+DeepFilterNet (ADR-0008), the open model closest to Krisp: it takes out
+keyboards, fans and other voices rather than a steady hiss. The runtime is
+libDF's C API, bundled as `df.dll` with the DeepFilterNet3 model beside the
+executable (`tool/build_deepfilternet.ps1` rebuilds both); the model works on
+10 ms hops at 48 kHz, so a 20 ms frame is two hops and the filter buffers
+nothing. The model loads on a worker isolate when the switch goes on, and the
+microphone passes through unfiltered until it is ready; going quiet pushes two
+frames of silence through the model so the tail of the last word is sent
+rather than kept for the next press. The switch lives in voice settings, is off
+by default, hidden when the bundle has no filter, and is kept in
+`voice_processing.json` beside the stream quality. Measured on the development
+machine: about 2 ms of one core per 20 ms frame, 29 ms of delay from the
+model's window and lookahead, a noise floor between words 30 dB lower and
+speech within half a decibel of the input (`test/deep_filter_noise_suppressor_test.dart`
+prints the figures for the machine it runs on). The flags the capture layer
+passes to `record` (`noiseSuppress`, `echoCancel`, `autoGain`) are parsed but
+not applied by `record_windows`, so this is the only suppression the client
+has; echo cancellation and gain are not covered.
+
 The receive boundary maps speaking SSRCs to users, reorders RTP across sequence
 wrap, rejects duplicate/replayed packets, decrypts DAVE, and keeps independent
 Opus decoder state per remote user. Bounded loss uses native Opus PLC/FEC; long

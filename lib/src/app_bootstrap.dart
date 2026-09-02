@@ -17,6 +17,7 @@ import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
 import 'domain/voice_media.dart';
 import 'domain/voice_message_recorder.dart';
+import 'domain/voice_processing.dart';
 import 'platform/desktop_integration.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
@@ -54,6 +55,7 @@ class AppBootstrap {
     this.themeStore,
     this.streamerModeRepository,
     this.streamQualityRepository,
+    this.voiceProcessingRepository,
     this.windowCaptureShield,
     this.globalKeyboardHook,
     this.screenshotService,
@@ -111,6 +113,10 @@ class AppBootstrap {
 
   /// Where the stream quality bitrates are kept, injected for the same reason.
   final StreamQualityRepository? streamQualityRepository;
+
+  /// Where the microphone processing switches are kept, injected for the
+  /// same reason.
+  final VoiceProcessingRepository? voiceProcessingRepository;
 
   /// Keeps the window out of screen recordings. Injected so a test does not
   /// reach for the real window list.

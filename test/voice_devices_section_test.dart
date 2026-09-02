@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_media.dart';
+import 'package:flucord/src/domain/voice_processing.dart';
 import 'package:flucord/src/presentation/widgets/voice_devices_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_voice_audio.dart';
 
 void main() {
   Future<VoiceController> pumpSection(
@@ -63,6 +66,40 @@ void main() {
     expect(input.onChanged, isNull);
   });
 
+  testWidgets('offers the noise suppression switch only with a suppressor', (
+    tester,
+  ) async {
+    const key = ValueKey('voice-settings-noise-suppression');
+    await pumpSection(tester, media: _FakeMedia());
+    expect(find.byKey(key), findsNothing);
+
+    final repository = MemoryVoiceProcessingRepository();
+    final controller = VoiceController(
+      _FakeMedia(),
+      audioCodecFactory: FakeVoiceOpusCodecFactory(),
+      noiseSuppressorFactory: () async => FakeNoiseSuppressor(),
+      processingRepository: repository,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(body: VoiceDevicesSection(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+
+    expect(controller.noiseSuppression, isTrue);
+    expect(
+      repository.saved,
+      const VoiceProcessingSettings(noiseSuppression: true),
+    );
+    expect(tester.widget<SwitchListTile>(find.byKey(key)).value, isTrue);
+  });
+
   testWidgets('devices that would not open can be tried again', (tester) async {
     final media = _FakeMedia()..failNext = true;
     final controller = await pumpSection(tester, media: media);
@@ -82,7 +119,11 @@ final class _FakeMedia implements VoiceMediaService {
   bool failNext = false;
   List<VoiceDevice> devices = const [
     VoiceDevice(id: 'mic-1', label: 'Webcam', kind: VoiceDeviceKind.audioInput),
-    VoiceDevice(id: 'mic-2', label: 'Headset', kind: VoiceDeviceKind.audioInput),
+    VoiceDevice(
+      id: 'mic-2',
+      label: 'Headset',
+      kind: VoiceDeviceKind.audioInput,
+    ),
     VoiceDevice(
       id: 'out-1',
       label: 'Speakers',

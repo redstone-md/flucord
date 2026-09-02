@@ -25,6 +25,7 @@ do not count as desktop-user chat parity.
 | Search | Ready | Server-side `GET /guilds/{id}/messages/search` and the DM equivalent, with the loaded page filtered locally as you type |
 | Friends | Separate SDK path | Requires approved Discord Social SDK package |
 | Server voice channels | Ready | Desktop-user session joins over its own gateway; occupants read from `READY_SUPPLEMENTAL.guilds[].voice_states` and shown per channel; joins without DAVE on the transport cipher; live audio interoperability still unverified |
+| Noise suppression | Built, measured locally | DeepFilterNet (MIT) on the microphone path between the framer and the Opus encoder, off by default, switched from voice settings; 2 ms per 20 ms frame, 29 ms model delay, noise floor between words 30 dB lower on synthesised speech; not yet judged by a remote listener over Discord |
 | DM and group calls | Ready | Opcode 13, ring and decline, incoming-call surface; live interoperability unverified |
 | Stage channels | Ready | Type 13 recognised, live instance and topic; audience may request to speak, withdraw, accept an invitation and step down; a moderator may start, rename and end a stage and move anybody on or off it |
 | Slash commands and components | Ready | Chat-input commands from the channel index, context-menu commands on a message or member, buttons and every select kind, and modals — interaction types 2, 3 and 5 |

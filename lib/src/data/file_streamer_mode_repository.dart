@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
-
 import '../domain/streamer_mode.dart';
+import 'json_settings_file.dart';
 
 /// Streamer mode's switches, kept in a file beside the keybinds.
 ///
@@ -12,34 +10,17 @@ import '../domain/streamer_mode.dart';
 /// signed in on it.
 final class FileStreamerModeRepository implements StreamerModeRepository {
   FileStreamerModeRepository({Future<Directory> Function()? directory})
-    : _directory = directory ?? getApplicationSupportDirectory;
+    : _file = JsonSettingsFile(fileName, directory: directory);
 
   static const fileName = 'streamer_mode.json';
 
-  final Future<Directory> Function() _directory;
+  final JsonSettingsFile _file;
 
   @override
-  Future<StreamerModeSettings> load() async {
-    try {
-      final file = await _file();
-      if (!file.existsSync()) return const StreamerModeSettings();
-      return StreamerModeSettings.fromJson(
-        jsonDecode(await file.readAsString()),
-      );
-    } on Object {
-      // Defaults rather than a failure to start: nothing here is worth
-      // refusing to open the client over.
-      return const StreamerModeSettings();
-    }
-  }
+  Future<StreamerModeSettings> load() async =>
+      StreamerModeSettings.fromJson(await _file.read());
 
   @override
-  Future<void> save(StreamerModeSettings settings) async {
-    final file = await _file();
-    await file.parent.create(recursive: true);
-    await file.writeAsString(jsonEncode(settings.toJson()));
-  }
-
-  Future<File> _file() async =>
-      File('${(await _directory()).path}${Platform.pathSeparator}$fileName');
+  Future<void> save(StreamerModeSettings settings) =>
+      _file.write(settings.toJson());
 }

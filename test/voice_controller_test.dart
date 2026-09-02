@@ -6,6 +6,9 @@ import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
+import 'package:flucord/src/domain/voice_processing.dart';
+
+import 'support/fake_voice_audio.dart';
 
 void main() {
   test('push to talk sets the mute flag rather than toggling it', () async {
@@ -150,6 +153,87 @@ void main() {
     expect(first.joins, [('guild-1', 'voice-1', false)]);
     expect(second.joins, [('guild-1', 'voice-1', false)]);
     expect(controller.hasDiscordSignaling, isTrue);
+  });
+
+  test(
+    'noise suppression is loaded, applied to the uplink and saved',
+    () async {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final repository = MemoryVoiceProcessingRepository(
+        const VoiceProcessingSettings(noiseSuppression: true),
+      );
+      final suppressor = FakeNoiseSuppressor();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+        noiseSuppressorFactory: () async => suppressor,
+        processingRepository: repository,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      expect(controller.isNoiseSuppressionAvailable, isTrue);
+      expect(controller.noiseSuppression, isFalse);
+      await controller.loadProcessingSettings();
+      await _flushEvents();
+      expect(controller.noiseSuppression, isTrue);
+
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      await _flushEvents();
+      media.addPcm(Uint8List(3840));
+      await _flushEvents();
+      expect(suppressor.frames, hasLength(1));
+
+      await controller.setNoiseSuppression(false);
+      expect(controller.noiseSuppression, isFalse);
+      expect(repository.saved, const VoiceProcessingSettings());
+      media.addPcm(Uint8List(3840));
+      await _flushEvents();
+      expect(suppressor.frames, hasLength(1));
+      expect(signaling.sentFrames, hasLength(2));
+    },
+  );
+
+  test('a slow startup load does not overwrite a fresh toggle', () async {
+    final repository = MemoryVoiceProcessingRepository()
+      ..pendingLoad = Completer();
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      audioCodecFactory: _FakeCodecFactory(),
+      noiseSuppressorFactory: () async => FakeNoiseSuppressor(),
+      processingRepository: repository,
+    );
+    addTearDown(controller.dispose);
+
+    final loading = controller.loadProcessingSettings();
+    await controller.setNoiseSuppression(true);
+    repository.pendingLoad!.complete(const VoiceProcessingSettings());
+    await loading;
+
+    expect(controller.noiseSuppression, isTrue);
+    expect(
+      repository.saved,
+      const VoiceProcessingSettings(noiseSuppression: true),
+    );
+  });
+
+  test('a filter that will not open shows as off and reports why', () async {
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      audioCodecFactory: _FakeCodecFactory(),
+      noiseSuppressorFactory: () async => throw StateError('no df.dll'),
+      processingRepository: MemoryVoiceProcessingRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.setNoiseSuppression(true);
+    await _flushEvents();
+
+    expect(controller.noiseSuppression, isFalse);
+    expect(controller.error, isA<StateError>());
   });
 
   test('muting silences the uplink even when the microphone refuses', () async {
@@ -620,7 +704,8 @@ final class _FakeVoicePlaybackService implements VoiceAudioPlaybackService {
   void addPcmFrame(VoiceRemotePcmFrame frame) => frames.add(frame);
 
   @override
-  Future<void> removeSource(String sourceId) async => removedSources.add(sourceId);
+  Future<void> removeSource(String sourceId) async =>
+      removedSources.add(sourceId);
 
   @override
   Future<void> dispose() async => disposed = true;

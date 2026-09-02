@@ -6,6 +6,7 @@ import '../domain/voice_audio.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_media.dart';
+import '../domain/voice_processing.dart';
 import 'voice_audio_pipeline.dart';
 import '../app_log.dart';
 
@@ -27,6 +28,12 @@ final class VoiceController extends ChangeNotifier {
     /// Audio from watched streams (ADR-0004).
     Stream<VoiceRemotePcmFrame>? streamAudio,
     Stream<String>? streamAudioEnded,
+
+    /// Opens the microphone noise filter; null on a build without one.
+    Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+
+    /// Where the processing switches are kept between runs.
+    VoiceProcessingRepository? processingRepository,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
@@ -35,6 +42,8 @@ final class VoiceController extends ChangeNotifier {
     playbackService,
     streamAudio,
     streamAudioEnded,
+    noiseSuppressorFactory,
+    processingRepository,
   );
 
   VoiceController._(
@@ -45,11 +54,14 @@ final class VoiceController extends ChangeNotifier {
     this._playbackService,
     Stream<VoiceRemotePcmFrame>? streamAudio,
     Stream<String>? streamAudioEnded,
+    Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+    this._processingRepository,
   ) : _audioPipeline = audioCodecFactory == null
           ? null
           : VoiceAudioPipeline(
               mediaService: _mediaService,
               codecFactory: audioCodecFactory,
+              noiseSuppressorFactory: noiseSuppressorFactory,
             ) {
     _audioErrorSubscription = _audioPipeline?.errors.listen((error) {
       _error = error;
@@ -68,6 +80,12 @@ final class VoiceController extends ChangeNotifier {
   final DirectCallServiceProvider _callServiceProvider;
   final VoiceAudioPlaybackService? _playbackService;
   final VoiceAudioPipeline? _audioPipeline;
+  final VoiceProcessingRepository? _processingRepository;
+  VoiceProcessingSettings _processing = const VoiceProcessingSettings();
+
+  /// Set by the first user change, so a startup load that resolves late
+  /// cannot overwrite what the user has since chosen.
+  bool _processingTouched = false;
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
@@ -642,6 +660,10 @@ final class VoiceController extends ChangeNotifier {
 
   void _reportBackgroundError(Object error) {
     _error = error;
+    _notify();
+  }
+
+  void _notify() {
     if (!_disposed) notifyListeners();
   }
 

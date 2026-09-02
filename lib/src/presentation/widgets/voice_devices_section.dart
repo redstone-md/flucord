@@ -45,6 +45,25 @@ class VoiceDevicesSection extends StatelessWidget {
           selectedId: controller.selectedOutputId,
           onChanged: controller.selectOutput,
         ),
+        if (controller.isNoiseSuppressionAvailable) ...[
+          const SizedBox(height: 14),
+          SwitchListTile(
+            key: const ValueKey('voice-settings-noise-suppression'),
+            contentPadding: EdgeInsets.zero,
+            value: controller.noiseSuppression,
+            onChanged: (value) =>
+                unawaited(controller.setNoiseSuppression(value)),
+            title: const Text(
+              'Noise suppression',
+              style: TextStyle(fontSize: 13),
+            ),
+            subtitle: Text(
+              'Removes keyboards, fans and other voices from the microphone '
+              'with DeepFilterNet. Costs some CPU while in a call.',
+              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            ),
+          ),
+        ],
         if (controller.deviceError case final error?) ...[
           const SizedBox(height: 14),
           Text(
