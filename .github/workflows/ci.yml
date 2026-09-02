@@ -65,8 +65,9 @@ jobs:
   build:
     name: Build Windows x64
     # A build break should surface on main, not at the release tag; pull
-    # requests get analyze and tests, which is where nearly everything fails.
-    if: github.event_name == 'push'
+    # requests get analyze and tests, which is where nearly everything fails;
+    # a manual dispatch builds too.
+    if: github.event_name != 'pull_request'
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
