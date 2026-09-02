@@ -42,6 +42,7 @@ import 'application/multi_factor_auth_controller.dart';
 import 'application/oauth_guild_directory_controller.dart';
 import 'application/oauth_guild_membership_controller.dart';
 import 'application/remote_camera_controller.dart';
+import 'application/room_focus.dart';
 import 'application/self_presence_controller.dart';
 import 'application/self_video_controller.dart';
 import 'application/slash_command_controller.dart';
@@ -173,6 +174,7 @@ final class AppComposition {
   late final GoLiveMediaIsolate goLiveMedia;
   late final GoLiveController goLive;
   late final StreamViewerController streamViewer;
+  late final RoomFocus roomFocus;
   late final DiscordStreamRtcService streamRtc;
   late final StreamRouter streamRouter;
   late final AttachmentDownloadService attachmentDownload;
@@ -414,6 +416,7 @@ final class AppComposition {
         audioDecoderFactory: bootstrap.voiceOpusCodecFactory,
       ),
     );
+    roomFocus = _register(RoomFocus());
     // Where a ready watched connection goes. Lives here rather than in the
     // widget, so the wiring has tests of its own.
     streamRouter = StreamRouter(opened: streamRtc.opened, viewer: streamViewer);
@@ -597,6 +600,7 @@ final class AppComposition {
       streamerMode: streamerMode,
       goLive: goLive,
       streamViewer: streamViewer,
+      focus: roomFocus,
     );
     _teardown.add(voiceRoomCoordination.dispose);
     // A window nothing of is on screen stops drawing what it is watching,

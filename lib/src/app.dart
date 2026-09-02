@@ -24,6 +24,7 @@ import 'presentation/widgets/self_presence_scope.dart';
 import 'presentation/widgets/slash_command_scope.dart';
 import 'presentation/widgets/soundboard_scope.dart';
 import 'presentation/widgets/stage_scope.dart';
+import 'presentation/widgets/room_focus_scope.dart';
 import 'presentation/widgets/stream_viewer_scope.dart';
 import 'presentation/widgets/thread_membership_scope.dart';
 import 'presentation/widgets/voice_message_recorder_scope.dart';
@@ -244,17 +245,20 @@ class _FlucordAppState extends State<FlucordApp> {
                       controller: _composition.goLive,
                       child: StreamViewerScope(
                         controller: _composition.streamViewer,
-                        child: RemoteCameraScope(
-                          controller: _composition.remoteCameras,
-                          child: GifPickerScope(
-                            controller: _composition.gifPicker,
-                            child: ExpressionFavoritesScope(
-                              controller: _composition.expressionFavorites,
-                              child: SlashCommandScope(
-                                controller: _composition.slashCommand,
-                                child: MessageComponentScope(
-                                  controller: _composition.messageComponent,
-                                  child: child,
+                        child: RoomFocusScope(
+                          focus: _composition.roomFocus,
+                          child: RemoteCameraScope(
+                            controller: _composition.remoteCameras,
+                            child: GifPickerScope(
+                              controller: _composition.gifPicker,
+                              child: ExpressionFavoritesScope(
+                                controller: _composition.expressionFavorites,
+                                child: SlashCommandScope(
+                                  controller: _composition.slashCommand,
+                                  child: MessageComponentScope(
+                                    controller: _composition.messageComponent,
+                                    child: child,
+                                  ),
                                 ),
                               ),
                             ),

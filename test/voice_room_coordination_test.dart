@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/remote_camera_controller.dart';
+import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/streamer_mode_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
@@ -86,6 +87,35 @@ void main() {
     expect(viewer.isOpen(key), isFalse);
   });
 
+  test('the stage focus follows its participant out of the room', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final voice = VoiceController(
+      const NoopVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    final focus = RoomFocus();
+    final room = _buildRoom(voice: voice, focus: focus);
+    addTearDown(room.dispose);
+    await voice.refreshSignalingService();
+    await voice.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(_participantState('them'));
+    await Future<void>.delayed(Duration.zero);
+
+    focus.focus('them');
+    signaling.emit(const VoiceUserDisconnectedEvent('them'));
+    await Future<void>.delayed(Duration.zero);
+    expect(focus.userId, isNull, reason: 'nobody to draw large');
+
+    signaling.emit(_participantState('them'));
+    await Future<void>.delayed(Duration.zero);
+    focus.focus('them');
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(focus.userId, isNull, reason: 'the focus goes with the room');
+  });
+
   test('the overlay redraws whenever the room changes', () async {
     final signaling = _FakeVoiceSignalingService();
     final voice = VoiceController(
@@ -153,6 +183,7 @@ VoiceRoomCoordination _buildRoom({
   StreamerModeController? streamerMode,
   GoLiveController? goLive,
   StreamViewerController? streamViewer,
+  RoomFocus? focus,
 }) {
   final resolvedVoice =
       voice ??
@@ -188,9 +219,23 @@ VoiceRoomCoordination _buildRoom({
           repositoryProvider: () => null,
           decoderFactory: () => throw StateError('unused'),
         ),
+    focus: focus ?? RoomFocus(),
   );
   return room;
 }
+
+VoiceParticipantStateEvent _participantState(String userId) =>
+    VoiceParticipantStateEvent(
+      userId: userId,
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      selfMuted: false,
+      selfDeafened: false,
+      serverMuted: false,
+      serverDeafened: false,
+      isStreaming: false,
+      isVideoEnabled: false,
+    );
 
 class _FakeVoiceSignalingService implements VoiceSignalingService {
   @override
