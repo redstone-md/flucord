@@ -117,7 +117,11 @@ final class VoiceController extends ChangeNotifier {
   bool _isBusy = false;
   bool _disposed = false;
 
-  static const int _pendingPcmFrameLimit = 250;
+  /// How many 20 ms frames wait while playback is off. Ten is the jitter a
+  /// device opening late is allowed; the old 250 was five seconds, which is
+  /// exactly the playback buffer, so flushing it filled the buffer in one go
+  /// and the source was marked ended for the rest of the call.
+  static const int _pendingPcmFrameLimit = 10;
 
   VoiceState get state => _state;
   VoiceConnectionStatus get connectionStatus => _connectionStatus;

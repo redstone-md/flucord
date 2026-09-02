@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_soloud/flutter_soloud.dart';
@@ -85,7 +86,24 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
       throw StateError('Remote PCM frame is not stereo aligned');
     }
     final source = _sources.putIfAbsent(frame.sourceId, _createSource);
-    _player.addAudioDataStream(source, _asBytes(frame.samples));
+    try {
+      _player.addAudioDataStream(source, _asBytes(frame.samples));
+    } on SoLoudPcmBufferFullCppException {
+      _replace(frame.sourceId, source);
+    } on SoLoudStreamEndedAlreadyCppException {
+      _replace(frame.sourceId, source);
+    }
+  }
+
+  /// A stream whose buffer filled is finished for good: SoLoud marks it ended
+  /// and refuses every byte after. The buffer fills when nothing consumes it
+  /// (the device stopped) or when a backlog is poured in at once, and either
+  /// way the sound in it is late already. The source is thrown away with it,
+  /// and the next frame opens a fresh one; the failure is not reported, since
+  /// the room could do nothing with it but show it on every frame.
+  void _replace(String sourceId, AudioSource source) {
+    if (identical(_sources[sourceId], source)) _sources.remove(sourceId);
+    unawaited(_player.disposeSource(source));
   }
 
   @override
