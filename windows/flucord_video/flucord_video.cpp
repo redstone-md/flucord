@@ -1,5 +1,7 @@
 #include "flucord_video.h"
 
+#include "qpc_clock.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -241,7 +243,7 @@ int64_t NowNs() {
   }();
   LARGE_INTEGER now;
   QueryPerformanceCounter(&now);
-  return now.QuadPart * 1000000000 / frequency;
+  return flucord_video::QpcTicksToNanoseconds(now.QuadPart, frequency);
 }
 
 }  // namespace

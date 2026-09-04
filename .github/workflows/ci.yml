@@ -71,6 +71,25 @@ jobs:
           --total-shards 4
           --shard-index ${{ matrix.shard }}
 
+  native-test:
+    name: Test native video
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure
+        run: >
+          cmake -S windows/flucord_video -B build/flucord-video-test
+          -DFLUCORD_VIDEO_BUILD_TESTS=ON
+      - name: Build
+        run: >
+          cmake --build build/flucord-video-test --config Release
+          --target flucord_video_clock_test
+      - name: Test
+        run: >
+          ctest --test-dir build/flucord-video-test -C Release
+          --output-on-failure
+
   build:
     name: Build Windows x64
     # A build break should surface on main, not at the release tag; pull

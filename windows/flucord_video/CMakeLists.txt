@@ -6,6 +6,7 @@ project(flucord_video LANGUAGES CXX)
 # thing to trust and to rebuild by hand.
 add_library(flucord_video SHARED
   "flucord_video.cpp"
+  "qpc_clock.cpp"
 )
 
 target_include_directories(flucord_video PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -24,3 +25,14 @@ target_link_libraries(flucord_video PRIVATE
 set_target_properties(flucord_video PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/runner/$<CONFIG>"
 )
+
+option(FLUCORD_VIDEO_BUILD_TESTS "Build the native video tests" OFF)
+if(FLUCORD_VIDEO_BUILD_TESTS)
+  enable_testing()
+  add_executable(flucord_video_clock_test
+    "qpc_clock_test.cpp"
+    "qpc_clock.cpp"
+  )
+  target_compile_features(flucord_video_clock_test PRIVATE cxx_std_17)
+  add_test(NAME flucord_video_clock_test COMMAND flucord_video_clock_test)
+endif()
