@@ -401,6 +401,12 @@ final class DiscordVoiceGatewayClient
       case DiscordVoiceGatewayFail(:final error):
         _fail(error);
       case DiscordVoiceGatewayDispatch(:final event):
+        // The protocol just dropped the sender's SSRC mapping; the recovery
+        // drops the sender's reorder state with it, so a departure cannot
+        // leave a buffer and its asks behind for the rest of the call.
+        if (event is VoiceUserDisconnectedEvent) {
+          _recovery.forgetSender(event.userId);
+        }
         if (!_events.isClosed) _events.add(event);
       case DiscordVoiceGatewayDiscoverUdp():
         unawaited(_discoverUdp(action));

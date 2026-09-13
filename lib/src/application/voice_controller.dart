@@ -123,8 +123,13 @@ final class VoiceController extends ChangeNotifier {
   bool _isAudioPlaybackActive = false;
   final List<VoiceRemotePcmFrame> _pendingPcmFrames = [];
 
-  /// When each source's last frame arrived, for the gap diagnostic.
+  /// When each source's last frame arrived, for the gap diagnostic. Sources
+  /// stop without an event sometimes: past a few minutes of silence an entry
+  /// is dead, and once the map is past [_lastPcmMicrosLimit] the dead ones
+  /// are swept as frames arrive.
   final Map<String, int> _lastPcmMicros = {};
+  static const int _lastPcmMicrosLimit = 64;
+  static final Duration _lastPcmIdle = Duration(minutes: 5);
 
   /// Senders whose camera is no longer to be decoded, one event each: the
   /// sender left the room, moved out of it, or a voice state says their
@@ -467,7 +472,7 @@ final class VoiceController extends ChangeNotifier {
       _isCallSession = false;
       _connectionStatus = VoiceConnectionStatus.disconnected;
       _transportSession = null;
-      _participants.clear();
+      _clearParticipants();
       _isMuted = false;
       _isDeafened = false;
       _isCameraOn = false;
@@ -491,6 +496,7 @@ final class VoiceController extends ChangeNotifier {
     // survive losing; hearing the transport is not.
     unawaited(_seatedSubscription?.cancel());
     _seatedSubscription = service?.seatedChanges.listen((_) {
+      _reconcileParticipants();
       if (!_disposed) notifyListeners();
     });
     _signalingSubscription = service?.voiceEvents.listen(
@@ -753,6 +759,29 @@ final class VoiceController extends ChangeNotifier {
       timer.cancel();
     }
     _speakingTimers.clear();
+    _pendingPcmFrames.clear();
+    _lastPcmMicros.clear();
+  }
+
+  /// Drops participants the seated roster no longer lists.
+  ///
+  /// The roster is the authority on who is in the room. The transport's own
+  /// disconnect event rides a different socket, so losing one without the
+  /// other used to leave a departed participant seated for the rest of the
+  /// call. Runs on roster changes. A join announced on the voice socket
+  /// first is safe: it is only evicted when a later roster change still does
+  /// not list it. The account's own entry is kept, because the roster can
+  /// lag behind the credentials that put us in the room.
+  void _reconcileParticipants() {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return;
+    final seated = _signalingService?.seatedByChannel[channelId];
+    if (seated == null) return;
+    final liveUsers = {for (final state in seated) state.userId};
+    final selfUserId = _selfUserId;
+    _participants.removeWhere(
+      (userId, _) => userId != selfUserId && !liveUsers.contains(userId),
+    );
   }
 
   /// A voice frame is the participant speaking; the ring goes out
@@ -808,6 +837,11 @@ final class VoiceController extends ChangeNotifier {
   /// stopped arriving rather than on the device that stopped playing them.
   void _noteArrival(VoiceRemotePcmFrame frame) {
     final now = DateTime.now().microsecondsSinceEpoch;
+    if (_lastPcmMicros.length >= _lastPcmMicrosLimit) {
+      _lastPcmMicros.removeWhere(
+        (_, last) => now - last > _lastPcmIdle.inMicroseconds,
+      );
+    }
     final last = _lastPcmMicros[frame.sourceId];
     _lastPcmMicros[frame.sourceId] = now;
     if (last == null) return;

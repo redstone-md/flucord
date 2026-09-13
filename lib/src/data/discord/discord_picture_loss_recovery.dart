@@ -75,6 +75,9 @@ final class DiscordPictureLossRecovery {
   /// the granularity the retransmission window closes at.
   static const _recoveryTick = Duration(milliseconds: 40);
 
+  /// How long an unowned entry survives without a packet behind it.
+  static const _unownedIdleBeforeEviction = Duration(minutes: 5);
+
   /// How many sequences one ask names. A hole wider than this is a sender
   /// restart or a whole burst gone, not something a retransmission mends,
   /// and an ask sized to it would not fit a datagram.
@@ -121,6 +124,7 @@ final class DiscordPictureLossRecovery {
     final ssrc = frame.header.ssrc;
     if (_senderFor(ssrc) == null) return;
     final receive = _video.putIfAbsent(ssrc, () => _newVideoReceive(ssrc));
+    receive.lastSeen = _now();
     receive.packets++;
     if (retransmitted) {
       if (!receive.buffer.wants(frame.header.sequence)) {
@@ -143,6 +147,7 @@ final class DiscordPictureLossRecovery {
       mediaSsrc,
       () => _newVideoReceive(mediaSsrc),
     );
+    receive.lastSeen = _now();
     if (receive.buffer.hasHoles) {
       receive.keyframeOwed = true;
       receive.keyframesHeld++;
@@ -158,9 +163,28 @@ final class DiscordPictureLossRecovery {
     _recoveryTimer = null;
   }
 
+  /// Drops one sender's stream state: they left the room, so no packet of
+  /// theirs can arrive, and an open hole of theirs would be asked for until
+  /// the next session reset. The voice protocol drops its SSRC mapping for
+  /// the same sender at the same time; the mapping is what [forgetSender] is
+  /// called on its way out.
+  void forgetSender(String userId) {
+    _video.removeWhere((_, receive) => receive.sender == userId);
+  }
+
   /// One line per sender that saw anything since the last report, and
   /// starts the counts over.
+  ///
+  /// Also sweeps unowned state: an entry with no sender is a keyframe ask
+  /// for a stream whose owner was never announced, and when no packet has
+  /// backed it for a while it is state for a stream that is gone.
   List<String> report() {
+    final now = _now();
+    _video.removeWhere(
+      (_, receive) =>
+          receive.sender == null &&
+          now - receive.lastSeen > _unownedIdleBeforeEviction,
+    );
     final lines = <String>[];
     for (final receive in _video.values) {
       if (receive.packets == 0 && receive.keyframeAsks == 0) continue;
@@ -184,6 +208,7 @@ final class DiscordPictureLossRecovery {
 
   _VideoReceive _newVideoReceive(int ssrc) => _VideoReceive(
     ssrc,
+    _senderFor(ssrc),
     DiscordRtpReorderBuffer(holdTime: () => _retransmitWindow, now: _now),
   );
 
@@ -301,10 +326,20 @@ final class DiscordPictureLossRecovery {
 /// waits for the retransmission, the asks in flight, and the counts the
 /// recovery line reports.
 final class _VideoReceive {
-  _VideoReceive(this.ssrc, this.buffer);
+  _VideoReceive(this.ssrc, this.sender, this.buffer);
 
   final int ssrc;
+
+  /// Whoever the protocol said sends here, captured when the entry opened.
+  /// The protocol forgets the mapping when a sender leaves; the captured
+  /// name is what lets the recovery drop the state with it. Null for a
+  /// stream whose owner was never announced, swept when idle instead.
+  final String? sender;
+
   final DiscordRtpReorderBuffer buffer;
+
+  /// When this stream was last the subject of a packet or an ask.
+  Duration lastSeen = Duration.zero;
 
   /// Holes already asked for, so a packet that exposes nothing new does not
   /// ask again ahead of the round trip.

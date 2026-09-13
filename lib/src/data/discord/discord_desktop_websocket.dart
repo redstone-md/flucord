@@ -96,12 +96,17 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
   final Completer<void> _done = Completer();
   late final StreamSubscription<Object?> _subscription;
 
-  Isolate? _worker;
   int _handle = 0;
   int? _closeCode;
   bool _open = false;
   bool _finishing = false;
   bool _disposed = false;
+
+  /// How long the worker gets to report done after a close frame went out.
+  /// The handle's own close timeout bounds the handshake at two seconds, so
+  /// anything past this means the server never answered and the forced close
+  /// takes over.
+  static const _closeGrace = Duration(seconds: 5);
 
   static Future<_WinHttpDiscordDesktopWebSocket> connect(Uri uri) async {
     if (uri.scheme != 'wss' || uri.host.isEmpty) {
@@ -113,7 +118,10 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
       receivePort,
     );
     try {
-      socket._worker = await Isolate.spawn(_runWinHttpWorker, {
+      // The isolate is not held on to: it is never killed, and it exits on
+      // its own once its bounded native calls return and its handles are
+      // closed.
+      await Isolate.spawn(_runWinHttpWorker, {
         'uri': uri.toString(),
         'events': receivePort.sendPort,
       });
@@ -163,14 +171,32 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
   Future<void> close() async {
     if (!_open) return;
     _open = false;
+    if (_done.isCompleted) return;
     final handle = Pointer<Void>.fromAddress(_handle);
+    // Sends our close frame and returns without waiting for the server's, so
+    // the main isolate never sits in native code. The worker's blocked
+    // receive ends with the server's close frame, and its finally is the only
+    // place a handle is closed.
+    _bindings.webSocketShutdown(handle, 1000, nullptr, 0);
+    if (await _workerDone(_closeGrace)) return;
+    // The server never answered. Force the connection closed: the handle's
+    // own close timeout bounds this call, and a close cancels a pending
+    // receive, which is what ends the worker's loop. The worker is provably
+    // still in that receive (done was not reported, and it reports before it
+    // closes anything), so this is the one handle use the two isolates share,
+    // and it is the documented one. No handle is closed on this side, ever.
     _bindings.webSocketClose(handle, 1000, nullptr, 0);
+    if (await _workerDone(_closeGrace)) return;
+    await _finish();
+  }
+
+  /// Whether the worker reported done inside [timeout].
+  Future<bool> _workerDone(Duration timeout) async {
     try {
-      await _done.future.timeout(const Duration(seconds: 2));
+      await _done.future.timeout(timeout);
+      return true;
     } on TimeoutException {
-      _bindings.closeHandle(handle);
-      _worker?.kill(priority: Isolate.immediate);
-      await _finish();
+      return false;
     }
   }
 
@@ -200,7 +226,11 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
         );
         if (!_connected.isCompleted) {
           _connected.completeError(error);
-        } else if (!_messages.isClosed) {
+        } else if (_open && !_messages.isClosed) {
+          // A socket being closed by us reports its own teardown as an
+          // error: the receive cancelled under the close frame. Nobody is
+          // listening for failures of a socket they just closed, and the
+          // gateway client would only log a reconnect it already started.
           _messages.addError(error);
         }
         return;
@@ -234,8 +264,10 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
     _disposed = true;
     await _subscription.cancel();
     _receivePort.close();
-    _worker?.kill(priority: Isolate.immediate);
-    _worker = null;
+    // No kill: the worker may sit inside a native call, which a kill cannot
+    // interrupt. Every call it makes is bounded by a handle timeout, so it
+    // closes its handles and exits on its own; anything it sends to the
+    // closed port is dropped.
   }
 }
 
@@ -288,6 +320,17 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
         ),
         'enable WebSocket upgrade',
       );
+      final closeTimeout = arena<Uint32>()..value = _winHttpCloseTimeoutMillis;
+      _requireSuccess(
+        bindings,
+        bindings.setOption(
+          upgradeRequest,
+          _winHttpWebSocketCloseTimeout,
+          closeTimeout.cast(),
+          sizeOf<Uint32>(),
+        ),
+        'set WebSocket close timeout',
+      );
       final origin = 'Origin: https://discord.com\r\n'.toNativeUtf16(
         allocator: arena,
       );
@@ -338,11 +381,15 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
   } on Object catch (error) {
     events.send({'type': 'error', 'message': error.toString()});
   } finally {
+    // Reported before anything is closed: the main isolate reads `done` as
+    // the worker no longer being inside a native call, and only then may it
+    // decide the connection is beyond waiting for. Closing a handle the main
+    // isolate could still touch is the race this order removes.
+    events.send({'type': 'done', 'closeCode': closeCode});
     if (webSocket.address != 0) bindings.closeHandle(webSocket);
     if (upgradeRequest.address != 0) bindings.closeHandle(upgradeRequest);
     if (connection.address != 0) bindings.closeHandle(connection);
     if (session.address != 0) bindings.closeHandle(session);
-    events.send({'type': 'done', 'closeCode': closeCode});
   }
 }
 
@@ -432,6 +479,14 @@ const _desktopUserAgent =
 const _winHttpNoProxy = 1;
 const _winHttpSecure = 0x00800000;
 const _winHttpUpgradeToWebSocket = 114;
+const _winHttpWebSocketCloseTimeout = 115;
+
+/// How long the close handshake may take, in milliseconds, on every handle
+/// this socket opens. The Windows default is ten seconds. The close path
+/// waits [_closeGrace] before forcing the connection closed, so this must
+/// stay below that grace: a forced close that outlives its wait would leave
+/// the worker cancelled after the main isolate had stopped listening.
+const _winHttpCloseTimeoutMillis = 2000;
 const _winHttpStatusCode = 19;
 const _winHttpQueryNumber = 0x20000000;
 const _winHttpAddHeader = 0x20000000;

@@ -47,6 +47,10 @@ final class _WinHttpBindings {
           .lookupFunction<_WebSocketCloseNative, _WebSocketCloseDart>(
             'WinHttpWebSocketClose',
           ),
+      webSocketShutdown = winHttp
+          .lookupFunction<_WebSocketCloseNative, _WebSocketCloseDart>(
+            'WinHttpWebSocketShutdown',
+          ),
       webSocketQueryCloseStatus = winHttp
           .lookupFunction<
             _WebSocketQueryCloseStatusNative,
@@ -77,6 +81,7 @@ final class _WinHttpBindings {
   final _WebSocketSendDart webSocketSend;
   final _WebSocketReceiveDart webSocketReceive;
   final _WebSocketCloseDart webSocketClose;
+  final _WebSocketCloseDart webSocketShutdown;
   final _WebSocketQueryCloseStatusDart webSocketQueryCloseStatus;
   final _CloseHandleDart closeHandle;
   final _LastErrorDart lastError;

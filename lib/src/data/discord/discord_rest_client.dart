@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,10 +26,23 @@ abstract interface class DiscordHttpTransport {
 }
 
 final class IoDiscordHttpTransport implements DiscordHttpTransport {
-  IoDiscordHttpTransport({HttpClient? client})
-    : _client = client ?? HttpClient();
+  IoDiscordHttpTransport({HttpClient? client, this.requestTimeout = _defaultTimeout})
+    : _ownsClient = client == null,
+      _client = client ?? HttpClient() {
+    // A connect that never completes is hung the same way a response is, and
+    // only the client knows about that stage.
+    if (_ownsClient) _client.connectionTimeout = requestTimeout;
+  }
+
+  static const _defaultTimeout = Duration(seconds: 30);
+
+  /// One request's whole budget: connect, send, response headers and body.
+  /// Without it a server that accepts and never answers holds its caller
+  /// forever, and a serialized caller holds every request behind it.
+  final Duration requestTimeout;
 
   final HttpClient _client;
+  final bool _ownsClient;
 
   @override
   Future<DiscordHttpResponse> send({
@@ -36,20 +50,34 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
     required Uri uri,
     required Map<String, String> headers,
     List<int>? body,
-  }) async {
-    final request = await _client.openUrl(method, uri);
-    headers.forEach(request.headers.set);
-    if (body != null) request.add(body);
-    final response = await request.close();
-    final responseHeaders = <String, String>{};
-    response.headers.forEach((name, values) {
-      responseHeaders[name.toLowerCase()] = values.join(',');
+  }) {
+    HttpClientRequest? request;
+    Future<DiscordHttpResponse> attempt() async {
+      request = await _client.openUrl(method, uri);
+      headers.forEach(request!.headers.set);
+      if (body != null) request!.add(body);
+      final response = await request!.close();
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name.toLowerCase()] = values.join(',');
+      });
+      return DiscordHttpResponse(
+        statusCode: response.statusCode,
+        headers: responseHeaders,
+        body: await utf8.decoder.bind(response).join(),
+      );
+    }
+
+    return attempt().timeout(requestTimeout, onTimeout: () {
+      // The socket is in an unknown state: aborting releases it instead of
+      // leaving a half-read connection in the client's pool.
+      request?.abort();
+      throw TimeoutException(
+        'Discord request to ${uri.host} timed out after '
+        '${requestTimeout.inSeconds}s',
+        requestTimeout,
+      );
     });
-    return DiscordHttpResponse(
-      statusCode: response.statusCode,
-      headers: responseHeaders,
-      body: await utf8.decoder.bind(response).join(),
-    );
   }
 
   @override

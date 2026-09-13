@@ -35,6 +35,12 @@ final class LocalDesktopNotificationGateway
     implements DesktopNotificationGateway {
   LocalDesktopNotificationGateway();
 
+  /// The most toasts held at once. The OS reports a removal only through
+  /// the close and click callbacks. A toast dismissed without either fires
+  /// no callback, so it would sit in the set forever; the cap retires the
+  /// oldest entries as new ones arrive.
+  static const maxLive = 12;
+
   final Set<LocalNotification> _notifications = {};
 
   @override
@@ -45,6 +51,10 @@ final class LocalDesktopNotificationGateway
 
   @override
   Future<void> show(DesktopNotificationRequest request) async {
+    // Insertion order makes [_notifications.first] the oldest live toast.
+    while (_notifications.length >= maxLive) {
+      await _destroy(_notifications.first);
+    }
     late final LocalNotification notification;
     notification = LocalNotification(
       identifier: request.identifier,

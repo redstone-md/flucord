@@ -242,6 +242,38 @@ void main() {
         harness.close();
       });
     });
+    test('a sender who left has their stream state dropped', () {
+      fakeAsync((async) {
+        final harness = _Harness(async);
+        harness.recovery.accept(_video(1));
+        harness.recovery.accept(_video(3));
+        async.elapse(Duration.zero);
+        expect(harness.recovery.report(), isNotEmpty);
+
+        // The protocol drops the SSRC mapping when the user disconnects;
+        // the recovery drops the buffer and the open hole with it.
+        harness.senders.remove(_videoSsrc);
+        harness.recovery.forgetSender('remote-2');
+
+        expect(harness.recovery.report(), isEmpty);
+        // No NACK keeps going to a sender who is gone.
+        async.elapse(const Duration(milliseconds: 200));
+        expect(harness.nacks, hasLength(1));
+        harness.close();
+      });
+    });
+
+    test('a sender still in the room keeps their stream state', () {
+      fakeAsync((async) {
+        final harness = _Harness(async);
+        harness.recovery.accept(_video(1));
+        async.elapse(Duration.zero);
+
+        harness.recovery.forgetSender('somebody-else');
+        expect(harness.recovery.report(), isNotEmpty);
+        harness.close();
+      });
+    });
   });
 }
 
@@ -287,7 +319,7 @@ DiscordRtpFrame _onRtxSsrc(int sequence) => DiscordRtpFrame(
 final class _Harness {
   _Harness(this.async) {
     recovery = DiscordPictureLossRecovery(
-      senderFor: (ssrc) => ssrc == _videoSsrc ? 'remote-2' : null,
+      senderFor: (ssrc) => senders[ssrc],
       roundTrip: () => roundTrip,
       now: () => async.elapsed,
     );
@@ -300,6 +332,10 @@ final class _Harness {
 
   final FakeAsync async;
   late final DiscordPictureLossRecovery recovery;
+
+  /// Who the protocol says sends on each SSRC, mutable so a test can
+  /// disconnect a sender the way the protocol does.
+  final Map<int, String> senders = {_videoSsrc: 'remote-2'};
   Duration? roundTrip;
 
   /// The sequences delivered in order.

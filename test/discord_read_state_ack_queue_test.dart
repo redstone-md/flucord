@@ -216,6 +216,39 @@ void main() {
     expect(transport.requests, hasLength(1));
   });
 
+  test('does not retry a request that hung to its timeout', () async {
+    final transport = _RecordingTransport(timeouts: 1);
+    final queue = _queue(transport);
+    addTearDown(queue.close);
+
+    await expectLater(
+      queue.sendNow(DiscordDesktopReadStateRequests.ackPins(_channelId)),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(transport.requests, hasLength(1));
+  });
+
+  test('a timed-out ack does not hold the queue against later acks', () async {
+    final transport = _RecordingTransport(timeouts: 1);
+    final queue = _queue(transport);
+    addTearDown(queue.close);
+
+    queue.schedule(
+      const DiscordPendingAck(channelId: _channelId, messageId: _olderMessage),
+      immediate: true,
+    );
+    await _settle();
+    expect(transport.requests, hasLength(1));
+
+    queue.schedule(
+      const DiscordPendingAck(channelId: _channelId, messageId: _newerMessage),
+      immediate: true,
+    );
+    await _settle();
+    expect(transport.requests, hasLength(2));
+    expect(queue.hasPendingWork, isFalse);
+  });
+
   test('retries a rate limit and a transport-level failure', () async {
     final rateLimited = _RecordingTransport(failures: 1, failureStatus: 429);
     final queue = _queue(rateLimited);
@@ -311,17 +344,22 @@ final class _RecordingTransport {
     List<Map<String, Object?>?> responses = const [],
     this.failures = 0,
     this.failureStatus = 500,
+    this.timeouts = 0,
     this.gate,
   }) : _responses = [...responses];
 
   final List<Map<String, Object?>?> _responses;
   final int failures;
   final int? failureStatus;
+  final int timeouts;
   final Completer<void>? gate;
   final List<DiscordDesktopRestRequest> requests = [];
 
   Future<Map<String, Object?>?> send(DiscordDesktopRestRequest request) async {
     requests.add(request);
+    if (requests.length <= timeouts) {
+      throw TimeoutException('Discord request timed out');
+    }
     if (requests.length <= failures) {
       final status = failureStatus;
       if (status == null) throw StateError('socket closed');

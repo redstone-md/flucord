@@ -187,27 +187,34 @@ final class DiscordReadStateAckQueue {
     final generation = _generation;
     final sessionUserId = _userId;
     final tokenBefore = _token;
-    await _serialize(() async {
-      if (generation != _generation) return;
-      final body = await _attempt(
-        DiscordDesktopRestRequest.ackMessage(
-          channelId: ack.channelId,
-          messageId: ack.messageId,
-          readStateToken: tokenBefore,
-          lastViewed: ack.lastViewed,
-          flags: ack.flags,
-        ),
-      );
-      final next = body?['token'];
-      if (generation != _generation) return;
-      // Compare-and-set on both the token and the session. A response that
-      // overtook a newer ack, or that belongs to an account that has since been
-      // switched away from, would otherwise resurrect a stale token and make
-      // every later ack fail in a way nothing here can observe.
-      if (next is String && _token == tokenBefore && _userId == sessionUserId) {
-        _token = next;
-      }
-    });
+    try {
+      await _serialize(() async {
+        if (generation != _generation) return;
+        final body = await _attempt(
+          DiscordDesktopRestRequest.ackMessage(
+            channelId: ack.channelId,
+            messageId: ack.messageId,
+            readStateToken: tokenBefore,
+            lastViewed: ack.lastViewed,
+            flags: ack.flags,
+          ),
+        );
+        final next = body?['token'];
+        if (generation != _generation) return;
+        // Compare-and-set on both the token and the session. A response that
+        // overtook a newer ack, or that belongs to an account that has since
+        // been switched away from, would otherwise resurrect a stale token and
+        // make every later ack fail in a way nothing here can observe.
+        if (next is String &&
+            _token == tokenBefore &&
+            _userId == sessionUserId) {
+          _token = next;
+        }
+      });
+    } on Object {
+      // The retry policy logs its own giveups. The next ack for this channel
+      // is a fresh attempt, and the chain behind the failed one still runs.
+    }
   }
 
   Future<void> _drainBulk() async {
@@ -276,6 +283,16 @@ final class DiscordReadStateAckQueue {
         // A rejection the server will repeat is not worth two more round
         // trips; only a transient failure earns the backoff.
         if (error.statusCode < 500 && error.statusCode != 429) rethrow;
+      } on TimeoutException {
+        // One slot is all a hung request gets. It already held the queue for
+        // the transport's whole timeout, and two more attempts would hold it
+        // for that span again; the next ack is a fresh request of its own.
+        AppLog.warning(
+          'discord.readstate',
+          'Discord read-state ${request.method} ${request.path} timed out '
+          'and was not retried',
+        );
+        rethrow;
       } on Object catch (error) {
         lastError = error;
       }

@@ -24,6 +24,19 @@ final class SqliteChatCache
   @override
   final Database _database;
 
+  /// The most messages held per channel, about five full pages of offline
+  /// scrollback. History loading appends page after page without replacing,
+  /// so one channel scrolled far back would otherwise grow the table for the
+  /// life of the install. The oldest rows go first: recent history is what
+  /// an offline launch restores, and what scrolling loads first on a
+  /// connected one.
+  static const historyPerChannel = 500;
+
+  /// The most messages the offline fallback decodes per channel. The
+  /// workspace read used to select the whole table, so a long session paid
+  /// the whole table's decode on every offline launch.
+  static const offlineHistoryPerChannel = 100;
+
   static Future<SqliteChatCache> openDefault() async {
     sqfliteFfiInit();
     final supportDirectory = await getApplicationSupportDirectory();
@@ -63,6 +76,8 @@ final class SqliteChatCache
   ///
   /// The two reads differ only in those two tables, and those two are the
   /// expensive ones: every message row carries seven encoded fields to decode.
+  /// The message read is bounded to [offlineHistoryPerChannel] per channel,
+  /// so an offline launch decodes a bounded amount however long the table is.
   Future<ChatWorkspace?> _readWorkspace({required bool withHistory}) async {
     final metadata = await _database.query(
       'metadata',
@@ -78,9 +93,28 @@ final class SqliteChatCache
     final members = withHistory
         ? await _database.query('members')
         : const <Map<String, Object?>>[];
-    final messages = withHistory
-        ? await _database.query('messages', orderBy: 'sent_at')
-        : const <Map<String, Object?>>[];
+    final messages = <Map<String, Object?>>[];
+    if (withHistory) {
+      // Per channel, newest first, so a limit keeps each channel's newest
+      // page instead of the newest channels' everything.
+      for (final channel in channels) {
+        messages.addAll(
+          await _database.query(
+            'messages',
+            where: 'channel_id = ?',
+            whereArgs: [channel['id']],
+            orderBy: 'sent_at DESC',
+            limit: offlineHistoryPerChannel,
+          ),
+        );
+      }
+      // The workspace has always carried its messages oldest first.
+      messages.sort(
+        (left, right) => (left['sent_at']! as String).compareTo(
+          right['sent_at']! as String,
+        ),
+      );
+    }
     final (emojis, stickers) = await _readGuildExpressions();
     return ChatWorkspace(
       spaces: spaces.map(_spaceFromRow).toList(),
@@ -240,6 +274,7 @@ final class SqliteChatCache
         );
       }
       await batch.commit(noResult: true);
+      await _pruneChannel(transaction, history.channelId);
     });
   }
 
@@ -258,8 +293,19 @@ final class SqliteChatCache
         _messageToRow(message),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      await _pruneChannel(transaction, message.channelId);
     });
   }
+
+  /// Keeps a channel's rows within [historyPerChannel], newest kept.
+  Future<void> _pruneChannel(DatabaseExecutor executor, String channelId) =>
+      executor.delete(
+        'messages',
+        where: 'channel_id = ? AND id NOT IN '
+            '(SELECT id FROM messages WHERE channel_id = ? '
+            'ORDER BY sent_at DESC LIMIT ?)',
+        whereArgs: [channelId, channelId, historyPerChannel],
+      );
 
   @override
   Future<void> writeSpace(CommunitySpace space) async {

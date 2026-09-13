@@ -619,7 +619,74 @@ void main() {
     await _flushEvents();
     expect(gone, ['user-1', 'user-2']);
   });
+
+  test('a participant the roster no longer seats leaves the room', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(_state('user-1'));
+    // A speaking event puts somebody in the room with no state event behind
+    // it, the way a join announced on the voice socket lands.
+    signaling.emit(
+      const VoiceSpeakingEvent(userId: 'user-2', ssrc: 9, speakingFlags: 1),
+    );
+    await _flushEvents();
+    expect(
+      controller.participants.map((participant) => participant.userId),
+      containsAll(['user-1', 'user-2']),
+    );
+
+    // user-2 left without a disconnect event ever arriving; the roster's
+    // next change is what takes them out.
+    signaling.roster['voice-1'] = [_state('user-1')];
+    signaling.changeSeats();
+    await _flushEvents();
+    expect(
+      controller.participants.map((participant) => participant.userId),
+      ['user-1'],
+    );
+
+    // The account's own entry survives a roster that does not list it: the
+    // roster can lag behind the credentials that put us in the room.
+    signaling.emit(
+      const VoiceCredentialsReadyEvent(
+        VoiceServerCredentials(
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          userId: 'self-1',
+          sessionId: 'session-1',
+          token: 'token-1',
+          endpoint: 'voice.example',
+        ),
+      ),
+    );
+    signaling.changeSeats();
+    await _flushEvents();
+    expect(
+      controller.participants.map((participant) => participant.userId),
+      contains('self-1'),
+    );
+  });
 }
+
+VoiceParticipantStateEvent _state(String userId) =>
+    VoiceParticipantStateEvent(
+      userId: userId,
+      guildId: 'guild-1',
+      channelId: 'voice-1',
+      selfMuted: false,
+      selfDeafened: false,
+      serverMuted: false,
+      serverDeafened: false,
+      isStreaming: false,
+      isVideoEnabled: false,
+    );
 
 /// One 20 ms microphone frame loud enough to pass the uplink's gate.
 final Uint8List _speech = Int16List.fromList(
@@ -646,11 +713,17 @@ final class _FakeVoiceSignalingService
   @override
   VoiceTransportSession? currentSession;
 
-  @override
-  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => const {};
+  Map<String, List<VoiceParticipantStateEvent>> roster = {};
 
   @override
-  Stream<void> get seatedChanges => const Stream<void>.empty();
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel => roster;
+
+  final StreamController<void> _seatedChanges = StreamController.broadcast();
+
+  @override
+  Stream<void> get seatedChanges => _seatedChanges.stream;
+
+  void changeSeats() => _seatedChanges.add(null);
 
   _FakeVoiceSignalingService({this._operations});
 
@@ -704,6 +777,7 @@ final class _FakeVoiceSignalingService
   Future<void> close() async {
     await _events.close();
     await _remoteAudio.close();
+    await _seatedChanges.close();
   }
 }
 
