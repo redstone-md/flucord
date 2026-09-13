@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../application/quick_switcher_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'mention_badge.dart';
 
 part 'quick_switcher_destination_row.dart';
 

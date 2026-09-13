@@ -286,12 +286,25 @@ class _ImageAttachment extends StatelessWidget {
                 aspectRatio: ratio,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image(
-                    image: _previewImage(context, attachment, box),
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.medium,
-                    errorBuilder: (_, _, _) =>
-                        _FileAttachment(attachment: attachment),
+                  // A hairline on the clipped edge. Painted over the image, so
+                  // a light picture still reads against a light background.
+                  child: DecoratedBox(
+                    position: DecorationPosition.foreground,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: Theme.of(context).brightness == Brightness.light
+                            ? Colors.black.withValues(alpha: 0.1)
+                            : Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Image(
+                      image: _previewImage(context, attachment, box),
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, _, _) =>
+                          _FileAttachment(attachment: attachment),
+                    ),
                   ),
                 ),
               ),

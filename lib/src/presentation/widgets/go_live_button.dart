@@ -58,7 +58,11 @@ class GoLiveButton extends StatelessWidget {
             child: Text(
               '${controller.viewerIds.length} watching',
               key: const ValueKey('go-live-viewers'),
-              style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: 11,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
         IconButton(

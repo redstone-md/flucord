@@ -171,24 +171,9 @@ class _ChannelRow extends StatelessWidget {
                     ),
                   ),
                 if (channel.mentionCount > 0)
-                  Container(
+                  MentionBadge(
                     key: ValueKey('channel-mention-${channel.id}'),
-                    constraints: const BoxConstraints(minWidth: 18),
-                    height: 18,
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: FlucordColors.mention,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${channel.mentionCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    count: channel.mentionCount,
                   ),
                 const SizedBox(width: 8),
               ],

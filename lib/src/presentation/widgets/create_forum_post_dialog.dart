@@ -136,7 +136,7 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
     backgroundColor: context.surfaces.surface,
     clipBehavior: Clip.antiAlias,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       side: BorderSide(color: context.surfaces.border),
     ),
     child: ConstrainedBox(

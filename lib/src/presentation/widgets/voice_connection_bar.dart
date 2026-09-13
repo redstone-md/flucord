@@ -177,7 +177,10 @@ class _BarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colour = danger
+    // The disabled shade matches the icon button theme's disabled colour.
+    final colour = onPressed == null
+        ? context.surfaces.muted.withValues(alpha: 0.38)
+        : danger
         ? Theme.of(context).colorScheme.error
         : active
         ? Theme.of(context).colorScheme.onSurface
@@ -188,9 +191,10 @@ class _BarButton extends StatelessWidget {
         key: buttonKey,
         borderRadius: BorderRadius.circular(4),
         onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 16, color: colour),
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Center(child: Icon(icon, size: 16, color: colour)),
         ),
       ),
     );

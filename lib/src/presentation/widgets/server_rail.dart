@@ -11,6 +11,7 @@ import 'account_standing_scope.dart';
 import 'auth_session_scope.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
+import 'mention_badge.dart';
 import 'stream_quality_scope.dart';
 import 'streamer_mode_scope.dart';
 import 'theme_scope.dart';
@@ -300,6 +301,7 @@ class _RailButtonState extends State<_RailButton> {
                     borderRadius: radius,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOut,
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
@@ -323,9 +325,12 @@ class _RailButtonState extends State<_RailButton> {
               Positioned(
                 right: 4,
                 bottom: 0,
-                child: _MentionBadge(
-                  spaceId: widget.spaceId,
+                // The rail-coloured ring keeps the badge readable where it
+                // overlaps the avatar's edge.
+                child: MentionBadge(
+                  key: ValueKey('space-mention-${widget.spaceId}'),
                   count: widget.activity.mentionCount,
+                  borderColor: context.surfaces.rail,
                 ),
               ),
           ],
@@ -342,33 +347,4 @@ class _RailButtonState extends State<_RailButton> {
     if (activity.muted) return '$name, muted';
     return activity.hasUnread ? '$name, unread' : name;
   }
-}
-
-class _MentionBadge extends StatelessWidget {
-  const _MentionBadge({required this.spaceId, required this.count});
-
-  final String spaceId;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: ValueKey('space-mention-$spaceId'),
-    constraints: const BoxConstraints(minWidth: 18),
-    height: 18,
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: FlucordColors.mention,
-      borderRadius: BorderRadius.circular(9),
-      border: Border.all(color: context.surfaces.rail, width: 2),
-    ),
-    child: Text(
-      count > 99 ? '99+' : '$count',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
 }

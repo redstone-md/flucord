@@ -70,7 +70,7 @@ class MessageActionBar extends StatelessWidget {
       currentMemberId: workspace.currentMemberId,
     );
     return Container(
-      height: 30,
+      height: 36,
       decoration: BoxDecoration(
         color: context.surfaces.surface,
         border: Border.all(color: context.surfaces.border),
@@ -82,7 +82,7 @@ class MessageActionBar extends StatelessWidget {
           ?apps,
           if (capabilities.sendMessages)
             _ActionButton(
-              icon: Icons.reply,
+              icon: Icons.reply_outlined,
               tooltip: 'Reply',
               onPressed: onReply,
             ),
@@ -197,7 +197,7 @@ class MessageActionBar extends StatelessWidget {
       spaceName: space.name,
       customEmojis: workspace.emojisFor(space.id),
       purpose: EmojiPickerPurpose.reaction,
-      dimension: 30,
+      dimension: 36,
       iconSize: 16,
       onMenuStateChanged: onReactionPickerToggled,
       onSelected: onAddReaction,
@@ -232,6 +232,6 @@ class _ActionButton extends StatelessWidget {
     ),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
-    constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
   );
 }

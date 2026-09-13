@@ -87,7 +87,7 @@ class _DestinationRow extends StatelessWidget {
                     ),
                   if (destination.mentionCount > 0) ...[
                     const SizedBox(width: 8),
-                    _MentionBadge(count: destination.mentionCount),
+                    MentionBadge(count: destination.mentionCount),
                   ],
                   const SizedBox(width: 10),
                 ],
@@ -98,32 +98,6 @@ class _DestinationRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MentionBadge extends StatelessWidget {
-  const _MentionBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minWidth: 20),
-    height: 18,
-    padding: const EdgeInsets.symmetric(horizontal: 5),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: FlucordColors.mention,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      count > 99 ? '99+' : '$count',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
 }
 
 class _QuickSwitcherFooter extends StatelessWidget {

@@ -127,6 +127,7 @@ class _OAuthAccountHomeButton extends StatelessWidget {
                   borderRadius: radius,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOut,
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
@@ -210,6 +211,7 @@ class _OAuthGuildRailButtonState extends State<_OAuthGuildRailButton> {
                     borderRadius: radius,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOut,
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(

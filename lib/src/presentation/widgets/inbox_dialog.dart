@@ -7,6 +7,7 @@ import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
+import 'mention_badge.dart';
 
 class InboxActivityButton extends StatelessWidget {
   const InboxActivityButton({
@@ -48,7 +49,10 @@ class InboxActivityButton extends StatelessWidget {
                 Positioned(
                   top: 3,
                   right: 2,
-                  child: _ActivityBadge(count: summary.mentionCount),
+                  child: MentionBadge(
+                    key: const ValueKey('inbox-mention-badge'),
+                    count: summary.mentionCount,
+                  ),
                 )
               else if (summary.hasUnread)
                 Positioned(
@@ -440,33 +444,6 @@ class _InboxEmptyState extends StatelessWidget {
           style: TextStyle(color: context.surfaces.muted, fontSize: 11),
         ),
       ],
-    ),
-  );
-}
-
-class _ActivityBadge extends StatelessWidget {
-  const _ActivityBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('inbox-mention-badge'),
-    constraints: const BoxConstraints(minWidth: 16),
-    height: 16,
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: FlucordColors.mention,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      count > 99 ? '99+' : '$count',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 9,
-        fontWeight: FontWeight.w700,
-      ),
     ),
   );
 }

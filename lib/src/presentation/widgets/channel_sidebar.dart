@@ -11,6 +11,7 @@ import 'account_panel.dart';
 import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
+import 'mention_badge.dart';
 import 'notification_settings_menu.dart';
 
 part 'channel_sidebar_rows.dart';

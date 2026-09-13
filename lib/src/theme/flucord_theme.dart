@@ -137,6 +137,11 @@ abstract final class FlucordTheme {
           ),
         ),
       ),
+      // AlertDialogs get the same 8px corners as the hand-built Dialogs;
+      // Material 3 would otherwise round them to 28.
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: rail,

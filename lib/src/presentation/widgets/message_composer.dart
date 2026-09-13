@@ -322,6 +322,27 @@ class _MessageComposerState extends State<MessageComposer>
                         ? 'Message ${widget.channelName}'
                         : 'Message #${widget.channelName}',
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
+                    // Square top corners under the reply bar, so the two read
+                    // as one surface. Null elsewhere keeps the theme's rounded
+                    // field.
+                    enabledBorder: widget.replyTo == null
+                        ? null
+                        : const OutlineInputBorder(
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(6),
+                            ),
+                            borderSide: BorderSide.none,
+                          ),
+                    focusedBorder: widget.replyTo == null
+                        ? null
+                        : OutlineInputBorder(
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(6),
+                            ),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                     prefixIcon: widget.canAttachFiles
                         ? IconButton(
                             key: const ValueKey('add-attachment'),
@@ -404,61 +425,26 @@ class _MessageComposerState extends State<MessageComposer>
                               ? 'Send with notifications'
                               : 'Send silently',
                         ),
-                        if (widget.isSending)
-                          const SizedBox.square(
-                            dimension: 48,
-                            child: Center(
-                              child: SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                        // The two send buttons share one key, so a disabled
+                        // send updates in place; only the spinner and the
+                        // recorder cross-fade.
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 130),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeOut,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(
+                                    begin: 0.9,
+                                    end: 1.0,
+                                  ).animate(animation),
+                                  child: child,
                                 ),
                               ),
-                            ),
-                          )
-                        else if (_canSend)
-                          IconButton(
-                            key: const ValueKey('send-message'),
-                            constraints: const BoxConstraints.tightFor(
-                              width: 48,
-                              height: 48,
-                            ),
-                            padding: EdgeInsets.zero,
-                            onPressed: _send,
-                            icon: const Icon(
-                              Icons.send,
-                              size: 19,
-                              color: FlucordColors.brand,
-                            ),
-                            tooltip: 'Send message',
-                          )
-                        else if (widget.voiceMessageRecorder != null &&
-                            widget.onSendVoiceMessage != null)
-                          IconButton(
-                            key: const ValueKey('record-voice-message'),
-                            constraints: const BoxConstraints.tightFor(
-                              width: 48,
-                              height: 48,
-                            ),
-                            padding: EdgeInsets.zero,
-                            onPressed: _canRecordVoice
-                                ? _startVoiceRecording
-                                : null,
-                            icon: const Icon(Icons.mic_none_rounded, size: 20),
-                            tooltip: 'Record voice message',
-                          )
-                        else
-                          const IconButton(
-                            key: ValueKey('send-message'),
-                            constraints: BoxConstraints.tightFor(
-                              width: 48,
-                              height: 48,
-                            ),
-                            padding: EdgeInsets.zero,
-                            onPressed: null,
-                            icon: Icon(Icons.send, size: 19),
-                            tooltip: 'Send message',
-                          ),
+                          child: _trailingAction(),
+                        ),
                       ],
                     ),
                   ),
@@ -467,6 +453,51 @@ class _MessageComposerState extends State<MessageComposer>
             ),
         ],
       ),
+    );
+  }
+
+  /// The last control in the composer's trailing cluster.
+  Widget _trailingAction() {
+    if (widget.isSending) {
+      return const SizedBox.square(
+        key: ValueKey('send-progress'),
+        dimension: 48,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (_canSend) {
+      return IconButton(
+        key: const ValueKey('send-message'),
+        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+        padding: EdgeInsets.zero,
+        onPressed: _send,
+        icon: const Icon(Icons.send, size: 19, color: FlucordColors.brand),
+        tooltip: 'Send message',
+      );
+    }
+    if (widget.voiceMessageRecorder != null &&
+        widget.onSendVoiceMessage != null) {
+      return IconButton(
+        key: const ValueKey('record-voice-message'),
+        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+        padding: EdgeInsets.zero,
+        onPressed: _canRecordVoice ? _startVoiceRecording : null,
+        icon: const Icon(Icons.mic_none_rounded, size: 20),
+        tooltip: 'Record voice message',
+      );
+    }
+    return const IconButton(
+      key: ValueKey('send-message'),
+      constraints: BoxConstraints.tightFor(width: 48, height: 48),
+      padding: EdgeInsets.zero,
+      onPressed: null,
+      icon: Icon(Icons.send, size: 19),
+      tooltip: 'Send message',
     );
   }
 
@@ -480,7 +511,7 @@ class _MessageComposerState extends State<MessageComposer>
         left: BorderSide(color: context.surfaces.border),
         right: BorderSide(color: context.surfaces.border),
       ),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
     ),
     child: Row(
       children: [

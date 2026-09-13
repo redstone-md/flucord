@@ -491,7 +491,7 @@ class _StreamCard extends StatelessWidget {
       onPressed: onPressed,
       style: TextButton.styleFrom(
         minimumSize: Size.zero,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         foregroundColor: danger ? FlucordColors.danger : null,
         textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),

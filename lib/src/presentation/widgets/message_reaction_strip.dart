@@ -168,7 +168,10 @@ class _ReactionChip extends StatelessWidget {
                   const SizedBox(width: 5),
                   Text(
                     '${reaction.count}',
-                    style: const TextStyle(fontSize: 10),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ],
               ),
