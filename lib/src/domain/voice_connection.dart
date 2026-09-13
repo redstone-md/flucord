@@ -117,6 +117,14 @@ final class VoiceCredentialsReadyEvent extends VoiceSignalingEvent {
   final VoiceServerCredentials credentials;
 }
 
+/// The connection's session ended server-side (Discord's 4006, 4014 and
+/// 4022) and no redial of its own credentials can bring it back: the holder
+/// asks the main gateway for fresh ones, as the call's recovery does, and
+/// the connection is rebuilt from what arrives.
+final class VoiceCredentialsNeededEvent extends VoiceSignalingEvent {
+  const VoiceCredentialsNeededEvent();
+}
+
 final class VoiceTransportReadyEvent extends VoiceSignalingEvent {
   const VoiceTransportReadyEvent(this.session);
 

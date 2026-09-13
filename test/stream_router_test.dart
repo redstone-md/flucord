@@ -77,6 +77,8 @@ final class _Wiring {
       repositoryProvider: () => repository,
       identityProvider: () => (sessionId: 'session-1', userId: 'me'),
       socketFactoryProvider: _plainSocketFactory,
+      // The viewer's holds are what make an endpoint worth a connection.
+      isWatched: (key) => viewer.isOpen(key),
     )..reconcile();
     // The Sender runs in-process here, where the production plane would run
     // it on its own isolate.
@@ -324,18 +326,17 @@ void main() {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
 
+    // An endpoint for a stream nobody asked for: opened, it would dial and
+    // go on living with nothing ever stopping it.
     wiring.repository.assign(_otherServer);
-    await Future<void>.delayed(Duration.zero);
-    final connection = wiring.clients.single;
-    connection.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
 
     final heard = <VoiceRemotePcmFrame>[];
     final played = wiring.viewer.audio.listen(heard.add);
     addTearDown(played.cancel);
-    connection.emitAudio('somebody-else', [7]);
     await Future<void>.delayed(Duration.zero);
 
+    expect(wiring.clients, isEmpty);
     expect(wiring.viewer.isOpen(_otherKey), isFalse);
     expect(wiring.viewer.isWatching(_otherKey), isFalse);
     expect(wiring.audioCodecs.created, 0);
@@ -418,6 +419,7 @@ void main() {
     final wiring = _Wiring();
     addTearDown(wiring.dispose);
 
+    await wiring.viewer.requestWatch(_otherKey);
     wiring.router.dispose();
     wiring.repository.assign(_otherServer);
     await Future<void>.delayed(Duration.zero);
@@ -427,6 +429,136 @@ void main() {
     expect(wiring.clients.single.announcements, isEmpty);
     expect(wiring.viewer.watching, isNull);
   });
+
+  test('an endpoint replacement mid-watch keeps the watch running', () async {
+    final wiring = _Wiring();
+    addTearDown(wiring.dispose);
+
+    await wiring.viewer.requestWatch(_otherKey);
+    wiring.repository.assign(_otherServer);
+    await Future<void>.delayed(Duration.zero);
+    final first = wiring.clients.single;
+    first.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+    expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+    // Discord hands out a fresh endpoint for the same stream: the first
+    // connection is closed to be replaced.
+    wiring.repository.assign(
+      const GoLiveServer(
+        key: _otherKey,
+        endpoint: 'stream.discord.gg',
+        token: 'second',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(first.closed, isTrue);
+
+    // The swap close is not reported as a stop: the key stays held, the ask
+    // is not withdrawn, and the room goes on showing the stream it holds
+    // while the fresh connection dials.
+    expect(wiring.repository.withdrawn, isEmpty);
+    expect(wiring.viewer.isOpen(_otherKey), isTrue);
+
+    final second = wiring.clients.last;
+    second.announce(const VoiceTransportReadyEvent(_session));
+    await Future<void>.delayed(Duration.zero);
+    expect(wiring.viewer.watching, _otherKey);
+    expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+    for (final frame in _packetizedUnit()) {
+      second.emitVideo(_otherKey.userId, frame);
+    }
+    await Future<void>.delayed(Duration.zero);
+    expect(wiring.viewer.receivedPacketsFor(_otherKey), 2);
+    expect(wiring.viewer.decodedUnitsFor(_otherKey), 1);
+  });
+
+  test(
+    'a watch asked for again in the same breath as its stop is not withdrawn',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
+
+      await wiring.viewer.requestWatch(_otherKey);
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      final first = wiring.clients.single;
+      first.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+      // Stop and ask again with no event-loop turn between. The first
+      // connection's close lands after the fresh ask; were it reported as a
+      // stop, the fresh ask would be withdrawn with it.
+      final stopping = wiring.viewer.stop(_otherKey);
+      final asking = wiring.viewer.requestWatch(_otherKey);
+      await stopping;
+      await asking;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(wiring.repository.withdrawn, hasLength(1));
+      expect(wiring.viewer.isOpen(_otherKey), isTrue);
+
+      // The fresh answer opens a working watch.
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      final second = wiring.clients.last;
+      second.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+      for (final frame in _packetizedUnit()) {
+        second.emitVideo(_otherKey.userId, frame);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.decodedUnitsFor(_otherKey), 1);
+    },
+  );
+
+  test(
+    'a session-ended close recovers the watch once fresh credentials arrive',
+    () async {
+      final wiring = _Wiring();
+      addTearDown(wiring.dispose);
+
+      await wiring.viewer.requestWatch(_otherKey);
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      final hung = wiring.clients.single;
+      hung.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+      // Codes 4006/4014/4022 end the session: the connection can only wait.
+      hung.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+
+      // The ask went out on the watch's own behalf: withdrawal first, then
+      // the watch again. The viewer was not touched.
+      expect(wiring.repository.withdrawn, [_otherKey]);
+      expect(wiring.repository.watched, [_otherKey, _otherKey]);
+      expect(wiring.viewer.isOpen(_otherKey), isTrue);
+
+      // The fresh endpoint answers, and the connection is swapped under the
+      // watch rather than the watch being ended with the dead one.
+      wiring.repository.assign(_otherServer);
+      await Future<void>.delayed(Duration.zero);
+      expect(hung.closed, isTrue);
+      expect(wiring.viewer.isOpen(_otherKey), isTrue);
+
+      final fresh = wiring.clients.last;
+      fresh.announce(const VoiceTransportReadyEvent(_session));
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.isWatching(_otherKey), isTrue);
+
+      for (final frame in _packetizedUnit()) {
+        fresh.emitVideo(_otherKey.userId, frame);
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(wiring.viewer.decodedUnitsFor(_otherKey), 1);
+    },
+  );
 }
 
 /// Fake stream client with picture and audio inputs.
@@ -567,13 +699,25 @@ final class _FakeDecoder implements VideoDecoderService {
 final class _FakeRepository implements GoLiveRepository {
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
+  final Map<String, GoLiveStream> _streams = {};
   final List<GoLiveStreamKey> watched = [];
+  final List<GoLiveStreamKey> withdrawn = [];
 
   /// What this client told Discord about holding pictures back, which is the
   /// sender's own act and reaches everybody watching, suspended or not.
   final List<bool> pauses = [];
 
-  void assign(GoLiveServer server) => _servers.add(server);
+  void assign(GoLiveServer server) {
+    _streams.putIfAbsent(server.key.value, () => GoLiveStream(key: server.key));
+    _servers.add(server);
+  }
+
+  /// Ends a stream the way the real repository does: removed first, the
+  /// final state published after.
+  void end(GoLiveStreamKey key) {
+    final removed = _streams.remove(key.value);
+    if (removed != null) _updates.add(removed.copyWith(viewerIds: const []));
+  }
 
   Future<void> close() async {
     await _updates.close();
@@ -581,7 +725,7 @@ final class _FakeRepository implements GoLiveRepository {
   }
 
   @override
-  Map<String, GoLiveStream> get streams => const {};
+  Map<String, GoLiveStream> get streams => _streams;
 
   @override
   Stream<GoLiveStream> get updates => _updates.stream;
@@ -616,7 +760,7 @@ final class _FakeRepository implements GoLiveRepository {
   Future<void> endStream(GoLiveStreamKey key) async {}
 
   @override
-  Future<void> stopWatching(GoLiveStreamKey key) async {}
+  Future<void> stopWatching(GoLiveStreamKey key) async => withdrawn.add(key);
 }
 
 /// The socket factory seam, faked on the stream side only.

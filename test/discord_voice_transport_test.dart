@@ -851,6 +851,35 @@ void main() {
       expect(connector.connectCount, 1);
     });
 
+    test('a session Discord ended asks for fresh credentials', () async {
+      final socket = _FakeVoiceWebSocket();
+      final connector = _FakeVoiceSocketConnector(socket);
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: connector,
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      final events = <VoiceSignalingEvent>[];
+      final subscription = client.events.listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(client.close);
+
+      await client.connect();
+      await socket.closeFromServer(4014);
+      await _flushEvents();
+
+      // The status is the state; the event is the ask. The call's recovery
+      // reads the transition into reconnecting, and the stream planes read
+      // the ask: only fresh credentials bring the connection back.
+      expect(
+        events.whereType<VoiceCredentialsNeededEvent>(),
+        hasLength(1),
+      );
+      final statuses = events.whereType<VoiceSignalingStatusEvent>().toList();
+      expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
+    });
+
     test(
       'a session Discord ended does not redial on unanswered heartbeats',
       () async {

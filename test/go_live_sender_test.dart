@@ -157,6 +157,22 @@ void main() {
     ]);
   });
 
+  test(
+    'a session-ended close waits for fresh credentials, not a resume',
+    () async {
+      final opened = _Opened(frames: const Stream<EncodedVideoFrame>.empty());
+      opened.ready();
+      opened.client.emit(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+
+      // Codes 4006/4014/4022 ended the session: no redial brings this
+      // connection back, so this is not the hold a resume lifts.
+      expect(opened.sender.status, GoLiveSenderStatus.awaitingCredentials);
+      opened.sender.sendOpusFrame(Uint8List.fromList([1, 2, 3]));
+      expect(opened.client.opus, isEmpty);
+    },
+  );
+
   test('a missed packet is resent, a lost picture asks the encoder', () async {
     final opened = _Opened();
     opened.ready();

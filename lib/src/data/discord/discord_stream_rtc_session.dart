@@ -49,6 +49,24 @@ final class DiscordStreamRtcSession {
   int? _wantsSsrc;
   bool _closed = false;
 
+  /// Whether the watched session this connection carried ends when the
+  /// connection does.
+  ///
+  /// It does, until the service says otherwise: the closes it performs on
+  /// purpose, a replacement endpoint's swap and the watch holder's own stop,
+  /// are not the watched session's end. The first is followed by a fresh
+  /// connection for the same stream, and the second the holder has already
+  /// reported.
+  bool _watchEndsWithConnection = true;
+
+  bool get watchEndsWithConnection => _watchEndsWithConnection;
+
+  /// Closes the connection, leaving the watch it carried alone.
+  Future<void> closeKeepingWatch() async {
+    _watchEndsWithConnection = false;
+    await close();
+  }
+
   /// Pictures arriving on this connection, tagged with whose SSRC carried them.
   Stream<(String, DiscordRtpFrame)> get video => _video.stream;
 

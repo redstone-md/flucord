@@ -578,6 +578,11 @@ final class VoiceController extends ChangeNotifier {
         // acts on it through the stream router; a call carrying only audio
         // has nothing to resend.
         break;
+      case VoiceCredentialsNeededEvent():
+        // The signaling service asks the gateway for fresh credentials; the
+        // state the room is shown arrives as the reconnecting status beside
+        // this.
+        break;
     }
     if (!_disposed) notifyListeners();
   }

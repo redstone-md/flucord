@@ -23,6 +23,14 @@ enum GoLiveSenderStatus {
   /// until it comes back.
   held,
 
+  /// The session ended server-side and the connection is waiting for fresh
+  /// credentials. A hold lifts when the transport resumes; this waits for a
+  /// fresh endpoint, which is what rebuilds the sender. There is no ask that
+  /// re-issues a sender's endpoint without ending the stream: the endpoint
+  /// rides the main gateway re-issuing the voice session, and the controller
+  /// opens the fresh sender the moment it arrives.
+  awaitingCredentials,
+
   failed,
   closed,
 }
@@ -277,6 +285,11 @@ final class GoLiveWireSender implements GoLiveSender {
       case VoiceKeyframeRequestedEvent():
         _pictureLosses++;
         _commands.add(const GoLiveKeyframeCommand());
+      case VoiceCredentialsNeededEvent():
+        // The session ended server-side: no resume comes back on this
+        // connection. Held apart from a plain reconnect, so what waits for
+        // fresh credentials is not mistaken for one a redial will lift.
+        _setStatus(GoLiveSenderStatus.awaitingCredentials);
       default:
         break;
     }

@@ -67,6 +67,11 @@ final class StreamRouter {
       // the connection it was keyed by, and the watched session goes with it.
       onDone: () {
         _waiting.remove(session)?.cancel();
+        // Unless the service says otherwise: a close it performed on purpose
+        // is not the watched session's end. A replacement connection is on
+        // its way for the same stream, or the watch holder already ended the
+        // watch.
+        if (!session.watchEndsWithConnection) return;
         if (identical(_receiving[session.key], session)) {
           _receiving.remove(session.key);
           unawaited(_viewer.stop(session.key));

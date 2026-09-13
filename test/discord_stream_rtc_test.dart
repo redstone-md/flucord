@@ -340,6 +340,378 @@ void main() {
       expect(clients.last.closed, isFalse);
     });
 
+    test(
+      'two endpoints in one batch leave exactly one live connection',
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        // Both endpoints in one socket batch, with no event-loop turn
+        // between: this is the shape of a region change racing a watch
+        // answer, and it is the only way the double open shows itself.
+        for (final token in ['first', 'second']) {
+          repository.announceServer(
+            GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: token),
+          );
+        }
+        await Future<void>.delayed(Duration.zero);
+
+        // The second endpoint supersedes the first, and only it is dialled:
+        // exactly one connection, and the map holds it.
+        expect(clients, hasLength(1));
+        expect(clients.single.closed, isFalse);
+        expect(service.sessionFor(_key), isNotNull);
+      },
+    );
+
+    test('an open superseded by a stop does not dial stale credentials', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final tokens = <String>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((credentials) {
+          tokens.add(credentials.token);
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      // An endpoint starts an open; the watch is stopped and a fresh
+      // endpoint arrives before the open has had its turn. The queued open
+      // is stale: dialling it would open a connection for a watch that was
+      // already over.
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'first',
+        ),
+      );
+      await service.stop(_key);
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'second',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(tokens, ['second']);
+      expect(clients, hasLength(1));
+      expect(clients.single.closed, isFalse);
+    },
+  );
+
+    test(
+      'an open whose stream ends while it waits for its turn opens nothing',
+      () async {
+        final repository = _FakeRepository();
+        var made = 0;
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            made++;
+            return _FakeClient();
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'first',
+          ),
+        );
+        repository.end(_key);
+        // An endpoint behind the end: queued, then stale by the time its
+        // turn comes.
+        repository.announceOrphanServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'second',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(made, 0);
+        expect(service.sessionFor(_key), isNull);
+      },
+    );
+
+    test('an endpoint for a stream nobody holds opens nothing', () async {
+      final repository = _FakeRepository();
+      var made = 0;
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          made++;
+          return _FakeClient();
+        }),
+        isWatched: (_) => false,
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // Opened, it would dial and go on living with nothing ever stopping
+      // it. Discord reissues the endpoint on the next ask.
+      expect(made, 0);
+      expect(service.sessionFor(_key), isNull);
+    });
+
+    test(
+      'an endpoint for a stream the session never saw opens nothing',
+      () async {
+        final repository = _FakeRepository();
+        var made = 0;
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            made++;
+            return _FakeClient();
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        // No STREAM_CREATE was seen: the stream is not in the repository,
+        // and the credentials a connection would build from it are the guild
+        // and voice channel Discord refuses.
+        repository.announceOrphanServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'stream-token',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(made, 0);
+        expect(service.sessionFor(_key), isNull);
+      },
+    );
+
+    test(
+      'a session-ended close asks for fresh credentials and swaps the '
+      'connection',
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'first',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        final hung = clients.single;
+
+        // Codes 4006/4014/4022 leave the connection waiting for credentials
+        // it will never have: the ask is the watch's own leave and rejoin.
+        hung.announce(const VoiceCredentialsNeededEvent());
+        await Future<void>.delayed(Duration.zero);
+
+        expect(repository.withdrawn, [_key]);
+        expect(repository.watched, [_key]);
+
+        // The fresh endpoint answers: the hung connection is replaced, and
+        // the fresh one dials on the new token.
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'second',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(clients, hasLength(2));
+        expect(hung.closed, isTrue);
+        expect(clients.last.closed, isFalse);
+        expect(service.sessionFor(_key), isNotNull);
+      },
+    );
+
+    test('a recovery whose watch stops mid-ask re-asks for nothing', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      var held = true;
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+        isWatched: (_) => held,
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // The withdrawal waits in the fake, the way a frame in flight waits
+      // for the gateway.
+      repository.gateWithdraw = Completer<void>();
+      clients.single.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.watched, isEmpty);
+
+      // The watch stops while the withdrawal is in flight: the ask that
+      // follows it finds nothing held, and is not sent.
+      held = false;
+      repository.gateWithdraw!.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.withdrawn, [_key]);
+      expect(repository.watched, isEmpty);
+    });
+
+    test(
+      'a connection that reaches ready settles its recovery count',
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'first',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Two whole recoveries, each ending ready: neither may count against
+        // the other.
+        for (final token in ['second', 'third']) {
+          clients.last.announce(const VoiceCredentialsNeededEvent());
+          await Future<void>.delayed(Duration.zero);
+          repository.announceServer(
+            GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: token),
+          );
+          await Future<void>.delayed(Duration.zero);
+          clients.last.announce(const VoiceTransportReadyEvent(_session));
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        expect(repository.watched, hasLength(2));
+        expect(clients, hasLength(3));
+        expect(clients.last.closed, isFalse);
+      },
+    );
+
+    test('a recovery that keeps dying is called off', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'first',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      // Every fresh endpoint dies the same death, and each ask is answered:
+      // without a cap the recovery would never stop.
+      for (
+        var round = 0;
+        round < DiscordStreamRtcService.maxRecoveries;
+        round++
+      ) {
+        clients.last.announce(const VoiceCredentialsNeededEvent());
+        await Future<void>.delayed(Duration.zero);
+        repository.announceServer(
+          GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: '$round'),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+      final last = clients.last;
+
+      last.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+
+      // The watch cannot go on a connection that keeps dying: it ends.
+      expect(last.closed, isTrue);
+      expect(service.sessionFor(_key), isNull);
+    });
+
     test("an own endpoint with no watch pending is the sender's", () async {
       final repository = _FakeRepository();
       var made = 0;
@@ -407,6 +779,98 @@ void main() {
 
       expect(service.sessionFor(_key), isNull);
       expect(clients.single.closed, isTrue);
+    });
+
+    test(
+      'a withdrawal echoed mid-recovery does not end the watch',
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((_) {
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
+
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'first',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        clients.single.announce(const VoiceCredentialsNeededEvent());
+        await Future<void>.delayed(Duration.zero);
+        expect(repository.withdrawn, [_key]);
+
+        // The withdrawal the recovery sent echoes back as a stream delete:
+        // the repository drops the stream it just withdrew from. That echo
+        // must not close the connection the re-watch is being answered on.
+        repository.end(_key);
+        await Future<void>.delayed(Duration.zero);
+        expect(service.sessionFor(_key), isNotNull);
+        expect(clients.single.closed, isFalse);
+
+        // The re-watch is answered: create and endpoint together, and the
+        // connection is swapped under the watch.
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'second',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(clients, hasLength(2));
+        expect(clients.first.closed, isTrue);
+        expect(clients.last.closed, isFalse);
+        expect(service.sessionFor(_key), isNotNull);
+      },
+    );
+
+    test('a re-issue that is never answered is asked for again', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+        reissueFallbackDelay: const Duration(milliseconds: 20),
+      );
+      addTearDown(service.close);
+      service.reconcile();
+
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'stream-token',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      clients.single.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.watched, hasLength(1));
+
+      // Nothing answers the ask. The fallback asks again until the cap
+      // calls the recovery off, and the watch ends rather than hanging on a
+      // connection nobody will ever re-issue credentials for.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(repository.watched, hasLength(DiscordStreamRtcService.maxRecoveries));
+      expect(clients.single.closed, isTrue);
+      expect(service.sessionFor(_key), isNull);
     });
 
     test('stopping one leaves the others alone', () async {
@@ -581,12 +1045,21 @@ final class _FakeRepository implements GoLiveRepository {
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
   final Map<String, GoLiveStream> _streams = {};
+  final List<GoLiveStreamKey> watched = [];
+  final List<GoLiveStreamKey> withdrawn = [];
+
+  /// When set, a withdrawal waits on it: an ask in flight the test controls.
+  Completer<void>? gateWithdraw;
   int serverListeners = 0;
 
   void announceServer(GoLiveServer server) {
     _streams.putIfAbsent(server.key.value, () => GoLiveStream(key: server.key));
     _servers.add(server);
   }
+
+  /// Announces an endpoint without holding the stream: the shape of an
+  /// endpoint for a stream this session never saw created.
+  void announceOrphanServer(GoLiveServer server) => _servers.add(server);
 
   /// Ends a stream the way the real repository does: removed first, the
   /// final state published after.
@@ -615,7 +1088,7 @@ final class _FakeRepository implements GoLiveRepository {
   }) async => _key;
 
   @override
-  Future<void> watchStream(GoLiveStreamKey key) async {}
+  Future<void> watchStream(GoLiveStreamKey key) async => watched.add(key);
 
   @override
   Future<void> pingStream(GoLiveStreamKey key) async {}
@@ -627,7 +1100,11 @@ final class _FakeRepository implements GoLiveRepository {
   Future<void> endStream(GoLiveStreamKey key) async {}
 
   @override
-  Future<void> stopWatching(GoLiveStreamKey key) async {}
+  Future<void> stopWatching(GoLiveStreamKey key) async {
+    final gate = gateWithdraw;
+    if (gate != null) await gate.future;
+    withdrawn.add(key);
+  }
 }
 
 /// The socket factory seam, faked on the stream side only: hands back the

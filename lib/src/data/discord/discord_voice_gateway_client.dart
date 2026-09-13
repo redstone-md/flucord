@@ -394,6 +394,10 @@ final class DiscordVoiceGatewayClient
         _mediaTransport.reset();
         _replaceTransportCipher(null);
         _emitStatus(VoiceConnectionStatus.reconnecting, error: error);
+        // The status is the state; this is the ask. The call's recovery
+        // reads the transition into reconnecting, and the stream planes
+        // read this: only fresh credentials bring the connection back.
+        if (!_events.isClosed) _events.add(const VoiceCredentialsNeededEvent());
       case DiscordVoiceGatewayFail(:final error):
         _fail(error);
       case DiscordVoiceGatewayDispatch(:final event):

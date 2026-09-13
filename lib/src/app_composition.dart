@@ -385,6 +385,9 @@ final class AppComposition {
       // Receiving uses the same factory as the call, so the two agree about
       // DAVE without this module knowing a version number.
       socketFactoryProvider: () => liveVoiceSignaling?.socketFactory,
+      // An endpoint is opened only for a stream this client still holds: the
+      // viewer's asks are what make an endpoint worth a connection.
+      isWatched: (key) => streamViewer.isOpen(key),
     );
     _teardown.add(() => unawaited(streamRtc.close()));
     goLive = _register(

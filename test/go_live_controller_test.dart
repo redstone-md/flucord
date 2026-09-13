@@ -254,6 +254,62 @@ void main() {
     expect(plane.opened.last.closed, isFalse);
   });
 
+  test(
+    'a running share recovers once fresh credentials arrive for the sender',
+    () async {
+      final repository = _FakeRepository();
+      addTearDown(repository.close);
+      final plane = _FakePlane();
+      final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+      final controller = _controller(
+        repository,
+        plane: plane,
+        endpoints: endpoints,
+      );
+      final hung = await _sending(controller, plane, endpoints);
+      repository.assign(
+        const GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: 't'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isStreaming, isTrue);
+
+      // A session-ended close leaves the sender waiting for credentials it
+      // will never have: the share stays up, and the wait is not the failure
+      // that would end it.
+      hung.sessionEnded();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isStreaming, isTrue);
+
+      // The fresh endpoint answers, and the sender is rebuilt on it.
+      repository.assign(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'fresh',
+        ),
+      );
+      endpoints.add(
+        (
+          key: _key,
+          credentials: const VoiceServerCredentials(
+            guildId: 'guild-1',
+            channelId: 'voice-1',
+            userId: 'me',
+            sessionId: 'session-1',
+            token: 'fresh-token',
+            endpoint: 'stream.discord.gg',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(plane.opened, hasLength(2));
+      expect(hung.closed, isTrue);
+      expect(plane.opened.last.closed, isFalse);
+      expect(controller.isStreaming, isTrue);
+    },
+  );
+
   test('a reported settings change reaches the Sender', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
@@ -795,6 +851,12 @@ final class _FakeSender implements GoLiveSender {
 
   void fail() {
     status = GoLiveSenderStatus.failed;
+    _statuses.add(status);
+  }
+
+  /// The session ended server-side: the sender waits for fresh credentials.
+  void sessionEnded() {
+    status = GoLiveSenderStatus.awaitingCredentials;
     _statuses.add(status);
   }
 
