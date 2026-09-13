@@ -46,17 +46,27 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
   final Completer<MediaHello> _hello = Completer();
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<VideoEncoderException> _failures =
+      StreamController.broadcast();
   final Map<int, _IsolateSender> _senders = {};
 
   Future<void>? _spawning;
   int _nextId = 0;
+  bool _disposed = false;
 
   @override
-  Future<int?> get nativeFrameSink =>
-      _worker().then((hello) => hello.frameSink);
+  Future<int?> get nativeFrameSink {
+    // A plane that is going away must not hand the encoder a callback it is
+    // about to close: frames then stay in-process instead.
+    if (_disposed) return Future<int?>.value(null);
+    return _worker().then((hello) => hello.frameSink);
+  }
 
   @override
   Stream<EncodedVideoFrame> get relayedFrames => _frames.stream;
+
+  @override
+  Stream<VideoEncoderException> get captureFailures => _failures.stream;
 
   @override
   GoLiveSender openSender({
@@ -66,6 +76,12 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
   }) {
     final id = _nextId++;
     final sender = _IsolateSender(id: id, plane: this);
+    if (_disposed) {
+      // Not synchronously: a status fired before the caller could listen
+      // would be dropped by the broadcast stream.
+      scheduleMicrotask(() => sender.accept(GoLiveSenderStatus.failed));
+      return sender;
+    }
     _senders[id] = sender;
     _post(
       MediaOpen(
@@ -86,7 +102,12 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
   /// needs its inbox, and a spawn that hangs must not hang the app's exit.
   static const _helloTimeout = Duration(seconds: 3);
 
-  Future<void> dispose() async {
+  /// Tears the plane down after [stopEncoder], which runs first: the worker
+  /// closes its native frame callback during this shutdown, and that close
+  /// is only safe once the encoder has stopped delivering to it.
+  Future<void> dispose({Future<void> Function()? stopEncoder}) async {
+    _disposed = true;
+    await stopEncoder?.call();
     if (_spawning != null) {
       _post(const MediaShutdown());
       await _hello.future
@@ -100,6 +121,7 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
     _inbox.close();
     _errors.close();
     await _frames.close();
+    await _failures.close();
   }
 
   /// The worker, spawned on first use and kept for the process.
@@ -160,6 +182,14 @@ final class GoLiveMediaIsolate implements GoLiveMediaPlane {
         );
       case MediaLog(:final level, :final scope, :final message, :final error):
         AppLog.record(level, scope, message, error: error);
+      case MediaCaptureLost(:final platformCode, :final platformStage):
+        _failures.add(
+          VideoEncoderException(
+            VideoEncoderFailure.captureLost,
+            platformCode: platformCode,
+            platformStage: platformStage,
+          ),
+        );
       case MediaClosed(:final id):
         _senders.remove(id)?.finishClose();
     }
@@ -305,22 +335,35 @@ final class _NativeFrameSource {
     int isKeyframe,
   ) {
     try {
-      if (length <= 0 || _frames.isClosed) return;
-      final bytes = Uint8List.fromList(data.asTypedList(length));
-      _frames.add(
-        EncodedVideoFrame(
-          bytes: bytes,
-          timestamp: Duration(microseconds: timestampUs),
-          isKeyframe: isKeyframe != 0,
-        ),
-      );
-      _relay.send(
-        MediaFrame(
-          bytes: TransferableTypedData.fromList([bytes]),
-          timestampUs: timestampUs,
-          isKeyframe: isKeyframe != 0,
-        ),
-      );
+      // No buffer at all is the capture thread's last word: its source is
+      // gone and it gave up reopening it. The main isolate hears it, since
+      // the share must end rather than stay up on a frozen picture.
+      if (data == nullptr && length == 0) {
+        _relay.send(
+          MediaCaptureLost(
+            platformCode: _bindings.lastError?.call(),
+            platformStage: _bindings.lastErrorStage?.call(),
+          ),
+        );
+        return;
+      }
+      if (length > 0 && !_frames.isClosed) {
+        final bytes = Uint8List.fromList(data.asTypedList(length));
+        _frames.add(
+          EncodedVideoFrame(
+            bytes: bytes,
+            timestamp: Duration(microseconds: timestampUs),
+            isKeyframe: isKeyframe != 0,
+          ),
+        );
+        _relay.send(
+          MediaFrame(
+            bytes: TransferableTypedData.fromList([bytes]),
+            timestampUs: timestampUs,
+            isKeyframe: isKeyframe != 0,
+          ),
+        );
+      }
     } finally {
       _bindings.releaseFrame(data);
     }

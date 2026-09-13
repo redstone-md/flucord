@@ -111,6 +111,16 @@ final class MediaLog {
   final String? error;
 }
 
+/// Worker to main: the capture the encoder delivers from lost its source and
+/// gave up reopening it. The worker's frame callback hears it first, and the
+/// share must end rather than freeze for the watchers.
+final class MediaCaptureLost {
+  const MediaCaptureLost({this.platformCode, this.platformStage});
+
+  final int? platformCode;
+  final int? platformStage;
+}
+
 final class MediaClosed {
   const MediaClosed(this.id);
 

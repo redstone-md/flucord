@@ -13,6 +13,10 @@ import 'discord_video_rtp_sender.dart';
 /// be handed the voice transport's sender without either knowing about the
 /// other: a stream is a second connection, but it encrypts and sends the same
 /// way.
+///
+/// The answer is the bytes the socket took: 0 means the packet did not leave
+/// this machine (a reconnect holds it back), which the transport counts as
+/// unsent. A throw stops the stream.
 typedef VideoFrameSink = int Function(DiscordRtpFrame frame);
 
 /// Encrypts one whole access unit for the room's group, before packetisation.
@@ -254,12 +258,16 @@ final class DiscordVideoStreamTransport {
     _paceTimer ??= Timer.periodic(paceInterval, (_) => _release());
   }
 
-  /// One packet of a picture onto the wire, recorded for retransmission.
+  /// One packet of a picture onto the wire, recorded for retransmission when
+  /// it actually went out. False only when the stream has stopped.
   bool _putOnWire(DiscordRtpFrame rtp) {
-    if (!_put(rtp)) return false;
-    _history[rtp.header.sequence & (historySize - 1)] = rtp;
-    _sentPackets++;
-    _sentBytes += rtp.payload.length;
+    final handed = _put(rtp);
+    if (handed < 0) return false;
+    if (handed > 0) {
+      _history[rtp.header.sequence & (historySize - 1)] = rtp;
+      _sentPackets++;
+      _sentBytes += handed;
+    }
     return true;
   }
 
@@ -287,7 +295,9 @@ final class DiscordVideoStreamTransport {
         ),
         payload: [sequence >> 8, sequence & 0xff, ...held.payload],
       );
-      if (!_put(rtx)) return sent;
+      final handed = _put(rtx);
+      if (handed < 0) return sent;
+      if (handed == 0) continue;
       _rtxSequence = (_rtxSequence + 1) & 0xffff;
       sent++;
       _retransmittedPackets++;
@@ -295,15 +305,17 @@ final class DiscordVideoStreamTransport {
     return sent;
   }
 
-  /// One packet onto the wire, or the stream stopped with the reason kept.
-  bool _put(DiscordRtpFrame rtp) {
+  /// One packet to the sink. Answers the bytes it handed to the wire: 0 when
+  /// it held the packet back (a reconnect does), and -1 when it threw, which
+  /// stops the stream. Only handed packets are counted, or the pace line
+  /// reports traffic that never left the machine.
+  int _put(DiscordRtpFrame rtp) {
     try {
-      _sink(rtp);
-      return true;
+      return _sink(rtp);
     } on Object catch (error) {
       _error = error;
       unawaited(stop());
-      return false;
+      return -1;
     }
   }
 

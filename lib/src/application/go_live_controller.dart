@@ -166,6 +166,18 @@ final class GoLiveController extends ChangeNotifier {
     final preview => preview.error,
   };
 
+  /// Raised by one [start], so a [stop] that lands mid-flight can be told
+  /// apart from the start it supersedes.
+  int _epoch = 0;
+
+  /// The start in flight, if there is one. A stop during the creating phase
+  /// waits for it, so nothing it raised is torn down before it is raised.
+  Completer<void>? _starting;
+
+  /// The stop in flight, if there is one: two failures in one breath must
+  /// not send two end frames.
+  Future<void>? _stopping;
+
   /// What the capture runs at after a quality change reached it. The Sender
   /// decides what of it Discord needs to hear.
   void _follow(VideoEncoderSettings settings) {
@@ -198,7 +210,9 @@ final class GoLiveController extends ChangeNotifier {
     _senderSubscriptions = [
       sender.statuses.listen((status) {
         if (status == GoLiveSenderStatus.failed) {
-          _diagnose('sender failed', endpoint.key);
+          // A failed sender does not come back: the share would stay up with
+          // no pictures and no sound reaching anybody.
+          _shareFailed('sender failed', StateError('the sender failed'));
         }
       }),
       sender.encoderCommands.listen(_applyEncoderCommand),
@@ -215,12 +229,6 @@ final class GoLiveController extends ChangeNotifier {
       unawaited(subscription.cancel());
     }
     await sender?.close();
-  }
-
-  void _qualityRefused(Object error) {
-    _diagnose('quality change refused', error);
-    _error = error;
-    _notify();
   }
 
   void _applyEncoderCommand(GoLiveEncoderCommand command) {
@@ -298,6 +306,10 @@ final class GoLiveController extends ChangeNotifier {
     String? sourceId,
     String? guildId,
   }) async {
+    // A start while a stop is still taking the last share down waits for it:
+    // the teardown clears what a new capture would race for.
+    final ongoing = _stopping;
+    if (ongoing != null) await ongoing;
     _bind();
     final repository = _repository;
     // A failure is over once the next attempt starts; nothing else is.
@@ -305,9 +317,38 @@ final class GoLiveController extends ChangeNotifier {
         (_status != GoLiveStatus.idle && _status != GoLiveStatus.failure)) {
       return false;
     }
+    final epoch = ++_epoch;
+    final starting = _starting = Completer<void>();
     _status = GoLiveStatus.creating;
     _error = null;
     _notify();
+    try {
+      return await _attemptStart(
+        repository,
+        epoch,
+        sourceId,
+        guildId,
+        channelId: channelId,
+      );
+    } finally {
+      if (identical(_starting, starting)) _starting = null;
+      starting.complete();
+      _notify();
+    }
+  }
+
+  /// The body of a start, running under [epoch]. A stop or dispose that
+  /// lands mid-flight raises the epoch, so each await that has raised
+  /// something (a capture, a stream) is followed by a check that undoes it.
+  /// A superseded start keeps its stream key: the stop that superseded it
+  /// ends that stream.
+  Future<bool> _attemptStart(
+    GoLiveRepository repository,
+    int epoch,
+    String? sourceId,
+    String? guildId, {
+    required String channelId,
+  }) async {
     try {
       // The capture is what produces the picture Discord receives: the one
       // module reads the display itself, through Desktop Duplication, and
@@ -329,12 +370,20 @@ final class GoLiveController extends ChangeNotifier {
         _follow,
         onError: _qualityRefused,
       );
+      if (epoch != _epoch) {
+        await _stopCapture();
+        return false;
+      }
       _stage = null;
       await _startAudio();
       _key = await repository.startStream(
         channelId: channelId,
         guildId: guildId,
       );
+      if (epoch != _epoch) {
+        await _stopCapture();
+        return false;
+      }
       // Discord's own clients follow the create with an unpause. Attempted
       // rather than required: a server that refuses it has not refused the
       // stream, and failing the share over it would be inventing a problem.
@@ -347,13 +396,13 @@ final class GoLiveController extends ChangeNotifier {
       _startPinging();
       return true;
     } on Object catch (error) {
-      _diagnose('start failed', error);
-      _error = error;
-      _status = GoLiveStatus.failure;
+      if (epoch == _epoch) {
+        _diagnose('start failed', error);
+        _error = error;
+        _status = GoLiveStatus.failure;
+      }
       await _stopCapture();
       return false;
-    } finally {
-      _notify();
     }
   }
 
@@ -408,14 +457,52 @@ final class GoLiveController extends ChangeNotifier {
   /// as a picture that silently froze.
   void _captureLost(VideoEncoderException failure) {
     if (_lease == null || _disposed) return;
-    _diagnose('capture lost', failure);
-    _error = failure;
+    _shareFailed('capture lost', failure);
+  }
+
+  /// The quality change restarted the encoder and the restart was refused:
+  /// the hub has already torn its lease down, so nothing is capturing any
+  /// more and the share is over.
+  void _qualityRefused(Object error) {
+    _shareFailed('quality change refused', error);
+  }
+
+  /// The share cannot go on (the capture died, a quality change lost it, the
+  /// sender failed for good): it ends rather than staying up with no
+  /// pictures. Watchers hear the end through the stream delete.
+  void _shareFailed(String what, Object reason) {
+    if (_disposed || !isSharing) return;
+    _diagnose(what, reason);
+    _error = reason;
     _status = GoLiveStatus.failure;
     unawaited(stop());
   }
 
   /// Ends the stream and stops the capture behind it.
+  ///
+  /// A stop while the stream is still being created is the same stop: the
+  /// start in flight is invalidated first, and this waits for it to undo
+  /// what it has raised so far before taking the rest down. Without that
+  /// wait, the start would finish its work after the stop: a stream left
+  /// live on Discord, capturing and pinging, while the controller said idle.
   Future<void> stop() async {
+    _epoch++;
+    final ongoing = _stopping;
+    if (ongoing != null) {
+      await ongoing;
+      return;
+    }
+    final stopping = _stopping = _stop();
+    try {
+      await stopping;
+    } finally {
+      if (identical(_stopping, stopping)) _stopping = null;
+    }
+  }
+
+  Future<void> _stop() async {
+    final starting = _starting;
+    if (starting != null) await starting.future;
     final repository = _repository;
     final key = _key;
     _ping?.cancel();
@@ -453,6 +540,8 @@ final class GoLiveController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    // A start in flight must not raise anything past this point.
+    _epoch++;
     _ping?.cancel();
     _ping = null;
     unawaited(_senderEndpoints?.cancel());
@@ -463,6 +552,10 @@ final class GoLiveController extends ChangeNotifier {
     unawaited(_leaseChanges?.cancel());
     unawaited(_updates?.cancel());
     unawaited(_servers?.cancel());
+    // The capture goes with the controller, not merely abandoned: the app's
+    // teardown stops the media isolate next, and that needs the encoder
+    // stopped first (VideoCaptureHub.stopEncoder).
+    unawaited(_stopCapture());
     super.dispose();
   }
 

@@ -144,6 +144,39 @@ void main() {
     expect(encoder.pauses, [true]);
   });
 
+  test('a capture loss on the destination\'s side is a hub failure', () async {
+    final encoder = FakeVideoEncoder();
+    final destination = _FakeDestination();
+    final hub = VideoCaptureHub(encoder: encoder, shareFrames: destination);
+    final failures = <VideoEncoderException>[];
+    hub.failures.listen(failures.add);
+
+    final share = await hub.startShare();
+    destination.loseCapture();
+    await pumpEventQueue();
+
+    // The share's frames were delivered to the destination directly, so its
+    // account of the capture's death is the one the hub has.
+    expect(failures, hasLength(1));
+    expect(failures.single.failure, VideoEncoderFailure.captureLost);
+
+    // The lease is still held; the holder decides.
+    expect(hub.isCapturing, isTrue);
+    await share.release();
+  });
+
+  test('shutdown stops the encoder even while a lease holds it', () async {
+    final encoder = FakeVideoEncoder();
+    final hub = VideoCaptureHub(encoder: encoder);
+    await hub.startShare();
+
+    // Every other path needs the lease in hand; shutdown does not.
+    await hub.stopEncoder();
+
+    expect(encoder.stopped, 1);
+    expect(hub.isCapturing, isTrue);
+  });
+
   test('a released lease steers nothing', () async {
     final encoder = FakeVideoEncoder();
     final hub = VideoCaptureHub(encoder: encoder);
@@ -360,6 +393,8 @@ final class _FakeDestination implements ShareFrameDestination {
 
   final StreamController<EncodedVideoFrame> _echoed =
       StreamController.broadcast();
+  final StreamController<VideoEncoderException> _lost =
+      StreamController.broadcast();
 
   void echo() => _echoed.add(
     EncodedVideoFrame(
@@ -369,9 +404,18 @@ final class _FakeDestination implements ShareFrameDestination {
     ),
   );
 
+  /// The capture dies on the destination's side, as a share delivered to the
+  /// media isolate would report it.
+  void loseCapture() => _lost.add(
+    const VideoEncoderException(VideoEncoderFailure.captureLost),
+  );
+
   @override
   Future<int?> get nativeFrameSink => Future.value(sink);
 
   @override
   Stream<EncodedVideoFrame> get relayedFrames => _echoed.stream;
+
+  @override
+  Stream<VideoEncoderException> get captureFailures => _lost.stream;
 }

@@ -44,6 +44,10 @@ final class InProcessGoLiveMediaPlane implements GoLiveMediaPlane {
       const Stream<EncodedVideoFrame>.empty();
 
   @override
+  Stream<VideoEncoderException> get captureFailures =>
+      const Stream<VideoEncoderException>.empty();
+
+  @override
   GoLiveSender openSender({
     required VoiceServerCredentials credentials,
     required GoLiveStreamKey streamKey,

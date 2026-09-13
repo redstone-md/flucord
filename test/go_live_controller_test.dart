@@ -291,7 +291,7 @@ void main() {
     expect(controller.error, isNull);
   });
 
-  test('a shape the encoder will not restart into is reported', () async {
+  test('a shape the encoder will not restart into ends the share', () async {
     final repository = _FakeRepository();
     addTearDown(repository.close);
     final encoder = FakeVideoEncoder();
@@ -312,8 +312,11 @@ void main() {
     await pumpEventQueue();
 
     expect(controller.error, isA<StateError>());
-    // The stream itself is still up; ending it is the user's call.
-    expect(controller.isSharing, isTrue);
+    // The capture is gone with the refused restart: a stream kept "live"
+    // over it sends no pictures at all.
+    expect(controller.status, GoLiveStatus.failure);
+    expect(controller.isSharing, isFalse);
+    expect(repository.ended, [_key]);
   });
 
   test('an encoder that fails leaves nothing announced', () async {
@@ -361,6 +364,111 @@ void main() {
       ),
     );
     expect(repository.ended, [_key]);
+    expect(encoder.stopped, 1);
+  });
+
+  test('a capture loss the isolate reports ends the share', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = FakeVideoEncoder(displays: 2);
+    final plane = _FakePlane();
+    final controller = _controller(repository, encoder: encoder, plane: plane);
+    expect(
+      await controller.start(channelId: 'voice-1', guildId: 'guild-1'),
+      isTrue,
+    );
+
+    // The share's frames are delivered to the media isolate, so the loss
+    // arrives through it rather than through the encoder service.
+    plane.loseCapture();
+    await pumpEventQueue();
+
+    expect(controller.status, GoLiveStatus.failure);
+    expect(
+      controller.error,
+      isA<VideoEncoderException>().having(
+        (e) => e.failure,
+        'failure',
+        VideoEncoderFailure.captureLost,
+      ),
+    );
+    expect(repository.ended, [_key]);
+    expect(encoder.stopped, 1);
+  });
+
+  test('a sender that fails ends the share', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = FakeVideoEncoder(displays: 2);
+    final plane = _FakePlane();
+    final endpoints = StreamController<DiscordSenderEndpoint>.broadcast();
+    final controller = _controller(
+      repository,
+      encoder: encoder,
+      plane: plane,
+      endpoints: endpoints,
+    );
+    final sender = await _sending(controller, plane, endpoints);
+
+    sender.fail();
+    await pumpEventQueue();
+
+    // A failed sender does not come back: a share kept up over it carries no
+    // pictures and no sound to anybody.
+    expect(controller.status, GoLiveStatus.failure);
+    expect(repository.ended, [_key]);
+    expect(sender.closed, isTrue);
+    expect(encoder.stopped, 1);
+  });
+
+  test('a stop while the stream is being created leaves nothing', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    repository.gateStart = Completer<void>();
+    final encoder = FakeVideoEncoder(displays: 2);
+    final controller = _controller(repository, encoder: encoder);
+
+    final starting = controller.start(channelId: 'voice-1', guildId: 'guild-1');
+    await pumpEventQueue();
+    // The capture is up; Discord has not answered the create yet.
+    expect(controller.status, GoLiveStatus.creating);
+    expect(encoder.started, hasLength(1));
+
+    final stopping = controller.stop();
+    repository.gateStart!.complete();
+    expect(await starting, isFalse);
+    await stopping;
+
+    // The stream the in-flight start raised still ends, the capture with it,
+    // and nothing pings a stream the controller no longer tracks.
+    expect(repository.ended, [_key]);
+    expect(encoder.stopped, 1);
+    expect(controller.status, GoLiveStatus.idle);
+    expect(controller.isSharing, isFalse);
+    expect(controller.streamKey, isNull);
+    final pings = repository.pings.length;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(repository.pings.length, pings);
+  });
+
+  test('disposing the controller releases the capture', () async {
+    final repository = _FakeRepository();
+    addTearDown(repository.close);
+    final encoder = FakeVideoEncoder(displays: 2);
+    final plane = _FakePlane();
+    final controller = GoLiveController(
+      repositoryProvider: () => repository,
+      capture: VideoCaptureHub(encoder: encoder, shareFrames: plane),
+      media: plane,
+    )..reconcile();
+    await controller.start(channelId: 'voice-1', guildId: 'guild-1');
+
+    // App teardown disposes the controller while the capture runs: the
+    // native encoder must be stopped with it, before the media isolate's
+    // frame callback closes.
+    controller.dispose();
+    await pumpEventQueue();
+
     expect(encoder.stopped, 1);
   });
 
@@ -633,6 +741,14 @@ final class _FakePlane implements GoLiveMediaPlane {
   static const sink = 0xf00d;
 
   final List<_FakeSender> opened = [];
+  final StreamController<VideoEncoderException> _captureLost =
+      StreamController.broadcast();
+
+  /// The capture dies on the isolate's side, as a share delivered to the
+  /// media isolate reports it.
+  void loseCapture() => _captureLost.add(
+    const VideoEncoderException(VideoEncoderFailure.captureLost),
+  );
 
   @override
   Future<int?> get nativeFrameSink => Future.value(sink);
@@ -640,6 +756,9 @@ final class _FakePlane implements GoLiveMediaPlane {
   @override
   Stream<EncodedVideoFrame> get relayedFrames =>
       const Stream<EncodedVideoFrame>.empty();
+
+  @override
+  Stream<VideoEncoderException> get captureFailures => _captureLost.stream;
 
   @override
   GoLiveSender openSender({
@@ -674,6 +793,11 @@ final class _FakeSender implements GoLiveSender {
     _statuses.add(status);
   }
 
+  void fail() {
+    status = GoLiveSenderStatus.failed;
+    _statuses.add(status);
+  }
+
   @override
   Stream<GoLiveSenderStatus> get statuses => _statuses.stream;
 
@@ -705,6 +829,10 @@ final class _FakeRepository implements GoLiveRepository {
   final bool failEnd;
   bool failWatch = false;
 
+  /// When set, a start waits on it: a stream whose create frame never comes
+  /// back within the test's control.
+  Completer<void>? gateStart;
+
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
   final StreamController<GoLiveServer> _servers = StreamController.broadcast();
   final List<String> started = [];
@@ -733,6 +861,8 @@ final class _FakeRepository implements GoLiveRepository {
     String? preferredRegion,
   }) async {
     if (failStart) throw StateError('refused');
+    final gate = gateStart;
+    if (gate != null) await gate.future;
     started.add(channelId);
     return guildId == null
         ? GoLiveStreamKey.call(channelId: channelId, userId: 'me')

@@ -77,7 +77,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         count++;
-        return 0;
+        return frame.payload.length;
       },
       maxPayloadSize: 100,
     );
@@ -94,7 +94,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         sent.add(frame);
-        return 0;
+        return frame.payload.length;
       },
     );
 
@@ -117,7 +117,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         count++;
-        return 0;
+        return frame.payload.length;
       },
     );
 
@@ -141,7 +141,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         count++;
-        return 0;
+        return frame.payload.length;
       },
     )..attach(frames.stream);
 
@@ -170,7 +170,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         count++;
-        return 0;
+        return frame.payload.length;
       },
     )..attach(first.stream);
 
@@ -205,13 +205,70 @@ void main() {
   test('an error on the frame stream is reported, not thrown', () async {
     final frames = StreamController<EncodedVideoFrame>();
     addTearDown(frames.close);
-    final transport = DiscordVideoStreamTransport(ssrc: 1, sink: (frame) => 0)
-      ..attach(frames.stream);
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) => frame.payload.length,
+    )..attach(frames.stream);
 
     frames.addError(StateError('encoder died'));
     await Future<void>.delayed(Duration.zero);
 
     expect(transport.error, isNotNull);
+  });
+
+  test('packets the sink holds back are not counted as sent', () {
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      // A reconnect holds every packet back: the socket takes nothing.
+      sink: (frame) => 0,
+    );
+
+    transport.send(_frame(sliceLength: 8, isKeyframe: true));
+
+    expect(transport.sentPackets, 0);
+    expect(transport.sentBytes, 0);
+    // Not a fault: the stream lives and resumes when the sink takes again.
+    expect(transport.error, isNull);
+  });
+
+  test('a held sink does not stop the stream', () {
+    var handOut = false;
+    final sent = <DiscordRtpFrame>[];
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) {
+        if (!handOut) return 0;
+        sent.add(frame);
+        return frame.payload.length;
+      },
+    );
+
+    transport.send(_frame());
+    handOut = true;
+    transport.send(_frame(timestamp: const Duration(milliseconds: 33)));
+
+    expect(transport.sentPackets, 2);
+    expect(sent, hasLength(2));
+    expect(transport.error, isNull);
+  });
+
+  test('a retransmission the sink holds back is not counted', () {
+    var handOut = true;
+    final transport = DiscordVideoStreamTransport(
+      ssrc: 1,
+      sink: (frame) => handOut ? frame.payload.length : 0,
+    );
+    transport.send(_frame(sliceLength: 8, isKeyframe: true));
+
+    // The connection went down after the packet went out. The resend is
+    // refused: it neither counts nor advances the rtx sequence, so the
+    // retry when the connection comes back is still numbered 0.
+    handOut = false;
+    expect(transport.retransmit([0]), 0);
+    expect(transport.retransmittedPackets, 0);
+    handOut = true;
+    expect(transport.retransmit([0]), 1);
+    expect(transport.retransmittedPackets, 1);
   });
 
   test('the sequence continues where a caller resumed it', () {
@@ -221,7 +278,7 @@ void main() {
       initialSequence: 0xfffe,
       sink: (frame) {
         sent.add(frame);
-        return 0;
+        return frame.payload.length;
       },
     );
 
@@ -238,7 +295,7 @@ void main() {
       rtxSsrc: 0x2000,
       sink: (frame) {
         sent.add(frame);
-        return 0;
+        return frame.payload.length;
       },
     );
 
@@ -267,7 +324,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         count++;
-        return 0;
+        return frame.payload.length;
       },
     );
 
@@ -289,7 +346,7 @@ void main() {
       ssrc: 1,
       sink: (frame) {
         sent.add(frame);
-        return 0;
+        return frame.payload.length;
       },
       groupEncryptor: (frame) {
         encrypted.add(frame);
@@ -331,7 +388,7 @@ void _pacingTests() {
         ssrc: 1,
         sink: (frame) {
           sent.add(frame);
-          return 0;
+          return frame.payload.length;
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
@@ -361,7 +418,7 @@ void _pacingTests() {
         ssrc: 1,
         sink: (frame) {
           count++;
-          return 0;
+          return frame.payload.length;
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
@@ -383,7 +440,7 @@ void _pacingTests() {
         ssrc: 1,
         sink: (frame) {
           sent.add(frame);
-          return 0;
+          return frame.payload.length;
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
@@ -407,7 +464,7 @@ void _pacingTests() {
         ssrc: 1,
         sink: (frame) {
           count++;
-          return 0;
+          return frame.payload.length;
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,

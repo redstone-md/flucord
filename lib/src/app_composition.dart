@@ -352,7 +352,12 @@ final class AppComposition {
       maxDaveProtocolVersion: () =>
           liveVoiceSignaling?.socketFactory.maxDaveProtocolVersion ?? 0,
     );
-    _teardown.add(() => unawaited(goLiveMedia.dispose()));
+    // The encoder stops before the isolate goes: see VideoCaptureHub.stopEncoder.
+    _teardown.add(
+      () => unawaited(
+        goLiveMedia.dispose(stopEncoder: videoCapture.stopEncoder),
+      ),
+    );
     // Go Live: the stream plane and the transport binding behind it. The
     // picture comes from the capture module shared with the camera and the
     // clip buffer; a stream's frames go straight to the media isolate.

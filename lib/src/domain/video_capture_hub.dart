@@ -12,6 +12,11 @@ abstract interface class ShareFrameDestination {
 
   /// The frames delivered there, echoed back.
   Stream<EncodedVideoFrame> get relayedFrames;
+
+  /// The capture behind a share lost its source and did not get it back:
+  /// no more frames are coming. In-process destinations leave this empty,
+  /// since the encoder's own failures stream already carries the news.
+  Stream<VideoEncoderException> get captureFailures;
 }
 
 /// The machine's one capture and encode resource.
@@ -36,6 +41,14 @@ final class VideoCaptureHub {
        _diagnose = onDiagnostic {
     _encoder.frames.listen(_frames.add, onError: _frames.addError);
     shareFrames?.relayedFrames.listen(_frames.add);
+    // The capture's death reaches this stream from either side: the encoder's
+    // own listener when frames stayed in-process, the destination's relay
+    // when they were delivered to it directly.
+    _encoder.failures.listen(_failures.add, onError: _failures.addError);
+    shareFrames?.captureFailures.listen(
+      _failures.add,
+      onError: _failures.addError,
+    );
   }
 
   final VideoEncoderService _encoder;
@@ -91,14 +104,17 @@ final class VideoCaptureHub {
 
   final StreamController<EncodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<VideoEncoderException> _failures =
+      StreamController.broadcast();
 
   /// Encoded frames, from whichever capture is running: the encoder's own,
   /// or the ones the share's destination echoes back.
   Stream<EncodedVideoFrame> get frames => _frames.stream;
 
-  /// A capture that ended on its own. The lease is still held: whoever holds
-  /// it decides whether to release it or start again.
-  Stream<VideoEncoderException> get failures => _encoder.failures;
+  /// A capture that ended on its own, from the encoder or from the share's
+  /// destination. The lease is still held: whoever holds it decides whether
+  /// to release it or start again.
+  Stream<VideoEncoderException> get failures => _failures.stream;
 
   /// The native pipeline's own account of itself, for the pace log.
   VideoEncoderDiagnostics? get diagnostics => _encoder.diagnostics;
@@ -212,6 +228,15 @@ final class VideoCaptureHub {
       await lease._changes.close();
     });
   }
+
+  /// Stops the encoder for shutdown, even while a lease holds it.
+  ///
+  /// Why the hub offers this: the share's frame destination closes its native
+  /// callback when it dies, and a callback closed while the encoder's thread
+  /// still delivers to that address is undefined behavior. Stopping here
+  /// joins that thread, which is what makes the close safe. Runs through the
+  /// serial queue, behind a release or restart still in flight.
+  Future<void> stopEncoder() => _serial(_encoder.stop);
 
   Future<void> _queue = Future.value();
 
