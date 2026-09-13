@@ -52,6 +52,12 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
   bool _speaking = false;
   int _consecutiveSendFailures = 0;
 
+  /// Whether the missing-media problem has been said since the last
+  /// [configure]. The packetizer is null exactly while a socket is being
+  /// replaced, which is every reconnect; saying it per frame flooded the room
+  /// with errors and rebuilds fifty times a second.
+  bool _notReadyReported = false;
+
   /// Frames in a row the socket may refuse before it counts as broken. Fifty
   /// is a second of speech: long enough to outlast a reconnect, short enough
   /// that a genuinely dead path is still reported.
@@ -65,6 +71,9 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
     _packetizer = DiscordAudioRtpPacketizer.secure(ssrc: ssrc);
     _daveEnabled = daveEnabled;
     _speaking = false;
+    // A socket that made it this far is a socket to report about again, if
+    // it goes away in turn.
+    _notReadyReported = false;
     _remoteStates.clear();
   }
 
@@ -79,7 +88,14 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
   void sendOpusFrame(Uint8List opusFrame) {
     if (opusFrame.isEmpty) throw ArgumentError('Opus frame cannot be empty');
     final packetizer = _packetizer;
-    if (packetizer == null) throw StateError('Voice media is not ready');
+    if (packetizer == null) {
+      // The socket is being replaced. Twenty milliseconds of audio lost to a
+      // reconnect is ordinary, and a reconnect that never comes back ends in
+      // a status the room reports anyway; one report is all this deserves.
+      if (_notReadyReported) return;
+      _notReadyReported = true;
+      throw StateError('Voice media is not ready');
+    }
     final startsSpeaking = !_speaking;
     if (startsSpeaking) {
       _sendSpeaking(true);

@@ -49,7 +49,11 @@ abstract interface class VoiceNoiseSuppressor {
   int get hopSize;
 
   /// Cleans one frame of interleaved 48 kHz PCM16, [channels] wide, in place.
-  void process(Int16List frame, {required int channels});
+  ///
+  /// Answers a future because the work may run where the model lives rather
+  /// than on the caller's isolate; the caller chains its frames, so order is
+  /// kept whichever side does the cleaning.
+  Future<void> process(Int16List frame, {required int channels});
 
   void dispose();
 }

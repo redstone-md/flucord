@@ -535,6 +535,90 @@ void main() {
 
     expect(controller.joinBlockedReason, isNotNull);
   });
+
+  test(
+    'a participant who leaves takes their decoder and their sound along',
+    () async {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final playback = _FakeVoicePlaybackService();
+      final codecs = FakeVoiceOpusCodecFactory();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: codecs,
+        playbackService: playback,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      await _flushEvents();
+      signaling.addRemote('user-1', [7]);
+      await _flushEvents();
+      expect(codecs.created, 1);
+      expect(playback.frames.single.sourceId, 'user-1');
+
+      signaling.emit(const VoiceUserDisconnectedEvent('user-1'));
+      await _flushEvents();
+
+      // An hour of joiners and leavers used to leave one decoder and one
+      // playback source behind per person who had ever spoken, until the
+      // whole channel was left.
+      expect(codecs.disposed, 1);
+      expect(playback.removedSources, ['user-1']);
+
+      // A frame still carrying their name opens no decoder behind the one
+      // that was just thrown away.
+      signaling.addRemote('user-1', [7]);
+      await _flushEvents();
+      expect(codecs.created, 1);
+      expect(codecs.disposed, 1);
+
+      // The room has them again, so they decode again.
+      signaling.emit(
+        const VoiceSpeakingEvent(userId: 'user-1', ssrc: 43, speakingFlags: 1),
+      );
+      await _flushEvents();
+      signaling.addRemote('user-1', [7]);
+      await _flushEvents();
+      expect(codecs.created, 2);
+    },
+  );
+
+  test('a camera that is gone says so: sender left, or turned it off', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+    final gone = <String>[];
+    controller.camerasGone.listen(gone.add);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(const VoiceUserDisconnectedEvent('user-1'));
+    await _flushEvents();
+    expect(gone, ['user-1']);
+
+    signaling.emit(
+      const VoiceParticipantStateEvent(
+        userId: 'user-2',
+        guildId: 'guild-1',
+        channelId: 'voice-1',
+        selfMuted: false,
+        selfDeafened: false,
+        serverMuted: false,
+        serverDeafened: false,
+        isStreaming: false,
+        isVideoEnabled: false,
+      ),
+    );
+    await _flushEvents();
+    expect(gone, ['user-1', 'user-2']);
+  });
 }
 
 /// One 20 ms microphone frame loud enough to pass the uplink's gate.

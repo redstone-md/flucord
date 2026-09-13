@@ -147,10 +147,13 @@ keyboards, fans and other voices rather than a steady hiss. The runtime is
 libDF's C API, bundled as `df.dll` with the DeepFilterNet3 model beside the
 executable (`tool/build_deepfilternet.ps1` rebuilds both); the model works on
 10 ms hops at 48 kHz, so a 20 ms frame is two hops and the filter buffers
-nothing. The model loads on a worker isolate when the switch goes on, and the
-microphone passes through unfiltered until it is ready; going quiet pushes two
-frames of silence through the model so the tail of the last word is sent
-rather than kept for the next press. The switch lives in voice settings, is off
+nothing. The model loads and runs on its own isolate, so the two inference
+calls per frame never stall the interface; frames cross over to be cleaned and
+cross back, and the uplink drops a frame rather than queues it if the model
+falls behind. The model loads when the switch goes on, and the microphone
+passes through unfiltered until it is ready; going quiet pushes two frames of
+silence through the model so the tail of the last word is sent rather than
+kept for the next press. The switch lives in voice settings, is off
 by default, hidden when the bundle has no filter, and is kept in
 `voice_processing.json` beside the stream quality. Measured on the development
 machine: about 2 ms of one core per 20 ms frame, 29 ms of delay from the

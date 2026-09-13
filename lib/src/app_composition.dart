@@ -65,7 +65,7 @@ import 'application/workspace_controller.dart';
 import 'data/discord/discord_rtp_packet.dart';
 import 'data/discord/go_live_media_isolate.dart';
 import 'data/video/system_audio_capture.dart';
-import 'data/audio/deep_filter_noise_suppressor.dart';
+import 'data/audio/isolate_noise_suppressor.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/disconnected_chat_repository.dart';
@@ -448,7 +448,7 @@ final class AppComposition {
         streamAudioEnded: streamViewer.audioEnded,
         // Null where the bundle has no filter to switch on, and the switch
         // is hidden with it.
-        noiseSuppressorFactory: DeepFilterNoiseSuppressor.bundledFactory(),
+        noiseSuppressorFactory: IsolateNoiseSuppressor.bundledFactory(),
         processingRepository:
             bootstrap.voiceProcessingRepository ??
             FileVoiceProcessingRepository(),
@@ -618,12 +618,13 @@ final class AppComposition {
     );
     _teardown.add(voiceRoomCoordination.dispose);
     // A window nothing of is on screen stops drawing what it is watching,
-    // and keeps receiving it (ADR-0003). Registered after the stream plane,
-    // so it stops listening to the window before the viewer it suspends goes
-    // away.
+    // and stops decoding the room's cameras, while both keep receiving
+    // (ADR-0003). Registered after the stream plane, so it stops listening
+    // to the window before the viewers it suspends go away.
     streamSuspension = StreamSuspension(
       visible: windowVisible,
       viewer: streamViewer,
+      remoteCameras: remoteCameras,
     );
     _teardown.add(streamSuspension.dispose);
     accountCoordination = AccountConnectionCoordination(

@@ -4,9 +4,10 @@ import '../../application/remote_camera_controller.dart';
 
 /// Publishes the remote cameras to the conversation pane.
 ///
-/// The controller notifies per decoded picture, so depending on this scope is
-/// also what keeps the camera tiles moving: every frame rebuilds whoever reads
-/// the scope.
+/// The controller announces when a camera appears, not every picture it
+/// decodes: the pictures travel on the per-sender streams the camera tiles
+/// hold, so a camera runs at its frame rate without rebuilding the pane
+/// around it.
 final class RemoteCameraScope extends InheritedNotifier<RemoteCameraController> {
   const RemoteCameraScope({
     required RemoteCameraController controller,

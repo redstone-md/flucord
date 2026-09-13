@@ -19,6 +19,11 @@ final class VoiceAudioReceiver {
   final Map<String, VoiceOpusDecoder> _decoders = {};
   final Map<String, int> _undecodableFrames = {};
 
+  /// Users whose decoder was thrown away while they left the room. Frames
+  /// still carrying their name are dropped until the room has them again,
+  /// so a departure cannot leave a decoder behind it.
+  final Set<String> _forgotten = {};
+
   static const int _frameDurationMs = 20;
   static const int _maxConcealedFrames = 3;
   static const int _undecodableLimit = 50;
@@ -56,6 +61,7 @@ final class VoiceAudioReceiver {
 
   void _handleRemoteOpus(VoiceRemoteOpusFrame frame) {
     if (_disposed) return;
+    if (_forgotten.contains(frame.userId)) return;
     try {
       var decoder = _decoders.putIfAbsent(
         frame.userId,
@@ -102,12 +108,31 @@ final class VoiceAudioReceiver {
     if (!_errors.isClosed) _errors.add(error);
   }
 
+  /// Throws away one participant's decoder, and drops their frames until
+  /// [allowDecoder] says they are back.
+  ///
+  /// A departure reaches this controller on one socket while the audio
+  /// arrives on another: a roster on the gateway socket can be ahead of the
+  /// voice socket's own SSRC pruning, so frames naming the departed can
+  /// still be in flight. Decoding them would open a decoder for a sender
+  /// nobody holds, and leave it there for the rest of the call.
+  void forgetDecoder(String userId) {
+    _decoders.remove(userId)?.dispose();
+    _undecodableFrames.remove(userId);
+    _forgotten.add(userId);
+  }
+
+  /// Takes a forgotten user back: the room has them again, so their frames
+  /// decode instead of being dropped.
+  void allowDecoder(String userId) => _forgotten.remove(userId);
+
   void _disposeDecoders() {
     for (final decoder in _decoders.values) {
       decoder.dispose();
     }
     _decoders.clear();
     _undecodableFrames.clear();
+    _forgotten.clear();
   }
 
   Future<void> dispose() async {

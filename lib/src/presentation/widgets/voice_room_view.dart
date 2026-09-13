@@ -27,6 +27,7 @@ class VoiceRoomView extends StatefulWidget {
     this.streamViewer,
     this.streams,
     this.cameraFrameFor,
+    this.cameraFramesFor,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
@@ -47,6 +48,10 @@ class VoiceRoomView extends StatefulWidget {
   /// The latest picture from a participant's camera, when one is
   /// arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+
+  /// Where a participant's camera pictures arrive from now on, for the tile
+  /// that is already showing one.
+  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
 
   /// The stage strip, or null for an ordinary voice channel.
   final Widget? stageControls;
@@ -146,6 +151,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 currentMemberId: widget.currentMemberId,
                 spaceId: widget.spaceId,
                 cameraFrameFor: widget.cameraFrameFor,
+                cameraFramesFor: widget.cameraFramesFor,
               ),
             ),
             _VoiceToolbar(controller: widget.controller, goLive: widget.goLive),
@@ -249,6 +255,7 @@ class _VoiceStage extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
+    this.cameraFramesFor,
     this.streams,
     this.focusedUserId,
     this.onTapParticipant,
@@ -258,6 +265,10 @@ class _VoiceStage extends StatelessWidget {
   /// The latest picture from a participant's camera, when one is
   /// arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+
+  /// Where a participant's camera pictures arrive from now on, for the tile
+  /// that is already showing one.
+  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
   final String? focusedUserId;
   final void Function(String userId)? onTapParticipant;
   final VoidCallback? onClearFocus;
@@ -290,6 +301,7 @@ class _VoiceStage extends StatelessWidget {
           currentMemberId: currentMemberId,
           spaceId: spaceId,
           cameraFrameFor: cameraFrameFor,
+          cameraFramesFor: cameraFramesFor,
           streams: streams,
           onTapParticipant: onTapParticipant,
           compact: compact,
@@ -314,6 +326,7 @@ class _VoiceStage extends StatelessWidget {
                   currentMemberId: currentMemberId,
                   spaceId: spaceId,
                   cameraFrameFor: cameraFrameFor,
+                  cameraFramesFor: cameraFramesFor,
                   streams: streams,
                   onTap: onTapParticipant,
                   size: VoiceParticipantTileSize.stage,

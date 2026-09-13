@@ -6,6 +6,10 @@ When this client's window has nothing on screen, watched sessions stop drawing a
 
 Suspension used to follow the focus, so a viewer who alt-tabbed away had their picture stop and restart on every glance at another window. Each restart cost a fresh receiver and a wait for the next keyframe, which reads as the stream breaking. The rule now follows the screen instead: a window that is still visible keeps drawing when it loses the focus, and only a window nothing of is on screen (minimized, or hidden to the tray) suspends. The chat's read state still follows the focus.
 
+## Amendment (2026-09-13): the room's cameras follow the same rule
+
+The rule covered watched sessions; everybody else's cameras kept decoding with the window in the tray, one decoder and one last picture per camera. Camera decoding now suspends through the same seam and by the same rule: packets keep being counted, the decoder is let go, and the first picture back is a keyframe.
+
 ## Status
 
 Accepted.

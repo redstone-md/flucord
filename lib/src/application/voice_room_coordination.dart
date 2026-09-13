@@ -44,6 +44,9 @@ final class VoiceRoomCoordination {
     _voice.addListener(_refreshOverlay);
     _streamerMode.addListener(_refreshOverlay);
     _goLive.addListener(_syncStreamerMode);
+    _camerasGoneSubscription = voice.camerasGone.listen(
+      _remoteCameras.forget,
+    );
   }
 
   final VoiceController _voice;
@@ -54,6 +57,7 @@ final class VoiceRoomCoordination {
   final StreamViewerController _streamViewer;
   final SelfVideoController _selfVideo;
   final RoomFocus _focus;
+  StreamSubscription<String>? _camerasGoneSubscription;
 
   void dispose() {
     _voice.removeListener(_syncRemoteCameras);
@@ -63,6 +67,7 @@ final class VoiceRoomCoordination {
     _voice.removeListener(_refreshOverlay);
     _streamerMode.removeListener(_refreshOverlay);
     _goLive.removeListener(_syncStreamerMode);
+    unawaited(_camerasGoneSubscription?.cancel());
   }
 
   /// Reads everybody else's cameras only while a room is actually connected.

@@ -16,6 +16,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
+    this.cameraFramesFor,
     this.streams,
     this.onTapParticipant,
     this.compact = false,
@@ -33,6 +34,11 @@ class VoiceParticipantGrid extends StatelessWidget {
 
   /// The latest picture from a participant's camera, when one is arriving.
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+
+  /// Where a participant's camera pictures arrive from now on, for the tile
+  /// that is already showing one: the pictures go to their tile alone
+  /// instead of rebuilding the room around it.
+  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
 
   /// The streams this client has open, and the controls a tile offers for
   /// them. Null where the room was drawn without a stream plane at all.
@@ -93,6 +99,7 @@ class VoiceParticipantGrid extends StatelessWidget {
         final participant = participants[index];
         return VoiceParticipantTile(
           cameraFrameFor: cameraFrameFor,
+          cameraFramesFor: cameraFramesFor,
           participant: participant,
           members: members,
           currentMemberId: currentMemberId,
@@ -121,6 +128,7 @@ class VoiceParticipantTile extends StatelessWidget {
     required this.currentMemberId,
     required this.spaceId,
     this.cameraFrameFor,
+    this.cameraFramesFor,
     this.streams,
     this.onTap,
     this.size = VoiceParticipantTileSize.regular,
@@ -132,6 +140,10 @@ class VoiceParticipantTile extends StatelessWidget {
   final String currentMemberId;
   final String spaceId;
   final DecodedVideoFrame? Function(String userId)? cameraFrameFor;
+
+  /// Where this participant's camera pictures arrive from now on, for the
+  /// tile that is already showing one.
+  final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
   final VoiceStreamControls? streams;
   final void Function(String userId)? onTap;
   final VoiceParticipantTileSize size;
@@ -233,7 +245,10 @@ class VoiceParticipantTile extends StatelessWidget {
                   key: ValueKey('voice-camera-${participant.userId}'),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(5),
-                    child: CameraPicture(frame: frame),
+                    child: CameraPicture(
+                      frame: frame,
+                      frames: cameraFramesFor?.call(participant.userId),
+                    ),
                   ),
                 )
               else

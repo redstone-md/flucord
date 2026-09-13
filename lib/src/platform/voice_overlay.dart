@@ -203,24 +203,29 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
     text.paint(canvas, Offset(32, top + (rowHeight - text.height) / 2));
   }
 
-  final image = await recorder.endRecording().toImage(
-    width.round(),
-    height.round(),
-  );
+  final picture = recorder.endRecording();
   try {
-    final data = await image.toByteData(
-      // Premultiplied is what UpdateLayeredWindow expects; straight alpha
-      // draws every edge with a dark fringe around it.
-      format: ui.ImageByteFormat.rawStraightRgba,
-    );
-    if (data == null) return null;
-    return OverlayPicture(
-      pixels: premultipliedBgraFromRgba(data.buffer.asUint8List()),
-      width: image.width,
-      height: image.height,
-    );
+    final image = await picture.toImage(width.round(), height.round());
+    try {
+      final data = await image.toByteData(
+        // Premultiplied is what UpdateLayeredWindow expects; straight alpha
+        // draws every edge with a dark fringe around it.
+        format: ui.ImageByteFormat.rawStraightRgba,
+      );
+      if (data == null) return null;
+      return OverlayPicture(
+        pixels: premultipliedBgraFromRgba(data.buffer.asUint8List()),
+        width: image.width,
+        height: image.height,
+      );
+    } finally {
+      image.dispose();
+    }
   } finally {
-    image.dispose();
+    // The raster cache keeps a picture alive until it is disposed, and the
+    // overlay is redrawn on every roster and speaking change: one left here
+    // per refresh was a leak that grew for the whole call.
+    picture.dispose();
   }
 }
 

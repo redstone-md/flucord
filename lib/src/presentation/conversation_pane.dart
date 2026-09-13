@@ -362,6 +362,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             channelName: channel.name,
             controller: voice,
             cameraFrameFor: cameras.frameFor,
+            cameraFramesFor: cameras.framesFor,
             members: widget.workspace.members,
             currentMemberId: widget.workspace.currentMemberId,
           )
@@ -391,6 +392,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               channelName: channel.name,
               controller: voice,
               cameraFrameFor: cameras.frameFor,
+              cameraFramesFor: cameras.framesFor,
               members: widget.workspace.members,
               currentMemberId: widget.workspace.currentMemberId,
             ),

@@ -49,7 +49,7 @@ class FakeNoiseSuppressor implements VoiceNoiseSuppressor {
   int get hopSize => 480;
 
   @override
-  void process(Int16List frame, {required int channels}) {
+  Future<void> process(Int16List frame, {required int channels}) async {
     this.channels = channels;
     frames.add(Int16List.fromList(frame));
     frame.fillRange(0, frame.length, cleaned);

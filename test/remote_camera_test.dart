@@ -10,6 +10,7 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/presentation/widgets/camera_picture.dart';
 import 'package:flucord/src/presentation/widgets/voice_participant_grid.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'support/fake_video_decoder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -66,11 +67,11 @@ void main() {
   group('receiving other cameras', () {
     test('a picture is rebuilt per sender, not across them', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <_FakeDecoder>[];
+      final decoders = <FakeVideoDecoder>[];
       final controller = RemoteCameraController(
         packetsProvider: () => packets.stream,
         decoderFactory: () {
-          final decoder = _FakeDecoder();
+          final decoder = FakeVideoDecoder();
           decoders.add(decoder);
           return decoder;
         },
@@ -106,12 +107,12 @@ void main() {
       'a group-encrypted camera picture decrypts after reassembly',
       () async {
         final packets = StreamController<(String, DiscordRtpFrame)>();
-        final decoders = <_FakeDecoder>[];
+        final decoders = <FakeVideoDecoder>[];
         final decryptions = <Uint8List>[];
         final controller = RemoteCameraController(
           packetsProvider: () => packets.stream,
           decoderFactory: () {
-            final decoder = _FakeDecoder();
+            final decoder = FakeVideoDecoder();
             decoders.add(decoder);
             return decoder;
           },
@@ -136,11 +137,11 @@ void main() {
 
     test('a decoded picture is held for whoever sent it', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <_FakeDecoder>[];
+      final decoders = <FakeVideoDecoder>[];
       final controller = RemoteCameraController(
         packetsProvider: () => packets.stream,
         decoderFactory: () {
-          final decoder = _FakeDecoder();
+          final decoder = FakeVideoDecoder();
           decoders.add(decoder);
           return decoder;
         },
@@ -164,11 +165,11 @@ void main() {
       final first = StreamController<(String, DiscordRtpFrame)>.broadcast();
       final second = StreamController<(String, DiscordRtpFrame)>.broadcast();
       var current = first;
-      final decoders = <_FakeDecoder>[];
+      final decoders = <FakeVideoDecoder>[];
       final controller = RemoteCameraController(
         packetsProvider: () => current.stream,
         decoderFactory: () {
-          final decoder = _FakeDecoder();
+          final decoder = FakeVideoDecoder();
           decoders.add(decoder);
           return decoder;
         },
@@ -187,7 +188,7 @@ void main() {
       // The SSRCs the old cameras were built around belong to a socket that
       // has gone, so nothing from it is still drawn.
       expect(controller.frameFor('user-a'), isNull);
-      expect(decoders.single.stops, 1);
+      expect(decoders.single.stopped, 1);
       expect(controller.isListening, isTrue);
 
       // And the new socket is the one being read.
@@ -199,11 +200,11 @@ void main() {
 
     test('stopping closes every decoder', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <_FakeDecoder>[];
+      final decoders = <FakeVideoDecoder>[];
       final controller = RemoteCameraController(
         packetsProvider: () => packets.stream,
         decoderFactory: () {
-          final decoder = _FakeDecoder();
+          final decoder = FakeVideoDecoder();
           decoders.add(decoder);
           return decoder;
         },
@@ -215,7 +216,7 @@ void main() {
 
       controller.stop();
 
-      expect(decoders.single.stops, 1);
+      expect(decoders.single.stopped, 1);
       expect(controller.isListening, isFalse);
       expect(controller.senders, isEmpty);
     });
@@ -224,7 +225,7 @@ void main() {
       'a camera that loses a picture asks for a keyframe and waits for an IDR',
       () async {
         final packets = StreamController<(String, DiscordRtpFrame)>();
-        final decoder = _FakeDecoder();
+        final decoder = FakeVideoDecoder();
         final asked = <int>[];
         var reject = true;
         final controller = RemoteCameraController(
@@ -262,7 +263,7 @@ void main() {
         packetsProvider: () => const Stream<(String, DiscordRtpFrame)>.empty(),
         decoderFactory: () {
           made++;
-          return _FakeDecoder();
+          return FakeVideoDecoder();
         },
       );
       addTearDown(controller.dispose);
@@ -272,6 +273,112 @@ void main() {
 
       expect(made, 0);
       expect(controller.isReceiving, isFalse);
+    });
+
+    test('a camera whose sender is gone is released with its picture',
+      () async {
+      final packets = StreamController<(String, DiscordRtpFrame)>();
+      final decoders = <FakeVideoDecoder>[];
+      final controller = RemoteCameraController(
+        packetsProvider: () => packets.stream,
+        decoderFactory: () {
+          final decoder = FakeVideoDecoder();
+          decoders.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      controller.listen();
+      packets.add(('user-a', _frame([0x65, 1], marker: true)));
+      await Future<void>.delayed(Duration.zero);
+      decoders.single.emit(_picture(width: 4, height: 2));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.frameFor('user-a'), isNotNull);
+
+      controller.forget('user-a');
+
+      // Their decoder stops and the last picture is not held onto: a camera
+      // that stayed behind for the rest of the session was a decoder and a
+      // frame buffer kept open for nobody.
+      expect(decoders.single.stopped, 1);
+      expect(controller.frameFor('user-a'), isNull);
+      expect(controller.senders, isEmpty);
+      expect(controller.isReceiving, isFalse);
+
+      // Forgetting somebody with no camera says nothing happened.
+      controller.forget('user-b');
+    });
+
+    test('a suspended room counts packets and opens no decoder', () async {
+      final packets = StreamController<(String, DiscordRtpFrame)>();
+      final decoders = <FakeVideoDecoder>[];
+      final controller = RemoteCameraController(
+        packetsProvider: () => packets.stream,
+        decoderFactory: () {
+          final decoder = FakeVideoDecoder();
+          decoders.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      controller.setSuspended(true);
+      controller.listen();
+      packets.add(('user-a', _frame([0x65, 1], marker: true)));
+      await Future<void>.delayed(Duration.zero);
+
+      // Nothing to draw the picture on, so nothing to decode it with; the
+      // packets are still counted, so the room knows who is sending.
+      expect(decoders, isEmpty);
+      expect(controller.packetsFrom('user-a'), 1);
+      expect(controller.frameFor('user-a'), isNull);
+
+      // The window back means a fresh decoder and a keyframe first.
+      controller.setSuspended(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(decoders.single.started, 1);
+      expect(controller.isSuspended, isFalse);
+    });
+
+    test('the first picture announces the camera, the rest go to the tile',
+      () async {
+      final packets = StreamController<(String, DiscordRtpFrame)>();
+      final decoders = <FakeVideoDecoder>[];
+      final controller = RemoteCameraController(
+        packetsProvider: () => packets.stream,
+        decoderFactory: () {
+          final decoder = FakeVideoDecoder();
+          decoders.add(decoder);
+          return decoder;
+        },
+      );
+      addTearDown(controller.dispose);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.listen();
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 1, reason: 'listening is announced once');
+
+      packets.add(('user-a', _frame([0x65, 1], marker: true)));
+      await Future<void>.delayed(Duration.zero);
+
+      final pictures = <DecodedVideoFrame>[];
+      controller.framesFor('user-a')!.listen(pictures.add);
+      decoders.single.emit(_picture(width: 4, height: 2));
+      await Future<void>.delayed(Duration.zero);
+      // One announcement, when the tile appears.
+      expect(notifications, 2);
+      expect(pictures.single.width, 4);
+
+      // The next pictures reach the tile through its own subscription, not
+      // through the room: a notification per picture rebuilt the whole
+      // conversation pane, timeline included, at the camera's frame rate.
+      final notifiedAfterFirst = notifications;
+      decoders.single.emit(_picture(width: 6, height: 2));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(notifications, notifiedAfterFirst);
+      expect(pictures.map((picture) => picture.width), [4, 6]);
+      expect(controller.frameFor('user-a')?.width, 6);
     });
   });
 
@@ -481,30 +588,3 @@ DecodedVideoFrame _picture({int width = 2, int height = 2}) =>
       timestamp: Duration.zero,
     );
 
-final class _FakeDecoder implements VideoDecoderService {
-  final List<List<int>> submitted = [];
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
-  int stops = 0;
-
-  void emit(DecodedVideoFrame frame) => _frames.add(frame);
-
-  @override
-  bool get isSupported => true;
-
-  @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
-
-  @override
-  Stream<int> get droppedAccessUnits => const Stream.empty();
-
-  @override
-  Future<void> start() async {}
-
-  @override
-  Future<void> submit(Uint8List accessUnit, {Duration? timestamp}) async =>
-      submitted.add(accessUnit);
-
-  @override
-  Future<void> stop() async => stops++;
-}

@@ -379,7 +379,7 @@ void main() {
 
 final class _BrokenSuppressor extends FakeNoiseSuppressor {
   @override
-  void process(Int16List frame, {required int channels}) =>
+  Future<void> process(Int16List frame, {required int channels}) =>
       throw StateError('model failed');
 }
 

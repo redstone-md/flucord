@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,11 +17,13 @@ import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
 
+import 'support/fake_video_decoder.dart';
 import 'support/fake_video_encoder.dart';
 import 'support/stream_room_harness.dart';
 
@@ -58,6 +61,47 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     expect(cameras.isListening, isFalse, reason: 'rules die with the room');
+  });
+
+  test('a camera is released when its sender leaves the room', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final voice = VoiceController(
+      const NoopVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(voice.dispose);
+    final packets = StreamController<(String, DiscordRtpFrame)>();
+    addTearDown(packets.close);
+    final decoders = <FakeVideoDecoder>[];
+    final cameras = RemoteCameraController(
+      packetsProvider: () => packets.stream,
+      decoderFactory: () {
+        final decoder = FakeVideoDecoder();
+        decoders.add(decoder);
+        return decoder;
+      },
+    );
+    addTearDown(cameras.dispose);
+    final room = _buildRoom(voice: voice, remoteCameras: cameras);
+    addTearDown(room.dispose);
+
+    await voice.refreshSignalingService();
+    signaling.emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready));
+    await Future<void>.delayed(Duration.zero);
+    packets.add(('user-a', _cameraFrame([0x65, 1])));
+    await Future<void>.delayed(Duration.zero);
+    decoders.single.emit(_picture());
+    await Future<void>.delayed(Duration.zero);
+    expect(cameras.frameFor('user-a'), isNotNull);
+
+    // The room's controller hears the departure and lets the camera go: its
+    // decoder stops and the last picture it decoded is not held onto.
+    signaling.emit(const VoiceUserDisconnectedEvent('user-a'));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(decoders.single.stopped, 1);
+    expect(cameras.frameFor('user-a'), isNull);
+    expect(cameras.senders, isEmpty);
   });
 
   test('watched streams end with the room', () async {
@@ -436,3 +480,23 @@ class _NoSettings implements StreamerModeRepository {
   @override
   Future<void> save(StreamerModeSettings settings) async {}
 }
+
+DiscordRtpFrame _cameraFrame(List<int> payload) => DiscordRtpFrame(
+  header: DiscordRtpHeader(
+    payloadType: DiscordRtpHeader.discordVideoPayloadType,
+    sequence: 1,
+    timestamp: 0,
+    ssrc: 41,
+    marker: true,
+  ),
+  payload: payload,
+);
+
+/// A picture with something in it, as a decoder would produce.
+DecodedVideoFrame _picture() => DecodedVideoFrame(
+  pixels: Uint8List(2 * 2 * 4)..fillRange(0, 2 * 2 * 4, 9),
+  width: 2,
+  height: 2,
+  timestamp: Duration.zero,
+);
+

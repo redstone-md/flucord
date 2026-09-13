@@ -126,6 +126,17 @@ final class VoiceController extends ChangeNotifier {
   /// When each source's last frame arrived, for the gap diagnostic.
   final Map<String, int> _lastPcmMicros = {};
 
+  /// Senders whose camera is no longer to be decoded, one event each: the
+  /// sender left the room, moved out of it, or a voice state says their
+  /// camera is off. The room's own view of who has a camera is not good
+  /// enough to filter these, so an event can name somebody who never had
+  /// one; releasing that is nothing.
+  final StreamController<String> _camerasGone = StreamController.broadcast();
+
+  /// The events [_camerasGone] carries. Not replayed, so whoever cares must
+  /// listen while the room is being built, before anybody can leave it.
+  Stream<String> get camerasGone => _camerasGone.stream;
+
   /// How long a participant still counts as speaking after their last voice
   /// frame. A sender closes a burst with five silence frames, 100 ms; this is
   /// long enough to ride over those and a lost packet, short enough that the
@@ -561,10 +572,10 @@ final class VoiceController extends ChangeNotifier {
             _participants[event.userId] ??
             VoiceParticipant(userId: event.userId);
         _participants[event.userId] = participant.copyWith(ssrc: event.ssrc);
+        _audioPipeline?.allowDecoder(event.userId);
         if (event.speakingFlags != 0) _heard(event.userId);
       case VoiceUserDisconnectedEvent():
-        _participants.remove(event.userId);
-        _speakingTimers.remove(event.userId)?.cancel();
+        _forgetParticipant(event.userId);
       case VoiceDaveBinaryEvent():
         break;
       case VoiceKeyframeRequestedEvent():
@@ -607,7 +618,7 @@ final class VoiceController extends ChangeNotifier {
   void _applyParticipantState(VoiceParticipantStateEvent event) {
     if (event.guildId != _connectedGuildId ||
         event.channelId != _connectedChannelId) {
-      _participants.remove(event.userId);
+      _forgetParticipant(event.userId);
       return;
     }
     final participant =
@@ -620,6 +631,25 @@ final class VoiceController extends ChangeNotifier {
       isStreaming: event.isStreaming,
       isVideoEnabled: event.isVideoEnabled,
     );
+    _audioPipeline?.allowDecoder(event.userId);
+    if (!event.isVideoEnabled && !_disposed) _camerasGone.add(event.userId);
+  }
+
+  /// Takes one participant out of the room, and their audio resources with
+  /// them: their Opus decoder and their playback source are native memory an
+  /// hour of comings and goings used to pile up until the whole channel was
+  /// left.
+  void _forgetParticipant(String userId) {
+    _participants.remove(userId);
+    _speakingTimers.remove(userId)?.cancel();
+    if (!_disposed) _camerasGone.add(userId);
+    _pendingPcmFrames.removeWhere((frame) => frame.sourceId == userId);
+    _lastPcmMicros.remove(userId);
+    _audioPipeline?.forgetDecoder(userId);
+    final playbackService = _playbackService;
+    if (playbackService != null) {
+      unawaited(_removePlaybackSource(playbackService, userId));
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -800,6 +830,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
+    unawaited(_camerasGone.close());
     unawaited(_audioPipeline?.dispose());
     unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());

@@ -202,6 +202,38 @@ void main() {
     transport.reset();
     expect(() => transport.sendOpusFrame(opus), throwsStateError);
   });
+
+  test('a reconnect surfaces one not-ready error, not one per frame', () {
+    final transport = DiscordVoiceMediaTransport(
+      incomingFrames: const Stream.empty(),
+      encryptDave: (frame) => frame,
+      decryptDave: (_, frame) => frame,
+      sendFrame: (_) => 1,
+      sendSpeaking: (_) {},
+      userForSsrc: (_) => null,
+    )..configure(ssrc: 1, daveEnabled: false);
+    transport.reset();
+    final opus = Uint8List.fromList([1]);
+
+    // The socket is being replaced: the first frame says the media is gone,
+    // and the rest of the burst rides it out. One error per frame was a
+    // flood of errors and rebuilds at the microphone's frame rate.
+    var errors = 0;
+    for (var index = 0; index < 50; index++) {
+      try {
+        transport.sendOpusFrame(opus);
+      } on Object {
+        errors++;
+      }
+    }
+    expect(errors, 1);
+
+    // A socket that made it back is a socket to report about again, if it
+    // goes away in turn.
+    transport.configure(ssrc: 1, daveEnabled: false);
+    transport.reset();
+    expect(() => transport.sendOpusFrame(opus), throwsStateError);
+  });
 }
 
 DiscordRtpFrame _frame({

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../app_log.dart';
 import '../domain/voice_audio.dart';
 import '../domain/voice_media.dart';
 import '../domain/voice_processing.dart';
@@ -17,6 +18,11 @@ import 'voice_pcm_framer.dart';
 /// better part of a second, so it happens off the frame path when the switch
 /// goes on; frames pass through as captured until it is ready, and a
 /// suppressor that fails to open or run turns the switch off and reports why.
+/// The inference itself runs where the model lives, off the UI isolate, and
+/// the uplink chains each frame's work behind the last one: frames leave in
+/// the order the microphone produced them, and one that arrives while the
+/// chain is still long is dropped rather than delayed (a live microphone
+/// cannot afford a queue).
 ///
 /// Only speech goes out. A frame is sent while the [VoiceActivityGate] hears
 /// the cleaned microphone above the room's noise floor, and for the gate's
@@ -46,6 +52,12 @@ final class VoiceAudioPipeline {
   /// How many quiet frames the uplink stays open after the last loud one.
   static const int hangoverFrames = VoiceActivityGate.defaultHangoverFrames;
 
+  /// How many frames may wait for their turn on the uplink. Inference that
+  /// keeps up never fills this; one that falls behind is shedding frames
+  /// rather than adding latency to a live microphone. Five is 100 ms, twice
+  /// what the model's own lookahead and window ask of it.
+  static const int _uplinkBacklogLimit = 5;
+
   final VoiceOpusEncoder _encoder;
   final VoiceAudioReceiver _receiver;
   final VoicePcmFramer _framer = VoicePcmFramer();
@@ -57,6 +69,11 @@ final class VoiceAudioPipeline {
   VoiceNoiseSuppressor? _noiseSuppressor;
   Future<void>? _noiseSuppressorOpening;
   bool _noiseSuppression = false;
+
+  /// The uplink's work, one frame at a time, in microphone order.
+  Future<void> _uplink = Future<void>.value();
+  int _uplinkBacklog = 0;
+  int _uplinkDropped = 0;
   bool _enabled = false;
   bool _disposed = false;
   final StreamController<bool> _speaking = StreamController.broadcast();
@@ -132,7 +149,12 @@ final class VoiceAudioPipeline {
     _framer.reset();
     _gate.reset();
     if (!enabled) {
-      _flushNoiseSuppressor();
+      // Frames already taken in finish first: they were captured while the
+      // uplink was live, and cutting them off would clip the tail of a word.
+      await _uplink;
+      _uplink = Future<void>.value();
+      _uplinkBacklog = 0;
+      await _flushNoiseSuppressor();
       _setSpeaking(false);
       await _transport?.finishSpeaking();
     }
@@ -141,22 +163,57 @@ final class VoiceAudioPipeline {
   void _handleMicrophonePcm(VoicePcmChunk chunk) {
     final transport = _transport;
     if (!_enabled || transport == null || _disposed) return;
-    try {
-      for (final frame in _framer.add(chunk)) {
-        _suppressNoise(frame);
-        final speech = _gate.accept(_rmsDbfs(frame));
-        if (speech) {
-          _setSpeaking(true);
-          transport.sendOpusFrame(_encoder.encode(frame));
-        } else if (_isSpeaking) {
-          _setSpeaking(false);
-          unawaited(_finishSpeaking(transport));
-        }
+    for (final frame in _framer.add(chunk)) {
+      if (_uplinkBacklog >= _uplinkBacklogLimit) {
+        _noteDroppedFrame();
+        continue;
       }
-    } catch (error) {
+      _uplinkBacklog++;
+      _uplink = _uplink.then((_) => _sendUplinkFrame(frame)).whenComplete(() {
+        _uplinkBacklog--;
+      });
+    }
+  }
+
+  /// The uplink cost is growing faster than the microphone produces: say so,
+  /// but not per frame, or the log becomes the problem being described.
+  void _noteDroppedFrame() {
+    _uplinkDropped++;
+    if (_uplinkDropped == 1 || _uplinkDropped % 100 == 0) {
+      AppLog.warning(
+        'voice.uplink',
+        'uplink dropped $_uplinkDropped frames: the filter cannot keep up',
+      );
+    }
+  }
+
+  /// One frame's whole turn: cleaned, gated, encoded, sent. Never throws, so
+  /// one bad frame cannot break the chain behind it.
+  Future<void> _sendUplinkFrame(Int16List frame) async {
+    final transport = _transport;
+    if (_disposed || transport == null) return;
+    try {
+      await _suppressNoise(frame);
+      final speech = _gate.accept(_rmsDbfs(frame));
+      if (speech) {
+        _setSpeaking(true);
+        transport.sendOpusFrame(_encoder.encode(frame));
+      } else if (_isSpeaking) {
+        _setSpeaking(false);
+        unawaited(_finishSpeaking(transport));
+      }
+    } on Object catch (error) {
       _emitError(error);
     }
   }
+
+  /// Throws away one participant's decoder: they left the room, and their
+  /// decoder is native memory that otherwise outlives them by the whole call.
+  void forgetDecoder(String userId) => _receiver.forgetDecoder(userId);
+
+  /// Takes a forgotten user back, now that the room has them again: their
+  /// frames decode instead of being dropped.
+  void allowDecoder(String userId) => _receiver.allowDecoder(userId);
 
   /// Ends the burst; a transport that refuses is reported like any other
   /// frame-path failure rather than thrown out of an unawaited future.
@@ -184,16 +241,16 @@ final class VoiceAudioPipeline {
     return 20 * math.log(rms) / math.ln10;
   }
 
-  /// Cleans [frame] in place while a suppressor is open and switched on.
+  /// Cleans [frame] while a suppressor is open and switched on.
   ///
   /// A suppressor that throws is dropped and the switch turned off: the frame
   /// goes out as captured, the failure is reported once, and switching on
   /// again opens a fresh one.
-  void _suppressNoise(Int16List frame) {
+  Future<void> _suppressNoise(Int16List frame) async {
     final suppressor = _noiseSuppressor;
     if (!_noiseSuppression || suppressor == null) return;
     try {
-      suppressor.process(frame, channels: _framer.channels);
+      await suppressor.process(frame, channels: _framer.channels);
     } on Object catch (error) {
       _noiseSuppression = false;
       _noiseSuppressor = null;
@@ -209,7 +266,7 @@ final class VoiceAudioPipeline {
   /// Silence pushed through brings them out, and leaves the model holding
   /// silence rather than that tail for the next press. Only while frames are
   /// actually being sent: a filter that is still loading has nothing inside.
-  void _flushNoiseSuppressor() {
+  Future<void> _flushNoiseSuppressor() async {
     final transport = _transport;
     // Only mid-burst: a closed gate has already pushed silence through the
     // model, and a frame sent now would open a burst just to end it.
@@ -222,7 +279,7 @@ final class VoiceAudioPipeline {
     try {
       for (var i = 0; i < _flushFrames; i++) {
         final silence = Int16List(_framer.samplesPerFrame);
-        _suppressNoise(silence);
+        await _suppressNoise(silence);
         transport.sendOpusFrame(_encoder.encode(silence));
       }
     } on Object catch (error) {

@@ -48,23 +48,6 @@ final class DeepFilterNoiseSuppressor implements VoiceNoiseSuppressor {
       '${File(Platform.resolvedExecutable).parent.path}'
       '${Platform.pathSeparator}$fileName';
 
-  /// A way to open the bundled suppressor, or null when this build has none:
-  /// another platform, or a bundle missing the library or the model.
-  ///
-  /// Probed once here so a settings surface offers a switch only for a filter
-  /// that can actually be switched on.
-  static Future<VoiceNoiseSuppressor> Function()? bundledFactory() {
-    if (!Platform.isWindows) return null;
-    final model = bundledPath(modelFileName);
-    if (!File(model).existsSync()) return null;
-    try {
-      DynamicLibrary.open(libraryFileName);
-    } on Object {
-      return null;
-    }
-    return () => open(libraryPath: libraryFileName, modelPath: model);
-  }
-
   /// Opens the library and loads the model, off the calling isolate: the load
   /// takes the better part of a second, which is not a stall the UI or the
   /// microphone path can afford.
@@ -122,7 +105,13 @@ final class DeepFilterNoiseSuppressor implements VoiceNoiseSuppressor {
   final int hopSize;
 
   @override
-  void process(Int16List frame, {required int channels}) {
+  Future<void> process(Int16List frame, {required int channels}) async {
+    _processSync(frame, channels);
+  }
+
+  /// The cleaning itself: native calls, so it belongs on the isolate that
+  /// owns the model.
+  void _processSync(Int16List frame, int channels) {
     if (_disposed) throw StateError('DeepFilterNoiseSuppressor is disposed');
     if (channels <= 0 || frame.length % (hopSize * channels) != 0) {
       throw ArgumentError.value(
