@@ -1,8 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flucord/src/data/discord/discord_remote_auth_api.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// The browser identity the client context sends: the installed desktop
+/// client on Windows, this client on the platforms the desktop protocol is
+/// not proven on yet.
+Matcher get _browserAgent => Platform.isWindows
+    ? contains('discord/1.0.9249')
+    : startsWith('Flucord/');
 
 void main() {
   test(
@@ -25,7 +33,7 @@ void main() {
       expect(exchange.uri.path, '/api/v9/users/@me/remote-auth/login');
       expect(exchange.headers['X-Fingerprint'], 'api-fingerprint');
       expect(exchange.headers['X-Super-Properties'], isNotEmpty);
-      expect(exchange.headers['user-agent'], contains('discord/1.0.9249'));
+      expect(exchange.headers['user-agent'], _browserAgent);
       expect(jsonDecode(utf8.decode(exchange.body!)), {
         'ticket': 'remote-ticket',
       });
@@ -92,7 +100,7 @@ void main() {
     expect(challenge, isNotNull);
     expect(challenge!.siteKey, 'site-key');
     expect(challenge.service, 'hcaptcha');
-    expect(challenge.userAgent, contains('discord/1.0.9249'));
+    expect(challenge.userAgent, _browserAgent);
     expect(challenge.rqData, 'request-data');
     expect(challenge.rqToken, 'request-token');
     expect(challenge.sessionId, 'session-id');
