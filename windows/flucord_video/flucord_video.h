@@ -81,6 +81,9 @@ flucord_video_open(const FlucordVideoConfig* config,
 //
 // `config->width`/`height` are what the encoder produces; the reader is asked
 // for the nearest thing the camera offers and the result is scaled to fit.
+// What the reader settled on is verified before the open answers: a camera
+// that can neither produce nor scale to the asked size fails the open rather
+// than feeding the encoder a shape it did not agree to.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_open_camera(const FlucordVideoConfig* config,
                           FlucordVideoFrameCallback callback,
@@ -115,6 +118,12 @@ flucord_video_set_bitrate(FlucordVideoEncoder* encoder,
                           int32_t bits_per_second);
 
 // Stops and releases everything. Safe to call twice.
+//
+// Waits up to two seconds for the capture thread. One stuck in a driver call
+// (a camera read, a GPU readback) cannot be joined: the stop answers anyway,
+// the thread is left to a background cleanup, and the timeout is reported
+// through flucord_video_last_error. No frame reaches the callback after this
+// returns, so the caller's own callback is safe to drop then.
 FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
 
 // Releases a buffer handed out by the frame callback.
@@ -131,7 +140,9 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
 // Which call produced that HRESULT: 1 finding the output, 2 creating the
 // device on its adapter, 3 duplicating onto that device, 4 duplicating onto
 // the device the encoder already had, 5 handing a frame to the encoder, 6
-// reading an event from a hardware encoder. Zero when nothing has failed.
+// reading an event from a hardware encoder, 7 joining the capture thread at
+// close, 8 joining the decode thread at close, 9 settling the camera's
+// output type. Zero when nothing has failed.
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
 
 // Writes the running encoder's own description into [buffer] ("hardware:
@@ -225,6 +236,13 @@ flucord_video_decoder_info(FlucordVideoDecoder* decoder,
                            int32_t* out_height,
                            int32_t* out_stride);
 
+// Stops and releases the decoder.
+//
+// Waits up to two seconds for the decode thread. One stuck in a driver call
+// cannot be joined: the close answers anyway, the thread is left to a
+// background cleanup, and the timeout is reported through
+// flucord_video_last_error. No picture reaches the callback after this
+// returns.
 FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
     FlucordVideoDecoder* decoder);
 
@@ -244,7 +262,10 @@ flucord_video_decode_probe(const uint8_t* annex_b, int32_t length);
 // picture, not an H.264 stream, and running a frame through the encoder and
 // back out of a decoder to get one would be a round trip for nothing.
 //
-// The buffer is valid for the duration of the callback only.
+// The whole wait is bounded to about a second, because the caller runs on the
+// thread the user is using: a display that produces no frame within the
+// budget answers NO_DISPLAY rather than blocking. The buffer is valid for the
+// duration of the callback only.
 typedef void (*FlucordVideoScreenshotCallback)(void* user_data,
                                                const uint8_t* bgra,
                                                int32_t width,

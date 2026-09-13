@@ -118,6 +118,10 @@ final class NativeScreenshotService implements ScreenshotService {
   }
 
   /// The raw frame, or null when nothing could be captured.
+  ///
+  /// The native capture runs on this thread and is bounded to about a second
+  /// by the module: a display that produces no frame within the budget is
+  /// reported as null rather than waited on.
   CapturedScreen? capture({int displayIndex = 0}) {
     final captureScreen = _captureScreen;
     if (captureScreen == null) return null;

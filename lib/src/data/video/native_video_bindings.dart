@@ -328,10 +328,8 @@ final class NativeVideoBindings {
   /// Reads the HRESULT behind the last failure, when the module reports one.
   final int Function()? lastError;
 
-  /// Which call produced it: 1 finding the output, 2 creating the device on
-  /// its adapter, 3 duplicating onto that device, 4 duplicating onto the one
-  /// the encoder already had, 5 handing a frame to the encoder, 6 reading an
-  /// event from a hardware encoder.
+  /// Which call produced it, as numbered in [NativeVideoStage]; zero when
+  /// nothing has failed.
   final int Function()? lastErrorStage;
 
   /// The running encoder's own description ("hardware: ... gop=ok"), or null
@@ -429,4 +427,22 @@ abstract final class NativeVideoStatus {
   static const encoder = 3;
   static const state = 4;
   static const noCamera = 5;
+}
+
+/// Which call produced the module's last HRESULT, as
+/// `flucord_video_last_error_stage` answers it.
+abstract final class NativeVideoStage {
+  static const findOutput = 1;
+  static const createDevice = 2;
+  static const duplicate = 3;
+  static const duplicateOnOriginalDevice = 4;
+  static const encodeInput = 5;
+  static const encoderEvent = 6;
+
+  /// The stop gave up waiting for its worker and left it to cleanup.
+  static const stopJoinCapture = 7;
+  static const stopJoinDecode = 8;
+
+  /// The camera would not settle on the format the encoder was opened for.
+  static const cameraOutputType = 9;
 }

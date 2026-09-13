@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import '../../app_log.dart';
 import '../../domain/video_encoder.dart';
 import 'native_camera_names.dart';
 import 'native_video_bindings.dart';
@@ -216,10 +217,15 @@ final class NativeVideoEncoderService
   Future<void> stop() async {
     if (_handle == nullptr) return;
     _finalizer?.detach(this);
-    // The native close joins the capture thread, so no further callback can
-    // arrive once it returns and the callable is safe to release.
+    // The native close bounds its join, so this answers even when the capture
+    // thread is stuck in a driver call: the thread is left to a native
+    // cleanup, and the timeout is read where the module records its failures.
     _bindings?.close(_handle);
     _handle = nullptr;
+    if (_bindings?.lastErrorStage?.call() ==
+        NativeVideoStage.stopJoinCapture) {
+      AppLog.warning('video', 'capture thread stuck; stop left it to cleanup');
+    }
     _callback?.close();
     _callback = null;
   }

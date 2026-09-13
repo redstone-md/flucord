@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// Keeps this client's window out of screen recordings.
 ///
@@ -29,11 +30,28 @@ final class UnavailableWindowCaptureShield implements WindowCaptureShield {
   bool setExcluded({required bool excluded}) => false;
 }
 
+/// One visible top-level window of this process, as the walk saw it.
+///
+/// Windows arrive in z-order, front first.
+final class OwnWindowCandidate {
+  const OwnWindowCandidate({
+    required this.className,
+    required this.isToolWindow,
+  });
+
+  final String className;
+
+  /// A tool window stays out of the task bar and alt-tab, which is how the
+  /// in-game overlay is built.
+  final bool isToolWindow;
+}
+
 /// `SetWindowDisplayAffinity` on the client's own top-level window.
 ///
-/// Straight FFI against `user32.dll` rather than a package: three calls, all
-/// of them in the Windows API since Vista, and a dependency added for that
-/// would be more to keep current than to write.
+/// Straight FFI against `user32.dll` rather than a package: a walk of the
+/// window list and one call to set the affinity, all of it in the Windows API
+/// since Vista, and a dependency added for that would be more to keep current
+/// than to write.
 final class WindowsWindowCaptureShield implements WindowCaptureShield {
   WindowsWindowCaptureShield()
     : this.withLibraries(
@@ -57,6 +75,14 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
   /// which still tells a viewer exactly where the client is.
   static const int excludeFromCapture = 0x00000011;
   static const int none = 0x00000000;
+
+  /// The runner's main window class, from `windows/runner/win32_window.cpp`.
+  ///
+  /// The main window is picked by this class rather than by z-order, because
+  /// while the in-game overlay is shown it is the process's first visible
+  /// window, and shielding the overlay would leave the main window on the
+  /// recording with the shield reporting success.
+  static const String mainWindowClass = 'FLUTTER_RUNNER_WIN32_WINDOW';
 
   static DynamicLibrary? _open(String name) {
     try {
@@ -86,7 +112,7 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
     return setAffinity(window, excluded ? excludeFromCapture : none) != 0;
   }
 
-  /// This process's first visible top-level window.
+  /// This process's main window.
   ///
   /// Found by walking the windows rather than by title: the title follows the
   /// open channel, and matching on it would stop working the moment somebody
@@ -117,23 +143,72 @@ final class WindowsWindowCaptureShield implements WindowCaptureShield {
           Uint32 Function(Pointer<Void>, Pointer<Uint32>),
           int Function(Pointer<Void>, Pointer<Uint32>)
         >('GetWindowThreadProcessId');
+    final getClassName = user32
+        .lookupFunction<
+          Int32 Function(Pointer<Void>, Pointer<Uint16>, Int32),
+          int Function(Pointer<Void>, Pointer<Uint16>, int)
+        >('GetClassNameW');
+    final getWindowLong = user32
+        .lookupFunction<
+          Int32 Function(Pointer<Void>, Int32),
+          int Function(Pointer<Void>, int)
+        >('GetWindowLongW');
 
     // GW_CHILD from the desktop is the first top-level window; GW_HWNDNEXT
     // walks the rest in z-order.
-    var window = getWindow(getDesktopWindow(), 5);
+    const gwChild = 5;
+    const gwHwndNext = 2;
+    const gwlExStyle = -16;
+    const wsExToolWindow = 0x00000080;
+    const classNameCapacity = 256;
+
+    final className = calloc<Uint16>(classNameCapacity);
     final owner = calloc<Uint32>();
+    final handles = <Pointer<Void>>[];
+    final candidates = <OwnWindowCandidate>[];
     try {
+      var window = getWindow(getDesktopWindow(), gwChild);
       while (window != nullptr) {
         owner.value = 0;
         threadProcess(window, owner);
         if (owner.value == currentProcessId && isVisible(window) != 0) {
-          return window;
+          final length = getClassName(window, className, classNameCapacity);
+          final exStyle = getWindowLong(window, gwlExStyle);
+          handles.add(window);
+          candidates.add(
+            OwnWindowCandidate(
+              className: length <= 0
+                  ? ''
+                  : String.fromCharCodes(className.asTypedList(length)),
+              isToolWindow: (exStyle & wsExToolWindow) != 0,
+            ),
+          );
         }
-        window = getWindow(window, 2);
+        window = getWindow(window, gwHwndNext);
       }
+      final index = pickOwnWindow(candidates);
+      return index < 0 ? nullptr : handles[index];
     } finally {
+      calloc.free(className);
       calloc.free(owner);
     }
-    return nullptr;
+  }
+
+  /// Picks the window to shield out of the process's visible top-level
+  /// windows, answering its position in [windows].
+  ///
+  /// The main window's class wins. If no window carries it, a build whose
+  /// runner class has moved on, the first window that is not a tool window is
+  /// taken, which is what keeps the overlay out of the answer. -1 when
+  /// nothing qualifies.
+  @visibleForTesting
+  static int pickOwnWindow(List<OwnWindowCandidate> windows) {
+    for (var index = 0; index < windows.length; index++) {
+      if (windows[index].className == mainWindowClass) return index;
+    }
+    for (var index = 0; index < windows.length; index++) {
+      if (!windows[index].isToolWindow) return index;
+    }
+    return -1;
   }
 }

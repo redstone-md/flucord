@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <memory>
@@ -246,6 +247,65 @@ int64_t NowNs() {
   return flucord_video::QpcTicksToNanoseconds(now.QuadPart, frequency);
 }
 
+// One balanced CoInitializeEx: the destructor answers it on every exit,
+// which the early-return error paths used to skip. A failed init is not
+// answered, because only a successful one owes the balance.
+class ComApartment {
+ public:
+  ComApartment()
+      : initialized_(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
+  }
+  ~ComApartment() {
+    if (initialized_) CoUninitialize();
+  }
+  ComApartment(const ComApartment&) = delete;
+  ComApartment& operator=(const ComApartment&) = delete;
+
+ private:
+  bool initialized_;
+};
+
+// A worker thread's exit word. The join itself has no deadline, so a close
+// waits for this word instead: in time and it joins a thread that has
+// finished, too late and it hands the rest of the teardown to a detached
+// cleanup thread.
+struct WorkerExit {
+  std::mutex lock;
+  std::condition_variable signal;
+  bool exited = false;
+
+  void Announce() {
+    std::lock_guard<std::mutex> guard(lock);
+    exited = true;
+    signal.notify_all();
+  }
+
+  template <typename Rep, typename Period>
+  bool WaitFor(std::chrono::duration<Rep, Period> limit) {
+    std::unique_lock<std::mutex> guard(lock);
+    return signal.wait_for(guard, limit, [&] { return exited; });
+  }
+
+  void AwaitForever() {
+    std::unique_lock<std::mutex> guard(lock);
+    signal.wait(guard, [&] { return exited; });
+  }
+};
+
+// A gate around callbacks into Dart. A close that stopped waiting for its
+// worker still must not have a frame arrive after it returned: the caller is
+// free to drop its callback then. The check and the callback sit under one
+// lock, and the close sets the gate under the same lock before it answers.
+struct DeliveryGate {
+  std::mutex lock;
+  bool closed = false;
+};
+
+// How long a close waits for its worker. A worker that is merely slow (a
+// frame in flight, a long encode) is out well inside it; one stuck in a
+// driver call is left to a detached cleanup thread at the deadline.
+constexpr std::chrono::milliseconds kWorkerJoinDeadline{2000};
+
 }  // namespace
 
 struct FlucordVideoEncoder {
@@ -287,6 +347,13 @@ struct FlucordVideoEncoder {
   std::atomic<bool> paused{false};
   std::atomic<bool> keyframe_requested{true};
   std::mutex encoder_lock;
+
+  // A close that cannot get the worker's exit word in time hands the rest of
+  // the teardown to a detached cleanup thread, and closes the delivery gate
+  // first so nothing arrives in Dart after the close has answered.
+  WorkerExit worker_exit;
+  DeliveryGate deliveries;
+  std::atomic<bool> close_started{false};
 
   std::vector<uint8_t> nv12;
 };
@@ -611,6 +678,15 @@ void ClearFailure() {
   g_last_error.store(0);
 }
 
+// The whole story for an attempt that has no fallback to speak quietly over:
+// a stop that could not join its worker, a camera whose output type would
+// not settle. These overwrite, because the caller is asking about this
+// attempt, not about the run that came before it.
+void RecordAttemptFailure(int32_t stage, HRESULT hr) {
+  g_last_error_stage.store(stage);
+  g_last_error.store(static_cast<int32_t>(hr));
+}
+
 // Which call refused, reported alongside its HRESULT.
 enum DuplicationStage {
   kStageFindOutput = 1,
@@ -619,6 +695,11 @@ enum DuplicationStage {
   kStageDuplicateOnOriginalDevice = 4,
   kStageEncodeInput = 5,
   kStageEncoderEvent = 6,
+  // A stop that could not join its worker, a camera whose format would not
+  // settle: attempts that must be reported even after an earlier failure.
+  kStageStopJoinCapture = 7,
+  kStageStopJoinDecode = 8,
+  kStageCameraOutputType = 9,
 };
 
 HRESULT OpenDuplication(FlucordVideoEncoder* state) {
@@ -683,14 +764,21 @@ void DeliverEncodedSample(FlucordVideoEncoder* state, IMFSample* produced) {
   }
   LONGLONG timestamp = 0;
   produced->GetSampleTime(&timestamp);
+  const bool keyframe = IsKeyframe(produced);
   auto* owned = static_cast<uint8_t*>(malloc(length));
   if (owned != nullptr) {
     memcpy(owned, data, length);
-    state->callback(state->user_data, owned, static_cast<int32_t>(length),
-                    timestamp / 10,  // 100ns units to microseconds.
-                    IsKeyframe(produced) ? 1 : 0);
   }
   contiguous->Unlock();
+  if (owned == nullptr) return;
+  std::lock_guard<std::mutex> guard(state->deliveries.lock);
+  if (state->deliveries.closed) {
+    free(owned);
+    return;
+  }
+  state->callback(state->user_data, owned, static_cast<int32_t>(length),
+                  timestamp / 10,  // 100ns units to microseconds.
+                  keyframe ? 1 : 0);
 }
 
 // Takes one output from an asynchronous encoder, which it only produces in
@@ -978,12 +1066,36 @@ HRESULT OpenCameraReader(FlucordVideoEncoder* state) {
         fallback.Get());
     if (FAILED(hr)) return hr;
   }
-  return state->reader->SetStreamSelection(
+  hr = state->reader->SetStreamSelection(
       static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
+  if (FAILED(hr)) return hr;
+
+  // What the reader settled on is what the capture loop feeds the encoder,
+  // whose input type names exactly one size. The exact type was asked first
+  // and the reader scales when it can; a camera left on its own shape would
+  // hand the encoder frames it refuses or mangles, so the settled type is
+  // verified here rather than assumed.
+  ComPtr<IMFMediaType> settled;
+  hr = state->reader->GetCurrentMediaType(
+      static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &settled);
+  if (FAILED(hr)) return hr;
+  GUID subtype{};
+  UINT32 width = 0;
+  UINT32 height = 0;
+  if (FAILED(settled->GetGUID(MF_MT_SUBTYPE, &subtype)) ||
+      subtype != MFVideoFormat_NV12 ||
+      FAILED(MFGetAttributeSize(settled.Get(), MF_MT_FRAME_SIZE, &width,
+                                &height)) ||
+      static_cast<int32_t>(width) != state->config.width ||
+      static_cast<int32_t>(height) != state->config.height) {
+    RecordAttemptFailure(kStageCameraOutputType, MF_E_INVALIDMEDIATYPE);
+    return MF_E_INVALIDMEDIATYPE;
+  }
+  return S_OK;
 }
 
 void CameraLoop(FlucordVideoEncoder* state) {
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   const size_t nv12_size =
       static_cast<size_t>(state->config.width) * state->config.height * 3 / 2;
   const auto started = GetTickCount64();
@@ -1014,7 +1126,6 @@ void CameraLoop(FlucordVideoEncoder* state) {
     }
     buffer->Unlock();
   }
-  CoUninitialize();
 }
 
 // Scales and colour-converts on the GPU with the Direct3D video processor.
@@ -1210,7 +1321,7 @@ bool ReopenDuplication(FlucordVideoEncoder* state) {
 }
 
 void CaptureLoop(FlucordVideoEncoder* state) {
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   const int frame_interval_ms = 1000 / state->config.frames_per_second;
   const int64_t frame_interval_ns =
       1000000000 / state->config.frames_per_second;
@@ -1312,9 +1423,13 @@ void CaptureLoop(FlucordVideoEncoder* state) {
       if (!ReopenDuplication(state)) {
         // Given up: an empty frame is the callback's word for it, and the
         // recorded failure says which step kept refusing. Not while closing,
-        // when the loop is leaving anyway.
+        // when the loop is leaving anyway; the gate check is for a close
+        // that stopped waiting for this thread and answered without it.
         if (state->running.load()) {
-          state->callback(state->user_data, nullptr, 0, 0, 0);
+          std::lock_guard<std::mutex> guard(state->deliveries.lock);
+          if (!state->deliveries.closed) {
+            state->callback(state->user_data, nullptr, 0, 0, 0);
+          }
         }
         break;
       }
@@ -1401,7 +1516,49 @@ void CaptureLoop(FlucordVideoEncoder* state) {
     state->duplication->ReleaseFrame();
   }
   if (tick_timer != nullptr) CloseHandle(tick_timer);
-  CoUninitialize();
+}
+
+// Everything close does once the worker is out: the last pictures, the
+// release, the module reference. Runs on the thread that called close when
+// the worker came out in time, or on a cleanup thread's when it did not.
+void FinishEncoderClose(FlucordVideoEncoder* encoder) {
+  if (encoder->worker.joinable()) encoder->worker.join();
+  if (encoder->encoder) {
+    std::lock_guard<std::mutex> guard(encoder->encoder_lock);
+    if (encoder->encoder_is_async) {
+      // A hardware encoder hands back what it is still holding only once
+      // asked to drain, and the last pictures of a stream are worth asking
+      // for. Bounded, because a driver that never answers DrainComplete must
+      // not hang the close.
+      encoder->encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+      const int64_t deadline = NowNs() + 50000000;
+      while (NowNs() < deadline) {
+        ComPtr<IMFMediaEvent> event;
+        if (FAILED(encoder->encoder_events->GetEvent(MF_EVENT_FLAG_NO_WAIT,
+                                                     &event))) {
+          break;
+        }
+        MediaEventType type = MEUnknown;
+        event->GetType(&type);
+        if (type == METransformHaveOutput) {
+          ConsumeEncoderOutput(encoder);
+        } else if (type == METransformDrainComplete) {
+          break;
+        }
+      }
+    }
+    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+  }
+  encoder->duplication.Reset();
+  encoder->reader.Reset();
+  encoder->encoder.Reset();
+  encoder->codec.Reset();
+  encoder->encoder_events.Reset();
+  encoder->context.Reset();
+  encoder->device.Reset();
+  delete encoder;
+  MFShutdown();
 }
 
 }  // namespace
@@ -1448,6 +1605,13 @@ struct FlucordVideoDecoder {
   std::atomic<int64_t> outputs{0};
   std::atomic<int64_t> outputErrors{0};
   std::atomic<int64_t> lastOutputError{0};
+
+  // A close that cannot get the worker's exit word in time hands the rest of
+  // the teardown to a detached cleanup thread, and closes the delivery gate
+  // first so no picture arrives in Dart after the close has answered.
+  WorkerExit worker_exit;
+  DeliveryGate deliveries;
+  std::atomic<bool> close_started{false};
 };
 
 namespace {
@@ -1501,17 +1665,21 @@ void RecordOutputType(FlucordVideoDecoder* decoder, IMFMediaType* type) {
   }
 }
 
-void TakeAvailableOutputType(FlucordVideoDecoder* decoder) {
+// Offers the decoder every output type it names until it takes one. False
+// when it refused them all: offering the same types again draws the same
+// refusal, so retrying cannot clear it.
+bool TakeAvailableOutputType(FlucordVideoDecoder* decoder) {
   ComPtr<IMFMediaType> type;
   for (DWORD index = 0;
        SUCCEEDED(decoder->transform->GetOutputAvailableType(0, index, &type));
        ++index) {
     if (SUCCEEDED(decoder->transform->SetOutputType(0, type.Get(), 0))) {
       RecordOutputType(decoder, type.Get());
-      return;
+      return true;
     }
     type.Reset();
   }
+  return false;
 }
 
 void ReadCurrentOutputType(FlucordVideoDecoder* decoder) {
@@ -1520,7 +1688,15 @@ void ReadCurrentOutputType(FlucordVideoDecoder* decoder) {
   RecordOutputType(decoder, type.Get());
 }
 
+// How many consecutive format changes a drain replans before it gives up.
+// When the decoder accepts no output type, every call to ProcessOutput
+// answers a change again, and an unbounded loop would spin a core forever.
+constexpr int kMaxFormatChanges = 8;
+
 void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
+  // Consecutive format changes with nothing decoded in between are the
+  // storm; a settled output is progress, and the count starts over.
+  int format_changes = 0;
   while (true) {
     MFT_OUTPUT_STREAM_INFO info{};
     decoder->transform->GetOutputStreamInfo(0, &info);
@@ -1543,7 +1719,15 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
     if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) return;
     if (hr == MF_E_TRANSFORM_STREAM_CHANGE) {
       // The decoder has read the parameter sets and is restating its output.
-      TakeAvailableOutputType(decoder);
+      // When no type it offers is accepted, every further call answers the
+      // same way and the loop would burn a core forever: the replans are
+      // bounded, and the storm is reported through the counters instead.
+      if (!TakeAvailableOutputType(decoder) ||
+          ++format_changes > kMaxFormatChanges) {
+        decoder->outputErrors.fetch_add(1);
+        decoder->lastOutputError.store(static_cast<int64_t>(hr));
+        return;
+      }
       continue;
     }
     if (FAILED(hr)) {
@@ -1555,6 +1739,7 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
     ComPtr<IMFSample> produced = allocates ? out.pSample : sample;
     if (!produced) return;
     decoder->outputs.fetch_add(1);
+    format_changes = 0;
     if (decoder->width <= 0 || decoder->height <= 0) {
       ReadCurrentOutputType(decoder);
     }
@@ -1576,13 +1761,26 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
                    picture.get());
         LONGLONG sample_time = 0;
         produced->GetSampleTime(&sample_time);
-        decoder->callback(decoder->user_data, picture.get(), decoder->width,
-                          decoder->height, decoder->width * 4,
-                          sample_time != 0 ? sample_time / 10 : timestamp_us);
-        // Ownership went with the callback; a picture posted after the
-        // listener closed leaks, which is the price of a teardown racing a
-        // decode and costs one frame at most.
-        picture.release();
+        // Ownership went with the callback when it was delivered; a picture
+        // the gate refused is freed here, and nothing arrives in Dart after
+        // a close that stopped waiting for this thread.
+        bool delivered = false;
+        {
+          std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
+          if (!decoder->deliveries.closed) {
+            decoder->callback(decoder->user_data, picture.get(),
+                              decoder->width, decoder->height,
+                              decoder->width * 4,
+                              sample_time != 0 ? sample_time / 10
+                                               : timestamp_us);
+            delivered = true;
+          }
+        }
+        if (delivered) {
+          picture.release();
+        } else {
+          picture.reset();
+        }
         contiguous->Unlock();
       }
     }
@@ -1673,7 +1871,7 @@ HRESULT ConfigureDecoder(FlucordVideoDecoder* decoder) {
 // caller's thread but finished pictures. The transform was configured by
 // the open that spawned this thread, which owns the MFStartup reference.
 void DecoderLoop(FlucordVideoDecoder* decoder) {
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   while (true) {
     std::pair<std::vector<uint8_t>, int64_t> unit;
     {
@@ -1688,7 +1886,17 @@ void DecoderLoop(FlucordVideoDecoder* decoder) {
     SubmitToTransform(decoder, unit.first, unit.second);
   }
   decoder->transform.Reset();
-  CoUninitialize();
+}
+
+// Everything the decoder's close does once its worker is out: the module
+// reference and the object. Runs on the thread that called close when the
+// worker came out in time, or on a cleanup thread's when it did not.
+void FinishDecoderClose(FlucordVideoDecoder* decoder) {
+  if (decoder->worker.joinable()) decoder->worker.join();
+  // The reference the open took: the decode thread is gone, so nothing
+  // uses Media Foundation through this decoder any more.
+  MFShutdown();
+  delete decoder;
 }
 }  // namespace
 
@@ -1701,10 +1909,12 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
   if (callback == nullptr || out_decoder == nullptr) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
+  ClearFailure();
+
   auto decoder = std::make_unique<FlucordVideoDecoder>();
   decoder->callback = callback;
   decoder->user_data = user_data;
@@ -1720,7 +1930,11 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
-  decoder->worker = std::thread(DecoderLoop, decoder.get());
+  FlucordVideoDecoder* raw = decoder.get();
+  raw->worker = std::thread([raw]() {
+    DecoderLoop(raw);
+    raw->worker_exit.Announce();
+  });
   *out_decoder = decoder.release();
   return FLUCORD_VIDEO_OK;
 }
@@ -1810,16 +2024,34 @@ flucord_video_decoder_info(FlucordVideoDecoder* decoder,
 FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
     FlucordVideoDecoder* decoder) {
   if (decoder == nullptr) return;
+  if (decoder->close_started.exchange(true)) return;
+  // A stop is its own attempt: what an earlier one recorded must not read
+  // as this one's result.
+  ClearFailure();
+  {
+    // Down before the answer: the caller is free to drop its picture
+    // callback once this returns, and a picture late to the cleanup thread
+    // must not reach it.
+    std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
+    decoder->deliveries.closed = true;
+  }
   {
     std::lock_guard lock(decoder->mutex);
     decoder->stopping = true;
   }
   decoder->ready.notify_all();
-  if (decoder->worker.joinable()) decoder->worker.join();
-  // The reference the open took: the decode thread is gone, so nothing
-  // uses Media Foundation through this decoder any more.
-  MFShutdown();
-  delete decoder;
+  if (decoder->worker_exit.WaitFor(kWorkerJoinDeadline)) {
+    FinishDecoderClose(decoder);
+    return;
+  }
+  // The decode thread is stuck in a call of its own. Stop answers here, with
+  // the timeout recorded, and the rest of the teardown waits for the thread
+  // on one of its own.
+  RecordAttemptFailure(kStageStopJoinDecode, HRESULT_FROM_WIN32(WAIT_TIMEOUT));
+  std::thread([decoder]() {
+    decoder->worker_exit.AwaitForever();
+    FinishDecoderClose(decoder);
+  }).detach();
 }
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_open(const FlucordVideoConfig* config,
@@ -1834,7 +2066,7 @@ flucord_video_open(const FlucordVideoConfig* config,
     return FLUCORD_VIDEO_ERROR_STATE;
   }
 
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
@@ -1868,7 +2100,10 @@ flucord_video_open(const FlucordVideoConfig* config,
 
   state->running.store(true);
   FlucordVideoEncoder* raw = state.release();
-  raw->worker = std::thread(CaptureLoop, raw);
+  raw->worker = std::thread([raw]() {
+    CaptureLoop(raw);
+    raw->worker_exit.Announce();
+  });
   *out_encoder = raw;
   return FLUCORD_VIDEO_OK;
 }
@@ -1885,10 +2120,11 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
       config->frames_per_second <= 0 || config->bitrate_bits_per_second <= 0) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
+  ClearFailure();
 
   auto state = std::make_unique<FlucordVideoEncoder>();
   state->config = *config;
@@ -1908,13 +2144,16 @@ flucord_video_open_camera(const FlucordVideoConfig* config,
 
   state->running.store(true);
   FlucordVideoEncoder* raw = state.release();
-  raw->worker = std::thread(CameraLoop, raw);
+  raw->worker = std::thread([raw]() {
+    CameraLoop(raw);
+    raw->worker_exit.Announce();
+  });
   *out_encoder = raw;
   return FLUCORD_VIDEO_OK;
 }
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_count(void) {
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return 0;
   IMFActivate** devices = nullptr;
   UINT32 count = 0;
@@ -1931,7 +2170,7 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_name(int32_t index,
                                                        char* buffer,
                                                        int32_t capacity) {
   if (index < 0) return 0;
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return 0;
   IMFActivate** devices = nullptr;
   UINT32 count = 0;
@@ -2002,44 +2241,30 @@ flucord_video_set_bitrate(FlucordVideoEncoder* encoder,
 
 FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder) {
   if (encoder == nullptr) return;
+  if (encoder->close_started.exchange(true)) return;
+  // A stop is its own attempt: what an earlier one recorded must not read
+  // as this one's result.
+  ClearFailure();
   encoder->running.store(false);
-  if (encoder->worker.joinable()) encoder->worker.join();
-  if (encoder->encoder) {
-    std::lock_guard<std::mutex> guard(encoder->encoder_lock);
-    if (encoder->encoder_is_async) {
-      // A hardware encoder hands back what it is still holding only once
-      // asked to drain, and the last pictures of a stream are worth asking
-      // for. Bounded, because a driver that never answers DrainComplete must
-      // not hang the close.
-      encoder->encoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
-      const int64_t deadline = NowNs() + 50000000;
-      while (NowNs() < deadline) {
-        ComPtr<IMFMediaEvent> event;
-        if (FAILED(encoder->encoder_events->GetEvent(MF_EVENT_FLAG_NO_WAIT,
-                                                     &event))) {
-          break;
-        }
-        MediaEventType type = MEUnknown;
-        event->GetType(&type);
-        if (type == METransformHaveOutput) {
-          ConsumeEncoderOutput(encoder);
-        } else if (type == METransformDrainComplete) {
-          break;
-        }
-      }
-    }
-    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
-    encoder->encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
+  if (encoder->worker_exit.WaitFor(kWorkerJoinDeadline)) {
+    FinishEncoderClose(encoder);
+    return;
   }
-  encoder->duplication.Reset();
-  encoder->reader.Reset();
-  encoder->encoder.Reset();
-  encoder->codec.Reset();
-  encoder->encoder_events.Reset();
-  encoder->context.Reset();
-  encoder->device.Reset();
-  delete encoder;
-  MFShutdown();
+  {
+    // The gate goes down before the answer: no picture may arrive after
+    // close has returned, and the caller is free to drop its callback then.
+    std::lock_guard<std::mutex> guard(encoder->deliveries.lock);
+    encoder->deliveries.closed = true;
+  }
+  RecordAttemptFailure(kStageStopJoinCapture,
+                       HRESULT_FROM_WIN32(WAIT_TIMEOUT));
+  // The capture thread is stuck in a call of its own (a camera read, a GPU
+  // readback, a driver). Stop answers here, with the timeout recorded, and
+  // the rest of the teardown waits for the thread on one of its own.
+  std::thread([encoder]() {
+    encoder->worker_exit.AwaitForever();
+    FinishEncoderClose(encoder);
+  }).detach();
 }
 
 FLUCORD_VIDEO_EXPORT int32_t flucord_video_encoder_name(
@@ -2065,9 +2290,7 @@ FLUCORD_VIDEO_EXPORT void flucord_video_stage_timings(
 FLUCORD_VIDEO_EXPORT int32_t
 flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
   if (annex_b == nullptr || length <= 0) return -1;
-  if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
-    // Already initialised on this thread is not a failure.
-  }
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return -2;
 
   int32_t decoded = 0;
@@ -2111,6 +2334,8 @@ flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
             if (SUCCEEDED(decoder->ProcessInput(0, sample.Get(), 0))) {
               decoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
               decoder->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+              // The storm bound is shared with DrainDecoder above.
+              int format_changes = 0;
               while (true) {
                 MFT_OUTPUT_STREAM_INFO info{};
                 decoder->GetOutputStreamInfo(0, &info);
@@ -2138,21 +2363,30 @@ flucord_video_decode_probe(const uint8_t* annex_b, int32_t length) {
                 if (drained == MF_E_TRANSFORM_STREAM_CHANGE) {
                   // The decoder has read the parameter sets and wants to
                   // restate its output; taking the new type is what lets the
-                  // pictures through.
+                  // pictures through. When nothing it offers is accepted,
+                  // the same answer would come forever, so the replans are
+                  // bounded and the probe reports a stream with no pictures.
+                  bool settled = false;
                   ComPtr<IMFMediaType> changed;
                   for (DWORD index = 0;
                        SUCCEEDED(
                            decoder->GetOutputAvailableType(0, index, &changed));
                        ++index) {
                     if (SUCCEEDED(decoder->SetOutputType(0, changed.Get(), 0))) {
+                      settled = true;
                       break;
                     }
                     changed.Reset();
+                  }
+                  if (!settled || ++format_changes > kMaxFormatChanges) {
+                    if (decoded == 0) decoded = -3;
+                    break;
                   }
                   continue;
                 }
                 if (FAILED(drained)) break;
                 ++decoded;
+                format_changes = 0;
                 if (allocates && out.pSample != nullptr) out.pSample->Release();
               }
             }
@@ -2187,7 +2421,7 @@ flucord_video_capture_screen(int32_t display_index,
   if (callback == nullptr || display_index < 0) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
 
   ComPtr<ID3D11Device> device;
   ComPtr<ID3D11DeviceContext> context;
@@ -2214,11 +2448,21 @@ flucord_video_capture_screen(int32_t display_index,
 
   // The first frame after DuplicateOutput is often the accumulated difference
   // rather than the screen, so a few attempts are made before giving up: a
-  // desktop nobody is touching produces no new frame at all.
+  // desktop nobody is touching produces no new frame at all. The whole wait
+  // is bounded, because a screenshot is taken on the thread the user is
+  // using: a display that produces nothing within the budget is reported
+  // rather than waited on.
+  constexpr int64_t kCaptureBudgetNs = 1000000000;  // One second.
+  const int64_t deadline = NowNs() + kCaptureBudgetNs;
   for (int attempt = 0; attempt < 30; ++attempt) {
+    const int64_t remaining_ns = deadline - NowNs();
+    if (remaining_ns <= 0) break;
+    const DWORD wait_ms = static_cast<DWORD>(
+        std::min<int64_t>(200, (remaining_ns + 999999) / 1000000));
     DXGI_OUTDUPL_FRAME_INFO info{};
     ComPtr<IDXGIResource> resource;
-    const HRESULT hr = duplication->AcquireNextFrame(200, &info, &resource);
+    const HRESULT hr =
+        duplication->AcquireNextFrame(wait_ms, &info, &resource);
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) continue;
     if (FAILED(hr)) break;
 
@@ -2234,9 +2478,32 @@ flucord_video_capture_screen(int32_t display_index,
       ComPtr<ID3D11Texture2D> staging;
       if (SUCCEEDED(device->CreateTexture2D(&desc, nullptr, &staging))) {
         context->CopyResource(staging.Get(), texture.Get());
+        // The map waits on the GPU, which a hung driver never satisfies: the
+        // copy is polled through an event query against the same budget, and
+        // only a completed copy is mapped without waiting. A driver that
+        // offers no query falls back to the blocking map.
+        bool copy_done = true;
+        D3D11_QUERY_DESC query_desc{};
+        query_desc.Query = D3D11_QUERY_EVENT;
+        ComPtr<ID3D11Query> copy_query;
+        if (SUCCEEDED(device->CreateQuery(&query_desc, &copy_query))) {
+          context->End(copy_query.Get());
+          copy_done = false;
+          while (NowNs() < deadline) {
+            BOOL complete = FALSE;
+            if (context->GetData(copy_query.Get(), &complete, sizeof(complete),
+                                 0) == S_OK) {
+              copy_done = true;
+              break;
+            }
+            Sleep(1);
+          }
+        }
         D3D11_MAPPED_SUBRESOURCE mapped{};
-        if (SUCCEEDED(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0,
-                                   &mapped))) {
+        if (copy_done &&
+            SUCCEEDED(context->Map(
+                staging.Get(), 0, D3D11_MAP_READ,
+                copy_query ? D3D11_MAP_FLAG_DO_NOT_WAIT : 0, &mapped))) {
           callback(user_data, static_cast<const uint8_t*>(mapped.pData),
                    static_cast<int32_t>(desc.Width),
                    static_cast<int32_t>(desc.Height),
@@ -2263,7 +2530,7 @@ flucord_video_clip_open(const char* utf8_path,
       height <= 0 || frames_per_second <= 0) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComApartment com;
   if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
@@ -2354,6 +2621,7 @@ flucord_video_clip_write(FlucordVideoClip* clip,
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_clip_close(FlucordVideoClip* clip) {
   if (clip == nullptr) return FLUCORD_VIDEO_ERROR_STATE;
+  ComApartment com;
   const HRESULT hr = clip->writer ? clip->writer->Finalize() : E_FAIL;
   clip->writer.Reset();
   delete clip;
