@@ -252,7 +252,9 @@ final class StreamViewerController extends ChangeNotifier {
   /// Starts decoding [packets] as [key], without asking Discord again.
   ///
   /// Used once the stream connection is up: the ask already went out, and
-  /// repeating it would open a second one.
+  /// repeating it would open a second one. A decoder that will not open
+  /// becomes the session's error rather than its end: the session is still
+  /// held, and the tile says why there is no picture on it.
   Future<bool> attach(
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
@@ -307,9 +309,12 @@ final class StreamViewerController extends ChangeNotifier {
     try {
       await session.pipeline.setDecoding(true);
     } on Object catch (error) {
+      // The session stays, the way a resume keeps a session whose decoder
+      // would not open: the connection is still there and the packets still
+      // count, and the room is told why there is no picture. The next
+      // suspension cycle is a clean attempt with a new decoder.
       if (identical(_sessions[key], session)) {
         _errors[key] = error;
-        await _teardown(key);
         _notify();
       }
       return false;

@@ -97,7 +97,9 @@ void main() {
     var taken = 0;
 
     setUpAll(() async {
-      smalls = [for (var index = 0; index < 8; index++) await _makeImage(4, 4)];
+      smalls = [
+        for (var index = 0; index < 12; index++) await _makeImage(4, 4),
+      ];
       large = await _makeImage(8, 8);
     });
 
@@ -108,6 +110,7 @@ void main() {
       Stream<DecodedVideoFrame> frames, {
       String label = '',
       required _Converter converter,
+      Object? error,
     }) => tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
@@ -116,6 +119,7 @@ void main() {
             frames: frames,
             label: label,
             converter: converter.convert,
+            error: error,
           ),
         ),
       ),
@@ -134,6 +138,54 @@ void main() {
 
       expect(find.byKey(const ValueKey('go-live-waiting')), findsOne);
       expect(find.text('Waiting for Rx'), findsOne);
+    });
+
+    testWidgets('a session error is shown instead of a spinner', (
+      tester,
+    ) async {
+      final frames = StreamController<DecodedVideoFrame>();
+      addTearDown(frames.close);
+
+      await pump(
+        tester,
+        frames.stream,
+        converter: _Converter(nextSmall()),
+        error: StateError('no decoder'),
+      );
+
+      expect(find.byKey(const ValueKey('go-live-error')), findsOne);
+      expect(find.text('Stream unavailable'), findsOne);
+      expect(find.byKey(const ValueKey('go-live-waiting')), findsNothing);
+    });
+
+    testWidgets('a session error replaces the picture on screen', (
+      tester,
+    ) async {
+      final frames = StreamController<DecodedVideoFrame>();
+      addTearDown(frames.close);
+      // Held so both pumps hand the widget one and the same stream, the way
+      // the stage does across rebuilds.
+      final stream = frames.stream;
+      final converter = _Converter(nextSmall());
+
+      await pump(tester, stream, converter: converter);
+      frames.add(_frame());
+      await tester.pump();
+      converter.complete();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('go-live-picture')), findsOne);
+
+      // The failure that stops the decoder leaves the last picture frozen
+      // and silent about it; the session's error is the honest tile.
+      await pump(
+        tester,
+        stream,
+        converter: converter,
+        error: StateError('no decoder'),
+      );
+
+      expect(find.byKey(const ValueKey('go-live-error')), findsOne);
+      expect(find.byKey(const ValueKey('go-live-picture')), findsNothing);
     });
 
     testWidgets('waits silently when nobody is named', (tester) async {

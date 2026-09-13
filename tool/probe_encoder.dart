@@ -56,11 +56,10 @@ Future<void> main() async {
   // The receiving half, so the sender can be checked against itself: what
   // comes back out must be what the encoder put in.
   final depacketizer = DiscordH264Depacketizer();
-  // The viewer's half, in-process: what the sender put on the wire is decoded
-  // back into pictures exactly as a watching client would.
-  final viewer = NativeVideoDecoderService(
-    bindings: NativeVideoBindings(DynamicLibrary.open(dll)),
-  );
+  // The viewer's half: what the sender put on the wire is decoded back into
+  // pictures exactly as a watching client would. The decoder opens its own
+  // copy of the module on its worker isolate.
+  final viewer = NativeVideoDecoderService(libraryPath: dll);
   await viewer.start();
   var pictures = 0;
   var completePictures = 0;

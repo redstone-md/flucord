@@ -1625,64 +1625,70 @@ void SubmitToTransform(FlucordVideoDecoder* decoder,
   DrainDecoder(decoder, timestamp_us);
 }
 
+// The input type, low latency, and the streaming notices: everything the
+// decode thread used to settle before it could consume its queue. Runs at
+// open rather than on the decode thread, so a machine without the system
+// decoder is answered with a status instead of a decoder that quietly
+// produces nothing.
+HRESULT ConfigureDecoder(FlucordVideoDecoder* decoder) {
+  ComPtr<IMFMediaType> input;
+  if (FAILED(MFCreateMediaType(&input))) return E_FAIL;
+  if (FAILED(input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video))) {
+    return E_FAIL;
+  }
+  if (FAILED(input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264))) {
+    return E_FAIL;
+  }
+  if (FAILED(input->SetUINT32(MF_MT_INTERLACE_MODE,
+                              MFVideoInterlace_Progressive))) {
+    return E_FAIL;
+  }
+  if (FAILED(decoder->transform->SetInputType(0, input.Get(), 0))) {
+    return E_FAIL;
+  }
+  // Low latency is what makes a live stream live. Without it the
+  // decoder holds frames in its internal reorder buffer and emits
+  // them in bursts. Two mechanisms carry the same request because a
+  // silently ignored one cost an evening.
+  ComPtr<ICodecAPI> codecApi;
+  if (SUCCEEDED(decoder->transform.As(&codecApi))) {
+    VARIANT lowLatency;
+    VariantInit(&lowLatency);
+    lowLatency.vt = VT_BOOL;
+    lowLatency.boolVal = VARIANT_TRUE;
+    codecApi->SetValue(&CODECAPI_AVLowLatencyMode, &lowLatency);
+  }
+  ComPtr<IMFAttributes> attributes;
+  if (SUCCEEDED(decoder->transform->GetAttributes(&attributes))) {
+    attributes->SetUINT32(MF_LOW_LATENCY, TRUE);
+  }
+  decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
+  decoder->transform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+  TakeAvailableOutputType(decoder);
+  return S_OK;
+}
+
 // Decodes and converts on the decoder's own thread. A failed input is
 // dropped here, where a counter can say so; nothing ever reaches the
-// caller's thread but finished pictures.
+// caller's thread but finished pictures. The transform was configured by
+// the open that spawned this thread, which owns the MFStartup reference.
 void DecoderLoop(FlucordVideoDecoder* decoder) {
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  if (SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
-    HRESULT hr = CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr,
-                                  CLSCTX_INPROC_SERVER,
-                                  IID_PPV_ARGS(&decoder->transform));
-    if (SUCCEEDED(hr)) {
-      ComPtr<IMFMediaType> input;
-      if (SUCCEEDED(MFCreateMediaType(&input))) {
-        input->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-        input->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-        input->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
-        if (SUCCEEDED(decoder->transform->SetInputType(0, input.Get(), 0))) {
-          // Low latency is what makes a live stream live. Without it the
-          // decoder holds frames in its internal reorder buffer and emits
-          // them in bursts. Two mechanisms carry the same request because a
-          // silently ignored one cost an evening.
-          ComPtr<ICodecAPI> codecApi;
-          if (SUCCEEDED(decoder->transform.As(&codecApi))) {
-            VARIANT lowLatency;
-            VariantInit(&lowLatency);
-            lowLatency.vt = VT_BOOL;
-            lowLatency.boolVal = VARIANT_TRUE;
-            codecApi->SetValue(&CODECAPI_AVLowLatencyMode, &lowLatency);
-          }
-          ComPtr<IMFAttributes> attributes;
-          if (SUCCEEDED(decoder->transform->GetAttributes(&attributes))) {
-            attributes->SetUINT32(MF_LOW_LATENCY, TRUE);
-          }
-          decoder->transform->ProcessMessage(
-              MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
-          decoder->transform->ProcessMessage(
-              MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
-          TakeAvailableOutputType(decoder);
-
-          while (true) {
-            std::pair<std::vector<uint8_t>, int64_t> unit;
-            {
-              std::unique_lock lock(decoder->mutex);
-              decoder->ready.wait(lock, [&] {
-                return decoder->stopping || !decoder->queue.empty();
-              });
-              if (decoder->stopping) break;
-              unit = std::move(decoder->queue.front());
-              decoder->queue.pop_front();
-            }
-            SubmitToTransform(decoder, unit.first, unit.second);
-          }
-        }
-      }
+  while (true) {
+    std::pair<std::vector<uint8_t>, int64_t> unit;
+    {
+      std::unique_lock lock(decoder->mutex);
+      decoder->ready.wait(lock, [&] {
+        return decoder->stopping || !decoder->queue.empty();
+      });
+      if (decoder->stopping) break;
+      unit = std::move(decoder->queue.front());
+      decoder->queue.pop_front();
     }
+    SubmitToTransform(decoder, unit.first, unit.second);
   }
   decoder->transform.Reset();
   CoUninitialize();
-  MFShutdown();
 }
 }  // namespace
 
@@ -1695,9 +1701,25 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
   if (callback == nullptr || out_decoder == nullptr) {
     return FLUCORD_VIDEO_ERROR_STATE;
   }
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
   auto decoder = std::make_unique<FlucordVideoDecoder>();
   decoder->callback = callback;
   decoder->user_data = user_data;
+  const HRESULT hr = CoCreateInstance(CLSID_MSH264DecoderMFT, nullptr,
+                                      CLSCTX_INPROC_SERVER,
+                                      IID_PPV_ARGS(&decoder->transform));
+  if (FAILED(hr)) {
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
+  if (FAILED(ConfigureDecoder(decoder.get()))) {
+    decoder->transform.Reset();
+    MFShutdown();
+    return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
+  }
   decoder->worker = std::thread(DecoderLoop, decoder.get());
   *out_decoder = decoder.release();
   return FLUCORD_VIDEO_OK;
@@ -1794,6 +1816,9 @@ FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
   }
   decoder->ready.notify_all();
   if (decoder->worker.joinable()) decoder->worker.join();
+  // The reference the open took: the decode thread is gone, so nothing
+  // uses Media Foundation through this decoder any more.
+  MFShutdown();
   delete decoder;
 }
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus

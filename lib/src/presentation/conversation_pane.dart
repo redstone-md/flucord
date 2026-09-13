@@ -294,7 +294,11 @@ class _ConversationPaneState extends State<ConversationPane> {
       if (userId == null) return null;
       final key = channel.streamKeyFor(userId);
       if (!viewer.isWatching(key)) return null;
-      return GoLiveViewer(frames: viewer.framesFor(key), label: userId);
+      return GoLiveViewer(
+        frames: viewer.framesFor(key),
+        label: userId,
+        error: viewer.errorFor(key),
+      );
     }
 
     Widget goLiveControl() => ListenableBuilder(

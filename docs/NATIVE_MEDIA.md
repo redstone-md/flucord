@@ -61,13 +61,23 @@ account's own key is the sender's; the RTC service hands it out rather than
 opening it. The stream controller opens the Sender on it with the running
 settings and forwards each settings change as a reshape. The sender's own
 picture never crosses Discord: `GoLiveSelfPreview` decodes the encoder's
-echoed access units on the main isolate for the sender's tile (ADR-0001).
-Before the isolate, every stage
+echoed access units through the decoder service below, for the sender's tile
+(ADR-0001). Before the isolate, every stage
 from the picture copy to the per-packet AES-GCM ran on the UI isolate, and a
 long build or a garbage collection held the send path for hundreds of
 milliseconds at a time, which reached the watcher as a freeze followed by a
 burst. The worker echoes each picture back to the hub, so the clip buffer
 keeps recording a stream and the self-preview has something to decode.
+
+Watching somebody else's stream runs on the same kind of isolate.
+`NativeVideoDecoderService` is a proxy: one worker isolate owns every decoder
+handle, opens it and answers whether that worked (a decoder that will not
+open becomes the watched session's error rather than a spinner), copies each
+decoded picture into a transferable buffer, reports each drop the moment the
+count grows so a keyframe is asked for at once, and closes the decoder. The
+close joins the decode thread, which used to run on the UI isolate and hitch
+the interface on every suspend, switch and leave. The main isolate hands
+access units over and receives pictures, and touches no native memory.
 
 The share's sound is captured from the machine's output (WASAPI loopback),
 framed into 20 ms stereo Opus on the main isolate, and handed to the share's

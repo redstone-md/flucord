@@ -40,6 +40,7 @@ class GoLiveViewer extends StatefulWidget {
     this.label = '',
     this.converter = decodePictureWithEngine,
     this.showProgress = true,
+    this.error,
     super.key,
   });
 
@@ -53,6 +54,12 @@ class GoLiveViewer extends StatefulWidget {
   /// A compact tile can use a static waiting state so a room settling does not
   /// leave an animation running forever while Discord has not answered yet.
   final bool showProgress;
+
+  /// Why there is no picture, if the session knows one. Shown instead of
+  /// whatever is on the tile: a decoder that failed to open is a message,
+  /// not a spinner turning forever, and a picture frozen by a suspend the
+  /// decoder never came back from reads as a live stream that stalled.
+  final Object? error;
 
   @override
   State<GoLiveViewer> createState() => _GoLiveViewerState();
@@ -108,33 +115,42 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final image = _image;
-    if (image == null) {
-      return ColoredBox(
-        key: const ValueKey('go-live-waiting'),
-        color: Colors.black,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.showProgress)
-                const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                const Icon(Icons.live_tv_outlined, size: 24),
-              if (widget.label.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  'Waiting for ${widget.label}',
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-                ),
-              ],
-            ],
+    final error = widget.error;
+    if (error != null) {
+      return _stage('go-live-error', [
+        Icon(
+          Icons.error_outline,
+          size: 24,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Stream unavailable',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.error,
+            fontSize: 12,
           ),
         ),
-      );
+      ]);
+    }
+    final image = _image;
+    if (image == null) {
+      return _stage('go-live-waiting', [
+        if (widget.showProgress)
+          const SizedBox.square(
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          const Icon(Icons.live_tv_outlined, size: 24),
+        if (widget.label.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Waiting for ${widget.label}',
+            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          ),
+        ],
+      ]);
     }
     return ColoredBox(
       key: const ValueKey('go-live-picture'),
@@ -149,4 +165,14 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
       ),
     );
   }
+
+  /// The full-height state a tile shows before its pictures: a black ground
+  /// with one message in the middle.
+  Widget _stage(String key, List<Widget> children) => ColoredBox(
+    key: ValueKey(key),
+    color: Colors.black,
+    child: Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+    ),
+  );
 }

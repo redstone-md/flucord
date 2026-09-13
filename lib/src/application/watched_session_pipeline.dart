@@ -260,8 +260,14 @@ final class WatchedSessionPipeline {
       _receiver = null;
       _pacer?.dispose();
       _pacer = null;
-      await _decoderFrames?.cancel();
-      await _decoderDrops?.cancel();
+      // Locals, for the same reason _release reads into locals: the awaits
+      // below can overlap a fresh install.
+      final frames = _decoderFrames;
+      final drops = _decoderDrops;
+      _decoderFrames = null;
+      _decoderDrops = null;
+      await frames?.cancel();
+      await drops?.cancel();
       rethrow;
     } finally {
       _opening.remove(decoder);
@@ -287,19 +293,27 @@ final class WatchedSessionPipeline {
   /// Lets go of what turns packets into pictures. The decoder is stopped
   /// first and synchronously, unless it is still opening; that one is
   /// handed back by [setDecoding] once its start answers.
+  ///
+  /// Everything let go is read into locals before the first await. Suspending
+  /// and resuming overlap: while this is mid-release, a fresh "on" can
+  /// install a decoder and its subscriptions, and a field read back after an
+  /// await would then cancel the new decoder's, leaving its drops unheard
+  /// and its pictures smearing until a random keyframe.
   Future<void> _release() async {
     final decoder = _decoder;
+    final frames = _decoderFrames;
+    final drops = _decoderDrops;
     _decoder = null;
     _receiver = null;
+    _decoderFrames = null;
+    _decoderDrops = null;
     // Disposing flushes what the pacer holds into the decoder before it
     // stops, rather than dropping pictures that already arrived.
     _pacer?.dispose();
     _pacer = null;
     final stopping = _opening.contains(decoder) ? null : decoder?.stop();
-    await _decoderFrames?.cancel();
-    await _decoderDrops?.cancel();
-    _decoderFrames = null;
-    _decoderDrops = null;
+    await frames?.cancel();
+    await drops?.cancel();
     await stopping;
   }
 

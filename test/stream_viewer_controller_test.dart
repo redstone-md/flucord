@@ -283,12 +283,35 @@ void main() {
     expect(controller.watching, isNull);
   });
 
-  test('a decoder that will not open is reported', () async {
+  test(
+    'a decoder that will not open is reported, and the session stays',
+    () async {
+      final repository = _FakeRepository();
+      final decoder = _FakeDecoder(failStart: true);
+      final controller = StreamViewerController(
+        repositoryProvider: () => repository,
+        decoderFactory: () => decoder,
+      );
+      addTearDown(controller.dispose);
+
+      expect(
+        await controller.watch(_key, packets: const Stream.empty()),
+        isFalse,
+      );
+
+      expect(controller.error, isNotNull);
+      // Held, not torn down: the stage keeps the session and shows why there
+      // is no picture on it, and a later suspension cycle is a clean attempt.
+      expect(controller.isWatching(_key), isTrue);
+    },
+  );
+
+  test('a decoder that opens again clears the failure it left', () async {
     final repository = _FakeRepository();
-    final decoder = _FakeDecoder(failStart: true);
+    var fail = true;
     final controller = StreamViewerController(
       repositoryProvider: () => repository,
-      decoderFactory: () => decoder,
+      decoderFactory: () => _FakeDecoder(failStart: fail),
     );
     addTearDown(controller.dispose);
 
@@ -296,8 +319,15 @@ void main() {
       await controller.watch(_key, packets: const Stream.empty()),
       isFalse,
     );
+    expect(controller.errorFor(_key), isNotNull);
 
-    expect(controller.error, isNotNull);
+    fail = false;
+    // Suspension is what retries a decoder: dark and back is a fresh one.
+    controller.setSuspended(true);
+    controller.setSuspended(false);
+    await pumpEventQueue();
+
+    expect(controller.errorFor(_key), isNull);
   });
 
   test('an error on the packet stream is reported, not thrown', () async {
@@ -508,7 +538,7 @@ void main() {
     });
 
     test(
-      'a decoder that will not start reports rather than half-attaches',
+      'a decoder that will not start reports on the session it keeps',
       () async {
         final controller = StreamViewerController(
           repositoryProvider: () => _FakeRepository(),
@@ -521,7 +551,9 @@ void main() {
           await controller.attach(_key, packets: const Stream.empty()),
           isFalse,
         );
-        expect(controller.watching, isNull);
+        // The session is kept, with the failure on it: the stage can say why
+        // there is no picture, and nothing is silently half-attached.
+        expect(controller.watching, _key);
         expect(controller.error, isNotNull);
       },
     );

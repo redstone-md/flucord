@@ -337,6 +337,47 @@ void main() {
     expect(pipeline.stats.decodedFrames, 2);
   });
 
+  test(
+    'a release racing a fresh install leaves the new subscriptions in',
+    () async {
+      final made = <_FakeDecoder>[];
+      var asks = 0;
+      final pipeline = WatchedSessionPipeline(
+        decoderFactory: () {
+          final decoder = _FakeDecoder();
+          made.add(decoder);
+          return decoder;
+        },
+        requestKeyframe: () => asks++,
+      );
+      addTearDown(pipeline.close);
+      final drawn = <DecodedVideoFrame>[];
+      final frames = pipeline.frames.listen(drawn.add);
+      addTearDown(frames.cancel);
+
+      await pipeline.setDecoding(true);
+
+      // A hide and a show in one breath: the release is still mid-flight when
+      // the fresh install puts its own subscriptions in. The release lets go
+      // of the old decoder's subscriptions and nothing else.
+      final release = pipeline.setDecoding(false);
+      final reopen = pipeline.setDecoding(true);
+      await release;
+      await reopen;
+      expect(made, hasLength(2));
+
+      // A drop the new decoder made reaches the keyframe ask, and its frames
+      // reach the room: both subscriptions are still the new decoder's.
+      made.last.drop(1);
+      await _flush();
+      expect(asks, 1);
+
+      made.last.emit(_picture);
+      await _flush();
+      expect(drawn, hasLength(1));
+    },
+  );
+
   test('two "on" calls leave one decoder', () async {
     final gate = Completer<void>();
     final made = <_FakeDecoder>[];
@@ -400,7 +441,7 @@ void main() {
 
       await expectLater(pipeline.setDecoding(true), throwsStateError);
 
-        _feed(pipeline, _idr);
+      _feed(pipeline, _idr);
       expect(decoder.submitted, isEmpty);
     },
   );

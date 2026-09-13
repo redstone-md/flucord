@@ -168,11 +168,14 @@ typedef void (*FlucordVideoPictureCallback)(void* user_data,
 // Opens a decoder for somebody else's stream. Frames are fed in as Annex B
 // access units and come back out as pictures.
 //
-// The decode runs on the decoder's own thread: a 1080p60 picture costs more
-// to decode and convert than the frame budget allows, and the thread that
-// feeds it is the one that draws the whole interface. Pictures arrive on the
-// callback from that thread, each carrying its own heap buffer that the
-// callee releases with flucord_video_decoder_release_picture once copied.
+// The system decoder is created here rather than on the decode thread, so a
+// machine without one is answered with a status instead of a decoder that
+// quietly produces nothing. The decode itself runs on the decoder's own
+// thread: a 1080p60 picture costs more to decode and convert than the frame
+// budget allows, and the thread that feeds it is the one that draws the
+// whole interface. Pictures arrive on the callback from that thread, each
+// carrying its own heap buffer that the callee releases with
+// flucord_video_decoder_release_picture once copied.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
 flucord_video_decoder_open(FlucordVideoPictureCallback callback,
                            void* user_data,
