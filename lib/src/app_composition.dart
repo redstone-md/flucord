@@ -96,6 +96,7 @@ import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/video_capture_hub.dart';
+import 'domain/voice_connection.dart';
 import 'domain/voice_message_recorder.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
@@ -479,6 +480,10 @@ final class AppComposition {
         sinkProvider: () => liveVoiceSignaling?.sendVideoFrame,
         groupEncryptorProvider: () =>
             liveVoiceSignaling?.encryptVideoGroupFrame,
+        // Held while the room is not actually up, so a reconnect holds the
+        // pictures instead of throwing them at a socket that is gone.
+        isVoiceReady: () =>
+            voice.connectionStatus == VoiceConnectionStatus.ready,
         announceSelfVideo: ({required bool enabled}) =>
             voice.setCameraAnnounced(enabled: enabled),
       ),
@@ -608,6 +613,7 @@ final class AppComposition {
       streamerMode: streamerMode,
       goLive: goLive,
       streamViewer: streamViewer,
+      selfVideo: selfVideo,
       focus: roomFocus,
     );
     _teardown.add(voiceRoomCoordination.dispose);

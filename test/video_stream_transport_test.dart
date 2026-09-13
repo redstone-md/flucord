@@ -367,11 +367,13 @@ void main() {
   });
 }
 
-/// A clock the test moves by hand, in step with [FakeAsync.elapse].
+/// A clock the test moves by hand, in step with [FakeAsync.elapse]. The
+/// transport reads a monotonic clock, so this is one: elapsed time, not a
+/// wall-clock reading.
 final class _Clock {
-  DateTime now = DateTime(2026, 8, 24);
+  Duration elapsed = Duration.zero;
   void elapse(FakeAsync async, Duration by) {
-    now = now.add(by);
+    elapsed += by;
     async.elapse(by);
   }
 }
@@ -392,7 +394,7 @@ void _pacingTests() {
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
-        now: () => clock.now,
+        now: () => clock.elapsed,
       );
 
       final queued = transport.send(_frame(sliceLength: 430));
@@ -422,13 +424,111 @@ void _pacingTests() {
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
-        now: () => clock.now,
+        now: () => clock.elapsed,
       );
 
       // A long silence, then a frame: still one packet at once, no burst.
       clock.elapse(async, const Duration(seconds: 5));
       transport.send(_frame(sliceLength: 430));
       expect(count, 1);
+    });
+  });
+
+  test('a clock that jumps forward earns no burst, and pace still drains', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      final sent = <DiscordRtpFrame>[];
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          sent.add(frame);
+          return frame.payload.length;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        now: () => clock.elapsed,
+      );
+      transport.send(_frame(sliceLength: 130));
+      expect(sent, hasLength(1));
+
+      // The kind of step a wall clock takes when the OS adjusts it. The
+      // monotonic clock the transport reads never takes one, and silence
+      // earns no budget either way: the next picture still leaves one
+      // packet at a time.
+      clock.elapse(async, const Duration(hours: 1));
+      final queued = transport.send(_frame(sliceLength: 430));
+      expect(queued, 6);
+      expect(sent, hasLength(4));
+      clock.elapse(async, const Duration(seconds: 1));
+      expect(sent, hasLength(9));
+      expect(transport.error, isNull);
+    });
+  });
+
+  test('a pace left below the encoder gives up the oldest picture', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      final sent = <DiscordRtpFrame>[];
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) {
+          sent.add(frame);
+          return frame.payload.length;
+        },
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        maxQueuedPackets: 4,
+        now: () => clock.elapsed,
+      );
+
+      // Five two-packet pictures with no budget to speak of: the first
+      // packet of the first picture leaves at once and the rest pile up
+      // against the bound.
+      for (var i = 0; i < 5; i++) {
+        transport.send(
+          _frame(sliceLength: 8, timestamp: Duration(milliseconds: 33 * i)),
+        );
+      }
+
+      // The queue never outgrew the bound.
+      final window = transport.takeWindow();
+      expect(window.maxQueued, 4);
+      // Five packets went: the tail of the first picture (its front was
+      // already sent, so the rest is unusable) and the whole second and
+      // third pictures.
+      expect(window.droppedPackets, 5);
+      expect(transport.queuedPackets, 4);
+      expect(transport.error, isNull);
+
+      // What drained is the newest of what queued: nothing newer was
+      // sacrificed for it.
+      clock.elapse(async, const Duration(seconds: 1));
+      expect(sent.map((frame) => frame.header.sequence), [
+        0,
+        6,
+        7,
+        8,
+        9,
+      ]);
+    });
+  });
+
+  test('drops taken twice read as a fresh window with none', () {
+    fakeAsync((async) {
+      final clock = _Clock();
+      final transport = DiscordVideoStreamTransport(
+        ssrc: 1,
+        sink: (frame) => frame.payload.length,
+        maxPayloadSize: 100,
+        pacingBitsPerSecond: bitsPerSecond,
+        maxQueuedPackets: 4,
+        now: () => clock.elapsed,
+      );
+      for (var i = 0; i < 5; i++) {
+        transport.send(_frame(sliceLength: 130));
+      }
+      expect(transport.takeWindow().droppedPackets, greaterThan(0));
+      expect(transport.takeWindow().droppedPackets, 0);
     });
   });
 
@@ -444,7 +544,7 @@ void _pacingTests() {
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
-        now: () => clock.now,
+        now: () => clock.elapsed,
       );
       transport.send(_frame(sliceLength: 430));
       expect(sent, hasLength(1));
@@ -468,7 +568,7 @@ void _pacingTests() {
         },
         maxPayloadSize: 100,
         pacingBitsPerSecond: bitsPerSecond,
-        now: () => clock.now,
+        now: () => clock.elapsed,
       );
       transport.send(_frame(sliceLength: 430));
       transport.stop();

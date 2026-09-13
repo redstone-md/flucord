@@ -5,15 +5,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/remote_camera_controller.dart';
 import 'package:flucord/src/application/room_focus.dart';
+import 'package:flucord/src/application/self_video_controller.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/streamer_mode_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/voice_overlay_controller.dart';
 import 'package:flucord/src/application/voice_room_coordination.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
 
@@ -116,6 +120,55 @@ void main() {
     expect(focus.userId, isNull, reason: 'the focus goes with the room');
   });
 
+  test('the camera goes off with the room, without announcing it', () async {
+    final signaling = _FakeVoiceSignalingService();
+    final voice = VoiceController(
+      const NoopVoiceMediaService(),
+      signalingServiceProvider: () => signaling,
+    );
+    final encoder = FakeVideoEncoder();
+    final transport = _FakeSelfVideoTransport();
+    final camera = SelfVideoController(
+      capture: VideoCaptureHub(encoder: encoder),
+      transportProvider: () => transport,
+      sinkProvider: () => transport.send,
+      isVoiceReady: () => voice.connectionStatus == VoiceConnectionStatus.ready,
+      announceSelfVideo: ({required bool enabled}) async => true,
+    );
+    addTearDown(camera.dispose);
+    final room = _buildRoom(voice: voice, selfVideo: camera);
+    addTearDown(room.dispose);
+    await voice.refreshSignalingService();
+    await camera.turnOn();
+    expect(camera.isOn, isTrue);
+
+    // A reconnect is not the room ending: the camera holds and stays on.
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.reconnecting),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(camera.isOn, isTrue);
+
+    // The room ending is: Discord forgets the voice state with the socket,
+    // and the socket that would carry a withdrawal is the one that dropped.
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.disconnected),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(camera.isOn, isFalse);
+    expect(encoder.stopped, 1);
+    expect(transport.announcements, [true]);
+
+    // A connection that failed ends the room the same way.
+    await camera.turnOn();
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.failure),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(camera.isOn, isFalse);
+    expect(encoder.stopped, 2);
+  });
+
   test('the overlay redraws whenever the room changes', () async {
     final signaling = _FakeVoiceSignalingService();
     final voice = VoiceController(
@@ -183,6 +236,7 @@ VoiceRoomCoordination _buildRoom({
   StreamerModeController? streamerMode,
   GoLiveController? goLive,
   StreamViewerController? streamViewer,
+  SelfVideoController? selfVideo,
   RoomFocus? focus,
 }) {
   final resolvedVoice =
@@ -218,6 +272,15 @@ VoiceRoomCoordination _buildRoom({
         StreamViewerController(
           repositoryProvider: () => null,
           decoderFactory: () => throw StateError('unused'),
+        ),
+    selfVideo:
+        selfVideo ??
+        SelfVideoController(
+          capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+          transportProvider: () => null,
+          sinkProvider: () => null,
+          isVoiceReady: () => false,
+          announceSelfVideo: ({required bool enabled}) async => true,
         ),
     focus: focus ?? RoomFocus(),
   );
@@ -292,6 +355,25 @@ class _CountingVoiceOverlay implements VoiceOverlay {
 
   @override
   void close() {}
+}
+
+/// The voice side of the camera: declares SSRCs, takes pictures.
+class _FakeSelfVideoTransport implements VoiceVideoTransport {
+  final List<bool> announcements = [];
+
+  @override
+  int? get audioSsrc => 40;
+
+  int send(DiscordRtpFrame frame) => frame.payload.length;
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) {
+    announcements.add(enabled);
+    return true;
+  }
 }
 
 class _FakeGoLiveRepository implements GoLiveRepository {

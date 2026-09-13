@@ -7,6 +7,7 @@ import '../../domain/stream_bitrate_adapter.dart';
 import '../../domain/video_encoder.dart';
 import '../../domain/voice_audio.dart';
 import '../../domain/voice_connection.dart';
+import '../../monotonic_clock.dart';
 import 'discord_video_stream_transport.dart';
 import 'discord_voice_gateway_client.dart';
 import 'discord_voice_gateway_protocol.dart';
@@ -70,7 +71,7 @@ final class GoLiveWireSender implements GoLiveSender {
     required Stream<EncodedVideoFrame> frames,
     required VideoEncoderSettings settings,
     Duration paceInterval = const Duration(seconds: 5),
-    DateTime Function() now = DateTime.now,
+    Duration Function() now = monotonicNow,
   }) : _client = client,
        _frames = frames,
        _settings = settings,
@@ -88,7 +89,7 @@ final class GoLiveWireSender implements GoLiveSender {
 
   final DiscordVoiceClient _client;
   final Stream<EncodedVideoFrame> _frames;
-  final DateTime Function() _now;
+  final Duration Function() _now;
 
   final StreamController<GoLiveSenderStatus> _statuses =
       StreamController.broadcast();
@@ -304,7 +305,7 @@ final class GoLiveWireSender implements GoLiveSender {
   int _lastFrames = 0;
   int _lastPackets = 0;
   int _lastRetransmitted = 0;
-  DateTime _windowStarted;
+  Duration _windowStarted;
   bool _stopReported = false;
 
   /// What the stream sent since the last line, or null before it sends.
@@ -312,13 +313,15 @@ final class GoLiveWireSender implements GoLiveSender {
   /// "A stream is slow" has three culprits (the encoder, this sender, the
   /// server) and no way to tell them apart from a watcher's impression. The
   /// line splits the path: the rate that left this machine, what the far end
-  /// said about it, the longest wait for a picture and the deepest the pacing
-  /// queue got. A transport that stopped says why, once.
+  /// said about it, the longest wait for a picture, the deepest the pacing
+  /// queue got, and what the queue's bound gave up when the pace sat below
+  /// the encoder for the whole window. A transport that stopped says why,
+  /// once.
   String? takePaceLine() {
     final transport = _transport;
     if (transport == null) return null;
     final now = _now();
-    final seconds = now.difference(_windowStarted).inMilliseconds / 1000;
+    final seconds = (now - _windowStarted).inMilliseconds / 1000;
     _windowStarted = now;
     final frames = transport.sentFrames - _lastFrames;
     final packets = transport.sentPackets - _lastPackets;
@@ -338,6 +341,7 @@ final class GoLiveWireSender implements GoLiveSender {
       _describeFeedback(retransmitted),
       'gap ${window.maxSendGap.inMilliseconds}ms',
       'queue ${window.maxQueued}',
+      if (window.droppedPackets > 0) 'dropped ${window.droppedPackets}',
       'kf $_keyframesSent',
       if (bitrate != null && bitrate.isAdapted)
         'bitrate ${bitrate.bitrate ~/ 1000}k',

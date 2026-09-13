@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flucord/src/application/self_video_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/data/discord/discord_video_stream_transport.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_protocol.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/data/video/native_camera_names.dart';
@@ -242,6 +243,77 @@ void main() {
       expect(encoder.started.length, 1);
     });
 
+    test('a camera on across a reconnect holds its pictures, not itself', () async {
+      final encoder = FakeVideoEncoder();
+      final transport = _FakeVoiceVideoTransport();
+      var encryptions = 0;
+      var voiceReady = true;
+      final controller = _controllerFor(
+        encoder,
+        transport: transport,
+        isVoiceReady: () => voiceReady,
+        groupEncryptorProvider: () => (frame) {
+          encryptions++;
+          return frame;
+        },
+      );
+      addTearDown(controller.dispose);
+      await controller.turnOn();
+
+      encoder.emit();
+      await Future<void>.delayed(Duration.zero);
+      final sentBefore = controller.sentPackets;
+      expect(sentBefore, greaterThan(0));
+      expect(encryptions, 1);
+
+      // The voice connection drops into a reconnect. The next picture meets
+      // a sink and a cipher that are not there; held, it neither leaves nor
+      // stops the stream, and the camera stays on.
+      voiceReady = false;
+      encoder.emit();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.sentPackets, sentBefore);
+      expect(encryptions, 1);
+      expect(controller.isOn, isTrue);
+
+      // The connection answers again: pictures flow without a new start.
+      voiceReady = true;
+      encoder.emit();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.sentPackets, greaterThan(sentBefore));
+      expect(encryptions, 2);
+    });
+
+    test('a camera turned on in the gap sends once the connection answers', () async {
+      final encoder = FakeVideoEncoder();
+      final transport = _FakeVoiceVideoTransport();
+      var voiceReady = false;
+      final controller = _controllerFor(
+        encoder,
+        transport: transport,
+        isVoiceReady: () => voiceReady,
+      );
+      addTearDown(controller.dispose);
+
+      // The transport is there (the session's SSRC is known) but the
+      // connection has not answered yet. The camera turns on all the same:
+      // refusing here would mean a reconnect eating every attempt made in
+      // the gap.
+      expect(await controller.turnOn(), isTrue);
+
+      // The first pictures meet a sink that is not there yet, and the
+      // transport lives through them instead of dying on the first one.
+      encoder.emit();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.sentPackets, 0);
+      expect(controller.isOn, isTrue);
+
+      voiceReady = true;
+      encoder.emit();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.sentPackets, greaterThan(0));
+    });
+
     test('a voice connection that is not ready refuses the camera', () async {
       final encoder = FakeVideoEncoder();
       final controller = _controllerFor(encoder);
@@ -380,6 +452,7 @@ void main() {
           capture: hub,
           transportProvider: _FakeVoiceVideoTransport.new,
           sinkProvider: () => null,
+          isVoiceReady: () => false,
           announceSelfVideo: ({required bool enabled}) async => true,
         );
 
@@ -519,10 +592,14 @@ SelfVideoController _controllerFor(
   _FakeVoiceVideoTransport? transport,
   bool accept = true,
   void Function(bool)? onAnnounce,
+  bool Function()? isVoiceReady,
+  VideoFrameGroupEncryptor? Function()? groupEncryptorProvider,
 }) => SelfVideoController(
   capture: VideoCaptureHub(encoder: encoder),
   transportProvider: () => transport,
   sinkProvider: () => transport?.send,
+  isVoiceReady: isVoiceReady ?? (() => true),
+  groupEncryptorProvider: groupEncryptorProvider,
   announceSelfVideo: ({required bool enabled}) async {
     onAnnounce?.call(enabled);
     return accept;

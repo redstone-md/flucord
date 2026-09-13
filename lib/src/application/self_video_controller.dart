@@ -32,11 +32,13 @@ final class SelfVideoController extends ChangeNotifier {
     required VoiceVideoTransport? Function() transportProvider,
     required VideoFrameSink? Function() sinkProvider,
     required SelfVideoAnnouncer announceSelfVideo,
+    required bool Function() isVoiceReady,
     VideoFrameGroupEncryptor? Function()? groupEncryptorProvider,
   }) : _capture = capture,
        _transportProvider = transportProvider,
        _sinkProvider = sinkProvider,
        _groupEncryptorProvider = groupEncryptorProvider,
+       _isVoiceReady = isVoiceReady,
        _announce = announceSelfVideo;
 
   /// The machine's one capture and encode resource. The camera is one of its
@@ -48,6 +50,11 @@ final class SelfVideoController extends ChangeNotifier {
   final VideoFrameSink? Function() _sinkProvider;
   final VideoFrameGroupEncryptor? Function()? _groupEncryptorProvider;
   final SelfVideoAnnouncer _announce;
+
+  /// Whether the voice connection the camera rides is up right now. Read
+  /// per picture: the transport build's gate holds pictures across a
+  /// reconnect on this.
+  final bool Function() _isVoiceReady;
 
   /// Which camera the next start will use.
   int _selectedCamera = 0;
@@ -112,10 +119,22 @@ final class SelfVideoController extends ChangeNotifier {
     // undeclared SSRC would drop it.
     transport.announceVideo(enabled: true, settings: _lease!.settings);
     _transport?.stop();
+    final encryptor = _groupEncryptorProvider?.call();
     _transport = DiscordVideoStreamTransport(
       ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
-      sink: sink,
-      groupEncryptor: _groupEncryptorProvider?.call(),
+      // Held on a voice connection that is not up, the same gate the Go Live
+      // sender puts on its sink: during a reconnect the cipher and the socket
+      // are gone, a picture pushed through then throws, and the transport
+      // treats that throw as a dead socket and stops for good. Held (0), the
+      // camera keeps its state and resumes when the connection answers.
+      //
+      // The encryptor has no hold answer, so not-ready answers an empty
+      // picture: nothing packetises and nothing leaves, and no clear bytes
+      // exist to be sent by accident.
+      sink: (frame) => _isVoiceReady() ? sink(frame) : 0,
+      groupEncryptor: encryptor == null
+          ? null
+          : (frame) => _isVoiceReady() ? encryptor(frame) : Uint8List(0),
     )..attach(_capture.frames);
     if (!await _announce(enabled: true)) {
       await _tearDown(transport);

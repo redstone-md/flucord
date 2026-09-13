@@ -4,6 +4,7 @@ import '../domain/voice_connection.dart';
 import 'go_live_controller.dart';
 import 'remote_camera_controller.dart';
 import 'room_focus.dart';
+import 'self_video_controller.dart';
 import 'stream_viewer_controller.dart';
 import 'streamer_mode_controller.dart';
 import 'voice_controller.dart';
@@ -14,9 +15,10 @@ import 'voice_overlay_controller.dart';
 /// Remote cameras are read only while a connection is actually up, the
 /// in-game overlay is redrawn on every roster change and whenever streamer
 /// mode moves it, streamer mode's automatic switch follows this client's own
-/// share, watched streams end with the room, and the stage's focus follows
-/// its participant out of it. These rules used to sit in the app widget,
-/// where no test could reach them without pumping the whole client.
+/// stream, watched streams end with the room, the camera goes off with it,
+/// and the stage's focus follows its participant out of it. These rules used
+/// to sit in the app widget, where no test could reach them without pumping
+/// the whole client.
 final class VoiceRoomCoordination {
   VoiceRoomCoordination({
     required VoiceController voice,
@@ -25,6 +27,7 @@ final class VoiceRoomCoordination {
     required StreamerModeController streamerMode,
     required GoLiveController goLive,
     required StreamViewerController streamViewer,
+    required SelfVideoController selfVideo,
     required RoomFocus focus,
   }) : _voice = voice,
        _remoteCameras = remoteCameras,
@@ -32,9 +35,11 @@ final class VoiceRoomCoordination {
        _streamerMode = streamerMode,
        _goLive = goLive,
        _streamViewer = streamViewer,
+       _selfVideo = selfVideo,
        _focus = focus {
     _voice.addListener(_syncRemoteCameras);
     _voice.addListener(_endWatchesWithRoom);
+    _voice.addListener(_endCameraWithRoom);
     _voice.addListener(_keepFocusInRoom);
     _voice.addListener(_refreshOverlay);
     _streamerMode.addListener(_refreshOverlay);
@@ -47,11 +52,13 @@ final class VoiceRoomCoordination {
   final StreamerModeController _streamerMode;
   final GoLiveController _goLive;
   final StreamViewerController _streamViewer;
+  final SelfVideoController _selfVideo;
   final RoomFocus _focus;
 
   void dispose() {
     _voice.removeListener(_syncRemoteCameras);
     _voice.removeListener(_endWatchesWithRoom);
+    _voice.removeListener(_endCameraWithRoom);
     _voice.removeListener(_keepFocusInRoom);
     _voice.removeListener(_refreshOverlay);
     _streamerMode.removeListener(_refreshOverlay);
@@ -79,6 +86,16 @@ final class VoiceRoomCoordination {
   void _endWatchesWithRoom() {
     if (_roomIsUp) return;
     unawaited(_streamViewer.stop());
+  }
+
+  /// The camera goes off with the room, without announcing it: the voice
+  /// state that said the camera was on dies with the socket, and the socket
+  /// that would carry the withdrawal is the one that dropped. A camera kept
+  /// on across a full disconnect would be re-announced into the next room
+  /// while sending on the old session's SSRC.
+  void _endCameraWithRoom() {
+    if (_roomIsUp) return;
+    unawaited(_selfVideo.forget());
   }
 
   /// A connection that failed ends the room the same as one that was left:

@@ -5,6 +5,7 @@ import 'package:flucord/src/data/discord/go_live_sender.dart';
 import 'package:flucord/src/domain/go_live_media.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/monotonic_clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_stream_client.dart';
@@ -60,11 +61,12 @@ EncodedVideoFrame _picture() => EncodedVideoFrame(
 
 /// A sender over a fake connection, with what it said and was told recorded.
 final class _Opened {
-  _Opened({Stream<EncodedVideoFrame>? frames}) {
+  _Opened({Stream<EncodedVideoFrame>? frames, Duration Function()? now}) {
     sender = GoLiveWireSender(
       client: client,
       frames: frames ?? this.frames.stream,
       settings: _settings,
+      now: now ?? monotonicNow,
     );
     sender.encoderCommands.listen(commands.add);
     sender.statuses.listen(statuses.add);
@@ -247,6 +249,30 @@ void main() {
       expect(opened.sender.takePaceLine(), contains('bitrate 2700k'));
     },
   );
+
+  test('the pace line says what the queue\'s bound gave up', () async {
+    var elapsed = Duration.zero;
+    final opened = _Opened(now: () => elapsed);
+    opened.ready();
+    await Future<void>.delayed(Duration.zero);
+
+    // Far more pictures than the budget lets out, with no time passing for
+    // the pace to spend any: each picture packetises to two packets, the
+    // queue piles up against its bound, and the oldest pictures are given
+    // up. The next pace line says so, next to the deepest the queue got.
+    for (var i = 0; i < 300; i++) {
+      opened.frames.add(_picture());
+    }
+    await Future<void>.delayed(Duration.zero);
+
+    final line = opened.sender.takePaceLine()!;
+    // The bound is the transport's default; pinning the number keeps this
+    // test honest if the default moves.
+    expect(line, contains('queue 256'));
+    // 600 packets came in, one left at once, the bound keeps 256, and the
+    // rest went.
+    expect(line, contains('dropped 343'));
+  });
 
   test('a reshape with a new shape is announced on the running connection', () {
     final opened = _Opened();

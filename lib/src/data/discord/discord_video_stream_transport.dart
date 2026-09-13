@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import '../../domain/video_encoder.dart';
+import '../../monotonic_clock.dart';
 import 'discord_h264_sps.dart';
 import 'discord_rtp_packet.dart';
 import 'discord_video_rtp_sender.dart';
@@ -39,7 +40,8 @@ final class DiscordVideoStreamTransport {
     int initialSequence = 0,
     int maxPayloadSize = 1200,
     int pacingBitsPerSecond = 0,
-    DateTime Function() now = DateTime.now,
+    int maxQueuedPackets = maxQueuedPackets,
+    Duration Function() now = monotonicNow,
   }) : _sender = DiscordVideoRtpSender(
          ssrc: ssrc,
          initialSequence: initialSequence,
@@ -51,6 +53,7 @@ final class DiscordVideoStreamTransport {
        _payloadType = payloadType,
        _rtxPayloadType = rtxPayloadType,
        _paceBytesPerSecond = pacingBitsPerSecond * paceMultiplier / 8,
+       _maxQueuedPackets = maxQueuedPackets,
        _now = now;
 
   /// How many sent packets are kept for retransmission: four seconds at
@@ -69,6 +72,18 @@ final class DiscordVideoStreamTransport {
   /// than from the ticks.
   static const paceInterval = Duration(milliseconds: 5);
 
+  /// The most packets the pacing queue holds: room for one whole keyframe
+  /// (about a hundred packets of a 720p picture) plus several ordinary
+  /// pictures around it, and no more.
+  ///
+  /// A pace the bitrate adapter has lowered below what the encoder keeps
+  /// producing makes the queue grow forever, and packets leave hours after
+  /// the moment a watcher could have used them. So the bound is enforced,
+  /// not hoped for: a packet that does not fit drops the oldest picture in
+  /// the queue to make room. What was dropped shows in [takeWindow], and
+  /// the sender's pace line reports it.
+  static const maxQueuedPackets = 256;
+
   final DiscordVideoRtpSender _sender;
   final VideoFrameSink _sink;
   final VideoFrameGroupEncryptor? _groupEncryptor;
@@ -86,7 +101,8 @@ final class DiscordVideoStreamTransport {
   /// each packet spends its size, and it never builds up while nothing is
   /// queued, so a frame after silence is still let out one packet at a time.
   double _paceBytesPerSecond;
-  final DateTime Function() _now;
+  final int _maxQueuedPackets;
+  final Duration Function() _now;
 
   /// Follows the encoder's bitrate when it changes mid-stream: the pace is
   /// a multiple of it, and a pace left at the old rate would let a lowered
@@ -97,18 +113,26 @@ final class DiscordVideoStreamTransport {
 
   /// Two numbers about this window of the stream, for the pace log: the
   /// longest gap between two pictures arriving to be sent (a stall in the
-  /// encoder or in this isolate), and the deepest the pacing queue got (a
-  /// pace that is not keeping up). Reading them starts the next window.
-  ({Duration maxSendGap, int maxQueued}) takeWindow() {
-    final window = (maxSendGap: _maxSendGap, maxQueued: _maxQueued);
+  /// encoder or in this isolate), the deepest the pacing queue got (a
+  /// pace that is not keeping up), and how many packets the bound threw
+  /// away (a pace left below the encoder for a whole window). Reading them
+  /// starts the next window.
+  ({Duration maxSendGap, int maxQueued, int droppedPackets}) takeWindow() {
+    final window = (
+      maxSendGap: _maxSendGap,
+      maxQueued: _maxQueued,
+      droppedPackets: _droppedInWindow,
+    );
     _maxSendGap = Duration.zero;
     _maxQueued = 0;
+    _droppedInWindow = 0;
     return window;
   }
 
-  DateTime? _lastSendAt;
+  Duration? _lastSendAt;
   Duration _maxSendGap = Duration.zero;
   int _maxQueued = 0;
+  int _droppedInWindow = 0;
 
   /// Keeps the RTP clock running forward across an encoder restart.
   ///
@@ -141,7 +165,7 @@ final class DiscordVideoStreamTransport {
 
   final Queue<DiscordRtpFrame> _queue = Queue();
   double _budgetBytes = 0;
-  DateTime? _budgetRead;
+  Duration? _budgetRead;
   Timer? _paceTimer;
 
   /// The packets that went out most recently, by sequence, as the wire saw
@@ -200,7 +224,7 @@ final class DiscordVideoStreamTransport {
     final now = _now();
     final last = _lastSendAt;
     if (last != null) {
-      final gap = now.difference(last);
+      final gap = now - last;
       if (gap > _maxSendGap) _maxSendGap = gap;
     }
     _lastSendAt = now;
@@ -217,6 +241,7 @@ final class DiscordVideoStreamTransport {
         payload: packet.payload,
       );
       if (_paceBytesPerSecond > 0) {
+        _makeRoom();
         _queue.add(rtp);
       } else if (!_putOnWire(rtp)) {
         return sent;
@@ -236,7 +261,7 @@ final class DiscordVideoStreamTransport {
     final read = _budgetRead;
     if (read != null) {
       _budgetBytes +=
-          now.difference(read).inMicroseconds *
+          (now - read).inMicroseconds *
           _paceBytesPerSecond /
           Duration.microsecondsPerSecond;
     }
@@ -256,6 +281,26 @@ final class DiscordVideoStreamTransport {
       return;
     }
     _paceTimer ??= Timer.periodic(paceInterval, (_) => _release());
+  }
+
+  /// Makes room for one more packet at the bound, by giving up the oldest
+  /// picture in the queue.
+  ///
+  /// The head is what goes: it has waited longest, and once the queue is
+  /// full a packet leaves late enough that a fresh one behind it is worth
+  /// more. The drop stops at a picture boundary (the packet with the marker
+  /// bit), so a queued picture is given up whole; the head may be the tail
+  /// of a picture whose front already left, and its remainder is unusable
+  /// anyway. A watcher misses what was dropped until the next keyframe,
+  /// which the media server asks for when it cannot decode.
+  void _makeRoom() {
+    while (_queue.length >= _maxQueuedPackets && _queue.isNotEmpty) {
+      DiscordRtpFrame dropped;
+      do {
+        dropped = _queue.removeFirst();
+        _droppedInWindow++;
+      } while (!dropped.header.marker && _queue.isNotEmpty);
+    }
   }
 
   /// One packet of a picture onto the wire, recorded for retransmission when

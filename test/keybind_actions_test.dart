@@ -39,6 +39,7 @@ void main() {
         capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
         transportProvider: () => null,
         sinkProvider: () => null,
+        isVoiceReady: () => false,
         announceSelfVideo: ({required bool enabled}) async => true,
       ),
       workspace: WorkspaceController(),
