@@ -1,0 +1,37 @@
+[
+  {
+    "name": "truncated-header",
+    "note": "frame magic cut short",
+    "bytes": 3
+  },
+  {
+    "name": "truncated-body",
+    "note": "frame cut mid-block",
+    "bytes": 670
+  },
+  {
+    "name": "reserved-block-type",
+    "note": "reserved block type 3",
+    "bytes": 1340
+  },
+  {
+    "name": "bad-magic",
+    "note": "wrong frame magic",
+    "bytes": 1340
+  },
+  {
+    "name": "bad-checksum",
+    "note": "content checksum does not match",
+    "bytes": 1344
+  },
+  {
+    "name": "reserved-fhd-bit",
+    "note": "reserved frame header bit set",
+    "bytes": 1340
+  },
+  {
+    "name": "dictionary-id",
+    "note": "frame requires an external dictionary",
+    "bytes": 1206
+  }
+]

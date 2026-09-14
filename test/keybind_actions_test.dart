@@ -1,0 +1,193 @@
+import 'dart:async';
+import 'package:fake_async/fake_async.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:flucord/src/application/keybind_actions.dart';
+import 'package:flucord/src/application/self_video_controller.dart';
+import 'package:flucord/src/application/streamer_mode_controller.dart';
+import 'package:flucord/src/application/voice_controller.dart';
+import 'package:flucord/src/application/voice_overlay_controller.dart';
+import 'package:flucord/src/application/workspace_controller.dart';
+import 'package:flucord/src/data/video/clip_recorder.dart';
+import 'package:flucord/src/data/video/screenshot_service.dart';
+import 'package:flucord/src/domain/keybind.dart';
+import 'package:flucord/src/domain/streamer_mode.dart';
+import 'package:flucord/src/domain/video_capture_hub.dart';
+import 'package:flucord/src/domain/voice_media.dart';
+import 'package:flucord/src/platform/voice_overlay.dart';
+
+import 'support/fake_video_encoder.dart';
+
+void main() {
+  late VoiceController voice;
+  late StreamerModeController streamerMode;
+  late VoiceOverlayController overlay;
+  late KeybindActions actions;
+
+  setUp(() {
+    voice = VoiceController(_FakeVoiceMediaService());
+    streamerMode = StreamerModeController(_NoSettings());
+    overlay = VoiceOverlayController(
+      overlay: _CountingVoiceOverlay(),
+      roster: () => const [],
+      isHiddenByStreamerMode: () => false,
+    );
+    actions = KeybindActions(
+      voice: voice,
+      selfVideo: SelfVideoController(
+        capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
+        transportProvider: () => null,
+        sinkProvider: () => null,
+        isVoiceReady: () => false,
+        announceSelfVideo: ({required bool enabled}) async => true,
+      ),
+      workspace: WorkspaceController(),
+      streamerMode: streamerMode,
+      overlay: overlay,
+      screenshot: const UnavailableScreenshotService(),
+      clip: const UnavailableClipRecorder(),
+      messenger: GlobalKey<ScaffoldMessengerState>(),
+    );
+  });
+
+  /// Mute and deafen are room state: a controller with no connection rightly
+  /// refuses to touch them, so these tests stand in a connected room first.
+  Future<void> connectRoom() async {
+    await voice.initialize();
+    await voice.connect(guildId: 'forge', channelId: 'forge-voice');
+  }
+
+  test('push to talk unmutes on press and mutes on release', () async {
+    await connectRoom();
+
+    actions(KeybindAction.pushToTalk, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isMuted, isFalse);
+
+    actions(KeybindAction.pushToTalk, pressed: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isMuted, isTrue);
+  });
+
+  test('a release through the push to talk key still waits the delay', () {
+    fakeAsync((async) async {
+      await voice.initialize();
+      await voice.setPushToTalkReleaseDelayMs(200);
+      await voice.connect(guildId: 'forge', channelId: 'forge-voice');
+      async.flushMicrotasks();
+
+      actions(KeybindAction.pushToTalk, pressed: true);
+      async.flushMicrotasks();
+      expect(voice.isMuted, isFalse);
+
+      actions(KeybindAction.pushToTalk, pressed: false);
+      async.flushMicrotasks();
+      // The key came up, but the uplink stays live through the window.
+      expect(voice.isMuted, isFalse);
+
+      async.elapse(const Duration(milliseconds: 250));
+      async.flushMicrotasks();
+      expect(voice.isMuted, isTrue);
+    });
+  });
+
+  test('push to mute is the opposite direction of the same flag', () async {
+    await connectRoom();
+
+    actions(KeybindAction.pushToMute, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isMuted, isTrue);
+
+    actions(KeybindAction.pushToMute, pressed: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isMuted, isFalse);
+  });
+
+  test('toggle actions fire on press only, and releases do nothing', () async {
+    await connectRoom();
+
+    actions(KeybindAction.toggleMute, pressed: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isMuted, isFalse, reason: 'a release is not a toggle');
+
+    actions(KeybindAction.toggleDeafen, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isDeafened, isTrue);
+
+    actions(KeybindAction.toggleDeafen, pressed: false);
+    await Future<void>.delayed(Duration.zero);
+    expect(voice.isDeafened, isTrue, reason: 'still only presses toggle');
+  });
+
+  test('the overlay toggle reaches the overlay controller', () async {
+    actions(KeybindAction.toggleOverlay, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(overlay.isWanted, isTrue);
+
+    actions(KeybindAction.toggleOverlay, pressed: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(overlay.isWanted, isFalse);
+  });
+}
+
+class _FakeVoiceMediaService implements VoiceMediaService {
+  final StreamController<VoicePcmChunk> _microphone =
+      StreamController.broadcast();
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<List<VoiceDevice>> enumerateDevices() async => const [];
+
+  @override
+  Future<void> selectAudioOutput(String deviceId) async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {}
+
+  @override
+  Future<void> startMicrophone(String? deviceId) async {}
+
+  @override
+  Future<void> stopMicrophone() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
+class _CountingVoiceOverlay implements VoiceOverlay {
+  int shows = 0;
+  int hides = 0;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  bool get isVisible => shows > hides;
+
+  @override
+  Future<bool> show(List<OverlaySpeaker> speakers) async {
+    shows++;
+    return true;
+  }
+
+  @override
+  void hide() => hides++;
+
+  @override
+  void close() {}
+}
+
+class _NoSettings implements StreamerModeRepository {
+  @override
+  Future<StreamerModeSettings> load() async => const StreamerModeSettings();
+
+  @override
+  Future<void> save(StreamerModeSettings settings) async {}
+}

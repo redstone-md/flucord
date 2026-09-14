@@ -1,0 +1,911 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../domain/voice_audio.dart';
+import '../domain/voice_call.dart';
+import '../domain/voice_connection.dart';
+import '../domain/voice_media.dart';
+import '../domain/voice_processing.dart';
+import 'voice_audio_pipeline.dart';
+import '../app_log.dart';
+
+part 'voice_controller_devices.dart';
+part 'voice_controller_listening.dart';
+
+enum VoiceState { idle, loading, ready, failure }
+
+typedef VoiceSignalingServiceProvider = VoiceSignalingService? Function();
+typedef DirectCallServiceProvider = DirectCallService? Function();
+
+final class VoiceController extends ChangeNotifier {
+  factory VoiceController(
+    VoiceMediaService mediaService, {
+    VoiceSignalingServiceProvider? signalingServiceProvider,
+    DirectCallServiceProvider? callServiceProvider,
+    VoiceOpusCodecFactory? audioCodecFactory,
+    VoiceAudioPlaybackService? playbackService,
+
+    /// Audio from watched streams (ADR-0004).
+    Stream<VoiceRemotePcmFrame>? streamAudio,
+    Stream<String>? streamAudioEnded,
+
+    /// Opens the microphone noise filter; null on a build without one.
+    Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+
+    /// Opens the machine's echo and gain stages; null on a build without
+    /// them.
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })?
+    microphoneEnhancerFactory,
+
+    /// Where the processing switches are kept between runs.
+    VoiceProcessingRepository? processingRepository,
+
+    /// Turns other applications down while this account speaks. Null on a
+    /// platform whose attenuation reports itself unavailable.
+    ApplicationAttenuation? applicationAttenuation,
+  }) => VoiceController._(
+    mediaService,
+    signalingServiceProvider ?? _noSignaling,
+    callServiceProvider ?? _noCalls,
+    audioCodecFactory,
+    playbackService,
+    streamAudio,
+    streamAudioEnded,
+    noiseSuppressorFactory,
+    microphoneEnhancerFactory,
+    processingRepository,
+    applicationAttenuation,
+  );
+  VoiceController._(
+    this._mediaService,
+    this._signalingServiceProvider,
+    this._callServiceProvider,
+    VoiceOpusCodecFactory? audioCodecFactory,
+    this._playbackService,
+    Stream<VoiceRemotePcmFrame>? streamAudio,
+    Stream<String>? streamAudioEnded,
+    Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })?
+    microphoneEnhancerFactory,
+    this._processingRepository,
+    this._applicationAttenuation,
+  ) : _audioPipeline = audioCodecFactory == null
+          ? null
+          : VoiceAudioPipeline(
+              mediaService: _mediaService,
+              codecFactory: audioCodecFactory,
+              noiseSuppressorFactory: noiseSuppressorFactory,
+              microphoneEnhancerFactory: microphoneEnhancerFactory,
+            ) {
+    _audioErrorSubscription = _audioPipeline?.errors.listen((error) {
+      _error = error;
+      if (!_disposed) notifyListeners();
+    });
+    _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
+    _ownSpeakingSubscription = _audioPipeline?.speaking.listen(
+      _handleOwnSpeaking,
+    );
+    // Attenuation follows the same speech the speaking ring does.
+    _attenuationSpeakingSubscription = _audioPipeline?.speaking.listen(
+      _handleOwnSpeakingForAttenuation,
+    );
+    // Voice and stream audio share the room playback path.
+    _streamAudioSubscription = streamAudio?.listen(_handleRemotePcm);
+    _streamAudioEndedSubscription = streamAudioEnded?.listen(
+      _handleStreamAudioEnded,
+    );
+  }
+
+  final VoiceMediaService _mediaService;
+  final VoiceSignalingServiceProvider _signalingServiceProvider;
+  final DirectCallServiceProvider _callServiceProvider;
+  final VoiceAudioPlaybackService? _playbackService;
+  final VoiceAudioPipeline? _audioPipeline;
+  final VoiceProcessingRepository? _processingRepository;
+  final ApplicationAttenuation? _applicationAttenuation;
+  VoiceProcessingSettings _processing = const VoiceProcessingSettings();
+
+  /// Set by the first user change, so a startup load that resolves late
+  /// cannot overwrite what the user has since chosen.
+  bool _processingTouched = false;
+  StreamSubscription<Object>? _audioErrorSubscription;
+  StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
+  StreamSubscription<bool>? _ownSpeakingSubscription;
+  StreamSubscription<bool>? _attenuationSpeakingSubscription;
+  StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
+  StreamSubscription<String>? _streamAudioEndedSubscription;
+  StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
+  VoiceSignalingService? _signalingService;
+  StreamSubscription<void>? _seatedSubscription;
+  VoiceState _state = VoiceState.idle;
+  VoiceConnectionStatus _connectionStatus = VoiceConnectionStatus.disconnected;
+  List<VoiceDevice> _devices = const [];
+  String? _selectedInputId;
+  String? _selectedOutputId;
+  String? _connectedGuildId;
+  String? _connectedChannelId;
+  bool _isCallSession = false;
+  VoiceTransportSession? _transportSession;
+  final Map<String, VoiceParticipant> _participants = {};
+  String? _selfUserId;
+
+  /// The pending end of a push-to-talk burst, waiting out the release
+  /// delay. Cancelled by a press inside the window.
+  Timer? _releaseDelayTimer;
+
+  /// Runs out [speakingHangover] after a participant's last voice frame.
+  final Map<String, Timer> _speakingTimers = {};
+  Object? _error;
+
+  /// Why the audio devices could not be opened, kept apart from [_error] so
+  /// a transport failure is not reported as a missing microphone.
+  Object? _deviceError;
+  Object? _microphoneError;
+  bool _isMuted = false;
+  bool _isDeafened = false;
+  bool _isCameraOn = false;
+  bool _isAudioPlaybackActive = false;
+  final List<VoiceRemotePcmFrame> _pendingPcmFrames = [];
+
+  /// When each source's last frame arrived, for the gap diagnostic. Sources
+  /// stop without an event sometimes: past a few minutes of silence an entry
+  /// is dead, and once the map is past [_lastPcmMicrosLimit] the dead ones
+  /// are swept as frames arrive.
+  final Map<String, int> _lastPcmMicros = {};
+  static const int _lastPcmMicrosLimit = 64;
+  static final Duration _lastPcmIdle = Duration(minutes: 5);
+
+  /// Senders whose camera is no longer to be decoded, one event each: the
+  /// sender left the room, moved out of it, or a voice state says their
+  /// camera is off. The room's own view of who has a camera is not good
+  /// enough to filter these, so an event can name somebody who never had
+  /// one; releasing that is nothing.
+  final StreamController<String> _camerasGone = StreamController.broadcast();
+
+  /// The events [_camerasGone] carries. Not replayed, so whoever cares must
+  /// listen while the room is being built, before anybody can leave it.
+  Stream<String> get camerasGone => _camerasGone.stream;
+
+  /// How long a participant still counts as speaking after their last voice
+  /// frame. A sender closes a burst with five silence frames, 100 ms; this is
+  /// long enough to ride over those and a lost packet, short enough that the
+  /// ring goes out with the voice.
+  static const Duration speakingHangover = Duration(milliseconds: 250);
+  bool _isBusy = false;
+  bool _disposed = false;
+
+  /// How many 20 ms frames wait while playback is off. Ten is the jitter a
+  /// device opening late is allowed; the old 250 was five seconds, which is
+  /// exactly the playback buffer, so flushing it filled the buffer in one go
+  /// and the source was marked ended for the rest of the call.
+  static const int _pendingPcmFrameLimit = 10;
+
+  VoiceState get state => _state;
+  VoiceConnectionStatus get connectionStatus => _connectionStatus;
+  List<VoiceDevice> get inputDevices => _devices
+      .where((device) => device.kind == VoiceDeviceKind.audioInput)
+      .toList(growable: false);
+  List<VoiceDevice> get outputDevices => _devices
+      .where((device) => device.kind == VoiceDeviceKind.audioOutput)
+      .toList(growable: false);
+  String? get selectedInputId => _selectedInputId;
+  String? get selectedOutputId => _selectedOutputId;
+  String? get connectedGuildId => _connectedGuildId;
+  String? get connectedChannelId => _connectedChannelId;
+  VoiceTransportSession? get transportSession => _transportSession;
+
+  /// Who is in the room on screen.
+  ///
+  /// Built from the roster of who is seated rather than from the events this
+  /// connection happened to see. The events are announcements — somebody
+  /// arrived, somebody spoke — and a client that has just reconnected, or
+  /// re-entered a channel it was already in, is sent none of them for the
+  /// people who were already there. The room rendered empty while four people
+  /// were plainly listed in the sidebar.
+  ///
+  /// What the connection knows is still layered on top: speaking flags and
+  /// SSRCs only ever come from the transport.
+  List<VoiceParticipant> get participants {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return List.unmodifiable(_participants.values);
+    final seated = _signalingService?.seatedByChannel[channelId] ?? const [];
+    final byUser = <String, VoiceParticipant>{};
+    for (final state in seated) {
+      final known = _participants[state.userId];
+      byUser[state.userId] = (known ?? VoiceParticipant(userId: state.userId))
+          .copyWith(
+            selfMuted: state.selfMuted,
+            selfDeafened: state.selfDeafened,
+            serverMuted: state.serverMuted,
+            serverDeafened: state.serverDeafened,
+            isStreaming: state.isStreaming,
+            isVideoEnabled: state.isVideoEnabled,
+          );
+    }
+    // Anybody the transport knows about but the roster has not caught up on
+    // yet — a join announced on the voice socket first — is still shown.
+    for (final entry in _participants.entries) {
+      byUser.putIfAbsent(entry.key, () => entry.value);
+    }
+    return List.unmodifiable(byUser.values);
+  }
+
+  Object? get error => _error;
+
+  /// Why the microphone could not be opened, or `null` when it is running.
+  ///
+  /// Separate from [error] because it is not a failure to join: the room is
+  /// connected and audible, the uplink simply has nothing to send.
+  Object? get microphoneError => _microphoneError;
+
+  /// Why the audio devices could not be opened, or null.
+  Object? get deviceError => _deviceError;
+
+  /// Why joining a voice channel is not possible at all, or `null`.
+  ///
+  /// Answered before a join is attempted so the room can say what is missing
+  /// instead of showing "Disconnected" with no reason.
+  String? get joinBlockedReason {
+    if (_state == VoiceState.failure && _signalingService == null) {
+      return 'Audio devices could not be opened, and this session has no '
+          'Discord voice transport.';
+    }
+    if (!hasDiscordSignaling && _signalingServiceProvider() == null) {
+      return 'This session cannot reach Discord voice. Sign in with a Discord '
+          'account to join voice channels.';
+    }
+    return null;
+  }
+
+  bool get isConnected => _connectedChannelId != null;
+
+  /// Whether the connection is a DM or group-DM call rather than guild voice.
+  bool get isCallSession => _isCallSession;
+  bool get hasDiscordSignaling => _signalingService != null;
+
+  /// Who is seated in each voice channel, whether or not this client is in it.
+  ///
+  /// [participants] deliberately holds only the room we are connected to, so it
+  /// cannot answer for the rest of the sidebar. This reads the transport's own
+  /// view of every voice state instead.
+  Map<String, List<VoiceParticipantStateEvent>> get seatedByChannel =>
+      _signalingService?.seatedByChannel ?? const {};
+  bool get isTransportReady => _transportSession != null;
+  bool get isAudioUplinkActive => _audioPipeline?.isEnabled ?? false;
+  bool get isAudioPlaybackActive => _isAudioPlaybackActive;
+  bool get isMuted => _isMuted;
+
+  /// Whether this account has silenced the room for itself.
+  bool get isDeafened => _isDeafened;
+
+  /// Whether this account's camera is announced to the room.
+  ///
+  /// Held here rather than on the camera controller because opcode 4 is a
+  /// whole-state frame: the flag has to be replayed with every mute toggle and
+  /// every reconnect, and the thing that replays those is this.
+  bool get isCameraOn => _isCameraOn;
+  bool get isBusy => _isBusy;
+
+  Future<void> initialize() async {
+    // A previous failure is tried again rather than remembered forever. Audio
+    // devices come and go — a headset is plugged in, an exclusive-mode
+    // application lets go — and the old behaviour left a client that failed
+    // once with no devices for the rest of the session, showing the first
+    // error over every later attempt.
+    if (_state == VoiceState.loading || _state == VoiceState.ready) return;
+    _state = VoiceState.loading;
+    _error = null;
+    notifyListeners();
+    try {
+      await _mediaService.initialize();
+      await _playbackService?.initialize();
+      final mediaDevices = await _mediaService.enumerateDevices();
+      final playbackDevices = await _playbackService?.enumerateOutputDevices();
+      _devices = playbackDevices == null
+          ? mediaDevices
+          : [
+              ...mediaDevices.where(
+                (device) => device.kind == VoiceDeviceKind.audioInput,
+              ),
+              ...playbackDevices,
+            ];
+      _selectedInputId = _firstDeviceId(VoiceDeviceKind.audioInput);
+      _selectedOutputId = _firstDeviceId(VoiceDeviceKind.audioOutput);
+      _state = VoiceState.ready;
+    } catch (error) {
+      _error = error;
+      _deviceError = error;
+      _state = VoiceState.failure;
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  /// Opens the audio devices again after a failure.
+  ///
+  /// Its own entry point so a surface can offer the retry: walking out of the
+  /// channel and back in is not an obvious way to ask for one, and it is what
+  /// somebody had to do before.
+  Future<void> retryDevices() async {
+    if (_state == VoiceState.loading) return;
+    _state = VoiceState.idle;
+    _deviceError = null;
+    await initialize();
+  }
+
+  String? _firstDeviceId(VoiceDeviceKind kind) {
+    for (final device in _devices) {
+      if (device.kind == kind) return device.id;
+    }
+    return null;
+  }
+
+  Future<void> connect({required String guildId, required String channelId}) =>
+      _connectTo(guildId: guildId, channelId: channelId, isCall: false);
+
+  /// Joins a call in a DM or group DM.
+  ///
+  /// The media half is identical to guild voice — same microphone, same Opus
+  /// uplink, same participant grid — so only the session's identity differs: a
+  /// call has no guild and is addressed by its channel.
+  Future<void> connectToCall({required String channelId}) =>
+      _connectTo(guildId: null, channelId: channelId, isCall: true);
+
+  Future<void> _connectTo({
+    required String? guildId,
+    required String channelId,
+    required bool isCall,
+  }) async {
+    await initialize();
+    if (_connectedGuildId == guildId &&
+        _connectedChannelId == channelId &&
+        _isCallSession == isCall) {
+      return;
+    }
+    // A machine with no working capture device must still be able to walk into
+    // a channel and listen, which is what Discord does. Refusing the join
+    // outright — the old behaviour — left the room showing "Disconnected" with
+    // nothing said about why, and no way to hear anybody.
+    if (_state == VoiceState.loading) return;
+    await _run(() async {
+      final signalingService = _signalingServiceProvider();
+      await _bindSignaling(signalingService);
+      // Walking between two channels of one guild is a move on the same
+      // connection, so only a different session is torn down first. A call is
+      // its own session, keyed by channel, and always is.
+      final movedSession =
+          _isCallSession != isCall ||
+          (isCall
+              ? _connectedChannelId != channelId
+              : _connectedGuildId != guildId);
+      if (movedSession) await _leaveActiveSession();
+      if (_connectedChannelId == null) {
+        // Failing to open the microphone must not abort the join: the room is
+        // still worth being in to listen. The reason is kept so the room can
+        // say the uplink is off rather than leaving a silent mic looking fine.
+        try {
+          await _mediaService.startMicrophone(_selectedInputId);
+          await _mediaService.setMicrophoneEnabled(!_isMuted);
+          _microphoneError = null;
+        } on Object catch (error) {
+          _microphoneError = error;
+        }
+      }
+      _connectedGuildId = guildId;
+      _connectedChannelId = channelId;
+      _isCallSession = isCall;
+      _participants.clear();
+      _transportSession = null;
+      await _audioPipeline?.setEnabled(false);
+      await _setPlaybackEnabled(false);
+      // Only a session that is actually being established says "joining". A
+      // transport already up for this channel — a rebind, or a second call
+      // into the same room — keeps what it has, or the room announces a
+      // connection it never lost.
+      if (movedSession ||
+          signalingService?.currentStatus != VoiceConnectionStatus.ready) {
+        _connectionStatus = VoiceConnectionStatus.joining;
+        _logStatus('joining', _connectionStatus);
+      }
+      if (!await _sendJoin()) {
+        _connectionStatus = VoiceConnectionStatus.disconnected;
+        _logStatus('join not sent', _connectionStatus);
+      }
+    });
+  }
+
+  /// Sets the camera flag and re-announces the session with it.
+  ///
+  /// Answers whether the room was told. A camera turned on while nothing is
+  /// connected is refused rather than remembered: the flag would then be
+  /// replayed into whatever channel is joined next.
+  Future<bool> setCameraAnnounced({required bool enabled}) async {
+    if (_connectedChannelId == null) return false;
+    if (_isCameraOn == enabled) return true;
+    _isCameraOn = enabled;
+    final sent = await _sendJoin();
+    if (!sent) _isCameraOn = !enabled;
+    if (!_disposed) notifyListeners();
+    return sent;
+  }
+
+  /// Re-announces the current session, returning whether anything was sent.
+  ///
+  /// Both the join and every mute toggle go through here: R08's opcode 4 is a
+  /// whole-state frame, so "mute" is simply the same join with a different
+  /// flag, and a call sends it through the call plane instead of the guild one.
+  Future<bool> _sendJoin() async {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return false;
+    if (_isCallSession) {
+      final callService = _callServiceProvider();
+      if (callService == null) return false;
+      await callService.joinCall(
+        channelId: channelId,
+        selfMute: _isMuted,
+        selfDeaf: _isDeafened,
+        selfVideo: _isCameraOn,
+      );
+      return true;
+    }
+    final guildId = _connectedGuildId;
+    final signalingService = _signalingService;
+    if (guildId == null || signalingService == null) return false;
+    await signalingService.joinVoiceChannel(
+      guildId: guildId,
+      channelId: channelId,
+      selfMute: _isMuted,
+      selfDeaf: _isDeafened,
+      selfVideo: _isCameraOn,
+    );
+    return true;
+  }
+
+  Future<void> _leaveActiveSession() async {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return;
+    if (_isCallSession) {
+      await _callServiceProvider()?.leaveCall(channelId);
+      return;
+    }
+    final guildId = _connectedGuildId;
+    if (guildId != null) await _signalingService?.leaveVoiceChannel(guildId);
+  }
+
+  Future<void> refreshSignalingService() async {
+    final service = _signalingServiceProvider();
+    if (identical(service, _signalingService)) return;
+    await _run(() async {
+      await _bindSignaling(service);
+      if (service == null || _connectedChannelId == null) return;
+      if (service.currentStatus != VoiceConnectionStatus.ready) {
+        _connectionStatus = VoiceConnectionStatus.joining;
+        _logStatus('joining', _connectionStatus);
+      }
+      await _sendJoin();
+    });
+  }
+
+  Future<void> disconnect() async {
+    await _run(() async {
+      await _audioPipeline?.setEnabled(false);
+      await _setPlaybackEnabled(false);
+      await _leaveActiveSession();
+      await _mediaService.stopMicrophone();
+      _connectedGuildId = null;
+      _connectedChannelId = null;
+      _isCallSession = false;
+      _connectionStatus = VoiceConnectionStatus.disconnected;
+      _transportSession = null;
+      _clearParticipants();
+      _isMuted = false;
+      _isDeafened = false;
+      _isCameraOn = false;
+    });
+  }
+
+  Future<void> _bindSignaling(VoiceSignalingService? service) async {
+    // A service that is already bound *and listened to* is left alone. The
+    // second half of that matters: a bind that failed part way used to leave
+    // the service set with no subscription behind it, and every bind after it
+    // took this early exit — so the transport ran, carried audio, and the
+    // controller never heard a word of it. The room said "joining" for the
+    // whole call.
+    if (identical(service, _signalingService) &&
+        (service == null || _signalingSubscription != null)) {
+      return;
+    }
+    await _signalingSubscription?.cancel();
+    _signalingService = service;
+    // Subscribed before anything that can throw. Sound is what a room can
+    // survive losing; hearing the transport is not.
+    unawaited(_seatedSubscription?.cancel());
+    _seatedSubscription = service?.seatedChanges.listen((_) {
+      _reconcileParticipants();
+      if (!_disposed) notifyListeners();
+    });
+    _signalingSubscription = service?.voiceEvents.listen(
+      _handleSignalingEvent,
+      onDone: _handleSignalingDone,
+    );
+    // Read rather than waited for. Binding to a service that is already
+    // connected used to reset the status to disconnected and then sit there:
+    // the `ready` it was waiting for had already been announced, and nothing
+    // announces it twice, so a working call showed as joining forever.
+    _connectionStatus =
+        service?.currentStatus ?? VoiceConnectionStatus.disconnected;
+    _logStatus('bound', _connectionStatus);
+    _transportSession = service?.currentSession;
+    _participants.clear();
+    final audioTransport = service is VoiceAudioTransport
+        ? service as VoiceAudioTransport
+        : null;
+    try {
+      await _audioPipeline?.bindTransport(audioTransport);
+      await _setPlaybackEnabled(false);
+    } on Object catch (error) {
+      // A playback device that will not open is worth reporting and worth
+      // surviving: the room is still joined and everything else still works.
+      _error = error;
+      _logStatus('audio bind failed', _connectionStatus, error: error);
+    }
+  }
+
+  void _handleSignalingEvent(VoiceSignalingEvent event) {
+    switch (event) {
+      case VoiceSignalingStatusEvent():
+        // A room that shows the wrong status is unfalsifiable without this:
+        // the transport can be carrying audio while the label says joining,
+        // and nothing else records which side lost the transition. Statuses
+        // only — no channel, no session, nothing about who is in the room.
+        _logStatus('signalled', event.status, error: event.error);
+        _connectionStatus = event.status;
+        // A reconnect is not a problem to report. The status line already says
+        // "Reconnecting", and putting the close code underneath it in red said
+        // the same thing twice — the second time as though something needed
+        // doing about it.
+        if (event.error != null &&
+            event.status != VoiceConnectionStatus.reconnecting) {
+          _error = event.error;
+        }
+        // A connection that came back clears what killed the last one. The
+        // room used to keep showing a close code in red over a working
+        // call, because nothing ever took the message down.
+        if (event.status == VoiceConnectionStatus.ready ||
+            event.status == VoiceConnectionStatus.reconnecting) {
+          _error = null;
+        }
+        if (event.status == VoiceConnectionStatus.disconnected ||
+            event.status == VoiceConnectionStatus.failure) {
+          _transportSession = null;
+          _clearParticipants();
+          unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
+        }
+      case VoiceTransportReadyEvent():
+        _transportSession = event.session;
+        unawaited(
+          _applyBackgroundAudioState(uplink: !_isMuted, playback: true),
+        );
+      case VoiceCredentialsReadyEvent():
+        _selfUserId = event.credentials.userId;
+        _participants.putIfAbsent(
+          event.credentials.userId,
+          () => VoiceParticipant(userId: event.credentials.userId),
+        );
+      case VoiceParticipantStateEvent():
+        _applyParticipantState(event);
+      case VoiceSpeakingEvent():
+        // The opcode maps the SSRC, and says who started sending, never
+        // reliably who stopped: so it lights the ring the way a frame does,
+        // and the hangover takes it down. That is also all a deafened
+        // client gets, since no audio is sent to it.
+        final participant =
+            _participants[event.userId] ??
+            VoiceParticipant(userId: event.userId);
+        _participants[event.userId] = participant.copyWith(ssrc: event.ssrc);
+        _audioPipeline?.allowDecoder(event.userId);
+        if (event.speakingFlags != 0) _heard(event.userId);
+      case VoiceUserDisconnectedEvent():
+        _forgetParticipant(event.userId);
+      case VoiceDaveBinaryEvent():
+        break;
+      case VoiceKeyframeRequestedEvent():
+        // Answered where the pictures come from: the stream router points the
+        // share's capture at one of these. A camera's turn, when its pictures
+        // are being sent at all.
+        break;
+      case VoiceRetransmitRequestedEvent():
+      case VoiceReceiverReportEvent():
+        // Feedback about the pictures this client sends. The Go Live path
+        // acts on it through the stream router; a call carrying only audio
+        // has nothing to resend.
+        break;
+      case VoiceCredentialsNeededEvent():
+        // The signaling service asks the gateway for fresh credentials; the
+        // state the room is shown arrives as the reconnecting status beside
+        // this.
+        break;
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void _logStatus(String what, VoiceConnectionStatus status, {Object? error}) {
+    AppLog.info(
+      'voice.status',
+      '$what: ${status.name}${error == null ? '' : ' ($error)'}',
+    );
+  }
+
+  void _handleSignalingDone() {
+    _logStatus('event stream closed', _connectionStatus);
+    _signalingService = null;
+    _connectionStatus = VoiceConnectionStatus.disconnected;
+    _transportSession = null;
+    _clearParticipants();
+    unawaited(_unbindBackgroundAudio());
+    if (!_disposed) notifyListeners();
+  }
+
+  void _applyParticipantState(VoiceParticipantStateEvent event) {
+    if (event.guildId != _connectedGuildId ||
+        event.channelId != _connectedChannelId) {
+      _forgetParticipant(event.userId);
+      return;
+    }
+    final participant =
+        _participants[event.userId] ?? VoiceParticipant(userId: event.userId);
+    _participants[event.userId] = participant.copyWith(
+      selfMuted: event.selfMuted,
+      selfDeafened: event.selfDeafened,
+      serverMuted: event.serverMuted,
+      serverDeafened: event.serverDeafened,
+      isStreaming: event.isStreaming,
+      isVideoEnabled: event.isVideoEnabled,
+    );
+    _audioPipeline?.allowDecoder(event.userId);
+    if (!event.isVideoEnabled && !_disposed) _camerasGone.add(event.userId);
+  }
+
+  /// Takes one participant out of the room, and their audio resources with
+  /// them: their Opus decoder and their playback source are native memory an
+  /// hour of comings and goings used to pile up until the whole channel was
+  /// left.
+  void _forgetParticipant(String userId) {
+    _participants.remove(userId);
+    _speakingTimers.remove(userId)?.cancel();
+    if (!_disposed) _camerasGone.add(userId);
+    _pendingPcmFrames.removeWhere((frame) => frame.sourceId == userId);
+    _lastPcmMicros.remove(userId);
+    _audioPipeline?.forgetDecoder(userId);
+    final playbackService = _playbackService;
+    if (playbackService != null) {
+      unawaited(_removePlaybackSource(playbackService, userId));
+    }
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_isBusy) return;
+    _isBusy = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await action();
+    } catch (error) {
+      _error = error;
+    } finally {
+      _isBusy = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> _setPlaybackEnabled(bool enabled) async {
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    if (!enabled) {
+      _isAudioPlaybackActive = false;
+      _pendingPcmFrames.clear();
+    }
+    await playbackService.setEnabled(enabled);
+    if (enabled) {
+      _isAudioPlaybackActive = true;
+      _flushPendingPcmFrames(playbackService);
+    } else {
+      _pendingPcmFrames.clear();
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void _flushPendingPcmFrames(VoiceAudioPlaybackService playbackService) {
+    final pending = List<VoiceRemotePcmFrame>.of(_pendingPcmFrames);
+    _pendingPcmFrames.clear();
+    for (final frame in pending) {
+      try {
+        playbackService.addPcmFrame(frame);
+      } catch (error) {
+        _reportBackgroundError(error);
+        return;
+      }
+    }
+  }
+
+  Future<void> _applyBackgroundAudioState({
+    required bool uplink,
+    required bool playback,
+  }) async {
+    try {
+      await _audioPipeline?.setEnabled(uplink);
+      await _setPlaybackEnabled(playback);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  Future<void> _unbindBackgroundAudio() async {
+    try {
+      await _audioPipeline?.bindTransport(null);
+      await _setPlaybackEnabled(false);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  void _reportBackgroundError(Object error) {
+    _error = error;
+    _notify();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  void _handleStreamAudioEnded(String sourceId) {
+    if (_disposed) return;
+    _pendingPcmFrames.removeWhere((frame) => frame.sourceId == sourceId);
+    _lastPcmMicros.remove(sourceId);
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    unawaited(_removePlaybackSource(playbackService, sourceId));
+  }
+
+  Future<void> _removePlaybackSource(
+    VoiceAudioPlaybackService playbackService,
+    String sourceId,
+  ) async {
+    try {
+      await playbackService.removeSource(sourceId);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  void _clearParticipants() {
+    _participants.clear();
+    for (final timer in _speakingTimers.values) {
+      timer.cancel();
+    }
+    _speakingTimers.clear();
+    _pendingPcmFrames.clear();
+    _lastPcmMicros.clear();
+  }
+
+  /// Drops participants the seated roster no longer lists.
+  ///
+  /// The roster is the authority on who is in the room. The transport's own
+  /// disconnect event rides a different socket, so losing one without the
+  /// other used to leave a departed participant seated for the rest of the
+  /// call. Runs on roster changes. A join announced on the voice socket
+  /// first is safe: it is only evicted when a later roster change still does
+  /// not list it. The account's own entry is kept, because the roster can
+  /// lag behind the credentials that put us in the room.
+  void _reconcileParticipants() {
+    final channelId = _connectedChannelId;
+    if (channelId == null) return;
+    final seated = _signalingService?.seatedByChannel[channelId];
+    if (seated == null) return;
+    final liveUsers = {for (final state in seated) state.userId};
+    final selfUserId = _selfUserId;
+    _participants.removeWhere(
+      (userId, _) => userId != selfUserId && !liveUsers.contains(userId),
+    );
+  }
+
+  /// A voice frame is the participant speaking; the ring goes out
+  /// [speakingHangover] after the last one. Screen-share audio is somebody's
+  /// game, not their voice, and is left out.
+  void _heard(String userId) {
+    _speakingTimers.remove(userId)?.cancel();
+    _speakingTimers[userId] = Timer(speakingHangover, () {
+      _speakingTimers.remove(userId);
+      _setSpeaking(userId, false);
+    });
+    _setSpeaking(userId, true);
+  }
+
+  void _handleOwnSpeaking(bool speaking) {
+    final userId = _selfUserId;
+    if (userId == null || _disposed) return;
+    _setSpeaking(userId, speaking);
+  }
+
+  void _setSpeaking(String userId, bool speaking) {
+    // Somebody not in the roster is somebody who left: their last frames
+    // arrive after the roster said so, and must not put them back.
+    final participant = _participants[userId];
+    if (participant == null || participant.isSpeaking == speaking) return;
+    _participants[userId] = participant.copyWith(isSpeaking: speaking);
+    _notify();
+  }
+
+  void _handleRemotePcm(VoiceRemotePcmFrame frame) {
+    if (_disposed) return;
+    _noteArrival(frame);
+    if (frame.sourceId == frame.userId) _heard(frame.userId);
+    final playbackService = _playbackService;
+    if (playbackService == null) return;
+    if (!_isAudioPlaybackActive) {
+      if (_pendingPcmFrames.length == _pendingPcmFrameLimit) {
+        _pendingPcmFrames.removeAt(0);
+      }
+      _pendingPcmFrames.add(frame);
+      return;
+    }
+    try {
+      playbackService.addPcmFrame(frame);
+    } catch (error) {
+      _reportBackgroundError(error);
+    }
+  }
+
+  /// A hole in a source's frames, as it reaches playback: two 20 ms frames
+  /// late is more than the 60 ms the playback buffer holds, so it is heard.
+  /// Logged with the size, so a crackle can be blamed on the frames that
+  /// stopped arriving rather than on the device that stopped playing them.
+  void _noteArrival(VoiceRemotePcmFrame frame) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    if (_lastPcmMicros.length >= _lastPcmMicrosLimit) {
+      _lastPcmMicros.removeWhere(
+        (_, last) => now - last > _lastPcmIdle.inMicroseconds,
+      );
+    }
+    final last = _lastPcmMicros[frame.sourceId];
+    _lastPcmMicros[frame.sourceId] = now;
+    if (last == null) return;
+    final gapMs = (now - last) ~/ 1000;
+    if (gapMs >= 40) {
+      AppLog.warning('voice.playback', 'pcm gap ${frame.sourceId}: ${gapMs}ms');
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _releaseDelayTimer?.cancel();
+    for (final timer in _speakingTimers.values) {
+      timer.cancel();
+    }
+    unawaited(_audioErrorSubscription?.cancel());
+    unawaited(_remotePcmSubscription?.cancel());
+    unawaited(_ownSpeakingSubscription?.cancel());
+    unawaited(_attenuationSpeakingSubscription?.cancel());
+    unawaited(_applicationAttenuation?.dispose());
+    unawaited(_streamAudioSubscription?.cancel());
+    unawaited(_streamAudioEndedSubscription?.cancel());
+    unawaited(_signalingSubscription?.cancel());
+    unawaited(_seatedSubscription?.cancel());
+    unawaited(_camerasGone.close());
+    unawaited(_audioPipeline?.dispose());
+    unawaited(_playbackService?.dispose());
+    unawaited(_mediaService.dispose());
+    super.dispose();
+  }
+
+  static VoiceSignalingService? _noSignaling() => null;
+
+  static DirectCallService? _noCalls() => null;
+}

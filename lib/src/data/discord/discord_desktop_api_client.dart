@@ -1,0 +1,822 @@
+import '../../domain/chat_models.dart';
+import 'discord_call_api.dart';
+import 'discord_account_connections_repository.dart';
+import 'discord_account_data_package_repository.dart';
+import 'discord_account_entitlements_repository.dart';
+import 'discord_app_authorisation_repository.dart';
+import 'discord_desktop_rest_protocol.dart';
+import 'discord_age_verification_repository.dart';
+import 'discord_auth_session_repository.dart';
+import 'discord_family_centre_repository.dart';
+import 'discord_guild_management_repository.dart';
+import 'discord_mfa_repository.dart';
+import 'discord_moderation_repository.dart';
+import 'discord_expression_service.dart';
+import 'discord_multipart_body.dart';
+import 'discord_safety_hub_repository.dart';
+import 'discord_read_state_repository.dart';
+import 'discord_rest_client.dart';
+import 'discord_application_command_service.dart';
+import 'discord_gif_service.dart';
+import 'discord_message_component_service.dart';
+import 'discord_soundboard_service.dart';
+import 'discord_stage_service.dart';
+import 'discord_thread_membership_service.dart';
+import 'discord_user_notes_repository.dart';
+import 'discord_user_profile_repository.dart';
+import 'discord_user_settings_transport.dart';
+
+final class DiscordDesktopApiClient
+    implements
+        DiscordCallApi,
+        DiscordUserProfileTransport,
+        DiscordThreadMembershipTransport,
+        DiscordStageTransport,
+        DiscordSoundboardTransport,
+        DiscordGifTransport,
+        DiscordApplicationCommandTransport,
+        DiscordComponentTransport,
+        DiscordUserSettingsTransport,
+        DiscordUserNotesTransport,
+        DiscordReadStateTransport,
+        DiscordExpressionTransport {
+  DiscordDesktopApiClient({
+    required String authorization,
+    required Map<String, String> headers,
+    DiscordHttpTransport? transport,
+    DelayFunction? delay,
+    Uri? baseUri,
+  }) : _rest = DiscordRestClient(
+         authorization: DiscordDesktopAuthorization(authorization),
+         additionalHeaders: headers,
+         transport: transport,
+         delay: delay,
+         baseUri: baseUri ?? Uri.parse('https://discord.com/api/v9'),
+       );
+
+  final DiscordRestClient _rest;
+
+  /// The guild-administration routes, sharing this session's credentials.
+  ///
+  /// Built lazily and kept, so the settings window's sections all talk to one
+  /// object rather than each minting its own over the same socket.
+  late final DiscordGuildManagementRepository guildManagement =
+      DiscordGuildManagementRepository(_rest);
+
+  late final DiscordModerationRepository moderation =
+      DiscordModerationRepository(_rest);
+
+  late final DiscordSafetyHubRepository safetyHub = DiscordSafetyHubRepository(
+    _rest,
+  );
+
+  late final DiscordFamilyCentreRepository familyCentre =
+      DiscordFamilyCentreRepository(_rest);
+
+  late final DiscordAuthSessionRepository authSessions =
+      DiscordAuthSessionRepository(_rest);
+
+  late final DiscordMfaRepository multiFactorAuth = DiscordMfaRepository(_rest);
+
+  late final DiscordAgeVerificationRepository ageVerification =
+      DiscordAgeVerificationRepository(_rest);
+
+  late final DiscordAccountConnectionsRepository accountConnections =
+      DiscordAccountConnectionsRepository(_rest);
+
+  late final DiscordAccountEntitlementsRepository accountEntitlements =
+      DiscordAccountEntitlementsRepository(_rest);
+
+  late final DiscordAppAuthorisationRepository appAuthorisation =
+      DiscordAppAuthorisationRepository(_rest);
+
+  late final DiscordAccountDataPackageRepository accountDataPackage =
+      DiscordAccountDataPackageRepository(_rest);
+
+  @override
+  Future<bool> patchThreadMemberSettings({
+    required String threadId,
+    required Map<String, Object?> body,
+  }) async {
+    try {
+      await _rest.requestEmpty(
+        'PATCH',
+        '/channels/$threadId/thread-members/@me/settings',
+        body: body,
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      // A thread archived out from under the change, or one this account may
+      // no longer see, refuses it. That is an answer about the thread.
+      if (error.statusCode == 400 || error.statusCode == 403) return false;
+      rethrow;
+    }
+  }
+
+  /// `GET /applications/detectable`: the games Discord can recognise.
+  ///
+  /// Not on the public protocol surface: the official client uses it to map
+  /// a running executable to the game a presence card names. Game detection
+  /// does the same thing with it.
+  Future<List<Map<String, Object?>>> getDetectableApplications() =>
+      _rest.getList('/applications/detectable');
+
+  /// `GET /friend-suggestions`.
+  Future<List<Map<String, Object?>>> getFriendSuggestions() =>
+      _rest.getList('/friend-suggestions');
+
+  /// `DELETE /friend-suggestions/{id}` — says no to one.
+  Future<void> deleteFriendSuggestion(String userId) => _rest.requestEmpty(
+    'DELETE',
+    '/friend-suggestions/${Uri.encodeComponent(userId)}',
+  );
+
+  /// `PUT /users/@me/relationships/{id}`.
+  ///
+  /// With no type, this is a friend request — or its acceptance, which Discord
+  /// does not distinguish. With a type it sets the relationship outright,
+  /// which is how blocking works.
+  Future<void> putRelationship(String userId, {int? type}) =>
+      _rest.requestEmpty(
+        'PUT',
+        '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+        body: type == null ? const <String, Object?>{} : {'type': type},
+      );
+
+  /// `DELETE /users/@me/relationships/{id}` — undoes whatever it was.
+  Future<void> deleteRelationship(String userId) => _rest.requestEmpty(
+    'DELETE',
+    '/users/@me/relationships/${Uri.encodeComponent(userId)}',
+  );
+
+  /// The guild's scheduled events, with the interested counts Discord's own
+  /// client asks for.
+  Future<List<Map<String, Object?>>> getGuildScheduledEvents(String guildId) =>
+      _rest.getList(
+        '/guilds/$guildId/scheduled-events',
+        query: const {'with_user_count': 'true'},
+      );
+
+  /// The people interested in an event.
+  ///
+  /// `with_member` is what brings the guild nickname back with each user, so
+  /// somebody appears under the name that server knows them by.
+  Future<List<Map<String, Object?>>> getGuildScheduledEventUsers({
+    required String guildId,
+    required String eventId,
+    int limit = 100,
+  }) => _rest.getList(
+    '/guilds/$guildId/scheduled-events/$eventId/users',
+    query: {'limit': '${limit.clamp(1, 100)}', 'with_member': 'true'},
+  );
+
+  Future<Map<String, Object?>> createGuildScheduledEvent({
+    required String guildId,
+    required Map<String, Object?> body,
+  }) => _rest.requestObject(
+    'POST',
+    '/guilds/$guildId/scheduled-events',
+    body: body,
+  );
+
+  Future<Map<String, Object?>> editGuildScheduledEvent({
+    required String guildId,
+    required String eventId,
+    required Map<String, Object?> body,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/guilds/$guildId/scheduled-events/$eventId',
+    body: body,
+  );
+
+  Future<void> deleteGuildScheduledEvent({
+    required String guildId,
+    required String eventId,
+  }) => _rest.requestEmpty(
+    'DELETE',
+    '/guilds/$guildId/scheduled-events/$eventId',
+  );
+
+  /// `PUT`/`DELETE /guilds/{id}/scheduled-events/{event}[/{exception}]/users/@me`.
+  ///
+  /// The response value is Discord's own: 1 for interested. Withdrawing sends
+  /// no body at all, which is how one route carries both answers.
+  Future<void> setGuildScheduledEventInterest({
+    required String guildId,
+    required String eventId,
+    required bool interested,
+    String? exceptionId,
+  }) {
+    final occurrence = exceptionId == null || exceptionId.isEmpty
+        ? ''
+        : '/$exceptionId';
+    final path =
+        '/guilds/$guildId/scheduled-events/$eventId$occurrence/users/@me';
+    return interested
+        ? _rest.requestEmpty('PUT', path, body: const {'response': 1})
+        : _rest.requestEmpty('DELETE', path);
+  }
+
+  Future<List<Map<String, Object?>>> getChannelMessages(
+    String channelId, {
+    int limit = 100,
+    String? beforeMessageId,
+    String? aroundMessageId,
+  }) => _rest.getList(
+    '/channels/$channelId/messages',
+    query: {
+      'limit': '${limit.clamp(1, 100)}',
+      'before': ?beforeMessageId,
+      'around': ?aroundMessageId,
+    },
+  );
+
+  Future<List<Map<String, Object?>>> getChannelPins(String channelId) async {
+    final payload = await _rest.requestObject(
+      'GET',
+      '/channels/$channelId/messages/pins',
+      query: const {'limit': '50'},
+    );
+    final items = payload['items'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map>()
+        .map((item) {
+          final message = item['message'];
+          return message is Map
+              ? {...message.cast<String, Object?>(), 'pinned': true}
+              : <String, Object?>{};
+        })
+        .where((message) => message.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  /// Runs one classic message-search request against [path].
+  ///
+  /// Unlike every other route here the caller needs the raw answer rather than
+  /// the decoded body: a search whose corpus Discord has not finished indexing
+  /// comes back `202 Accepted` with a `Retry-After` header, and both the status
+  /// and that header are part of the flow.
+  Future<DiscordApiResponse> searchMessages(
+    String path,
+    Map<String, Object?> query,
+  ) => _rest.requestDetailed('GET', path, query: query);
+
+  Future<Map<String, Object?>> createDirectMessageChannel(String recipientId) =>
+      _rest.requestObject(
+        'POST',
+        '/users/@me/channels',
+        body: {
+          'recipients': [recipientId],
+        },
+      );
+
+  Future<Map<String, Object?>> createThreadFromMessage({
+    required String channelId,
+    required String messageId,
+    required String name,
+    required int autoArchiveDurationMinutes,
+  }) => _rest.requestObject(
+    'POST',
+    '/channels/$channelId/messages/$messageId/threads',
+    body: {'name': name, 'auto_archive_duration': autoArchiveDurationMinutes},
+  );
+
+  /// Moves this account between a stage's audience and its speakers.
+  ///
+  /// `request_to_speak_timestamp` is three-valued on the wire: absent leaves
+  /// the hand as it is, a timestamp raises it, and an explicit null lowers it.
+  /// Collapsing the last two would make cancelling a request indistinguishable
+  /// from not touching it.
+  @override
+  Future<void> patchSelfVoiceState(
+    String guildId, {
+    required String channelId,
+    bool? suppress,
+    String? requestToSpeakTimestamp,
+    bool clearRequestToSpeak = false,
+  }) => _rest.requestEmpty(
+    'PATCH',
+    '/guilds/$guildId/voice-states/@me',
+    body: {
+      'channel_id': channelId,
+      'suppress': ?suppress,
+      if (clearRequestToSpeak)
+        'request_to_speak_timestamp': null
+      else
+        'request_to_speak_timestamp': ?requestToSpeakTimestamp,
+    },
+  );
+
+  /// The channel's command index. `include_applications` is what brings the
+  /// bot's name and avatar back with each command, so the list can show who
+  /// owns one without a second lookup.
+  @override
+  Future<Map<String, Object?>> searchApplicationCommands(
+    String channelId, {
+    required String query,
+    required int type,
+  }) => _rest.requestObject(
+    'GET',
+    '/channels/$channelId/application-commands/search',
+    query: {
+      'type': '$type',
+      'query': query,
+      'limit': '25',
+      'include_applications': 'true',
+    },
+  );
+
+  @override
+  Future<void> postInteraction(Map<String, Object?> body) =>
+      _rest.requestEmpty('POST', '/interactions', body: body);
+
+  /// Discord's own provider proxy. The client never talks to Tenor or Giphy
+  /// directly, and neither does this.
+  @override
+  Future<Map<String, Object?>> getTrendingGifs({
+    required String mediaFormat,
+    required String provider,
+  }) => _rest.requestObject(
+    'GET',
+    '/gifs/trending',
+    query: {'media_format': mediaFormat, 'provider': provider},
+  );
+
+  @override
+  Future<List<Map<String, Object?>>> searchGifs({
+    required String query,
+    required String mediaFormat,
+    required String provider,
+    int limit = 50,
+  }) => _rest.getList(
+    '/gifs/search',
+    query: {
+      'q': query,
+      'media_format': mediaFormat,
+      'provider': provider,
+      'limit': '$limit',
+    },
+  );
+
+  @override
+  Future<List<Object?>> suggestGifs({
+    required String query,
+    int limit = 8,
+  }) async {
+    final payload = await _rest.request(
+      'GET',
+      '/gifs/suggest',
+      query: {'q': query, 'limit': '$limit'},
+    );
+    return payload is List ? payload : const [];
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> listDefaultSounds() =>
+      _rest.getList('/soundboard-default-sounds');
+
+  @override
+  Future<Map<String, Object?>> listGuildSounds(String guildId) =>
+      _rest.requestObject('GET', '/guilds/$guildId/soundboard-sounds');
+
+  /// `source_guild_id` goes out only for a server's own sound; Discord rejects
+  /// it on a default one.
+  @override
+  Future<void> sendSoundboardSound(
+    String channelId, {
+    required String soundId,
+    String? emojiId,
+    String? emojiName,
+    String? sourceGuildId,
+  }) => _rest.requestEmpty(
+    'POST',
+    '/channels/$channelId/send-soundboard-sound',
+    body: {
+      'sound_id': soundId,
+      'emoji_id': emojiId,
+      'emoji_name': emojiName,
+      'source_guild_id': ?sourceGuildId,
+    },
+  );
+
+  @override
+  Future<List<Map<String, Object?>>> listGuildEmojis(String guildId) =>
+      _rest.getList('/guilds/$guildId/emojis');
+
+  @override
+  Future<Map<String, Object?>> createGuildEmoji(
+    String guildId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject('POST', '/guilds/$guildId/emojis', body: body);
+
+  @override
+  Future<void> deleteGuildEmoji(String guildId, String emojiId) =>
+      _rest.requestEmpty('DELETE', '/guilds/$guildId/emojis/$emojiId');
+
+  @override
+  Future<List<Map<String, Object?>>> listGuildStickers(String guildId) =>
+      _rest.getList('/guilds/$guildId/stickers');
+
+  /// A form rather than a JSON body: the file is a part of its own, which is
+  /// the one route among these three that does not take an inline image.
+  @override
+  Future<Map<String, Object?>> createGuildSticker(
+    String guildId,
+    DiscordMultipartBody body,
+  ) async {
+    final payload = await _rest.request(
+      'POST',
+      '/guilds/$guildId/stickers',
+      rawBody: body.bytes,
+      contentType: body.contentType,
+    );
+    if (payload is! Map) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a sticker object',
+      );
+    }
+    return payload.cast<String, Object?>();
+  }
+
+  @override
+  Future<void> deleteGuildSticker(String guildId, String stickerId) =>
+      _rest.requestEmpty('DELETE', '/guilds/$guildId/stickers/$stickerId');
+
+  @override
+  Future<Map<String, Object?>> createSoundboardSound(
+    String guildId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject(
+    'POST',
+    '/guilds/$guildId/soundboard-sounds',
+    body: body,
+  );
+
+  @override
+  Future<void> deleteSoundboardSound(String guildId, String soundId) => _rest
+      .requestEmpty('DELETE', '/guilds/$guildId/soundboard-sounds/$soundId');
+
+  /// The moderator's half of the voice-state route.
+  @override
+  Future<void> patchMemberVoiceState(
+    String guildId, {
+    required String userId,
+    required String channelId,
+    required bool suppress,
+  }) => _rest.requestEmpty(
+    'PATCH',
+    '/guilds/$guildId/voice-states/$userId',
+    body: {'channel_id': channelId, 'suppress': suppress},
+  );
+
+  /// `privacy_level` is sent as guild-only: Discord retired the public value
+  /// and rejects a stage created with it.
+  @override
+  Future<Map<String, Object?>> createStageInstance({
+    required String channelId,
+    required String topic,
+    bool sendStartNotification = false,
+  }) => _rest.requestObject(
+    'POST',
+    '/stage-instances',
+    body: {
+      'channel_id': channelId,
+      'topic': topic,
+      'privacy_level': 2,
+      'send_start_notification': sendStartNotification,
+    },
+  );
+
+  @override
+  Future<Map<String, Object?>> updateStageInstance(
+    String channelId, {
+    required String topic,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/stage-instances/$channelId',
+    body: {'topic': topic},
+  );
+
+  @override
+  Future<void> deleteStageInstance(String channelId) =>
+      _rest.requestEmpty('DELETE', '/stage-instances/$channelId');
+
+  /// `GET /channels/{id}/thread-members`, with the guild member attached so a
+  /// name and avatar can be shown without a second lookup.
+  @override
+  Future<List<Map<String, Object?>>> listThreadMembers(String threadId) =>
+      _rest.getList(
+        '/channels/$threadId/thread-members',
+        query: const {'with_member': 'true', 'limit': '100'},
+      );
+
+  /// The desktop client posts rather than puts here, and so does this.
+  @override
+  Future<void> joinThread(String threadId) =>
+      _rest.requestEmpty('POST', '/channels/$threadId/thread-members/@me');
+
+  @override
+  Future<void> leaveThread(String threadId) =>
+      _rest.requestEmpty('DELETE', '/channels/$threadId/thread-members/@me');
+
+  Future<Map<String, Object?>> createMessage({
+    required String channelId,
+    required String content,
+    required String nonce,
+    List<PendingAttachment> attachments = const [],
+    String? replyToMessageId,
+    bool suppressNotifications = false,
+    bool textToSpeech = false,
+  }) async {
+    final payload = <String, Object?>{
+      'content': content,
+      'nonce': nonce,
+      'tts': textToSpeech,
+      'flags': suppressNotifications ? 4096 : 0,
+      if (replyToMessageId != null)
+        'message_reference': {'message_id': replyToMessageId},
+      if (attachments.isNotEmpty)
+        'attachments': [
+          for (var index = 0; index < attachments.length; index++)
+            {'id': index, 'filename': attachments[index].name},
+        ],
+    };
+    if (attachments.isEmpty) {
+      return _rest.requestObject(
+        'POST',
+        '/channels/$channelId/messages',
+        body: payload,
+      );
+    }
+    final multipart = await DiscordMultipartBody.build(payload, attachments);
+    final response = await _rest.request(
+      'POST',
+      '/channels/$channelId/messages',
+      rawBody: multipart.bytes,
+      contentType: multipart.contentType,
+    );
+    if (response is! Map) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a message object',
+      );
+    }
+    return response.cast<String, Object?>();
+  }
+
+  Future<Map<String, Object?>> editMessage({
+    required String channelId,
+    required String messageId,
+    required String content,
+  }) => _rest.requestObject(
+    'PATCH',
+    '/channels/$channelId/messages/$messageId',
+    body: {'content': content},
+  );
+
+  Future<void> deleteMessage({
+    required String channelId,
+    required String messageId,
+  }) =>
+      _rest.requestEmpty('DELETE', '/channels/$channelId/messages/$messageId');
+
+  /// Acts on one AutoMod alert. Discord reads which message tripped the rule
+  /// from the alert, so the body names the alert rather than the offence.
+  Future<void> resolveAutoModAlert({
+    required String guildId,
+    required String channelId,
+    required String messageId,
+    required int actionType,
+  }) => _rest.requestEmpty(
+    'POST',
+    '/guilds/$guildId/auto-moderation/alert-action',
+    body: {
+      'message_id': messageId,
+      'channel_id': channelId,
+      'alert_action_type': actionType,
+    },
+  );
+
+  Future<void> addReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _rest.requestEmpty(
+    'PUT',
+    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
+  );
+
+  Future<void> removeReaction({
+    required String channelId,
+    required String messageId,
+    required String emoji,
+  }) => _rest.requestEmpty(
+    'DELETE',
+    '/channels/$channelId/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}/@me',
+  );
+
+  Future<void> setPinned({
+    required String channelId,
+    required String messageId,
+    required bool pinned,
+  }) => _rest.requestEmpty(
+    pinned ? 'PUT' : 'DELETE',
+    '/channels/$channelId/messages/pins/$messageId',
+  );
+
+  Future<void> startTyping(String channelId) =>
+      _rest.requestEmpty('POST', '/channels/$channelId/typing');
+
+  /// Pre-flight before ringing a channel (R08: `GET /channels/{id}/call`).
+  ///
+  /// The renderer reads exactly one field off the response, `ringable`, and
+  /// treats a failed request as "not ringable" rather than an error — a DM with
+  /// somebody who is not a friend answers with a rejection, and the desktop
+  /// client turns that into an "add as a friend" prompt.
+  @override
+  Future<bool> isChannelRingable(String channelId) async {
+    final payload = await _rest.requestObject(
+      'GET',
+      '/channels/$channelId/call',
+    );
+    return payload['ringable'] == true;
+  }
+
+  /// Rings [recipients], or everybody in the channel when it is null.
+  ///
+  /// R08 shows `recipients` sent explicitly as null for the ring-everybody
+  /// case, unlike `stop-ringing` where the key is dropped.
+  @override
+  Future<void> ringChannel(
+    String channelId, {
+    List<String>? recipients,
+    required String analyticsLocation,
+  }) => _rest.request(
+    'POST',
+    '/channels/$channelId/call/ring',
+    body: {'recipients': recipients, 'analytics_location': analyticsLocation},
+  );
+
+  /// Stops a ring. With no [recipients] this is the local user's decline, and
+  /// the key is omitted entirely rather than sent as null.
+  @override
+  Future<void> stopRingingChannel(
+    String channelId, {
+    List<String>? recipients,
+  }) => _rest.request(
+    'POST',
+    '/channels/$channelId/call/stop-ringing',
+    body: {'recipients': ?recipients},
+  );
+
+  /// Reads one settings blob. A missing `settings` string is an account that
+  /// has never stored anything for this type, not a transport failure.
+  @override
+  Future<Map<String, Object?>> readCurrentUser() =>
+      _rest.getObject('/users/@me');
+
+  @override
+  Future<Map<String, Object?>?> patchCurrentUser(
+    Map<String, Object?> body,
+  ) async {
+    try {
+      return await _rest.requestObject('PATCH', '/users/@me', body: body);
+    } on DiscordApiException catch (error) {
+      // A wrong password, or a username already taken. Both are answers about
+      // the request rather than a fault in the client.
+      if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /users/{id}/profile`, with the mutuals the popover wants.
+  ///
+  /// The route refuses somebody this account has no relationship with, and a
+  /// blocked profile comes back half redacted; both are answers, so a 403 or
+  /// 404 reads as null rather than as an outage.
+  @override
+  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+    try {
+      return await _rest.requestObject(
+        'GET',
+        '/users/${Uri.encodeComponent(userId)}/profile',
+        query: const {
+          'with_mutual_guilds': 'true',
+          'with_mutual_friends': 'true',
+        },
+      );
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 403 || error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /users/@me/notes`, every note the account holds.
+  ///
+  /// A request that fails to return a map is an account with no notes rather
+  /// than an error: the route answers an empty body, not an empty object,
+  /// for an account that never wrote one.
+  @override
+  Future<Map<String, Object?>> readNotes() async {
+    final payload = await _rest.request('GET', '/users/@me/notes');
+    return payload is Map
+        ? payload.cast<String, Object?>()
+        : const <String, Object?>{};
+  }
+
+  /// `PUT /users/@me/notes/{id}`. A null note key clears the note, which is
+  /// the shape Discord's own client sends.
+  @override
+  Future<Object?> writeNote({
+    required String userId,
+    required Map<String, Object?> body,
+  }) async {
+    try {
+      return await _rest.request(
+        'PUT',
+        '/users/@me/notes/${Uri.encodeComponent(userId)}',
+        body: body,
+      );
+    } on DiscordApiException catch (error) {
+      // A note too long, or an account already holding the maximum number
+      // of them. Both are answers about the request, not a fault in the client.
+      if (error.statusCode == 400 || error.statusCode == 403) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String?> readSettingsProto(int type) async {
+    final payload = await _rest.getObject(
+      '/users/@me/settings-proto/${_settingsType(type)}',
+    );
+    final settings = payload['settings'];
+    return settings is String ? settings : null;
+  }
+
+  @override
+  Future<DiscordSettingsWriteResult> writeSettingsProto({
+    required int type,
+    required String settings,
+    int? requiredDataVersion,
+  }) async {
+    final payload = await _rest.requestObject(
+      'PATCH',
+      '/users/@me/settings-proto/${_settingsType(type)}',
+      body: {
+        'settings': settings,
+        // What makes the server able to refuse a write composed against a
+        // blob that has since changed. Without it a stale edit is accepted
+        // and silently undoes whatever the other device did.
+        'required_data_version': ?requiredDataVersion,
+      },
+    );
+    final merged = payload['settings'];
+    return DiscordSettingsWriteResult(
+      settings: merged is String ? merged : null,
+      outOfDate: payload['out_of_date'] == true,
+    );
+  }
+
+  static int _settingsType(int type) {
+    if (type < 1 || type > 3) {
+      throw ArgumentError.value(type, 'type', 'Unknown settings proto type');
+    }
+    return type;
+  }
+
+  /// Sends a request the read-state protocol built.
+  ///
+  /// The read-state routes go through [DiscordDesktopRestRequest] rather than
+  /// being spelled out here, because two of them encode the read-state type
+  /// into the path in an order that is easy to invert; keeping the rendering in
+  /// the protocol description is what lets a test pin the exact path.
+  @override
+  Future<Map<String, Object?>?> sendReadStateRequest(
+    DiscordDesktopRestRequest request,
+  ) async {
+    final payload = await _rest.request(
+      request.method,
+      request.path,
+      query: request.query.isEmpty ? null : request.query,
+      body: request.body,
+    );
+    return payload is Map ? payload.cast<String, Object?>() : null;
+  }
+
+  Future<String> getGatewayUrl() async {
+    final payload = await _rest.getObject('/gateway');
+    final url = payload['url'];
+    if (url is! String || url.isEmpty) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Gateway URL missing from response',
+      );
+    }
+    return url;
+  }
+
+  void close() => _rest.close();
+}

@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+# Three jobs where there was one: the checks are CI's own (audit, analyze,
+# four test shards), the build runs beside them rather than after them, and
+# only publishing waits for both. Measured against the single job: about
+# nine minutes instead of seventeen.
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+    with:
+      build: false
+    permissions:
+      contents: read
+
+  build:
+    name: Build and package Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate tag and project version
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -notmatch '^v(?<version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$') {
+            throw "Release tag must use exact vMAJOR.MINOR.PATCH syntax: $tag"
+          }
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)(?:\+\d+)?\s*$'
+          if ($versionLine.Matches.Count -ne 1) {
+            throw 'pubspec.yaml must contain exactly one semantic version.'
+          }
+          $projectVersion = $versionLine.Matches[0].Groups[1].Value
+          if ($projectVersion -ne $Matches.version) {
+            throw "Tag $tag does not match pubspec version $projectVersion."
+          }
+          $tagType = git cat-file -t $tag
+          if ($tagType -notin @('tag', 'commit')) {
+            throw "Tag $tag does not resolve to a Git tag or commit."
+          }
+
+      - name: Set up Flutter
+        uses: ./.github/actions/setup-flutter
+        with:
+          precache-windows: "true"
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      # Inno Setup ships on the hosted Windows images; the script wraps the
+      # complete runtime directory the step above produced.
+      - name: Build Windows installer
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup compiler not found at $iscc."
+          }
+          $installerName = "flucord-windows-x64-setup-$tag"
+          & $iscc "/DAppVersion=$($tag.TrimStart('v'))" "/DOutputName=$installerName" 'windows/installer/flucord.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "ISCC failed with exit code $LASTEXITCODE."
+          }
+          $installerPath = Join-Path $PWD "build/distribution/$installerName.exe"
+          if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+            throw "Installer was not produced at $installerPath."
+          }
+
+      - name: Package release and checksums
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $releaseDirectory = Resolve-Path 'build/windows/x64/runner/Release'
+          $distributionDirectory = Join-Path $PWD 'build/distribution'
+          $packageDirectory = Join-Path $distributionDirectory "flucord-windows-x64-$tag"
+          New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+          Copy-Item -Path (Join-Path $releaseDirectory '*') -Destination $packageDirectory -Recurse -Force
+          Copy-Item -LiteralPath 'LICENSE', 'NOTICE' -Destination $packageDirectory -Force
+
+          $requiredFiles = @(
+            'flucord.exe',
+            'flutter_windows.dll',
+            'data/flutter_assets/AssetManifest.bin',
+            'LICENSE',
+            'NOTICE'
+          )
+          foreach ($requiredFile in $requiredFiles) {
+            $requiredPath = Join-Path $packageDirectory $requiredFile
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+              throw "Release package is missing required file: $requiredFile"
+            }
+          }
+
+          $archivePath = Join-Path $distributionDirectory "flucord-windows-x64-$tag.zip"
+          Compress-Archive -Path (Join-Path $packageDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+          $installerPath = Join-Path $distributionDirectory "flucord-windows-x64-setup-$tag.exe"
+          $checksums = ''
+          foreach ($asset in @($installerPath, $archivePath)) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash.ToLowerInvariant()
+            $checksums += "$hash  $(Split-Path -Leaf $asset)`n"
+          }
+          [System.IO.File]::WriteAllText(
+            (Join-Path $distributionDirectory 'SHA256SUMS.txt'),
+            $checksums,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+      # Only the three assets: the unpacked package directory is the ZIP's
+      # content twice over.
+      - name: Keep the release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            build/distribution/flucord-windows-x64-setup-${{ github.ref_name }}.exe
+            build/distribution/flucord-windows-x64-${{ github.ref_name }}.zip
+            build/distribution/SHA256SUMS.txt
+
+  publish:
+    name: Publish GitHub release
+    needs: [checks, build]
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      # The notes read the tag's history, so this job checks out all of it.
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: build/distribution
+
+      - name: Generate detailed release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./.github/scripts/build-release-notes.ps1 `
+            -Tag '${{ github.ref_name }}' `
+            -OutputPath 'build/distribution/RELEASE_NOTES.md'
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $installer = "build/distribution/flucord-windows-x64-setup-$tag.exe"
+          $archive = "build/distribution/flucord-windows-x64-$tag.zip"
+          $checksums = 'build/distribution/SHA256SUMS.txt'
+          $notes = 'build/distribution/RELEASE_NOTES.md'
+          foreach ($asset in @($installer, $archive, $checksums)) {
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Release asset is missing: $asset"
+            }
+          }
+          gh release view $tag --json id *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            gh release edit $tag `
+              --verify-tag `
+              --latest `
+              --title "Flucord $tag" `
+              --notes-file $notes
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update release $tag."
+            }
+            gh release upload $tag $installer $archive $checksums --clobber
+          } else {
+            gh release create $tag $installer $archive $checksums `
+              --verify-tag `
+              --latest `
+              --title "Flucord $tag" `
+              --notes-file $notes
+          }

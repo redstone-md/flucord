@@ -1,0 +1,254 @@
+part of 'chat_models.dart';
+
+const _keepUnreadBoundary = Object();
+const _keepLastMessageId = Object();
+const _keepMessageRequestTimestamp = Object();
+const _keepRtcRegion = Object();
+
+final class ConversationChannel {
+  const ConversationChannel({
+    required this.id,
+    required this.spaceId,
+    required this.name,
+    required this.topic,
+    required this.kind,
+    this.position = 0,
+    this.parentId,
+    this.isThread = false,
+    this.isStage = false,
+    this.isArchived = false,
+    this.isLocked = false,
+    this.archiveTimestamp,
+    this.autoArchiveDurationMinutes,
+    this.availableTags = const [],
+    this.appliedTagIds = const [],
+    this.defaultAutoArchiveDurationMinutes,
+    this.defaultSortOrder,
+    this.defaultForumLayout,
+    this.recipientId,
+    this.isMessageRequest = false,
+    this.messageRequestedAt,
+    this.unread = false,
+    this.mentionCount = 0,
+    this.firstUnreadMessageId,
+    this.lastMessageId,
+    this.permissionOverwrites = const {},
+    this.rateLimitPerUser = 0,
+    this.isAgeGated = false,
+    this.bitrate,
+    this.userLimit,
+    this.rtcRegion,
+  });
+
+  final String id;
+  final String spaceId;
+  final String name;
+  final String topic;
+  final ChannelKind kind;
+  final int position;
+  final String? parentId;
+  final bool isThread;
+
+  /// A stage channel: a voice channel where only speakers may talk and
+  /// everyone else has to ask. Discord types it separately (13), and the
+  /// distinction changes what the room offers, so it is carried rather than
+  /// flattened into [ChannelKind.voice].
+  final bool isStage;
+  final bool isArchived;
+  final bool isLocked;
+  final DateTime? archiveTimestamp;
+  final int? autoArchiveDurationMinutes;
+  final List<ForumTag> availableTags;
+  final List<String> appliedTagIds;
+  final int? defaultAutoArchiveDurationMinutes;
+  final ForumSortOrder? defaultSortOrder;
+  final ForumLayout? defaultForumLayout;
+  final String? recipientId;
+
+  /// A direct message the account has not answered yet, so it belongs in the
+  /// message-request folder rather than the DM list.
+  ///
+  /// Discord flags the channel itself (`is_message_request`), which is why the
+  /// flag rides on the channel and not on the read state: accepting or
+  /// declining is a decision about the conversation, and the folder question
+  /// has to survive a workspace that arrives without any read state at all.
+  final bool isMessageRequest;
+
+  /// When the request landed, for the folder's ordering.
+  final DateTime? messageRequestedAt;
+  final bool unread;
+  final int mentionCount;
+  final String? firstUnreadMessageId;
+
+  /// The newest message Discord says this channel holds.
+  ///
+  /// Unread is a comparison, not a flag: a channel is unread when this id is
+  /// newer than the read state's ack cursor. Keeping the pointer on the channel
+  /// is what lets that comparison survive a restart, because the client can
+  /// answer it without having loaded a single message.
+  final String? lastMessageId;
+
+  /// The channel's permission overwrites, keyed by role or member id.
+  ///
+  /// A thread carries none that matter: Discord resolves a thread's
+  /// permissions from its parent and never reads the thread's own map.
+  final Map<String, DiscordPermissionOverwrite> permissionOverwrites;
+
+  /// Slowmode, in seconds. Zero is off; the editor clamps to Discord's six
+  /// hour ceiling before anything reaches this field.
+  final int rateLimitPerUser;
+
+  /// The age gate Discord names `nsfw`: the channel is hidden from members
+  /// who have not agreed to age-restricted content.
+  final bool isAgeGated;
+
+  /// The room's bitrate in bits per second, on a voice channel.
+  final int? bitrate;
+
+  /// The room's member cap. Zero means unlimited, Discord's own encoding.
+  final int? userLimit;
+
+  /// The room's voice region override, or null for automatic. Discord's own
+  /// editor offers a fixed list plus Auto; the id is whatever it accepts.
+  final String? rtcRegion;
+
+  bool get isDirectMessage => recipientId != null;
+
+  /// The guild this channel belongs to, or null outside a server.
+  ///
+  /// Not simply [spaceId]: a private channel sits in the pseudo-space `@me`,
+  /// which names a server no account is in. Anything Discord addresses by
+  /// guild and channel, a stream key among them, needs the null.
+  String? get guildId =>
+      spaceId.isEmpty || spaceId == CommunitySpace.directMessagesId
+      ? null
+      : spaceId;
+
+  /// How a stream by [userId] in this channel's room is addressed.
+  ///
+  /// The key is the only thing that says call or guild; everything downstream,
+  /// watching and pausing and ending, carries the key rather than the channel.
+  GoLiveStreamKey streamKeyFor(String userId) {
+    final guildId = this.guildId;
+    return guildId == null
+        ? GoLiveStreamKey.call(channelId: id, userId: userId)
+        : GoLiveStreamKey.guild(
+            guildId: guildId,
+            channelId: id,
+            userId: userId,
+          );
+  }
+
+  /// The channel whose thread browser this channel is browsed under: a thread
+  /// under its parent, every other channel under itself.
+  String? get threadParentId => isThread ? parentId : id;
+
+  /// A voice channel carries an ordinary message timeline on the same channel
+  /// id as the room, so every message-shaped feature has to treat it like a
+  /// text channel. Forum and media channels look similar but are threads-only
+  /// containers: their messages live in posts, never on the parent id, so they
+  /// deliberately stay out.
+  bool get hasMessageTimeline =>
+      kind == ChannelKind.text || kind == ChannelKind.voice;
+
+  bool get canAcceptMessageForward =>
+      hasMessageTimeline && !(isThread && isArchived && isLocked);
+
+  ConversationChannel markUnread({
+    required String messageId,
+    required bool mention,
+  }) => copyWith(
+    unread: true,
+    mentionCount: mention ? mentionCount + 1 : mentionCount,
+    firstUnreadMessageId: firstUnreadMessageId ?? messageId,
+  );
+
+  ConversationChannel markRead() => copyWith(unread: false, mentionCount: 0);
+
+  ConversationChannel clearUnreadBoundary() =>
+      copyWith(firstUnreadMessageId: null);
+
+  ConversationChannel withActivityOf(ConversationChannel previous) => copyWith(
+    unread: previous.unread,
+    mentionCount: previous.mentionCount,
+    firstUnreadMessageId: previous.firstUnreadMessageId,
+    // A `CHANNEL_UPDATE` carries the whole channel but not always its
+    // `last_message_id`; dropping the remembered one would make every unread
+    // channel look read until the next message arrived.
+    lastMessageId: lastMessageId ?? previous.lastMessageId,
+  );
+
+  /// Records that [messageId] is the newest message here, never rewinding.
+  ConversationChannel withLatestMessage(String messageId) =>
+      lastMessageId != null &&
+          DiscordSnowflake.compare(messageId, lastMessageId!) <= 0
+      ? this
+      : copyWith(lastMessageId: messageId);
+
+  ConversationChannel copyWith({
+    bool? unread,
+    int? mentionCount,
+    bool? isArchived,
+    bool? isLocked,
+    bool? isMessageRequest,
+    DateTime? archiveTimestamp,
+    int? autoArchiveDurationMinutes,
+    List<ForumTag>? availableTags,
+    List<String>? appliedTagIds,
+    int? defaultAutoArchiveDurationMinutes,
+    ForumSortOrder? defaultSortOrder,
+    ForumLayout? defaultForumLayout,
+    Object? firstUnreadMessageId = _keepUnreadBoundary,
+    Object? lastMessageId = _keepLastMessageId,
+    Object? messageRequestedAt = _keepMessageRequestTimestamp,
+    int? rateLimitPerUser,
+    bool? isAgeGated,
+    int? bitrate,
+    int? userLimit,
+    Object? rtcRegion = _keepRtcRegion,
+  }) => ConversationChannel(
+    id: id,
+    spaceId: spaceId,
+    name: name,
+    topic: topic,
+    kind: kind,
+    position: position,
+    parentId: parentId,
+    isThread: isThread,
+    isStage: isStage,
+    isArchived: isArchived ?? this.isArchived,
+    isLocked: isLocked ?? this.isLocked,
+    archiveTimestamp: archiveTimestamp ?? this.archiveTimestamp,
+    autoArchiveDurationMinutes:
+        autoArchiveDurationMinutes ?? this.autoArchiveDurationMinutes,
+    availableTags: availableTags ?? this.availableTags,
+    appliedTagIds: appliedTagIds ?? this.appliedTagIds,
+    defaultAutoArchiveDurationMinutes:
+        defaultAutoArchiveDurationMinutes ??
+        this.defaultAutoArchiveDurationMinutes,
+    defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
+    defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
+    recipientId: recipientId,
+    isMessageRequest: isMessageRequest ?? this.isMessageRequest,
+    messageRequestedAt:
+        identical(messageRequestedAt, _keepMessageRequestTimestamp)
+        ? this.messageRequestedAt
+        : messageRequestedAt as DateTime?,
+    permissionOverwrites: permissionOverwrites,
+    unread: unread ?? this.unread,
+    mentionCount: mentionCount ?? this.mentionCount,
+    rateLimitPerUser: rateLimitPerUser ?? this.rateLimitPerUser,
+    isAgeGated: isAgeGated ?? this.isAgeGated,
+    bitrate: bitrate ?? this.bitrate,
+    userLimit: userLimit ?? this.userLimit,
+    rtcRegion: identical(rtcRegion, _keepRtcRegion)
+        ? this.rtcRegion
+        : rtcRegion as String?,
+    firstUnreadMessageId: identical(firstUnreadMessageId, _keepUnreadBoundary)
+        ? this.firstUnreadMessageId
+        : firstUnreadMessageId as String?,
+    lastMessageId: identical(lastMessageId, _keepLastMessageId)
+        ? this.lastMessageId
+        : lastMessageId as String?,
+  );
+}

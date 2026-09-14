@@ -1,0 +1,42 @@
+[
+  {
+    "name": "guard-rle-literals-wide",
+    "note": "RLE literals with a three byte header and no sequences",
+    "rawBytes": 5000,
+    "compressedBytes": 14,
+    "rawSha256": "3cad4dac0871e656000d39774c13a988c46fc120f5edca8091f43b74eb38b2ba",
+    "hasRawFile": false
+  },
+  {
+    "name": "guard-long-sequence-count",
+    "note": "32512 sequences, the smallest count using the long spelling",
+    "rawBytes": 97544,
+    "compressedBytes": 29,
+    "rawSha256": "052f17d06bb977667e73b18148a9982bc1883bf75c80364a296565e68ef82960",
+    "hasRawFile": false
+  },
+  {
+    "name": "guard-repeat-offset-step",
+    "note": "offset code 3 with no literals means one byte closer than the last match",
+    "rawBytes": 14,
+    "compressedBytes": 27,
+    "rawSha256": "beb31e9d105ef579a83c2c3f8ade43fa524f61f68d00fb28e44996ca66dd3d5d",
+    "hasRawFile": true
+  },
+  {
+    "name": "guard-huffman-direct-weights",
+    "note": "direct Huffman weights behind a five byte literals header",
+    "rawBytes": 17000,
+    "compressedBytes": 8534,
+    "rawSha256": "299c4a22332310a18c8469b30f1672347fdcb06c554f23d66f385b549b5cc199",
+    "hasRawFile": false
+  },
+  {
+    "name": "guard-checksum-tail",
+    "note": "checksum over blocks that are not multiples of 32 bytes",
+    "rawBytes": 141,
+    "compressedBytes": 32,
+    "rawSha256": "24fb543d479a26a2f61418fb5f8667b54f3463b17380f7af4ffeca9d59a783e0",
+    "hasRawFile": true
+  }
+]

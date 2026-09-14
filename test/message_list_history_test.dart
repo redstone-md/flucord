@@ -1,0 +1,287 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/external_link_launcher.dart';
+import 'package:flucord/src/domain/reaction_repository.dart';
+import 'package:flucord/src/presentation/widgets/message_list.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
+
+void main() {
+  testWidgets('shows load, progress, and retry history boundaries', (
+    tester,
+  ) async {
+    final messages = List.generate(4, (index) => _message(index + 10));
+    var requests = 0;
+
+    await tester.pumpWidget(_host(messages, onLoadOlder: () => requests++));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('load-older-messages')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('load-older-messages')));
+    expect(requests, 1);
+
+    await tester.pumpWidget(
+      _host(messages, isLoadingOlder: true, onLoadOlder: () => requests++),
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.pumpWidget(
+      _host(
+        messages,
+        olderLoadError: StateError('offline'),
+        onLoadOlder: () => requests++,
+      ),
+    );
+    expect(find.text('Older messages unavailable'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('retry-older-messages')));
+    expect(requests, 2);
+  });
+
+  testWidgets('preserves the visible message when history is prepended', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final current = List.generate(30, (index) => _message(index + 10));
+
+    await tester.pumpWidget(_host(current));
+    await tester.pump();
+    await tester.pump();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
+    await tester.pumpAndSettle();
+    final anchor = find.byKey(const ValueKey('message-m020'));
+    expect(anchor, findsOneWidget);
+    final before = tester.getTopLeft(anchor).dy;
+
+    await tester.pumpWidget(
+      _host([...List.generate(10, _message), ...current]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message-m020')), findsOneWidget);
+    final after = tester.getTopLeft(anchor).dy;
+    expect(after, closeTo(before, 1));
+  });
+
+  testWidgets('positions the timeline at the first unread message', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final messages = List.generate(50, _message);
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm025');
+
+    await tester.pumpWidget(_host(messages, channel: channel));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('unread-message-boundary')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('New messages'), findsOneWidget);
+    final unreadMessage = find.byKey(const ValueKey('message-m025'));
+    expect(unreadMessage, findsOneWidget);
+    expect(tester.getTopLeft(unreadMessage).dy, inInclusiveRange(60, 250));
+    expect(find.byKey(const ValueKey('jump-to-unread')), findsNothing);
+    semantics.dispose();
+  });
+
+  testWidgets('hides the unread boundary while filtering messages', (
+    tester,
+  ) async {
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm010');
+    await tester.pumpWidget(
+      _host(List.generate(20, _message), channel: channel, query: 'Message 15'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('unread-message-boundary')), findsNothing);
+    expect(find.textContaining('Message 15'), findsOneWidget);
+  });
+
+  testWidgets('opens at the newest message when nothing is unread', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_host(List.generate(60, _unevenMessage)));
+    await tester.pumpAndSettle();
+
+    final newest = find.byKey(const ValueKey('message-m059'));
+    expect(newest, findsOneWidget);
+    expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+  });
+
+  testWidgets('opens on the unread message among unevenly tall ones', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm040');
+
+    await tester.pumpWidget(
+      _host(List.generate(60, _unevenMessage), channel: channel),
+    );
+    await tester.pumpAndSettle();
+
+    final unread = find.byKey(const ValueKey('message-m040'));
+    expect(unread, findsOneWidget);
+    expect(tester.getTopLeft(unread).dy, inInclusiveRange(0, 400));
+  });
+
+  testWidgets('offers the way back to the newest message and takes it', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final channel = _channel.copyWith(firstUnreadMessageId: 'm020');
+
+    await tester.pumpWidget(
+      _host(List.generate(60, _unevenMessage), channel: channel),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-m059')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+    await tester.pumpAndSettle();
+
+    final newest = find.byKey(const ValueKey('message-m059'));
+    expect(newest, findsOneWidget);
+    expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+    expect(find.byKey(const ValueKey('jump-to-present')), findsNothing);
+  });
+
+  testWidgets('a channel already at its newest offers no way back', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_host(List.generate(60, _unevenMessage)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('jump-to-present')), findsNothing);
+  });
+
+  testWidgets('positions the timeline at an explicit inbox message', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _host(List.generate(50, _message), targetMessageId: 'm012'),
+    );
+    await tester.pumpAndSettle();
+
+    final target = find.byKey(const ValueKey('message-m012'));
+    expect(target, findsOneWidget);
+    expect(tester.getTopLeft(target).dy, inInclusiveRange(60, 250));
+  });
+}
+
+Widget _host(
+  List<ChatMessage> messages, {
+  bool isLoadingOlder = false,
+  Object? olderLoadError,
+  VoidCallback? onLoadOlder,
+  ConversationChannel channel = _channel,
+  String query = '',
+  String? targetMessageId,
+}) {
+  return MaterialApp(
+    theme: FlucordTheme.dark,
+    home: Scaffold(
+      body: SizedBox(
+        width: 700,
+        height: 500,
+        child: MessageList(
+          workspace: ChatWorkspace(
+            spaces: const [_space],
+            channels: [channel],
+            members: const [_member],
+            messages: messages,
+            currentMemberId: 'bot-1',
+          ),
+          channel: channel,
+          query: query,
+          targetMessageId: targetMessageId,
+          onReply: (_) {},
+          onEdit: (_, _) async => true,
+          onDelete: (_) async {},
+          onToggleReaction: (_, _) async {},
+          onLoadReactionUsers: (_, _, _, _) async =>
+              const ReactionUsersPage(users: [], hasMore: false),
+          onAddReaction: (_, _) async {},
+          onCreateThread: (_, _, _) async => true,
+          onTogglePin: (_) async {},
+          onEndPoll: (_) async => true,
+          onForward: (_, _) async => true,
+          onToggleSuppressEmbeds: (_) async => true,
+          canLoadOlder: true,
+          isLoadingOlder: isLoadingOlder,
+          olderLoadError: olderLoadError,
+          onLoadOlder: onLoadOlder ?? () {},
+          externalLinkLauncher: const _TestLinkLauncher(),
+          onSelectChannel: (_) {},
+        ),
+      ),
+    ),
+  );
+}
+
+ChatMessage _message(int index) => ChatMessage(
+  id: 'm${index.toString().padLeft(3, '0')}',
+  channelId: 'channel-1',
+  authorId: 'bot-1',
+  body: 'Message $index with enough content to keep row height stable.',
+  sentAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+);
+
+/// Messages whose heights differ by an order of magnitude, which is what a
+/// real channel looks like and what a position estimate cannot survive.
+ChatMessage _unevenMessage(int index) => ChatMessage(
+  id: 'm${index.toString().padLeft(3, '0')}',
+  channelId: 'channel-1',
+  authorId: 'bot-1',
+  body: index.isEven
+      ? 'ok'
+      : List.filled(
+          index % 7 + 1,
+          'A long paragraph of content that wraps across several lines.',
+        ).join(String.fromCharCode(10)),
+  sentAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+);
+
+const _space = CommunitySpace(
+  id: 'space-1',
+  name: 'Forge',
+  monogram: 'FO',
+  colorValue: 0xff456b5a,
+);
+
+const _channel = ConversationChannel(
+  id: 'channel-1',
+  spaceId: 'space-1',
+  name: 'general',
+  topic: 'History',
+  kind: ChannelKind.text,
+);
+
+const _member = Member(
+  id: 'bot-1',
+  displayName: 'Flucord',
+  initials: 'FL',
+  role: 'Bot',
+  presence: Presence.online,
+  colorValue: 0xff456b5a,
+);
+
+final class _TestLinkLauncher implements ExternalLinkLauncher {
+  const _TestLinkLauncher();
+
+  @override
+  Future<bool> open(Uri uri) async => true;
+}

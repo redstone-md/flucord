@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Flucord
+Comment=Native Flutter Discord client
+Exec=flucord %u
+Terminal=false
+Categories=Network;Chat;
+MimeType=x-scheme-handler/flucord;
+StartupWMClass=dev.flucord.app

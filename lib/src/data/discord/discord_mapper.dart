@@ -1,0 +1,474 @@
+import 'dart:convert';
+import '../../domain/message_component.dart';
+import 'discord_message_component_service.dart';
+
+import '../../domain/chat_models.dart';
+import '../../domain/discord_permissions.dart';
+import '../../domain/discord_snowflake.dart';
+import '../../domain/guild_membership.dart';
+import '../../domain/message_search.dart';
+import '../../domain/permission_overwrite.dart';
+import '../message_attachment_codec.dart';
+import '../message_embed_codec.dart';
+import 'discord_cdn.dart';
+import 'discord_color.dart';
+import 'discord_mention_matcher.dart';
+
+part 'discord_poll_mapper.dart';
+part 'discord_message_mapper.dart';
+part 'discord_message_search_mapper.dart';
+part 'discord_message_snapshot_mapper.dart';
+part 'discord_sticker_mapper.dart';
+part 'discord_scheduled_event_mapper.dart';
+part 'discord_channel_mapper.dart';
+
+final class DiscordMappedDirectMessage {
+  const DiscordMappedDirectMessage({
+    required this.channel,
+    required this.recipient,
+  });
+
+  final ConversationChannel channel;
+  final Member recipient;
+}
+
+final class DiscordMapper {
+  static const directMessagesSpaceId = CommunitySpace.directMessagesId;
+  static const _colors = [
+    0xff456b5a,
+    0xff765341,
+    0xff5f5b76,
+    0xff59636a,
+    0xff486b70,
+    0xff6f5967,
+  ];
+
+  ChatWorkspace workspace({
+    required Map<String, Object?> currentUser,
+    required List<Map<String, Object?>> guilds,
+    required Map<String, List<Map<String, Object?>>> channelsByGuild,
+    Map<String, List<Map<String, Object?>>> threadsByGuild = const {},
+    Map<String, List<Map<String, Object?>>> membersByGuild = const {},
+    Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
+    Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
+    Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
+    List<Map<String, Object?>> directChannels = const [],
+    bool includeDirectMessagesSpace = false,
+    String currentUserRole = 'Discord bot',
+  }) {
+    final spaces = <CommunitySpace>[];
+    final channels = <ConversationChannel>[];
+    final categories = <ChannelCategory>[];
+    final roles = <CommunityRole>[];
+    final emojis = <GuildEmoji>[];
+    final stickers = <GuildSticker>[];
+    final members = <String, Member>{};
+    if (includeDirectMessagesSpace || directChannels.isNotEmpty) {
+      spaces.add(directMessagesSpace);
+    }
+    for (final payload in directChannels) {
+      final mapped = directMessage(payload, currentUser['id']! as String);
+      if (mapped == null) continue;
+      channels.add(mapped.channel);
+      members[mapped.recipient.id] = mapped.recipient;
+    }
+    for (final guild in guilds) {
+      final guildId = guild['id']! as String;
+      final rawChannels = [
+        ...(channelsByGuild[guildId] ?? const []),
+        ...(threadsByGuild[guildId] ?? const []),
+      ];
+      final mappedChannels = rawChannels
+          .map((channel) => this.channel(channel, guildId))
+          .whereType<ConversationChannel>()
+          .toList();
+      if (mappedChannels.isEmpty) continue;
+      spaces.add(_space(guild));
+      channels.addAll(mappedChannels);
+      categories.addAll(
+        rawChannels
+            .map((channel) => category(channel, guildId))
+            .whereType<ChannelCategory>(),
+      );
+      roles.addAll(
+        (rolesByGuild[guildId] ?? const []).map(
+          (payload) => role(payload, guildId),
+        ),
+      );
+      emojis.addAll(
+        (emojisByGuild[guildId] ?? const []).map(
+          (payload) => emoji(payload, guildId),
+        ),
+      );
+      stickers.addAll(
+        (stickersByGuild[guildId] ?? const []).map(
+          (payload) => guildSticker(payload, guildId),
+        ),
+      );
+      for (final payload in membersByGuild[guildId] ?? const []) {
+        final mapped = guildMember(
+          payload,
+          guildId,
+          rolesByGuild[guildId] ?? const [],
+        );
+        members[mapped.id] = _mergeMembers(members[mapped.id], mapped);
+      }
+    }
+    final currentMember = member(
+      currentUser,
+      role: currentUserRole,
+      presence: Presence.online,
+      spaceIds: spaces.map((space) => space.id).toSet(),
+    );
+    members[currentMember.id] = _mergeMembers(
+      members[currentMember.id],
+      currentMember,
+    );
+    return ChatWorkspace(
+      spaces: spaces,
+      channels: channels,
+      roles: roles,
+      categories: categories,
+      members: members.values.toList(),
+      messages: const [],
+      emojis: emojis,
+      stickers: stickers,
+      currentMemberId: currentMember.id,
+    );
+  }
+
+  CommunitySpace get directMessagesSpace =>
+      const CommunitySpace.directMessages();
+
+  GuildEmoji emoji(Map<String, Object?> payload, String guildId) {
+    final id = payload['id']! as String;
+    final animated = payload['animated'] as bool? ?? false;
+    return GuildEmoji(
+      id: id,
+      spaceId: guildId,
+      name: payload['name']! as String,
+      animated: animated,
+      available: payload['available'] as bool? ?? true,
+      imageUrl: DiscordCdn.customEmoji(id, animated: animated, size: 64),
+    );
+  }
+
+  DiscordMappedDirectMessage? directMessage(
+    Map<String, Object?> payload,
+    String currentUserId,
+  ) {
+    if (payload['type'] != 1) return null;
+    final recipients = (payload['recipients'] as List? ?? const [])
+        .whereType<Map>()
+        .map((recipient) => recipient.cast<String, Object?>())
+        .where((recipient) => recipient['id'] != currentUserId)
+        .toList(growable: false);
+    if (recipients.isEmpty) return null;
+    final recipient = member(
+      recipients.first,
+      role: 'Direct message',
+      spaceIds: const {directMessagesSpaceId},
+    );
+    return DiscordMappedDirectMessage(
+      recipient: recipient,
+      channel: ConversationChannel(
+        id: payload['id']! as String,
+        spaceId: directMessagesSpaceId,
+        name: recipient.displayName,
+        topic: 'Direct message with ${recipient.displayName}',
+        kind: ChannelKind.text,
+        recipientId: recipient.id,
+        isMessageRequest: payload['is_message_request'] as bool? ?? false,
+        messageRequestedAt: _messageRequestTimestamp(
+          payload['is_message_request_timestamp'],
+        ),
+        lastMessageId: _lastMessageId(payload),
+      ),
+    );
+  }
+
+  /// The request's own timestamp, promoted out of its ISO string. Discord
+  /// sorts unanswered requests on it, and the folder does the same; a value
+  /// that will not parse is dropped rather than guessed at.
+  static DateTime? _messageRequestTimestamp(Object? value) =>
+      value is String ? DateTime.tryParse(value) : null;
+
+  ChannelHistory history(
+    String channelId,
+    List<Map<String, Object?>> payloads, {
+    String? currentMemberId,
+  }) {
+    final members = <String, Member>{};
+    final messages = <ChatMessage>[];
+    for (final payload in payloads.reversed) {
+      final authorPayload = (payload['author']! as Map).cast<String, Object?>();
+      final author = member(authorPayload);
+      members[author.id] = author;
+      messages.add(message(payload, currentMemberId: currentMemberId));
+    }
+    return ChannelHistory(
+      channelId: channelId,
+      messages: messages,
+      members: members.values.toList(),
+    );
+  }
+
+  MessageAttachment _attachment(Map<String, Object?> payload) =>
+      MessageAttachmentCodec.fromMap(payload);
+
+  MessageReaction _reaction(Map<String, Object?> payload) {
+    final emoji =
+        (payload['emoji'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
+    final counts =
+        (payload['count_details'] as Map?)?.cast<String, Object?>() ??
+        const <String, Object?>{};
+    final count = payload['count'] as int? ?? 0;
+    final burstCount = counts['burst'] as int? ?? 0;
+    return MessageReaction(
+      emojiName: emoji['name'] as String? ?? '?',
+      emojiId: emoji['id'] as String?,
+      animated: emoji['animated'] as bool? ?? false,
+      count: count,
+      normalCount: counts['normal'] as int? ?? count - burstCount,
+      burstCount: burstCount,
+      reactedByCurrentUser: payload['me'] as bool? ?? false,
+      burstByCurrentUser: payload['me_burst'] as bool? ?? false,
+      burstColorValues: (payload['burst_colors'] as List? ?? const [])
+          .whereType<String>()
+          .map(DiscordColor.parseHex)
+          .whereType<int>()
+          .toList(growable: false),
+    );
+  }
+
+  MessageReply? _reply(Map<String, Object?> payload) {
+    final id = payload['id'] as String?;
+    final author = payload['author'];
+    final authorId = author is Map ? author['id'] as String? : null;
+    if (id == null || authorId == null) return null;
+    return MessageReply(
+      messageId: id,
+      authorId: authorId,
+      body: payload['content'] as String? ?? '',
+    );
+  }
+
+  /// The members carried by a `GUILD_MEMBERS_CHUNK`.
+  ///
+  /// Each row is a guild member wrapping a user, and the guild is named once
+  /// on the chunk rather than on every row, so it is threaded in here. A row
+  /// with no user is dropped: it names nobody to mention.
+  List<Member> membersFromChunk(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    final rows = payload['members'];
+    if (guildId is! String || guildId.isEmpty || rows is! List) {
+      return const [];
+    }
+    return [
+      for (final row in rows.whereType<Map>())
+        if (row['user'] case final Map user when user['id'] is String)
+          _chunkMember(user.cast<String, Object?>(), row, guildId),
+    ];
+  }
+
+  /// One row of a chunk. The guild nickname wins where there is one: it is
+  /// the name that guild knows somebody by, and the name everybody there sees.
+  Member _chunkMember(
+    Map<String, Object?> user,
+    Map<Object?, Object?> row,
+    String guildId,
+  ) {
+    final mapped = member(user, spaceIds: {guildId});
+    final nickname = row['nick'];
+    return nickname is String && nickname.isNotEmpty
+        ? mapped.copyWith(displayName: nickname)
+        : mapped;
+  }
+
+  Member member(
+    Map<String, Object?> payload, {
+    String role = 'Member',
+    Presence presence = Presence.offline,
+    Set<String> spaceIds = const {},
+    Map<String, String> rolesBySpace = const {},
+    int? colorValue,
+  }) {
+    final username =
+        payload['global_name'] as String? ??
+        payload['username'] as String? ??
+        'Unknown';
+    final id = payload['id']! as String;
+    return Member(
+      id: id,
+      displayName: username,
+      initials: _monogram(username),
+      role: role,
+      presence: presence,
+      colorValue: colorValue ?? _colorFor(id),
+      spaceIds: spaceIds,
+      rolesBySpace: rolesBySpace,
+      avatarUrl: DiscordCdn.userAvatar(id, payload['avatar'] as String?),
+    );
+  }
+
+  Member guildMember(
+    Map<String, Object?> payload,
+    String guildId,
+    List<Map<String, Object?>> roles,
+  ) {
+    final user = (payload['user']! as Map).cast<String, Object?>();
+    final roleIds = (payload['roles'] as List? ?? const []).whereType<String>();
+    final matchingRoles =
+        roles.where((role) => roleIds.contains(role['id'])).toList()..sort(
+          (left, right) => (right['position'] as int? ?? 0).compareTo(
+            left['position'] as int? ?? 0,
+          ),
+        );
+    final topRole = matchingRoles.isEmpty ? null : matchingRoles.first;
+    final roleName = topRole?['name'] as String? ?? 'Member';
+    final roleColor = topRole?['color'] as int? ?? 0;
+    final username =
+        payload['nick'] as String? ??
+        user['global_name'] as String? ??
+        user['username'] as String? ??
+        'Unknown';
+    final id = user['id']! as String;
+    final guildAvatarUrl = DiscordCdn.guildMemberAvatar(
+      guildId,
+      id,
+      payload['avatar'] as String?,
+    );
+    return Member(
+      id: id,
+      displayName: username,
+      initials: _monogram(username),
+      role: roleName,
+      presence: Presence.offline,
+      colorValue: roleColor == 0 ? _colorFor(id) : 0xff000000 | roleColor,
+      spaceIds: {guildId},
+      rolesBySpace: {guildId: roleName},
+      avatarUrl: DiscordCdn.userAvatar(id, user['avatar'] as String?),
+      avatarUrlsBySpace: {guildId: ?guildAvatarUrl},
+      membershipsBySpace: {guildId: membership(payload)},
+    );
+  }
+
+  /// The permission-relevant half of a guild member payload.
+  GuildMembership membership(Map<String, Object?> payload) {
+    final timeout = payload['communication_disabled_until'] as String?;
+    return GuildMembership(
+      roleIds: (payload['roles'] as List? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      flags: payload['flags'] as int? ?? 0,
+      isPending: payload['pending'] as bool? ?? false,
+      timeoutUntil: timeout == null ? null : DateTime.tryParse(timeout),
+    );
+  }
+
+  /// The coarse status a member row carries until a full presence arrives.
+  ///
+  /// It reads the wire value rather than folding `dnd` into `idle`: the two
+  /// paint different colours, and a roster page that arrived after a presence
+  /// frame would otherwise turn a red dot yellow until the next frame.
+  Presence presence(String status) => Presence.fromWire(status);
+
+  CommunityRole role(Map<String, Object?> payload, String guildId) {
+    final rawColor = payload['color'] as int? ?? 0;
+    return CommunityRole(
+      id: payload['id']! as String,
+      spaceId: guildId,
+      name: payload['name'] as String? ?? 'unknown-role',
+      position: payload['position'] as int? ?? 0,
+      colorValue: rawColor == 0 ? null : 0xff000000 | rawColor,
+      // Left null rather than zeroed when the field is absent: a role that
+      // grants nothing and a role we were told nothing about lead to opposite
+      // decisions once permissions are computed.
+      permissions: DiscordPermissions.tryParse(payload['permissions']),
+    );
+  }
+
+  ChannelCategory? category(Map<String, Object?> payload, String guildId) {
+    if (payload['type'] != 4) return null;
+    return ChannelCategory(
+      id: payload['id']! as String,
+      spaceId: guildId,
+      name: payload['name'] as String? ?? 'Unnamed category',
+      position: payload['position'] as int? ?? 0,
+    );
+  }
+
+  static Member _mergeMembers(Member? previous, Member incoming) {
+    if (previous == null) return incoming;
+    return incoming.copyWith(
+      spaceIds: {...previous.spaceIds, ...incoming.spaceIds},
+      rolesBySpace: {...previous.rolesBySpace, ...incoming.rolesBySpace},
+      avatarUrl: incoming.avatarUrl ?? previous.avatarUrl,
+      avatarUrlsBySpace: {
+        ...previous.avatarUrlsBySpace,
+        ...incoming.avatarUrlsBySpace,
+      },
+      membershipsBySpace: {
+        ...previous.membershipsBySpace,
+        ...incoming.membershipsBySpace,
+      },
+      presence: incoming.presence == Presence.offline
+          ? previous.presence
+          : incoming.presence,
+    );
+  }
+
+  CommunitySpace _space(Map<String, Object?> payload) {
+    final id = payload['id']! as String;
+    // The desktop session splits the guild record into a `properties` object
+    // while the REST guild list keeps everything flat, so permission-relevant
+    // fields are read from whichever of the two carried them.
+    final properties = payload['properties'];
+    final core = properties is Map
+        ? properties.cast<String, Object?>()
+        : payload;
+    // The name and the icon live in there too, which is why every server on a
+    // desktop session was drawn as "Unnamed server" with a blank badge.
+    final name =
+        (payload['name'] ?? core['name']) as String? ?? 'Unnamed server';
+    final icon = (payload['icon'] ?? core['icon']) as String?;
+    return CommunitySpace(
+      id: id,
+      name: name,
+      monogram: _monogram(name),
+      colorValue: _colorFor(id),
+      iconUrl: DiscordCdn.guildIcon(id, icon),
+      ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
+      requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
+      premiumTier:
+          (payload['premium_tier'] ?? core['premium_tier']) as int? ?? 0,
+    );
+  }
+
+  /// The same projection for the join and create answers, which must draw a
+  /// joined server exactly like one the session was opened with.
+  CommunitySpace spaceFromGuildPayload(Map<String, Object?> payload) =>
+      _space(payload);
+
+  static String _monogram(String name) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .take(2)
+        .toList();
+    if (words.isEmpty) return '?';
+    return words
+        .map((word) => String.fromCharCode(word.runes.first).toUpperCase())
+        .join();
+  }
+
+  static int _colorFor(String id) {
+    var hash = 0;
+    for (final unit in id.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    return _colors[hash % _colors.length];
+  }
+}

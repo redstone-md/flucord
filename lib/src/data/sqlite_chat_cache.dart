@@ -1,0 +1,708 @@
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import '../domain/chat_cache.dart';
+import '../domain/chat_models.dart';
+import '../domain/discord_permissions.dart';
+import 'chat_model_json.dart';
+import 'message_snapshot_codec.dart';
+import 'sqlite_chat_schema.dart';
+import 'sqlite_guild_emoji_store.dart';
+import 'sqlite_guild_scheduled_event_store.dart';
+import 'sqlite_guild_sticker_store.dart';
+
+part 'sqlite_chat_cache_expressions.dart';
+part 'sqlite_chat_cache_entities.dart';
+
+final class SqliteChatCache
+    with _SqliteChatCacheExpressions, _SqliteChatCacheEntities
+    implements ChatCache {
+  SqliteChatCache._(this._database);
+
+  @override
+  final Database _database;
+
+  /// The most messages held per channel, about five full pages of offline
+  /// scrollback. History loading appends page after page without replacing,
+  /// so one channel scrolled far back would otherwise grow the table for the
+  /// life of the install. The oldest rows go first: recent history is what
+  /// an offline launch restores, and what scrolling loads first on a
+  /// connected one.
+  static const historyPerChannel = 500;
+
+  /// The most messages the offline fallback decodes per channel. The
+  /// workspace read used to select the whole table, so a long session paid
+  /// the whole table's decode on every offline launch.
+  static const offlineHistoryPerChannel = 100;
+
+  static Future<SqliteChatCache> openDefault() async {
+    sqfliteFfiInit();
+    final supportDirectory = await getApplicationSupportDirectory();
+    final databaseDirectory = Directory(
+      '${supportDirectory.path}${Platform.pathSeparator}database',
+    );
+    await databaseDirectory.create(recursive: true);
+    return openAt(
+      '${databaseDirectory.path}${Platform.pathSeparator}flucord.sqlite3',
+    );
+  }
+
+  static Future<SqliteChatCache> openAt(
+    String path, {
+    DatabaseFactory? factory,
+  }) async {
+    sqfliteFfiInit();
+    final database = await (factory ?? databaseFactoryFfi).openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: SqliteChatSchema.version,
+        onCreate: SqliteChatSchema.create,
+        onUpgrade: SqliteChatSchema.upgrade,
+      ),
+    );
+    return SqliteChatCache._(database);
+  }
+
+  @override
+  Future<ChatWorkspace?> readWorkspace() => _readWorkspace(withHistory: true);
+
+  @override
+  Future<ChatWorkspace?> readWorkspaceShell() =>
+      _readWorkspace(withHistory: false);
+
+  /// Reads the workspace, with its members and messages when [withHistory].
+  ///
+  /// The two reads differ only in those two tables, and those two are the
+  /// expensive ones: every message row carries seven encoded fields to decode.
+  /// The message read is bounded to [offlineHistoryPerChannel] per channel,
+  /// so an offline launch decodes a bounded amount however long the table is.
+  Future<ChatWorkspace?> _readWorkspace({required bool withHistory}) async {
+    final metadata = await _database.query(
+      'metadata',
+      where: 'key = ?',
+      whereArgs: ['current_member_id'],
+      limit: 1,
+    );
+    final spaces = await _database.query('spaces', orderBy: 'sort_index');
+    if (metadata.isEmpty || spaces.isEmpty) return null;
+    final channels = await _database.query('channels', orderBy: 'sort_index');
+    final categories = await _database.query('categories', orderBy: 'position');
+    final roles = await _database.query('roles', orderBy: 'position DESC');
+    final members = withHistory
+        ? await _database.query('members')
+        : const <Map<String, Object?>>[];
+    final messages = <Map<String, Object?>>[];
+    if (withHistory) {
+      // Per channel, newest first, so a limit keeps each channel's newest
+      // page instead of the newest channels' everything.
+      for (final channel in channels) {
+        messages.addAll(
+          await _database.query(
+            'messages',
+            where: 'channel_id = ?',
+            whereArgs: [channel['id']],
+            orderBy: 'sent_at DESC',
+            limit: offlineHistoryPerChannel,
+          ),
+        );
+      }
+      // The workspace has always carried its messages oldest first.
+      messages.sort(
+        (left, right) =>
+            (left['sent_at']! as String).compareTo(right['sent_at']! as String),
+      );
+    }
+    final (emojis, stickers) = await _readGuildExpressions();
+    return ChatWorkspace(
+      spaces: spaces.map(_spaceFromRow).toList(),
+      channels: channels.map(_channelFromRow).toList(),
+      categories: categories.map(_categoryFromRow).toList(),
+      roles: roles.map(_roleFromRow).toList(),
+      members: members.map(_memberFromRow).toList(),
+      messages: messages.map(_messageFromRow).toList(),
+      emojis: emojis,
+      stickers: stickers,
+      currentMemberId: metadata.single['value']! as String,
+    );
+  }
+
+  @override
+  Future<void> writeWorkspace(ChatWorkspace workspace) async {
+    await _database.transaction((transaction) async {
+      await transaction.insert('metadata', {
+        'key': 'current_member_id',
+        'value': workspace.currentMemberId,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await transaction.delete('spaces');
+      await transaction.delete('channels');
+      await transaction.delete('categories');
+      await transaction.delete('roles');
+      await _writeGuildExpressions(transaction, workspace);
+      final batch = transaction.batch();
+      for (var index = 0; index < workspace.spaces.length; index++) {
+        batch.insert('spaces', _spaceToRow(workspace.spaces[index], index));
+      }
+      for (var index = 0; index < workspace.channels.length; index++) {
+        batch.insert(
+          'channels',
+          _channelToRow(workspace.channels[index], index),
+        );
+      }
+      for (final category in workspace.categories) {
+        batch.insert('categories', _categoryToRow(category));
+      }
+      for (final role in workspace.roles) {
+        batch.insert('roles', _roleToRow(role));
+      }
+      for (final member in workspace.members) {
+        batch.insert(
+          'members',
+          _memberToRow(member),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  @override
+  Future<ChannelHistory> readChannelHistory(
+    String channelId, {
+    int? limit,
+    String? beforeMessageId,
+  }) async {
+    // Times are stored as UTC in ISO form, so one sorts against another as
+    // text and the cursor needs no parsing.
+    final cursor = beforeMessageId == null
+        ? null
+        : await _sentAtOf(beforeMessageId);
+    // Read newest first so a limit keeps the newest page, then turn the rows
+    // back to oldest first, which is the order every caller expects.
+    final rows = await _database.query(
+      'messages',
+      where: cursor == null
+          ? 'channel_id = ?'
+          : 'channel_id = ? AND sent_at < ?',
+      whereArgs: cursor == null ? [channelId] : [channelId, cursor],
+      orderBy: 'sent_at DESC',
+      limit: limit,
+    );
+    final messages = rows.reversed.toList(growable: false);
+    final authorIds = messages
+        .map((row) => row['author_id']! as String)
+        .toSet();
+    final members = await _readMembers(authorIds);
+    return ChannelHistory(
+      channelId: channelId,
+      messages: messages.map(_messageFromRow).toList(),
+      members: members,
+    );
+  }
+
+  /// When the named message was sent, as it is stored, or null where the
+  /// message is not held. A cursor pointing at nothing reads the channel from
+  /// its newest end rather than reading nothing at all.
+  Future<String?> _sentAtOf(String messageId) async {
+    final rows = await _database.query(
+      'messages',
+      columns: ['sent_at'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['sent_at'] as String?;
+  }
+
+  @override
+  Future<ChatMessage?> readMessage(String messageId) async {
+    final rows = await _database.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : _messageFromRow(rows.single);
+  }
+
+  @override
+  Future<ChannelHistory> readPinnedMessages(String channelId) async {
+    final messages = await _database.query(
+      'messages',
+      where: 'channel_id = ? AND is_pinned = 1',
+      whereArgs: [channelId],
+      orderBy: 'sent_at DESC',
+    );
+    final authorIds = messages
+        .map((row) => row['author_id']! as String)
+        .toSet();
+    return ChannelHistory(
+      channelId: channelId,
+      messages: messages.map(_messageFromRow).toList(),
+      members: await _readMembers(authorIds),
+    );
+  }
+
+  @override
+  Future<void> writeChannelHistory(
+    ChannelHistory history, {
+    bool replaceExisting = true,
+  }) async {
+    await _database.transaction((transaction) async {
+      if (replaceExisting) {
+        await transaction.delete(
+          'messages',
+          where: 'channel_id = ?',
+          whereArgs: [history.channelId],
+        );
+      }
+      final batch = transaction.batch();
+      for (final member in history.members) {
+        batch.insert(
+          'members',
+          _memberToRow(member),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final message in history.messages) {
+        batch.insert(
+          'messages',
+          _messageToRow(message),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+      await _pruneChannel(transaction, history.channelId);
+    });
+  }
+
+  @override
+  Future<void> writeMessage(ChatMessage message, {Member? member}) async {
+    await _database.transaction((transaction) async {
+      if (member != null) {
+        await transaction.insert(
+          'members',
+          _memberToRow(member),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await transaction.insert(
+        'messages',
+        _messageToRow(message),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await _pruneChannel(transaction, message.channelId);
+    });
+  }
+
+  /// Keeps a channel's rows within [historyPerChannel], newest kept.
+  Future<void> _pruneChannel(DatabaseExecutor executor, String channelId) =>
+      executor.delete(
+        'messages',
+        where:
+            'channel_id = ? AND id NOT IN '
+            '(SELECT id FROM messages WHERE channel_id = ? '
+            'ORDER BY sent_at DESC LIMIT ?)',
+        whereArgs: [channelId, channelId, historyPerChannel],
+      );
+
+  @override
+  Future<void> writeSpace(CommunitySpace space) async {
+    final existing = await _database.query(
+      'spaces',
+      columns: ['sort_index'],
+      where: 'id = ?',
+      whereArgs: [space.id],
+      limit: 1,
+    );
+    final countRows = await _database.rawQuery(
+      'SELECT COUNT(*) AS space_count FROM spaces',
+    );
+    final count = countRows.single['space_count']! as int;
+    await _database.insert(
+      'spaces',
+      _spaceToRow(
+        space,
+        existing.isEmpty ? count : existing.single['sort_index']! as int,
+      ),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> writeGuild(JoinedGuild guild) async {
+    await _database.transaction((transaction) async {
+      final existing = await transaction.query(
+        'spaces',
+        columns: ['sort_index'],
+        where: 'id = ?',
+        whereArgs: [guild.space.id],
+        limit: 1,
+      );
+      final countRows = await transaction.rawQuery(
+        'SELECT COUNT(*) AS space_count FROM spaces',
+      );
+      final count = countRows.single['space_count']! as int;
+      await transaction.insert(
+        'spaces',
+        _spaceToRow(
+          guild.space,
+          existing.isEmpty ? count : existing.single['sort_index']! as int,
+        ),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      final batch = transaction.batch();
+      for (var index = 0; index < guild.channels.length; index++) {
+        batch.insert(
+          'channels',
+          _channelToRow(guild.channels[index], index),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final category in guild.categories) {
+        batch.insert(
+          'categories',
+          _categoryToRow(category),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final role in guild.roles) {
+        batch.insert(
+          'roles',
+          _roleToRow(role),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final member in guild.members) {
+        batch.insert(
+          'members',
+          _memberToRow(member),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  @override
+  Future<void> deleteGuild(String spaceId) async {
+    await _database.transaction((transaction) async {
+      // Messages reference the channels by id, so they go before the channels
+      // the query reads from.
+      await transaction.rawDelete(
+        'DELETE FROM messages WHERE channel_id IN '
+        '(SELECT id FROM channels WHERE space_id = ?)',
+        [spaceId],
+      );
+      await transaction.delete(
+        'channels',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'categories',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'roles',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete('spaces', where: 'id = ?', whereArgs: [spaceId]);
+      await transaction.delete(
+        'emojis',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'guild_stickers',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'guild_scheduled_events',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await _dropGuildFromMembers(transaction, spaceId);
+    });
+  }
+
+  /// Rewrites the members that named [spaceId] without it.
+  ///
+  /// A cached membership for a guild the account left would come back on the
+  /// next offline launch as a permission record for a server that is no
+  /// longer on the rail, so the guild leaves the member rows with the guild.
+  /// A member whose only space was this one has nothing left to restore and
+  /// is removed whole.
+  Future<void> _dropGuildFromMembers(
+    DatabaseExecutor transaction,
+    String spaceId,
+  ) async {
+    final rows = await transaction.query('members');
+    for (final row in rows) {
+      final spaceIds = ChatModelJson.stringsFrom(
+        row['space_ids_json']! as String,
+      );
+      if (!spaceIds.contains(spaceId)) continue;
+      final kept = _memberFromRow(row).withoutSpace(spaceId);
+      if (kept == null) {
+        await transaction.delete(
+          'members',
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+        continue;
+      }
+      await transaction.insert(
+        'members',
+        _memberToRow(kept),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteMessage(String messageId) =>
+      _database.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+
+  @override
+  Future<void> writeChannel(ConversationChannel channel) async {
+    final countRows = await _database.rawQuery(
+      'SELECT COUNT(*) AS channel_count FROM channels',
+    );
+    final count = countRows.single['channel_count'] as int?;
+    await _database.insert(
+      'channels',
+      _channelToRow(channel, count ?? 0),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> writeChannelActivity(ConversationChannel channel) =>
+      _database.update(
+        'channels',
+        {
+          'unread': channel.unread ? 1 : 0,
+          'mention_count': channel.mentionCount,
+          'first_unread_message_id': channel.firstUnreadMessageId,
+          'last_message_id': channel.lastMessageId,
+        },
+        where: 'id = ?',
+        whereArgs: [channel.id],
+      );
+
+  @override
+  Future<void> deleteChannel(String channelId) async {
+    await _database.transaction((transaction) async {
+      await transaction.delete(
+        'messages',
+        where: 'channel_id = ?',
+        whereArgs: [channelId],
+      );
+      await transaction.delete(
+        'channels',
+        where: 'id = ?',
+        whereArgs: [channelId],
+      );
+    });
+  }
+
+  @override
+  Future<void> deleteCategory(String categoryId) =>
+      _database.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
+
+  Future<List<Member>> _readMembers(Set<String> ids) async {
+    if (ids.isEmpty) return [];
+    final placeholders = List.filled(ids.length, '?').join(',');
+    final rows = await _database.query(
+      'members',
+      where: 'id IN ($placeholders)',
+      whereArgs: ids.toList(),
+    );
+    return rows.map(_memberFromRow).toList();
+  }
+
+  static Map<String, Object?> _spaceToRow(CommunitySpace space, int index) => {
+    'id': space.id,
+    'name': space.name,
+    'monogram': space.monogram,
+    'color_value': space.colorValue,
+    'icon_url': space.iconUrl,
+    'kind': space.kind.index,
+    'owner_id': space.ownerId,
+    'requires_mfa': space.requiresMultiFactorAuth ? 1 : 0,
+    'premium_tier': space.premiumTier,
+    'sort_index': index,
+  };
+
+  static CommunitySpace _spaceFromRow(Map<String, Object?> row) =>
+      CommunitySpace(
+        id: row['id']! as String,
+        name: row['name']! as String,
+        monogram: row['monogram']! as String,
+        colorValue: row['color_value']! as int,
+        iconUrl: row['icon_url'] as String?,
+        kind: SpaceKind.values[row['kind']! as int],
+        ownerId: row['owner_id'] as String?,
+        requiresMultiFactorAuth: row['requires_mfa'] == 1,
+        premiumTier: row['premium_tier'] as int? ?? 0,
+      );
+
+  static Map<String, Object?> _roleToRow(CommunityRole role) => {
+    'id': role.id,
+    'space_id': role.spaceId,
+    'name': role.name,
+    'position': role.position,
+    'color_value': role.colorValue,
+    'permissions': role.permissions?.toString(),
+  };
+
+  static Map<String, Object?> _categoryToRow(ChannelCategory category) => {
+    'id': category.id,
+    'space_id': category.spaceId,
+    'name': category.name,
+    'position': category.position,
+  };
+
+  static ChannelCategory _categoryFromRow(Map<String, Object?> row) =>
+      ChannelCategory(
+        id: row['id']! as String,
+        spaceId: row['space_id']! as String,
+        name: row['name']! as String,
+        position: row['position']! as int,
+      );
+
+  static CommunityRole _roleFromRow(Map<String, Object?> row) => CommunityRole(
+    id: row['id']! as String,
+    spaceId: row['space_id']! as String,
+    name: row['name']! as String,
+    position: row['position']! as int,
+    colorValue: row['color_value'] as int?,
+    permissions: DiscordPermissions.tryParse(row['permissions']),
+  );
+
+  static Map<String, Object?> _channelToRow(
+    ConversationChannel channel,
+    int index,
+  ) => {
+    'id': channel.id,
+    'space_id': channel.spaceId,
+    'name': channel.name,
+    'topic': channel.topic,
+    'kind': channel.kind.index,
+    'position': channel.position,
+    'unread': channel.unread ? 1 : 0,
+    'mention_count': channel.mentionCount,
+    'first_unread_message_id': channel.firstUnreadMessageId,
+    'last_message_id': channel.lastMessageId,
+    'parent_id': channel.parentId,
+    'is_thread': channel.isThread ? 1 : 0,
+    'is_archived': channel.isArchived ? 1 : 0,
+    'is_locked': channel.isLocked ? 1 : 0,
+    'archive_timestamp': channel.archiveTimestamp?.toIso8601String(),
+    'auto_archive_duration': channel.autoArchiveDurationMinutes,
+    'available_tags_json': ChatModelJson.forumTags(channel.availableTags),
+    'applied_tag_ids_json': ChatModelJson.strings(channel.appliedTagIds),
+    'default_auto_archive_duration': channel.defaultAutoArchiveDurationMinutes,
+    'default_sort_order': channel.defaultSortOrder?.index,
+    'default_forum_layout': channel.defaultForumLayout?.index,
+    'recipient_id': channel.recipientId,
+    'permission_overwrites_json': ChatModelJson.permissionOverwrites(
+      channel.permissionOverwrites,
+    ),
+    'rate_limit_per_user': channel.rateLimitPerUser,
+    'is_age_gated': channel.isAgeGated ? 1 : 0,
+    'bitrate': channel.bitrate,
+    'user_limit': channel.userLimit,
+    'rtc_region': channel.rtcRegion,
+    'sort_index': index,
+  };
+
+  static ConversationChannel _channelFromRow(Map<String, Object?> row) =>
+      ConversationChannel(
+        id: row['id']! as String,
+        spaceId: row['space_id']! as String,
+        name: row['name']! as String,
+        topic: row['topic']! as String,
+        kind: ChannelKind.values[row['kind']! as int],
+        position: row['position']! as int,
+        unread: row['unread'] == 1,
+        mentionCount: row['mention_count']! as int,
+        firstUnreadMessageId: row['first_unread_message_id'] as String?,
+        lastMessageId: row['last_message_id'] as String?,
+        parentId: row['parent_id'] as String?,
+        isThread: row['is_thread'] == 1,
+        isArchived: row['is_archived'] == 1,
+        isLocked: row['is_locked'] == 1,
+        archiveTimestamp: row['archive_timestamp'] == null
+            ? null
+            : DateTime.parse(row['archive_timestamp']! as String),
+        autoArchiveDurationMinutes: row['auto_archive_duration'] as int?,
+        availableTags: ChatModelJson.forumTagsFrom(
+          row['available_tags_json']! as String,
+        ),
+        appliedTagIds: ChatModelJson.stringListFrom(
+          row['applied_tag_ids_json']! as String,
+        ),
+        defaultAutoArchiveDurationMinutes:
+            row['default_auto_archive_duration'] as int?,
+        defaultSortOrder: row['default_sort_order'] == null
+            ? null
+            : ForumSortOrder.values[row['default_sort_order']! as int],
+        defaultForumLayout: row['default_forum_layout'] == null
+            ? null
+            : ForumLayout.values[row['default_forum_layout']! as int],
+        recipientId: row['recipient_id'] as String?,
+        permissionOverwrites: ChatModelJson.permissionOverwritesFrom(
+          row['permission_overwrites_json'] as String?,
+        ),
+        rateLimitPerUser: row['rate_limit_per_user'] as int? ?? 0,
+        isAgeGated: row['is_age_gated'] == 1,
+        bitrate: row['bitrate'] as int?,
+        userLimit: row['user_limit'] as int?,
+        rtcRegion: row['rtc_region'] as String?,
+      );
+
+  static Map<String, Object?> _memberToRow(Member member) => {
+    'id': member.id,
+    'display_name': member.displayName,
+    'initials': member.initials,
+    'role': member.role,
+    'presence': member.presence.index,
+    'color_value': member.colorValue,
+    'space_ids_json': ChatModelJson.strings(member.spaceIds),
+    'roles_by_space_json': ChatModelJson.stringMap(member.rolesBySpace),
+    'avatar_url': member.avatarUrl,
+    'avatar_urls_by_space_json': ChatModelJson.stringMap(
+      member.avatarUrlsBySpace,
+    ),
+    'memberships_json': ChatModelJson.memberships(member.membershipsBySpace),
+  };
+
+  static Member _memberFromRow(Map<String, Object?> row) => Member(
+    id: row['id']! as String,
+    displayName: row['display_name']! as String,
+    initials: row['initials']! as String,
+    role: row['role']! as String,
+    presence: Presence.values[row['presence']! as int],
+    colorValue: row['color_value']! as int,
+    spaceIds: ChatModelJson.stringsFrom(row['space_ids_json']! as String),
+    rolesBySpace: ChatModelJson.stringMapFrom(
+      row['roles_by_space_json']! as String,
+    ),
+    avatarUrl: row['avatar_url'] as String?,
+    avatarUrlsBySpace: ChatModelJson.stringMapFrom(
+      row['avatar_urls_by_space_json']! as String,
+    ),
+    membershipsBySpace: ChatModelJson.membershipsFrom(
+      row['memberships_json'] as String?,
+    ),
+  );
+
+  @override
+  Future<void> close() => _database.close();
+}

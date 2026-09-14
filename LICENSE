@@ -1,0 +1,172 @@
+Flucord Project License 1.0
+
+Copyright (c) 2026 Rxflex and Flucord contributors
+
+This license permits Flucord to be used, studied, improved, and shared as a
+project while preserving its original authorship, its place in the Redstone
+organization, reciprocal development, and the integrity of its user interface.
+
+1. Definitions
+
+"Software" means the Flucord source code, object code, documentation, images,
+and other materials distributed with this license, except for Third-Party
+Materials.
+
+"Original Author" means Rxflex, the creator of Flucord.
+
+"Project Organization" means Redstone, published at:
+https://redstone.md
+and:
+https://github.com/redstone-md
+
+"Canonical Project" means the Flucord project published at:
+https://github.com/redstone-md/flucord
+
+"Project Derivative" means a modified, extended, or forked edition of the
+Software that:
+
+  a. is based on a substantial portion of the Software as a whole;
+  b. is distributed and presented as a fork, continuation, or modified edition
+     of Flucord; and
+  c. complies with all conditions of this license.
+
+Changing the project name does not by itself stop a work from being a Project
+Derivative.
+
+"Interface Materials" means:
+
+  a. the contents of lib/src/presentation and lib/src/theme;
+  b. Flucord icons, screenshots, visual assets, layouts, component designs, and
+     interaction designs; and
+  c. any recognizable adaptation, translation, or port of those materials.
+
+"Separate Product" means a product, project, library, template, theme, design
+system, or service that is not the Software or a Project Derivative.
+
+"Corresponding Source" means the preferred form for making modifications,
+including build scripts, interface definitions, and material required to build
+and run the distributed version. It does not include separately licensed tools
+or dependencies that users can obtain from their ordinary public sources.
+
+"Third-Party Materials" means files or components that identify a different
+copyright holder or license.
+
+2. Permission Grant
+
+Subject to this license, each copyright holder grants you a worldwide,
+royalty-free, non-exclusive license to:
+
+  a. run and study the Software for any lawful purpose;
+  b. make modifications and Project Derivatives;
+  c. reproduce and distribute the Software or a Project Derivative in source or
+     object form; and
+  d. use the Software or a Project Derivative commercially.
+
+No permission is granted to use Interface Materials in a Separate Product.
+
+3. Attribution and Provenance
+
+Every copy or Project Derivative that you distribute or make available must:
+
+  a. include this LICENSE file;
+  b. include the NOTICE file without removing or obscuring its identification
+     of the Original Author, Project Organization, and Canonical Project;
+  c. preserve existing copyright and attribution notices;
+  d. identify the work as Flucord or as derived from Flucord in its source
+     documentation and primary project description;
+  e. link to the Canonical Project; and
+  f. state that the work was modified, if applicable, without implying that the
+     Original Author endorsed those modifications.
+
+You may add contributor credits and additional notices, but they must not
+reduce the prominence or accuracy of the original attribution.
+
+4. Reciprocal Source and License
+
+If you distribute object code, installers, packages, or hosted access to a
+modified version, you must provide the complete Corresponding Source for that
+version at no additional charge through a durable and conspicuous location.
+
+The Software, Project Derivatives, and their Corresponding Source must remain
+under Flucord Project License 1.0. You may not impose terms that restrict a
+recipient from exercising the permissions granted by this license.
+
+You may aggregate the Software with independent works. This license applies
+only to the Software and Project Derivatives, not to independent works that do
+not contain or derive from the Software or Interface Materials.
+
+5. Project and Interface Integrity
+
+You may use, modify, and distribute Interface Materials only as part of the
+Software or a Project Derivative.
+
+You may not extract, copy, port, translate, adapt, sublicense, or otherwise use
+Interface Materials, in whole or in substantial part, in a Separate Product.
+In particular, you may not publish them as a reusable UI library, template,
+theme, design system, component pack, or interface for an unrelated product.
+
+This section does not prohibit:
+
+  a. independently created interfaces that do not copy or adapt Interface
+     Materials; or
+  b. reasonable screenshots or excerpts used with attribution for review,
+     commentary, documentation, education, or reporting about Flucord.
+
+6. Project Name and Endorsement
+
+This license does not grant trademark rights. You may use the Flucord name only
+to identify the unmodified Software or accurately describe the origin of a
+Project Derivative. A modified version must not claim to be an official release
+or imply endorsement by the Original Author unless separately authorized.
+
+7. Contributions
+
+Unless accompanied by a separate written agreement, any contribution
+intentionally submitted for inclusion in the Canonical Project is offered under
+Flucord Project License 1.0. The contributor represents that they have the
+right to grant this permission.
+
+Each contributor grants recipients a worldwide, royalty-free patent license
+for patent claims necessarily infringed by that contributor's contribution.
+The patent license terminates for anyone who initiates patent litigation
+alleging that the Software or a contribution infringes a patent.
+
+8. Third-Party Materials
+
+Third-Party Materials remain governed by their own licenses. Nothing in this
+license removes or replaces rights, notices, or obligations attached to those
+materials. When a Third-Party Material license conflicts with this license, its
+terms control that Third-Party Material only.
+
+9. No Sublicensing or Additional Rights
+
+You receive permissions directly under this license. You may not sublicense the
+Software or Interface Materials under different terms. No patent, trademark,
+publicity, or other right is granted except as expressly stated.
+
+The Original Author may separately offer the Software under other terms. That
+does not alter the rights already granted to recipients under this license.
+
+10. Termination and Reinstatement
+
+Your rights terminate automatically if you violate this license. Rights are
+reinstated provisionally when the violation stops and permanently if the
+copyright holder does not notify you of the violation within 60 days after it
+stops. A copyright holder may still seek relief for the period of violation or
+for repeated violations.
+
+11. Disclaimer of Warranty and Limitation of Liability
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW,
+NO COPYRIGHT HOLDER OR CONTRIBUTOR IS LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY ARISING FROM OR RELATED TO THE SOFTWARE OR THIS LICENSE.
+
+12. Interpretation
+
+If a provision is unenforceable, it is modified only to the minimum extent
+necessary, and the remaining provisions continue in effect. No failure to
+enforce a provision is a waiver. Headings are for convenience only.
+
+By exercising any permission granted by this license, you accept its terms.

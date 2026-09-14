@@ -1,0 +1,66 @@
+[
+  {
+    "name": "stream-l1",
+    "note": "streamed, unknown content size, level 1",
+    "rawBytes": 163840,
+    "compressedBytes": 32879,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-l6",
+    "note": "streamed, unknown content size, level 6",
+    "rawBytes": 163840,
+    "compressedBytes": 30268,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-l19",
+    "note": "streamed, unknown content size, level 19",
+    "rawBytes": 163840,
+    "compressedBytes": 22801,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-checksum",
+    "note": "streamed with an xxh64 content checksum",
+    "rawBytes": 163840,
+    "compressedBytes": 30272,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-window10",
+    "note": "streamed with a 1 KiB window, forces wrap-around",
+    "rawBytes": 163840,
+    "compressedBytes": 39016,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-window17",
+    "note": "streamed with unaligned chunks and a 128 KiB window",
+    "rawBytes": 163840,
+    "compressedBytes": 30268,
+    "rawSha256": "bc5aa44cb906c26fd0a573de0eb8870df4661b3db3bdec629d3245fa534f5247",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-rle-blocks",
+    "note": "RLE blocks in a stream",
+    "rawBytes": 120000,
+    "compressedBytes": 114,
+    "rawSha256": "5806ce778fd0c860ffd35eb95d49f4b1fd0b24a574e621160d56de964054f4f4",
+    "hasRawFile": false
+  },
+  {
+    "name": "stream-structured",
+    "note": "repetitive dispatch stream",
+    "rawBytes": 362890,
+    "compressedBytes": 4486,
+    "rawSha256": "4ca3577597e6b0dd7ac97e6c7d05bd632fb198592f87acacc430e56957893d3f",
+    "hasRawFile": false
+  }
+]

@@ -1,0 +1,316 @@
+// Screen capture and H.264 encoding for Discord's Go Live.
+//
+// Everything above this lives in Dart: the stream key, the gateway frames, the
+// RTP sender. What Dart cannot do is turn a desktop into encoded frames —
+// flutter_webrtc exposes capture and a renderer but no encoded-frame callback,
+// and Go Live carries its own RTP over the voice socket rather than through a
+// peer connection, so a peer connection would not help even if one were open.
+//
+// Media Foundation rather than libwebrtc: the H.264 encoder MFT ships with
+// Windows, uses the GPU when one is available, and needs no headers or import
+// library that the Flutter plugin does not give us.
+
+#ifndef FLUCORD_VIDEO_H_
+#define FLUCORD_VIDEO_H_
+
+#include <stdint.h>
+
+#if defined(_WIN32)
+#define FLUCORD_VIDEO_EXPORT __declspec(dllexport)
+#else
+#define FLUCORD_VIDEO_EXPORT
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Status codes. Anything other than OK leaves the encoder untouched.
+typedef enum {
+  FLUCORD_VIDEO_OK = 0,
+  FLUCORD_VIDEO_ERROR_UNSUPPORTED = 1,
+  FLUCORD_VIDEO_ERROR_NO_DISPLAY = 2,
+  FLUCORD_VIDEO_ERROR_ENCODER = 3,
+  FLUCORD_VIDEO_ERROR_STATE = 4,
+  // No camera at that index, or one that another application already holds.
+  // Kept apart from NO_DISPLAY: a busy camera is a thing the user can fix,
+  // and a missing display is not.
+  FLUCORD_VIDEO_ERROR_NO_CAMERA = 5,
+} FlucordVideoStatus;
+
+typedef struct FlucordVideoEncoder FlucordVideoEncoder;
+
+// One encoded frame, as an Annex B access unit.
+//
+// The buffer is heap-allocated by the encoder and handed to the callee, which
+// must release it with flucord_video_release_frame once it has copied what it
+// needs. It cannot be a borrowed pointer: Dart delivers a native callback
+// asynchronously, and the capture thread has released the underlying surface
+// long before the listener runs.
+typedef void (*FlucordVideoFrameCallback)(void* user_data,
+                                          const uint8_t* data,
+                                          int32_t length,
+                                          int64_t timestamp_us,
+                                          int32_t is_keyframe);
+
+typedef struct {
+  // Which display to capture, or which camera when the pipeline was opened
+  // with flucord_video_open_camera. 0 is the primary one either way.
+  int32_t display_index;
+  int32_t width;
+  int32_t height;
+  int32_t frames_per_second;
+  int32_t bitrate_bits_per_second;
+} FlucordVideoConfig;
+
+// Opens a capture-and-encode pipeline. The callback runs on the capture
+// thread, so the caller must not block in it.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open(const FlucordVideoConfig* config,
+                   FlucordVideoFrameCallback callback,
+                   void* user_data,
+                   FlucordVideoEncoder** out_encoder);
+
+// Opens the same pipeline against a camera instead of a display.
+//
+// The frames come out identically — Annex B on the same callback — because
+// everything downstream of the capture is shared: a camera and a screen differ
+// only in where the NV12 comes from. Media Foundation's source reader does the
+// format conversion and the scaling, so a camera that only speaks YUY2 or
+// MJPEG still arrives as the NV12 the encoder wants.
+//
+// `config->width`/`height` are what the encoder produces; the reader is asked
+// for the nearest thing the camera offers and the result is scaled to fit.
+// What the reader settled on is verified before the open answers: a camera
+// that can neither produce nor scale to the asked size fails the open rather
+// than feeding the encoder a shape it did not agree to.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_open_camera(const FlucordVideoConfig* config,
+                          FlucordVideoFrameCallback callback,
+                          void* user_data,
+                          FlucordVideoEncoder** out_encoder);
+
+// How many cameras are attached.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_count(void);
+
+// Writes the UTF-8 name of camera `index` into `buffer` and returns how many
+// bytes it needed, including the terminator. A capacity of 0 asks for the
+// length without writing anything, which is how a caller sizes its buffer.
+// Returns 0 when there is no camera at that index.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_camera_name(int32_t index,
+                                                       char* buffer,
+                                                       int32_t capacity);
+
+// Asks the encoder for a keyframe on the next capture, which is what a viewer
+// joining midway needs before anything decodes.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_request_keyframe(FlucordVideoEncoder* encoder);
+
+// Stops capturing without tearing the encoder down. Frames stop arriving.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_set_paused(FlucordVideoEncoder* encoder, int32_t paused);
+
+// Changes the running encoder's bitrate. FLUCORD_VIDEO_ERROR_UNSUPPORTED when
+// the encoder refuses to change it mid-stream, in which case it keeps the
+// rate it started with.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_set_bitrate(FlucordVideoEncoder* encoder,
+                          int32_t bits_per_second);
+
+// Stops and releases everything. Safe to call twice.
+//
+// Waits up to two seconds for the capture thread. One stuck in a driver call
+// (a camera read, a GPU readback) cannot be joined: the stop answers anyway,
+// the thread is left to a background cleanup, and the timeout is reported
+// through flucord_video_last_error. No frame reaches the callback after this
+// returns, so the caller's own callback is safe to drop then.
+FLUCORD_VIDEO_EXPORT void flucord_video_close(FlucordVideoEncoder* encoder);
+
+// Releases a buffer handed out by the frame callback.
+FLUCORD_VIDEO_EXPORT void flucord_video_release_frame(uint8_t* data);
+
+// The HRESULT behind the last failure, or 0.
+//
+// A status code says which stage refused; this says why the platform did.
+// "No display" covers a machine with no output at all, an index that no
+// longer exists, and a duplication another process is already holding, and
+// only the HRESULT separates them.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error(void);
+
+// Which call produced that HRESULT: 1 finding the output, 2 creating the
+// device on its adapter, 3 duplicating onto that device, 4 duplicating onto
+// the device the encoder already had, 5 handing a frame to the encoder, 6
+// reading an event from a hardware encoder, 7 joining the capture thread at
+// close, 8 joining the decode thread at close, 9 settling the camera's
+// output type. Zero when nothing has failed.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_last_error_stage(void);
+
+// Writes the running encoder's own description into [buffer] ("hardware:
+// NVIDIA Video Encoder gop=ok cbr=ok" or "software: Microsoft H.264 gop=ok")
+// and returns how many bytes were written. The pace log carries it, because
+// "the stream is slow" and "this machine has no NVENC" look identical from
+// the outside.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_encoder_name(
+    FlucordVideoEncoder* encoder, char* buffer, int32_t capacity);
+
+// Where the frames' time went: four int64 values — nanoseconds spent waiting
+// for the desktop to change, converting the captured frame, encoding it, and
+// how many frames those cover. Totals since the capture opened; the caller
+// takes deltas and divides.
+FLUCORD_VIDEO_EXPORT void flucord_video_stage_timings(
+    FlucordVideoEncoder* encoder, int64_t* out_values);
+
+// Writes what DXGI reports about this machine's adapters and displays into
+// [buffer] as text, answering how many bytes were written. Diagnostics only.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_describe_displays(char* buffer,
+                                                             int32_t capacity);
+
+typedef struct FlucordVideoDecoder FlucordVideoDecoder;
+
+// One decoded picture, as BGRA ready for a texture. Valid for the duration of
+// the callback only: the decoder reuses its buffer.
+typedef void (*FlucordVideoPictureCallback)(void* user_data,
+                                            const uint8_t* bgra,
+                                            int32_t width,
+                                            int32_t height,
+                                            int32_t stride,
+                                            int64_t timestamp_us);
+
+// Opens a decoder for somebody else's stream. Frames are fed in as Annex B
+// access units and come back out as pictures.
+//
+// The system decoder is created here rather than on the decode thread, so a
+// machine without one is answered with a status instead of a decoder that
+// quietly produces nothing. The decode itself runs on the decoder's own
+// thread: a 1080p60 picture costs more to decode and convert than the frame
+// budget allows, and the thread that feeds it is the one that draws the
+// whole interface. Pictures arrive on the callback from that thread, each
+// carrying its own heap buffer that the callee releases with
+// flucord_video_decoder_release_picture once copied.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_open(FlucordVideoPictureCallback callback,
+                           void* user_data,
+                           FlucordVideoDecoder** out_decoder);
+
+// Feeds one access unit in. Returns at once; the decode happens on the
+// decoder's thread, and pictures reach the callback from there.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_submit(FlucordVideoDecoder* decoder,
+                             const uint8_t* annex_b,
+                             int32_t length,
+                             int64_t timestamp_us);
+
+// Releases one picture buffer the callback delivered. Every picture the
+// callback receives owns its memory until this is called on it.
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_release_picture(
+    void* picture);
+
+// How many access units were dropped because the decode could not keep up.
+// Each dropped one breaks the reference chain until a keyframe arrives.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decoder_dropped(FlucordVideoDecoder* decoder);
+
+// The decoder's own accounting, for telling a delivery problem from a decode
+// one: how many access units were submitted, how many the transform refused
+// (and with which HRESULT), how many pictures came out, and how many queued
+// units were dropped when the decode fell behind.
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_stats(
+    FlucordVideoDecoder* decoder,
+    int64_t* submitted,
+    int64_t* not_accepting,
+    int64_t* input_errors,
+    int64_t* last_input_error,
+    int64_t* outputs,
+    int64_t* output_errors,
+    int64_t* last_output_error,
+    int32_t* dropped);
+
+// Describes the output the decoder has settled on: the FOURCC of the pixel
+// format, the frame size, and the row pitch it writes with. A decoder that
+// was assumed to produce tightly packed NV12 while it produces something
+// else draws a picture that only looks like one.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_decoder_info(FlucordVideoDecoder* decoder,
+                           int32_t* out_fourcc,
+                           int32_t* out_width,
+                           int32_t* out_height,
+                           int32_t* out_stride);
+
+// Stops and releases the decoder.
+//
+// Waits up to two seconds for the decode thread. One stuck in a driver call
+// cannot be joined: the close answers anyway, the thread is left to a
+// background cleanup, and the timeout is reported through
+// flucord_video_last_error. No picture reaches the callback after this
+// returns.
+FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(
+    FlucordVideoDecoder* decoder);
+
+// Runs an Annex B stream through the system H.264 decoder and returns how
+// many pictures came out, or a negative status on failure.
+//
+// This is how the client checks its own output without a second account
+// watching: the decoder here is the same Media Foundation one a Discord
+// client on Windows decodes with, so a stream it accepts is a stream a viewer
+// can draw.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decode_probe(const uint8_t* annex_b, int32_t length);
+
+// One BGRA frame from a display, for a screenshot.
+//
+// Its own entry point rather than a mode of the encoder: a screenshot wants a
+// picture, not an H.264 stream, and running a frame through the encoder and
+// back out of a decoder to get one would be a round trip for nothing.
+//
+// The whole wait is bounded to about a second, because the caller runs on the
+// thread the user is using: a display that produces no frame within the
+// budget answers NO_DISPLAY rather than blocking. The buffer is valid for the
+// duration of the callback only.
+typedef void (*FlucordVideoScreenshotCallback)(void* user_data,
+                                               const uint8_t* bgra,
+                                               int32_t width,
+                                               int32_t height,
+                                               int32_t stride);
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_capture_screen(int32_t display_index,
+                             FlucordVideoScreenshotCallback callback,
+                             void* user_data);
+
+// Writes already-encoded H.264 into an MP4 file.
+//
+// The clip recorder holds the last few seconds of what the encoder produced
+// and hands them here when somebody asks for a clip. Encoding again would be
+// both slower and worse: these frames were encoded once already, and the file
+// sink only has to wrap them.
+typedef struct FlucordVideoClip FlucordVideoClip;
+
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_open(const char* utf8_path,
+                        int32_t width,
+                        int32_t height,
+                        int32_t frames_per_second,
+                        int32_t bitrate_bits_per_second,
+                        FlucordVideoClip** out_clip);
+
+// Appends one Annex B access unit. `timestamp_us` is measured from the start
+// of the clip, not from when the frame was captured.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_write(FlucordVideoClip* clip,
+                         const uint8_t* annex_b,
+                         int32_t length,
+                         int64_t timestamp_us,
+                         int32_t is_keyframe);
+
+// Finalises the file. A clip not closed is a file no player will open.
+FLUCORD_VIDEO_EXPORT FlucordVideoStatus
+flucord_video_clip_close(FlucordVideoClip* clip);
+
+// How many displays are available, so a picker has something to list.
+FLUCORD_VIDEO_EXPORT int32_t flucord_video_display_count(void);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+
+#endif  // FLUCORD_VIDEO_H_

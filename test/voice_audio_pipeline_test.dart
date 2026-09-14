@@ -1,0 +1,698 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/application/voice_audio_pipeline.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
+import 'package:flucord/src/domain/voice_media.dart';
+import 'package:flucord/src/domain/voice_processing.dart';
+
+import 'support/fake_voice_audio.dart';
+
+/// One 20 ms frame of something that is clearly not silence: a sawtooth at
+/// about -35 dBFS, well above the gate.
+final Int16List _speech = Int16List.fromList(
+  List.generate(1920, (index) => (index * 37) % 2000 - 1000),
+);
+final Uint8List _speechBytes = _speech.buffer.asUint8List();
+
+/// One 20 ms frame of nothing.
+final Uint8List _silence = Uint8List(3840);
+
+void main() {
+  test(
+    'frames microphone PCM, encodes, and finishes speaking on disable',
+    () async {
+      final media = _FakeMediaService();
+      final codecs = _FakeCodecFactory();
+      final transport = _FakeAudioTransport();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+
+      await pipeline.bindTransport(transport);
+      await pipeline.setEnabled(true);
+      media.addPcm(_speechBytes.sublist(0, 1000));
+      media.addPcm(_speechBytes.sublist(1000));
+      await _flushEvents();
+
+      expect(codecs.encoder.inputs.single.length, 1920);
+      expect(transport.sent, [
+        Uint8List.fromList([1, 128]),
+      ]);
+
+      await pipeline.setEnabled(false);
+      expect(transport.finishCount, 1);
+    },
+  );
+
+  test('a quiet microphone sends nothing', () async {
+    final media = _FakeMediaService();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: _FakeCodecFactory(),
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+    await pipeline.setEnabled(true);
+
+    media.addPcm(_silence);
+    media.addPcm(_silence);
+    await _flushEvents();
+
+    expect(transport.sent, isEmpty);
+    expect(transport.finishCount, 0);
+    expect(pipeline.isSpeaking, isFalse);
+  });
+
+  test(
+    'speech opens the uplink, silence closes it after the hangover',
+    () async {
+      final media = _FakeMediaService();
+      final transport = _FakeAudioTransport();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: _FakeCodecFactory(),
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      final speaking = <bool>[];
+      pipeline.speaking.listen(speaking.add);
+      await pipeline.bindTransport(transport);
+      await pipeline.setEnabled(true);
+
+      media.addPcm(_speechBytes);
+      for (var i = 0; i < VoiceAudioPipeline.hangoverFrames; i++) {
+        media.addPcm(_silence);
+      }
+      await _flushEvents();
+
+      // The pause after a word goes out with it, so the tail is not clipped.
+      expect(transport.sent, hasLength(1 + VoiceAudioPipeline.hangoverFrames));
+      expect(transport.finishCount, 0);
+      expect(speaking, [true]);
+
+      media.addPcm(_silence);
+      await _flushEvents();
+
+      // One frame past the hangover: the burst is finished, which is what the
+      // room reads as this participant going quiet, and nothing more is sent.
+      expect(transport.sent, hasLength(1 + VoiceAudioPipeline.hangoverFrames));
+      expect(transport.finishCount, 1);
+      expect(speaking, [true, false]);
+
+      media.addPcm(_speechBytes);
+      await _flushEvents();
+      expect(speaking, [true, false, true]);
+    },
+  );
+
+  test('keeps independent Opus decoder state per remote user', () async {
+    final media = _FakeMediaService();
+    final codecs = _FakeCodecFactory();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: codecs,
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+    final received = <VoiceRemotePcmFrame>[];
+    final subscription = pipeline.remotePcm.listen(received.add);
+    addTearDown(subscription.cancel);
+
+    transport.addRemote('user-1', [5]);
+    transport.addRemote('user-2', [7]);
+    transport.addRemote('user-1', [9]);
+    await _flushEvents();
+
+    expect(codecs.decoders, hasLength(2));
+    expect(received.map((frame) => frame.userId), [
+      'user-1',
+      'user-2',
+      'user-1',
+    ]);
+    expect(received.map((frame) => frame.samples.single), [5, 7, 9]);
+  });
+
+  test('uses Opus PLC and FEC for bounded remote packet loss', () async {
+    final media = _FakeMediaService();
+    final codecs = _FakeCodecFactory();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: codecs,
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+    final received = <VoiceRemotePcmFrame>[];
+    final subscription = pipeline.remotePcm.listen(received.add);
+    addTearDown(subscription.cancel);
+
+    transport.addRemote('user-1', [9], missingFramesBefore: 3);
+    await _flushEvents();
+
+    expect(received.map((frame) => frame.samples.single), [-20, -20, -9, 9]);
+  });
+
+  test('resets per-user decoder after an unbounded packet gap', () async {
+    final media = _FakeMediaService();
+    final codecs = _FakeCodecFactory();
+    final transport = _FakeAudioTransport();
+    final pipeline = VoiceAudioPipeline(
+      mediaService: media,
+      codecFactory: codecs,
+    );
+    addTearDown(pipeline.dispose);
+    addTearDown(media.dispose);
+    await pipeline.bindTransport(transport);
+
+    transport.addRemote('user-1', [1]);
+    transport.addRemote('user-1', [2], missingFramesBefore: 20);
+    await _flushEvents();
+
+    expect(codecs.decoders, hasLength(2));
+    expect(codecs.decoders.first.disposed, isTrue);
+  });
+
+  group('noise suppression', () {
+    final samples = _speech;
+    final bytes = _speechBytes;
+
+    Future<(VoiceAudioPipeline, _FakeCodecFactory, List<Object>)> pump(
+      _FakeMediaService media, {
+      required Future<VoiceNoiseSuppressor> Function()? factory,
+      required bool enabled,
+      _FakeAudioTransport? transport,
+    }) async {
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        noiseSuppressorFactory: factory,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      final errors = <Object>[];
+      pipeline.errors.listen(errors.add);
+      await pipeline.bindTransport(transport ?? _FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      await pipeline.setNoiseSuppression(enabled);
+      return (pipeline, codecs, errors);
+    }
+
+    test('passes microphone PCM through untouched while off', () async {
+      final media = _FakeMediaService();
+      var opened = 0;
+      final (_, codecs, errors) = await pump(
+        media,
+        factory: () async {
+          opened++;
+          return FakeNoiseSuppressor();
+        },
+        enabled: false,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(codecs.encoder.inputs.single, samples);
+      expect(opened, 0);
+      expect(errors, isEmpty);
+    });
+
+    test('runs every frame through one suppressor while on', () async {
+      final media = _FakeMediaService();
+      final suppressor = FakeNoiseSuppressor();
+      var opened = 0;
+      final (pipeline, codecs, _) = await pump(
+        media,
+        factory: () async {
+          opened++;
+          return suppressor;
+        },
+        enabled: true,
+      );
+      media.addPcm(bytes);
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(opened, 1);
+      expect(suppressor.frames, hasLength(2));
+      expect(suppressor.channels, 2);
+      expect(
+        codecs.encoder.inputs.last,
+        everyElement(FakeNoiseSuppressor.cleaned),
+      );
+
+      await pipeline.dispose();
+      expect(suppressor.disposed, isTrue);
+    });
+
+    test('frames pass raw while the model loads, then cleaned', () async {
+      final media = _FakeMediaService();
+      final loading = Completer<VoiceNoiseSuppressor>();
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        noiseSuppressorFactory: () => loading.future,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      await pipeline.bindTransport(_FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      final opening = pipeline.setNoiseSuppression(true);
+
+      media.addPcm(bytes);
+      await _flushEvents();
+      expect(pipeline.isNoiseSuppressionEnabled, isTrue);
+      expect(codecs.encoder.inputs.single, samples);
+
+      loading.complete(FakeNoiseSuppressor());
+      await opening;
+      media.addPcm(bytes);
+      await _flushEvents();
+      expect(
+        codecs.encoder.inputs.last,
+        everyElement(FakeNoiseSuppressor.cleaned),
+      );
+    });
+
+    test(
+      'a suppressor that will not open turns the switch off, once',
+      () async {
+        final media = _FakeMediaService();
+        var opened = 0;
+        final (pipeline, codecs, errors) = await pump(
+          media,
+          factory: () async {
+            opened++;
+            throw StateError('df.dll is missing');
+          },
+          enabled: true,
+        );
+        media.addPcm(bytes);
+        media.addPcm(bytes);
+        await _flushEvents();
+
+        expect(errors, hasLength(1));
+        expect(pipeline.isNoiseSuppressionEnabled, isFalse);
+        expect(pipeline.isNoiseSuppressionAvailable, isTrue);
+        expect(codecs.encoder.inputs, hasLength(2));
+        expect(codecs.encoder.inputs.first, samples);
+
+        // Switching on again is the retry.
+        await pipeline.setNoiseSuppression(true);
+        await _flushEvents();
+        expect(opened, 2);
+        expect(errors, hasLength(2));
+      },
+    );
+
+    test('a suppressor that throws mid-call is dropped and reported', () async {
+      final media = _FakeMediaService();
+      final suppressor = _BrokenSuppressor();
+      final (pipeline, codecs, errors) = await pump(
+        media,
+        factory: () async => suppressor,
+        enabled: true,
+      );
+      media.addPcm(bytes);
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(errors, hasLength(1));
+      expect(suppressor.disposed, isTrue);
+      expect(pipeline.isNoiseSuppressionEnabled, isFalse);
+      expect(codecs.encoder.inputs, hasLength(2));
+      expect(codecs.encoder.inputs.last, samples);
+    });
+
+    test('going quiet flushes the model tail before finishing', () async {
+      final media = _FakeMediaService();
+      final transport = _FakeAudioTransport();
+      final suppressor = FakeNoiseSuppressor();
+      final (pipeline, codecs, _) = await pump(
+        media,
+        factory: () async => suppressor,
+        enabled: true,
+        transport: transport,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      await pipeline.setEnabled(false);
+
+      // One frame of speech, then two of silence pushed through the model so
+      // the last 29 ms of the word come out before the speaking burst ends.
+      expect(suppressor.frames, hasLength(3));
+      expect(suppressor.frames.last, everyElement(0));
+      expect(transport.sent, hasLength(3));
+      expect(transport.finishCount, 1);
+      expect(codecs.encoder.inputs, hasLength(3));
+    });
+
+    test('a build without a suppressor says so', () async {
+      final media = _FakeMediaService();
+      final (pipeline, codecs, errors) = await pump(
+        media,
+        factory: null,
+        enabled: true,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(pipeline.isNoiseSuppressionAvailable, isFalse);
+      expect(pipeline.isNoiseSuppressionEnabled, isFalse);
+      expect(errors, isEmpty);
+      expect(codecs.encoder.inputs.single, samples);
+    });
+  });
+
+  group('microphone enhancement', () {
+    final samples = _speech;
+    final bytes = _speechBytes;
+
+    Future<(VoiceAudioPipeline, _FakeCodecFactory, List<Object>)> pump(
+      _FakeMediaService media, {
+      required Future<VoiceMicrophoneEnhancer> Function({
+        required bool echoCancellation,
+        required bool automaticGainControl,
+      })?
+      factory,
+      required bool echoCancellation,
+      required bool automaticGainControl,
+      _FakeAudioTransport? transport,
+    }) async {
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        microphoneEnhancerFactory: factory,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      final errors = <Object>[];
+      pipeline.errors.listen(errors.add);
+      await pipeline.bindTransport(transport ?? _FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: echoCancellation,
+        automaticGainControl: automaticGainControl,
+      );
+      return (pipeline, codecs, errors);
+    }
+
+    test('passes microphone PCM through untouched while off', () async {
+      final media = _FakeMediaService();
+      var opened = 0;
+      final (_, codecs, errors) = await pump(
+        media,
+        factory:
+            ({required echoCancellation, required automaticGainControl}) async {
+              opened++;
+              return FakeMicrophoneEnhancer();
+            },
+        echoCancellation: false,
+        automaticGainControl: false,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(codecs.encoder.inputs.single, samples);
+      expect(opened, 0);
+      expect(errors, isEmpty);
+    });
+
+    test('runs every frame through one enhancer while on', () async {
+      final media = _FakeMediaService();
+      final enhancer = FakeMicrophoneEnhancer();
+      var opened = 0;
+      final (pipeline, codecs, _) = await pump(
+        media,
+        factory:
+            ({required echoCancellation, required automaticGainControl}) async {
+              opened++;
+              return enhancer;
+            },
+        echoCancellation: true,
+        automaticGainControl: true,
+      );
+      media.addPcm(bytes);
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(opened, 1);
+      expect(enhancer.frames, hasLength(2));
+      expect(enhancer.channels, 2);
+      // Halved on its way out, which is what the fake does.
+      expect(
+        codecs.encoder.inputs.last,
+        Int16List.fromList([for (final sample in samples) sample ~/ 2]),
+      );
+
+      await pipeline.dispose();
+      expect(enhancer.disposed, isTrue);
+    });
+
+    test('the enhancer runs before the noise filter', () async {
+      final media = _FakeMediaService();
+      final enhancer = _RecordingEnhancer();
+      final suppressor = FakeNoiseSuppressor();
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        noiseSuppressorFactory: () async => suppressor,
+        microphoneEnhancerFactory:
+            ({
+              required echoCancellation,
+              required automaticGainControl,
+            }) async => enhancer,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      await pipeline.bindTransport(_FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      await pipeline.setNoiseSuppression(true);
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: true,
+        automaticGainControl: false,
+      );
+
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      // The suppressor saw the enhanced frame, not the raw one: echo and
+      // gain run first, so the noise filter cleans a microphone the room
+      // is already out of.
+      expect(suppressor.frames.single.first, _RecordingEnhancer.enhanced);
+      expect(enhancer.sawRaw, isTrue);
+    });
+
+    test(
+      'an enhancer that throws is dropped and both switches go off',
+      () async {
+        final media = _FakeMediaService();
+        final enhancer = _BrokenEnhancer();
+        var opened = 0;
+        final (pipeline, codecs, errors) = await pump(
+          media,
+          factory:
+              ({
+                required echoCancellation,
+                required automaticGainControl,
+              }) async {
+                opened++;
+                return enhancer;
+              },
+          echoCancellation: true,
+          automaticGainControl: true,
+        );
+        media.addPcm(bytes);
+        media.addPcm(bytes);
+        await _flushEvents();
+
+        expect(errors, hasLength(1));
+        expect(pipeline.isEchoCancellationEnabled, isFalse);
+        expect(pipeline.isAutomaticGainControlEnabled, isFalse);
+        expect(enhancer.disposed, isTrue);
+        expect(codecs.encoder.inputs, hasLength(2));
+        expect(codecs.encoder.inputs.last, samples);
+
+        // Switching on again is the retry.
+        await pipeline.setMicrophoneEnhancement(
+          echoCancellation: true,
+          automaticGainControl: true,
+        );
+        await _flushEvents();
+        expect(opened, 2);
+      },
+    );
+
+    test('a build without the stages says so', () async {
+      final media = _FakeMediaService();
+      final (pipeline, codecs, errors) = await pump(
+        media,
+        factory: null,
+        echoCancellation: true,
+        automaticGainControl: true,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(pipeline.isMicrophoneEnhancementAvailable, isFalse);
+      expect(pipeline.isEchoCancellationEnabled, isFalse);
+      expect(pipeline.isAutomaticGainControlEnabled, isFalse);
+      expect(errors, isEmpty);
+      expect(codecs.encoder.inputs.single, samples);
+    });
+  });
+}
+
+/// An enhancer that marks each sample it hands on, so a downstream filter
+/// can be checked for having seen the enhanced frame.
+final class _RecordingEnhancer implements VoiceMicrophoneEnhancer {
+  static const int enhanced = 12000;
+
+  bool sawRaw = false;
+  bool disposed = false;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    sawRaw = frame.any((sample) => sample != enhanced);
+    frame.fillRange(0, frame.length, enhanced);
+  }
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _BrokenEnhancer implements VoiceMicrophoneEnhancer {
+  bool disposed = false;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    throw StateError('the stages failed');
+  }
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _BrokenSuppressor extends FakeNoiseSuppressor {
+  @override
+  Future<void> process(Int16List frame, {required int channels}) =>
+      throw StateError('model failed');
+}
+
+Future<void> _flushEvents() => Future<void>.delayed(Duration.zero);
+
+final class _FakeCodecFactory implements VoiceOpusCodecFactory {
+  final _FakeEncoder encoder = _FakeEncoder();
+  final List<_FakeDecoder> decoders = [];
+
+  @override
+  VoiceOpusEncoder createEncoder() => encoder;
+
+  @override
+  VoiceOpusDecoder createDecoder() {
+    final decoder = _FakeDecoder();
+    decoders.add(decoder);
+    return decoder;
+  }
+}
+
+final class _FakeEncoder implements VoiceOpusEncoder {
+  final List<Int16List> inputs = [];
+
+  @override
+  Uint8List encode(Int16List pcm) {
+    inputs.add(Int16List.fromList(pcm));
+    return Uint8List.fromList([inputs.length, pcm.length ~/ 15]);
+  }
+
+  @override
+  void dispose() {}
+}
+
+final class _FakeDecoder implements VoiceOpusDecoder {
+  bool disposed = false;
+
+  @override
+  Int16List decode(Uint8List opusFrame) =>
+      Int16List.fromList([opusFrame.first]);
+
+  @override
+  Int16List decodeFec(Uint8List opusFrame, {int frameDurationMs = 20}) =>
+      Int16List.fromList([-opusFrame.first]);
+
+  @override
+  Int16List conceal({int frameDurationMs = 20}) =>
+      Int16List.fromList([-frameDurationMs]);
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _FakeAudioTransport implements VoiceAudioTransport {
+  final StreamController<VoiceRemoteOpusFrame> _remote =
+      StreamController.broadcast();
+  final List<Uint8List> sent = [];
+  int finishCount = 0;
+
+  @override
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _remote.stream;
+
+  void addRemote(
+    String userId,
+    List<int> opus, {
+    int missingFramesBefore = 0,
+  }) => _remote.add(
+    VoiceRemoteOpusFrame(
+      userId: userId,
+      opus: Uint8List.fromList(opus),
+      missingFramesBefore: missingFramesBefore,
+    ),
+  );
+
+  @override
+  void sendOpusFrame(Uint8List opusFrame) =>
+      sent.add(Uint8List.fromList(opusFrame));
+
+  @override
+  Future<void> finishSpeaking() async => finishCount++;
+}
+
+final class _FakeMediaService implements VoiceMediaService {
+  final StreamController<VoicePcmChunk> _microphone =
+      StreamController.broadcast();
+
+  void addPcm(Uint8List bytes) => _microphone.add(
+    VoicePcmChunk(bytes: bytes, sampleRate: 48000, channels: 2),
+  );
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => _microphone.stream;
+  @override
+  Future<List<VoiceDevice>> enumerateDevices() async => const [];
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<void> selectAudioOutput(String deviceId) async {}
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {}
+  @override
+  Future<void> startMicrophone(String? deviceId) async {}
+  @override
+  Future<void> stopMicrophone() async {}
+  @override
+  Future<void> dispose() => _microphone.close();
+}

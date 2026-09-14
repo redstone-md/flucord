@@ -1,0 +1,138 @@
+/// What streamer mode hides while it is on.
+///
+/// The switches are Discord's own, read out of the desktop bundle's settings
+/// ids rather than invented. All six are here.
+final class StreamerModeSettings {
+  const StreamerModeSettings({
+    this.enabled = false,
+    this.automatic = true,
+    this.hidePersonalInformation = true,
+    this.hideInviteLinks = true,
+    this.disableSounds = true,
+    this.disableNotifications = true,
+    this.hideFromCapture = false,
+    this.hideOverlayWidgets = true,
+  });
+
+  /// Whether it is on right now.
+  final bool enabled;
+
+  /// Whether starting a stream turns it on by itself, which is Discord's
+  /// default and the reason the mode is usable at all: somebody about to go
+  /// live is not thinking about a settings page.
+  final bool automatic;
+
+  final bool hidePersonalInformation;
+  final bool hideInviteLinks;
+  final bool disableSounds;
+  final bool disableNotifications;
+
+  /// Whether the window itself is kept out of screen recordings.
+  ///
+  /// Off by default, unlike the rest: it makes the client invisible in a
+  /// recording, and somebody who meant to show it would have no way of
+  /// telling why it had gone.
+  final bool hideFromCapture;
+
+  /// Whether the in-game overlay is taken off screen while the mode is on.
+  /// It is drawn over whatever is being captured, so it is the one thing that
+  /// hiding the client's own window does not deal with.
+  final bool hideOverlayWidgets;
+
+  static const off = StreamerModeSettings();
+
+  bool get hidesPersonalInformation => enabled && hidePersonalInformation;
+  bool get hidesInviteLinks => enabled && hideInviteLinks;
+  bool get silencesSounds => enabled && disableSounds;
+  bool get silencesNotifications => enabled && disableNotifications;
+  bool get hidesWindowFromCapture => enabled && hideFromCapture;
+  bool get hidesOverlay => enabled && hideOverlayWidgets;
+
+  StreamerModeSettings copyWith({
+    bool? enabled,
+    bool? automatic,
+    bool? hidePersonalInformation,
+    bool? hideInviteLinks,
+    bool? disableSounds,
+    bool? disableNotifications,
+    bool? hideFromCapture,
+    bool? hideOverlayWidgets,
+  }) => StreamerModeSettings(
+    enabled: enabled ?? this.enabled,
+    automatic: automatic ?? this.automatic,
+    hidePersonalInformation:
+        hidePersonalInformation ?? this.hidePersonalInformation,
+    hideInviteLinks: hideInviteLinks ?? this.hideInviteLinks,
+    disableSounds: disableSounds ?? this.disableSounds,
+    disableNotifications: disableNotifications ?? this.disableNotifications,
+    hideFromCapture: hideFromCapture ?? this.hideFromCapture,
+    hideOverlayWidgets: hideOverlayWidgets ?? this.hideOverlayWidgets,
+  );
+
+  Map<String, Object?> toJson() => {
+    // `enabled` is deliberately not stored: the mode is about what is on
+    // screen right now, and a client that came back up still hiding
+    // everything would leave somebody wondering what broke.
+    'automatic': automatic,
+    'hide_personal_information': hidePersonalInformation,
+    'hide_invite_links': hideInviteLinks,
+    'disable_sounds': disableSounds,
+    'disable_notifications': disableNotifications,
+    'hide_from_capture': hideFromCapture,
+    'hide_overlay_widgets': hideOverlayWidgets,
+  };
+
+  /// Reads stored settings, falling back per field.
+  ///
+  /// A file written by a newer build, or edited by hand, must not stop the
+  /// client: an unreadable switch simply keeps its default.
+  static StreamerModeSettings fromJson(Object? value) {
+    if (value is! Map) return const StreamerModeSettings();
+    bool read(String key, {required bool fallback}) {
+      final held = value[key];
+      return held is bool ? held : fallback;
+    }
+
+    return StreamerModeSettings(
+      automatic: read('automatic', fallback: true),
+      hidePersonalInformation: read(
+        'hide_personal_information',
+        fallback: true,
+      ),
+      hideInviteLinks: read('hide_invite_links', fallback: true),
+      disableSounds: read('disable_sounds', fallback: true),
+      disableNotifications: read('disable_notifications', fallback: true),
+      hideFromCapture: read('hide_from_capture', fallback: false),
+      hideOverlayWidgets: read('hide_overlay_widgets', fallback: true),
+    );
+  }
+}
+
+/// Where the switches are kept.
+///
+/// Local rather than on the account: `PreloadedUserSettings` has no streamer
+/// group — the desktop client keeps these on the machine — so putting them in
+/// the settings blob would invent a shape Discord does not have.
+abstract interface class StreamerModeRepository {
+  Future<StreamerModeSettings> load();
+  Future<void> save(StreamerModeSettings settings);
+}
+
+/// What an invite link is replaced with while the mode is on.
+const String hiddenInviteLabel = '[invite hidden]';
+
+/// Replaces every Discord invite link in [text].
+///
+/// Matched by host rather than by shape: `discord.gg/x` is an invite and
+/// `example.com/discord.gg` is not, and a viewer of a stream reading the
+/// second as the first is only a nuisance while the reverse hands out a
+/// server to everybody watching.
+String hideInviteLinks(String text) => text.replaceAllMapped(
+  RegExp(
+    r'(?:https?://)?(?:www\.)?'
+    r'(?:discord\.gg|discord(?:app)?\.com/invite|discord\.com/events)'
+    r'/[A-Za-z0-9\-_/]+',
+    caseSensitive: false,
+  ),
+  (_) => hiddenInviteLabel,
+);

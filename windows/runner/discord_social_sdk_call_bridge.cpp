@@ -1,0 +1,333 @@
+#include "discord_social_sdk_call_bridge.h"
+
+#include "discord_social_sdk_wire.h"
+
+#include <cstdint>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+#include <discord_partner_sdk/discordpp.h>
+#endif
+
+namespace {
+
+using discord_social_sdk_wire::BoolArgument;
+using discord_social_sdk_wire::InvalidArguments;
+using discord_social_sdk_wire::MethodResult;
+using discord_social_sdk_wire::SnowflakeArgument;
+
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+std::string CallStatusName(discordpp::Call::Status status) {
+  switch (status) {
+    case discordpp::Call::Status::Disconnected:
+      return "disconnected";
+    case discordpp::Call::Status::Joining:
+      return "joining";
+    case discordpp::Call::Status::Connecting:
+      return "connecting";
+    case discordpp::Call::Status::SignalingConnected:
+      return "signaling_connected";
+    case discordpp::Call::Status::Connected:
+      return "connected";
+    case discordpp::Call::Status::Reconnecting:
+      return "reconnecting";
+    case discordpp::Call::Status::Disconnecting:
+      return "disconnecting";
+    default:
+      return "unknown";
+  }
+}
+
+flutter::EncodableValue DisconnectedPayload(uint64_t lobby_id,
+                                            uint64_t current_user_id) {
+  flutter::EncodableMap payload;
+  payload[flutter::EncodableValue("lobby_id")] =
+      flutter::EncodableValue(std::to_string(lobby_id));
+  payload[flutter::EncodableValue("current_user_id")] =
+      flutter::EncodableValue(std::to_string(current_user_id));
+  payload[flutter::EncodableValue("status")] =
+      flutter::EncodableValue("disconnected");
+  payload[flutter::EncodableValue("participant_user_ids")] =
+      flutter::EncodableValue(flutter::EncodableList{});
+  payload[flutter::EncodableValue("speaking_user_ids")] =
+      flutter::EncodableValue(flutter::EncodableList{});
+  payload[flutter::EncodableValue("locally_muted_user_ids")] =
+      flutter::EncodableValue(flutter::EncodableList{});
+  payload[flutter::EncodableValue("self_muted")] =
+      flutter::EncodableValue(false);
+  payload[flutter::EncodableValue("self_deafened")] =
+      flutter::EncodableValue(false);
+  return flutter::EncodableValue(payload);
+}
+
+flutter::EncodableValue CallPayload(uint64_t lobby_id,
+                                    uint64_t current_user_id,
+                                    discordpp::Call& call,
+                                    const std::set<uint64_t>& speaking_users) {
+  flutter::EncodableList participants;
+  flutter::EncodableList locally_muted;
+  for (const auto user_id : call.GetParticipants()) {
+    participants.emplace_back(std::to_string(user_id));
+    if (call.GetLocalMute(user_id)) {
+      locally_muted.emplace_back(std::to_string(user_id));
+    }
+  }
+  flutter::EncodableList speaking;
+  for (const auto user_id : speaking_users) {
+    speaking.emplace_back(std::to_string(user_id));
+  }
+  flutter::EncodableMap payload;
+  payload[flutter::EncodableValue("lobby_id")] =
+      flutter::EncodableValue(std::to_string(lobby_id));
+  payload[flutter::EncodableValue("current_user_id")] =
+      flutter::EncodableValue(std::to_string(current_user_id));
+  payload[flutter::EncodableValue("status")] =
+      flutter::EncodableValue(CallStatusName(call.GetStatus()));
+  payload[flutter::EncodableValue("participant_user_ids")] =
+      flutter::EncodableValue(participants);
+  payload[flutter::EncodableValue("speaking_user_ids")] =
+      flutter::EncodableValue(speaking);
+  payload[flutter::EncodableValue("locally_muted_user_ids")] =
+      flutter::EncodableValue(locally_muted);
+  payload[flutter::EncodableValue("self_muted")] =
+      flutter::EncodableValue(call.GetSelfMute());
+  payload[flutter::EncodableValue("self_deafened")] =
+      flutter::EncodableValue(call.GetSelfDeaf());
+  return flutter::EncodableValue(payload);
+}
+#endif
+
+}  // namespace
+
+class DiscordSocialSdkCallBridge::Impl {
+ public:
+  Impl(discordpp::Client* client,
+       flutter::MethodChannel<flutter::EncodableValue>* channel)
+      : client_(client), channel_(channel) {}
+
+  bool CanHandle(const std::string& method) const {
+    return method == "startActivityCall" ||
+           method == "setActivityCallMuted" ||
+           method == "setActivityCallDeafened" ||
+           method == "setActivityParticipantMuted" ||
+           method == "leaveActivityCall";
+  }
+
+  void ResetSession() {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+    call_.reset();
+    active_lobby_id_ = 0;
+    current_user_id_ = 0;
+    speaking_user_ids_.clear();
+#endif
+  }
+
+  void Handle(const flutter::MethodCall<>& method_call,
+              std::unique_ptr<MethodResult> result) {
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+    if (client_->GetStatus() != discordpp::Client::Status::Ready) {
+      result->Error("not_authenticated",
+                    "Activity voice requires a ready Social SDK session.");
+      return;
+    }
+    if (method_call.method_name() == "startActivityCall") {
+      Start(method_call, std::move(result));
+    } else if (method_call.method_name() == "leaveActivityCall") {
+      Leave(method_call, std::move(result));
+    } else if (method_call.method_name() ==
+               "setActivityParticipantMuted") {
+      SetParticipantMuted(method_call, std::move(result));
+    } else {
+      SetVoiceState(method_call, std::move(result));
+    }
+#else
+    result->Error("sdk_not_bundled",
+                  "The Discord Social SDK package is not linked.");
+#endif
+  }
+
+ private:
+#if defined(FLUCORD_DISCORD_SOCIAL_SDK_ENABLED)
+  void Start(const flutter::MethodCall<>& method_call,
+             std::unique_ptr<MethodResult> result) {
+    const auto lobby_id = SnowflakeArgument(method_call, "lobby_id");
+    if (!lobby_id) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    if (call_ && active_lobby_id_ == *lobby_id) {
+      result->Success(CallPayload(active_lobby_id_, current_user_id_, *call_,
+                                  speaking_user_ids_));
+      return;
+    }
+    if (call_) {
+      result->Error("activity_call_active",
+                    "Another activity voice call is already active.");
+      return;
+    }
+    const auto current_user = client_->GetCurrentUserV2();
+    if (!current_user || current_user->Id() == 0) {
+      result->Error("current_user_unavailable",
+                    "Activity voice requires the current Discord identity.");
+      return;
+    }
+    active_lobby_id_ = *lobby_id;
+    current_user_id_ = current_user->Id();
+    speaking_user_ids_.clear();
+    call_ = std::make_unique<discordpp::Call>(
+        client_->StartCall(active_lobby_id_));
+    call_->SetStatusChangedCallback(
+        [this](discordpp::Call::Status, discordpp::Call::Error, int32_t) {
+          NotifyCallState();
+        });
+    call_->SetParticipantChangedCallback(
+        [this](uint64_t user_id, bool added) {
+          if (!added) {
+            speaking_user_ids_.erase(user_id);
+          }
+          NotifyCallState();
+        });
+    call_->SetSpeakingStatusChangedCallback(
+        [this](uint64_t user_id, bool speaking) {
+          if (speaking) {
+            speaking_user_ids_.insert(user_id);
+          } else {
+            speaking_user_ids_.erase(user_id);
+          }
+          NotifyCallState();
+        });
+    result->Success(CallPayload(active_lobby_id_, current_user_id_, *call_,
+                                speaking_user_ids_));
+  }
+
+  void SetVoiceState(const flutter::MethodCall<>& method_call,
+                     std::unique_ptr<MethodResult> result) {
+    const auto lobby_id = SnowflakeArgument(method_call, "lobby_id");
+    const auto value = BoolArgument(method_call, "value");
+    if (!lobby_id || !value || !call_ || *lobby_id != active_lobby_id_) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    if (method_call.method_name() == "setActivityCallMuted") {
+      call_->SetSelfMute(*value);
+    } else {
+      call_->SetSelfDeaf(*value);
+    }
+    const auto payload =
+        CallPayload(active_lobby_id_, current_user_id_, *call_,
+                    speaking_user_ids_);
+    result->Success(payload);
+    NotifyCallState();
+  }
+
+  void SetParticipantMuted(const flutter::MethodCall<>& method_call,
+                           std::unique_ptr<MethodResult> result) {
+    const auto lobby_id = SnowflakeArgument(method_call, "lobby_id");
+    const auto user_id = SnowflakeArgument(method_call, "user_id");
+    const auto value = BoolArgument(method_call, "value");
+    if (!lobby_id || !user_id || !value || !call_ ||
+        *lobby_id != active_lobby_id_) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    if (*user_id == current_user_id_) {
+      result->Error("activity_call_self_target",
+                    "Use the self mute control for the current user.");
+      return;
+    }
+    bool participant_found = false;
+    for (const auto participant_user_id : call_->GetParticipants()) {
+      if (participant_user_id == *user_id) {
+        participant_found = true;
+        break;
+      }
+    }
+    if (!participant_found) {
+      result->Error("activity_call_participant_missing",
+                    "The activity voice participant is no longer present.");
+      return;
+    }
+    call_->SetLocalMute(*user_id, *value);
+    const auto payload =
+        CallPayload(active_lobby_id_, current_user_id_, *call_,
+                    speaking_user_ids_);
+    result->Success(payload);
+    NotifyCallState();
+  }
+
+  void Leave(const flutter::MethodCall<>& method_call,
+             std::unique_ptr<MethodResult> result) {
+    const auto lobby_id = SnowflakeArgument(method_call, "lobby_id");
+    if (!lobby_id || !call_ || *lobby_id != active_lobby_id_) {
+      InvalidArguments(std::move(result));
+      return;
+    }
+    const auto ending_lobby_id = active_lobby_id_;
+    const auto ending_current_user_id = current_user_id_;
+    auto pending = std::shared_ptr<MethodResult>(std::move(result));
+    client_->EndCalls(
+        [this, pending, ending_lobby_id, ending_current_user_id](
+            const discordpp::ClientResult& sdk_result) {
+          if (!sdk_result.Successful()) {
+            pending->Error("activity_call_leave_failed",
+                           "Discord could not leave activity voice.");
+            return;
+          }
+          call_.reset();
+          active_lobby_id_ = 0;
+          current_user_id_ = 0;
+          speaking_user_ids_.clear();
+          const auto payload =
+              DisconnectedPayload(ending_lobby_id, ending_current_user_id);
+          pending->Success(payload);
+          channel_->InvokeMethod(
+              "socialActivityCallChanged",
+              std::make_unique<flutter::EncodableValue>(payload));
+        });
+  }
+
+  void NotifyCallState() {
+    if (!call_ || active_lobby_id_ == 0) {
+      return;
+    }
+    const auto payload =
+        CallPayload(active_lobby_id_, current_user_id_, *call_,
+                    speaking_user_ids_);
+    channel_->InvokeMethod(
+        "socialActivityCallChanged",
+        std::make_unique<flutter::EncodableValue>(payload));
+  }
+
+  uint64_t active_lobby_id_ = 0;
+  uint64_t current_user_id_ = 0;
+  std::unique_ptr<discordpp::Call> call_;
+  std::set<uint64_t> speaking_user_ids_;
+#endif
+
+  discordpp::Client* client_;
+  flutter::MethodChannel<flutter::EncodableValue>* channel_;
+};
+
+DiscordSocialSdkCallBridge::DiscordSocialSdkCallBridge(
+    discordpp::Client* client,
+    flutter::MethodChannel<flutter::EncodableValue>* channel)
+    : impl_(std::make_unique<Impl>(client, channel)) {}
+
+DiscordSocialSdkCallBridge::~DiscordSocialSdkCallBridge() = default;
+
+bool DiscordSocialSdkCallBridge::CanHandle(const std::string& method) const {
+  return impl_->CanHandle(method);
+}
+
+void DiscordSocialSdkCallBridge::ResetSession() {
+  impl_->ResetSession();
+}
+
+void DiscordSocialSdkCallBridge::Handle(
+    const flutter::MethodCall<>& call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  impl_->Handle(call, std::move(result));
+}

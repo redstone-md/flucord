@@ -1,0 +1,57 @@
+name: flucord
+description: A native Flutter desktop messaging client.
+publish_to: 'none'
+version: 0.0.10+10
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  auto_updater: ^1.0.0
+  cached_network_image: ^3.4.1
+  cryptography: ^2.9.0
+  file_picker: 11.0.2
+  ffi: ^2.2.0
+  flutter:
+    sdk: flutter
+  flutter_cache_manager: ^3.4.2
+  flutter_markdown_plus: 1.0.12
+  flutter_secure_storage: ^10.3.1
+  flutter_soloud: ^4.0.13
+  flutter_webrtc: ^1.5.2
+  local_notifier: ^0.1.6
+  markdown: 7.3.1
+  path_provider: ^2.1.6
+  protocol_handler: ^0.2.0
+  sqflite_common_ffi: ^2.4.2
+  tray_manager: ^0.5.3
+  url_launcher: 6.3.2
+  webview_windows: ^0.4.0
+  window_manager: ^0.5.2
+  record: ^7.1.1
+  opus_codec: ^3.0.5
+  opus_codec_dart: ^3.0.5
+  media_kit: 1.2.6
+  media_kit_video: 2.0.1
+  media_kit_libs_video: ^1.0.7
+  lottie: ^3.5.1
+  pointycastle: ^4.0.0
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  fake_async: ^1.3.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - windows/runner/resources/app_icon.ico
+    - macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png
+    - assets/sounds/call_ring.wav
+    - assets/sounds/call_accept.wav
+    - assets/sounds/call_hang_up.wav
+    - assets/spellcheck/en.txt

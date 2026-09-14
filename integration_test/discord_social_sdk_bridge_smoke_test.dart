@@ -1,0 +1,195 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/data/native_discord_social_sdk_gateway.dart';
+import 'package:flucord/src/domain/discord_relationship.dart';
+import 'package:flucord/src/domain/discord_social_activity.dart';
+import 'package:flucord/src/domain/discord_social_presence.dart';
+import 'package:flucord/src/domain/discord_social_sdk.dart';
+import 'package:integration_test/integration_test.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('reports an unbundled SDK through the Windows runner', (
+    tester,
+  ) async {
+    final gateway = NativeDiscordSocialSdkGateway();
+
+    final availability = await gateway.checkAvailability();
+
+    expect(
+      availability.status,
+      DiscordSocialSdkAvailabilityStatus.sdkNotBundled,
+    );
+    await expectLater(
+      gateway.fetchCurrentUserId(),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.fetchRelationships(),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.updateRelationship(
+        userId: '123456789',
+        action: DiscordRelationshipAction.acceptRequest,
+      ),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.sendFriendRequest('123456789'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.fetchConversations(),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.fetchMessages(userId: '123456789'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.sendMessage(userId: '123456789', content: 'smoke'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.editMessage(
+        userId: '123456789',
+        messageId: '987654321',
+        content: 'edited smoke',
+      ),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.deleteMessage(userId: '123456789', messageId: '987654321'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.setShowingChat(true),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.setOnlineStatus(DiscordOnlineStatus.idle),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.sendActivityInvite('123456789'),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    await expectLater(
+      gateway.acceptActivityInvite(
+        DiscordSocialActivityInvite(
+          applicationId: '100',
+          parentApplicationId: '0',
+          channelId: '300',
+          messageId: '400',
+          senderId: '500',
+          partyId: 'party',
+          sessionId: 'session',
+          type: DiscordSocialActivityInviteType.join,
+          isValid: true,
+        ),
+      ),
+      throwsA(
+        isA<DiscordSocialSdkException>().having(
+          (error) => error.code,
+          'code',
+          'sdk_not_bundled',
+        ),
+      ),
+    );
+    for (final operation in <Future<Object?>>[
+      gateway.startActivityCall('700'),
+      gateway.setActivityCallMuted(lobbyId: '700', muted: true),
+      gateway.setActivityCallDeafened(lobbyId: '700', deafened: true),
+      gateway.setActivityParticipantMuted(
+        lobbyId: '700',
+        userId: '123456789',
+        muted: true,
+      ),
+      gateway.leaveActivityCall('700'),
+    ]) {
+      await expectLater(
+        operation,
+        throwsA(
+          isA<DiscordSocialSdkException>().having(
+            (error) => error.code,
+            'code',
+            'sdk_not_bundled',
+          ),
+        ),
+      );
+    }
+  });
+}
