@@ -174,8 +174,18 @@ class ReleaseNotesBuilder {
     if ([string]::IsNullOrWhiteSpace([string] $response.body)) {
       return '_No pull requests were associated with this release range._'
     }
-    return [string] $response.body
+    # GitHub's generator calls anyone whose first merged PR lands in the
+    # release range a new contributor, which mislabels the maintainers who
+    # push commits to main directly. The block carries nothing the release
+    # needs, so it goes.
+    $body = [string] $response.body
+    $start = $body.IndexOf('## New Contributors')
+    if ($start -ge 0) {
+      $body = $body.Substring(0, $start).TrimEnd()
+    }
+    return $body
   }
+
 
   hidden [void] AppendHighlights(
     [System.Collections.Generic.List[string]] $content
