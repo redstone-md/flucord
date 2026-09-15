@@ -180,13 +180,20 @@ class ReleaseNotesBuilder {
   hidden [void] AppendHighlights(
     [System.Collections.Generic.List[string]] $content
   ) {
-    # The release commit's body may carry the release's own summary as
-    # bullets: a squashed history has one subject, and the bullets are
-    # where the surface list lives. Section headings in the body are
-    # skipped so the notes keep one shape.
-    $body = @(& git log --format=%B -1 "$($this.Tag)") -join "`n"
+    # The release summary lives on the chore(release) commit, which the
+    # tag itself need not be: a last-mile fix may carry the tag while the
+    # bullets stay on the release commit it follows. Walk the history
+    # back to the nearest release commit and read its body.
+    $releaseCommit = @(& git log --first-parent --format=%H --grep='^chore(release):' -1 "$($this.Tag)")
     if ($LASTEXITCODE -ne 0) {
-      throw 'Unable to read the tagged commit body.'
+      throw 'Unable to search the history for the release commit.'
+    }
+    if ($releaseCommit.Count -eq 0) {
+      return
+    }
+    $body = @(& git log --format=%B -1 $releaseCommit[0]) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Unable to read the release commit body.'
     }
     $bullets = @(
       foreach ($line in $body -split "`n") {
