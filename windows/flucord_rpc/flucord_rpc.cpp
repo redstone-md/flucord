@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr int kInvalidStatusPipe = FLUCORD_RPC_ERROR_PIPE;
+constexpr FlucordRpcStatus kInvalidStatusPipe = FLUCORD_RPC_ERROR_PIPE;
 
 std::wstring Utf8ToWide(const char* text) {
   const auto length =

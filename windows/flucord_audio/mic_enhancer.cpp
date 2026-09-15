@@ -341,7 +341,7 @@ void PullSpeaker(EnhancerState* state) {
 // from the same moment.
 void ReadSpeakerFrame(EnhancerState* state, int16_t* out) {
   PullSpeaker(state);
-  const size_t have = std::min(state->speaker_internal.size(),
+  const size_t have = (std::min)(state->speaker_internal.size(),
                                static_cast<size_t>(kInternalFrame));
   for (size_t i = 0; i < have; i++) {
     out[i] = state->speaker_internal[i];
