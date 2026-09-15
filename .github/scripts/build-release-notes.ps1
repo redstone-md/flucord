@@ -85,7 +85,8 @@ class ReleaseNotesBuilder {
     } else {
       $content.Add("- History: [all commits through $($this.Tag)]($($this.RepositoryUrl)/commits/$($this.Tag))")
     }
-    $content.Add('')
+
+    $this.AppendHighlights($content)
 
     $this.AppendConventionalIndex($content, $commits)
     $this.AppendCommitSection($content, 'Merge history', $mergeCommits)
@@ -175,6 +176,36 @@ class ReleaseNotesBuilder {
     }
     return [string] $response.body
   }
+
+  hidden [void] AppendHighlights(
+    [System.Collections.Generic.List[string]] $content
+  ) {
+    # The release commit's body may carry the release's own summary as
+    # bullets: a squashed history has one subject, and the bullets are
+    # where the surface list lives. Section headings in the body are
+    # skipped so the notes keep one shape.
+    $body = @(& git log --format=%B -1 "$($this.Tag)") -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Unable to read the tagged commit body.'
+    }
+    $bullets = @(
+      foreach ($line in $body -split "`n") {
+        if ($line -match '^-\s+(.+)$') {
+          $Matches[1].Trim()
+        }
+      }
+    )
+    if ($bullets.Count -eq 0) {
+      return
+    }
+    $content.Add('## Highlights')
+    $content.Add('')
+    foreach ($bullet in $bullets) {
+      $content.Add("- $($this.EscapeMarkdown($bullet))")
+    }
+    $content.Add('')
+  }
+
 
   hidden [void] AppendConventionalIndex(
     [System.Collections.Generic.List[string]] $content,
