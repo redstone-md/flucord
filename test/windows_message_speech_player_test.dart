@@ -2,23 +2,28 @@ import 'package:flucord/src/data/windows_message_speech_player.dart';
 import 'package:flucord/src/domain/soundboard_playback.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The synthesis half of spoken-aloud messages. The Windows synthesiser
-/// itself only exists on a Windows machine with a voice, which is live
-/// evidence the suite keeps out; what the suite can hold to account is the
-/// honesty of the refusal and the handoff to the media playback layer.
+/// The synthesis half of spoken-aloud messages. A Windows runner carries the
+/// real synthesiser, so the expectations branch on what the player reports:
+/// where it can speak it proves the handoff to the media playback layer,
+/// and where it cannot it proves the plain refusal.
 void main() {
-  test('a machine without the synthesiser refuses and plays nothing', () async {
+  test('the refusal and the handoff follow what the machine supports',
+      () async {
     final sounds = _RecordingSounds();
     final speech = WindowsMessageSpeechPlayer(player: sounds);
 
-    await speech.speak('The release is out.');
+    final spoken = await speech.speak('The release is out.');
 
-    // This suite runs on a machine the player cannot synthesise on; the
-    // contract's answer there is a plain refusal, not an error and not a
-    // silent pretence.
-    expect(sounds.played, isEmpty);
-    expect(speech.isSupported, anyOf(isTrue, isFalse));
-    if (!speech.isSupported) {
+    if (speech.isSupported) {
+      // A synthesiser is here: the message goes out as a spoken file handed
+      // to the media playback layer.
+      expect(spoken, isTrue);
+      expect(sounds.played, hasLength(1));
+    } else {
+      // No synthesiser: the contract's answer is a plain refusal, not an
+      // error and not a silent pretence.
+      expect(spoken, isFalse);
+      expect(sounds.played, isEmpty);
       expect(await speech.speak('The release is out.'), isFalse);
     }
   });

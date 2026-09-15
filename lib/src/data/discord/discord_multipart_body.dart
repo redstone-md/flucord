@@ -53,12 +53,21 @@ final class DiscordMultipartBody {
   /// Unlike [build] there is no `payload_json`: every value is its own field,
   /// because that is what a form route expects and a single JSON blob is what
   /// a message route expects.
+
+  /// Separates consecutive bodies the clock may not: two builds inside one
+  /// coarse timer tick would otherwise share a boundary.
+  static int _boundaryCounter = 0;
   static Future<DiscordMultipartBody> buildForm(
     Map<String, String> fields,
     List<({String name, String filename, List<int> bytes})> files,
   ) async {
+    // A clock alone does not separate two bodies on a platform whose timer
+    // ticks coarser than a microsecond: Windows can hand two builds the
+    // same tick, and a body whose boundary equals its neighbour's cannot be
+    // told apart on the wire. A counter carries what the clock cannot.
     final boundary =
-        '----flucord-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
+        '----flucord-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}'
+        '-${_boundaryCounter = (_boundaryCounter + 1) % 0x10000}';
     final builder = BytesBuilder(copy: false);
 
     void text(String value) => builder.add(utf8.encode(value));
