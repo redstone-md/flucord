@@ -56,7 +56,12 @@ void main() {
       ],
       channelsByGuild: const {
         'guild-1': [
-          {'id': 'general', 'guild_id': 'guild-1', 'name': 'general', 'type': 0},
+          {
+            'id': 'general',
+            'guild_id': 'guild-1',
+            'name': 'general',
+            'type': 0,
+          },
         ],
       },
     );

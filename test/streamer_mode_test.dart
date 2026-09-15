@@ -95,33 +95,35 @@ void main() {
   });
 
   group('the controller', () {
-    test('a stream turns it on, and ending the stream turns it back off',
-        () async {
-      final repository = _MemorySettings();
-      final controller = StreamerModeController(repository);
-      addTearDown(controller.dispose);
-      expect(controller.isLoaded, isFalse);
-      await controller.load();
-      // A second load does not re-read.
-      await controller.load();
-      expect(repository.reads, 1);
-      expect(controller.isLoaded, isTrue);
+    test(
+      'a stream turns it on, and ending the stream turns it back off',
+      () async {
+        final repository = _MemorySettings();
+        final controller = StreamerModeController(repository);
+        addTearDown(controller.dispose);
+        expect(controller.isLoaded, isFalse);
+        await controller.load();
+        // A second load does not re-read.
+        await controller.load();
+        expect(repository.reads, 1);
+        expect(controller.isLoaded, isTrue);
 
-      controller.reconcileStreaming(isStreaming: true);
-      expect(controller.isEnabled, isTrue);
-      expect(controller.hidesPersonalInformation, isTrue);
-      expect(controller.hidesInviteLinks, isTrue);
-      expect(controller.silencesSounds, isTrue);
-      expect(controller.silencesNotifications, isTrue);
-      // The overlay is drawn over whatever is being captured, so hiding the
-      // client's own window does not deal with it.
-      expect(controller.hidesOverlay, isTrue);
+        controller.reconcileStreaming(isStreaming: true);
+        expect(controller.isEnabled, isTrue);
+        expect(controller.hidesPersonalInformation, isTrue);
+        expect(controller.hidesInviteLinks, isTrue);
+        expect(controller.silencesSounds, isTrue);
+        expect(controller.silencesNotifications, isTrue);
+        // The overlay is drawn over whatever is being captured, so hiding the
+        // client's own window does not deal with it.
+        expect(controller.hidesOverlay, isTrue);
 
-      controller.reconcileStreaming(isStreaming: false);
-      expect(controller.isEnabled, isFalse);
-      // The live flag is never written.
-      expect(repository.saved, isEmpty);
-    });
+        controller.reconcileStreaming(isStreaming: false);
+        expect(controller.isEnabled, isFalse);
+        // The live flag is never written.
+        expect(repository.saved, isEmpty);
+      },
+    );
 
     test('a mode switched on by hand outlives the stream', () async {
       final controller = StreamerModeController(_MemorySettings());
@@ -212,33 +214,34 @@ void main() {
       expect(controller.wasCaptureShieldRefused, isTrue);
     });
 
-    test('the window is excluded while the mode is on, and put back after',
-        () async {
-      final shield = _FakeShield();
-      final controller = StreamerModeController(
-        _MemorySettings()
-          ..stored = const StreamerModeSettings(hideFromCapture: true),
-        shield: shield,
-      );
-      addTearDown(controller.dispose);
-      await controller.load();
+    test(
+      'the window is excluded while the mode is on, and put back after',
+      () async {
+        final shield = _FakeShield();
+        final controller = StreamerModeController(
+          _MemorySettings()
+            ..stored = const StreamerModeSettings(hideFromCapture: true),
+          shield: shield,
+        );
+        addTearDown(controller.dispose);
+        await controller.load();
 
-      await controller.setEnabled(enabled: true);
-      expect(shield.calls, [true]);
-      expect(controller.isHiddenFromCapture, isTrue);
-      expect(controller.wasCaptureShieldRefused, isFalse);
+        await controller.setEnabled(enabled: true);
+        expect(shield.calls, [true]);
+        expect(controller.isHiddenFromCapture, isTrue);
+        expect(controller.wasCaptureShieldRefused, isFalse);
 
-      // Asked again for the same thing: the window list is not walked twice.
-      await controller.setHidePersonalInformation(hide: false);
-      expect(shield.calls, [true]);
+        // Asked again for the same thing: the window list is not walked twice.
+        await controller.setHidePersonalInformation(hide: false);
+        expect(shield.calls, [true]);
 
-      await controller.setEnabled(enabled: false);
-      expect(shield.calls, [true, false]);
-      expect(controller.isHiddenFromCapture, isFalse);
-    });
+        await controller.setEnabled(enabled: false);
+        expect(shield.calls, [true, false]);
+        expect(controller.isHiddenFromCapture, isFalse);
+      },
+    );
 
-    test('a refusal from the platform is reported, not assumed away',
-        () async {
+    test('a refusal from the platform is reported, not assumed away', () async {
       final shield = _FakeShield()..accept = false;
       final controller = StreamerModeController(
         _MemorySettings()
@@ -277,9 +280,7 @@ void main() {
       expect(shield.setExcluded(excluded: true), isFalse);
     });
 
-
-    test('on Windows it walks the real window list and answers honestly',
-        () {
+    test('on Windows it walks the real window list and answers honestly', () {
       if (!Platform.isWindows) return;
       final shield = WindowsWindowCaptureShield();
 
@@ -346,9 +347,9 @@ void main() {
       expect(settings.disableNotifications, isFalse);
     });
 
-
-    testWidgets('the capture switch is dead where the platform has no shield',
-        (tester) async {
+    testWidgets('the capture switch is dead where the platform has no shield', (
+      tester,
+    ) async {
       final controller = StreamerModeController(_MemorySettings());
       addTearDown(controller.dispose);
       await controller.load();
@@ -472,10 +473,8 @@ final class _MemorySettings implements StreamerModeRepository {
   }
 
   @override
-  Future<void> save(StreamerModeSettings settings) async =>
-      saved.add(settings);
+  Future<void> save(StreamerModeSettings settings) async => saved.add(settings);
 }
-
 
 final class _FakeShield implements WindowCaptureShield {
   final List<bool> calls = [];

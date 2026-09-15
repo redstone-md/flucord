@@ -5,6 +5,7 @@ import 'package:flucord/src/domain/automod_rule.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
+import 'package:flucord/src/domain/permission_overwrite.dart';
 import 'package:flucord/src/domain/workspace_permissions.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_audit_section.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_controls.dart';
@@ -190,6 +191,173 @@ void main() {
     harness.dispose();
   });
 
+  testWidgets('the channel editor exposes and saves every field', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('guild-settings-rail-channels')),
+    );
+    await tester.pumpAndSettle();
+
+    // The voice channel carries the voice-only fields.
+    await tester.tap(
+      find.byKey(const ValueKey('guild-channel-edit-234567890123456789')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Edit workbench'), findsOneWidget);
+    for (final key in [
+      'guild-channel-age-gate',
+      'guild-channel-slowmode',
+      'guild-channel-parent',
+      'guild-channel-bitrate',
+      'guild-channel-user-limit',
+      'guild-channel-region',
+    ]) {
+      await _reveal(tester, find.byKey(ValueKey(key)));
+      expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+    }
+
+    await _reveal(tester, find.byKey(const ValueKey('guild-channel-age-gate')));
+    await tester.tap(find.byKey(const ValueKey('guild-channel-age-gate')));
+    await tester.pumpAndSettle();
+    await _choose(tester, 'guild-channel-slowmode', '5 minutes');
+    await _choose(tester, 'guild-channel-parent', 'No category');
+    await _choose(tester, 'guild-channel-bitrate', '128 kbps');
+    await _choose(tester, 'guild-channel-user-limit', '25');
+    await _choose(tester, 'guild-channel-region', 'us-east');
+    await _reveal(tester, find.byKey(const ValueKey('guild-channel-save')));
+    await tester.tap(find.byKey(const ValueKey('guild-channel-save')));
+    await tester.pumpAndSettle();
+
+    expect(harness.repository.calls, contains('editGuildChannel'));
+    // Saving closes the editor and returns to the list.
+    expect(find.byKey(const ValueKey('guild-channel-create')), findsOneWidget);
+    harness.dispose();
+  });
+
+  testWidgets('the overwrite editor adds a role overwrite and saves it', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('guild-settings-rail-channels')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('guild-channel-edit-$textChannelId')),
+    );
+    await tester.pumpAndSettle();
+
+    // The text channel starts with no overwrites. A member overwrite is
+    // added through its own picker, named by the member it grants.
+    await _reveal(
+      tester,
+      find.byKey(const ValueKey('guild-overwrite-add-member')),
+    );
+    await tester.tap(find.byKey(const ValueKey('guild-overwrite-add-member')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('overwrite-target-$lowMemberId')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('guild-overwrite-$lowMemberId')),
+      findsOneWidget,
+    );
+
+    // Grant View channel to the member.
+    await tester.tap(
+      find.byKey(const ValueKey('guild-overwrite-edit-$lowMemberId')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('overwrite-allow-View channel')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('overwrite-bits-done')));
+    await tester.pumpAndSettle();
+
+    await _reveal(tester, find.byKey(const ValueKey('guild-channel-save')));
+    await tester.tap(find.byKey(const ValueKey('guild-channel-save')));
+    await tester.pumpAndSettle();
+    expect(harness.repository.savedOverwrites, hasLength(1));
+    final saved = harness.repository.savedOverwrites!.single;
+    expect(saved.id, lowMemberId);
+    expect(saved.kind, PermissionOverwriteKind.member);
+    expect(saved.allow, DiscordPermissions.viewChannel);
+    harness.dispose();
+  });
+
+  testWidgets('the webhooks page lists, creates, edits and deletes', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('guild-settings-rail-webhooks')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('There are no webhooks yet.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('guild-webhook-create')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('webhook-name')),
+      'builds',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('webhook-confirm')));
+    await tester.pumpAndSettle();
+    expect(harness.repository.calls, contains('createWebhook'));
+    expect(
+      find.byKey(const ValueKey('guild-webhook-555555555555555555')),
+      findsOneWidget,
+    );
+    expect(find.text('Posts into #general'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('guild-webhook-edit-555555555555555555')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('webhook-name')),
+      'builds v2',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('webhook-confirm')));
+    await tester.pumpAndSettle();
+    expect(harness.repository.calls, contains('updateWebhook'));
+    expect(find.text('builds v2'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('guild-webhook-delete-555555555555555555')),
+    );
+    await tester.pumpAndSettle();
+    expect(harness.repository.calls, contains('deleteWebhook'));
+    expect(find.text('There are no webhooks yet.'), findsOneWidget);
+    harness.dispose();
+  });
+
+  testWidgets('the webhooks page is hidden without MANAGE_WEBHOOKS', (
+    tester,
+  ) async {
+    final harness = await _pump(
+      tester,
+      permissions: DiscordPermissions.combine([
+        DiscordPermissions.viewChannel,
+        DiscordPermissions.manageGuild,
+        DiscordPermissions.banMembers,
+      ]),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('guild-settings-rail-webhooks')),
+      findsNothing,
+    );
+    harness.dispose();
+  });
+
   testWidgets('changes every overview control', (tester) async {
     // The section is pumped on its own so the whole form is on screen: the
     // dialog caps its height, and a test that spent its time dragging a
@@ -369,24 +537,53 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Every section has to survive the narrow window, not just the first.
-    for (final section in GuildSettingsSection.values) {
+    // The strip scrolls sideways, so each chip is dragged into view along
+    // the strip's own axis.
+    for (final section in harness.controller.availableSections) {
       final chip = find.byKey(ValueKey('guild-settings-chip-${section.name}'));
-      await tester.scrollUntilVisible(
-        chip,
-        80,
-        scrollable: find
-            .descendant(
-              of: find.byKey(const ValueKey('guild-settings-section-strip')),
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
+      for (var attempt = 0; attempt < 20; attempt++) {
+        if (chip.evaluate().isNotEmpty) {
+          final rect = tester.getRect(chip);
+          if (rect.left >= 0 && rect.right <= 420) break;
+        }
+        await tester.drag(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('guild-settings-section-strip')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+          const Offset(-80, 0),
+        );
+        await tester.pumpAndSettle();
+      }
       await tester.tap(chip);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: section.name);
     }
     harness.dispose();
   });
+}
+
+/// Scrolls the open section until [finder] is fully on screen.
+///
+/// The dialog caps its own height, so a row can be laid out inside the window
+/// and still be clipped by the panel it scrolls in; the check is against the
+/// panel's own rect, and anything outside it cannot be tapped.
+Future<void> _reveal(WidgetTester tester, Finder finder) async {
+  final viewport = find.byType(GuildSettingsPanel);
+  for (var attempt = 0; attempt < 40; attempt++) {
+    if (finder.evaluate().isNotEmpty) {
+      final view = tester.getRect(viewport);
+      final rect = tester.getRect(finder);
+      if (rect.top >= view.top && rect.bottom <= view.bottom) break;
+    }
+    final above =
+        finder.evaluate().isNotEmpty &&
+        tester.getRect(finder).top < tester.getRect(viewport).top;
+    await tester.drag(viewport, Offset(0, above ? 200 : -200));
+    await tester.pumpAndSettle();
+  }
 }
 
 bool _enabled(WidgetTester tester, String key) =>
@@ -399,17 +596,6 @@ Future<void> _choose(WidgetTester tester, String key, String option) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text(option).last);
   await tester.pumpAndSettle();
-}
-
-/// Scrolls the open section until [finder] has been built.
-///
-/// The dialog caps its own height, so a taller test window does not put the
-/// bottom of a long form on screen — only scrolling does.
-Future<void> _reveal(WidgetTester tester, Finder finder) async {
-  for (var attempt = 0; attempt < 20 && finder.evaluate().isEmpty; attempt++) {
-    await tester.drag(find.byType(GuildSettingsPanel), const Offset(0, -200));
-    await tester.pumpAndSettle();
-  }
 }
 
 final class _Harness {
@@ -431,6 +617,13 @@ Future<_Harness> _pump(
   // A window tall enough that every control of every section is on screen.
   // The compact case has its own test; here the point is the behaviour, and a
   // test that spends its time dragging a ListView tests the ListView.
+  // The view is configured too, not just the surface: hit testing runs
+  // against the view, and a control laid out below the view's own edge
+  // cannot be tapped however tall the surface is.
+  tester.view.physicalSize = surfaceSize;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final workspace = guildWorkspace(

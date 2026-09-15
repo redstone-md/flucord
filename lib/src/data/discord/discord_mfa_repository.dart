@@ -29,9 +29,9 @@ final class DiscordMfaRepository implements MultiFactorAuthRepository {
         backupCodes: _codes(payload['backup_codes']),
       );
     } on DiscordApiException catch (error) {
-      // A code that was mistyped or has already rolled over is refused with a
-      // 400. That is the ordinary case — somebody typing six digits against a
-      // thirty-second window — and reporting it as an outage would be wrong.
+      // A code that was mistyped or has already rolled over is refused with
+      // a 400. That is the ordinary case: somebody typing six digits against
+      // a thirty-second window. Reporting it as an outage would be wrong.
       if (error.statusCode == 400 || error.statusCode == 401) return null;
       rethrow;
     }
@@ -123,6 +123,108 @@ final class DiscordMfaRepository implements MultiFactorAuthRepository {
       if (error.statusCode == 400 || error.statusCode == 401) return null;
       rethrow;
     }
+  }
+
+  @override
+  Future<List<SecurityKey>> loadSecurityKeys() async => readSecurityKeys(
+    await _rest.getList('/users/@me/mfa/webauthn/credentials'),
+  );
+
+  @override
+  Future<String?> requestSecurityKeyChallenge(String password) async {
+    if (password.isEmpty) return null;
+    try {
+      final payload = await _rest.requestObject(
+        'POST',
+        '/users/@me/mfa/webauthn/credentials/registration-options',
+        body: {'password': password},
+      );
+      return _string(payload['challenge']);
+    } on DiscordApiException catch (error) {
+      // A mistyped password is the ordinary refusal, and reporting it as an
+      // outage would tell somebody their client is broken when the answer
+      // is about the password they typed.
+      if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> registerSecurityKey({
+    required String name,
+    required String challenge,
+    required SecurityKeyRegistration registration,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || challenge.isEmpty) return false;
+    try {
+      await _rest.requestObject(
+        'POST',
+        '/users/@me/mfa/webauthn/credentials',
+        body: {
+          'challenge': challenge,
+          'name': trimmed,
+          // The browser's registration response, which is the shape
+          // Discord's flow was built around.
+          'response': {
+            'id': registration.credentialId,
+            'rawId': registration.credentialId,
+            'type': 'public-key',
+            'response': {
+              'attestationObject': registration.attestationObject,
+              'clientDataJSON': registration.clientDataJson,
+              'transports': const <String>[],
+            },
+          },
+        },
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      // A proof Discord would not take, or a password that bought the
+      // challenge and has since gone stale, is an answer about this key.
+      if (error.statusCode == 400 || error.statusCode == 401) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> removeSecurityKey(SecurityKey key, String password) async {
+    if (password.isEmpty || key.id.isEmpty) return false;
+    try {
+      await _rest.requestEmpty(
+        'DELETE',
+        '/users/@me/mfa/webauthn/credentials/${Uri.encodeComponent(key.id)}',
+        body: {'password': password},
+      );
+      return true;
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 401) return false;
+      rethrow;
+    }
+  }
+
+  /// Reads the key rows. A row without an id names nothing and can be removed
+  /// by nothing, so it is dropped rather than shown as a blank.
+  static List<SecurityKey> readSecurityKeys(
+    List<Map<String, Object?>> payload,
+  ) => [
+    for (final entry in payload)
+      if (_securityKey(entry) case final SecurityKey key) key,
+  ];
+
+  static SecurityKey? _securityKey(Map<String, Object?> payload) {
+    final id = payload['id'];
+    if (id is! String || id.isEmpty) return null;
+    return SecurityKey(
+      id: id,
+      name: _string(payload['name']) ?? 'Security key',
+      createdAt: _date(payload['created_at']),
+    );
+  }
+
+  static DateTime? _date(Object? value) {
+    if (value is! String || value.isEmpty) return null;
+    return DateTime.tryParse(value)?.toUtc();
   }
 
   /// Backup codes arrive as objects carrying the code and whether it is spent;

@@ -126,6 +126,18 @@ final class DiscordReadStateAckQueue {
   Future<void> sendNow(DiscordDesktopRestRequest request) =>
       _serialize(() => _attempt(request));
 
+  /// Sends one built request and answers its decoded body, for the routes
+  /// whose answer is folded back in rather than thrown away.
+  Future<Map<String, Object?>?> sendForPayload(
+    DiscordDesktopRestRequest request,
+  ) {
+    late final Future<Map<String, Object?>?> payload;
+    final sent = _serialize(() async {
+      payload = _attempt(request);
+    });
+    return sent.then((_) => payload);
+  }
+
   /// Queues bulk-ack entries and starts the pump if it is not already running.
   void enqueueBulk(Iterable<Map<String, Object?>> entries) {
     if (_closed) return;
@@ -290,7 +302,7 @@ final class DiscordReadStateAckQueue {
         AppLog.warning(
           'discord.readstate',
           'Discord read-state ${request.method} ${request.path} timed out '
-          'and was not retried',
+              'and was not retried',
         );
         rethrow;
       } on Object catch (error) {
@@ -301,7 +313,7 @@ final class DiscordReadStateAckQueue {
     AppLog.warning(
       'discord.readstate',
       'Discord read-state ${request.method} ${request.path} failed after '
-      '$maxAttempts attempts: $lastError',
+          '$maxAttempts attempts: $lastError',
       error: lastError,
     );
     throw lastError;

@@ -3,7 +3,8 @@ import 'package:flutter/widgets.dart';
 import '../../application/stream_viewer_controller.dart';
 
 /// Publishes the stream viewer to the conversation pane.
-final class StreamViewerScope extends InheritedNotifier<StreamViewerController> {
+final class StreamViewerScope
+    extends InheritedNotifier<StreamViewerController> {
   const StreamViewerScope({
     required StreamViewerController controller,
     required super.child,
@@ -21,9 +22,9 @@ final class StreamViewerScope extends InheritedNotifier<StreamViewerController> 
     );
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static StreamViewerController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<StreamViewerScope>()!.notifier!;
-
 }

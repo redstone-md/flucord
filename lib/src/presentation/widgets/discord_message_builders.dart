@@ -5,6 +5,7 @@ import 'package:markdown/markdown.dart' as md;
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'user_settings_scope.dart';
 
 Map<String, MarkdownElementBuilder> discordMessageBuilders({
   required ChatWorkspace workspace,
@@ -102,13 +103,18 @@ final class _EmojiBuilder extends MarkdownElementBuilder {
     final name = element.textContent;
     final id = element.attributes['id']!;
     final animated = element.attributes['animated'] == 'true';
+    // The account's own answer to whether a custom emoji moves, read here so
+    // a change from another device repaints the timeline. A still frame is
+    // the same emoji's webp form, which is what the animated one's first
+    // frame is.
+    final plays = UserSettingsScope.displayOf(context).playsAnimatedEmoji;
     return Tooltip(
       message: ':$name:',
       child: SizedBox.square(
         key: ValueKey('discord-emoji-$id'),
         dimension: 20,
         child: Image.network(
-          DiscordCdn.customEmoji(id, animated: animated),
+          DiscordCdn.customEmoji(id, animated: animated && plays),
           fit: BoxFit.contain,
           errorBuilder: (_, _, _) => FittedBox(
             fit: BoxFit.scaleDown,

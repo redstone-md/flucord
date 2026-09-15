@@ -38,10 +38,18 @@ abstract interface class ChatCache {
   Future<void> writeMessage(ChatMessage message, {Member? member});
 
   Future<void> writeMember(Member member);
-
   Future<void> writeSpace(CommunitySpace space);
 
   Future<void> writeCategory(ChannelCategory category);
+
+  /// One guild the account gained, written whole: space, channels,
+  /// categories, roles and members. What a restart restores.
+  Future<void> writeGuild(JoinedGuild guild);
+
+  /// One guild the account left, removed whole: its space, channels,
+  /// categories, roles, the messages those channels held, and its emoji,
+  /// stickers and scheduled events.
+  Future<void> deleteGuild(String spaceId);
 
   Future<void> replaceGuildEmojis(String spaceId, List<GuildEmoji> emojis);
 

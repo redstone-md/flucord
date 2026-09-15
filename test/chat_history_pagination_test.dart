@@ -1,4 +1,8 @@
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
+import 'package:flucord/src/domain/account_connections.dart';
+import 'package:flucord/src/domain/account_data_package.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/app_authorisation.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -12,8 +16,10 @@ import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
+import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +30,7 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
@@ -76,6 +83,28 @@ void main() {
     expect(
       controller.workspace!.messagesFor('channel-1').map((item) => item.id),
       ['m1', 'm2'],
+    );
+  });
+
+  test('a link lands its window on the message it names', () async {
+    // The workspace holds a second channel the automatic open does not
+    // touch, so the anchor's fetch is the first one for it.
+    final repository = _PagedRepository([
+      _page(['m1'], hasMore: false, channelId: 'channel-2'),
+    ], workspace: _workspaceWithAnchor());
+    final controller = ChatController(repository);
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await _settleController();
+    await controller.openChannel('channel-2', anchorMessageId: 'anchor-1');
+
+    // The window was asked for around the link's message, not forward from
+    // the end, so the transport built its page around the anchor.
+    expect(repository.cursors, [null, 'around:anchor-1']);
+    expect(
+      controller.workspace!.messagesFor('channel-2').map((item) => item.id),
+      ['m1'],
     );
   });
 
@@ -178,6 +207,8 @@ const _member = Member(
 final class _PagedRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+  @override
+  UserNotesRepository? get userNotes => _delegate.userNotes;
 
   @override
   ThreadMembershipRepository? get threadMembership =>
@@ -188,6 +219,9 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => _delegate.soundboard;
+
+  @override
+  GuildExpressionRepository? get expressions => _delegate.expressions;
 
   @override
   GifRepository? get gifs => _delegate.gifs;
@@ -258,6 +292,18 @@ final class _PagedRepository implements ChatRepository {
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
@@ -265,6 +311,8 @@ final class _PagedRepository implements ChatRepository {
 
   @override
   PresenceService? get presence => null;
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;
@@ -296,8 +344,11 @@ final class _PagedRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async {
-    cursors.add(beforeMessageId);
+    cursors.add(
+      aroundMessageId != null ? 'around:$aroundMessageId' : beforeMessageId,
+    );
     final result = _results.removeAt(0);
     if (result is Error) throw result;
     if (result is Exception) throw result;
@@ -333,6 +384,7 @@ final class _PagedRepository implements ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
@@ -340,6 +392,7 @@ final class _PagedRepository implements ChatRepository {
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,
+    textToSpeech: textToSpeech,
   );
 
   @override

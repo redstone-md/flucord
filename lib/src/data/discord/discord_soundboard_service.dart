@@ -109,6 +109,30 @@ final class DiscordSoundboardService implements SoundboardRepository {
     return _publish(guildId);
   }
 
+  /// Folds a sound the settings window just uploaded into the store, so the
+  /// picker hears it through the ordinary updates stream rather than being
+  /// told separately.
+  void acceptSound(SoundboardSound sound) {
+    final guildId = sound.guildId;
+    if (guildId == null) return;
+    _byGuild[guildId] = [
+      ...?_byGuild[guildId]?.where((existing) => existing.id != sound.id),
+      sound,
+    ];
+    _publish(guildId);
+  }
+
+  /// Drops a sound the settings window just deleted, and publishes the guild
+  /// so the picker drops it too.
+  void forgetSound(String guildId, String soundId) {
+    final existing = _byGuild[guildId];
+    if (existing == null) return;
+    _byGuild[guildId] = existing
+        .where((sound) => sound.id != soundId)
+        .toList(growable: false);
+    _publish(guildId);
+  }
+
   String? _replace(Map<String, Object?> data) {
     final guildId = data['guild_id'];
     if (guildId is! String || guildId.isEmpty) return null;

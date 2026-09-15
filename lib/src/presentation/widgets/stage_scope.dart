@@ -18,9 +18,9 @@ final class StageScope extends InheritedNotifier<StageController> {
     assert(controller != null, 'StageScope is missing above this widget.');
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static StageController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<StageScope>()!.notifier!;
-
 }

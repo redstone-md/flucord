@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 21;
+  static const version = 23;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -20,6 +20,7 @@ abstract final class SqliteChatSchema {
         kind INTEGER NOT NULL,
         owner_id TEXT,
         requires_mfa INTEGER NOT NULL DEFAULT 0,
+        premium_tier INTEGER NOT NULL DEFAULT 0,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -56,6 +57,11 @@ abstract final class SqliteChatSchema {
         default_forum_layout INTEGER,
         recipient_id TEXT,
         permission_overwrites_json TEXT,
+        rate_limit_per_user INTEGER NOT NULL DEFAULT 0,
+        is_age_gated INTEGER NOT NULL DEFAULT 0,
+        bitrate INTEGER,
+        user_limit INTEGER,
+        rtc_region TEXT,
         sort_index INTEGER NOT NULL
       )
     ''');
@@ -106,7 +112,8 @@ abstract final class SqliteChatSchema {
         embeds_json TEXT NOT NULL,
         mentions_current_member INTEGER NOT NULL,
         poll_json TEXT,
-        stickers_json TEXT NOT NULL
+        stickers_json TEXT NOT NULL,
+        is_text_to_speech INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await database.execute('''
@@ -317,6 +324,40 @@ abstract final class SqliteChatSchema {
       // could not read it would report every channel read until the socket came
       // back. Nullable: a row written before this version simply has no answer.
       await _addColumn(database, 'channels', 'last_message_id TEXT');
+    }
+    if (oldVersion < 22) {
+      // A channel's editor fields, cached so an offline launch still knows
+      // what the composer owes a slowmode channel and the sidebar its age
+      // gate. Defaults rather than nulls: a row written before this version
+      // genuinely has no slowmode and no gate, which is what zero says.
+      await _addColumn(
+        database,
+        'channels',
+        'rate_limit_per_user INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(
+        database,
+        'channels',
+        'is_age_gated INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(database, 'channels', 'bitrate INTEGER');
+      await _addColumn(database, 'channels', 'user_limit INTEGER');
+      await _addColumn(database, 'channels', 'rtc_region TEXT');
+    }
+    if (oldVersion < 23) {
+      // Defaults rather than nulls: a row written before this version is a
+      // message nobody spoke aloud and a server whose boost level this cache
+      // never learned, which is what zero says for both.
+      await _addColumn(
+        database,
+        'messages',
+        'is_text_to_speech INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumn(
+        database,
+        'spaces',
+        'premium_tier INTEGER NOT NULL DEFAULT 0',
+      );
     }
   }
 

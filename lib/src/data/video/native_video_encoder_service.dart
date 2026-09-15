@@ -222,8 +222,7 @@ final class NativeVideoEncoderService
     // cleanup, and the timeout is read where the module records its failures.
     _bindings?.close(_handle);
     _handle = nullptr;
-    if (_bindings?.lastErrorStage?.call() ==
-        NativeVideoStage.stopJoinCapture) {
+    if (_bindings?.lastErrorStage?.call() == NativeVideoStage.stopJoinCapture) {
       AppLog.warning('video', 'capture thread stuck; stop left it to cleanup');
     }
     _callback?.close();

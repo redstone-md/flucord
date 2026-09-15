@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 /// A one-time-password secret, as an authenticator app wants it.
@@ -82,6 +83,139 @@ final class MfaEnrolment {
   bool get hasBackupCodes => backupCodes.isNotEmpty;
 }
 
+/// One security key registered as this account's second factor.
+///
+/// The key itself never leaves the machine that made it: what Discord holds
+/// is the public half, and this row is only how the settings page names it.
+final class SecurityKey {
+  const SecurityKey({
+    required this.id,
+    this.name = 'Security key',
+    this.createdAt,
+  });
+
+  /// The credential id, which is the only way to tell Discord which key to
+  /// forget.
+  final String id;
+
+  /// The name it was given when it was made. Discord hands back whatever the
+  /// person typed; an unnamed one falls back to plain wording rather than an
+  /// empty row.
+  final String name;
+
+  final DateTime? createdAt;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SecurityKey && other.id == id && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
+}
+
+/// What the platform authenticator made, in the form Discord's route takes.
+///
+/// Base64url without padding, which is how the browser shape Discord built
+/// its flow around carries every byte.
+final class SecurityKeyRegistration {
+  const SecurityKeyRegistration({
+    required this.credentialId,
+    required this.attestationObject,
+    required this.clientDataJson,
+  });
+
+  final String credentialId;
+  final String attestationObject;
+  final String clientDataJson;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SecurityKeyRegistration &&
+      other.credentialId == credentialId &&
+      other.attestationObject == attestationObject &&
+      other.clientDataJson == clientDataJson;
+
+  @override
+  int get hashCode =>
+      Object.hash(credentialId, attestationObject, clientDataJson);
+}
+
+/// The account as the platform authenticator's prompt shows it.
+final class SecurityKeyAccount {
+  const SecurityKeyAccount({required this.userId, required this.displayName});
+
+  /// Discord's own id for the account, which the key stores as its user
+  /// handle.
+  final String userId;
+
+  final String displayName;
+}
+
+/// The client data of a registration ceremony, built here so the Windows
+/// bridge and any future one send byte-identical proof.
+///
+/// Discord's challenge arrives base64url-encoded and travels back unchanged
+/// inside this JSON: the same string in, the same string out, with only the
+/// type and origin added around it.
+final class SecurityKeyClientData {
+  const SecurityKeyClientData._(this.json, this.challenge);
+
+  factory SecurityKeyClientData.create({
+    required String challenge,
+    String origin = 'https://discord.com',
+  }) => SecurityKeyClientData._(
+    jsonEncode({
+      'type': 'webauthn.create',
+      'challenge': challenge,
+      'origin': origin,
+    }),
+    challenge,
+  );
+
+  final String json;
+  final String challenge;
+
+  /// The JSON as base64url without padding, which is what the route wants.
+  String get base64Url => encodeBase64Url(utf8.encode(json));
+}
+
+/// The Windows platform authenticator, or whichever one the machine offers.
+///
+/// A ceremony, not a route: the challenge comes from Discord, the proof is
+/// made on this machine, and nothing here talks to the network.
+abstract interface class SecurityKeyCeremony {
+  /// Whether this machine can make a key at all.
+  bool get isAvailable;
+
+  /// Runs the registration ceremony.
+  ///
+  /// Returns null when the prompt was closed or the machine refused, which
+  /// is an answer rather than a failure.
+  Future<SecurityKeyRegistration?> createCredential({
+    required String challenge,
+    required SecurityKeyAccount account,
+  });
+}
+
+/// A ceremony on a machine with no platform authenticator. Says so rather
+/// than pretending.
+final class UnavailableSecurityKeyCeremony implements SecurityKeyCeremony {
+  const UnavailableSecurityKeyCeremony();
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  Future<SecurityKeyRegistration?> createCredential({
+    required String challenge,
+    required SecurityKeyAccount account,
+  }) async => null;
+}
+
+/// Base64url without padding, the encoding every WebAuthn byte travels in.
+String encodeBase64Url(List<int> bytes) =>
+    base64Url.encode(bytes).replaceAll('=', '');
+
 /// The one-time nonces Discord hands back before it will show backup codes.
 ///
 /// They are minted per challenge and spent once. Nothing stores them: they
@@ -103,7 +237,7 @@ final class BackupCodeNonces {
 abstract interface class MultiFactorAuthRepository {
   /// `POST /users/@me/mfa/totp/enable`, with the first working code.
   ///
-  /// Returns null when Discord refused the code — a mistyped or expired one,
+  /// Returns null when Discord refused the code, a mistyped or expired one,
   /// which is the ordinary case and not a failure.
   Future<MfaEnrolment?> enableTotp({
     required TotpSecret secret,
@@ -130,13 +264,38 @@ abstract interface class MultiFactorAuthRepository {
 
   /// Reads the backup codes again, or mints a new set.
   ///
-  /// [key] is a current code from the authenticator. Returns null when Discord
-  /// refused it — the ordinary mistyped-code case.
+  /// [key] is a current code from the authenticator. Returns null when
+  /// Discord refused it, the ordinary mistyped-code case.
   Future<List<String>?> viewBackupCodes({
     required String key,
     required BackupCodeNonces nonces,
     bool regenerate = false,
   });
+
+  /// `GET /users/@me/mfa/webauthn/credentials`. The keys themselves never
+  /// arrive; only the rows that name them.
+  Future<List<SecurityKey>> loadSecurityKeys();
+
+  /// `POST /users/@me/mfa/webauthn/credentials/registration-options`, gated
+  /// on the account password.
+  ///
+  /// Returns the challenge, or null when Discord refused the password, which
+  /// is the ordinary mistyped-password case and not a failure.
+  Future<String?> requestSecurityKeyChallenge(String password);
+
+  /// `POST /users/@me/mfa/webauthn/credentials`, with the proof the platform
+  /// authenticator made for Discord's challenge.
+  ///
+  /// Returns false when Discord refused the registration.
+  Future<bool> registerSecurityKey({
+    required String name,
+    required String challenge,
+    required SecurityKeyRegistration registration,
+  });
+
+  /// `DELETE /users/@me/mfa/webauthn/credentials/{id}`, gated on the account
+  /// password. The password is passed straight through and never held.
+  Future<bool> removeSecurityKey(SecurityKey key, String password);
 }
 
 /// Base32 without padding, as `TotpSecret` writes it. Exposed for the tests

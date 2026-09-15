@@ -26,9 +26,11 @@ abstract interface class DiscordHttpTransport {
 }
 
 final class IoDiscordHttpTransport implements DiscordHttpTransport {
-  IoDiscordHttpTransport({HttpClient? client, this.requestTimeout = _defaultTimeout})
-    : _ownsClient = client == null,
-      _client = client ?? HttpClient() {
+  IoDiscordHttpTransport({
+    HttpClient? client,
+    this.requestTimeout = _defaultTimeout,
+  }) : _ownsClient = client == null,
+       _client = client ?? HttpClient() {
     // A connect that never completes is hung the same way a response is, and
     // only the client knows about that stage.
     if (_ownsClient) _client.connectionTimeout = requestTimeout;
@@ -68,16 +70,19 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
       );
     }
 
-    return attempt().timeout(requestTimeout, onTimeout: () {
-      // The socket is in an unknown state: aborting releases it instead of
-      // leaving a half-read connection in the client's pool.
-      request?.abort();
-      throw TimeoutException(
-        'Discord request to ${uri.host} timed out after '
-        '${requestTimeout.inSeconds}s',
-        requestTimeout,
-      );
-    });
+    return attempt().timeout(
+      requestTimeout,
+      onTimeout: () {
+        // The socket is in an unknown state: aborting releases it instead of
+        // leaving a half-read connection in the client's pool.
+        request?.abort();
+        throw TimeoutException(
+          'Discord request to ${uri.host} timed out after '
+          '${requestTimeout.inSeconds}s',
+          requestTimeout,
+        );
+      },
+    );
   }
 
   @override

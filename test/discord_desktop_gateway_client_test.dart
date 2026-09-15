@@ -61,7 +61,6 @@ void main() {
     expect(data['properties'], containsPair('is_fast_connect', false));
   });
 
-
   test('a write that fails mid-frame reconnects instead of taking the isolate '
       'down', () async {
     final socket = _MemoryDesktopWebSocket();

@@ -275,39 +275,41 @@ void main() {
       expect(controller.isReceiving, isFalse);
     });
 
-    test('a camera whose sender is gone is released with its picture',
+    test(
+      'a camera whose sender is gone is released with its picture',
       () async {
-      final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <FakeVideoDecoder>[];
-      final controller = RemoteCameraController(
-        packetsProvider: () => packets.stream,
-        decoderFactory: () {
-          final decoder = FakeVideoDecoder();
-          decoders.add(decoder);
-          return decoder;
-        },
-      );
-      addTearDown(controller.dispose);
-      controller.listen();
-      packets.add(('user-a', _frame([0x65, 1], marker: true)));
-      await Future<void>.delayed(Duration.zero);
-      decoders.single.emit(_picture(width: 4, height: 2));
-      await Future<void>.delayed(Duration.zero);
-      expect(controller.frameFor('user-a'), isNotNull);
+        final packets = StreamController<(String, DiscordRtpFrame)>();
+        final decoders = <FakeVideoDecoder>[];
+        final controller = RemoteCameraController(
+          packetsProvider: () => packets.stream,
+          decoderFactory: () {
+            final decoder = FakeVideoDecoder();
+            decoders.add(decoder);
+            return decoder;
+          },
+        );
+        addTearDown(controller.dispose);
+        controller.listen();
+        packets.add(('user-a', _frame([0x65, 1], marker: true)));
+        await Future<void>.delayed(Duration.zero);
+        decoders.single.emit(_picture(width: 4, height: 2));
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.frameFor('user-a'), isNotNull);
 
-      controller.forget('user-a');
+        controller.forget('user-a');
 
-      // Their decoder stops and the last picture is not held onto: a camera
-      // that stayed behind for the rest of the session was a decoder and a
-      // frame buffer kept open for nobody.
-      expect(decoders.single.stopped, 1);
-      expect(controller.frameFor('user-a'), isNull);
-      expect(controller.senders, isEmpty);
-      expect(controller.isReceiving, isFalse);
+        // Their decoder stops and the last picture is not held onto: a camera
+        // that stayed behind for the rest of the session was a decoder and a
+        // frame buffer kept open for nobody.
+        expect(decoders.single.stopped, 1);
+        expect(controller.frameFor('user-a'), isNull);
+        expect(controller.senders, isEmpty);
+        expect(controller.isReceiving, isFalse);
 
-      // Forgetting somebody with no camera says nothing happened.
-      controller.forget('user-b');
-    });
+        // Forgetting somebody with no camera says nothing happened.
+        controller.forget('user-b');
+      },
+    );
 
     test('a suspended room counts packets and opens no decoder', () async {
       final packets = StreamController<(String, DiscordRtpFrame)>();
@@ -339,47 +341,49 @@ void main() {
       expect(controller.isSuspended, isFalse);
     });
 
-    test('the first picture announces the camera, the rest go to the tile',
+    test(
+      'the first picture announces the camera, the rest go to the tile',
       () async {
-      final packets = StreamController<(String, DiscordRtpFrame)>();
-      final decoders = <FakeVideoDecoder>[];
-      final controller = RemoteCameraController(
-        packetsProvider: () => packets.stream,
-        decoderFactory: () {
-          final decoder = FakeVideoDecoder();
-          decoders.add(decoder);
-          return decoder;
-        },
-      );
-      addTearDown(controller.dispose);
-      var notifications = 0;
-      controller.addListener(() => notifications++);
-      controller.listen();
-      await Future<void>.delayed(Duration.zero);
-      expect(notifications, 1, reason: 'listening is announced once');
+        final packets = StreamController<(String, DiscordRtpFrame)>();
+        final decoders = <FakeVideoDecoder>[];
+        final controller = RemoteCameraController(
+          packetsProvider: () => packets.stream,
+          decoderFactory: () {
+            final decoder = FakeVideoDecoder();
+            decoders.add(decoder);
+            return decoder;
+          },
+        );
+        addTearDown(controller.dispose);
+        var notifications = 0;
+        controller.addListener(() => notifications++);
+        controller.listen();
+        await Future<void>.delayed(Duration.zero);
+        expect(notifications, 1, reason: 'listening is announced once');
 
-      packets.add(('user-a', _frame([0x65, 1], marker: true)));
-      await Future<void>.delayed(Duration.zero);
+        packets.add(('user-a', _frame([0x65, 1], marker: true)));
+        await Future<void>.delayed(Duration.zero);
 
-      final pictures = <DecodedVideoFrame>[];
-      controller.framesFor('user-a')!.listen(pictures.add);
-      decoders.single.emit(_picture(width: 4, height: 2));
-      await Future<void>.delayed(Duration.zero);
-      // One announcement, when the tile appears.
-      expect(notifications, 2);
-      expect(pictures.single.width, 4);
+        final pictures = <DecodedVideoFrame>[];
+        controller.framesFor('user-a')!.listen(pictures.add);
+        decoders.single.emit(_picture(width: 4, height: 2));
+        await Future<void>.delayed(Duration.zero);
+        // One announcement, when the tile appears.
+        expect(notifications, 2);
+        expect(pictures.single.width, 4);
 
-      // The next pictures reach the tile through its own subscription, not
-      // through the room: a notification per picture rebuilt the whole
-      // conversation pane, timeline included, at the camera's frame rate.
-      final notifiedAfterFirst = notifications;
-      decoders.single.emit(_picture(width: 6, height: 2));
-      await Future<void>.delayed(Duration.zero);
+        // The next pictures reach the tile through its own subscription, not
+        // through the room: a notification per picture rebuilt the whole
+        // conversation pane, timeline included, at the camera's frame rate.
+        final notifiedAfterFirst = notifications;
+        decoders.single.emit(_picture(width: 6, height: 2));
+        await Future<void>.delayed(Duration.zero);
 
-      expect(notifications, notifiedAfterFirst);
-      expect(pictures.map((picture) => picture.width), [4, 6]);
-      expect(controller.frameFor('user-a')?.width, 6);
-    });
+        expect(notifications, notifiedAfterFirst);
+        expect(pictures.map((picture) => picture.width), [4, 6]);
+        expect(controller.frameFor('user-a')?.width, 6);
+      },
+    );
   });
 
   group('the tile', () {
@@ -587,4 +591,3 @@ DecodedVideoFrame _picture({int width = 2, int height = 2}) =>
       height: height,
       timestamp: Duration.zero,
     );
-

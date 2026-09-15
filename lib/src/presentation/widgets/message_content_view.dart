@@ -6,11 +6,13 @@ import 'streamer_mode_scope.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../../domain/channel_link.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
+import 'guild_access_scope.dart';
 
 class MessageContentView extends StatefulWidget {
   const MessageContentView({
@@ -137,6 +139,28 @@ class _MessageContentViewState extends State<MessageContentView> {
   }
 
   Future<void> _openLink(BuildContext context, String rawHref) async {
+    // An invite link and a conversation link are the outside links this app
+    // can act on itself, so each is offered to the access surface before
+    // anything opens a browser. A conversation link is only claimed when the
+    // workspace holds the channel it names: one from a server this account
+    // never joined is a page the browser can still show.
+    final access = GuildAccessScope.maybeOf(context);
+    if (access != null) {
+      final code = InviteLink.tryParseCode(rawHref);
+      if (code != null) {
+        access.onOpenInvite(context, code);
+        return;
+      }
+      final messageLink = DiscordMessageLink.tryParse(rawHref);
+      final openMessageLink = access.onOpenMessageLink;
+      if (messageLink != null && openMessageLink != null) {
+        final channel = widget.workspace.channelOrNull(messageLink.channelId);
+        if (channel != null && channel.spaceId == messageLink.spaceId) {
+          openMessageLink(context, messageLink);
+          return;
+        }
+      }
+    }
     final uri = Uri.tryParse(rawHref);
     final opened = uri != null && await widget.linkLauncher.open(uri);
     if (opened || !context.mounted) return;

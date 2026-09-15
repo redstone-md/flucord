@@ -20,6 +20,7 @@ class VoiceParticipantGrid extends StatelessWidget {
     this.streams,
     this.onTapParticipant,
     this.compact = false,
+    this.listening,
     super.key,
   });
 
@@ -43,6 +44,10 @@ class VoiceParticipantGrid extends StatelessWidget {
   /// The streams this client has open, and the controls a tile offers for
   /// them. Null where the room was drawn without a stream plane at all.
   final VoiceStreamControls? streams;
+
+  /// The per-participant volume controls the tiles offer. Null where the
+  /// room was drawn without a voice controller behind it.
+  final VoiceListeningControls? listening;
 
   /// Whether the grid is a strip under a stream on the stage rather than the
   /// whole room. Same tiles, smaller, reading left to right.
@@ -105,6 +110,7 @@ class VoiceParticipantGrid extends StatelessWidget {
           currentMemberId: currentMemberId,
           spaceId: spaceId,
           streams: streams,
+          listening: listening,
           onTap: onTapParticipant,
           size: compact
               ? VoiceParticipantTileSize.compact
@@ -130,6 +136,7 @@ class VoiceParticipantTile extends StatelessWidget {
     this.cameraFrameFor,
     this.cameraFramesFor,
     this.streams,
+    this.listening,
     this.onTap,
     this.size = VoiceParticipantTileSize.regular,
     super.key,
@@ -145,6 +152,10 @@ class VoiceParticipantTile extends StatelessWidget {
   /// tile that is already showing one.
   final Stream<DecodedVideoFrame>? Function(String userId)? cameraFramesFor;
   final VoiceStreamControls? streams;
+
+  /// This participant's volume control, or null where the tile has no room
+  /// behind it to hand a level to.
+  final VoiceListeningControls? listening;
   final void Function(String userId)? onTap;
   final VoiceParticipantTileSize size;
 
@@ -282,7 +293,7 @@ class VoiceParticipantTile extends StatelessWidget {
                     onStopShare: isCurrentUser ? streams?.onStopShare : null,
                   ),
                 )
-              else
+              else ...[
                 Positioned(
                   left: 10,
                   right: 10,
@@ -304,6 +315,25 @@ class VoiceParticipantTile extends StatelessWidget {
                     ],
                   ),
                 ),
+                // The room's own volume knob for this one participant. Not
+                // offered for this account, whose voice this client does
+                // not play, nor on the stage tile, which is already large
+                // enough to reach a control elsewhere.
+                if (!isCurrentUser &&
+                    !compact &&
+                    listening != null &&
+                    size != VoiceParticipantTileSize.stage)
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    top: 6,
+                    child: _TileVolumeSlider(
+                      key: ValueKey('voice-volume-${participant.userId}'),
+                      controls: listening!,
+                      participant: participant,
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -530,6 +560,88 @@ class _StateIcon extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: Icon(icon, size: 15, color: FlucordColors.danger),
+      ),
+    );
+  }
+}
+
+/// What the tiles need to know about the room's listening controls.
+///
+/// One value rather than three arguments, for the same reason the stream
+/// controls are: the pane that owns the voice controller builds this, and
+/// neither the grid nor the room below it owns that.
+final class VoiceListeningControls {
+  const VoiceListeningControls({
+    required this.volumeFor,
+    required this.onVolumeChanged,
+  });
+
+  /// The level [participant] plays at, as a fraction of the room's level.
+  final double Function(String participant) volumeFor;
+
+  /// Sets one participant's level. The fraction is of the room's level, 0 to
+  /// 1, matching what the slider shows.
+  final void Function(String participant, double volume) onVolumeChanged;
+}
+
+/// One participant's volume, read compactly over their tile.
+///
+/// Hover only: a room is looked at, not touched, and a slider permanently
+/// under every name is six of them fighting for the same hover the stream
+/// controls already use.
+class _TileVolumeSlider extends StatelessWidget {
+  const _TileVolumeSlider({
+    required this.controls,
+    required this.participant,
+    super.key,
+  });
+
+  final VoiceListeningControls controls;
+  final VoiceParticipant participant;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        height: 24,
+        decoration: BoxDecoration(
+          color: context.surfaces.raised.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: context.surfaces.border),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.volume_up_outlined, size: 14),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 10,
+                  ),
+                ),
+                child: Builder(
+                  builder: (context) {
+                    final value = controls
+                        .volumeFor(participant.userId)
+                        .clamp(0.0, 1.0);
+                    return Slider(
+                      value: value,
+                      onChanged: (volume) =>
+                          controls.onVolumeChanged(participant.userId, volume),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

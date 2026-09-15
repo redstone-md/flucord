@@ -13,14 +13,17 @@ import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
 import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/domain/channel_capabilities.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/guild_membership.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
 import 'package:flucord/src/domain/permission_overwrite.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
@@ -223,8 +226,8 @@ Future<void> _pumpComposer(
           channelId: 'general',
           channelName: 'general',
           spaceName: 'The Forge',
-          customEmojis: const [],
-          guildStickers: const [],
+          emojiSections: const [],
+          stickerSections: const [],
           isSending: false,
           canAttachFiles: canAttachFiles,
           onSend: (_, _, _, _) async => true,
@@ -387,6 +390,9 @@ final class _PermissionRepository implements ChatRepository {
   GuildManagementRepository? get guildManagement => null;
 
   @override
+  GuildExpressionRepository? get expressions => null;
+
+  @override
   ModerationRepository? get moderation => null;
 
   @override
@@ -394,6 +400,11 @@ final class _PermissionRepository implements ChatRepository {
 
   @override
   PresenceService? get presence => null;
+  @override
+  DetectableGameRepository? get detectableGames => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace();
@@ -402,6 +413,7 @@ final class _PermissionRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async => ChannelHistoryPage(
     history: ChannelHistory(
       channelId: channelId,

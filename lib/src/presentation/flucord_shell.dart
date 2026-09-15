@@ -6,7 +6,9 @@ import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/friends_controller.dart';
+import '../application/guild_member_admin_controller.dart';
 import '../application/guild_member_list_controller.dart';
+import '../application/member_profile_controller.dart';
 import '../application/guild_settings_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/message_search_controller.dart';
@@ -30,6 +32,7 @@ import '../domain/workspace_activity.dart';
 import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
 import 'conversation_pane.dart';
+import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/connection_dialog.dart';
@@ -47,6 +50,7 @@ import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
+import 'widgets/leave_server_dialog.dart';
 import 'widgets/report_dialog.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
@@ -75,6 +79,7 @@ class FlucordShell extends StatelessWidget {
     required this.selfVideoController,
     required this.externalLinkLauncher,
     this.memberListController,
+    this.memberProfileController,
     this.friendsController,
     this.messageSearchController,
     this.directCallController,
@@ -94,6 +99,10 @@ class FlucordShell extends StatelessWidget {
   /// Owns the member panel's roster subscription. Absent in hosts that never
   /// show the panel, such as the widget tests for a single pane.
   final GuildMemberListController? memberListController;
+
+  /// Drives the full profile a member popover fetches. Absent in hosts that
+  /// never open one, such as the widget tests for a single pane.
+  final MemberProfileController? memberProfileController;
 
   /// The account's friend graph, or null on a transport that is never told
   /// one — the demo workspace and the bot session.
@@ -164,6 +173,11 @@ class FlucordShell extends StatelessWidget {
                 administration.hasAnySurface &&
                 chatController.guildManagement != null;
             final canReport = chatController.moderation != null;
+
+            /// Joining, creating and leaving need the guild-management plane;
+            /// without it the rail hides its plus rather than opening a
+            /// dialog whose every button would fail.
+            final canManageServers = chatController.guildManagement != null;
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
@@ -238,6 +252,9 @@ class FlucordShell extends StatelessWidget {
                             onSelectSpace: _selectSpace,
                             onToggleTheme: workspaceController.toggleTheme,
                             onOpenConnections: () => _openConnections(context),
+                            onAddServer: canManageServers
+                                ? () => unawaited(_addServer(context))
+                                : null,
                             sessionMode: connectionController.mode,
                             isDark:
                                 workspaceController.themeMode == ThemeMode.dark,
@@ -326,6 +343,18 @@ class FlucordShell extends StatelessWidget {
                                       workspaceController.toggleCategory,
                                   onNewDirectMessage: () =>
                                       _openDirectMessage(context),
+                                  onAcceptMessageRequest: (channelId) =>
+                                      unawaited(
+                                        chatController.acceptMessageRequest(
+                                          channelId,
+                                        ),
+                                      ),
+                                  onDeclineMessageRequest: (channelId) =>
+                                      unawaited(
+                                        chatController.declineMessageRequest(
+                                          channelId,
+                                        ),
+                                      ),
                                   scheduledEventCount: chatController
                                       .scheduledEventsFor(space.id)
                                       .length,
@@ -342,6 +371,11 @@ class FlucordShell extends StatelessWidget {
                                             space,
                                             administration,
                                           ),
+                                        )
+                                      : null,
+                                  onLeaveServer: canManageServers
+                                      ? () => unawaited(
+                                          _leaveServer(context, space),
                                         )
                                       : null,
                                   onReportServer: () =>
@@ -390,6 +424,24 @@ class FlucordShell extends StatelessWidget {
                             controller: searchController,
                             workspace: workspace,
                             linkLauncher: externalLinkLauncher,
+                            channels: [
+                              if (channel != null)
+                                ..._searchChannels(workspace, space, channel),
+                            ],
+                            query: workspaceController.query,
+                            onSubmitQuery: channel != null && canSearch
+                                ? (text) {
+                                    // The bar echoes the line the controls
+                                    // composed, exactly as a typed line.
+                                    workspaceController.setQuery(text);
+                                    _submitSearch(
+                                      workspace,
+                                      space,
+                                      channel,
+                                      text,
+                                    );
+                                  }
+                                : null,
                             onClose: () {
                               workspaceController.closeSearch();
                               searchController.clear();
@@ -473,6 +525,7 @@ class FlucordShell extends StatelessWidget {
                             channelId: channel?.id,
                             memberList: memberListController,
                             roles: workspace.roles,
+                            profile: memberProfileController,
                             currentMemberId: workspace.currentMemberId,
                             onMessage: (member) => unawaited(
                               _openDirectConversation(context, member.id),
@@ -485,6 +538,8 @@ class FlucordShell extends StatelessWidget {
                                 ? (member) =>
                                       unawaited(_blockMember(context, member))
                                 : null,
+                            moderationBuilder: (member) =>
+                                _memberAdminController(spaceId, member.id),
                           ),
                       ],
                     );

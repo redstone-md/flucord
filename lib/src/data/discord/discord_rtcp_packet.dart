@@ -205,7 +205,9 @@ abstract final class DiscordRtcpPacket {
   /// A NACK names a packet and a bitmask of the fifteen after it, and
   /// repeats the pair for as long as the packet lasts.
   static DiscordRtcpNack _readNack(ByteData data, int offset, int end) {
-    final mediaSsrc = offset + 4 <= end ? data.getUint32(offset, Endian.big) : 0;
+    final mediaSsrc = offset + 4 <= end
+        ? data.getUint32(offset, Endian.big)
+        : 0;
     final sequences = <int>[];
     for (var at = offset + 4; at + 4 <= end; at += 4) {
       final packetId = data.getUint16(at, Endian.big);

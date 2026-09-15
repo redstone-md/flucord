@@ -140,6 +140,50 @@ void main() {
     expect(edit['name'], 'mod');
   });
 
+  test('GuildMemberEdit records what it will send, and clearing is a null', () {
+    final edit = GuildMemberEdit();
+    expect(edit.isEmpty, isTrue);
+    expect(edit.keys, isEmpty);
+
+    edit
+      ..nickname = 'Forge Ada'
+      ..timeoutUntil = DateTime.utc(2026, 9, 14, 12);
+    expect(edit.toJson(), {
+      'nick': 'Forge Ada',
+      'communication_disabled_until': '2026-09-14T12:00:00.000Z',
+    });
+
+    final cleared = GuildMemberEdit()..nickname = null;
+    expect(cleared.toJson(), {'nick': null});
+  });
+
+  test('a member profile reads its timeout against a clock it is given', () {
+    const profile = GuildMemberProfile(
+      userId: '234567890123456789',
+      guildId: '111111111111111111',
+      roleIds: ['member'],
+      timeoutUntil: null,
+    );
+    final until = DateTime.utc(2026, 9, 14, 12);
+    final timedOut = GuildMemberProfile(
+      userId: '234567890123456789',
+      guildId: '111111111111111111',
+      roleIds: const ['member'],
+      timeoutUntil: until,
+    );
+
+    expect(profile.isTimedOutAt(until), isFalse);
+    expect(
+      timedOut.isTimedOutAt(until.subtract(const Duration(seconds: 1))),
+      isTrue,
+    );
+    expect(
+      timedOut.isTimedOutAt(until),
+      isFalse,
+      reason: 'the moment itself has passed',
+    );
+  });
+
   test('GuildChannelEdit carries every field the route takes', () {
     final edit = GuildChannelEdit();
     expect(edit.isEmpty, isTrue);

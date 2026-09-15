@@ -224,9 +224,11 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
-                    trigger == ComposerAutocompleteTrigger.channel
-                        ? 'CHANNELS'
-                        : 'MEMBERS AND ROLES',
+                    switch (trigger) {
+                      ComposerAutocompleteTrigger.channel => 'CHANNELS',
+                      ComposerAutocompleteTrigger.emoji => 'EMOJI',
+                      _ => 'MEMBERS AND ROLES',
+                    },
                     style: TextStyle(
                       color: context.surfaces.muted,
                       fontSize: 10,
@@ -272,7 +274,10 @@ class _ComposerAutocompleteRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final prefix = suggestion.kind == ComposerAutocompleteKind.channel
+    final isEmoji = suggestion.kind == ComposerAutocompleteKind.emoji;
+    final prefix = isEmoji
+        ? ''
+        : suggestion.kind == ComposerAutocompleteKind.channel
         ? '#'
         : '@';
     return MouseRegion(
@@ -306,7 +311,9 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          '$prefix${suggestion.label}',
+                          isEmoji
+                              ? ':${suggestion.label}:'
+                              : '$prefix${suggestion.label}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
@@ -347,6 +354,33 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
     final color = Color(
       suggestion.colorValue ?? context.surfaces.muted.toARGB32(),
     );
+    if (suggestion.kind == ComposerAutocompleteKind.emoji) {
+      if (suggestion.unicodeGlyph case final String glyph) {
+        return SizedBox.square(
+          dimension: 28,
+          child: Center(
+            child: Text(glyph, style: const TextStyle(fontSize: 20)),
+          ),
+        );
+      }
+      return SizedBox.square(
+        dimension: 28,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: RemoteIdentityImage(
+            url: suggestion.emojiUrl,
+            fallback: Container(
+              color: color.withValues(alpha: 0.16),
+              alignment: Alignment.center,
+              child: Text(
+                suggestion.label.substring(0, 1).toUpperCase(),
+                style: TextStyle(fontSize: 11, color: color),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     if (suggestion.kind == ComposerAutocompleteKind.member) {
       return SizedBox.square(
         dimension: 28,

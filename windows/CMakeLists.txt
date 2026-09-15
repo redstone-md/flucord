@@ -174,6 +174,14 @@ add_dependencies(${BINARY_NAME} flucord_audio)
 install(FILES "$<TARGET_FILE:flucord_audio>"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 
+# The Rich Presence pipe server, so a game can reach the local RPC socket on
+# Windows. Named pipes cannot be opened from Dart's socket API; this module
+# owns the handle and moves the bytes.
+add_subdirectory("flucord_rpc")
+add_dependencies(${BINARY_NAME} flucord_rpc)
+install(FILES "$<TARGET_FILE:flucord_rpc>"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+
 set(LIBDAVE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdave/libdave.dll")
 if(NOT EXISTS "${LIBDAVE_DLL}")
   message(FATAL_ERROR "Missing ${LIBDAVE_DLL}; run tool/build_libdave.ps1")

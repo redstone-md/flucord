@@ -105,6 +105,12 @@ final class _FakePresenceService implements PresenceService {
   @override
   void markActive() => marks++;
 
+  @override
+  List<UserActivity> localActivities = const [];
+
+  @override
+  Future<void> setLocalActivities(List<UserActivity> activities) async {}
+
   Future<void> close() => _updates.close();
 }
 

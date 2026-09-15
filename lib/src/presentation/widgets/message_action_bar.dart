@@ -195,7 +195,7 @@ class MessageActionBar extends StatelessWidget {
     return EmojiPickerButton(
       buttonKey: ValueKey('add-reaction-${message.id}'),
       spaceName: space.name,
-      customEmojis: workspace.emojisFor(space.id),
+      emojiSections: emojiSectionsFromWorkspace(workspace, channel.spaceId),
       purpose: EmojiPickerPurpose.reaction,
       dimension: 36,
       iconSize: 16,

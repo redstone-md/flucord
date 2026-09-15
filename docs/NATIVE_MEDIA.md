@@ -159,10 +159,13 @@ by default, hidden when the bundle has no filter, and is kept in
 machine: about 2 ms of one core per 20 ms frame, 29 ms of delay from the
 model's window and lookahead, a noise floor between words 30 dB lower and
 speech within half a decibel of the input (`test/deep_filter_noise_suppressor_test.dart`
-prints the figures for the machine it runs on). The flags the capture layer
-passes to `record` (`noiseSuppress`, `echoCancel`, `autoGain`) are parsed but
-not applied by `record_windows`, so this is the only suppression the client
-has; echo cancellation and gain are not covered.
+prints the figures for the machine it runs on). Of the flags the capture layer
+passes to `record` (`noiseSuppress`, `echoCancel`, `autoGain`), `noiseSuppress`
+stays parsed and not applied, because DeepFilter owns suppression between the
+framer and the encoder; `echoCancel` and `autoGain` are applied by the native
+module's voice capture stages, one open path serving both switches, with the
+module looping back the default render endpoint as the reference the echo
+stage subtracts.
 
 The receive boundary maps speaking SSRCs to users, reorders RTP across sequence
 wrap, rejects duplicate/replayed packets, decrypts DAVE, and keeps independent

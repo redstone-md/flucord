@@ -11,9 +11,9 @@ final class ExpressionFavoritesScope
     super.key,
   }) : super(notifier: controller);
 
-  static ExpressionFavoritesController? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<ExpressionFavoritesScope>()
-          ?.notifier;
+  static ExpressionFavoritesController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<ExpressionFavoritesScope>()
+      ?.notifier;
 
   static ExpressionFavoritesController of(BuildContext context) {
     final controller = maybeOf(context);
@@ -23,9 +23,10 @@ final class ExpressionFavoritesScope
     );
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
-  static ExpressionFavoritesController read(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<ExpressionFavoritesScope>()!.notifier!;
-
+  static ExpressionFavoritesController read(BuildContext context) => context
+      .getInheritedWidgetOfExactType<ExpressionFavoritesScope>()!
+      .notifier!;
 }

@@ -39,14 +39,13 @@ void main() {
 
     expect(service.sessions, hasLength(2));
     expect(service.sessions.first.disposed, isTrue);
-    expect(
-      (commands.single as DiscordVoiceDaveBinaryCommand).opcode,
-      26,
-    );
+    expect((commands.single as DiscordVoiceDaveBinaryCommand).opcode, 26);
 
     // A later epoch continues the group the session already holds.
-    expect(controller.acceptJson(24, {'epoch': 2, 'protocol_version': 1}),
-        isEmpty);
+    expect(
+      controller.acceptJson(24, {'epoch': 2, 'protocol_version': 1}),
+      isEmpty,
+    );
     expect(service.sessions, hasLength(2));
   });
 

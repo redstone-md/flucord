@@ -61,8 +61,7 @@ final class UnavailableGlobalKeyboardHook implements GlobalKeyboardHook {
   Future<void> stop() async {}
 }
 
-typedef _HookCallback =
-    Void Function(Pointer<Void>, Int32, Int32, Int32);
+typedef _HookCallback = Void Function(Pointer<Void>, Int32, Int32, Int32);
 
 /// `WH_KEYBOARD_LL` through `flucord_hotkeys.dll`.
 final class WindowsGlobalKeyboardHook implements GlobalKeyboardHook {
@@ -87,8 +86,7 @@ final class WindowsGlobalKeyboardHook implements GlobalKeyboardHook {
   }
 
   final DynamicLibrary? _library;
-  final StreamController<GlobalKeyEvent> _events =
-      StreamController.broadcast();
+  final StreamController<GlobalKeyEvent> _events = StreamController.broadcast();
   NativeCallable<_HookCallback>? _callback;
   bool _running = false;
 
@@ -140,10 +138,13 @@ final class WindowsGlobalKeyboardHook implements GlobalKeyboardHook {
     int modifiers,
     int isDown,
   ) {
-    final key = virtualKeyToLogicalKey(virtualKey);
-    if (key == null || _events.isClosed) return;
+    if (_events.isClosed) return;
     _events.add(
-      GlobalKeyEvent(key: key, modifiers: modifiers, isDown: isDown != 0),
+      GlobalKeyEvent(
+        key: virtualKeyToLogicalKey(virtualKey),
+        modifiers: modifiers,
+        isDown: isDown != 0,
+      ),
     );
   }
 
@@ -153,16 +154,17 @@ final class WindowsGlobalKeyboardHook implements GlobalKeyboardHook {
   }
 }
 
-/// A Windows virtual-key code as the logical key Flutter would have reported.
+/// A Windows virtual-key code as the logical key Flutter would report.
 ///
-/// Only the keys somebody would bind to. A hook reports every key on the
-/// machine, and mapping the ones nobody can bind would be inventing entries
-/// for a table nothing reads — an unmapped code is dropped instead, which is
-/// also what keeps a keystroke in another application from matching by
-/// accident.
-LogicalKeyboardKey? virtualKeyToLogicalKey(int virtualKey) {
+/// Every code answers, because a hook that guesses nothing must not drop
+/// anything either: the short list below covers the keys people usually
+/// bind, Flutter's own Windows table answers the rest of the keyboard, and
+/// a code neither knows becomes the key the embedder itself would mint for
+/// it. The one that must never happen is two answers for one key, which is
+/// why the short list is checked first and the minted id last.
+LogicalKeyboardKey virtualKeyToLogicalKey(int virtualKey) {
   // 0x30-0x39 and 0x41-0x5a are the digits and letters, and Windows uses the
-  // ASCII values for both — which is what Flutter's logical ids use as well.
+  // ASCII values for both, which is what Flutter's logical ids use as well.
   if ((virtualKey >= 0x30 && virtualKey <= 0x39) ||
       (virtualKey >= 0x41 && virtualKey <= 0x5a)) {
     return LogicalKeyboardKey(
@@ -175,7 +177,11 @@ LogicalKeyboardKey? virtualKeyToLogicalKey(int virtualKey) {
       LogicalKeyboardKey.f1.keyId + (virtualKey - 0x70),
     );
   }
-  return _named[virtualKey];
+  final named = _named[virtualKey];
+  if (named != null) return named;
+  final known = kWindowsToLogicalKey[virtualKey];
+  if (known != null) return known;
+  return LogicalKeyboardKey(virtualKey | LogicalKeyboardKey.windowsPlane);
 }
 
 const Map<int, LogicalKeyboardKey> _named = {

@@ -18,9 +18,9 @@ final class GoLiveScope extends InheritedNotifier<GoLiveController> {
     assert(controller != null, 'GoLiveScope is missing above this widget.');
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static GoLiveController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<GoLiveScope>()!.notifier!;
-
 }

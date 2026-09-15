@@ -98,5 +98,15 @@ abstract interface class VoiceAudioPlaybackService {
   Future<void> setEnabled(bool enabled);
   void addPcmFrame(VoiceRemotePcmFrame frame);
   Future<void> removeSource(String sourceId);
+
+  /// Sets one source's volume, 0 to 1, as a fraction of the room's level.
+  ///
+  /// Set on the source rather than scaled into its samples: a level changed
+  /// mid-word has to reach the speaker without a gap, and the stream is the
+  /// thing that is already playing. What a source is keyed by is
+  /// [VoiceRemotePcmFrame.sourceId]: a participant in voice, a stream key
+  /// for screen-share audio. A source that has not started yet is
+  /// remembered, so its first frame opens already at the right level.
+  Future<void> setSourceVolume(String sourceId, double volume);
   Future<void> dispose();
 }

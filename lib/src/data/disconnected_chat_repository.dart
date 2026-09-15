@@ -4,6 +4,11 @@ import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
 import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';
+import '../domain/account_connections.dart';
+import '../domain/account_data_package.dart';
+import '../domain/account_entitlements.dart';
+import '../domain/app_authorisation.dart';
+
 import '../domain/automod_rule.dart';
 import '../domain/chat_models.dart';
 import '../domain/conversation_summary.dart';
@@ -12,17 +17,20 @@ import '../domain/message_component.dart';
 import '../domain/application_command.dart';
 import '../domain/gif_picker.dart';
 import '../domain/soundboard.dart';
+import '../domain/guild_expression_repository.dart';
+import '../domain/guild_management_repository.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/user_profile.dart';
 import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
-import '../domain/guild_management_repository.dart';
 import '../domain/message_search_repository.dart';
 import '../domain/moderation_repository.dart';
+import '../domain/game_detection.dart';
 import '../domain/presence_repository.dart';
 import '../domain/read_state_repository.dart';
 import '../domain/user_settings_repository.dart';
+import '../domain/user_notes.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 
@@ -45,12 +53,19 @@ final class DisconnectedChatRepository implements ChatRepository {
 
   @override
   UserProfileRepository? get userProfile => null;
+  @override
+  UserNotesRepository? get userNotes => null;
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
 
   @override
   StageRepository? get stages => null;
+
+  /// No transport is connected, so there is no session to manage a guild's
+  /// expressions with.
+  @override
+  GuildExpressionRepository? get expressions => null;
 
   @override
   SoundboardRepository? get soundboard => null;
@@ -108,10 +123,25 @@ final class DisconnectedChatRepository implements ChatRepository {
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
   PresenceService? get presence => null;
+
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async => _workspace;
@@ -120,6 +150,7 @@ final class DisconnectedChatRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) => _reject();
 
   @override
@@ -145,6 +176,7 @@ final class DisconnectedChatRepository implements ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => _reject();
 
   @override

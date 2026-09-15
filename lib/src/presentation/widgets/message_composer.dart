@@ -12,9 +12,11 @@ import 'create_poll_dialog.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../application/slash_command_controller.dart';
+import 'accessibility_scope.dart';
 import 'emoji_picker.dart';
 import 'gif_picker.dart';
 import 'slash_command_list.dart';
+import 'spell_check_scope.dart';
 import 'native_voice_message_player.dart';
 import 'pending_attachment_strip.dart';
 import 'remote_identity_image.dart';
@@ -39,8 +41,8 @@ class MessageComposer extends StatefulWidget {
     required this.channelName,
     this.channelIsVoice = false,
     required this.spaceName,
-    required this.customEmojis,
-    required this.guildStickers,
+    required this.emojiSections,
+    required this.stickerSections,
     required this.isSending,
     required this.onSend,
     required this.onCreatePoll,
@@ -58,6 +60,10 @@ class MessageComposer extends StatefulWidget {
     this.onSendVoiceMessage,
     this.replyTo,
     this.replyAuthor,
+    this.slowmode = Duration.zero,
+    this.slowmodeUntil,
+    this.characterLimit = 2000,
+    this.attachmentSizeLimitBytes,
     super.key,
   });
 
@@ -68,8 +74,13 @@ class MessageComposer extends StatefulWidget {
   /// channel is not a text channel and `#name` would not resolve to it.
   final bool channelIsVoice;
   final String spaceName;
-  final List<GuildEmoji> customEmojis;
-  final List<GuildSticker> guildStickers;
+
+  /// Every server's emoji, the space this channel lives in first. The picker
+  /// names each server above its own emoji.
+  final List<EmojiServerSection> emojiSections;
+
+  /// Every server's stickers, the space this channel lives in first.
+  final List<StickerServerSection> stickerSections;
   final bool isSending;
   final SendMessageCallback onSend;
   final CreatePollCallback onCreatePoll;
@@ -100,6 +111,23 @@ class MessageComposer extends StatefulWidget {
   final VoiceMessageRecorder? voiceMessageRecorder;
   final SendVoiceMessageCallback? onSendVoiceMessage;
 
+  /// This channel's slowmode interval, or zero when there is none.
+  final Duration slowmode;
+
+  /// When slowmode lets this account send again, or null while it does not
+  /// hold them. Fed by the surface that owns the last-send time, which is the
+  /// channel model plus the composer's own successful sends.
+  final DateTime? slowmodeUntil;
+
+  /// The longest message this account may type here, in characters. Fed from
+  /// the account's entitlements, which is where Discord derives it too.
+  final int characterLimit;
+
+  /// The largest file this account may attach here, in bytes, or null while
+  /// the transport has not said. A null limit rejects nothing: a guessed
+  /// limit would turn away a file the server would have taken.
+  final int? attachmentSizeLimitBytes;
+
   @override
   State<MessageComposer> createState() => _MessageComposerState();
 }
@@ -111,10 +139,28 @@ class _MessageComposerState extends State<MessageComposer>
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
   bool _hasContent = false;
   bool _suppressNotifications = false;
-  bool get _canSend => _hasContent || _attachments.isNotEmpty;
+  int _charactersUsed = 0;
+  bool get _canSend =>
+      (_hasContent || _attachments.isNotEmpty) && !_isOverCharacterLimit;
 
   @override
   bool get _hasRegularMessageContent => _canSend;
+
+  /// How many characters the typed message still has room for. Counted by
+  /// characters rather than the string's code units, because Discord counts
+  /// the emoji a user sees, not the two halves its encoding splits into.
+  int get _charactersRemaining => widget.characterLimit - _charactersUsed;
+
+  /// The point at which the counter appears. Discord keeps the count silent
+  /// until the limit is close enough to matter, and so does this.
+  bool get _showsCharacterCounter => _charactersRemaining <= 200;
+  bool get _isOverCharacterLimit => _charactersRemaining < 0;
+
+  /// Ticks once a second while slowmode holds this account back, so the
+  /// countdown reaches zero on screen instead of freezing at the number it
+  /// happened to be built with.
+  Timer? _slowmodeTicker;
+  bool _slowmodeTicking = false;
 
   @override
   TextEditingController get _autocompleteTextController => _controller;
@@ -127,6 +173,7 @@ class _MessageComposerState extends State<MessageComposer>
     super.initState();
     _initializeComposerAutocomplete();
     _listenToVoiceProgress();
+    _startSlowmodeTicker();
   }
 
   @override
@@ -137,9 +184,14 @@ class _MessageComposerState extends State<MessageComposer>
       _controller.clear();
       _attachments.clear();
       _hasContent = false;
+      _charactersUsed = 0;
       _suppressNotifications = false;
       _discardVoiceState(oldWidget.voiceMessageRecorder);
       _resetComposerAutocomplete();
+    }
+    if (oldWidget.slowmodeUntil != widget.slowmodeUntil ||
+        oldWidget.slowmode != widget.slowmode) {
+      _startSlowmodeTicker();
     }
     if (oldWidget.voiceMessageRecorder != widget.voiceMessageRecorder) {
       if (!channelChanged) {
@@ -162,6 +214,7 @@ class _MessageComposerState extends State<MessageComposer>
   @override
   void dispose() {
     _disposeComposerAutocomplete();
+    _slowmodeTicker?.cancel();
     _voiceGeneration++;
     unawaited(_voiceProgressSubscription?.cancel());
     final recorder = widget.voiceMessageRecorder;
@@ -177,11 +230,89 @@ class _MessageComposerState extends State<MessageComposer>
     super.dispose();
   }
 
+  /// How long until slowmode lets this account send again, or null when
+  /// nothing is holding them back.
+  Duration? get _slowmodeRemaining {
+    final until = widget.slowmodeUntil;
+    if (widget.slowmode == Duration.zero || until == null) return null;
+    final remaining = until.difference(DateTime.now());
+    return remaining.isNegative ? null : remaining;
+  }
+
+  void _startSlowmodeTicker() {
+    final holding = _slowmodeRemaining != null;
+    if (holding == _slowmodeTicking) return;
+    _slowmodeTicking = holding;
+    _slowmodeTicker?.cancel();
+    _slowmodeTicker = null;
+    if (!holding) return;
+    _slowmodeTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_slowmodeRemaining == null) {
+        _slowmodeTicking = false;
+        _slowmodeTicker?.cancel();
+        _slowmodeTicker = null;
+      }
+      setState(() {});
+    });
+  }
+
+  /// The countdown the composer shows, rounded up so it never reads zero
+  /// while a send would still be refused.
+  String _slowmodeLabel(Duration remaining) {
+    final seconds =
+        remaining.inSeconds +
+        (remaining.inMilliseconds.remainder(1000) > 0 ? 1 : 0);
+    if (seconds >= 60) {
+      final minutes = seconds ~/ 60;
+      final rest = seconds % 60;
+      return rest == 0 ? '$minutes:00' : '$minutes:$rest';
+    }
+    return '$seconds';
+  }
+
+  Widget _slowmodeNotice(Duration remaining) => Padding(
+    key: const ValueKey('composer-slowmode-countdown'),
+    padding: const EdgeInsets.only(left: 14, bottom: 4),
+    child: Row(
+      children: [
+        Icon(Icons.timer_outlined, size: 13, color: context.surfaces.muted),
+        const SizedBox(width: 5),
+        Text(
+          'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
+          'before sending again.',
+          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _pickAttachments() async {
     try {
       final picked = await widget.attachmentPicker.pick();
       if (!mounted || picked.isEmpty) return;
-      final reachedLimit = _attachments.merge(picked);
+      // The size is checked before anything is attached, so the answer
+      // arrives up front rather than as a failure after an upload.
+      final limit = widget.attachmentSizeLimitBytes;
+      final accepted = [
+        for (final attachment in picked)
+          if (limit == null || attachment.size <= limit) attachment,
+      ];
+      final rejected = picked.length - accepted.length;
+      if (rejected > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              rejected == 1
+                  ? 'That file is above the ${_formatSizeLimit(limit!)} '
+                        'upload limit.'
+                  : '$rejected files are above the '
+                        '${_formatSizeLimit(limit!)} upload limit.',
+            ),
+          ),
+        );
+      }
+      final reachedLimit = _attachments.merge(accepted);
       setState(() {});
       if (reachedLimit) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -197,6 +328,23 @@ class _MessageComposerState extends State<MessageComposer>
     }
   }
 
+  String _formatSizeLimit(int bytes) {
+    final megabytes = bytes ~/ (1024 * 1024);
+    return '$megabytes MB';
+  }
+
+  /// Applies or removes the spoiler tag on one attached file. The tag is the
+  /// name, so this rewrites it: the upload carries the prefix and the
+  /// receiver reads it back off the stored file.
+  void _toggleAttachmentSpoiler(int index) => setState(() {
+    _attachments.replaceAt(
+      index,
+      _attachments.items[index].asSpoiler(
+        spoiler: !_attachments.items[index].isSpoiler,
+      ),
+    );
+  });
+
   Future<void> _send() async {
     if (!_canSend || widget.isSending) return;
     final sent = await widget.onSend(
@@ -209,6 +357,7 @@ class _MessageComposerState extends State<MessageComposer>
     _controller.clear();
     setState(() {
       _hasContent = false;
+      _charactersUsed = 0;
       _attachments.clear();
       _suppressNotifications = false;
     });
@@ -239,7 +388,10 @@ class _MessageComposerState extends State<MessageComposer>
     );
     final hasContent = next.trim().isNotEmpty;
     if (hasContent) widget.onTyping();
-    setState(() => _hasContent = hasContent);
+    setState(() {
+      _hasContent = hasContent;
+      _charactersUsed = next.characters.length;
+    });
     _focusNode.requestFocus();
   }
 
@@ -247,7 +399,12 @@ class _MessageComposerState extends State<MessageComposer>
   /// leaving it behind would have the next message start with it.
   void _clearComposer() {
     _controller.clear();
-    if (_hasContent) setState(() => _hasContent = false);
+    if (_hasContent) {
+      setState(() {
+        _hasContent = false;
+        _charactersUsed = 0;
+      });
+    }
   }
 
   void _showPollDialog() {
@@ -271,12 +428,15 @@ class _MessageComposerState extends State<MessageComposer>
                 onPicked: _clearComposer,
               ),
             ),
+          if (_slowmodeRemaining case final remaining?)
+            _slowmodeNotice(remaining),
           if (widget.replyTo != null) _replyBar(context),
           if (_attachments.isNotEmpty) ...[
             PendingAttachmentStrip(
               attachments: _attachments.items,
               enabled: !widget.isSending,
               onRemove: (index) => setState(() => _attachments.removeAt(index)),
+              onToggleSpoiler: _toggleAttachmentSpoiler,
             ),
             const SizedBox(height: 6),
           ],
@@ -307,14 +467,23 @@ class _MessageComposerState extends State<MessageComposer>
                   autofocus: true,
                   minLines: 1,
                   maxLines: 4,
+                  // The underline comes from the local dictionary and goes
+                  // nowhere: a misspelling is information for whoever is
+                  // typing, not something to attach to the message.
+                  spellCheckConfiguration: _spellCheckConfiguration(context),
                   onChanged: (value) {
                     final hasContent = value.trim().isNotEmpty;
                     if (hasContent) widget.onTyping();
                     // A message that begins with a slash is a command being
                     // chosen, not typed prose, so the list follows the text.
                     widget.slashCommands?.syncComposer(value);
-                    if (hasContent != _hasContent) {
-                      setState(() => _hasContent = hasContent);
+                    final charactersUsed = value.characters.length;
+                    if (hasContent != _hasContent ||
+                        charactersUsed != _charactersUsed) {
+                      setState(() {
+                        _hasContent = hasContent;
+                        _charactersUsed = charactersUsed;
+                      });
                     }
                   },
                   decoration: InputDecoration(
@@ -365,7 +534,7 @@ class _MessageComposerState extends State<MessageComposer>
                       children: [
                         EmojiPickerButton(
                           spaceName: widget.spaceName,
-                          customEmojis: widget.customEmojis,
+                          emojiSections: widget.emojiSections,
                           onSelected: _insertEmoji,
                           favorites: widget.expressionFavorites,
                         ),
@@ -382,7 +551,7 @@ class _MessageComposerState extends State<MessageComposer>
                             ),
                           ),
                         StickerPickerButton(
-                          stickers: widget.guildStickers,
+                          sections: widget.stickerSections,
                           isSending: widget.isSending,
                           onSend: widget.onSendStickers,
                           favorites: widget.expressionFavorites,
@@ -451,10 +620,59 @@ class _MessageComposerState extends State<MessageComposer>
                 ),
               ),
             ),
+          if (_showsCharacterCounter) _characterCounter(),
         ],
       ),
     );
   }
+
+  /// The spell check configuration the composer runs with, or none where the
+  /// switch is off or no service is installed.
+  ///
+  /// The misspelled style comes from the field's own material default: the
+  /// red wavy underline is what every native app draws, and inventing a
+  /// second one would only look wrong.
+  SpellCheckConfiguration _spellCheckConfiguration(BuildContext context) {
+    final spellcheck = AccessibilityScope.maybeOf(context)?.spellchecks ?? true;
+    final service = SpellCheckScope.maybeOf(context);
+    if (!spellcheck || service == null) {
+      return const SpellCheckConfiguration.disabled();
+    }
+    return SpellCheckConfiguration(
+      spellCheckService: service,
+      misspelledTextStyle: TextField.materialMisspelledTextStyle,
+    );
+  }
+
+  /// The remaining-character count, shown only near the limit. A negative
+  /// count is red, and the send above refuses while one is showing.
+  Widget _characterCounter() => Padding(
+    key: const ValueKey('composer-character-counter'),
+    padding: const EdgeInsets.only(left: 14, bottom: 4),
+    child: Row(
+      children: [
+        Text(
+          '$_charactersRemaining',
+          style: TextStyle(
+            fontSize: 11,
+            color: _isOverCharacterLimit
+                ? Theme.of(context).colorScheme.error
+                : context.surfaces.muted,
+          ),
+        ),
+        if (_isOverCharacterLimit) ...[
+          const SizedBox(width: 5),
+          Text(
+            'Your message is above the limit.',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 
   /// The last control in the composer's trailing cluster.
   Widget _trailingAction() {
@@ -477,6 +695,19 @@ class _MessageComposerState extends State<MessageComposer>
         padding: EdgeInsets.zero,
         onPressed: _send,
         icon: const Icon(Icons.send, size: 19, color: FlucordColors.brand),
+        tooltip: 'Send message',
+      );
+    }
+    // A message that is over the limit keeps its send button, greyed out
+    // beside the red count, rather than swapping to the recorder: the user
+    // typed words, and the honest answer is that they are too many.
+    if (_hasContent || _attachments.isNotEmpty) {
+      return const IconButton(
+        key: ValueKey('send-message'),
+        constraints: BoxConstraints.tightFor(width: 48, height: 48),
+        padding: EdgeInsets.zero,
+        onPressed: null,
+        icon: Icon(Icons.send, size: 19),
         tooltip: 'Send message',
       );
     }

@@ -101,8 +101,7 @@ final class _Sps {
     var value = 0;
     for (var i = 0; i < count; i++) {
       value =
-          (value << 1) |
-          ((_data[_position >> 3] >> (7 - (_position & 7))) & 1);
+          (value << 1) | ((_data[_position >> 3] >> (7 - (_position & 7))) & 1);
       _position++;
     }
     return value;

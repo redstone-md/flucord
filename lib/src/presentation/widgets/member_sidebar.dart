@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../application/guild_member_admin_controller.dart';
 import '../../application/guild_member_list_controller.dart';
+import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
 import '../../theme/flucord_theme.dart';
@@ -26,8 +30,10 @@ class MemberSidebar extends StatefulWidget {
     this.channelId,
     this.memberList,
     this.roles = const <CommunityRole>[],
+    this.profile,
     this.onReport,
     this.onBlock,
+    this.moderationBuilder,
     super.key,
   });
 
@@ -36,6 +42,10 @@ class MemberSidebar extends StatefulWidget {
   final String currentMemberId;
   final ValueChanged<Member> onMessage;
 
+  /// Drives the full profile the anchored popover fetches. Null on a host
+  /// with no account behind it, which draws the identity block only.
+  final MemberProfileController? profile;
+
   /// Opens the report flow for a member. Absent on transports with no
   /// `/reporting` access, which is what keeps the button off the popover
   /// instead of putting one there that fails.
@@ -43,6 +53,11 @@ class MemberSidebar extends StatefulWidget {
 
   /// Blocks a member. Same reasoning as [onReport].
   final ValueChanged<Member>? onBlock;
+
+  /// Builds the moderation controller for one member's popover, or null
+  /// where this host offers no moderation: no guild-administration plane, or
+  /// a surface outside a guild.
+  final GuildMemberAdminController? Function(Member member)? moderationBuilder;
 
   /// Channel whose roster is shown. Member lists are subscribed per channel
   /// because visibility, not membership, decides who appears.
@@ -56,12 +71,35 @@ class MemberSidebar extends StatefulWidget {
 
 class _MemberSidebarState extends State<MemberSidebar> {
   final OverlayPortalController _overlayController = OverlayPortalController();
+  final TextEditingController _search = TextEditingController();
   final Map<String, LayerLink> _memberLinks = {};
   List<Member>? _indexedMembers;
   Map<String, Member> _membersById = const {};
   Member? _selectedMember;
   LayerLink? _selectedLink;
+
+  /// The moderation controller of the popover that is open, if the host
+  /// offered one. Owned here, disposed when the popover closes.
+  GuildMemberAdminController? _moderation;
   bool _openUp = false;
+
+  /// The member search as typed. Blank restores the roster, which is what
+  /// Discord does too: the results list is not a second roster to keep in
+  /// sync, it is the roster put away for a moment.
+  String _searchQuery = '';
+
+  Timer? _searchDebounce;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    _moderation?.dispose();
+    widget.memberList
+      ?..removeListener(_onRosterChanged)
+      ..clear();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -96,15 +134,9 @@ class _MemberSidebarState extends State<MemberSidebar> {
       }
       _selectedMember = null;
       _selectedLink = null;
+      _moderation?.dispose();
+      _moderation = null;
     }
-  }
-
-  @override
-  void dispose() {
-    widget.memberList
-      ?..removeListener(_onRosterChanged)
-      ..clear();
-    super.dispose();
   }
 
   void _watchChannel() => widget.memberList?.viewChannel(
@@ -119,6 +151,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
   @override
   Widget build(BuildContext context) {
     final roster = widget.memberList?.list;
+    final searching = _searchQuery.trim().isNotEmpty;
     return OverlayPortal(
       controller: _overlayController,
       overlayChildBuilder: _buildOverlay,
@@ -128,10 +161,85 @@ class _MemberSidebarState extends State<MemberSidebar> {
           color: context.surfaces.surface,
           border: Border(left: BorderSide(color: context.surfaces.border)),
         ),
-        child: roster != null && roster.isLoaded
-            ? _buildRoster(roster)
-            : _buildCachedMembers(_visibleMembers()),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: TextField(
+                key: const ValueKey('member-search'),
+                controller: _search,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  prefixIcon: Icon(Icons.search, size: 18),
+                  hintText: 'Search members',
+                ),
+                onChanged: _onSearchChanged,
+              ),
+            ),
+            Expanded(
+              child: searching
+                  ? _buildSearchResults()
+                  : roster != null && roster.isLoaded
+                  ? _buildRoster(roster)
+                  : _buildCachedMembers(_visibleMembers()),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  /// Reports the query once typing has settled, and renders results right
+  /// away: the local table is what a small guild already holds, and what the
+  /// chunk route adds arrives as an ordinary member update.
+  void _onSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    _searchDebounce?.cancel();
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return;
+    // Discord's own search field asks as you type; the debounce keeps one
+    // keystroke from spending one socket ask.
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      widget.memberList?.searchMembers(trimmed);
+    });
+  }
+
+  /// The members of this space whose name matches the query.
+  ///
+  /// A starts-with match, because that is the question the chunk route
+  /// answers too: a search that showed "Ver" for "Dover" here would disagree
+  /// with the members the route then delivers.
+  List<Member> _matchingMembers() {
+    final query = _searchQuery.trim().toLowerCase();
+    return [
+      for (final member in _visibleMembers())
+        if (member.displayName.toLowerCase().startsWith(query)) member,
+    ];
+  }
+
+  Widget _buildSearchResults() {
+    final results = _matchingMembers();
+    if (results.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
+        children: const [
+          MemberGroupLabel(label: 'Members', count: 0),
+          SizedBox(height: 14),
+          Center(
+            child: Text(
+              'Nobody by that name yet.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      children: [
+        MemberGroupLabel(label: 'Members', count: results.length),
+        for (final member in results) _rowFor(member),
+      ],
     );
   }
 
@@ -253,7 +361,9 @@ class _MemberSidebarState extends State<MemberSidebar> {
             child: MemberProfilePopover(
               member: member,
               spaceId: widget.spaceId,
+              profile: widget.profile,
               canMessage: member.id != widget.currentMemberId,
+              moderation: _moderation,
               onMessage: () {
                 _dismiss();
                 widget.onMessage(member);
@@ -290,8 +400,14 @@ class _MemberSidebarState extends State<MemberSidebar> {
     setState(() {
       _selectedMember = member;
       _selectedLink = link;
+      _moderation?.dispose();
+      _moderation = widget.moderationBuilder?.call(member);
       _openUp = centerY > MediaQuery.sizeOf(context).height / 2;
     });
+    // The fetch starts with the open rather than after it, so the sections
+    // arrive while the popover is already on screen.
+    final profile = widget.profile;
+    if (profile != null) unawaited(profile.open(member.id));
     _overlayController.show();
   }
 
@@ -301,6 +417,8 @@ class _MemberSidebarState extends State<MemberSidebar> {
     setState(() {
       _selectedMember = null;
       _selectedLink = null;
+      _moderation?.dispose();
+      _moderation = null;
     });
   }
 }

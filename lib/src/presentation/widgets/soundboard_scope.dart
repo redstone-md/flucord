@@ -18,9 +18,9 @@ final class SoundboardScope extends InheritedNotifier<SoundboardController> {
     assert(controller != null, 'SoundboardScope is missing above this widget.');
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static SoundboardController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<SoundboardScope>()!.notifier!;
-
 }

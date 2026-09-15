@@ -59,6 +59,26 @@ class FakeNoiseSuppressor implements VoiceNoiseSuppressor {
   void dispose() => disposed = true;
 }
 
+/// An enhancer that records the frames it was handed and halves them, so a
+/// test can tell an enhanced frame from a raw one by its samples.
+class FakeMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
+  final List<Int16List> frames = [];
+  int? channels;
+  bool disposed = false;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    this.channels = channels;
+    frames.add(Int16List.fromList(frame));
+    for (var i = 0; i < frame.length; i++) {
+      frame[i] = frame[i] ~/ 2;
+    }
+  }
+
+  @override
+  void dispose() => disposed = true;
+}
+
 final class MemoryVoiceProcessingRepository
     implements VoiceProcessingRepository {
   MemoryVoiceProcessingRepository([this.saved]);

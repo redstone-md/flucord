@@ -13,6 +13,10 @@ extension ChatControllerUserSettings on ChatController {
   /// account behind it. Read live for the same reason as the settings store.
   UserProfileRepository? get userProfile => _repository.userProfile;
 
+  /// The account's private notes, or `null` for a transport with no account
+  /// behind it. Read live for the same reason as the settings store.
+  UserNotesRepository? get userNotes => _repository.userNotes;
+
   /// The thread-membership plane of the connected transport, or `null`.
   ThreadMembershipRepository? get threadMembership =>
       _repository.threadMembership;
@@ -22,6 +26,9 @@ extension ChatControllerUserSettings on ChatController {
 
   /// The soundboard plane of the connected transport, or `null`.
   SoundboardRepository? get soundboard => _repository.soundboard;
+
+  /// The upload and delete plane for a guild's expressions, or `null`.
+  GuildExpressionRepository? get expressions => _repository.expressions;
 
   /// The GIF proxy of the connected transport, or `null`.
   GifRepository? get gifs => _repository.gifs;
@@ -45,6 +52,12 @@ extension ChatControllerUserSettings on ChatController {
   ConversationSummaryRepository? get conversationSummaries =>
       _repository.conversationSummaries;
 
+  /// The summaries the connected transport holds for [channelId], newest
+  /// first. Empty on a transport Discord sends none to, which is how the
+  /// strip stays absent rather than empty on those sessions.
+  List<ConversationSummary> conversationSummariesFor(String channelId) =>
+      conversationSummaries?.summariesFor(channelId) ?? const [];
+
   /// Whether Flucord should stay silent about new messages.
   ///
   /// Read straight from the settings store instead of being pushed into the
@@ -52,6 +65,35 @@ extension ChatControllerUserSettings on ChatController {
   /// between one message and the next.
   bool get suppressesMessageNotifications =>
       _repository.userSettings?.current?.notifications.isQuiet ?? false;
+
+  /// Whether the account wants the toast a new message raises.
+  ///
+  /// Read straight from the settings store instead of being pushed into the
+  /// notification path, because the value can change from another device
+  /// between one message and the next. A transport with no settings store
+  /// answers `true`, which is Discord's own default for the leaf.
+  bool get showsInAppNotifications =>
+      _repository
+          .userSettings
+          ?.current
+          ?.notifications
+          .showsInAppNotifications ??
+      true;
+
+  /// Whether the account allows the spoken-aloud message command.
+  ///
+  /// The same setting gates both halves of text-to-speech: sending one and
+  /// reading an arriving one aloud. Read per message rather than captured,
+  /// because another device can flip it between one message and the next.
+  /// A transport with no settings store answers `true`, which is Discord's
+  /// own default for the leaf.
+  bool get allowsTextToSpeech =>
+      _repository
+          .userSettings
+          ?.current
+          ?.messageDisplay
+          .enableTextToSpeechCommand ??
+      true;
 
   /// The guild-administration plane of the connected transport, or `null`.
   ///
@@ -77,6 +119,25 @@ extension ChatControllerUserSettings on ChatController {
 
   /// Age verification, or `null` where none is offered.
   AgeVerificationRepository? get ageVerification => _repository.ageVerification;
+
+  /// The account's third-party connections, or `null` where there are none
+  /// to manage.
+  AccountConnectionsRepository? get accountConnections =>
+      _repository.accountConnections;
+
+  /// What the account holds, or `null` where the transport reads nothing.
+  AccountEntitlementsRepository? get accountEntitlements =>
+      _repository.accountEntitlements;
+
+  /// Bot and app authorisation, or `null` where the transport cannot add an
+  /// app to a guild.
+  AppAuthorisationRepository? get appAuthorisation =>
+      _repository.appAuthorisation;
+
+  /// The account's data package, or `null` where the transport has no
+  /// account to collect one from.
+  AccountDataPackageRepository? get accountDataPackage =>
+      _repository.accountDataPackage;
 
   /// The account's friend graph, or `null` where the session is told none.
   DesktopRelationshipRepository? get relationships => _repository.relationships;

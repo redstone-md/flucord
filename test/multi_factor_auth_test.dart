@@ -59,6 +59,37 @@ void main() {
     });
   });
 
+  group('the security key client data', () {
+    test('carries the challenge unchanged, with type and origin around it', () {
+      final clientData = SecurityKeyClientData.create(challenge: 'a-challenge');
+
+      expect(clientData.challenge, 'a-challenge');
+      expect(clientData.json, contains('"type":"webauthn.create"'));
+      expect(clientData.json, contains('"challenge":"a-challenge"'));
+      expect(clientData.json, contains('"origin":"https://discord.com"'));
+    });
+
+    test('the JSON is base64url without padding', () {
+      final clientData = SecurityKeyClientData.create(challenge: 'abc');
+
+      expect(clientData.base64Url, isNotEmpty);
+      expect(clientData.base64Url.contains('='), isFalse);
+      expect(encodeBase64Url(utf8.encode('a')), 'YQ');
+      expect(encodeBase64Url(utf8.encode('bc')), 'YmM');
+      expect(
+        utf8.decode(base64Url.decode(clientData.base64Url)),
+        clientData.json,
+      );
+    });
+
+    test('two client datas for the same challenge agree', () {
+      expect(
+        SecurityKeyClientData.create(challenge: 'abc').base64Url,
+        SecurityKeyClientData.create(challenge: 'abc').base64Url,
+      );
+    });
+  });
+
   group('the routes', () {
     test('enabling sends the secret with the code that proved it', () async {
       final transport = _Transport([
@@ -407,6 +438,228 @@ void main() {
       expect(enrolment!.hasBackupCodes, isFalse);
       expect(enrolment.token, isEmpty);
     });
+
+    test('the security key rows come from the webauthn route', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode([
+            {
+              'id': 'cred-1',
+              'name': 'Hello key',
+              'created_at': '2026-09-01T10:00:00+00:00',
+            },
+            // A row with no id names nothing and can be removed by nothing.
+            {'name': 'nameless'},
+          ]),
+        ),
+      ]);
+
+      final keys = await _repository(transport).loadSecurityKeys();
+
+      expect(keys.single.id, 'cred-1');
+      expect(keys.single.name, 'Hello key');
+      expect(keys.single.createdAt, isNotNull);
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/users/@me/mfa/webauthn/credentials'),
+      );
+    });
+
+    test('a row with no name is still listed, under plain wording', () {
+      final keys = DiscordMfaRepository.readSecurityKeys([
+        {'id': 'cred-1'},
+      ]);
+
+      expect(keys.single.name, 'Security key');
+    });
+
+    test('the challenge is bought with the password', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode({'challenge': 'a-challenge'}),
+        ),
+      ]);
+
+      final challenge = await _repository(
+        transport,
+      ).requestSecurityKeyChallenge('hunter2');
+
+      expect(challenge, 'a-challenge');
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/users/@me/mfa/webauthn/credentials/registration-options'),
+      );
+      expect(transport.requests.single.body, {'password': 'hunter2'});
+    });
+
+    test(
+      'a challenge Discord would not buy answers null, not an error',
+      () async {
+        for (final status in [400, 401]) {
+          final transport = _Transport([
+            DiscordHttpResponse(
+              statusCode: status,
+              headers: const {},
+              body: jsonEncode({'message': 'Invalid password'}),
+            ),
+          ]);
+
+          expect(
+            await _repository(transport).requestSecurityKeyChallenge('wrong'),
+            isNull,
+            reason: '$status',
+          );
+        }
+
+        final empty = _Transport([]);
+        expect(
+          await _repository(empty).requestSecurityKeyChallenge(''),
+          isNull,
+        );
+        expect(empty.requests, isEmpty);
+      },
+    );
+
+    test('the registration sends the browser response shape', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(
+          statusCode: 200,
+          headers: const {},
+          body: jsonEncode({'id': 'cred-1'}),
+        ),
+      ]);
+      const registration = SecurityKeyRegistration(
+        credentialId: 'cred-1',
+        attestationObject: 'attestation',
+        clientDataJson: 'client-data',
+      );
+
+      final registered = await _repository(transport).registerSecurityKey(
+        name: ' Hello key ',
+        challenge: 'a-challenge',
+        registration: registration,
+      );
+
+      expect(registered, isTrue);
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/users/@me/mfa/webauthn/credentials'),
+      );
+      expect(transport.requests.single.body, {
+        'challenge': 'a-challenge',
+        'name': 'Hello key',
+        'response': {
+          'id': 'cred-1',
+          'rawId': 'cred-1',
+          'type': 'public-key',
+          'response': {
+            'attestationObject': 'attestation',
+            'clientDataJSON': 'client-data',
+            'transports': <String>[],
+          },
+        },
+      });
+    });
+
+    test('nothing is registered without a name or a challenge', () async {
+      const registration = SecurityKeyRegistration(
+        credentialId: 'cred-1',
+        attestationObject: 'attestation',
+        clientDataJson: 'client-data',
+      );
+      final transport = _Transport([]);
+      final repository = _repository(transport);
+
+      expect(
+        await repository.registerSecurityKey(
+          name: '  ',
+          challenge: 'a-challenge',
+          registration: registration,
+        ),
+        isFalse,
+      );
+      expect(
+        await repository.registerSecurityKey(
+          name: 'Hello key',
+          challenge: '',
+          registration: registration,
+        ),
+        isFalse,
+      );
+      expect(transport.requests, isEmpty);
+    });
+
+    test(
+      'a registration Discord refused answers false, not an error',
+      () async {
+        for (final status in [400, 401]) {
+          final transport = _Transport([
+            DiscordHttpResponse(
+              statusCode: status,
+              headers: const {},
+              body: jsonEncode({'message': 'Refused'}),
+            ),
+          ]);
+
+          expect(
+            await _repository(transport).registerSecurityKey(
+              name: 'Hello key',
+              challenge: 'a-challenge',
+              registration: const SecurityKeyRegistration(
+                credentialId: 'cred-1',
+                attestationObject: 'attestation',
+                clientDataJson: 'client-data',
+              ),
+            ),
+            isFalse,
+            reason: '$status',
+          );
+        }
+      },
+    );
+
+    test('removing a key spends the password and names the key', () async {
+      final transport = _Transport([
+        DiscordHttpResponse(statusCode: 204, headers: const {}, body: ''),
+      ]);
+      const key = SecurityKey(id: 'cred-1', name: 'Hello key');
+
+      expect(
+        await _repository(transport).removeSecurityKey(key, 'hunter2'),
+        isTrue,
+      );
+
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/users/@me/mfa/webauthn/credentials/cred-1'),
+      );
+      expect(transport.requests.single.method, 'DELETE');
+      expect(transport.requests.single.body, {'password': 'hunter2'});
+    });
+
+    test('a removal Discord refused answers false, not an error', () async {
+      for (final status in [400, 401]) {
+        final transport = _Transport([
+          DiscordHttpResponse(
+            statusCode: status,
+            headers: const {},
+            body: jsonEncode({'message': 'Refused'}),
+          ),
+        ]);
+
+        expect(
+          await _repository(
+            transport,
+          ).removeSecurityKey(const SecurityKey(id: 'cred-1'), 'wrong'),
+          isFalse,
+          reason: '$status',
+        );
+      }
+    });
   });
 
   group('the controller', () {
@@ -670,6 +923,286 @@ void main() {
 
       expect(notifications, 0);
     });
+
+    test('the security key flow states where it is at each step', () async {
+      final repository = _FakeMfa();
+      final ceremony = _FakeCeremony();
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: ceremony,
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.idle);
+      expect(controller.isSecurityKeyCeremonyAvailable, isTrue);
+
+      expect(
+        await controller.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'hunter2',
+        ),
+        isTrue,
+      );
+
+      // The password bought the challenge; the ceremony got the account it
+      // was asked to act for.
+      expect(repository.challengePasswords, ['hunter2']);
+      expect(ceremony.asked.single, ('challenge-1', 'user-1', 'Ada'));
+      expect(repository.registered.single.$1, 'Hello key');
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.added);
+      expect(controller.securityKeys.single.name, 'Hello key');
+    });
+
+    test('a refused password is named, not read as an outage', () async {
+      final repository = _FakeMfa()..acceptPassword = false;
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      expect(
+        await controller.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'wrong',
+        ),
+        isFalse,
+      );
+
+      expect(
+        controller.securityKeyRefusal,
+        MfaSecurityKeyRefusal.passwordRefused,
+      );
+      expect(controller.error, isNull);
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.idle);
+    });
+
+    test('a closed prompt says so and stays ordinary', () async {
+      final ceremony = _FakeCeremony()..decline = true;
+      final controller = MultiFactorAuthController(
+        () => _FakeMfa(),
+        securityKeyCeremony: ceremony,
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      expect(
+        await controller.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'hunter2',
+        ),
+        isFalse,
+      );
+
+      expect(controller.securityKeyRefusal, MfaSecurityKeyRefusal.keyDeclined);
+      expect(controller.error, isNull);
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.idle);
+    });
+
+    test(
+      'a registration Discord refused is named, not read as an outage',
+      () async {
+        final repository = _FakeMfa()..acceptRegistration = false;
+        final controller = MultiFactorAuthController(
+          () => repository,
+          securityKeyCeremony: _FakeCeremony(),
+          securityKeyAccount: () =>
+              const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+        );
+        addTearDown(controller.dispose);
+
+        expect(
+          await controller.beginSecurityKeyEnrolment(
+            name: 'Hello key',
+            password: 'hunter2',
+          ),
+          isFalse,
+        );
+
+        expect(
+          controller.securityKeyRefusal,
+          MfaSecurityKeyRefusal.registrationRefused,
+        );
+        expect(controller.error, isNull);
+      },
+    );
+
+    test('a security-key step that could not be sent is an error', () async {
+      final controller = MultiFactorAuthController(
+        () => _FakeMfa()..failNext = true,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      expect(
+        await controller.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'hunter2',
+        ),
+        isFalse,
+      );
+
+      expect(controller.error, isA<StateError>());
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.idle);
+    });
+
+    test('no ceremony or no account means no enrolment', () async {
+      final repository = _FakeMfa();
+      final noCeremony = MultiFactorAuthController(() => repository);
+      addTearDown(noCeremony.dispose);
+      expect(noCeremony.isSecurityKeyCeremonyAvailable, isFalse);
+      expect(
+        await noCeremony.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'hunter2',
+        ),
+        isFalse,
+      );
+
+      final noAccount = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+      );
+      addTearDown(noAccount.dispose);
+      expect(
+        await noAccount.beginSecurityKeyEnrolment(
+          name: 'Hello key',
+          password: 'hunter2',
+        ),
+        isFalse,
+      );
+      expect(repository.registered, isEmpty);
+    });
+
+    test('a key with no name asks for nothing', () async {
+      final repository = _FakeMfa();
+      final ceremony = _FakeCeremony();
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: ceremony,
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      expect(
+        await controller.beginSecurityKeyEnrolment(name: '  ', password: 'p'),
+        isFalse,
+      );
+
+      // Nothing was bought and no prompt was shown: the wording of the
+      // refusal belongs to the empty field, not to Windows or Discord.
+      expect(repository.challengePasswords, isEmpty);
+      expect(ceremony.asked, isEmpty);
+      expect(repository.registered, isEmpty);
+    });
+
+    test('the keys are loaded once, and again only when asked', () async {
+      final repository = _FakeMfa()
+        ..securityKeys = const [SecurityKey(id: 'cred-1', name: 'Hello key')];
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.loadSecurityKeys();
+      expect(controller.securityKeys.single.id, 'cred-1');
+
+      repository.securityKeys = const [SecurityKey(id: 'cred-2')];
+      await controller.loadSecurityKeys();
+      // Cached: the list is only re-read when asked for.
+      expect(controller.securityKeys.single.id, 'cred-1');
+
+      await controller.loadSecurityKeys(refresh: true);
+      expect(controller.securityKeys.single.id, 'cred-2');
+    });
+
+    test('removing a key takes it off the list', () async {
+      final repository = _FakeMfa()
+        ..securityKeys = const [SecurityKey(id: 'cred-1', name: 'Hello key')];
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadSecurityKeys();
+
+      expect(
+        await controller.removeSecurityKey(
+          const SecurityKey(id: 'cred-1', name: 'Hello key'),
+          'hunter2',
+        ),
+        isTrue,
+      );
+
+      expect(controller.securityKeys, isEmpty);
+      expect(repository.removed.single, (
+        const SecurityKey(id: 'cred-1', name: 'Hello key'),
+        'hunter2',
+      ));
+    });
+
+    test('a removal Discord refused is named, not read as an outage', () async {
+      final repository = _FakeMfa()
+        ..securityKeys = const [SecurityKey(id: 'cred-1')]
+        ..acceptRemoval = false;
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadSecurityKeys();
+
+      expect(
+        await controller.removeSecurityKey(
+          const SecurityKey(id: 'cred-1'),
+          'wrong',
+        ),
+        isFalse,
+      );
+
+      expect(
+        controller.securityKeyRefusal,
+        MfaSecurityKeyRefusal.removalRefused,
+      );
+      expect(controller.error, isNull);
+      expect(controller.securityKeys, isNotEmpty);
+    });
+
+    test('dismissing the added state offers another key', () async {
+      final repository = _FakeMfa();
+      final controller = MultiFactorAuthController(
+        () => repository,
+        securityKeyCeremony: _FakeCeremony(),
+        securityKeyAccount: () =>
+            const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+      );
+      addTearDown(controller.dispose);
+      await controller.beginSecurityKeyEnrolment(
+        name: 'Hello key',
+        password: 'hunter2',
+      );
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.added);
+
+      controller.dismissAddedSecurityKey();
+
+      expect(controller.securityKeyStage, MfaSecurityKeyStage.idle);
+      expect(controller.addedSecurityKey, isNull);
+    });
   });
 }
 
@@ -693,6 +1226,67 @@ final class _FakeMfa implements MultiFactorAuthRepository {
   bool smsEnabled = false;
   final List<String> passwords = [];
   final List<(String, String, bool)> viewed = [];
+
+  List<SecurityKey> securityKeys = const [];
+  final List<String> challengePasswords = [];
+  final List<(String, String, SecurityKeyRegistration)> registered = [];
+  final List<(SecurityKey, String)> removed = [];
+  bool acceptPassword = true;
+  bool acceptRegistration = true;
+  bool acceptRemoval = true;
+
+  @override
+  Future<List<SecurityKey>> loadSecurityKeys() async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('load failed');
+    }
+    return securityKeys;
+  }
+
+  @override
+  Future<String?> requestSecurityKeyChallenge(String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('challenge failed');
+    }
+    challengePasswords.add(password);
+    return acceptPassword ? 'challenge-1' : null;
+  }
+
+  @override
+  Future<bool> registerSecurityKey({
+    required String name,
+    required String challenge,
+    required SecurityKeyRegistration registration,
+  }) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('register failed');
+    }
+    if (!acceptRegistration) return false;
+    registered.add((name, challenge, registration));
+    securityKeys = [
+      ...securityKeys,
+      SecurityKey(id: registration.credentialId, name: name),
+    ];
+    return true;
+  }
+
+  @override
+  Future<bool> removeSecurityKey(SecurityKey key, String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('remove failed');
+    }
+    if (!acceptRemoval) return false;
+    removed.add((key, password));
+    securityKeys = [
+      for (final other in securityKeys)
+        if (other.id != key.id) other,
+    ];
+    return true;
+  }
 
   @override
   Future<MfaEnrolment?> enableTotp({
@@ -766,6 +1360,31 @@ final class _FakeMfa implements MultiFactorAuthRepository {
     if (!acceptCode || !acceptKey) return null;
     viewed.add((key, nonces.forRequest(regenerating: regenerate), regenerate));
     return regenerate ? const ['cccc-dddd'] : const ['aaaa-bbbb'];
+  }
+}
+
+final class _FakeCeremony implements SecurityKeyCeremony {
+  bool decline = false;
+
+  /// Every ceremony the controller asked for, with the challenge and the
+  /// account it was given.
+  final List<(String, String, String)> asked = [];
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<SecurityKeyRegistration?> createCredential({
+    required String challenge,
+    required SecurityKeyAccount account,
+  }) async {
+    asked.add((challenge, account.userId, account.displayName));
+    if (decline) return null;
+    return const SecurityKeyRegistration(
+      credentialId: 'cred-1',
+      attestationObject: 'attestation',
+      clientDataJson: 'client-data',
+    );
   }
 }
 

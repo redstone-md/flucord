@@ -12,12 +12,18 @@ final class UserSettingsPatch {
   const UserSettingsPatch({
     this.theme,
     this.timestampHourCycle,
+    this.density,
+    this.darkSidebar,
     this.renderEmbeds,
     this.renderReactions,
     this.inlineAttachmentMedia,
     this.inlineEmbedMedia,
+    this.animateEmoji,
+    this.gifAutoPlay,
+    this.enableTextToSpeechCommand,
     this.spamFilter,
     this.quietMode,
+    this.showInAppNotifications,
     this.notifyFriendsOnGoLive,
     this.friendOnlineNotifications,
     this.reactionNotifications,
@@ -37,13 +43,32 @@ final class UserSettingsPatch {
   final UserSettingsTheme? theme;
   final TimestampHourCycle? timestampHourCycle;
 
+  /// How tightly the account wants its lists packed, and whether the panels
+  /// beside the canvas draw as the dark variant. Both leaves live in the
+  /// appearance group.
+  final UserInterfaceDensity? density;
+  final bool? darkSidebar;
+
   final bool? renderEmbeds;
   final bool? renderReactions;
   final bool? inlineAttachmentMedia;
   final bool? inlineEmbedMedia;
+
+  /// Whether custom emoji animate, and whether GIFs play by themselves. The
+  /// two leaves a client can honour by choosing which asset to draw.
+  final bool? animateEmoji;
+  final bool? gifAutoPlay;
+
+  /// Whether the account allows the spoken-aloud message command, the
+  /// setting both halves of text-to-speech read.
+  final bool? enableTextToSpeechCommand;
   final DirectMessageSpamFilter? spamFilter;
 
   final bool? quietMode;
+
+  /// Whether the account wants a toast for a new message, the leaf the app's
+  /// own notification path reads.
+  final bool? showInAppNotifications;
   final bool? notifyFriendsOnGoLive;
   final bool? friendOnlineNotifications;
   final ReactionNotifications? reactionNotifications;
@@ -77,17 +102,25 @@ final class UserSettingsPatch {
   final bool clearCustomStatus;
   final bool? showCurrentGame;
 
-  bool get touchesAppearance => theme != null || timestampHourCycle != null;
+  bool get touchesAppearance =>
+      theme != null ||
+      timestampHourCycle != null ||
+      density != null ||
+      darkSidebar != null;
 
   bool get touchesTextAndImages =>
       renderEmbeds != null ||
       renderReactions != null ||
       inlineAttachmentMedia != null ||
       inlineEmbedMedia != null ||
+      animateEmoji != null ||
+      gifAutoPlay != null ||
+      enableTextToSpeechCommand != null ||
       spamFilter != null;
 
   bool get touchesNotifications =>
       quietMode != null ||
+      showInAppNotifications != null ||
       notifyFriendsOnGoLive != null ||
       friendOnlineNotifications != null ||
       reactionNotifications != null;

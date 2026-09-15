@@ -3,20 +3,51 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
-
 import '../../domain/chat_models.dart';
+import '../../domain/unicode_emoji.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'user_settings_scope.dart';
 
-part 'emoji_picker_data.dart';
 part 'emoji_picker_chrome.dart';
 
 enum EmojiPickerPurpose { message, reaction }
 
+/// The emoji of one server, to be listed under the server's own name.
+final class EmojiServerSection {
+  const EmojiServerSection({required this.spaceName, required this.emoji});
+
+  final String spaceName;
+  final List<GuildEmoji> emoji;
+}
+
+/// The servers' emoji grouped for the picker, the space the composer sits in
+/// first.
+///
+/// Discord lists every server the account is in, each under its own name, and
+/// it is the server that accepts or refuses a pick: the client adds no gate
+/// of its own.
+List<EmojiServerSection> emojiSectionsFromWorkspace(
+  ChatWorkspace workspace,
+  String currentSpaceId,
+) {
+  final sections = <EmojiServerSection>[];
+  for (final space in [
+    ...workspace.spaces.where((space) => space.id == currentSpaceId),
+    ...workspace.spaces.where((space) => space.id != currentSpaceId),
+  ]) {
+    final emoji = workspace.emojisFor(space.id);
+    if (emoji.isNotEmpty) {
+      sections.add(EmojiServerSection(spaceName: space.name, emoji: emoji));
+    }
+  }
+  return sections;
+}
+
 class EmojiPickerButton extends StatefulWidget {
   const EmojiPickerButton({
     required this.spaceName,
-    required this.customEmojis,
+    required this.emojiSections,
     required this.onSelected,
     this.purpose = EmojiPickerPurpose.message,
     this.dimension = 48,
@@ -28,7 +59,7 @@ class EmojiPickerButton extends StatefulWidget {
   });
 
   final String spaceName;
-  final List<GuildEmoji> customEmojis;
+  final List<EmojiServerSection> emojiSections;
   final ValueChanged<String> onSelected;
   final EmojiPickerPurpose purpose;
   final double dimension;
@@ -71,7 +102,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
     menuChildren: [
       EmojiPickerPanel(
         spaceName: widget.spaceName,
-        customEmojis: widget.customEmojis,
+        emojiSections: widget.emojiSections,
         purpose: widget.purpose,
         favorites: widget.favorites,
         onSelected: (value) {
@@ -107,7 +138,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
 class EmojiPickerPanel extends StatefulWidget {
   const EmojiPickerPanel({
     required this.spaceName,
-    required this.customEmojis,
+    required this.emojiSections,
     required this.onSelected,
     this.purpose = EmojiPickerPurpose.message,
     this.favorites,
@@ -115,7 +146,7 @@ class EmojiPickerPanel extends StatefulWidget {
   });
 
   final String spaceName;
-  final List<GuildEmoji> customEmojis;
+  final List<EmojiServerSection> emojiSections;
   final ValueChanged<String> onSelected;
   final EmojiPickerPurpose purpose;
   final ExpressionFavoritesController? favorites;
@@ -124,51 +155,120 @@ class EmojiPickerPanel extends StatefulWidget {
   State<EmojiPickerPanel> createState() => _EmojiPickerPanelState();
 }
 
+/// How many the FREQUENT section holds. Discord caps its own recent list;
+/// without a cap the section would grow without end as the account uses
+/// more of the catalogue.
+const int _frequentLimit = 32;
+
 class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
   String _query = '';
+  int _tone = 0;
 
-  List<_EmojiChoice> get _unicodeChoices => _unicodeEmojis
-      .where((emoji) => emoji.matches(_query))
-      .map(_EmojiChoice.unicode)
-      .toList(growable: false);
+  /// The selected category tab, or -1 for the leading view that gathers
+  /// favourites, the frequent set and every server's emoji.
+  int _category = -1;
 
-  List<_EmojiChoice> get _customChoices => widget.customEmojis
-      .where(
-        (emoji) =>
-            emoji.available &&
-            (_query.isEmpty ||
-                emoji.name.toLowerCase().replaceAll('_', ' ').contains(_query)),
-      )
-      .map(_EmojiChoice.custom)
-      .toList(growable: false);
+  Map<String, _EmojiChoice> get _choicesByKey => {
+    for (final emoji in UnicodeEmojiCatalog.all)
+      emoji.name: _EmojiChoice.unicode(emoji, tone: _tone),
+    for (final section in widget.emojiSections)
+      for (final emoji in section.emoji) emoji.id: _EmojiChoice.custom(emoji),
+  };
 
   /// The starred emoji, in the order the account starred them.
   ///
-  /// An entry naming an emoji this session cannot see — a custom one from a
-  /// server the account has since left — is skipped rather than drawn as a
+  /// An entry naming an emoji this session cannot see, a custom one from a
+  /// server the account has since left, is skipped rather than drawn as a
   /// gap: the blob outlives membership, and Discord's own client filters the
   /// same way instead of rewriting the list.
   List<_EmojiChoice> get _favoriteChoices {
     final held = widget.favorites?.favorites.emojis ?? const <String>[];
     if (held.isEmpty) return const [];
-    final byKey = {
-      for (final emoji in _unicodeEmojis) emoji.name: _EmojiChoice.unicode(emoji),
-      for (final emoji in widget.customEmojis)
-        if (emoji.available) emoji.id: _EmojiChoice.custom(emoji),
-    };
+    final byKey = _choicesByKey;
     return [
       for (final key in held)
         if (byKey[key] case final _EmojiChoice choice) choice,
     ];
   }
 
+  /// What the FREQUENT section shows: the emoji the account actually reaches
+  /// for, ranked by the use table over the catalogue and the servers' own
+  /// emoji together. The table is keyed the way the favourites are: custom
+  /// ones by id, unicode ones by name, so both kinds rank in one list,
+  /// which is what Discord's own recent row is made of. A fresh account gets
+  /// the catalogue's own order rather than an empty panel.
+  List<_EmojiChoice> get _frequentChoices {
+    final frecency = widget.favorites?.favorites.emojiFrecency;
+    if (frecency == null) {
+      return [
+        for (final emoji in UnicodeEmojiCatalog.all.take(_frequentLimit))
+          _EmojiChoice.unicode(emoji, tone: _tone),
+      ];
+    }
+    final rankable = <String, _EmojiChoice>{
+      for (final emoji in UnicodeEmojiCatalog.all)
+        emoji.name: _EmojiChoice.unicode(emoji, tone: _tone),
+      for (final section in widget.emojiSections)
+        for (final emoji in section.emoji) emoji.id: _EmojiChoice.custom(emoji),
+    };
+    return [
+      for (final key in frecency.rank(rankable.keys))
+        if (rankable[key] case final _EmojiChoice choice) choice,
+    ].take(_frequentLimit).toList(growable: false);
+  }
+
+  List<(String, List<_EmojiChoice>)> get _customSections {
+    final sections = <(String, List<_EmojiChoice>)>[];
+    for (final section in widget.emojiSections) {
+      final matches = section.emoji
+          .where((emoji) => _query.isEmpty || _customMatches(emoji))
+          .map(_EmojiChoice.custom)
+          .toList(growable: false);
+      if (matches.isNotEmpty) {
+        sections.add((section.spaceName, matches));
+      }
+    }
+    return sections;
+  }
+
+  bool _customMatches(GuildEmoji emoji) =>
+      emoji.name.toLowerCase().replaceAll('_', ' ').contains(_query);
+
+  /// The category tab's own group. Tab 0 is the leading view, so the
+  /// catalogue's groups start one tab later.
+  UnicodeEmojiGroup get _selectedGroup =>
+      UnicodeEmojiGroup.values[_category - 1];
+
+  List<_EmojiChoice> get _unicodeChoices {
+    final matches = UnicodeEmojiCatalog.search(_query);
+    if (_category >= 1) {
+      final group = _selectedGroup;
+      return [
+        for (final emoji in matches.where((emoji) => emoji.group == group))
+          _EmojiChoice.unicode(emoji, tone: _tone),
+      ];
+    }
+    if (_query.isEmpty) return const [];
+    return [
+      for (final emoji in matches) _EmojiChoice.unicode(emoji, tone: _tone),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final favourites = _query.isEmpty
+        ? _favoriteChoices
+        : const <_EmojiChoice>[];
+    final frequent = _category < 0 && _query.isEmpty
+        ? _frequentChoices
+        : const <_EmojiChoice>[];
+    final customSections = _customSections;
     final unicode = _unicodeChoices;
-    final custom = _customChoices;
-    // Only on the idle picker: a search asks about names, and putting the
-    // starred ones above the match would hide it.
-    final favorites = _query.isEmpty ? _favoriteChoices : const <_EmojiChoice>[];
+    final nothing =
+        favourites.isEmpty &&
+        frequent.isEmpty &&
+        customSections.isEmpty &&
+        unicode.isEmpty;
     return SizedBox(
       key: const ValueKey('emoji-picker'),
       width: 360,
@@ -197,43 +297,72 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
             ),
           ),
           Divider(height: 1, color: context.surfaces.border),
+          _CategoryBar(
+            categories: const [
+              (Icons.history, 'Frequently used'),
+              (Icons.emoji_emotions, 'Smileys & Emotion'),
+              (Icons.emoji_people, 'People & Body'),
+              (Icons.pets, 'Animals & Nature'),
+              (Icons.restaurant, 'Food & Drink'),
+              (Icons.flight_takeoff, 'Travel & Places'),
+              (Icons.celebration, 'Activities'),
+              (Icons.emoji_objects, 'Objects'),
+              (Icons.favorite, 'Symbols'),
+              (Icons.flag, 'Flags'),
+            ],
+            selected: _category,
+            onSelect: (index) => setState(() => _category = index),
+          ),
           Expanded(
-            child: unicode.isEmpty && custom.isEmpty
+            child: nothing
                 ? const _EmojiEmptyState()
-                : ListView(
+                : CustomScrollView(
+                    key: const ValueKey('emoji-grid-scroll'),
                     primary: false,
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-                    children: [
-                      if (favorites.isNotEmpty) ...[
-                        const _SectionLabel(label: 'FAVOURITES'),
-                        _EmojiGrid(
-                          choices: favorites,
+                    slivers: [
+                      if (favourites.isNotEmpty) ...[
+                        const _SliverSectionLabel(label: 'FAVOURITES'),
+                        _EmojiGridSliver(
+                          choices: favourites,
                           favorites: widget.favorites,
                           onSelected: _select,
                         ),
-                        const SizedBox(height: 12),
+                      ],
+                      if (frequent.isNotEmpty) ...[
+                        const _SliverSectionLabel(label: 'FREQUENT'),
+                        _EmojiGridSliver(
+                          choices: frequent,
+                          favorites: widget.favorites,
+                          onSelected: _select,
+                        ),
+                      ],
+                      for (final (spaceName, choices) in customSections) ...[
+                        _SliverSectionLabel(label: spaceName.toUpperCase()),
+                        _EmojiGridSliver(
+                          choices: choices,
+                          favorites: widget.favorites,
+                          onSelected: _select,
+                        ),
                       ],
                       if (unicode.isNotEmpty) ...[
-                        _SectionLabel(
-                          label: _query.isEmpty ? 'FREQUENT' : 'UNICODE',
+                        _SliverSectionLabel(
+                          label: _category >= 1
+                              ? _selectedGroup.label.toUpperCase()
+                              : 'UNICODE',
                         ),
-                        _EmojiGrid(
+                        _EmojiGridSliver(
                           choices: unicode,
-                          favorites: widget.favorites,
-                          onSelected: _select,
-                        ),
-                      ],
-                      if (custom.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _SectionLabel(label: widget.spaceName.toUpperCase()),
-                        _EmojiGrid(
-                          choices: custom,
                           favorites: widget.favorites,
                           onSelected: _select,
                         ),
                       ],
                     ],
                   ),
+          ),
+          Divider(height: 1, color: context.surfaces.border),
+          _ToneBar(
+            tone: _tone,
+            onSelect: (tone) => setState(() => _tone = tone),
           ),
         ],
       ),
@@ -244,8 +373,110 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
       widget.onSelected(choice.valueFor(widget.purpose));
 }
 
-class _EmojiGrid extends StatelessWidget {
-  const _EmojiGrid({
+class _CategoryBar extends StatelessWidget {
+  const _CategoryBar({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final List<(IconData, String)> categories;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('emoji-category-bar'),
+      height: 34,
+      child: Row(
+        children: [
+          for (var index = 0; index < categories.length; index++)
+            Tooltip(
+              message: categories[index].$2,
+              child: InkWell(
+                key: ValueKey('emoji-category-$index'),
+                onTap: () => onSelect(index == selected ? -1 : index),
+                child: SizedBox.square(
+                  dimension: 34,
+                  child: Icon(
+                    categories[index].$1,
+                    size: 15,
+                    color: index == selected
+                        ? FlucordColors.brand
+                        : context.surfaces.muted,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToneBar extends StatelessWidget {
+  const _ToneBar({required this.tone, required this.onSelect});
+
+  final int tone;
+  final ValueChanged<int> onSelect;
+
+  static const _swatches = ['✋', '✋🏻', '✋🏼', '✋🏽', '✋🏾', '✋🏿'];
+  static const _names = [
+    'Default skin tone',
+    'Light skin tone',
+    'Medium-light skin tone',
+    'Medium skin tone',
+    'Medium-dark skin tone',
+    'Dark skin tone',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('emoji-tone-bar'),
+      height: 36,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          for (var index = 0; index < _swatches.length; index++)
+            IconButton(
+              key: ValueKey('emoji-tone-$index'),
+              onPressed: () => onSelect(index),
+              icon: Text(
+                _swatches[index],
+                style: TextStyle(
+                  fontSize: 16,
+                  color: index == tone
+                      ? null
+                      : context.surfaces.muted.withValues(alpha: 0.6),
+                ),
+              ),
+              tooltip: _names[index],
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+              padding: EdgeInsets.zero,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliverSectionLabel extends StatelessWidget {
+  const _SliverSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+    sliver: SliverToBoxAdapter(child: _SectionLabel(label: label)),
+  );
+}
+
+class _EmojiGridSliver extends StatelessWidget {
+  const _EmojiGridSliver({
     required this.choices,
     required this.favorites,
     required this.onSelected,
@@ -256,64 +487,86 @@ class _EmojiGrid extends StatelessWidget {
   final ValueChanged<_EmojiChoice> onSelected;
 
   @override
-  Widget build(BuildContext context) => GridView.builder(
-    primary: false,
-    shrinkWrap: true,
-    physics: const NeverScrollableScrollPhysics(),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 8,
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
-    ),
-    itemCount: choices.length,
-    itemBuilder: (context, index) {
-      final choice = choices[index];
-      final store = favorites;
-      final starred = store?.isFavoriteEmoji(choice.favoriteKey) ?? false;
-      // Starring is the second gesture rather than a control drawn on the
-      // tile: these are 27 pixels across, and a star pinned to one would sit
-      // on top of the emoji it is meant to describe.
-      final star = store == null
-          ? null
-          : () => unawaited(store.toggleEmoji(choice.favoriteKey));
-      return Semantics(
-        label: starred ? '${choice.semanticLabel}, favourite' : choice.semanticLabel,
-        button: true,
-        onTap: () => onSelected(choice),
-        onLongPress: star,
-        excludeSemantics: true,
-        child: Tooltip(
-          message: store == null
-              ? choice.tooltip
-              : '${choice.tooltip}\nRight-click to '
-                    '${starred ? 'unfavourite' : 'favourite'}',
-          child: InkWell(
-            key: ValueKey('emoji-choice-${choice.key}'),
-            borderRadius: BorderRadius.circular(4),
-            onTap: () => onSelected(choice),
-            onSecondaryTap: star,
-            onLongPress: star,
-            child: Stack(
-              children: [
-                Center(child: _EmojiGlyph(choice: choice)),
-                if (starred)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Icon(
-                      Icons.star,
-                      key: ValueKey('emoji-starred-${choice.key}'),
-                      size: 9,
-                      color: Colors.amber,
-                    ),
+  Widget build(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      sliver: SliverGrid.builder(
+        itemCount: choices.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 8,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 4,
+        ),
+        itemBuilder: (context, index) => _EmojiTile(
+          choice: choices[index],
+          favorites: favorites,
+          onSelected: onSelected,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmojiTile extends StatelessWidget {
+  const _EmojiTile({
+    required this.choice,
+    required this.favorites,
+    required this.onSelected,
+  });
+
+  final _EmojiChoice choice;
+  final ExpressionFavoritesController? favorites;
+  final ValueChanged<_EmojiChoice> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = favorites;
+    final starred = store?.isFavoriteEmoji(choice.favoriteKey) ?? false;
+    // Starring is the second gesture rather than a control drawn on the
+    // tile: these are 27 pixels across, and a star pinned to one would sit
+    // on top of the emoji it is meant to describe.
+    final star = store == null
+        ? null
+        : () => unawaited(store.toggleEmoji(choice.favoriteKey));
+    return Semantics(
+      label: starred
+          ? '${choice.semanticLabel}, favourite'
+          : choice.semanticLabel,
+      button: true,
+      onTap: () => onSelected(choice),
+      onLongPress: star,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: store == null
+            ? choice.tooltip
+            : '${choice.tooltip}\nRight-click to '
+                  '${starred ? 'unfavourite' : 'favourite'}',
+        child: InkWell(
+          key: ValueKey('emoji-choice-${choice.key}'),
+          borderRadius: BorderRadius.circular(4),
+          onTap: () => onSelected(choice),
+          onSecondaryTap: star,
+          onLongPress: star,
+          child: Stack(
+            children: [
+              Center(child: _EmojiGlyph(choice: choice)),
+              if (starred)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Icon(
+                    Icons.star,
+                    key: ValueKey('emoji-starred-${choice.key}'),
+                    size: 9,
+                    color: Colors.amber,
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class _EmojiGlyph extends StatelessWidget {
@@ -332,6 +585,11 @@ class _EmojiGlyph extends StatelessWidget {
         borderRadius: BorderRadius.circular(3),
         child: RemoteIdentityImage(
           url: choice.imageUrl,
+          // The account's animate-emoji answer, read here so the flag from
+          // any device redraws the picker.
+          playsAnimations: UserSettingsScope.displayOf(
+            context,
+          ).playsAnimatedEmoji,
           fallback: ColoredBox(
             color: context.surfaces.inset,
             child: Center(
@@ -379,19 +637,23 @@ final class _EmojiChoice {
     this.imageUrl,
   });
 
-  factory _EmojiChoice.unicode(_UnicodeEmoji emoji) => _EmojiChoice(
-    key: 'unicode-${emoji.name}',
-    // Discord stores a unicode emoji by name and a custom one by id, so this
-    // is what goes in the blob — not the surrogates, which its own other
-    // sessions would fail to look up.
-    favoriteKey: emoji.name,
-    messageToken: emoji.glyph,
-    reactionKey: emoji.glyph,
-    tooltip: ':${emoji.name}:',
-    semanticLabel: '${emoji.name} emoji',
-    fallback: emoji.glyph,
-    unicodeGlyph: emoji.glyph,
-  );
+  factory _EmojiChoice.unicode(UnicodeEmoji emoji, {required int tone}) {
+    final name = emoji.nameForTone(tone);
+    final glyph = emoji.glyphForTone(tone);
+    return _EmojiChoice(
+      key: 'unicode-$name',
+      // Discord stores a unicode emoji by name and a custom one by id, so this
+      // is what goes in the blob, not the surrogates, which its own other
+      // sessions would fail to look up.
+      favoriteKey: name,
+      messageToken: glyph,
+      reactionKey: glyph,
+      tooltip: ':$name:',
+      semanticLabel: '$name emoji',
+      fallback: glyph,
+      unicodeGlyph: glyph,
+    );
+  }
 
   factory _EmojiChoice.custom(GuildEmoji emoji) => _EmojiChoice(
     key: 'custom-${emoji.id}',

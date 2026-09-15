@@ -223,6 +223,48 @@ void main() {
     expect(repository.subscribed, hasLength(1));
     expect(controller.list, isNull);
   });
+
+  group('member search', () {
+    test(
+      'asks the guild through the same chunk route mention completion uses',
+      () {
+        final repository = _FakeMemberListRepository();
+        final controller = GuildMemberListController(() => repository);
+        addTearDown(controller.dispose);
+        controller.viewChannel(guildId: 'guild-1', channelId: 'channel-1');
+
+        controller.searchMembers('  mi ');
+
+        // Trimmed, and blank refused: an empty ask would be a request for the
+        // whole guild's head.
+        expect(repository.searches, [('guild-1', 'mi')]);
+        controller.searchMembers('   ');
+        expect(repository.searches, hasLength(1));
+      },
+    );
+
+    test('a watched channel is not required, only a guild', () {
+      final repository = _FakeMemberListRepository();
+      final controller = GuildMemberListController(() => repository);
+      addTearDown(controller.dispose);
+      controller.viewChannel(guildId: 'guild-1', channelId: 'channel-1');
+
+      controller.searchMembers('mi');
+
+      expect(repository.searches.single.$1, 'guild-1');
+    });
+
+    test('a disposed controller asks nothing', () {
+      final repository = _FakeMemberListRepository();
+      final controller = GuildMemberListController(() => repository);
+      controller.viewChannel(guildId: 'guild-1', channelId: 'channel-1');
+      controller.dispose();
+
+      controller.searchMembers('mi');
+
+      expect(repository.searches, isEmpty);
+    });
+  });
 }
 
 final class _FakeMemberListRepository implements GuildMemberListRepository {

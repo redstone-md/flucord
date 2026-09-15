@@ -14,19 +14,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('the controller', () {
-    test('a transport with no favourites plane answers no to everything',
-        () async {
-      final controller = ExpressionFavoritesController(() => null);
-      addTearDown(controller.dispose);
+    test(
+      'a transport with no favourites plane answers no to everything',
+      () async {
+        final controller = ExpressionFavoritesController(() => null);
+        addTearDown(controller.dispose);
 
-      expect(controller.isSupported, isFalse);
-      expect(controller.favorites, ExpressionFavorites.empty);
-      await controller.load();
+        expect(controller.isSupported, isFalse);
+        expect(controller.favorites, ExpressionFavorites.empty);
+        await controller.load();
 
-      expect(await controller.toggleGif(_gif('a')), isFalse);
-      expect(await controller.toggleSticker('1'), isFalse);
-      expect(await controller.toggleEmoji('smile'), isFalse);
-    });
+        expect(await controller.toggleGif(_gif('a')), isFalse);
+        expect(await controller.toggleSticker('1'), isFalse);
+        expect(await controller.toggleEmoji('smile'), isFalse);
+      },
+    );
 
     test('the blob is read once and then followed', () async {
       final store = _FakeStore();
@@ -44,17 +46,19 @@ void main() {
       expect(controller.isFavoriteEmoji('elsewhere'), isTrue);
     });
 
-    test('a load that fails leaves the pickers with nothing rather than an error',
-        () async {
-      final store = _FakeStore()..failLoad = true;
-      final controller = ExpressionFavoritesController(() => store);
-      addTearDown(controller.dispose);
+    test(
+      'a load that fails leaves the pickers with nothing rather than an error',
+      () async {
+        final store = _FakeStore()..failLoad = true;
+        final controller = ExpressionFavoritesController(() => store);
+        addTearDown(controller.dispose);
 
-      await controller.load();
+        await controller.load();
 
-      expect(controller.favorites.isEmpty, isTrue);
-      expect(controller.isLoading, isFalse);
-    });
+        expect(controller.favorites.isEmpty, isTrue);
+        expect(controller.isLoading, isFalse);
+      },
+    );
 
     test('starring flips whichever way it was', () async {
       final store = _FakeStore();
@@ -91,25 +95,25 @@ void main() {
       expect(controller.wasRefused, isFalse);
     });
 
-    test('a new session replaces the store rather than writing to the old one',
-        () async {
-      var store = _FakeStore()..current = const ExpressionFavorites(
-        emojis: ['first'],
-      );
-      final controller = ExpressionFavoritesController(() => store);
-      addTearDown(controller.dispose);
-      expect(controller.favorites.emojis, ['first']);
+    test(
+      'a new session replaces the store rather than writing to the old one',
+      () async {
+        var store = _FakeStore()
+          ..current = const ExpressionFavorites(emojis: ['first']);
+        final controller = ExpressionFavoritesController(() => store);
+        addTearDown(controller.dispose);
+        expect(controller.favorites.emojis, ['first']);
 
-      store = _FakeStore()..current = const ExpressionFavorites(
-        emojis: ['second'],
-      );
-      expect(controller.favorites.emojis, ['second']);
+        store = _FakeStore()
+          ..current = const ExpressionFavorites(emojis: ['second']);
+        expect(controller.favorites.emojis, ['second']);
 
-      // And the signed-out case: nothing held, nothing listened to.
-      final gone = ExpressionFavoritesController(() => null);
-      addTearDown(gone.dispose);
-      expect(gone.favorites.isEmpty, isTrue);
-    });
+        // And the signed-out case: nothing held, nothing listened to.
+        final gone = ExpressionFavoritesController(() => null);
+        addTearDown(gone.dispose);
+        expect(gone.favorites.isEmpty, isTrue);
+      },
+    );
 
     test('a load already under way is not started twice', () async {
       final store = _FakeStore()..holdLoad = true;
@@ -127,8 +131,9 @@ void main() {
   });
 
   group('the star', () {
-    testWidgets('a transport that holds no favourites draws none',
-        (tester) async {
+    testWidgets('a transport that holds no favourites draws none', (
+      tester,
+    ) async {
       final controller = ExpressionFavoritesController(() => null);
       addTearDown(controller.dispose);
 
@@ -175,8 +180,9 @@ void main() {
   });
 
   group('the GIF picker', () {
-    testWidgets('starred GIFs lead the idle grid and can be unstarred',
-        (tester) async {
+    testWidgets('starred GIFs lead the idle grid and can be unstarred', (
+      tester,
+    ) async {
       final store = _FakeStore()
         ..current = ExpressionFavorites(gifs: [_gif('held')]);
       final favorites = ExpressionFavoritesController(() => store);
@@ -194,17 +200,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(sent, ['held']);
 
-      await tester.tap(
-        find.byKey(const ValueKey('gif-favorite-star-held')),
-      );
+      await tester.tap(find.byKey(const ValueKey('gif-favorite-star-held')));
       await tester.pumpAndSettle();
       expect(store.gifWrites.single, ('held', false));
       // Unstarred, so it leaves the tab it was drawn in.
       expect(find.byKey(const ValueKey('gif-favorite-held')), findsNothing);
     });
 
-    testWidgets('a search result can be starred, and a search hides the tab',
-        (tester) async {
+    testWidgets('a search result can be starred, and a search hides the tab', (
+      tester,
+    ) async {
       final store = _FakeStore()
         ..current = ExpressionFavorites(gifs: [_gif('held')]);
       final favorites = ExpressionFavoritesController(() => store);
@@ -232,7 +237,9 @@ void main() {
       expect(find.byKey(const ValueKey('gif-favorite-held')), findsNothing);
     });
 
-    testWidgets('a picker with no favourites plane still works', (tester) async {
+    testWidgets('a picker with no favourites plane still works', (
+      tester,
+    ) async {
       final picker = GifPickerController(() => _StubGifs());
       addTearDown(picker.dispose);
 
@@ -244,8 +251,9 @@ void main() {
   });
 
   group('the sticker picker', () {
-    testWidgets('a sticker is starred, and starred ones come first',
-        (tester) async {
+    testWidgets('a sticker is starred, and starred ones come first', (
+      tester,
+    ) async {
       final store = _FakeStore()
         ..current = const ExpressionFavorites(stickerIds: ['s2']);
       final favorites = ExpressionFavoritesController(() => store);
@@ -256,9 +264,11 @@ void main() {
           theme: FlucordTheme.dark,
           home: Scaffold(
             body: StickerPickerButton(
-              stickers: [
-                _sticker('s1', 'first'),
-                _sticker('s2', 'second'),
+              sections: [
+                StickerServerSection(
+                  spaceName: 'Guild',
+                  stickers: [_sticker('s1', 'first'), _sticker('s2', 'second')],
+                ),
               ],
               isSending: false,
               onSend: (_) async => true,
@@ -314,15 +324,19 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('a composer with no favourites plane draws no stars',
-        (tester) async {
+    testWidgets('a composer with no favourites plane draws no stars', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: FlucordTheme.dark,
           home: Scaffold(
             body: StickerPickerButton(
-              stickers: [
-                _sticker('s1', 'first'),
+              sections: [
+                StickerServerSection(
+                  spaceName: 'Guild',
+                  stickers: [_sticker('s1', 'first')],
+                ),
               ],
               isSending: false,
               onSend: (_) async => true,
@@ -349,7 +363,12 @@ Future<void> _pumpStickerPicker(
     theme: FlucordTheme.dark,
     home: Scaffold(
       body: StickerPickerButton(
-        stickers: [_sticker('s1', 'first')],
+        sections: [
+          StickerServerSection(
+            spaceName: 'Guild',
+            stickers: [_sticker('s1', 'first')],
+          ),
+        ],
         isSending: false,
         onSend: (_) async => true,
         favorites: favorites,

@@ -100,6 +100,11 @@ final class MessageAttachment {
     this.waveform,
   });
 
+  /// Discord's filename prefix for an attachment tagged as a spoiler. The
+  /// prefix is the whole convention: the client adds it when the file is
+  /// attached, and the receiver learns the tag from the stored name alone.
+  static const spoilerPrefix = 'SPOILER_';
+
   final String id;
   final String fileName;
   final String url;
@@ -117,6 +122,10 @@ final class MessageAttachment {
 
   bool get isImage => contentType?.startsWith('image/') ?? false;
   bool get isAudio => contentType?.startsWith('audio/') ?? false;
+
+  /// Whether the sender tagged this file as a spoiler.
+  bool get isSpoiler => fileName.startsWith(spoilerPrefix);
+
   Duration? get duration => durationSecs == null
       ? null
       : Duration(milliseconds: (durationSecs! * 1000).round());
@@ -273,6 +282,7 @@ final class ChatMessage {
     this.reference,
     this.type = DiscordMessageType.defaultMessage,
     this.flags = 0,
+    this.isTextToSpeech = false,
     this.isEdited = false,
     this.isPinned = false,
     this.mentionsCurrentMember = false,
@@ -303,6 +313,14 @@ final class ChatMessage {
   final DiscordMessageType type;
   final int flags;
   final List<MessageReaction> reactions;
+
+  /// The message was sent, and arrives, flagged to be read aloud.
+  ///
+  /// Discord carries this beside the flags as its own `tts` field, so it is
+  /// kept beside them rather than folded in: a flag bit this client made up
+  /// would not survive a round trip through the server.
+  final bool isTextToSpeech;
+
   final bool isEdited;
   final bool isPinned;
   final bool mentionsCurrentMember;
@@ -343,6 +361,7 @@ final class ChatMessage {
     MessageReference? reference,
     DiscordMessageType? type,
     int? flags,
+    bool? isTextToSpeech,
     bool? isEdited,
     bool? isPinned,
     bool? mentionsCurrentMember,
@@ -363,6 +382,7 @@ final class ChatMessage {
     reference: reference ?? this.reference,
     type: type ?? this.type,
     flags: flags ?? this.flags,
+    isTextToSpeech: isTextToSpeech ?? this.isTextToSpeech,
     reactions: reactions ?? this.reactions,
     isEdited: isEdited ?? this.isEdited,
     isPinned: isPinned ?? this.isPinned,

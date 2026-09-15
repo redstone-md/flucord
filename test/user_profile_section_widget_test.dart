@@ -385,6 +385,9 @@ final class _FakeRepository implements UserProfileRepository {
     return _current;
   }
 
+  @override
+  Future<OtherUserProfile?> loadProfileOf(String userId) async => null;
+
   void push(UserProfile profile) {
     _loaded = true;
     _current = profile;

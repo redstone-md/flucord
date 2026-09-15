@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/application/voice_audio_pipeline.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
@@ -197,6 +198,252 @@ void main() {
       expect(signaling.sentFrames, hasLength(2));
     },
   );
+
+  test('a manual sensitivity overrides the gate and is saved for the next '
+      'session', () async {
+    final media = _FakeVoiceMediaService();
+    final signaling = _FakeVoiceSignalingService();
+    final repository = MemoryVoiceProcessingRepository(
+      const VoiceProcessingSettings(inputSensitivity: -55),
+    );
+    final controller = VoiceController(
+      media,
+      signalingServiceProvider: () => signaling,
+      audioCodecFactory: _FakeCodecFactory(),
+      processingRepository: repository,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    // Not connected: the saved threshold is still read back.
+    expect(controller.inputSensitivity, isNull);
+    await controller.loadProcessingSettings();
+    expect(controller.inputSensitivity, -55);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+    await _flushEvents();
+    expect(controller.inputSensitivity, -55);
+
+    // Quiet for the automatic gate (its threshold sits at -50 to start),
+    // loud for the manual one: the frame goes out only because the
+    // threshold was chosen by hand.
+    media.addPcm(_quiet);
+    await _flushEvents();
+    expect(signaling.sentFrames, hasLength(1));
+
+    // Back to automatic. The quiet frames that follow cannot open the
+    // gate again: the burst runs its hangover out and the room hears
+    // nothing more.
+    await controller.setInputSensitivity(null);
+    expect(controller.inputSensitivity, isNull);
+    final sentAtSwitch = signaling.sentFrames.length;
+    for (var i = 0; i < VoiceAudioPipeline.hangoverFrames + 2; i++) {
+      media.addPcm(_quiet);
+      await _flushEvents();
+    }
+    expect(
+      signaling.sentFrames.length,
+      sentAtSwitch + VoiceAudioPipeline.hangoverFrames,
+      reason: 'the tail of the manual burst, and nothing after it',
+    );
+
+    // Saved as the automatic gate: no threshold in the document.
+    expect(repository.saved!.inputSensitivity, isNull);
+  });
+
+  test('the echo and gain switches open one enhancer and persist their '
+      'settings', () async {
+    final media = _FakeVoiceMediaService();
+    final signaling = _FakeVoiceSignalingService();
+    final repository = MemoryVoiceProcessingRepository();
+    final enhancer = FakeMicrophoneEnhancer();
+    final controller = VoiceController(
+      media,
+      signalingServiceProvider: () => signaling,
+      audioCodecFactory: _FakeCodecFactory(),
+      microphoneEnhancerFactory:
+          ({required echoCancellation, required automaticGainControl}) async {
+            expect(echoCancellation, isTrue);
+            expect(automaticGainControl, isTrue);
+            return enhancer;
+          },
+      processingRepository: repository,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    expect(controller.isMicrophoneEnhancementAvailable, isTrue);
+    // The pipeline honestly reports off until the saved switches have
+    // been applied to it.
+    expect(controller.echoCancellation, isFalse);
+    await controller.loadProcessingSettings();
+    await _flushEvents();
+    // Both switches are on by default, and one open path serves them.
+    expect(controller.echoCancellation, isTrue, reason: 'the default');
+    expect(controller.automaticGainControl, isTrue);
+    expect(enhancer.disposed, isFalse);
+
+    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+    signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+    await _flushEvents();
+    media.addPcm(_speech);
+    await _flushEvents();
+    // The frame was enhanced on its way out: one enhancer, one frame.
+    expect(enhancer.frames, hasLength(1));
+    expect(enhancer.channels, 2);
+
+    // Echo off, gain on: the open path stays, no reopen.
+    await controller.setMicrophoneEnhancement(echoCancellation: false);
+    expect(controller.echoCancellation, isFalse);
+    expect(controller.automaticGainControl, isTrue);
+    media.addPcm(_speech);
+    await _flushEvents();
+    expect(enhancer.frames, hasLength(2));
+
+    // Both off: the path closes.
+    await controller.setMicrophoneEnhancement(automaticGainControl: false);
+    expect(controller.echoCancellation, isFalse);
+    expect(controller.automaticGainControl, isFalse);
+    expect(enhancer.disposed, isTrue);
+    media.addPcm(_speech);
+    await _flushEvents();
+    expect(enhancer.frames, hasLength(2));
+
+    expect(repository.saved!.echoCancellation, isFalse);
+    expect(repository.saved!.automaticGainControl, isFalse);
+  });
+
+  test('push to talk keeps transmitting through the release delay', () {
+    fakeAsync((async) {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final repository = MemoryVoiceProcessingRepository();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+        processingRepository: repository,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      async.flushMicrotasks();
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      async.flushMicrotasks();
+
+      // The key is pressed and released, with a delay configured.
+      unawaited(controller.setPushToTalkReleaseDelayMs(150));
+      async.flushMicrotasks();
+      unawaited(controller.setMuted(muted: false));
+      async.flushMicrotasks();
+      expect(controller.isMuted, isFalse);
+      expect(media.microphoneEnabled, isTrue);
+
+      // The release does not end the speech at once.
+      unawaited(controller.setMuted(muted: true));
+      async.flushMicrotasks();
+      expect(controller.isMuted, isFalse, reason: 'the delay holds it');
+      expect(media.microphoneEnabled, isTrue);
+      expect(signaling.joins.last.$3, isFalse, reason: 'no mute announced');
+
+      // The room is told the moment the delay runs out.
+      async.elapse(const Duration(milliseconds: 150));
+      async.flushMicrotasks();
+      expect(controller.isMuted, isTrue);
+      expect(media.microphoneEnabled, isFalse);
+      expect(signaling.joins.last.$3, isTrue);
+    });
+  });
+
+  test('a press inside the release delay cancels the pending end', () {
+    fakeAsync((async) {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+        processingRepository: MemoryVoiceProcessingRepository(),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      async.flushMicrotasks();
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      async.flushMicrotasks();
+
+      unawaited(controller.setPushToTalkReleaseDelayMs(200));
+      async.flushMicrotasks();
+      unawaited(controller.setMuted(muted: false));
+      async.flushMicrotasks();
+      unawaited(controller.setMuted(muted: true));
+      async.flushMicrotasks();
+
+      // Pressed again before the delay ran out: nothing ends.
+      unawaited(controller.setMuted(muted: false));
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 2));
+      async.flushMicrotasks();
+      expect(controller.isMuted, isFalse);
+      expect(media.microphoneEnabled, isTrue);
+
+      // And a later release still gets its own delay.
+      unawaited(controller.setMuted(muted: true));
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 200));
+      async.flushMicrotasks();
+      expect(controller.isMuted, isTrue);
+    });
+  });
+
+  test('a release with no delay configured ends the speech with the key', () {
+    fakeAsync((async) {
+      final media = _FakeVoiceMediaService();
+      final signaling = _FakeVoiceSignalingService();
+      final controller = VoiceController(
+        media,
+        signalingServiceProvider: () => signaling,
+        audioCodecFactory: _FakeCodecFactory(),
+        processingRepository: MemoryVoiceProcessingRepository(),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+
+      controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      async.flushMicrotasks();
+      signaling.emit(const VoiceTransportReadyEvent(_transportSession));
+      async.flushMicrotasks();
+
+      unawaited(controller.setMuted(muted: false));
+      async.flushMicrotasks();
+      unawaited(controller.setMuted(muted: true));
+      async.flushMicrotasks();
+
+      expect(controller.isMuted, isTrue);
+      expect(media.microphoneEnabled, isFalse);
+    });
+  });
+
+  test('the release delay is saved for the next session', () async {
+    final repository = MemoryVoiceProcessingRepository();
+    final controller = VoiceController(
+      _FakeVoiceMediaService(),
+      processingRepository: repository,
+    );
+    addTearDown(controller.dispose);
+
+    await controller.setPushToTalkReleaseDelayMs(250);
+    expect(controller.pushToTalkReleaseDelayMs, 250);
+    expect(repository.saved!.pushToTalkReleaseDelayMs, 250);
+
+    // A negative delay is no delay.
+    await controller.setPushToTalkReleaseDelayMs(-5);
+    expect(controller.pushToTalkReleaseDelayMs, 0);
+    expect(repository.saved!.pushToTalkReleaseDelayMs, 0);
+  });
 
   test('a slow startup load does not overwrite a fresh toggle', () async {
     final repository = MemoryVoiceProcessingRepository()
@@ -587,38 +834,41 @@ void main() {
     },
   );
 
-  test('a camera that is gone says so: sender left, or turned it off', () async {
-    final signaling = _FakeVoiceSignalingService();
-    final controller = VoiceController(
-      _FakeVoiceMediaService(),
-      signalingServiceProvider: () => signaling,
-    );
-    addTearDown(controller.dispose);
-    addTearDown(signaling.close);
-    final gone = <String>[];
-    controller.camerasGone.listen(gone.add);
+  test(
+    'a camera that is gone says so: sender left, or turned it off',
+    () async {
+      final signaling = _FakeVoiceSignalingService();
+      final controller = VoiceController(
+        _FakeVoiceMediaService(),
+        signalingServiceProvider: () => signaling,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(signaling.close);
+      final gone = <String>[];
+      controller.camerasGone.listen(gone.add);
 
-    await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
-    signaling.emit(const VoiceUserDisconnectedEvent('user-1'));
-    await _flushEvents();
-    expect(gone, ['user-1']);
+      await controller.connect(guildId: 'guild-1', channelId: 'voice-1');
+      signaling.emit(const VoiceUserDisconnectedEvent('user-1'));
+      await _flushEvents();
+      expect(gone, ['user-1']);
 
-    signaling.emit(
-      const VoiceParticipantStateEvent(
-        userId: 'user-2',
-        guildId: 'guild-1',
-        channelId: 'voice-1',
-        selfMuted: false,
-        selfDeafened: false,
-        serverMuted: false,
-        serverDeafened: false,
-        isStreaming: false,
-        isVideoEnabled: false,
-      ),
-    );
-    await _flushEvents();
-    expect(gone, ['user-1', 'user-2']);
-  });
+      signaling.emit(
+        const VoiceParticipantStateEvent(
+          userId: 'user-2',
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          selfMuted: false,
+          selfDeafened: false,
+          serverMuted: false,
+          serverDeafened: false,
+          isStreaming: false,
+          isVideoEnabled: false,
+        ),
+      );
+      await _flushEvents();
+      expect(gone, ['user-1', 'user-2']);
+    },
+  );
 
   test('a participant the roster no longer seats leaves the room', () async {
     final signaling = _FakeVoiceSignalingService();
@@ -647,10 +897,9 @@ void main() {
     signaling.roster['voice-1'] = [_state('user-1')];
     signaling.changeSeats();
     await _flushEvents();
-    expect(
-      controller.participants.map((participant) => participant.userId),
-      ['user-1'],
-    );
+    expect(controller.participants.map((participant) => participant.userId), [
+      'user-1',
+    ]);
 
     // The account's own entry survives a roster that does not list it: the
     // roster can lag behind the credentials that put us in the room.
@@ -675,22 +924,27 @@ void main() {
   });
 }
 
-VoiceParticipantStateEvent _state(String userId) =>
-    VoiceParticipantStateEvent(
-      userId: userId,
-      guildId: 'guild-1',
-      channelId: 'voice-1',
-      selfMuted: false,
-      selfDeafened: false,
-      serverMuted: false,
-      serverDeafened: false,
-      isStreaming: false,
-      isVideoEnabled: false,
-    );
+VoiceParticipantStateEvent _state(String userId) => VoiceParticipantStateEvent(
+  userId: userId,
+  guildId: 'guild-1',
+  channelId: 'voice-1',
+  selfMuted: false,
+  selfDeafened: false,
+  serverMuted: false,
+  serverDeafened: false,
+  isStreaming: false,
+  isVideoEnabled: false,
+);
 
 /// One 20 ms microphone frame loud enough to pass the uplink's gate.
 final Uint8List _speech = Int16List.fromList(
   List.generate(1920, (index) => (index * 37) % 2000 - 1000),
+).buffer.asUint8List();
+
+/// One 20 ms microphone frame at about -53 dBFS: under the automatic
+/// gate's starting threshold of -50, over a manual one set to -55.
+final Uint8List _quiet = Int16List.fromList(
+  List.generate(1920, (index) => (index % 2 == 0) ? 73 : -73),
 ).buffer.asUint8List();
 
 const _transportSession = VoiceTransportSession(
@@ -933,6 +1187,12 @@ final class _FakeVoicePlaybackService implements VoiceAudioPlaybackService {
   @override
   Future<void> removeSource(String sourceId) async =>
       removedSources.add(sourceId);
+
+  final Map<String, double> sourceVolumes = {};
+
+  @override
+  Future<void> setSourceVolume(String sourceId, double volume) async =>
+      sourceVolumes[sourceId] = volume;
 
   @override
   Future<void> dispose() async => disposed = true;

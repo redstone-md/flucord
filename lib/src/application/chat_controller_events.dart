@@ -14,6 +14,8 @@ extension _ChatControllerEvents on ChatController {
           _workspace = _workspace?.upsertCategory(event.category);
         case SpaceUpsertedEvent():
           _workspace = _workspace?.upsertSpace(event.space);
+        case SpaceRemovedEvent():
+          _workspace = _workspace?.removeSpace(event.spaceId);
         case GuildEmojisReplacedEvent():
           _workspace = _workspace?.replaceGuildEmojis(
             event.spaceId,
@@ -67,7 +69,22 @@ extension _ChatControllerEvents on ChatController {
       }
       _notify();
     });
+    _listenToConversationSummaries();
     _listenToReadState();
+  }
+
+  /// Announces the summaries store moving, so the strip above the timeline
+  /// redraws without folding anything into the workspace.
+  ///
+  /// Summaries are channel-scoped data the store already holds, so a
+  /// change is announced rather than copied: nothing else in the workspace
+  /// reads them, and the strip asks for what it draws.
+  void _listenToConversationSummaries() {
+    final repository = _repository.conversationSummaries;
+    if (repository == null) return;
+    _conversationSummarySubscription = repository.updates.listen((_) {
+      _notify();
+    });
   }
 
   /// Folds the server's read state into the workspace as it arrives.

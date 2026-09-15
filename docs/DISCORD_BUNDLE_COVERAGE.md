@@ -61,9 +61,9 @@ extraction, stated rather than papered over.
 | Metric | Value | Definition |
 | --- | --- | --- |
 | Discovery coverage | **100.00%** | classified segments and events / discovered segments and events (340/340) |
-| Implementation coverage | **10.53%** | applicable domains verified complete / applicable domains (2/19) |
-| Partial domains | 15 of 19 applicable | at least one vertical slice shipped, remainder open |
-| Automated test coverage | 89.76% lines | `flutter test --coverage`, 2,735 passing, 6 skipped |
+| Implementation coverage | **15.79%** | applicable domains verified complete / applicable domains (3/19) |
+| Partial domains | 16 of 19 applicable | at least one vertical slice shipped, remainder open |
+| Automated test coverage | 88.08% lines | `flutter test --coverage`, 3,827 passing, 11 skipped |
 
 Implementation coverage counts only domains with a verified end-to-end vertical
 slice for **every** capability in the domain. A domain with shipped slices but
@@ -101,12 +101,20 @@ are excluded from the denominator and are never reported as implemented.
   resets them together on reconnect; binary WebSocket frames through the WinHTTP
   and `dart:io` connectors; identify/resume/QoS heartbeat;
   `READY`/`READY_SUPPLEMENTAL`/`GUILD_CREATE` hydration; opcode 37 batching
-  measured in encoded ETF bytes.
+  measured in encoded ETF bytes. Identify echoes the four committed cache
+  versions; `SESSIONS_REPLACE` feeds the session list, `STATE_UPDATE` and
+  `DELETED_ENTITY_IDS` fold into the read-state store, and a post-load READY
+  updates guilds and channels in place instead of replacing the payload
+  wholesale.
 - **Tests**: `discord_etf_codec_test.dart`, `discord_gateway_framing_test.dart`,
   `discord_gateway_transport_codec_test.dart`, `zstd_reference_test.dart`,
   `zstd_stream_reference_test.dart`,
   `discord_desktop_gateway_client_test.dart`,
-  `discord_desktop_gateway_protocol_test.dart`. The ETF codec, decoder,
+  `discord_desktop_gateway_protocol_test.dart`,
+  `discord_desktop_reconnect_hydration_test.dart`,
+  `discord_read_state_store_test.dart`,
+  `discord_read_state_repository_test.dart`,
+  `discord_desktop_read_state_test.dart`. The ETF codec, decoder,
   encoder, and framing files are at 100% line coverage. The Zstandard decoder is
   checked against libzstd 1.5.7 through a committed corpus of 28 reference
   frames plus 7 frames that must be rejected, and was additionally validated
@@ -122,10 +130,12 @@ are excluded from the denominator and are never reported as implemented.
   Gateway with `encoding=etf&v=9&compress=zstd-stream`, decompresses the live
   stream, decodes the `HELLO`, encodes an ETF heartbeat, and receives a real
   opcode 11 acknowledgement, on `2026-07-26`.
-- **Blocked by**: dispatch coverage, not transport. `SESSIONS_REPLACE`,
-  `STATE_UPDATE`, and `DELETED_ENTITY_IDS` are unhandled, and identify still
-  sends an empty `client_state`, so Discord always answers with full-mode
-  guilds instead of the versioned partial updates the renderer negotiates.
+- **Blocked by**: nothing on the transport path. `SESSIONS_REPLACE`,
+  `STATE_UPDATE`, and `DELETED_ENTITY_IDS` are folded into the session and
+  read-state stores, identify echoes the four committed cache versions, and a
+  reconnect READY updates the workspace in place instead of replacing the
+  payload wholesale. What remains unestablished is server-side behaviour the
+  corpus cannot pin: how far the deltas go in practice needs a live session.
 
 ## FBC-ACCOUNT — Authentication, sessions, verification
 
@@ -143,6 +153,10 @@ are excluded from the denominator and are never reported as implemented.
   `POST /users/@me/mfa/sms/enable`, `POST /users/@me/mfa/sms/disable`,
   `POST /auth/verify/view-backup-codes-challenge`,
   `POST /users/@me/mfa/codes-verification`,
+  `GET /users/@me/mfa/webauthn/credentials`,
+  `POST /users/@me/mfa/webauthn/credentials/registration-options`,
+  `POST /users/@me/mfa/webauthn/credentials`,
+  `DELETE /users/@me/mfa/webauthn/credentials/{id}`,
   `GET /age-verification/methods`, `POST /age-verification/verify`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
@@ -169,6 +183,12 @@ are excluded from the denominator and are never reported as implemented.
   a current authenticator code spends one. The account password is typed for
   the single request that needs it, cleared from the field before that request
   is even sent, and held nowhere.
+  Security keys sit next to the other second factors. A key is registered and
+  verified through the Windows platform authenticator over `webauthn.dll`,
+  straight FFI against the API Windows ships since 1903: the key Windows makes
+  never leaves the machine, and the client sends only the attestation and the
+  client-data hash the server needs to prove the ceremony happened. A key with
+  no name is refused before the prompt, not after it.
   Age verification lists the methods Discord offers the account and starts the
   one chosen, opening where Discord says it continues in the system browser.
   Each check is run by the third party Discord names, and the page says so
@@ -181,14 +201,17 @@ are excluded from the denominator and are never reported as implemented.
   `discord_desktop_login_controller_test.dart`, `auth_session_test.dart`,
   `auth_session_widget_test.dart`, `multi_factor_auth_test.dart`,
   `multi_factor_auth_widget_test.dart`, `age_verification_test.dart`,
-  `age_verification_widget_test.dart`.
+  `age_verification_widget_test.dart`; the security-key ceremony is covered
+  inside `multi_factor_auth_test.dart` and `multi_factor_auth_widget_test.dart`,
+  which drive it over a fake, and the Windows FFI surface is stated in
+  `windows_security_key_ceremony_test.dart`'s skip.
 - **Live evidence**: phone approval, hCaptcha completion, encrypted session
   exchange, and restart restoration validated on Windows `2026-07-25`. The
   Devices page has none: listing another session needs a second one to exist.
-- **Blocked by**: WebAuthn as a second factor, and the vendor-side half of
-  age verification. Both need a native surface this build does not carry — the
-  platform authenticator API for one, the identity vendors' own SDKs for the
-  other. Account standing shipped under FBC-MODERATION.
+- **Blocked by**: the vendor-side half of age verification, which needs the
+  identity vendors' own SDKs. The WebAuthn block is gone: the security-key
+  ceremony is real, and only its live proof against Discord's servers has no
+  human validation yet. Account standing shipped under FBC-MODERATION.
 
 ## FBC-PROFILE — Current user, other users, user settings
 
@@ -200,7 +223,8 @@ are excluded from the denominator and are never reported as implemented.
 - **UI surface**: account panel, member and friend profile popovers, user
   settings dialog.
 - **Contract**: `GET /users/@me`, `PATCH /users/@me`,
-  `GET /users/{id}/profile`, `GET`/`PATCH /users/@me/settings-proto/{n}`.
+  `GET /users/{id}/profile`, `GET`/`PATCH /users/@me/settings-proto/{n}`,
+  `GET /users/@me/notes`, `PATCH /users/@me/notes`.
 - **Dependencies**: FBC-GATEWAY.
 - **Status**: **Partial**.
 - **Implemented**: `READY` identity projection, guild member profile popover,
@@ -214,6 +238,12 @@ are excluded from the denominator and are never reported as implemented.
   accent carried as untouched/set/cleared so an unrelated save cannot strip
   what nobody edited, every write adopting the server's echo, and `USER_UPDATE`
   from another device applied to the same store.
+  The other user's profile is fetched whole: bio, banner, badges, avatar
+  decoration, connections, mutual servers and mutual friends, each rendered
+  when Discord returns it and falling back gracefully when it does not. A
+  private note on the person rides the account's own note blob
+  (`USER_NOTE_UPDATE` keeps it current), survives a restart, and is written
+  back trimmed to Discord's own limit.
 - **Tests**: `discord_oauth_account_mapper_test.dart`, `proto_wire_test.dart`,
   `discord_user_settings_codec_test.dart`,
   `discord_user_settings_repository_test.dart`,
@@ -221,7 +251,8 @@ are excluded from the denominator and are never reported as implemented.
   `user_settings_display_test.dart`, `user_profile_test.dart`,
   `user_profile_section_widget_test.dart`, `profile_image_picker_test.dart`,
   `account_credentials_test.dart`, `expression_favorites_test.dart`,
-  `widget_test.dart`.
+  `widget_test.dart`, `member_profile_controller_test.dart`,
+  `member_profile_popover_full_test.dart`, `user_notes_test.dart`.
 - **Implemented**: a linked teen's restrictions, read from
   `GET /family-center/{teenId}/settings-and-consents`. Both halves are kept as
   Discord names them: these are controls over somebody else's account, and a
@@ -348,10 +379,11 @@ are excluded from the denominator and are never reported as implemented.
   writing its own figures would fight whatever the other sessions counted. An
   entry naming something with no score sorts as zero rather than being
   dropped, so an expression never used is still in the picker.
-- **Blocked by**: a
-  keybind is matched by virtual-key code from the hook, and only the codes
-  somebody would bind are mapped — an unmapped one is dropped rather than
-  guessed at.
+- **Blocked by**: nothing on the keybind capture path. Every key the hook can
+  see is bindable: the short list covers the keys people usually bind, Flutter's
+  own Windows table answers the rest of the keyboard, and a code neither knows
+  becomes the key id the embedder itself would mint, reported rather than
+  dropped.
 
 ## FBC-PRESENCE — Presence and typing
 
@@ -372,17 +404,30 @@ are excluded from the denominator and are never reported as implemented.
   `merged_presences` attributed per R03; outbound opcode 3 with the idle/AFK
   machine, the dirty check and the five-per-twenty-second window; status and
   custom-status writes through the settings proto.
+  The local activity producers are no longer separate concerns: running games
+  are detected by process scanning on Windows (`psapi.dll` FFI) and mapped
+  against `GET /applications/detectable`, then published as the playing
+  activity through the outbound presence path, honouring the
+  show-current-game setting; and the documented local Rich Presence interface
+  is served over the unix-domain socket on Linux and macOS and the
+  `\\.\pipe\discord-ipc-{n}` named pipe on Windows (through `flucord_rpc.dll`),
+  a server separate from the desktop-user session transport that shuts down
+  with the app. A game that publishes over that interface sees its activity,
+  under the game's own name, carried into the account's presence.
 - **Tests**: `discord_presence_mapper_test.dart`,
   `discord_presence_store_test.dart`, `discord_idle_tracker_test.dart`,
   `discord_self_presence_test.dart`, `discord_presence_updater_test.dart`,
   `discord_presence_service_test.dart`, `discord_presence_wire_test.dart`,
   `discord_desktop_presence_test.dart`, `user_presence_model_test.dart`,
-  `presence_widget_test.dart`, `self_presence_controller_test.dart`.
-- **Live evidence**: none for the desktop-user transport.
-- **Not implemented**: the local activity producers R07 lists as separate
-  concerns — game detection, Spotify sync, Go-Live and the RPC `SET_ACTIVITY`
-  server — and the `BOT_HTTP_INTERACTIONS` status default, which needs user
-  flags the presence payload does not carry.
+  `presence_widget_test.dart`, `self_presence_controller_test.dart`,
+  `game_detection_test.dart`, `game_detection_controller_test.dart`,
+  `game_process_scanner_test.dart`, `discord_rpc_framing_test.dart`,
+  `discord_rpc_server_test.dart`.
+- **Live evidence**: none for the desktop-user transport; game detection and
+  the Rich Presence server are exercised against fakes and the local socket.
+- **Not implemented**: Spotify sync, Go-Live activity publishing and the
+  `BOT_HTTP_INTERACTIONS` status default, which needs user flags the presence
+  payload does not carry.
 
 ## FBC-RELATIONSHIPS — Friends, blocks, direct-message directory
 
@@ -426,8 +471,16 @@ are excluded from the denominator and are never reported as implemented.
   otherwise offer to introduce two people who already know each other. Contact
   names are shown only when Discord sends two, which is the rule that stops a
   single contact being singled out.
+  A direct conversation from a stranger arrives flagged as a message request:
+  it lands in its own folder in the DM sidebar, with accept and decline beside
+  it. Accepting moves the conversation into the DM list, declining removes it,
+  and both acknowledge the request's own read state
+  (`ReadStateType.messageRequests`), because Discord builds the folder's badge
+  from the request's ack rather than the channel's. The request-tracking
+  dispatch above is a Social SDK path and stays there.
 - **Tests**: `social_sdk_*_test.dart` suite, `desktop_relationship_test.dart`,
-  `friends_panel_test.dart`.
+  `friends_panel_test.dart`, `chat_controller_read_state_request_cases.dart`
+  (in `chat_controller_read_state_test.dart`).
 - **Live evidence**: unbundled-SDK contract release-verified; package-linked
   validation still requires the approved SDK download.
 - **Blocked by**: game relationships, which belong to the Social SDK's own
@@ -435,7 +488,7 @@ are excluded from the denominator and are never reported as implemented.
 
 ## FBC-GUILD — Servers, members, roles, discovery
 
-- **Bundle evidence**: 194 endpoint constants across 18 segments.
+- **Bundle evidence**: 197 endpoint constants across 18 segments.
 - **Symbols**: `GUILD_UPDATE`, `GUILD_DELETE`, `GUILD_MEMBER_*`,
   `GUILD_MEMBERS_CHUNK`, `GUILD_MEMBER_LIST_UPDATE`, `GUILD_JOIN_REQUEST_*`,
   `GUILD_DIRECTORY_ENTRY_*`, and 6 more.
@@ -454,8 +507,17 @@ are excluded from the denominator and are never reported as implemented.
   cache whose eviction is the unsubscribe, opcode 37 emission with
   reconnect replay, and the `SYNC`/`INVALIDATE`/`INSERT`/`UPDATE`/`DELETE`
   state machine over Discord's flat header-and-member row space.
+  Roles and members are administered end to end: the role editor offers every
+  permission bit generated from the existing constants, colour and icon
+  editable and sent on save, with reordering kept; the member popover grants
+  and revokes roles, changes nicknames, applies and lifts timeouts, kicks and
+  bans, each action gated by the computed permissions of the account
+  (`GuildAdminCapabilities`); and the member list is searched in large guilds
+  through the same member-chunk mechanism the mention completion uses.
 - **Tests**: `discord_mapper_test.dart`, `discord_guild_member_loader_test.dart`,
-  `discord_member_list_test.dart`, `discord_desktop_gateway_client_test.dart`.
+  `discord_member_list_test.dart`, `discord_desktop_gateway_client_test.dart`,
+  `guild_role_editor_test.dart`, `guild_member_admin_controller_test.dart`,
+  `guild_member_search_test.dart`, `member_moderation_widget_test.dart`.
   The seven new member-list files are at 100% line coverage, and the hash is
   checked against twelve `mmh3` reference values.
 - **Live evidence**: guild and channel hydration on Windows `2026-07-25`. None
@@ -481,7 +543,8 @@ are excluded from the denominator and are never reported as implemented.
 - **Symbols**: `CHANNEL_INFO`, `CHANNEL_MEMBER_COUNT_UPDATE`,
   `THREAD_MEMBER_UPDATE`, `THREAD_MEMBERS_UPDATE`, `THREAD_MEMBER_LIST_UPDATE`.
 - **Purpose**: channel tree, categories, threads, forum and media posts.
-- **UI surface**: channel sidebar, Threads panel, forum feed.
+- **UI surface**: channel sidebar, Threads panel, forum feed, the channel
+  editor.
 - **Contract**: `GUILD_CREATE.channels/threads`,
   `GET /channels/{id}/threads/archived/public`, forum thread creation,
   `GET /channels/{id}/thread-members`,
@@ -491,13 +554,18 @@ are excluded from the denominator and are never reported as implemented.
 - **Implemented**: categories, positions, collapsible sidebar, active and
   archived threads, forum/media posts with tags, layouts, and attachments.
   Thread membership is joinable: the store is fed from the list route,
-  `THREAD_MEMBER_UPDATE` — only ever about this account — `THREAD_MEMBERS_UPDATE`
-  with its authoritative count, and the member object nested in a
-  `THREAD_CREATE` for a thread made here. The desktop client posts rather than
-  puts to join, and so does this.
-- **Tests**: `discord_chat_repository_threads_test.dart`,
-  `discord_chat_repository_forums_test.dart`, `thread_membership_test.dart`,
-  `thread_membership_widget_test.dart`, `widget_test.dart`.
+  `THREAD_MEMBER_UPDATE` — only ever about this account —
+  `THREAD_MEMBERS_UPDATE` with its authoritative count, and the member object
+  nested in a `THREAD_CREATE` for a thread made here. The desktop client posts
+  rather than puts to join, and so does this.
+  A channel is configured end to end: the editor exposes and persists topic,
+  slowmode, age gate, bitrate, user limit, parent category and voice region
+  override; per-role and per-member permission overwrites are added and edited
+  and the computed permissions follow them immediately, so private channels
+  hide from members without the permission and appear for those with it; and
+  webhooks are listed, created, edited and deleted in guild settings, gated on
+  the manage-webhook permission. The composer counts down a channel's
+  slowmode.
 - **Live evidence**: channel history on Windows `2026-07-25`.
   The lazy roster arrives as `THREAD_MEMBER_LIST_UPDATE`, which names its
   thread on `thread_id` rather than `id` and replaces the held set because it
@@ -511,6 +579,12 @@ are excluded from the denominator and are never reported as implemented.
   or the switch springs back on the next rebuild. Which status codes count as
   a refusal is decided in the transport rather than in the membership layer,
   which is deliberately free of REST.
+- **Tests**: `discord_chat_repository_threads_test.dart`,
+  `discord_chat_repository_forums_test.dart`, `thread_membership_test.dart`,
+  `thread_membership_widget_test.dart`, `widget_test.dart`,
+  `guild_settings_controller_test.dart`, `guild_settings_structure_cases.dart`,
+  `private_channel_permissions_test.dart`,
+  `channel_permission_widget_test.dart`, `message_composer_slowmode_test.dart`.
 - **Blocked by**: nothing outstanding for the desktop-user session.
 
 ## FBC-MESSAGE — Messages and message content
@@ -527,6 +601,12 @@ are excluded from the denominator and are never reported as implemented.
   reactions with burst metadata, pins, embeds, polls, stickers, forwarding,
   message flags and nonces, voice messages, Markdown, mentions, downloads,
   native image/video/audio playback.
+  The composer is honest: a character counter appears as the message
+  approaches the limit, attachment sizes are checked against the tier- and
+  entitlement-derived limit before upload, files can be tagged as spoilers at
+  attach time (the `SPOILER_` filename convention) and render covered on
+  arrival, and a message can be sent to be read aloud or marked silent, both
+  flags riding the payload in both directions.
 - **Tests**: 40+ files under `test/`, including
   `discord_chat_repository_messages_test.dart` and `discord_message_mapper_test.dart`.
 - **Live evidence**: live channel history and message dispatches on Windows
@@ -542,7 +622,9 @@ are excluded from the denominator and are never reported as implemented.
 - **Purpose**: unread boundaries, mention badges, notification centre.
 - **UI surface**: rail pips, NEW divider, Inbox.
 - **Contract**: `POST /channels/{id}/messages/{id}/ack`,
-  `POST /read-states/ack-bulk`.
+  `POST /read-states/ack-bulk`, the user-entity acks for the notification
+  centre and message requests, and `DELETE /channels/{id}/messages/ack` for
+  the 30-day collector.
 - **Dependencies**: FBC-GATEWAY, FBC-MESSAGE.
 - **Status**: **Partial**.
 - **Implemented**: server read state hydrated from `READY.read_state` (both
@@ -555,19 +637,30 @@ are excluded from the denominator and are never reported as implemented.
   suppress `@everyone`, mobile push) reflected in the sidebar and rail and
   honoured by the desktop notification path; local unread and mention state,
   first-unread anchors, Inbox, mark-all-read.
+  The notification centre and message requests are modelled now: mentions
+  gather in one centre per channel, with jump targets and per-channel acks
+  (`ReadStateType.notificationCenter`), a direct conversation from a stranger
+  lands in the message-request folder with accept and decline, and both
+  answers ack the request's own read state (`ReadStateType.messageRequests`).
+  The 30-day collector runs once per session start, before the user has read
+  anything: an acknowledged channel read state whose newest acked message is
+  older than 30 days is deleted locally and over
+  `DELETE /channels/{id}/messages/ack`, an entry still carrying mention badges
+  survives, and the route that sat as a builder with no caller has one.
 - **Tests**: `read_state_model_test.dart`, `discord_read_state_codec_test.dart`,
   `discord_read_state_store_test.dart`,
   `discord_read_state_ack_queue_test.dart`,
   `discord_read_state_repository_test.dart`,
   `discord_desktop_rest_read_state_test.dart`,
   `discord_desktop_read_state_test.dart`,
-  `chat_controller_read_state_test.dart`,
+  `chat_controller_read_state_test.dart` (including the message-request and
+  collector cases), `inbox_catalog_test.dart`, `inbox_widget_test.dart`,
   `channel_sidebar_notifications_test.dart`.
 - **Live evidence**: none for server-side acknowledgement.
-- **Blocked by**: the notification centre (`NOTIFICATION_CENTER_*`) and message
-  requests are still unmodelled, and the 30-day read-state garbage collector is
-  not run — `DELETE /channels/{id}/messages/ack` exists as a route builder with
-  no caller.
+- **Blocked by**: nothing on the desktop-user session path. The
+  `NOTIFICATION_CENTER_ITEM_*` dispatches still have no surface of their own;
+  the centre is fed from the workspace's mention counts, which is what the
+  bundle's own centre also renders.
 
 ## FBC-EXPRESSION — Emoji, stickers, soundboard, GIF providers
 
@@ -575,23 +668,42 @@ are excluded from the denominator and are never reported as implemented.
 - **Symbols**: `GUILD_EMOJIS_UPDATE`, `GUILD_STICKERS_UPDATE`,
   `GUILD_SOUNDBOARD_SOUND_*`, `SOUNDBOARD_SOUNDS`, and 3 more.
 - **Purpose**: expression pickers and inline rendering.
-- **UI surface**: composer picker, reaction picker, message rendering.
-- **Contract**: `GET /guilds/{id}/emojis`, `GET /sticker-packs`,
-  `GET /guilds/{id}/soundboard-sounds`, Tenor/Giphy/Klipy proxies.
+- **UI surface**: composer picker, reaction picker, message rendering, the
+  expressions page in guild settings.
+- **Contract**: `GET`/`POST`/`DELETE /guilds/{id}/emojis`,
+  `GET`/`POST`/`DELETE /guilds/{id}/stickers`,
+  `GET`/`POST`/`DELETE /guilds/{id}/soundboard-sounds`, `GET /sticker-packs`,
+  Tenor/Giphy/Klipy proxies.
 - **Dependencies**: FBC-GUILD, FBC-MESSAGE.
 - **Status**: **Partial**.
 - **Implemented**: guild emoji catalogue with live updates, guild stickers,
-  searchable pickers, inline custom-emoji rendering. The soundboard sends:
-  a server's own sounds and the shared defaults are listed together and played
-  into a voice channel over `POST /channels/{id}/send-soundboard-sound`, with
-  `source_guild_id` carried only for a server sound because Discord refuses it
-  on a default one. Sounds a server lost its boost level for stay listed and
-  are refused locally rather than sent for a 403. Ids arrive as numbers for
-  defaults and strings for guild sounds; both are read.
+  searchable pickers, inline custom-emoji rendering. The pickers carry the
+  whole unicode catalogue (1,898 base emoji from Unicode emoji-test 15.1 in
+  nine CLDR groups, 321 of them with five skin-tone variants each, generated
+  by `tool/generate_unicode_emoji_data.py`), every joined server's emoji and
+  stickers under that server's name with server attribution, favourites and
+  frecency still leading, and colon autocomplete matching by name across
+  unicode and custom. The soundboard sends: a server's own sounds and the
+  shared defaults are listed together and played into a voice channel over
+  `POST /channels/{id}/send-soundboard-sound`, with `source_guild_id` carried
+  only for a server sound because Discord refuses it on a default one. Sounds
+  a server lost its boost level for stay listed and are refused locally rather
+  than sent for a 403. Ids arrive as numbers for defaults and strings for
+  guild sounds; both are read.
+  Uploads and deletes go through `GuildExpressionRepository`: an emoji is
+  uploaded with a name and its image as a data URI over the same multipart
+  image path the profile image picker uses, a sticker with its format
+  constraints stated, a sound with name and volume, each appearing in its
+  picker live and each deletion clearing the guild and the local stores, all
+  gated on the manage-expressions permission. A full server or an oversized
+  file is refused in plain words rather than as a status code.
 - **Tests**: `discord_chat_repository_emojis_test.dart`,
   `discord_chat_repository_stickers_test.dart`, `soundboard_test.dart`,
   `soundboard_widget_test.dart`, `expression_favorites_test.dart`,
-  `expression_favorites_ui_test.dart`, `emoji_picker_widget_test.dart`.
+  `expression_favorites_ui_test.dart`, `emoji_picker_widget_test.dart`,
+  `unicode_emoji_catalog_test.dart`, `composer_autocomplete_catalog_test.dart`,
+  `expression_file_picker_test.dart`, `guild_settings_expressions_test.dart`,
+  `guild_settings_expressions_widget_test.dart`.
 - **Live evidence**: none for the desktop-user transport.
   An incoming effect is played: Discord never mixes a soundboard sound into
   the RTP stream, it tells every client which sound was played and each one
@@ -615,11 +727,13 @@ are excluded from the denominator and are never reported as implemented.
   corner mark and leads the panel in its own row. A row entry naming an emoji
   the session cannot see, a custom one from a server the account has left, is
   skipped rather than drawn as a gap: the blob outlives membership.
-- **Blocked by**: GIF
-  providers are done: trending, search and suggestions go through Discord's
-  own `/gifs/*` proxy — the desktop client never talks to Tenor or Giphy
-  directly and neither does this — and a pick is sent as the `gif_src` link
-  rather than the `src` preview.
+- **Blocked by**: nothing on the expression path. GIF providers are done:
+  trending, search and suggestions go through Discord's own `/gifs/*` proxy —
+  the desktop client never talks to Tenor or Giphy directly and neither does
+  this — and a pick is sent as the `gif_src` link rather than the `src`
+  preview. What no static pass can establish is how a live server answers a
+  real upload: that stays unverified until one is exercised against a joined
+  server.
 
 ## FBC-VOICE — Voice, video, screen share, calls
 
@@ -669,10 +783,25 @@ are excluded from the denominator and are never reported as implemented.
   its own decoder, because two senders interleave on one socket and a shared
   depacketiser would splice one person's fragments into the other's picture.
   The picture replaces the avatar in that participant's tile.
+  Listening and capture are controllable. Each participant's tile carries a
+  volume slider that touches only that participant's audio and is persisted;
+  other applications are attenuated while this account speaks, through WASAPI
+  session volumes in `windows/flucord_audio`, with an on-or-off switch and a
+  level, both persisted; and an incoming call rings through a bundled sound on
+  the playback layer, repeating until answered, with accept and hang-up
+  sounds of their own. The sender's side of the microphone is controlled too:
+  a manual sensitivity setting overrides the automatic noise-floor gate,
+  push-to-talk keeps transmitting for its configured release delay after the
+  key comes up, and echo cancellation and automatic gain control are applied
+  in the native capture layer (`windows/flucord_audio`'s microphone enhancer,
+  the Windows voice-capture DMO); all four settings persist.
 - **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`,
   `voice_controller_test.dart`, `voice_connection_bar_test.dart`,
   `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`,
-  `self_video_test.dart`.
+  `self_video_test.dart`, `voice_listening_test.dart`,
+  `voice_processing_test.dart`, `voice_devices_section_test.dart`,
+  `windows_microphone_enhancer_test.dart`, `direct_call_controller_test.dart`,
+  `media_kit_soundboard_player_test.dart`.
 - **Live evidence**: an account reported Flucord's join appearing in the real
   client's voice channel; audio interoperability itself is still unverified.
   Go Live's signalling half is implemented: opcodes 18-22 and the four
@@ -874,15 +1003,31 @@ are excluded from the denominator and are never reported as implemented.
   `USER_CONNECTIONS_UPDATE`, `INTEGRATION_CREATE`/`DELETE`,
   `WEBHOOKS_UPDATE`, and 3 more.
 - **Purpose**: authorized applications, third-party connections, invites.
-- **UI surface**: Connections, account home.
+- **UI surface**: Connections, account home, the connections and authorised
+  apps pages in user settings.
 - **Contract**: documented public OAuth2 endpoints only.
 - **Dependencies**: none.
 - **Status**: **Implemented** for the documented public OAuth2 surface.
 - **Implemented**: native PKCE S256 public-client flow, `flucord://` callback,
   refresh rotation, separate grant vault, `identify`, `guilds`,
   `guilds.members.read`, `connections`.
-- **Tests**: `discord_oauth_*_test.dart`, `oauth_guild_*_test.dart`.
+  Third-party connections are listed, linked and unlinked over the
+  desktop-user session (`GET /users/@me/connections`,
+  `GET /connections/{type}/authorize`, `DELETE /users/@me/connections/{type}/{id}`),
+  the link hand-off going to the service's own page. Bot and app authorisation
+  runs in-app: an invite is parsed, the scopes it asks for are named, and
+  consent adds the app to a chosen server; authorised applications are listed
+  from `GET /oauth2/@me/authorizations` and revoked over
+  `DELETE /oauth2/@me/authorizations/{id}`; a failed invite read shows its
+  error and a way back. Entitlements are read only
+  (`GET /users/@me/entitlements`), which is tracked under FBC-PROFILE's
+  settings rows rather than here, commerce staying out of scope.
+- **Tests**: `discord_oauth_*_test.dart`, `oauth_guild_*_test.dart`,
+  `account_connections_test.dart`, `account_connections_widget_test.dart`,
+  `app_authorisation_test.dart`, `app_authorisation_widget_test.dart`.
 - **Live evidence**: OAuth authorization and refresh validated on Windows.
+  The connections and app-authorisation routes are covered over fakes; live
+  proof against Discord's servers has no human validation yet.
 - **Blocked by**: nothing. Undocumented user-session OAuth management routes
   are deliberately excluded from this domain.
 
@@ -969,7 +1114,7 @@ are excluded from the denominator and are never reported as implemented.
 - **Bundle evidence**: 5 endpoint constants under `ai`.
 - **Symbols**: `CONVERSATION_SUMMARY_UPDATE`.
 - **Purpose**: thread summaries, translation, grammar, titles.
-- **UI surface**: none yet; the store is in place for one.
+- **UI surface**: the strip above the timeline.
 - **Contract**: `CONVERSATION_SUMMARY_UPDATE`, `POST /ai/summarize-thread/{id}`,
   `/ai/translate`.
 - **Dependencies**: FBC-MESSAGE.
@@ -979,8 +1124,12 @@ are excluded from the denominator and are never reported as implemented.
   what changed; ordered by the message each stretch starts at, so a late
   dispatch about an old stretch lands where that stretch is; capped at the 75
   the desktop client keeps; and a summary Discord has not written yet is
-  dropped rather than shown as a blank card.
-- **Tests**: `conversation_summary_test.dart`.
+  dropped rather than shown as a blank card. They render above the timeline
+  from the per-channel store, with their participants named and the message
+  each stretch starts at; selecting one jumps to that message; a channel
+  without summaries draws exactly the timeline it always had.
+- **Tests**: `conversation_summary_test.dart`,
+  `conversation_summary_widget_test.dart`.
 - **Live evidence**: none.
 - **Blocked by**: server-side gating — whether an account receives summaries
   at all is an experiment, and the `/ai/*` routes that ask for one on demand
@@ -1020,13 +1169,19 @@ are excluded from the denominator and are never reported as implemented.
 - **Dependencies**: none.
 - **Status**: **Partial**.
 - **Implemented**: notifications, tray, deep links, single instance, updater,
-  media playback, audio capture, Opus, credential vault — all independently.
+  media playback, audio capture, Opus, credential vault, the local Rich
+  Presence pipe (`flucord_rpc.dll`, standing in for `discord_rpc`), the
+  microphone enhancer's echo cancellation and automatic gain control, and a
+  local spellcheck over a bundled word list (standing in for
+  `discord_spellcheck`), all independently.
 - **Tests**: `desktop_*_test.dart`, `native_media_*_test.dart`.
 - **Live evidence**: Windows release build and smoke run.
 - **Blocked by**: `discord_zstd` has no Flucord equivalent (see FBC-GATEWAY);
   `discord_hook`/`discord_overlay2` (in-game overlay) and `discord_krisp`
   (noise suppression) have no equivalent. Neither Discord binary may be
-  redistributed, so each needs an independent implementation.
+  redistributed, so each needs an independent implementation. The Rich
+  Presence pipe serves the documented interface, not Discord's own handshake
+  quirks beyond what its documentation pins.
 
 ## FBC-COMMERCE — Nitro, store, gifts, quests, collectibles
 
@@ -1054,21 +1209,23 @@ are excluded from the denominator and are never reported as implemented.
 
 ## Next dependency-first slices
 
-1. **FBC-GUILD member panel.** The lazy member-list transport and row state
-   machine have landed; what remains is the controller and sidebar cut that
-   drives range subscriptions from the panel's scroll position and renders the
-   server-authoritative groups.
-2. **FBC-READSTATE notification centre.** `NOTIFICATION_CENTER_*` and message
-   requests are the two read-state types still unmodelled; R04 lists the REST
-   bodies for the notification-centre acks as unestablished, so this one needs
-   a fresh corpus pass before it can be built.
-3. **FBC-GATEWAY versioned `client_state`.** `read_state_version` and
-   `user_guild_settings_version` are now echoed, because the read-state store
-   can apply a `partial: true` delta for both. `highest_last_message_id` and
-   `private_channels_version` are computed but deliberately not sent: guild and
-   private-channel hydration still replaces whatever `READY` carries, and R09
-   lists the server-side effect of `private_channels_version` as
-   unestablished.
+1. **FBC-GUILD member panel.** Done. The controller drives range
+   subscriptions from the panel's scroll position and renders the
+   server-authoritative groups; the popover grants roles and moderates.
+2. **FBC-READSTATE notification centre.** Done. Mentions gather per channel
+   with jump targets, the centre acks per space, message requests have their
+   folder with accept and decline, and the 30-day collector runs at session
+   start.
+3. **FBC-GATEWAY versioned `client_state`.** Done. Identify echoes the four
+   versions the caches can vouch for: `read_state_version`,
+   `user_guild_settings_version`, `highest_last_message_id`, and
+   `private_channels_version`, and the read-state store folds the deltas they
+   unlock. The block still collapses to `guild_versions` alone before the
+   first `READY`, and a cursor of `"0"` vouches for nothing and stays out.
+4. **Live proof over Discord's servers.** The surfaces above are built and
+   covered over fakes; what remains is the human half: a second account
+   exercising joins, uploads, calls and authorisation against the real
+   service, which this client cannot arrange by itself.
 
 ## Legal boundary
 

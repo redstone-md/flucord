@@ -48,6 +48,53 @@ void main() {
   });
 
   test(
+    "a joined guild's read state folds in through the hydration read",
+    () async {
+      final transport = _FakeTransport(
+        responses: {
+          'read_state': {
+            'version': 9,
+            'entries': [
+              {
+                'id': _channelId,
+                'last_message_id': _newerMessage,
+                'mention_count': 1,
+              },
+            ],
+          },
+        },
+      );
+      final repository = _repository(transport);
+      addTearDown(repository.close);
+      final seen = <ReadStateSnapshot>[];
+      repository.updates.listen(seen.add);
+
+      await repository.hydrateReadState(_guildId);
+
+      expect(transport.requests.single.method, 'GET');
+      expect(transport.requests.single.path, '/guilds/$_guildId/read-state');
+      expect(
+        repository.current.forChannel(_channelId)!.lastAckedId,
+        _newerMessage,
+      );
+      expect(repository.current.forChannel(_channelId)!.mentionCount, 1);
+      await _settle();
+      expect(seen, hasLength(1));
+    },
+  );
+
+  test('a hydration read that answers nothing changes nothing', () async {
+    final transport = _FakeTransport(responses: null);
+    final repository = _repository(transport);
+    addTearDown(repository.close);
+    final seen = <ReadStateSnapshot>[];
+    repository.updates.listen(seen.add);
+
+    await repository.hydrateReadState(_guildId);
+
+    expect(seen, isEmpty);
+  });
+  test(
     'acknowledges optimistically, then sends once the debounce lapses',
     () async {
       final transport = _FakeTransport(responses: {'token': 'rolling'});
@@ -380,6 +427,49 @@ void main() {
       'version': 9,
     });
     expect(repository.identifyClientState()['user_guild_settings_version'], 9);
+  });
+
+  test('client_state carries the four negotiated versions', () async {
+    final transport = _FakeTransport();
+    final repository = _repository(transport);
+    addTearDown(repository.close);
+
+    repository.acceptGatewayDispatch('READY', {
+      'read_state': {
+        'version': 5,
+        'partial': false,
+        'entries': [
+          {'id': _channelId, 'last_message_id': _newestMessage},
+          {'id': _threadId, 'last_message_id': _newerMessage},
+        ],
+      },
+      'user_guild_settings': {'version': 3, 'partial': false, 'entries': []},
+    });
+    repository.setPrivateChannelIds(const [_threadId]);
+
+    expect(repository.identifyClientState(), {
+      'guild_versions': <String, Object?>{},
+      'read_state_version': 5,
+      'user_guild_settings_version': 3,
+      'highest_last_message_id': _newestMessage,
+      'private_channels_version': _newerMessage,
+    });
+
+    // A cursor with nothing behind it vouches for nothing, so it stays out.
+    repository.acceptGatewayDispatch('READY', {
+      'read_state': {
+        'version': 6,
+        'partial': false,
+        'entries': [
+          {'id': _channelId, 'last_message_id': _newestMessage},
+        ],
+      },
+    });
+    repository.setPrivateChannelIds(const []);
+
+    final next = repository.identifyClientState();
+    expect(next['highest_last_message_id'], _newestMessage);
+    expect(next.containsKey('private_channels_version'), isFalse);
   });
 
   test('computes the two identify snowflake cursors', () async {

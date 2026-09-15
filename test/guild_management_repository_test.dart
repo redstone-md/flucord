@@ -2,18 +2,25 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_guild_management_repository.dart';
+import 'package:flucord/src/data/discord/discord_guild_admin_mapper.dart';
 import 'package:flucord/src/data/discord/discord_moderation_repository.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/automod_rule.dart';
 import 'package:flucord/src/domain/automod_rule_editing.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/moderation_report.dart';
+import 'package:flucord/src/domain/permission_overwrite.dart';
 
+part 'guild_management_repository_access_cases.dart';
 part 'guild_management_repository_automod_cases.dart';
 part 'guild_management_repository_bans_cases.dart';
 
 void main() {
+  _serverAccessCases();
+
   _automodCases();
 
   group('guild overview', () {
@@ -248,6 +255,120 @@ void main() {
       ).reorderGuildChannels(guildId: '111111111111111111', deltas: const []);
       expect(transport.requests, isEmpty);
     });
+
+    test('an edit carries the overwrites as the wire wants them', () async {
+      final transport = _Transport([
+        _json({
+          'id': '222222222222222222',
+          'name': 'staff',
+          'type': 0,
+          'guild_id': '111111111111111111',
+        }),
+      ]);
+      await _repository(transport).editGuildChannel(
+        channelId: '222222222222222222',
+        edit: GuildChannelEdit()
+          ..permissionOverwrites = [
+            DiscordPermissionOverwrite(
+              id: '111111111111111111',
+              allow: DiscordPermissions.viewChannel,
+              deny: DiscordPermissions.sendMessages,
+            ),
+            DiscordPermissionOverwrite(
+              id: '123456789012345678',
+              allow: DiscordPermissions.sendMessages,
+              deny: DiscordPermissions.none,
+              kind: PermissionOverwriteKind.member,
+            ),
+          ],
+      );
+      expect(transport.requests.single.json!['permission_overwrites'], [
+        {
+          'id': '111111111111111111',
+          'type': 0,
+          'allow': '1024',
+          'deny': '2048',
+        },
+        {'id': '123456789012345678', 'type': 1, 'allow': '2048', 'deny': '0'},
+      ]);
+    });
+  });
+
+  group('webhooks', () {
+    test('lists, creates, edits and deletes over the guild routes', () async {
+      final transport = _Transport([
+        _json([
+          {
+            'id': '555555555555555555',
+            'name': 'builds',
+            'channel_id': '222222222222222222',
+          },
+        ]),
+        _json({
+          'id': '666666666666666666',
+          'name': 'fresh hook',
+          'channel_id': '222222222222222222',
+        }),
+        _json({
+          'id': '555555555555555555',
+          'name': 'builds v2',
+          'channel_id': '234567890123456789',
+        }),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+      final repository = _repository(transport);
+      final webhooks = await repository.loadWebhooks('111111111111111111');
+      expect(webhooks.single.id, '555555555555555555');
+      expect(webhooks.single.channelId, '222222222222222222');
+      // The list is the guild route, never the channel one: MANAGE_WEBHOOKS
+      // is a guild-wide answer.
+      expect(
+        transport.requests.first.uri.path,
+        endsWith('/guilds/111111111111111111/webhooks'),
+      );
+
+      final created = await repository.createWebhook(
+        guildId: '111111111111111111',
+        draft: const GuildWebhookDraft(
+          name: 'fresh hook',
+          channelId: '222222222222222222',
+        ),
+      );
+      expect(created.name, 'fresh hook');
+      expect(transport.requests[1].json, {
+        'name': 'fresh hook',
+        'channel_id': '222222222222222222',
+      });
+
+      final edited = await repository.updateWebhook(
+        webhookId: '555555555555555555',
+        edit: GuildWebhookEdit()
+          ..name = 'builds v2'
+          ..channelId = '234567890123456789',
+      );
+      expect(edited.name, 'builds v2');
+      expect(
+        transport.requests[2].uri.path,
+        endsWith('/webhooks/555555555555555555'),
+      );
+      expect(transport.requests[2].method, 'PATCH');
+
+      await repository.deleteWebhook('555555555555555555');
+      expect(transport.requests[3].method, 'DELETE');
+    });
+
+    test('a webhook payload without a token answers a webhook without one', () {
+      final webhook = DiscordGuildAdminMapper.webhook(const {
+        'id': '555555555555555555',
+        'name': 'builds',
+        'channel_id': '222222222222222222',
+        'type': 1,
+        'token': 'should-not-be-read',
+      }, '111111111111111111');
+      expect(webhook, isNotNull);
+      expect(webhook!.name, 'builds');
+      expect(webhook.type, GuildWebhookType.incoming);
+    });
   });
 
   _bansCases();
@@ -337,6 +458,70 @@ void main() {
         'before': '987654321098765432',
         'action_type': '22',
       });
+    });
+  });
+
+  group('member administration', () {
+    test('loads a member through the per-member route', () async {
+      final transport = _Transport([
+        _json({
+          'roles': ['222222222222222222'],
+          'nick': 'Forge Ada',
+          'communication_disabled_until': '2026-09-14T12:00:00.000Z',
+        }),
+      ]);
+      final profile = await _repository(
+        transport,
+      ).loadMember(guildId: '111111111111111111', userId: '234567890123456789');
+      expect(
+        transport.requests.single.uri.path,
+        endsWith('/guilds/111111111111111111/members/234567890123456789'),
+      );
+      expect(profile.nickname, 'Forge Ada');
+      expect(profile.roleIds, ['222222222222222222']);
+      expect(profile.timeoutUntil, DateTime.utc(2026, 9, 14, 12));
+    });
+
+    test('patches nickname and timeout as separate fields', () async {
+      final transport = _Transport([_json(const {})]);
+      final repository = _repository(transport);
+      final until = DateTime.utc(2026, 9, 14, 12, 30);
+      await repository.updateMember(
+        guildId: '111111111111111111',
+        userId: '234567890123456789',
+        edit: GuildMemberEdit()..timeoutUntil = until,
+      );
+      expect(transport.requests.single.method, 'PATCH');
+      expect(transport.requests.single.json, {
+        'communication_disabled_until': '2026-09-14T12:30:00.000Z',
+      });
+
+      final lift = GuildMemberEdit()..timeoutUntil = null;
+      expect(lift.toJson(), {'communication_disabled_until': null});
+    });
+
+    test('roles go through their own one-role routes', () async {
+      final transport = _Transport([
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+        const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
+      ]);
+      final repository = _repository(transport);
+      await repository.grantMemberRole(
+        guildId: '111111111111111111',
+        userId: '234567890123456789',
+        roleId: '222222222222222222',
+      );
+      await repository.revokeMemberRole(
+        guildId: '111111111111111111',
+        userId: '234567890123456789',
+        roleId: '222222222222222222',
+      );
+      expect(
+        transport.requests[0].uri.path,
+        endsWith('/members/234567890123456789/roles/222222222222222222'),
+      );
+      expect(transport.requests[0].method, 'PUT');
+      expect(transport.requests[1].method, 'DELETE');
     });
   });
 

@@ -79,6 +79,11 @@ final class GuildChannelEdit {
   set userLimit(int value) => _values['user_limit'] = value;
   set parentId(String? value) => _values['parent_id'] = value;
 
+  /// The room's voice region override. Null means automatic, which is a real
+  /// value on this route rather than "leave it alone": the field is sent
+  /// whenever the editor's choice differs from the channel's.
+  set rtcRegion(String? value) => _values['rtc_region'] = value;
+
   /// Slowmode, in seconds. Discord's own control tops out at six hours and the
   /// server rejects anything above it, so the bound is enforced here rather
   /// than letting the request fail.
@@ -91,6 +96,23 @@ final class GuildChannelEdit {
       );
     }
     _values['rate_limit_per_user'] = value;
+  }
+
+  /// Replaces the channel's overwrites wholesale.
+  ///
+  /// The route takes the whole array, never a delta: an edit that sent only
+  /// what changed would silently drop every overwrite it did not mention. An
+  /// empty list is a real request here, "nobody gets in", and is sent as one.
+  set permissionOverwrites(Iterable<DiscordPermissionOverwrite> value) {
+    _values['permission_overwrites'] = [
+      for (final overwrite in value)
+        {
+          'id': overwrite.id,
+          'type': overwrite.kind.discordValue,
+          'allow': DiscordPermissions.encode(overwrite.allow),
+          'deny': DiscordPermissions.encode(overwrite.deny),
+        },
+    ];
   }
 
   Map<String, Object?> toJson() => Map<String, Object?>.unmodifiable(_values);

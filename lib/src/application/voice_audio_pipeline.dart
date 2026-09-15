@@ -24,6 +24,13 @@ import 'voice_pcm_framer.dart';
 /// chain is still long is dropped rather than delayed (a live microphone
 /// cannot afford a queue).
 ///
+/// Echo cancellation and gain control sit at the same place, ahead of the
+/// noise filter: they belong to the machine's own audio layer, which sees
+/// what the speakers are playing while the microphone hears it, and the
+/// filter would rather clean a microphone that is already free of the room
+/// coming back through the speakers. One open enhancer serves both switches,
+/// and turning both off closes it.
+///
 /// Only speech goes out. A frame is sent while the [VoiceActivityGate] hears
 /// the cleaned microphone above the room's noise floor, and for the gate's
 /// hangover after it last did; then the uplink finishes speaking, which is
@@ -34,9 +41,15 @@ final class VoiceAudioPipeline {
     required VoiceMediaService mediaService,
     required VoiceOpusCodecFactory codecFactory,
     Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })?
+    microphoneEnhancerFactory,
   }) : _encoder = codecFactory.createEncoder(),
        _receiver = VoiceAudioReceiver(decoderFactory: codecFactory),
-       _noiseSuppressorFactory = noiseSuppressorFactory {
+       _noiseSuppressorFactory = noiseSuppressorFactory,
+       _microphoneEnhancerFactory = microphoneEnhancerFactory {
     _microphoneSubscription = mediaService.microphonePcm.listen(
       _handleMicrophonePcm,
       onError: _emitError,
@@ -62,6 +75,15 @@ final class VoiceAudioPipeline {
   final VoiceAudioReceiver _receiver;
   final VoicePcmFramer _framer = VoicePcmFramer();
   final Future<VoiceNoiseSuppressor> Function()? _noiseSuppressorFactory;
+
+  /// Opens the machine's echo and gain processing, with the settings as they
+  /// were asked for; null on a build without one.
+  final Future<VoiceMicrophoneEnhancer> Function({
+    required bool echoCancellation,
+    required bool automaticGainControl,
+  })?
+  _microphoneEnhancerFactory;
+
   final StreamController<Object> _errors = StreamController.broadcast();
   late final StreamSubscription<VoicePcmChunk> _microphoneSubscription;
   late final StreamSubscription<Object> _receiverErrorSubscription;
@@ -69,16 +91,108 @@ final class VoiceAudioPipeline {
   VoiceNoiseSuppressor? _noiseSuppressor;
   Future<void>? _noiseSuppressorOpening;
   bool _noiseSuppression = false;
+  VoiceMicrophoneEnhancer? _microphoneEnhancer;
+  Future<void>? _microphoneEnhancerOpening;
+  bool _echoCancellation = false;
+  bool _automaticGainControl = false;
 
   /// The uplink's work, one frame at a time, in microphone order.
   Future<void> _uplink = Future<void>.value();
   int _uplinkBacklog = 0;
   int _uplinkDropped = 0;
+
   bool _enabled = false;
   bool _disposed = false;
   final StreamController<bool> _speaking = StreamController.broadcast();
   final VoiceActivityGate _gate = VoiceActivityGate();
   bool _isSpeaking = false;
+
+  /// Whether the level is learned from the room (null) or chosen by hand.
+  double? get inputSensitivity => _gate.isAutomatic ? null : _gate.threshold;
+
+  /// Whether this build has the machine's echo and gain processing at all.
+  bool get isMicrophoneEnhancementAvailable =>
+      _microphoneEnhancerFactory != null;
+
+  /// Whether the microphone's echo is being removed.
+  ///
+  /// Read from what the pipeline holds rather than what was asked for: an
+  /// enhancer that fails to open turns both switches off with it.
+  bool get isEchoCancellationEnabled => _echoCancellation;
+
+  /// Whether the microphone's level is being kept steady.
+  bool get isAutomaticGainControlEnabled => _automaticGainControl;
+
+  /// Sets the level the microphone has to reach to be sent, or returns to
+  /// the automatic gate with null.
+  void setInputThreshold(double? dbfs) => _gate.setManualThreshold(dbfs);
+
+  /// Switches the machine's echo and gain processing. Completes when the
+  /// enhancer is open, or at once when neither is wanted or it already is.
+  ///
+  /// Both settings ride one enhancer: the machine's echo and gain stages
+  /// share a device and a clock, so one open path serves both switches and
+  /// reopening for each would cost the full setup twice. Turning both off
+  /// closes it.
+  Future<void> setMicrophoneEnhancement({
+    required bool echoCancellation,
+    required bool automaticGainControl,
+  }) async {
+    final factory = _microphoneEnhancerFactory;
+    if (factory == null || _disposed) return;
+    final wanted = echoCancellation || automaticGainControl;
+    _echoCancellation = wanted && echoCancellation;
+    _automaticGainControl = wanted && automaticGainControl;
+    // Enhanced and raw frames have different floors.
+    _gate.reset();
+    if (!wanted) {
+      // Both switches off: the open path closes. A path that stayed open
+      // would keep a loopback of the render endpoint and the machine's
+      // voice stages running for a microphone nobody asked to enhance.
+      _microphoneEnhancer?.dispose();
+      _microphoneEnhancer = null;
+      return;
+    }
+    if (_microphoneEnhancer != null) return;
+    if (_microphoneEnhancerOpening case final opening?) return opening;
+    final opening = _microphoneEnhancerOpening = _openMicrophoneEnhancer(
+      factory,
+      echoCancellation: echoCancellation,
+      automaticGainControl: automaticGainControl,
+    );
+    try {
+      await opening;
+    } finally {
+      _microphoneEnhancerOpening = null;
+    }
+  }
+
+  Future<void> _openMicrophoneEnhancer(
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })
+    factory, {
+    required bool echoCancellation,
+    required bool automaticGainControl,
+  }) async {
+    try {
+      final enhancer = await factory(
+        echoCancellation: echoCancellation,
+        automaticGainControl: automaticGainControl,
+      );
+      // Both switched off again, or torn down, while it was opening.
+      if (_disposed || (!_echoCancellation && !_automaticGainControl)) {
+        enhancer.dispose();
+        return;
+      }
+      _microphoneEnhancer = enhancer;
+    } on Object catch (error) {
+      _echoCancellation = false;
+      _automaticGainControl = false;
+      _emitError(error);
+    }
+  }
 
   Stream<VoiceRemotePcmFrame> get remotePcm => _receiver.remotePcm;
   Stream<Object> get errors => _errors.stream;
@@ -187,13 +301,21 @@ final class VoiceAudioPipeline {
     }
   }
 
-  /// One frame's whole turn: cleaned, gated, encoded, sent. Never throws, so
-  /// one bad frame cannot break the chain behind it.
+  /// One frame's whole turn: enhanced, cleaned, gated, encoded, sent. Never
+  /// throws, so one bad frame cannot break the chain behind it.
+  ///
+  /// The enhance and clean steps only await when there is real work: an
+  /// awaited call that does nothing still costs a turn of the event loop
+  /// per frame, and a microphone that arrives faster than the empty turns
+  /// drain would be dropped for no reason.
   Future<void> _sendUplinkFrame(Int16List frame) async {
     final transport = _transport;
     if (_disposed || transport == null) return;
     try {
-      await _suppressNoise(frame);
+      final enhancement = _enhancement(frame);
+      if (enhancement != null) await enhancement;
+      final cleaning = _suppression(frame);
+      if (cleaning != null) await cleaning;
       final speech = _gate.accept(_rmsDbfs(frame));
       if (speech) {
         _setSpeaking(true);
@@ -231,7 +353,8 @@ final class VoiceAudioPipeline {
     if (!_speaking.isClosed) _speaking.add(value);
   }
 
-  /// The frame's loudness in dB relative to full scale; silence is -infinity.
+  /// The frame's loudness in dB relative to full scale; silence is
+  /// -infinity.
   static double _rmsDbfs(Int16List frame) {
     var energy = 0.0;
     for (final sample in frame) {
@@ -241,22 +364,49 @@ final class VoiceAudioPipeline {
     return 20 * math.log(rms) / math.ln10;
   }
 
-  /// Cleans [frame] while a suppressor is open and switched on.
+  /// Enhances [frame] while an enhancer is open and either switch is on,
+  /// or answers null when there is nothing to do.
   ///
-  /// A suppressor that throws is dropped and the switch turned off: the frame
-  /// goes out as captured, the failure is reported once, and switching on
-  /// again opens a fresh one.
-  Future<void> _suppressNoise(Int16List frame) async {
-    final suppressor = _noiseSuppressor;
-    if (!_noiseSuppression || suppressor == null) return;
-    try {
-      await suppressor.process(frame, channels: _framer.channels);
-    } on Object catch (error) {
-      _noiseSuppression = false;
-      _noiseSuppressor = null;
-      suppressor.dispose();
-      _emitError(error);
+  /// An enhancer that throws is dropped and both switches turned off: the
+  /// frame goes out as captured, the failure is reported once, and
+  /// switching on again opens a fresh one.
+  Future<void>? _enhancement(Int16List frame) {
+    final enhancer = _microphoneEnhancer;
+    if (enhancer == null || (!_echoCancellation && !_automaticGainControl)) {
+      return null;
     }
+    return () async {
+      try {
+        await enhancer.process(frame, channels: _framer.channels);
+      } on Object catch (error) {
+        _echoCancellation = false;
+        _automaticGainControl = false;
+        _microphoneEnhancer = null;
+        enhancer.dispose();
+        _emitError(error);
+      }
+    }();
+  }
+
+  /// Cleans [frame] while a suppressor is open and switched on, or answers
+  /// null when there is nothing to do.
+  ///
+  /// A suppressor that throws is dropped and the switch turned off: the
+  /// frame goes out as captured, the failure is reported once, and
+  /// switching on again opens a fresh one.
+  Future<void>? _suppression(Int16List frame) {
+    final suppressor = _noiseSuppressor;
+    if (!_noiseSuppression || suppressor == null) return null;
+    return () async {
+      try {
+        await suppressor.process(frame, channels: _framer.channels);
+      } on Object catch (error) {
+        _noiseSuppression = false;
+        _noiseSuppressor = null;
+        suppressor.dispose();
+        _emitError(error);
+      }
+    }();
   }
 
   /// Sends the sound still inside the model when the uplink goes quiet.
@@ -279,7 +429,10 @@ final class VoiceAudioPipeline {
     try {
       for (var i = 0; i < _flushFrames; i++) {
         final silence = Int16List(_framer.samplesPerFrame);
-        await _suppressNoise(silence);
+        final enhancement = _enhancement(silence);
+        if (enhancement != null) await enhancement;
+        final cleaning = _suppression(silence);
+        if (cleaning != null) await cleaning;
         transport.sendOpusFrame(_encoder.encode(silence));
       }
     } on Object catch (error) {
@@ -301,6 +454,8 @@ final class VoiceAudioPipeline {
     _encoder.dispose();
     _noiseSuppressor?.dispose();
     _noiseSuppressor = null;
+    _microphoneEnhancer?.dispose();
+    _microphoneEnhancer = null;
     await _speaking.close();
     await _errors.close();
   }

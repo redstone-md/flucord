@@ -87,10 +87,7 @@ class _KeybindRow extends StatelessWidget {
               if (action.holdToUse)
                 Text(
                   'Held, not toggled',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.surfaces.muted,
-                  ),
+                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
                 ),
             ],
           ),
@@ -102,9 +99,7 @@ class _KeybindRow extends StatelessWidget {
             key: ValueKey('keybind-record-${action.code}'),
             onPressed: isRecording ? onCancel : onRecord,
             child: Text(
-              isRecording
-                  ? 'Press any key…'
-                  : binding?.label ?? 'Not bound',
+              isRecording ? 'Press any key…' : binding?.label ?? 'Not bound',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

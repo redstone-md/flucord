@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flucord/src/domain/call_sounds.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -92,5 +93,21 @@ void main() {
       File('pubspec.yaml').readAsStringSync(),
       contains('app_icon_32.png'),
     );
+  });
+
+  test('every sound a call names is bundled in the assets list', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+
+    for (final asset in [
+      const CallSounds().ring,
+      const CallSounds().accept,
+      const CallSounds().hangUp,
+    ]) {
+      // The asset string carries the scheme the playback layer routes by;
+      // the bundling list names the file beneath it.
+      final path = asset.replaceFirst('asset://', '');
+      expect(pubspec, contains(path));
+      expect(File(path).existsSync(), isTrue, reason: '$path is on disk');
+    }
   });
 }

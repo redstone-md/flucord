@@ -3,13 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/multi_factor_auth_controller.dart';
+import '../../domain/multi_factor_auth.dart';
 import '../../theme/flucord_theme.dart';
 import 'user_settings_controls.dart';
 
-/// Two-factor authentication: add an authenticator, or take one off.
+/// Two-factor authentication: add an authenticator or a security key, or
+/// take one off.
 ///
 /// The secret is shown once, while it is being added, and never again. If it
-/// is lost before the first code works, the enrolment is started over — which
+/// is lost before the first code works, the enrolment is started over, which
 /// is safer than keeping a credential around to show a second time.
 class MfaSettingsSection extends StatefulWidget {
   const MfaSettingsSection({required this.controller, super.key});
@@ -27,24 +29,42 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
   /// the field is cleared the moment the request that needed it is sent.
   final TextEditingController _password = TextEditingController();
 
+  /// The name the new security key gets. Nothing secret about it: it is the
+  /// label the key is listed by.
+  final TextEditingController _securityKeyName = TextEditingController();
+
+  /// The password a security key needs, kept apart from the other one because
+  /// the two blocks ask at different times.
+  final TextEditingController _securityKeyPassword = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    _code.addListener(_onCodeChanged);
-    _password.addListener(_onCodeChanged);
+    _code.addListener(_onFieldChanged);
+    _password.addListener(_onFieldChanged);
+    _securityKeyName.addListener(_onFieldChanged);
+    _securityKeyPassword.addListener(_onFieldChanged);
+    unawaited(widget.controller.loadSecurityKeys());
   }
 
-  void _onCodeChanged() {
+  void _onFieldChanged() {
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _code
-      ..removeListener(_onCodeChanged)
+      ..removeListener(_onFieldChanged)
       ..dispose();
     _password
-      ..removeListener(_onCodeChanged)
+      ..removeListener(_onFieldChanged)
+      ..clear()
+      ..dispose();
+    _securityKeyName
+      ..removeListener(_onFieldChanged)
+      ..dispose();
+    _securityKeyPassword
+      ..removeListener(_onFieldChanged)
       ..clear()
       ..dispose();
     // The secret and the backup codes do not outlive the page that showed
@@ -64,7 +84,9 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
         children: [
           const SettingsSectionHeader(
             title: 'Two-Factor Authentication',
-            subtitle: 'A code from an app, on top of the password.',
+            subtitle:
+                'A second factor on top of the password: an app, a security '
+                'key, or a text message.',
           ),
           if (controller.error != null)
             Padding(
@@ -118,6 +140,8 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
           : () => unawaited(_disable(controller)),
       child: const Text('Turn two-factor off'),
     ),
+    const SizedBox(height: 20),
+    ..._securityKeys(context, controller),
     const SizedBox(height: 20),
     Text('Text messages', style: Theme.of(context).textTheme.titleSmall),
     const SizedBox(height: 4),
@@ -181,6 +205,143 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
   bool get _canReveal =>
       _password.text.isNotEmpty && _code.text.trim().length >= 6;
 
+  /// The security keys group: what is registered, and adding one.
+  ///
+  /// Windows makes the key itself, so there is nothing to type but a name
+  /// and the password that proves the ask is really this account's.
+  List<Widget> _securityKeys(
+    BuildContext context,
+    MultiFactorAuthController controller,
+  ) {
+    if (!controller.isSecurityKeyCeremonyAvailable) {
+      return [
+        Text('Security keys', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'This machine has no platform authenticator Flucord can use for a '
+          'security key.',
+          key: const ValueKey('mfa-security-key-unavailable'),
+          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        ),
+      ];
+    }
+    return [
+      Text('Security keys', style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 4),
+      Text(
+        'Windows makes a key that stays on this machine and proves it is you '
+        'with your face, fingerprint, or PIN.',
+        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+      ),
+      const SizedBox(height: 8),
+      if (controller.securityKeyRefusal case final refusal?)
+        Padding(
+          key: const ValueKey('mfa-security-key-refusal'),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            switch (refusal) {
+              MfaSecurityKeyRefusal.passwordRefused =>
+                'That password was not accepted.',
+              MfaSecurityKeyRefusal.keyDeclined =>
+                'The prompt was closed before a key was made.',
+              MfaSecurityKeyRefusal.registrationRefused =>
+                'Discord would not take the key this machine made.',
+              MfaSecurityKeyRefusal.removalRefused =>
+                'Discord refused. Check the password; the key may already '
+                    'be gone.',
+            },
+            style: TextStyle(
+              fontSize: 12,
+              color: refusal == MfaSecurityKeyRefusal.keyDeclined
+                  ? context.surfaces.muted
+                  : Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ),
+      if (controller.securityKeyStage == MfaSecurityKeyStage.prompting)
+        const Padding(
+          key: ValueKey('mfa-security-key-prompting'),
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text('Windows is asking you to prove it is you.'),
+        )
+      else if (controller.securityKeyStage == MfaSecurityKeyStage.added) ...[
+        Text(
+          'Added ${controller.addedSecurityKey?.name ?? 'the key'}. It '
+          'answers for this account now.',
+          key: const ValueKey('mfa-security-key-added'),
+          style: const TextStyle(fontSize: 12, color: FlucordColors.success),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          key: const ValueKey('mfa-security-key-done'),
+          onPressed: controller.dismissAddedSecurityKey,
+          child: const Text('Done'),
+        ),
+      ] else ...[
+        TextField(
+          key: const ValueKey('mfa-security-key-name'),
+          controller: _securityKeyName,
+          decoration: const InputDecoration(
+            isDense: true,
+            labelText: 'Name this key',
+            helperText: 'Shown in this list only.',
+          ),
+        ),
+        const SizedBox(height: 8),
+        _PasswordField(
+          fieldKey: const ValueKey('mfa-security-key-password'),
+          controller: _securityKeyPassword,
+        ),
+        const SizedBox(height: 8),
+        FilledButton.tonal(
+          key: const ValueKey('mfa-security-key-add'),
+          onPressed:
+              controller.isBusy ||
+                  _securityKeyName.text.trim().isEmpty ||
+                  _securityKeyPassword.text.isEmpty
+              ? null
+              : () => unawaited(_addSecurityKey(controller)),
+          child: const Text('Add a security key'),
+        ),
+      ],
+      const SizedBox(height: 8),
+      for (final key in controller.securityKeys)
+        _SecurityKeyRow(
+          key: ValueKey('mfa-security-key-${key.id}'),
+          securityKey: key,
+          enabled: !controller.isBusy && _securityKeyPassword.text.isNotEmpty,
+          onRemove: () => unawaited(_removeSecurityKey(controller, key)),
+        ),
+      if (controller.securityKeys.isEmpty)
+        Text(
+          'No security keys are on this account yet.',
+          key: const ValueKey('mfa-security-key-none'),
+          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        ),
+    ];
+  }
+
+  Future<void> _addSecurityKey(MultiFactorAuthController controller) async {
+    final name = _securityKeyName.text;
+    final password = _securityKeyPassword.text;
+    // Cleared before the await, so the password is not sitting in a field
+    // while Windows asks its question.
+    _securityKeyPassword.clear();
+    await controller.beginSecurityKeyEnrolment(name: name, password: password);
+    if (controller.securityKeyStage == MfaSecurityKeyStage.added) {
+      _securityKeyName.clear();
+    }
+  }
+
+  Future<void> _removeSecurityKey(
+    MultiFactorAuthController controller,
+    SecurityKey securityKey,
+  ) async {
+    final password = _securityKeyPassword.text;
+    _securityKeyPassword.clear();
+    await controller.removeSecurityKey(securityKey, password);
+  }
+
   List<Widget> _awaiting(
     BuildContext context,
     MultiFactorAuthController controller,
@@ -238,7 +399,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
     MultiFactorAuthController controller,
   ) => [
     const Text(
-      'Two-factor authentication is on. Write these codes down — they are '
+      'Two-factor authentication is on. Write these codes down; they are '
       'the way back in if the app is lost.',
       key: ValueKey('mfa-enrolled'),
     ),
@@ -301,13 +462,17 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
 }
 
 class _PasswordField extends StatelessWidget {
-  const _PasswordField({required this.controller});
+  const _PasswordField({this.fieldKey, required this.controller});
+
+  /// Null keeps the shared key the rest of this page has always used; the
+  /// security-key block names its own so the two fields can be told apart.
+  final Key? fieldKey;
 
   final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) => TextField(
-    key: const ValueKey('mfa-password'),
+    key: fieldKey ?? const ValueKey('mfa-password'),
     controller: controller,
     obscureText: true,
     decoration: const InputDecoration(
@@ -316,6 +481,52 @@ class _PasswordField extends StatelessWidget {
       helperText: 'Used for this one request and then forgotten.',
     ),
   );
+}
+
+/// One registered security key, with its removal next to it.
+class _SecurityKeyRow extends StatelessWidget {
+  const _SecurityKeyRow({
+    super.key,
+    required this.securityKey,
+    required this.enabled,
+    required this.onRemove,
+  });
+
+  final SecurityKey securityKey;
+  final bool enabled;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final created = securityKey.createdAt;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              securityKey.name,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (created != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                'added ${created.year}-${created.month.toString().padLeft(2, '0')}-${created.day.toString().padLeft(2, '0')}',
+                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              ),
+            ),
+          TextButton(
+            key: ValueKey('mfa-security-key-remove-${securityKey.id}'),
+            onPressed: enabled ? onRemove : null,
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CodeField extends StatelessWidget {

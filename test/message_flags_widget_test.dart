@@ -27,8 +27,8 @@ void main() {
               channelId: 'channel-1',
               channelName: 'native',
               spaceName: 'Forge',
-              customEmojis: const [],
-              guildStickers: const [],
+              emojiSections: const [],
+              stickerSections: const [],
               isSending: false,
               onSend: (_, _, _, suppressNotifications) async {
                 sentSilently = suppressNotifications;
@@ -65,6 +65,87 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a silent message says why nothing notified', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness(silent: true));
+
+    expect(find.byKey(const ValueKey('silent-message-marker')), findsOneWidget);
+    expect(find.byTooltip('Silent message'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('text-to-speech-message-marker')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a spoken-aloud message says so beside its name', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness(spoken: true));
+
+    expect(
+      find.byKey(const ValueKey('text-to-speech-message-marker')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('silent-message-marker')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an ordinary message carries neither marker', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness());
+
+    expect(find.byKey(const ValueKey('silent-message-marker')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('text-to-speech-message-marker')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a spoiler attachment arrives covered, and reveals on a click', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness(spoilerAttachment: true));
+
+    expect(
+      find.byKey(const ValueKey('attachment-spoiler-cover')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('SPOILER_notes.txt'),
+      findsNothing,
+      reason: 'the name stays hidden until the reader asks',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('attachment-spoiler-cover')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('SPOILER_notes.txt'),
+      findsOneWidget,
+      reason: 'the tag is the stored filename, shown as the server has it',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an ordinary attachment arrives uncovered', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const _MessageFlagHarness(plainAttachment: true));
+
+    expect(
+      find.byKey(const ValueKey('attachment-spoiler-cover')),
+      findsNothing,
+    );
+    expect(find.text('notes.txt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('suppresses and restores embeds from the message action bar', (
     tester,
   ) async {
@@ -94,7 +175,17 @@ void main() {
 }
 
 class _MessageFlagHarness extends StatefulWidget {
-  const _MessageFlagHarness();
+  const _MessageFlagHarness({
+    this.silent = false,
+    this.spoken = false,
+    this.spoilerAttachment = false,
+    this.plainAttachment = false,
+  });
+
+  final bool silent;
+  final bool spoken;
+  final bool spoilerAttachment;
+  final bool plainAttachment;
 
   @override
   State<_MessageFlagHarness> createState() => _MessageFlagHarnessState();
@@ -109,6 +200,35 @@ class _MessageFlagHarnessState extends State<_MessageFlagHarness> {
     sentAt: DateTime.utc(2026, 7, 24, 8),
     embeds: [MessageEmbed(type: 'rich', title: 'Preview title')],
   );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.silent || widget.spoken) {
+      _message = _message.copyWith(
+        flags: widget.silent
+            ? _message.flags | DiscordMessageFlag.suppressNotifications.bit
+            : _message.flags,
+        isTextToSpeech: widget.spoken,
+      );
+    }
+    if (widget.spoilerAttachment || widget.plainAttachment) {
+      _message = _message.copyWith(
+        body: '',
+        embeds: const [],
+        attachments: [
+          MessageAttachment(
+            id: 'attachment-1',
+            fileName: widget.spoilerAttachment
+                ? 'SPOILER_notes.txt'
+                : 'notes.txt',
+            url: 'https://cdn.example.com/notes.txt',
+            size: 1024,
+          ),
+        ],
+      );
+    }
+  }
 
   ChatWorkspace get _workspace => ChatWorkspace(
     spaces: const [_space],

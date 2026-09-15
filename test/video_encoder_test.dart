@@ -7,15 +7,19 @@ void main() {
   group('settings', () {
     test('rejects anything the encoder could not act on', () {
       expect(const VideoEncoderSettings(bitrate: 2500000).isValid, isTrue);
-      expect(const VideoEncoderSettings(bitrate: 2500000, width: 0).isValid,
-          isFalse);
+      expect(
+        const VideoEncoderSettings(bitrate: 2500000, width: 0).isValid,
+        isFalse,
+      );
       expect(
         const VideoEncoderSettings(bitrate: 2500000, height: -1).isValid,
         isFalse,
       );
       expect(
-        const VideoEncoderSettings(bitrate: 2500000, framesPerSecond: 0)
-            .isValid,
+        const VideoEncoderSettings(
+          bitrate: 2500000,
+          framesPerSecond: 0,
+        ).isValid,
         isFalse,
       );
       expect(const VideoEncoderSettings(bitrate: 0).isValid, isFalse);

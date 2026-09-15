@@ -87,11 +87,71 @@ abstract interface class GuildManagementRepository {
     String? reason,
   });
 
+  /// The member as the server knows them right now, for the member popover.
+  Future<GuildMemberProfile> loadMember({
+    required String guildId,
+    required String userId,
+  });
+
+  /// Applies a partial member patch: nickname or timeout.
+  Future<GuildMemberProfile> updateMember({
+    required String guildId,
+    required String userId,
+    required GuildMemberEdit edit,
+  });
+
+  /// Adds one role to a member, the single-role route rather than the whole
+  /// role list, so two moderators acting at once cannot erase each other.
+  Future<void> grantMemberRole({
+    required String guildId,
+    required String userId,
+    required String roleId,
+    String? reason,
+  });
+
+  /// Takes one role away. Same reasoning as [grantMemberRole].
+  Future<void> revokeMemberRole({
+    required String guildId,
+    required String userId,
+    required String roleId,
+    String? reason,
+  });
+
   Future<void> kickMember({
     required String guildId,
     required String userId,
     String? reason,
   });
+
+  /// Resolves an invite code to what the join surface shows before joining.
+  ///
+  /// [code] is the code alone: the URL forms are the caller's to parse, at the
+  /// deep-link surface that already owns link shapes.
+  ///
+  /// Invalid and expired invites refuse with [GuildAccessException]; an invite
+  /// for a server the account is already in still previews, because "you are
+  /// already in this server" is an answer the join surface needs before the
+  /// join is attempted.
+  Future<InvitePreview> previewInvite(String code);
+
+  /// Joins the server an invite names, hydrated for the rail.
+  ///
+  /// The answer carries the space, its channels, categories, roles, and this
+  /// account's own membership: joining must fill the rail and the channel
+  /// tree without a restart, so the route answers with everything a fresh
+  /// member needs to look around. Invalid, expired, and already-joined
+  /// invites refuse with [GuildAccessException].
+  Future<JoinedGuild> joinGuild(String code);
+
+  /// Creates a server named [name], owned by this account, hydrated for the
+  /// rail exactly as a join would be.
+  Future<JoinedGuild> createGuild({required String name});
+
+  /// Leaves [guildId].
+  ///
+  /// Owners cannot leave their own server without transferring it or deleting
+  /// it; that refusal arrives as [GuildAccessException].
+  Future<void> leaveGuild(String guildId);
 
   Future<List<GuildInvite>> loadGuildInvites(String guildId);
 
@@ -101,6 +161,21 @@ abstract interface class GuildManagementRepository {
   });
 
   Future<void> revokeInvite(String code);
+
+  /// The guild's webhooks, in the order the server lists them.
+  Future<List<GuildWebhook>> loadWebhooks(String guildId);
+
+  Future<GuildWebhook> createWebhook({
+    required String guildId,
+    required GuildWebhookDraft draft,
+  });
+
+  Future<GuildWebhook> updateWebhook({
+    required String webhookId,
+    required GuildWebhookEdit edit,
+  });
+
+  Future<void> deleteWebhook(String webhookId);
 
   Future<AuditLogPage> loadAuditLog({
     required String guildId,

@@ -54,6 +54,11 @@ extension DiscordMessageMapper on DiscordMapper {
     final flags = payload.containsKey('flags')
         ? payload['flags'] as int? ?? 0
         : fallback?.flags ?? 0;
+    // `tts` is a field of its own on the wire, so its absence on a partial
+    // update means "unchanged", not "no longer spoken aloud".
+    final isTextToSpeech = payload.containsKey('tts')
+        ? payload['tts'] == true
+        : fallback?.isTextToSpeech ?? false;
     // An edit that does not mention components leaves the ones already shown
     // in place; a payload that names them replaces the set, empty included,
     // because that is how an application takes its buttons away.
@@ -93,6 +98,7 @@ extension DiscordMessageMapper on DiscordMapper {
       snapshots: snapshots,
       type: type,
       flags: flags,
+      isTextToSpeech: isTextToSpeech,
     );
   }
 }

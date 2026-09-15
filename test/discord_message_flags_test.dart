@@ -64,6 +64,55 @@ void main() {
     },
   );
 
+  test('maps the spoken-aloud flag off the wire both ways', () {
+    final mapper = DiscordMapper();
+    final spoken = mapper.message({
+      'id': 'tts-1',
+      'channel_id': 'channel-1',
+      'author': {'id': 'user-1'},
+      'content': 'The release is out.',
+      'timestamp': '2026-07-24T08:00:00Z',
+      'tts': true,
+    });
+
+    expect(spoken.isTextToSpeech, isTrue);
+
+    // A partial edit that says nothing about tts keeps what the message was.
+    final edited = mapper.message({
+      'id': 'tts-1',
+      'channel_id': 'channel-1',
+      'content': 'Edited.',
+    }, fallback: spoken);
+    expect(edited.isTextToSpeech, isTrue);
+
+    final plain = mapper.message({
+      'id': 'tts-2',
+      'channel_id': 'channel-1',
+      'author': {'id': 'user-1'},
+      'content': 'Ordinary text.',
+      'timestamp': '2026-07-24T08:00:00Z',
+    });
+    expect(plain.isTextToSpeech, isFalse);
+  });
+
+  test('sends the spoken-aloud flag in the exact JSON payload', () async {
+    final transport = _RecordingTransport();
+    final client = DiscordApiClient(botToken: 'token', transport: transport);
+
+    await client.createMessage(
+      channelId: 'channel-1',
+      content: 'The release is out.',
+      nonce: 'nonce-1',
+      enforceNonce: true,
+      textToSpeech: true,
+    );
+
+    final request = transport.requests.single;
+    final payload =
+        jsonDecode(utf8.decode(request.body!)) as Map<String, Object?>;
+    expect(payload['tts'], isTrue);
+  });
+
   test('edits only the documented suppress-embed flag', () async {
     final transport = _RecordingTransport();
     final client = DiscordApiClient(botToken: 'token', transport: transport);

@@ -86,17 +86,77 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('drops embed media but keeps the embed itself', (tester) async {
+  testWidgets('keeps an animated emoji on its first frame when told to', (
+    tester,
+  ) async {
     final controller = await _controller(
       const UserSettings(
-        messageDisplay: MessageDisplayPreferences(inlineEmbedMedia: false),
+        messageDisplay: MessageDisplayPreferences(animateEmoji: false),
       ),
     );
-    await _pumpMessage(tester, controller: controller);
+    await _pumpMessage(tester, controller: controller, message: _emojiMessage);
 
-    expect(find.byType(MessageEmbedView), findsOneWidget);
-    expect(find.text('Deploy complete'), findsOneWidget);
-    expect(find.byKey(const ValueKey('embed-image')), findsNothing);
+    final image = tester.widget<Image>(
+      find.descendant(
+        of: find.byKey(const ValueKey('discord-emoji-333333')),
+        matching: find.byType(Image),
+      ),
+    );
+    // The webp form is the animated emoji's first frame.
+    expect((image.image as NetworkImage).url, contains('.webp'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('plays an animated emoji when the account allows it', (
+    tester,
+  ) async {
+    final controller = await _controller(
+      const UserSettings(
+        messageDisplay: MessageDisplayPreferences(animateEmoji: true),
+      ),
+    );
+    await _pumpMessage(tester, controller: controller, message: _emojiMessage);
+
+    final image = tester.widget<Image>(
+      find.descendant(
+        of: find.byKey(const ValueKey('discord-emoji-333333')),
+        matching: find.byType(Image),
+      ),
+    );
+    expect((image.image as NetworkImage).url, contains('.gif'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps a GIF embed on its first frame when autoplay is off', (
+    tester,
+  ) async {
+    final controller = await _controller(
+      const UserSettings(
+        messageDisplay: MessageDisplayPreferences(gifAutoPlay: false),
+      ),
+    );
+    await _pumpMessage(tester, controller: controller, message: _gifMessage);
+
+    final image = tester.widget<Image>(
+      find.byKey(const ValueKey('embed-image')),
+    );
+    expect((image.image as NetworkImage).url, endsWith('format=png'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('plays a GIF embed when autoplay is on', (tester) async {
+    final controller = await _controller(
+      const UserSettings(
+        messageDisplay: MessageDisplayPreferences(gifAutoPlay: true),
+      ),
+    );
+    await _pumpMessage(tester, controller: controller, message: _gifMessage);
+
+    final image = tester.widget<Image>(
+      find.byKey(const ValueKey('embed-image')),
+    );
+    expect((image.image as NetworkImage).url, isNot(contains('format=png')));
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -110,11 +170,12 @@ Future<UserSettingsController> _controller(UserSettings settings) async {
 Future<void> _pumpMessage(
   WidgetTester tester, {
   required UserSettingsController? controller,
+  ChatMessage? message,
 }) async {
   await tester.binding.setSurfaceSize(const Size(820, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final item = MessageItem(
-    message: _message,
+    message: message ?? _message,
     member: _member,
     workspace: _workspace,
     grouped: false,
@@ -207,6 +268,38 @@ final _message = ChatMessage(
       description: 'Windows package is ready.',
       image: const MessageEmbedMedia(
         url: 'https://invalid.example/image.png',
+        width: 1200,
+        height: 630,
+      ),
+    ),
+  ],
+);
+
+/// A message whose body carries a custom emoji the sender's client reported
+/// as animated, the form the timeline is asked to draw.
+final _emojiMessage = ChatMessage(
+  id: 'message-2',
+  channelId: 'channel-1',
+  authorId: 'member-1',
+  body: 'party <a:duck:333333> time',
+  sentAt: DateTime(2026, 7, 23, 3, 47),
+);
+
+/// A message whose embed picture is a moving one behind Discord's media
+/// proxy, which serves a still frame when asked for a png.
+final _gifMessage = ChatMessage(
+  id: 'message-3',
+  channelId: 'channel-1',
+  authorId: 'member-1',
+  body: 'look at it go',
+  sentAt: DateTime(2026, 7, 23, 3, 47),
+  embeds: [
+    MessageEmbed(
+      type: 'rich',
+      title: 'Deploy complete',
+      image: const MessageEmbedMedia(
+        url: 'https://cdn.discordapp.com/attachments/1/cat.gif',
+        proxyUrl: 'https://media.discordapp.net/attachments/1/cat.gif',
         width: 1200,
         height: 630,
       ),

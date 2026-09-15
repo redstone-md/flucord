@@ -6,6 +6,7 @@ import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/permission_overwrite.dart';
 import 'package:flucord/src/domain/workspace_permissions.dart';
 
 import 'support/guild_settings_fixtures.dart';

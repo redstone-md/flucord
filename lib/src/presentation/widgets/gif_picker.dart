@@ -313,8 +313,9 @@ class _TileFrame extends StatelessWidget {
             image,
             fit: BoxFit.cover,
             excludeFromSemantics: true,
-            errorBuilder: (_, _, _) =>
-                const Center(child: Icon(Icons.broken_image_outlined, size: 18)),
+            errorBuilder: (_, _, _) => const Center(
+              child: Icon(Icons.broken_image_outlined, size: 18),
+            ),
           ),
         ),
         if (star case final Widget star)

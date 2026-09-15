@@ -13,6 +13,7 @@ import 'attachment_download_button.dart';
 import 'image_attachment_viewer.dart';
 import 'native_inline_video_player.dart';
 import 'native_voice_message_player.dart';
+import 'user_settings_scope.dart';
 
 class MessageAttachmentView extends StatefulWidget {
   const MessageAttachmentView({
@@ -93,6 +94,15 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
 
   @override
   Widget build(BuildContext context) {
+    // A spoiler arrives as the name alone, so it is covered until the reader
+    // asks to see it, the same reveal the message text's spoilers use.
+    if (_attachment.isSpoiler) {
+      return _SpoilerAttachment(attachment: _attachment, child: _revealed());
+    }
+    return _revealed();
+  }
+
+  Widget _revealed() {
     late final Widget content;
     // With inline media off every attachment falls through to the file row.
     // The attachment is still there; only its preview is suppressed.
@@ -170,6 +180,69 @@ class _MessageAttachmentViewState extends State<MessageAttachmentView> {
   }
 }
 
+/// One attachment the sender tagged as a spoiler, covered until the reader
+/// asks to see it.
+///
+/// The tag is the filename prefix Discord's convention puts there, so this
+/// cover is the whole difference between a spoiler and an ordinary
+/// attachment: underneath it, the attachment renders exactly as it always
+/// did.
+class _SpoilerAttachment extends StatefulWidget {
+  const _SpoilerAttachment({required this.attachment, required this.child});
+
+  final MessageAttachment attachment;
+  final Widget child;
+
+  @override
+  State<_SpoilerAttachment> createState() => _SpoilerAttachmentState();
+}
+
+class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) => _revealed
+      ? widget.child
+      : Semantics(
+          button: true,
+          label: 'Reveal spoiler',
+          child: InkWell(
+            key: const ValueKey('attachment-spoiler-cover'),
+            onTap: () => setState(() => _revealed = true),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              width: 210,
+              height: 58,
+              decoration: BoxDecoration(
+                color: context.surfaces.muted,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.visibility_off_outlined,
+                    size: 18,
+                    color: context.surfaces.canvas,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Spoiler',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.surfaces.canvas,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+}
+
 /// Where preview bytes live between runs.
 ///
 /// Bounded by how many previews are kept rather than by the space they take,
@@ -226,7 +299,15 @@ ImageProvider _previewImage(
   final height = (box.height * scale).round();
   return ResizeImage(
     CachedNetworkImageProvider(
-      _previewUrl(attachment, width: width, height: height),
+      // The account's autoplay answer, read here so the flag from any
+      // device redraws the preview. A GIF the account keeps still is asked
+      // for as a png, which is the proxy's first frame.
+      _previewUrl(
+        attachment,
+        width: width,
+        height: height,
+        playsGifs: UserSettingsScope.displayOf(context).playsGifs,
+      ),
       cacheManager: _PreviewCache.instance,
     ),
     width: width,
@@ -239,16 +320,35 @@ String _previewUrl(
   MessageAttachment attachment, {
   required int width,
   required int height,
+  required bool playsGifs,
 }) {
   final proxy = Uri.tryParse(attachment.proxyUrl ?? '');
-  if (proxy == null || !proxy.hasAuthority) return attachment.url;
-  return proxy
+  if (proxy == null || !proxy.hasAuthority) {
+    return playsGifs || !_looksLikeGif(attachment)
+        ? attachment.url
+        : _stillFrameOf(attachment.url);
+  }
+  final query = {
+    ...proxy.queryParameters,
+    'width': '$width',
+    'height': '$height',
+    if (!playsGifs && _looksLikeGif(attachment)) 'format': 'png',
+  };
+  return proxy.replace(queryParameters: query).toString();
+}
+
+/// Whether the attachment is a moving picture, judged from the filename the
+/// sender's client reported. The proxy honours the extension it is given.
+bool _looksLikeGif(MessageAttachment attachment) =>
+    attachment.fileName.toLowerCase().endsWith('.gif');
+
+/// The first frame of a cdn GIF, which the cdn serves as the webp form.
+String _stillFrameOf(String url) {
+  final parsed = Uri.tryParse(url);
+  if (parsed == null || !parsed.path.endsWith('.gif')) return url;
+  return parsed
       .replace(
-        queryParameters: {
-          ...proxy.queryParameters,
-          'width': '$width',
-          'height': '$height',
-        },
+        path: parsed.path.replaceRange(parsed.path.length - 4, null, '.webp'),
       )
       .toString();
 }

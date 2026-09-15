@@ -68,9 +68,22 @@ extension DiscordChannelMapper on DiscordMapper {
       permissionOverwrites: DiscordPermissionOverwrite.mapFromJson(
         payload['permission_overwrites'],
       ),
+      rateLimitPerUser: payload['rate_limit_per_user'] as int? ?? 0,
+      isAgeGated: payload['nsfw'] == true,
+      bitrate: payload['bitrate'] as int?,
+      userLimit: payload['user_limit'] as int?,
+      rtcRegion: _textOrAuto(payload['rtc_region']),
       unread: false,
       lastMessageId: _lastMessageId(payload),
     );
+  }
+
+  /// `rtc_region` is either a region id or the literal `null` meaning
+  /// automatic, and Discord's payloads sometimes spell the automatic choice
+  /// as the string "auto". Both spellings read the same here.
+  static String? _textOrAuto(Object? value) {
+    final text = value is String && value.isNotEmpty ? value : null;
+    return text == null || text == 'auto' ? null : text;
   }
 }
 

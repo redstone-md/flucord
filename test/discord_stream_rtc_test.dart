@@ -362,7 +362,11 @@ void main() {
         // answer, and it is the only way the double open shows itself.
         for (final token in ['first', 'second']) {
           repository.announceServer(
-            GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: token),
+            GoLiveServer(
+              key: _key,
+              endpoint: 'stream.discord.gg',
+              token: token,
+            ),
           );
         }
         await Future<void>.delayed(Duration.zero);
@@ -375,49 +379,51 @@ void main() {
       },
     );
 
-    test('an open superseded by a stop does not dial stale credentials', () async {
-      final repository = _FakeRepository();
-      final clients = <_FakeClient>[];
-      final tokens = <String>[];
-      final service = DiscordStreamRtcService(
-        repositoryProvider: () => repository,
-        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-        socketFactoryProvider: () => _StreamSocketFactory((credentials) {
-          tokens.add(credentials.token);
-          final client = _FakeClient();
-          clients.add(client);
-          return client;
-        }),
-      );
-      addTearDown(service.close);
-      service.reconcile();
+    test(
+      'an open superseded by a stop does not dial stale credentials',
+      () async {
+        final repository = _FakeRepository();
+        final clients = <_FakeClient>[];
+        final tokens = <String>[];
+        final service = DiscordStreamRtcService(
+          repositoryProvider: () => repository,
+          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+          socketFactoryProvider: () => _StreamSocketFactory((credentials) {
+            tokens.add(credentials.token);
+            final client = _FakeClient();
+            clients.add(client);
+            return client;
+          }),
+        );
+        addTearDown(service.close);
+        service.reconcile();
 
-      // An endpoint starts an open; the watch is stopped and a fresh
-      // endpoint arrives before the open has had its turn. The queued open
-      // is stale: dialling it would open a connection for a watch that was
-      // already over.
-      repository.announceServer(
-        const GoLiveServer(
-          key: _key,
-          endpoint: 'stream.discord.gg',
-          token: 'first',
-        ),
-      );
-      await service.stop(_key);
-      repository.announceServer(
-        const GoLiveServer(
-          key: _key,
-          endpoint: 'stream.discord.gg',
-          token: 'second',
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
+        // An endpoint starts an open; the watch is stopped and a fresh
+        // endpoint arrives before the open has had its turn. The queued open
+        // is stale: dialling it would open a connection for a watch that was
+        // already over.
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'first',
+          ),
+        );
+        await service.stop(_key);
+        repository.announceServer(
+          const GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: 'second',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
 
-      expect(tokens, ['second']);
-      expect(clients, hasLength(1));
-      expect(clients.single.closed, isFalse);
-    },
-  );
+        expect(tokens, ['second']);
+        expect(clients, hasLength(1));
+        expect(clients.single.closed, isFalse);
+      },
+    );
 
     test(
       'an open whose stream ends while it waits for its turn opens nothing',
@@ -522,59 +528,56 @@ void main() {
       },
     );
 
-    test(
-      'a session-ended close asks for fresh credentials and swaps the '
-      'connection',
-      () async {
-        final repository = _FakeRepository();
-        final clients = <_FakeClient>[];
-        final service = DiscordStreamRtcService(
-          repositoryProvider: () => repository,
-          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-          socketFactoryProvider: () => _StreamSocketFactory((_) {
-            final client = _FakeClient();
-            clients.add(client);
-            return client;
-          }),
-        );
-        addTearDown(service.close);
-        service.reconcile();
+    test('a session-ended close asks for fresh credentials and swaps the '
+        'connection', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
 
-        repository.announceServer(
-          const GoLiveServer(
-            key: _key,
-            endpoint: 'stream.discord.gg',
-            token: 'first',
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-        final hung = clients.single;
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'first',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final hung = clients.single;
 
-        // Codes 4006/4014/4022 leave the connection waiting for credentials
-        // it will never have: the ask is the watch's own leave and rejoin.
-        hung.announce(const VoiceCredentialsNeededEvent());
-        await Future<void>.delayed(Duration.zero);
+      // Codes 4006/4014/4022 leave the connection waiting for credentials
+      // it will never have: the ask is the watch's own leave and rejoin.
+      hung.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
 
-        expect(repository.withdrawn, [_key]);
-        expect(repository.watched, [_key]);
+      expect(repository.withdrawn, [_key]);
+      expect(repository.watched, [_key]);
 
-        // The fresh endpoint answers: the hung connection is replaced, and
-        // the fresh one dials on the new token.
-        repository.announceServer(
-          const GoLiveServer(
-            key: _key,
-            endpoint: 'stream.discord.gg',
-            token: 'second',
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
+      // The fresh endpoint answers: the hung connection is replaced, and
+      // the fresh one dials on the new token.
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'second',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
 
-        expect(clients, hasLength(2));
-        expect(hung.closed, isTrue);
-        expect(clients.last.closed, isFalse);
-        expect(service.sessionFor(_key), isNotNull);
-      },
-    );
+      expect(clients, hasLength(2));
+      expect(hung.closed, isTrue);
+      expect(clients.last.closed, isFalse);
+      expect(service.sessionFor(_key), isNotNull);
+    });
 
     test('a recovery whose watch stops mid-ask re-asks for nothing', () async {
       final repository = _FakeRepository();
@@ -651,7 +654,11 @@ void main() {
           clients.last.announce(const VoiceCredentialsNeededEvent());
           await Future<void>.delayed(Duration.zero);
           repository.announceServer(
-            GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: token),
+            GoLiveServer(
+              key: _key,
+              endpoint: 'stream.discord.gg',
+              token: token,
+            ),
           );
           await Future<void>.delayed(Duration.zero);
           clients.last.announce(const VoiceTransportReadyEvent(_session));
@@ -698,7 +705,11 @@ void main() {
         clients.last.announce(const VoiceCredentialsNeededEvent());
         await Future<void>.delayed(Duration.zero);
         repository.announceServer(
-          GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: '$round'),
+          GoLiveServer(
+            key: _key,
+            endpoint: 'stream.discord.gg',
+            token: '$round',
+          ),
         );
         await Future<void>.delayed(Duration.zero);
       }
@@ -781,59 +792,56 @@ void main() {
       expect(clients.single.closed, isTrue);
     });
 
-    test(
-      'a withdrawal echoed mid-recovery does not end the watch',
-      () async {
-        final repository = _FakeRepository();
-        final clients = <_FakeClient>[];
-        final service = DiscordStreamRtcService(
-          repositoryProvider: () => repository,
-          identityProvider: () => (sessionId: 'session-1', userId: 'me'),
-          socketFactoryProvider: () => _StreamSocketFactory((_) {
-            final client = _FakeClient();
-            clients.add(client);
-            return client;
-          }),
-        );
-        addTearDown(service.close);
-        service.reconcile();
+    test('a withdrawal echoed mid-recovery does not end the watch', () async {
+      final repository = _FakeRepository();
+      final clients = <_FakeClient>[];
+      final service = DiscordStreamRtcService(
+        repositoryProvider: () => repository,
+        identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+        socketFactoryProvider: () => _StreamSocketFactory((_) {
+          final client = _FakeClient();
+          clients.add(client);
+          return client;
+        }),
+      );
+      addTearDown(service.close);
+      service.reconcile();
 
-        repository.announceServer(
-          const GoLiveServer(
-            key: _key,
-            endpoint: 'stream.discord.gg',
-            token: 'first',
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-        clients.single.announce(const VoiceCredentialsNeededEvent());
-        await Future<void>.delayed(Duration.zero);
-        expect(repository.withdrawn, [_key]);
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'first',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      clients.single.announce(const VoiceCredentialsNeededEvent());
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.withdrawn, [_key]);
 
-        // The withdrawal the recovery sent echoes back as a stream delete:
-        // the repository drops the stream it just withdrew from. That echo
-        // must not close the connection the re-watch is being answered on.
-        repository.end(_key);
-        await Future<void>.delayed(Duration.zero);
-        expect(service.sessionFor(_key), isNotNull);
-        expect(clients.single.closed, isFalse);
+      // The withdrawal the recovery sent echoes back as a stream delete:
+      // the repository drops the stream it just withdrew from. That echo
+      // must not close the connection the re-watch is being answered on.
+      repository.end(_key);
+      await Future<void>.delayed(Duration.zero);
+      expect(service.sessionFor(_key), isNotNull);
+      expect(clients.single.closed, isFalse);
 
-        // The re-watch is answered: create and endpoint together, and the
-        // connection is swapped under the watch.
-        repository.announceServer(
-          const GoLiveServer(
-            key: _key,
-            endpoint: 'stream.discord.gg',
-            token: 'second',
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-        expect(clients, hasLength(2));
-        expect(clients.first.closed, isTrue);
-        expect(clients.last.closed, isFalse);
-        expect(service.sessionFor(_key), isNotNull);
-      },
-    );
+      // The re-watch is answered: create and endpoint together, and the
+      // connection is swapped under the watch.
+      repository.announceServer(
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 'second',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(clients, hasLength(2));
+      expect(clients.first.closed, isTrue);
+      expect(clients.last.closed, isFalse);
+      expect(service.sessionFor(_key), isNotNull);
+    });
 
     test('a re-issue that is never answered is asked for again', () async {
       final repository = _FakeRepository();
@@ -868,7 +876,10 @@ void main() {
       // connection nobody will ever re-issue credentials for.
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(repository.watched, hasLength(DiscordStreamRtcService.maxRecoveries));
+      expect(
+        repository.watched,
+        hasLength(DiscordStreamRtcService.maxRecoveries),
+      );
       expect(clients.single.closed, isTrue);
       expect(service.sessionFor(_key), isNull);
     });

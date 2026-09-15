@@ -47,6 +47,34 @@ abstract interface class ReadStateRepository {
     Iterable<ConversationChannel> channels,
   );
 
+  /// Acknowledges the message request in [channelId], whichever way the
+  /// account answered it: accepted and declined requests both leave the
+  /// folder.
+  ///
+  /// This is the account-scoped read state of the request itself
+  /// (`ReadStateType.messageRequests`), not the conversation's channel read
+  /// state. Discord compares the newest unanswered request against the acked
+  /// one to build the folder's badge, so an answer that went unrecorded would
+  /// put the request straight back.
+  Future<void> acknowledgeMessageRequest(String channelId);
+
+  /// Acknowledges the notification centre of [spaceId], the badge the inbox
+  /// button reads.
+  ///
+  /// The centre's read state is account-scoped
+  /// (`ReadStateType.notificationCenter`), and Discord keys it per space, with
+  /// the direct messages filed under the same pseudo-guild every DM route
+  /// uses. Opening the centre is what acks it: the mentions stay listed, the
+  /// badge does not.
+  Future<void> acknowledgeNotificationCentre(String spaceId);
+
+  /// Deletes every read state the 30-day collector marks.
+  ///
+  /// Runs once per session start, on the schedule Discord's own client keeps.
+  /// Applied locally first, so the cache shrinks on the same stroke whether or
+  /// not the server call lands; the next `READY` re-reads the truth.
+  Future<void> collectGarbage({DateTime? now});
+
   /// Edits the notification settings of one space, direct messages included.
   Future<void> updateSpaceNotificationSettings(
     String spaceId,

@@ -4,6 +4,7 @@ import 'package:flutter/semantics.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'user_settings_scope.dart';
 
 class MessageReactionStrip extends StatelessWidget {
   const MessageReactionStrip({
@@ -62,6 +63,11 @@ class ReactionGlyph extends StatelessWidget {
         borderRadius: BorderRadius.circular(2),
         child: RemoteIdentityImage(
           url: emoji.imageUrl,
+          // The account's animate-emoji answer, read here so the flag from
+          // any device redraws the strip.
+          playsAnimations: UserSettingsScope.displayOf(
+            context,
+          ).playsAnimatedEmoji,
           fallback: ColoredBox(
             color: context.surfaces.raised,
             child: Center(

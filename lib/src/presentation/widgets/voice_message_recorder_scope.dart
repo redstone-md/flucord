@@ -21,7 +21,7 @@ final class VoiceMessageRecorderScope extends InheritedWidget {
   bool updateShouldNotify(VoiceMessageRecorderScope oldWidget) =>
       oldWidget.recorder != recorder;
 
-  static VoiceMessageRecorder? maybeOf(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<VoiceMessageRecorderScope>()
-          ?.recorder;
+  static VoiceMessageRecorder? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<VoiceMessageRecorderScope>()
+      ?.recorder;
 }

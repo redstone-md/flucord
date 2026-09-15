@@ -26,60 +26,65 @@ const _streamKey = GoLiveStreamKey.guild(
 
 void main() {
   group('DiscordVoiceGatewaySocketFactory', () {
-    test('a call socket offers the room DAVE version and carries the group',
-        () async {
-      final socket = _FakeVoiceWebSocket();
-      final dave = _CountingDaveService();
-      final factory = _factory(socket, dave);
-      final client = factory.callSocket(_credentials);
-      addTearDown(client.close);
+    test(
+      'a call socket offers the room DAVE version and carries the group',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final dave = _CountingDaveService();
+        final factory = _factory(socket, dave);
+        final client = factory.callSocket(_credentials);
+        addTearDown(client.close);
 
-      await client.connect();
+        await client.connect();
 
-      final identify = _identifyOn(socket);
-      expect(identify['max_dave_protocol_version'], 1);
-      expect(identify['channel_id'], 'voice-1');
-      expect(identify['video'], isFalse);
-      expect(identify.containsKey('streams'), isFalse);
+        final identify = _identifyOn(socket);
+        expect(identify['max_dave_protocol_version'], 1);
+        expect(identify['channel_id'], 'voice-1');
+        expect(identify['video'], isFalse);
+        expect(identify.containsKey('streams'), isFalse);
 
-      // The service rides the socket: a DAVE binary frame reaches the group
-      // machinery instead of being dropped.
-      socket.addBinary([0, 1, 25, 4, 5, 6]);
-      await _flushEvents();
-      expect(dave.sessions, 1);
-    });
+        // The service rides the socket: a DAVE binary frame reaches the group
+        // machinery instead of being dropped.
+        socket.addBinary([0, 1, 25, 4, 5, 6]);
+        await _flushEvents();
+        expect(dave.sessions, 1);
+      },
+    );
 
-    test('a stream socket says it carries a screen and matches the call', () async {
-      final socket = _FakeVoiceWebSocket();
-      final dave = _CountingDaveService();
-      final factory = _factory(socket, dave);
-      final client = factory.streamSocket(
-        credentials: _credentials,
-        streamKey: _streamKey,
-      );
-      addTearDown(client.close);
+    test(
+      'a stream socket says it carries a screen and matches the call',
+      () async {
+        final socket = _FakeVoiceWebSocket();
+        final dave = _CountingDaveService();
+        final factory = _factory(socket, dave);
+        final client = factory.streamSocket(
+          credentials: _credentials,
+          streamKey: _streamKey,
+        );
+        addTearDown(client.close);
 
-      await client.connect();
+        await client.connect();
 
-      // The version is the call's even though the socket joins no group:
-      // offering 0 against a v1 call is refused.
-      final identify = _identifyOn(socket);
-      expect(identify['max_dave_protocol_version'], 1);
-      expect(identify.containsKey('channel_id'), isFalse);
-      expect(identify['video'], isTrue);
-      expect(identify['streams'], [
-        {'type': 'screen', 'rid': '100', 'quality': 100},
-      ]);
+        // The version is the call's even though the socket joins no group:
+        // offering 0 against a v1 call is refused.
+        final identify = _identifyOn(socket);
+        expect(identify['max_dave_protocol_version'], 1);
+        expect(identify.containsKey('channel_id'), isFalse);
+        expect(identify['video'], isTrue);
+        expect(identify['streams'], [
+          {'type': 'screen', 'rid': '100', 'quality': 100},
+        ]);
 
-      // A group of its own: a stream is a separate media session with a
-      // separate MLS group, so the same frame the call's socket would hand
-      // to the service reaches it here too.
-      socket.addBinary([0, 1, 25, 4, 5, 6]);
-      await _flushEvents();
-      expect(dave.sessions, 1);
-      // The call's group is its voice channel.
-      expect(dave.groupIds.single, 'voice-1');
-    });
+        // A group of its own: a stream is a separate media session with a
+        // separate MLS group, so the same frame the call's socket would hand
+        // to the service reaches it here too.
+        socket.addBinary([0, 1, 25, 4, 5, 6]);
+        await _flushEvents();
+        expect(dave.sessions, 1);
+        // The call's group is its voice channel.
+        expect(dave.groupIds.single, 'voice-1');
+      },
+    );
 
     test('a stream keys its DAVE group one below the RTC server id', () async {
       final socket = _FakeVoiceWebSocket();
@@ -119,10 +124,9 @@ void main() {
       await call.connect();
 
       final streamSocket = _FakeVoiceWebSocket();
-      final stream = _factory(streamSocket).streamSocket(
-        credentials: _credentials,
-        streamKey: _streamKey,
-      );
+      final stream = _factory(
+        streamSocket,
+      ).streamSocket(credentials: _credentials, streamKey: _streamKey);
       addTearDown(stream.close);
       await stream.connect();
 

@@ -1,4 +1,8 @@
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
+import 'package:flucord/src/domain/account_connections.dart';
+import 'package:flucord/src/domain/account_data_package.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/app_authorisation.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -12,8 +16,10 @@ import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
+import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter/material.dart';
@@ -28,6 +34,7 @@ import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/message_search.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
@@ -113,6 +120,38 @@ void main() {
     expect(find.byKey(_panel), findsOneWidget);
   });
 
+  testWidgets('a filter control narrows the running search', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _SearchableRepository();
+    addTearDown(repository.dispose);
+
+    await _openWorkspace(tester, repository);
+
+    await tester.enterText(find.byKey(_searchField), 'continuous');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(_panel), findsOneWidget);
+
+    // The from control offers the members of the workspace the search ran
+    // against, and choosing one re-submits the line with its token in it.
+    await tester.tap(find.byKey(const ValueKey('search-filter-from')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('search-filter-member-mira')));
+    await tester.pumpAndSettle();
+
+    final request = repository.search.requests.last;
+    expect(request.query.filters.content, 'continuous');
+    expect(request.query.filters.authorIds, const ['mira']);
+    // The header bar echoes the line the control composed.
+    expect(
+      tester.widget<TextField>(find.byKey(_searchField)).controller!.text,
+      'continuous from:"Mira Chen"',
+    );
+  });
+
   testWidgets('a transport without search never offers it', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -156,6 +195,8 @@ Future<void> _openWorkspace(
 final class _SearchableRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+  @override
+  UserNotesRepository? get userNotes => _delegate.userNotes;
 
   @override
   ThreadMembershipRepository? get threadMembership =>
@@ -166,6 +207,9 @@ final class _SearchableRepository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => _delegate.soundboard;
+
+  @override
+  GuildExpressionRepository? get expressions => _delegate.expressions;
 
   @override
   GifRepository? get gifs => _delegate.gifs;
@@ -234,10 +278,25 @@ final class _SearchableRepository implements ChatRepository {
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
   PresenceService? get presence => _delegate.presence;
+
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
@@ -246,8 +305,12 @@ final class _SearchableRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
-  }) =>
-      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
+    String? aroundMessageId,
+  }) => _delegate.loadChannelHistory(
+    channelId,
+    beforeMessageId: beforeMessageId,
+    aroundMessageId: aroundMessageId,
+  );
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>
@@ -278,6 +341,7 @@ final class _SearchableRepository implements ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
@@ -285,6 +349,7 @@ final class _SearchableRepository implements ChatRepository {
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,
+    textToSpeech: textToSpeech,
   );
 
   @override

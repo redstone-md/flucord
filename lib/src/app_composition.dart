@@ -9,6 +9,10 @@ import 'app_bootstrap.dart';
 import 'app_log.dart';
 import 'application/voice_room_coordination.dart';
 import 'application/account_connection_coordination.dart';
+import 'application/account_connections_controller.dart';
+import 'application/account_data_package_controller.dart';
+import 'application/account_entitlements_controller.dart';
+import 'application/app_authorisation_controller.dart';
 import 'application/account_standing_controller.dart';
 import 'application/age_verification_controller.dart';
 import 'application/auth_session_controller.dart';
@@ -43,6 +47,8 @@ import 'application/oauth_guild_directory_controller.dart';
 import 'application/oauth_guild_membership_controller.dart';
 import 'application/remote_camera_controller.dart';
 import 'application/room_focus.dart';
+import 'application/game_detection_controller.dart';
+import 'data/discord_rpc/discord_rpc_server.dart';
 import 'application/self_presence_controller.dart';
 import 'application/self_video_controller.dart';
 import 'application/slash_command_controller.dart';
@@ -53,10 +59,13 @@ import 'application/stream_viewer_controller.dart';
 import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/stream_suspension.dart';
+import 'application/accessibility_controller.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
+import 'application/text_to_speech_playback_controller.dart';
 import 'application/thread_membership_controller.dart';
 import 'application/user_profile_controller.dart';
+import 'application/member_profile_controller.dart';
 import 'application/user_settings_controller.dart';
 import 'application/voice_controller.dart';
 import 'application/voice_overlay_controller.dart';
@@ -71,6 +80,10 @@ import 'data/discord/discord_voice_signaling_service.dart';
 import 'data/disconnected_chat_repository.dart';
 import 'data/file_voice_processing_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
+import 'data/windows_message_speech_player.dart';
+import 'data/windows_application_attenuation.dart';
+import 'data/windows_microphone_enhancer.dart';
+import 'data/windows_security_key_ceremony.dart';
 import 'data/mock_chat_repository.dart';
 import 'data/native_attachment_download_service.dart';
 import 'data/native_discord_social_sdk_gateway.dart';
@@ -82,6 +95,8 @@ import 'data/discord/discord_repository_factory.dart';
 import 'data/file_keybind_repository.dart';
 import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
+import 'data/file_accessibility_repository.dart';
+import 'data/spell_check/word_list_spell_check_service.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
 import 'data/secure_discord_oauth_vault.dart';
@@ -90,17 +105,26 @@ import 'data/video/native_video_decoder_service.dart';
 import 'data/video/native_video_encoder_service.dart';
 import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
+import 'domain/chat_models.dart' show Member, UserActivity;
 import 'domain/attachment_download.dart';
+import 'domain/game_detection.dart';
+import 'domain/multi_factor_auth.dart'
+    show
+        SecurityKeyAccount,
+        SecurityKeyCeremony,
+        UnavailableSecurityKeyCeremony;
+import 'domain/external_link_launcher.dart';
+import 'domain/video_capture_hub.dart';
 import 'domain/discord_social_activity.dart';
 import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_presence.dart';
-import 'domain/external_link_launcher.dart';
-import 'domain/video_capture_hub.dart';
 import 'domain/voice_connection.dart';
+import 'domain/voice_processing.dart' show ApplicationAttenuation;
 import 'domain/voice_message_recorder.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
+import 'platform/game_process_scanner.dart';
 
 /// Builds the application's object graph, and tears it down again.
 ///
@@ -155,10 +179,15 @@ final class AppComposition {
   late final GuildMemberListController memberList;
   late final UserSettingsController userSettings;
   late final UserProfileController userProfile;
+  late final MemberProfileController memberProfile;
   late final AccountStandingController accountStanding;
   late final FamilyCentreController familyCentre;
   late final AuthSessionController authSession;
   late final MultiFactorAuthController multiFactorAuth;
+  late final AccountConnectionsController accountConnections;
+  late final AccountDataPackageController accountDataPackage;
+  late final AccountEntitlementsController accountEntitlements;
+  late final AppAuthorisationController appAuthorisation;
   late final AgeVerificationController ageVerification;
   late final FriendsController friends;
   late final ThreadMembershipController threadMembership;
@@ -168,8 +197,11 @@ final class AppComposition {
   late final ExpressionFavoritesController expressionFavorites;
   late final MessageComponentController messageComponent;
   late final SlashCommandController slashCommand;
+  late final StreamSubscription<List<UserActivity>> _rpcSubscription;
+  late final DiscordRpcServer rpcServer;
   late final MessageSearchController messageSearch;
   late final SelfPresenceController selfPresence;
+  late final GameDetectionController gameDetection;
   late final VideoCaptureHub videoCapture;
   late final StreamQualityController streamQuality;
   late final GoLiveMediaIsolate goLiveMedia;
@@ -179,13 +211,18 @@ final class AppComposition {
   late final DiscordStreamRtcService streamRtc;
   late final StreamRouter streamRouter;
   late final AttachmentDownloadService attachmentDownload;
+
+  /// The local spell checker, one instance whose dictionary is read once.
+  late final SpellCheckService spellCheck;
   late final VoiceController voice;
   late final DirectCallController directCall;
   late final SoundboardPlaybackController soundboardPlayback;
+  late final TextToSpeechPlaybackController textToSpeech;
   late final SelfVideoController selfVideo;
   late final RemoteCameraController remoteCameras;
   late final ThemeController theme;
   late final StreamerModeController streamerMode;
+  late final AccessibilityController accessibility;
   late final ScreenshotService screenshot;
   late final ClipRecorder clipRecorder;
   late final VoiceOverlayController voiceOverlay;
@@ -304,13 +341,59 @@ final class AppComposition {
     );
     userSettings = _register(UserSettingsController(() => chat.userSettings));
     userProfile = _register(UserProfileController(() => chat.userProfile));
+    memberProfile = _register(
+      MemberProfileController(
+        profileProvider: () => chat.userProfile,
+        notesProvider: () => chat.userNotes,
+      ),
+    );
     accountStanding = _register(
       AccountStandingController(() => chat.safetyHub),
     );
     familyCentre = _register(FamilyCentreController(() => chat.familyCentre));
     authSession = _register(AuthSessionController(() => chat.authSessions));
+    // The ceremony is the machine's, not the session's, so it is held once
+    // rather than resolved per use; the account it acts for is read live,
+    // because a key made for the wrong account would guard nothing.
     multiFactorAuth = _register(
-      MultiFactorAuthController(() => chat.multiFactorAuth),
+      MultiFactorAuthController(
+        () => chat.multiFactorAuth,
+        securityKeyCeremony: _defaultSecurityKeyCeremony(),
+        securityKeyAccount: () {
+          final workspace = chat.workspace;
+          final id = workspace?.currentMemberId;
+          if (id == null) return null;
+          String? displayName;
+          for (final member in workspace?.members ?? const <Member>[]) {
+            if (member.id == id) {
+              displayName = member.displayName;
+              break;
+            }
+          }
+          return SecurityKeyAccount(userId: id, displayName: displayName ?? id);
+        },
+      ),
+    );
+
+    accountConnections = _register(
+      AccountConnectionsController(
+        () => chat.accountConnections,
+        launcher: externalLinkLauncher,
+      ),
+    );
+    accountDataPackage = _register(
+      AccountDataPackageController(() => chat.accountDataPackage),
+    );
+    accountEntitlements = _register(
+      AccountEntitlementsController(() => chat.accountEntitlements),
+    );
+    // The workspace is read live rather than captured: the list of servers
+    // an app can be added to follows whichever session is signed in.
+    appAuthorisation = _register(
+      AppAuthorisationController(
+        () => chat.appAuthorisation,
+        () => chat.workspace,
+      ),
     );
     ageVerification = _register(
       AgeVerificationController(
@@ -342,6 +425,14 @@ final class AppComposition {
     selfPresence = _register(
       SelfPresenceController(() => chat.presenceService),
     );
+    gameDetection = _register(
+      GameDetectionController(
+        presenceProvider: () => chat.presenceService,
+        sourceProvider: _gameDetectionSource,
+        showsCurrentGame: () =>
+            userSettings.settings?.status.showsCurrentGame ?? true,
+      ),
+    );
   }
 
   void _buildStreamPlane() {
@@ -355,9 +446,8 @@ final class AppComposition {
     );
     // The encoder stops before the isolate goes: see VideoCaptureHub.stopEncoder.
     _teardown.add(
-      () => unawaited(
-        goLiveMedia.dispose(stopEncoder: videoCapture.stopEncoder),
-      ),
+      () =>
+          unawaited(goLiveMedia.dispose(stopEncoder: videoCapture.stopEncoder)),
     );
     // Go Live: the stream plane and the transport binding behind it. The
     // picture comes from the capture module shared with the camera and the
@@ -436,6 +526,9 @@ final class AppComposition {
     attachmentDownload =
         bootstrap.attachmentDownloadService ??
         NativeAttachmentDownloadService();
+    // The dictionary is read once and shared: every composer consulting it
+    // costs a set lookup, not a second copy of the word list in memory.
+    spellCheck = bootstrap.spellCheckService ?? WordListSpellCheckService();
     voice = _register(
       VoiceController(
         bootstrap.voiceMediaService ?? const NoopVoiceMediaService(),
@@ -449,9 +542,14 @@ final class AppComposition {
         // Null where the bundle has no filter to switch on, and the switch
         // is hidden with it.
         noiseSuppressorFactory: IsolateNoiseSuppressor.bundledFactory(),
+        // The machine's own echo and gain stages, where the bundle has
+        // them; the switches are hidden otherwise.
+        microphoneEnhancerFactory: WindowsMicrophoneEnhancer.bundledFactory(),
         processingRepository:
             bootstrap.voiceProcessingRepository ??
             FileVoiceProcessingRepository(),
+        applicationAttenuation:
+            bootstrap.applicationAttenuation ?? _defaultAttenuation(),
       ),
     );
     unawaited(voice.loadProcessingSettings());
@@ -459,6 +557,9 @@ final class AppComposition {
       DirectCallController(
         serviceProvider: () => chat.directCallService,
         voiceController: voice,
+        // Ring, accept, and hang-up sounds: the same playback layer the
+        // soundboard uses, so a test overrides one seam for both.
+        sounds: bootstrap.soundboardAudioPlayer ?? MediaKitSoundboardPlayer(),
       ),
     );
     // Discord does not mix a soundboard sound into the voice stream: every
@@ -515,6 +616,25 @@ final class AppComposition {
     theme = _register(
       ThemeController(bootstrap.themeStore ?? FileThemeStore()),
     );
+    // A message flagged to be read aloud speaks on arrival, through the same
+    // media playback layer the soundboard uses. Null on a machine with no
+    // speech synthesiser, where the message arrives as ordinary text. Built
+    // here, after streamer mode, because its silence switch reads it.
+    textToSpeech = _register(
+      TextToSpeechPlaybackController(
+        chat: chat,
+        player:
+            bootstrap.messageSpeechPlayer ??
+            (Platform.isWindows
+                ? WindowsMessageSpeechPlayer(
+                    player:
+                        bootstrap.soundboardAudioPlayer ??
+                        MediaKitSoundboardPlayer(),
+                  )
+                : null),
+        isSilenced: () => streamerMode.silencesSounds,
+      ),
+    );
     unawaited(theme.load());
     streamerMode = _register(
       StreamerModeController(
@@ -523,6 +643,12 @@ final class AppComposition {
       ),
     );
     unawaited(streamerMode.load());
+    accessibility = _register(
+      AccessibilityController(
+        bootstrap.accessibilityRepository ?? FileAccessibilityRepository(),
+      ),
+    );
+    unawaited(accessibility.load());
     screenshot =
         bootstrap.screenshotService ??
         (Platform.isWindows
@@ -584,8 +710,19 @@ final class AppComposition {
   /// they are the first thing torn down: no controller is disposed while a
   /// rule still listens to it.
   void _coordinate() {
-    // The app side of the desktop seam, registered first so it stops reading
-    // the controllers before any of them goes away.
+    // The Rich Presence server is its own surface: it listens on the IPC
+    // socket the games connect to, and it shuts down with the app.
+    rpcServer = DiscordRpcServer();
+    // What the connected games publish travels straight into the account's
+    // own presence list, beside whatever this client detected itself.
+    _rpcSubscription = rpcServer.activitiesUpdates.listen((activities) {
+      unawaited(chat.presenceService?.setLocalActivities(activities));
+    });
+    unawaited(rpcServer.start());
+    // The server stops before the subscription is cancelled, so the last
+    // list a closing game published still reaches the presence.
+    _teardown.add(_rpcSubscription.cancel);
+    _teardown.add(rpcServer.stop);
     desktopSurface = _register(
       FlucordAppSurface(
         chat: chat,
@@ -604,6 +741,8 @@ final class AppComposition {
       soundboardPlayback: soundboardPlayback,
       goLive: goLive,
       selfPresence: selfPresence,
+      gameDetection: gameDetection,
+      accountEntitlements: accountEntitlements,
     );
     _teardown.add(sessionCoordination.dispose);
     voiceRoomCoordination = VoiceRoomCoordination(
@@ -652,6 +791,7 @@ final class AppComposition {
     ServicesBinding.instance.keyboard.addHandler(_markActiveOnKey);
     // Installed on the keyboard rather than in a Shortcuts widget: a
     // binding has to fire wherever the focus is, including the composer.
+    gameDetection.startScanning();
     ServicesBinding.instance.keyboard.addHandler(keybinds.handleKeyEvent);
     bootstrap.desktopIntegration?.attach(desktopSurface);
     connection.initialize(
@@ -685,14 +825,68 @@ final class AppComposition {
       ? WindowsGlobalKeyboardHook()
       : const UnavailableGlobalKeyboardHook();
 
+  /// The attenuation this platform has, or one that plainly says it has
+  /// none. The plain construction opens the module lazily, so a platform
+  /// with no module pays nothing.
+  static ApplicationAttenuation _defaultAttenuation() => Platform.isWindows
+      ? WindowsApplicationAttenuation()
+      : const UnavailableApplicationAttenuation();
+
   /// The shield this platform has, or one that plainly says it has none.
   static WindowCaptureShield _defaultCaptureShield() => Platform.isWindows
       ? WindowsWindowCaptureShield()
       : const UnavailableWindowCaptureShield();
+
+  /// The detection source over the live transport: what is running on this
+  /// machine, and which games Discord can recognise as a game. Both answers
+  /// are read per round, because the transport is replaced when the session
+  /// changes.
+  GameDetectionSource _gameDetectionSource() {
+    final scanner = bootstrap.gameProcessScanner ?? _defaultScanner();
+    return _LiveGameDetectionSource(
+      scanner: scanner,
+      detectableGames: chat.detectableGames,
+    );
+  }
+
+  /// The scanner this platform has, or one that plainly says it has none.
+  static GameProcessScanner _defaultScanner() => Platform.isWindows
+      ? WindowsGameProcessScanner()
+      : const UnavailableGameProcessScanner();
+
+  /// The platform authenticator this machine has, or one that plainly says
+  /// it has none.
+  static SecurityKeyCeremony _defaultSecurityKeyCeremony() => Platform.isWindows
+      ? WindowsSecurityKeyCeremony()
+      : const UnavailableSecurityKeyCeremony();
 
   /// Records a constructed part for reverse-order teardown.
   T _register<T extends ChangeNotifier>(T controller) {
     _teardown.add(controller.dispose);
     return controller;
   }
+}
+
+/// The detection facts as the running app sees them.
+///
+/// The scanner's answer is read once per round; the detectable list is
+/// answered by whichever transport is live, or by nothing, which the
+/// controller takes as "nothing is recognised".
+final class _LiveGameDetectionSource implements GameDetectionSource {
+  _LiveGameDetectionSource({
+    required GameProcessScanner scanner,
+    DetectableGameRepository? detectableGames,
+  }) : _scanner = scanner,
+       _detectableGames = detectableGames;
+
+  final GameProcessScanner _scanner;
+  final DetectableGameRepository? _detectableGames;
+
+  @override
+  Future<Set<String>> runningExecutables() async =>
+      _scanner.runningExecutableBasenames();
+
+  @override
+  Future<List<DetectableGame>?> detectableGames() async =>
+      _detectableGames?.detectableGames();
 }

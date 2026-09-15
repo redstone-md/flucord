@@ -89,6 +89,86 @@ extension ChatControllerReadState on ChatController {
     _notify();
   }
 
+  /// Accepts the message request in [channelId].
+  ///
+  /// The conversation joins the DM list on the click: the request flag comes
+  /// off the local channel first, and the request's own read state is acked
+  /// behind it. The ack is what Discord remembers, so the request never
+  /// returns on the next `READY`.
+  Future<void> acceptMessageRequest(String channelId) async {
+    final workspace = _workspace;
+    final channel = workspace?.channelOrNull(channelId);
+    if (workspace == null || channel == null || !channel.isMessageRequest) {
+      return;
+    }
+    _workspace = workspace.updateChannel(
+      channelId,
+      (channel) => channel.copyWith(
+        isMessageRequest: false,
+        // The timestamp belongs to the open request; an answered one keeps no
+        // date of its own.
+        messageRequestedAt: null,
+      ),
+    );
+    await _acknowledgeMessageRequest(channelId);
+    _notify();
+  }
+
+  /// Declines the message request in [channelId].
+  ///
+  /// Declining is not muting: the conversation leaves the workspace whole,
+  /// messages included, and the request's read state is acked so the folder's
+  /// badge keeps count of only what is still waiting.
+  Future<void> declineMessageRequest(String channelId) async {
+    final workspace = _workspace;
+    final channel = workspace?.channelOrNull(channelId);
+    if (workspace == null || channel == null || !channel.isMessageRequest) {
+      return;
+    }
+    _workspace = workspace.removeChannel(channelId);
+    await _acknowledgeMessageRequest(channelId);
+    _notify();
+  }
+
+  Future<void> _acknowledgeMessageRequest(String channelId) async {
+    final repository = _repository.readState;
+    if (repository == null) return;
+    await repository
+        .acknowledgeMessageRequest(channelId)
+        .catchError(_absorbReadStateFailure);
+  }
+
+  /// Acknowledges the notification centre for every space that shows
+  /// mentions.
+  ///
+  /// The centre is a snapshot of what was waiting when it opened, so its rows
+  /// stay listed; only the badge goes quiet, which is the whole point of the
+  /// account-scoped ack.
+  void acknowledgeNotificationCentre() {
+    final repository = _repository.readState;
+    final workspace = _workspace;
+    if (repository == null || workspace == null) return;
+    final spaceIds = workspace.channels
+        .where((channel) => channel.mentionCount > 0)
+        .map((channel) => channel.spaceId)
+        .toSet();
+    for (final spaceId in spaceIds) {
+      unawaited(
+        repository
+            .acknowledgeNotificationCentre(spaceId)
+            .catchError(_absorbReadStateFailure),
+      );
+    }
+  }
+
+  /// Runs the 30-day read-state collector, on the schedule the desktop client
+  /// keeps: once per session start, before the user has looked at anything.
+  Future<void> collectReadStateGarbage() async {
+    final repository = _repository.readState;
+    if (repository == null) return;
+    await repository.collectGarbage().catchError(_absorbReadStateFailure);
+  }
+
   /// Clears every unread marker the account is carrying.
   ///
   /// The local pass happens first so the sidebar goes quiet on the click, and

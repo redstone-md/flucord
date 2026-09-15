@@ -132,9 +132,8 @@ class _OAuthGateway implements DiscordOAuthAccountGateway {
 }
 
 class _ReadySocialGateway implements DiscordSocialSdkGateway {
-  _ReadySocialGateway({
-    DiscordSocialSdkAuthentication? restoredAuthentication,
-  }) : restoredAuthentication =
+  _ReadySocialGateway({DiscordSocialSdkAuthentication? restoredAuthentication})
+    : restoredAuthentication =
           restoredAuthentication ??
           DiscordSocialSdkAuthentication.readyFor('user-1');
 

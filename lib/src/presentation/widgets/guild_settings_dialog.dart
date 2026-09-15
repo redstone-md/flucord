@@ -9,10 +9,12 @@ import 'guild_settings_audit_section.dart';
 import 'guild_settings_automod_section.dart';
 import 'guild_settings_channels_section.dart';
 import 'guild_settings_controls.dart';
+import 'guild_settings_expressions_section.dart';
 import 'guild_settings_invites_section.dart';
 import 'guild_settings_moderation_section.dart';
 import 'guild_settings_overview_section.dart';
 import 'guild_settings_roles_section.dart';
+import 'guild_settings_webhooks_section.dart';
 
 /// Discord's server-settings window.
 ///
@@ -225,6 +227,14 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
         workspace: widget.workspace,
         spaceId: widget.space.id,
       ),
+      GuildSettingsSection.webhooks => GuildSettingsWebhooksSection(
+        controller: controller,
+        workspace: widget.workspace,
+        spaceId: widget.space.id,
+      ),
+      GuildSettingsSection.expressions => GuildSettingsExpressionsSection(
+        controller: controller,
+      ),
       GuildSettingsSection.auditLog => GuildSettingsAuditSection(
         controller: controller,
       ),
@@ -259,6 +269,8 @@ String guildSettingsSectionLabel(GuildSettingsSection section) =>
       GuildSettingsSection.bans => 'Bans',
       GuildSettingsSection.automod => 'AutoMod',
       GuildSettingsSection.invites => 'Invites',
+      GuildSettingsSection.webhooks => 'Webhooks',
+      GuildSettingsSection.expressions => 'Expressions',
       GuildSettingsSection.auditLog => 'Audit Log',
     };
 
@@ -270,6 +282,8 @@ IconData guildSettingsSectionIcon(GuildSettingsSection section) =>
       GuildSettingsSection.bans => Icons.gavel,
       GuildSettingsSection.automod => Icons.shield_moon_outlined,
       GuildSettingsSection.invites => Icons.link,
+      GuildSettingsSection.webhooks => Icons.anchor,
+      GuildSettingsSection.expressions => Icons.emoji_emotions_outlined,
       GuildSettingsSection.auditLog => Icons.receipt_long,
     };
 

@@ -39,6 +39,24 @@ final class PendingAttachment {
   final String name;
   final String path;
   final int size;
+
+  /// Whether this file is tagged as a spoiler.
+  ///
+  /// The tag is the name: Discord's convention is a `SPOILER_` prefix on the
+  /// filename, applied at attach time so the upload carries it and the
+  /// receiver reads it back off the stored name.
+  bool get isSpoiler => name.startsWith(MessageAttachment.spoilerPrefix);
+
+  /// The same file with the spoiler tag applied or removed.
+  PendingAttachment asSpoiler({required bool spoiler}) {
+    if (spoiler == isSpoiler) return this;
+    final prefix = MessageAttachment.spoilerPrefix;
+    return PendingAttachment(
+      name: spoiler ? '$prefix$name' : name.substring(prefix.length),
+      path: path,
+      size: size,
+    );
+  }
 }
 
 final class ChatWorkspace {
@@ -394,6 +412,76 @@ final class ChatWorkspace {
     ],
   );
 
+  /// Folds one gained guild in, whole: space, channels, categories, roles and
+  /// the members the join learned about.
+  ///
+  /// Joining must fill the rail and the channel tree without a restart, so
+  /// this is the one fold that touches every collection at once. Each piece
+  /// replaces anything the workspace already held under the same id, so a
+  /// hydration answer that arrives twice lands the same as one that arrives
+  /// once.
+  ChatWorkspace mergeGuild(JoinedGuild guild) => copyWith(
+    spaces: [
+      ...spaces.where((space) => space.id != guild.space.id),
+      guild.space,
+    ],
+    channels: [
+      ...channels.where((channel) => channel.spaceId != guild.space.id),
+      ...guild.channels,
+    ],
+    categories: [
+      ...categories.where((category) => category.spaceId != guild.space.id),
+      ...guild.categories,
+    ],
+    roles: [
+      ...roles.where((role) => role.spaceId != guild.space.id),
+      ...guild.roles,
+    ],
+    members: _withSpaceIds(members, guild),
+  );
+
+  /// Merges [guild]'s members into [current], adding the guild to every
+  /// member it names. The member merge follows [upsertMembers], so a member
+  /// the join introduces keeps the spaces and presences the workspace
+  /// already knew them under.
+  static List<Member> _withSpaceIds(List<Member> current, JoinedGuild guild) {
+    if (guild.members.isEmpty) return current;
+    final merged = {for (final member in current) member.id: member};
+    for (final member in guild.members) {
+      merged[member.id] = _mergeMember(merged[member.id], member);
+    }
+    return merged.values.toList(growable: false);
+  }
+
+  /// Drops one guild whole: the space, its channels, categories, roles, the
+  /// messages those channels held, and the guild from every member's record.
+  ///
+  /// Leaving a server must leave no trace on the rail, and a cached member
+  /// whose membership outlived the guild would rehydrate a permission record
+  /// for a server the account cannot open, so the membership is dropped here
+  /// too.
+  ChatWorkspace removeGuild(String spaceId) {
+    final channelIds = {
+      for (final channel in channels)
+        if (channel.spaceId == spaceId) channel.id,
+    };
+    return copyWith(
+      spaces: spaces.where((space) => space.id != spaceId).toList(),
+      channels: channels
+          .where((channel) => channel.spaceId != spaceId)
+          .toList(),
+      categories: categories
+          .where((category) => category.spaceId != spaceId)
+          .toList(),
+      roles: roles.where((role) => role.spaceId != spaceId).toList(),
+      members: [for (final member in members) ?member.withoutSpace(spaceId)],
+      messages: [
+        for (final message in messages)
+          if (!channelIds.contains(message.channelId)) message,
+      ],
+    );
+  }
+
   ChatWorkspace removeCategory(String categoryId) => copyWith(
     categories: categories
         .where((category) => category.id != categoryId)
@@ -441,18 +529,8 @@ final class ChatWorkspace {
         next.add(member);
         continue;
       }
-      final spaces = {...member.spaceIds}..remove(spaceId);
-      final roles = {...member.rolesBySpace}..remove(spaceId);
-      final avatars = {...member.avatarUrlsBySpace}..remove(spaceId);
-      if (spaces.isNotEmpty || member.spaceIds.isEmpty) {
-        next.add(
-          member.copyWith(
-            spaceIds: spaces,
-            rolesBySpace: roles,
-            avatarUrlsBySpace: avatars,
-          ),
-        );
-      }
+      final without = member.withoutSpace(spaceId);
+      if (without != null) next.add(without);
     }
     return copyWith(members: next);
   }
@@ -515,6 +593,14 @@ final class ChatWorkspace {
     );
   }
 
+  /// Takes a server row off the rail.
+  ///
+  /// The server's channels and messages stay until their own deletion events
+  /// arrive; a server that leaves while its channels remain renders as an
+  /// empty row for a moment rather than as a vanished conversation.
+  ChatWorkspace removeSpace(String spaceId) =>
+      copyWith(spaces: spaces.where((space) => space.id != spaceId).toList());
+
   static List<Member> _mergeMemberInto(List<Member> current, Member incoming) {
     final existing = current.where((member) => member.id == incoming.id);
     if (existing.isEmpty) return [...current, incoming];
@@ -565,4 +651,32 @@ final class ChannelHistoryPage {
 
   final ChannelHistory history;
   final bool hasMore;
+}
+
+/// One gained guild, hydrated the way a user reads it on the rail.
+///
+/// Joining and creating both answer with the whole server: the space itself,
+/// its channels, categories, roles, and the members the transport learned.
+/// That is what lets the rail and the channel tree fill without a restart.
+final class JoinedGuild {
+  const JoinedGuild({
+    required this.space,
+    required this.channels,
+    required this.categories,
+    required this.roles,
+    this.members = const [],
+  });
+
+  final CommunitySpace space;
+  final List<ConversationChannel> channels;
+  final List<ChannelCategory> categories;
+
+  /// The guild's roles, permission bits included, which is what lets the
+  /// channel tree answer visibility questions at once.
+  final List<CommunityRole> roles;
+
+  /// Members the answer learned about. On the desktop transport that is
+  /// normally just this account's own membership, which is exactly what the
+  /// permission model needs.
+  final List<Member> members;
 }

@@ -268,7 +268,11 @@ void main() {
       );
       final hung = await _sending(controller, plane, endpoints);
       repository.assign(
-        const GoLiveServer(key: _key, endpoint: 'stream.discord.gg', token: 't'),
+        const GoLiveServer(
+          key: _key,
+          endpoint: 'stream.discord.gg',
+          token: 't',
+        ),
       );
       await Future<void>.delayed(Duration.zero);
       expect(controller.isStreaming, isTrue);
@@ -288,19 +292,17 @@ void main() {
           token: 'fresh',
         ),
       );
-      endpoints.add(
-        (
-          key: _key,
-          credentials: const VoiceServerCredentials(
-            guildId: 'guild-1',
-            channelId: 'voice-1',
-            userId: 'me',
-            sessionId: 'session-1',
-            token: 'fresh-token',
-            endpoint: 'stream.discord.gg',
-          ),
+      endpoints.add((
+        key: _key,
+        credentials: const VoiceServerCredentials(
+          guildId: 'guild-1',
+          channelId: 'voice-1',
+          userId: 'me',
+          sessionId: 'session-1',
+          token: 'fresh-token',
+          endpoint: 'stream.discord.gg',
         ),
-      );
+      ));
       await Future<void>.delayed(Duration.zero);
 
       expect(plane.opened, hasLength(2));

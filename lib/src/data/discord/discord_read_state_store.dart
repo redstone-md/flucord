@@ -3,12 +3,13 @@ import 'discord_read_state_codec.dart';
 
 /// The account's read state as the gateway describes it, held in one place.
 ///
-/// Everything here is a fold over dispatches: `READY` sets the baseline, five
-/// ack events and `USER_GUILD_SETTINGS_UPDATE` revise it, and the two version
-/// counters this keeps are what a later connect echoes back so the server can
-/// answer with a delta. The store is deliberately free of transport and of
-/// timers — it decides *what is true*, and the repository around it decides
-/// what to send.
+/// Everything here is a fold over dispatches: `READY` sets the baseline, the
+/// ack events, `USER_GUILD_SETTINGS_UPDATE` and the cross-session
+/// `STATE_UPDATE` revise it, and `DELETED_ENTITY_IDS` forgets what Discord's
+/// garbage collector dropped. The two version counters this keeps are what a
+/// later connect echoes back so the server can answer with a delta. The store
+/// is deliberately free of transport and of timers: it decides *what is true*,
+/// and the repository around it decides what to send.
 final class DiscordReadStateStore {
   final Map<String, ReadState> _readStates = {};
   final Map<String, GuildNotificationSettings> _settings = {};
@@ -29,6 +30,8 @@ final class DiscordReadStateStore {
   /// dispatch that told it nothing new.
   bool accept(String name, Map<String, Object?> data) => switch (name) {
     'READY' => _acceptReady(data),
+    'STATE_UPDATE' => _acceptStateUpdate(data),
+    'DELETED_ENTITY_IDS' => _acceptDeletedEntityIds(data),
     'MESSAGE_ACK' => _acceptMessageAck(data),
     'CHANNEL_PINS_ACK' => _acceptPinsAck(data),
     'CHANNEL_PINS_UPDATE' => _acceptPinsUpdate(data),
@@ -40,6 +43,13 @@ final class DiscordReadStateStore {
 
   /// Replaces one read state outright, for the optimistic half of an ACK.
   void put(ReadState state) => _readStates[state.key] = state;
+
+  /// Forgets a channel's read state, for the 30-day collector.
+  ///
+  /// Returns whether there was anything to forget, so a caller that deleted
+  /// nothing sends nothing.
+  bool removeChannelState(String channelId) =>
+      _readStates.remove(channelId) != null;
 
   /// The read state for [channelId], creating an empty one when the account has
   /// never had a read state there. Discord does the same: a channel with no
@@ -77,6 +87,41 @@ final class DiscordReadStateStore {
     return true;
   }
 
+  /// `STATE_UPDATE` carries the same state blocks READY does, and always as a
+  /// delta: it exists to sync a change another session made, so the store
+  /// merges it over what it holds whether or not the block spells `partial`.
+  /// A block that meant to replace everything wholesale would have to name
+  /// every entry, and naming every entry is what READY is for.
+  bool _acceptStateUpdate(Map<String, Object?> data) {
+    final readState = data['read_state'];
+    final settings = data['user_guild_settings'];
+    if (readState is! Map && settings is! Map) return false;
+    if (readState is Map) _mergeReadStateEntries(readState.cast());
+    if (settings is Map) _mergeSettingsEntries(settings.cast());
+    return true;
+  }
+
+  /// `DELETED_ENTITY_IDS` names the read states Discord's own garbage
+  /// collector dropped, as one read-state type plus the entity ids of that
+  /// type. Forgetting them keeps a collected cursor from showing as unread
+  /// forever, since no later dispatch will ever mention the entity again.
+  bool _acceptDeletedEntityIds(Map<String, Object?> data) {
+    final type = ReadStateType.fromWire(data['read_state_type']);
+    if (type == null) return false;
+    final ids = _objects(data['ids']).map((entry) => entry['id']).toSet();
+    ids.addAll(_strings(data['ids']));
+    if (ids.isEmpty) return false;
+    var removed = false;
+    for (final id in ids.whereType<String>()) {
+      if (_readStates.remove(ReadState.keyFor(type, id)) != null) {
+        removed = true;
+      }
+    }
+    if (!removed) return false;
+    _bumpReadStateVersion(_int(data['version']));
+    return true;
+  }
+
   void _acceptReadStateBlock(Object? block) {
     if (block is! Map) return;
     final envelope = block.cast<String, Object?>();
@@ -84,6 +129,10 @@ final class DiscordReadStateStore {
     // replaces the lot, including a session whose account read everything
     // elsewhere and now legitimately has no read states at all.
     if (envelope['partial'] != true) _readStates.clear();
+    _mergeReadStateEntries(envelope);
+  }
+
+  void _mergeReadStateEntries(Map<String, Object?> envelope) {
     for (final entry in _objects(envelope['entries'])) {
       final state = DiscordReadStateCodec.readState(entry);
       if (state != null) _readStates[state.key] = state;
@@ -95,6 +144,10 @@ final class DiscordReadStateStore {
     if (block is! Map) return;
     final envelope = block.cast<String, Object?>();
     if (envelope['partial'] != true) _settings.clear();
+    _mergeSettingsEntries(envelope);
+  }
+
+  void _mergeSettingsEntries(Map<String, Object?> envelope) {
     for (final entry in _objects(envelope['entries'])) {
       final settings = DiscordReadStateCodec.guildSettings(entry);
       _settings[settings.spaceId] = settings;
@@ -213,5 +266,9 @@ final class DiscordReadStateStore {
             .whereType<Map>()
             .map((item) => item.cast<String, Object?>())
             .toList(growable: false)
+      : const [];
+
+  static List<String> _strings(Object? value) => value is List
+      ? value.whereType<String>().toList(growable: false)
       : const [];
 }

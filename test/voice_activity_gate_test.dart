@@ -46,4 +46,52 @@ void main() {
     }
     expect(gate.accept(-70), isFalse);
   });
+
+  test('a manual threshold overrides the learned floor', () {
+    final gate = VoiceActivityGate();
+    // A fan that is always there: without a manual threshold it becomes
+    // the floor and the gate closes on speech that is quieter than the
+    // fan plus the margin.
+    var open = false;
+    for (var i = 0; i < gate.floorWindow + gate.hangoverFrames + 1; i++) {
+      open = gate.accept(-45);
+    }
+    expect(open, isFalse);
+
+    // A threshold set by hand sits where the room really is, whatever the
+    // fan has taught the window.
+    gate.setManualThreshold(-50);
+    expect(gate.threshold, -50);
+    expect(gate.isAutomatic, isFalse);
+    expect(gate.accept(-48), isTrue, reason: 'above the manual threshold');
+
+    // The floor keeps being learned while the manual threshold is in
+    // force, so returning to the automatic gate starts from an honest
+    // floor rather than a window that stopped hearing.
+    for (var i = 0; i < gate.floorWindow; i++) {
+      gate.accept(-40);
+    }
+    expect(gate.floor, -40);
+    gate.setManualThreshold(null);
+    expect(gate.isAutomatic, isTrue);
+    expect(gate.threshold, -30);
+  });
+
+  test('a manual threshold is clamped to the range the gate can hold', () {
+    final gate = VoiceActivityGate();
+    gate.setManualThreshold(-200);
+    expect(gate.threshold, gate.minThreshold);
+    gate.setManualThreshold(0);
+    expect(gate.threshold, gate.maxThreshold);
+  });
+
+  test('the hangover still applies under a manual threshold', () {
+    final gate = VoiceActivityGate();
+    gate.setManualThreshold(-50);
+    expect(gate.accept(-40), isTrue);
+    for (var i = 0; i < gate.hangoverFrames; i++) {
+      expect(gate.accept(-70), isTrue, reason: 'frame $i is the tail');
+    }
+    expect(gate.accept(-70), isFalse);
+  });
 }

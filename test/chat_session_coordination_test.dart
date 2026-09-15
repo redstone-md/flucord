@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/chat_session_coordination.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
+import 'package:flucord/src/application/game_detection_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/self_presence_controller.dart';
 import 'package:flucord/src/application/soundboard_playback_controller.dart';
@@ -12,6 +13,7 @@ import 'package:flucord/src/application/user_profile_controller.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/user_settings.dart';
@@ -104,7 +106,20 @@ ChatSessionCoordination _buildCoordination({
       capture: VideoCaptureHub(encoder: FakeVideoEncoder(supported: false)),
     ),
     selfPresence: SelfPresenceController(() => null),
+    gameDetection: GameDetectionController(
+      presenceProvider: () => null,
+      sourceProvider: () => _NullDetectionSource(),
+      showsCurrentGame: () => true,
+    ),
   );
+}
+
+class _NullDetectionSource implements GameDetectionSource {
+  @override
+  Future<Set<String>> runningExecutables() async => const {};
+
+  @override
+  Future<List<DetectableGame>?> detectableGames() async => null;
 }
 
 class _FakeVoiceSignalingService implements VoiceSignalingService {

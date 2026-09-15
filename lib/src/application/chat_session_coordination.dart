@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'account_entitlements_controller.dart';
 import 'chat_controller.dart';
 import 'direct_call_controller.dart';
+import 'game_detection_controller.dart';
 import 'go_live_controller.dart';
 import 'self_presence_controller.dart';
 import 'soundboard_playback_controller.dart';
@@ -29,6 +31,8 @@ final class ChatSessionCoordination {
     required SoundboardPlaybackController soundboardPlayback,
     required GoLiveController goLive,
     required SelfPresenceController selfPresence,
+    required GameDetectionController gameDetection,
+    AccountEntitlementsController? accountEntitlements,
   }) : _chat = chat,
        _voice = voice,
        _directCall = directCall,
@@ -37,7 +41,9 @@ final class ChatSessionCoordination {
        _userProfile = userProfile,
        _soundboardPlayback = soundboardPlayback,
        _goLive = goLive,
-       _selfPresence = selfPresence {
+       _selfPresence = selfPresence,
+       _gameDetection = gameDetection,
+       _accountEntitlements = accountEntitlements {
     _chat.addListener(_sessionChanged);
   }
 
@@ -50,6 +56,11 @@ final class ChatSessionCoordination {
   final SoundboardPlaybackController _soundboardPlayback;
   final GoLiveController _goLive;
   final SelfPresenceController _selfPresence;
+  final GameDetectionController _gameDetection;
+
+  /// What the account holds, loaded once per session so the surfaces that
+  /// answer from it, the composer's limits, do not have to ask first.
+  final AccountEntitlementsController? _accountEntitlements;
 
   void dispose() {
     _chat.removeListener(_sessionChanged);
@@ -63,8 +74,10 @@ final class ChatSessionCoordination {
     }
     _userSettings.reconcile();
     _userProfile.reconcile();
+    _accountEntitlements?.load();
     _soundboardPlayback.reconcile();
     _goLive.reconcile();
     _selfPresence.reconcile();
+    _gameDetection.reconcile();
   }
 }

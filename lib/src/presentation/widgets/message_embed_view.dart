@@ -376,9 +376,14 @@ class _RemoteEmbedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The account's autoplay answer, read here so the flag from any device
+    // redraws the embed. A GIF kept still asks the proxy for its png frame,
+    // or the cdn's webp form where there is no proxy.
+    final plays = UserSettingsScope.displayOf(context).playsGifs;
+    final url = media.proxyUrl ?? media.url;
     return Image.network(
       key: const ValueKey('embed-image'),
-      media.proxyUrl ?? media.url,
+      plays || !_isGif(media) ? url : _stillFrameOf(url),
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => ColoredBox(
         color: context.surfaces.surface,
@@ -390,6 +395,29 @@ class _RemoteEmbedImage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Whether the embed's picture is a moving one, judged from the address it
+/// is drawn from.
+bool _isGif(MessageEmbedMedia media) =>
+    (media.proxyUrl ?? media.url).toLowerCase().endsWith('.gif');
+
+/// The first frame of a GIF the account keeps still: the proxy serves a png
+/// when asked, and the cdn the webp form of the same path.
+String _stillFrameOf(String url) {
+  final parsed = Uri.tryParse(url);
+  if (parsed == null) return url;
+  if (parsed.host == 'media.discordapp.net') {
+    return parsed
+        .replace(queryParameters: {...parsed.queryParameters, 'format': 'png'})
+        .toString();
+  }
+  if (!parsed.path.endsWith('.gif')) return url;
+  return parsed
+      .replace(
+        path: parsed.path.replaceRange(parsed.path.length - 4, null, '.webp'),
+      )
+      .toString();
 }
 
 class _EmbedFooterRow extends StatelessWidget {

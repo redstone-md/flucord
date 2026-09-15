@@ -133,6 +133,16 @@ final class AppearancePreferences {
   final UserInterfaceDensity density;
   final TimestampHourCycle timestampHourCycle;
   final bool darkSidebar;
+
+  /// Whether the channel list should draw as the dark rail variant, which is
+  /// what the account asked for. The light theme keeps its own answer where
+  /// the flag is off, and an installed theme is never overridden: its author
+  /// picked the panel colours on purpose.
+  bool get drawsDarkSidebar => darkSidebar;
+
+  /// Whether the account asked for the compact packing, which tightens the
+  /// message list rather than changing what a message shows.
+  bool get packsDensely => density == UserInterfaceDensity.compact;
 }
 
 /// The `PreloadedUserSettings.text_and_images` leaves that describe a message.
@@ -176,6 +186,13 @@ final class MessageDisplayPreferences {
   bool get rendersReactions => renderReactions ?? true;
   bool get rendersAttachmentMedia => inlineAttachmentMedia ?? true;
   bool get rendersEmbedMedia => inlineEmbedMedia ?? true;
+
+  /// R06 records no default for either animation leaf either, so both fall
+  /// back to playing: an account that never touched the setting sees the
+  /// moving form, which is what the client drew before it could read
+  /// settings at all.
+  bool get playsAnimatedEmoji => animateEmoji ?? true;
+  bool get playsGifs => gifAutoPlay ?? true;
 
   /// R06 does record this one: the renderer's accessor defaults it to false.
   bool get isCompact => compact ?? false;

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flucord/src/data/discord/discord_desktop_bootstrap.dart';
 import 'package:flucord/src/data/discord/discord_mapper.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
@@ -29,7 +31,6 @@ void main() {
       expect(without.permissions, isNull);
       expect(without.isEveryone, isTrue);
     });
-
     test('reads channel overwrites into a map keyed by id', () {
       final channel = DiscordMapper().channel(const {
         'id': 'channel-1',
@@ -60,6 +61,48 @@ void main() {
         }, 'guild-1')!.permissionOverwrites,
         isEmpty,
       );
+    });
+
+    test('reads a channel editor payload into the channel model', () {
+      final voice = DiscordMapper().channel(const {
+        'id': 'channel-1',
+        'name': 'workbench',
+        'type': 2,
+        'rate_limit_per_user': 30,
+        'nsfw': true,
+        'bitrate': 128000,
+        'user_limit': 25,
+        'rtc_region': 'rotterdam',
+      }, 'guild-1')!;
+      expect(voice.rateLimitPerUser, 30);
+      expect(voice.isAgeGated, isTrue);
+      expect(voice.bitrate, 128000);
+      expect(voice.userLimit, 25);
+      expect(voice.rtcRegion, 'rotterdam');
+
+      // Automatic is spelled both null and the literal string "auto".
+      final auto = DiscordMapper().channel(const {
+        'id': 'channel-2',
+        'name': 'room',
+        'type': 2,
+      }, 'guild-1')!;
+      expect(auto.rtcRegion, isNull);
+      final autoWord = DiscordMapper().channel(const {
+        'id': 'channel-3',
+        'name': 'room',
+        'type': 2,
+        'rtc_region': 'auto',
+      }, 'guild-1')!;
+      expect(autoWord.rtcRegion, isNull);
+
+      final text = DiscordMapper().channel(const {
+        'id': 'channel-4',
+        'name': 'general',
+        'type': 0,
+      }, 'guild-1')!;
+      expect(text.rateLimitPerUser, 0);
+      expect(text.isAgeGated, isFalse);
+      expect(text.rtcRegion, isNull);
     });
 
     test('reads the owner and two-factor level from either guild shape', () {
@@ -333,6 +376,11 @@ void main() {
             name: 'staff',
             topic: '',
             kind: ChannelKind.text,
+            rateLimitPerUser: 30,
+            isAgeGated: true,
+            bitrate: 128000,
+            userLimit: 25,
+            rtcRegion: 'rotterdam',
             permissionOverwrites: {
               'guild-1': DiscordPermissionOverwrite(
                 id: 'guild-1',
@@ -395,6 +443,12 @@ void main() {
           .permissionOverwrites['guild-1']!;
       expect(overwrite.allow, DiscordPermissions.pinMessages);
       expect(overwrite.deny, DiscordPermissions.viewChannel);
+      final restoredChannel = restored.channelById('channel-1');
+      expect(restoredChannel.rateLimitPerUser, 30);
+      expect(restoredChannel.isAgeGated, isTrue);
+      expect(restoredChannel.bitrate, 128000);
+      expect(restoredChannel.userLimit, 25);
+      expect(restoredChannel.rtcRegion, 'rotterdam');
       final membership = restored
           .memberById('member-1')
           .membershipIn('guild-1')!;
@@ -407,6 +461,67 @@ void main() {
         WorkspacePermissions(restored).visibleChannelsFor('guild-1'),
         isEmpty,
       );
+    });
+
+    test('a v21 cache upgrades its channels and reads them', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'flucord-channel-config-migration-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final path = '${directory.path}${Platform.pathSeparator}cache.sqlite3';
+      final legacy = await databaseFactoryFfi.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 21,
+          onCreate: (database, _) => _createV21ChannelTables(database),
+        ),
+      );
+      await legacy.insert('metadata', {
+        'key': 'current_member_id',
+        'value': 'member-1',
+      });
+      await legacy.insert('spaces', {
+        'id': 'guild-1',
+        'name': 'The Forge',
+        'monogram': 'TF',
+        'color_value': 0xff456b5a,
+        'kind': 0,
+        'sort_index': 0,
+      });
+      // A channel row written before this version knows nothing about the
+      // editor fields, which is exactly what the upgrade has to survive.
+      await legacy.insert('channels', {
+        'id': 'channel-1',
+        'space_id': 'guild-1',
+        'name': 'workbench',
+        'topic': '',
+        'kind': 1,
+        'position': 0,
+        'unread': 0,
+        'mention_count': 0,
+        'is_thread': 0,
+        'is_archived': 0,
+        'is_locked': 0,
+        'available_tags_json': '[]',
+        'applied_tag_ids_json': '[]',
+        'sort_index': 0,
+      });
+      await legacy.close();
+
+      final cache = await SqliteChatCache.openAt(
+        path,
+        factory: databaseFactoryFfi,
+      );
+      addTearDown(cache.close);
+      final restored = await cache.readWorkspace();
+      expect(restored, isNotNull);
+      final voice = restored!.channelById('channel-1');
+      expect(voice.name, 'workbench');
+      expect(voice.rateLimitPerUser, 0);
+      expect(voice.isAgeGated, isFalse);
+      expect(voice.bitrate, isNull);
+      expect(voice.userLimit, isNull);
+      expect(voice.rtcRegion, isNull);
     });
 
     test('a member row written before this version reads as unknown', () async {
@@ -431,4 +546,134 @@ void main() {
       expect(member.membershipsBySpace, isEmpty);
     });
   });
+}
+
+/// The channel, metadata and spaces tables as version 21 shaped them, minus
+/// every column the channel-config upgrade adds.
+Future<void> _createV21ChannelTables(Database database) async {
+  await database.execute('''
+    CREATE TABLE metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE spaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      monogram TEXT NOT NULL,
+      color_value INTEGER NOT NULL,
+      icon_url TEXT,
+      kind INTEGER NOT NULL,
+      owner_id TEXT,
+      requires_mfa INTEGER NOT NULL DEFAULT 0,
+      sort_index INTEGER NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE channels (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      kind INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      unread INTEGER NOT NULL,
+      mention_count INTEGER NOT NULL,
+      first_unread_message_id TEXT,
+      last_message_id TEXT,
+      parent_id TEXT,
+      is_thread INTEGER NOT NULL,
+      is_archived INTEGER NOT NULL,
+      is_locked INTEGER NOT NULL,
+      archive_timestamp TEXT,
+      auto_archive_duration INTEGER,
+      available_tags_json TEXT NOT NULL,
+      applied_tag_ids_json TEXT NOT NULL,
+      default_auto_archive_duration INTEGER,
+      default_sort_order INTEGER,
+      default_forum_layout INTEGER,
+      recipient_id TEXT,
+      permission_overwrites_json TEXT,
+      sort_index INTEGER NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE roles (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      color_value INTEGER,
+      permissions TEXT
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE members (
+      id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      initials TEXT NOT NULL,
+      role TEXT NOT NULL,
+      presence INTEGER NOT NULL,
+      color_value INTEGER,
+      avatar_url TEXT,
+      space_ids_json TEXT NOT NULL,
+      roles_by_space_json TEXT NOT NULL,
+      avatar_urls_by_space_json TEXT NOT NULL,
+      memberships_json TEXT
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      message_type INTEGER NOT NULL,
+      reference_message_id TEXT,
+      reference_channel_id TEXT,
+      reference_guild_id TEXT,
+      reference_type INTEGER NOT NULL,
+      snapshots_json TEXT NOT NULL,
+      flags INTEGER NOT NULL,
+      sent_at TEXT NOT NULL,
+      is_edited INTEGER NOT NULL,
+      attachments_json TEXT NOT NULL,
+      reply_json TEXT,
+      reactions_json TEXT NOT NULL,
+      is_pinned INTEGER NOT NULL,
+      embeds_json TEXT NOT NULL,
+      mentions_current_member INTEGER NOT NULL,
+      poll_json TEXT,
+      stickers_json TEXT NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE emojis (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      image_url TEXT,
+      animated INTEGER NOT NULL,
+      available INTEGER NOT NULL
+    )
+  ''');
+  await database.execute('''
+    CREATE TABLE guild_stickers (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      asset_url TEXT,
+      sort_index INTEGER NOT NULL
+    )
+  ''');
 }

@@ -2,6 +2,8 @@ part of 'chat_models.dart';
 
 const _keepUnreadBoundary = Object();
 const _keepLastMessageId = Object();
+const _keepMessageRequestTimestamp = Object();
+const _keepRtcRegion = Object();
 
 final class ConversationChannel {
   const ConversationChannel({
@@ -24,11 +26,18 @@ final class ConversationChannel {
     this.defaultSortOrder,
     this.defaultForumLayout,
     this.recipientId,
+    this.isMessageRequest = false,
+    this.messageRequestedAt,
     this.unread = false,
     this.mentionCount = 0,
     this.firstUnreadMessageId,
     this.lastMessageId,
     this.permissionOverwrites = const {},
+    this.rateLimitPerUser = 0,
+    this.isAgeGated = false,
+    this.bitrate,
+    this.userLimit,
+    this.rtcRegion,
   });
 
   final String id;
@@ -55,6 +64,18 @@ final class ConversationChannel {
   final ForumSortOrder? defaultSortOrder;
   final ForumLayout? defaultForumLayout;
   final String? recipientId;
+
+  /// A direct message the account has not answered yet, so it belongs in the
+  /// message-request folder rather than the DM list.
+  ///
+  /// Discord flags the channel itself (`is_message_request`), which is why the
+  /// flag rides on the channel and not on the read state: accepting or
+  /// declining is a decision about the conversation, and the folder question
+  /// has to survive a workspace that arrives without any read state at all.
+  final bool isMessageRequest;
+
+  /// When the request landed, for the folder's ordering.
+  final DateTime? messageRequestedAt;
   final bool unread;
   final int mentionCount;
   final String? firstUnreadMessageId;
@@ -73,6 +94,24 @@ final class ConversationChannel {
   /// permissions from its parent and never reads the thread's own map.
   final Map<String, DiscordPermissionOverwrite> permissionOverwrites;
 
+  /// Slowmode, in seconds. Zero is off; the editor clamps to Discord's six
+  /// hour ceiling before anything reaches this field.
+  final int rateLimitPerUser;
+
+  /// The age gate Discord names `nsfw`: the channel is hidden from members
+  /// who have not agreed to age-restricted content.
+  final bool isAgeGated;
+
+  /// The room's bitrate in bits per second, on a voice channel.
+  final int? bitrate;
+
+  /// The room's member cap. Zero means unlimited, Discord's own encoding.
+  final int? userLimit;
+
+  /// The room's voice region override, or null for automatic. Discord's own
+  /// editor offers a fixed list plus Auto; the id is whatever it accepts.
+  final String? rtcRegion;
+
   bool get isDirectMessage => recipientId != null;
 
   /// The guild this channel belongs to, or null outside a server.
@@ -82,8 +121,8 @@ final class ConversationChannel {
   /// guild and channel, a stream key among them, needs the null.
   String? get guildId =>
       spaceId.isEmpty || spaceId == CommunitySpace.directMessagesId
-          ? null
-          : spaceId;
+      ? null
+      : spaceId;
 
   /// How a stream by [userId] in this channel's room is addressed.
   ///
@@ -151,6 +190,7 @@ final class ConversationChannel {
     int? mentionCount,
     bool? isArchived,
     bool? isLocked,
+    bool? isMessageRequest,
     DateTime? archiveTimestamp,
     int? autoArchiveDurationMinutes,
     List<ForumTag>? availableTags,
@@ -160,6 +200,12 @@ final class ConversationChannel {
     ForumLayout? defaultForumLayout,
     Object? firstUnreadMessageId = _keepUnreadBoundary,
     Object? lastMessageId = _keepLastMessageId,
+    Object? messageRequestedAt = _keepMessageRequestTimestamp,
+    int? rateLimitPerUser,
+    bool? isAgeGated,
+    int? bitrate,
+    int? userLimit,
+    Object? rtcRegion = _keepRtcRegion,
   }) => ConversationChannel(
     id: id,
     spaceId: spaceId,
@@ -183,9 +229,21 @@ final class ConversationChannel {
     defaultSortOrder: defaultSortOrder ?? this.defaultSortOrder,
     defaultForumLayout: defaultForumLayout ?? this.defaultForumLayout,
     recipientId: recipientId,
+    isMessageRequest: isMessageRequest ?? this.isMessageRequest,
+    messageRequestedAt:
+        identical(messageRequestedAt, _keepMessageRequestTimestamp)
+        ? this.messageRequestedAt
+        : messageRequestedAt as DateTime?,
     permissionOverwrites: permissionOverwrites,
     unread: unread ?? this.unread,
     mentionCount: mentionCount ?? this.mentionCount,
+    rateLimitPerUser: rateLimitPerUser ?? this.rateLimitPerUser,
+    isAgeGated: isAgeGated ?? this.isAgeGated,
+    bitrate: bitrate ?? this.bitrate,
+    userLimit: userLimit ?? this.userLimit,
+    rtcRegion: identical(rtcRegion, _keepRtcRegion)
+        ? this.rtcRegion
+        : rtcRegion as String?,
     firstUnreadMessageId: identical(firstUnreadMessageId, _keepUnreadBoundary)
         ? this.firstUnreadMessageId
         : firstUnreadMessageId as String?,

@@ -83,4 +83,15 @@ abstract interface class PresenceService {
 
   /// Records real user input so the idle machine knows the user is here.
   void markActive();
+
+  /// The activities this client has detected locally, newest scan first.
+  ///
+  /// A running game is one. The contract names the list rather than the game
+  /// because presence composition takes activities, and because a second
+  /// producer (a media player reporting what it plays) would be the same list.
+  List<UserActivity> get localActivities;
+
+  /// Publishes what this client has detected locally, replacing the previous
+  /// list. An empty list clears it.
+  Future<void> setLocalActivities(List<UserActivity> activities);
 }

@@ -153,10 +153,7 @@ void main() {
 .theme-dark { --background-primary: #222222; }
 ''';
 
-      expect(
-        BetterDiscordThemeReader.readPalette(source).canvas,
-        0xff222222,
-      );
+      expect(BetterDiscordThemeReader.readPalette(source).canvas, 0xff222222);
     });
 
     test('every colour notation a theme might use is read', () {
@@ -164,8 +161,10 @@ void main() {
       expect(BetterDiscordThemeReader.parseColour('#ff8800'), 0xffff8800);
       // CSS writes the alpha last; Flutter wants it first.
       expect(BetterDiscordThemeReader.parseColour('#ff880080'), 0x80ff8800);
-      expect(BetterDiscordThemeReader.parseColour('rgb(255, 136, 0)'),
-          0xffff8800);
+      expect(
+        BetterDiscordThemeReader.parseColour('rgb(255, 136, 0)'),
+        0xffff8800,
+      );
       expect(
         BetterDiscordThemeReader.parseColour('rgba(255, 136, 0, 0.5)'),
         0x80ff8800,
@@ -180,7 +179,10 @@ void main() {
     });
 
     test('a file with no meta and no variables is still not a crash', () {
-      expect(BetterDiscordThemeReader.readMeta('body { color: red; }'), isEmpty);
+      expect(
+        BetterDiscordThemeReader.readMeta('body { color: red; }'),
+        isEmpty,
+      );
       expect(
         BetterDiscordThemeReader.readPalette('body { color: red; }').canvas,
         FlucordPalette.dark.canvas,
@@ -199,14 +201,17 @@ void main() {
     });
 
     test('a partial palette keeps the rest of the fallback', () {
-      final read = FlucordPalette.fromJson(
-        const {'canvas': 0xff000000, 'text': 'not a colour'},
-      );
+      final read = FlucordPalette.fromJson(const {
+        'canvas': 0xff000000,
+        'text': 'not a colour',
+      });
 
       expect(read.canvas, 0xff000000);
       expect(read.text, FlucordPalette.dark.text);
-      expect(FlucordPalette.fromJson('not a map').canvas,
-          FlucordPalette.dark.canvas);
+      expect(
+        FlucordPalette.fromJson('not a map').canvas,
+        FlucordPalette.dark.canvas,
+      );
     });
 
     test('the theme is built from whatever palette it is given', () {
@@ -219,8 +224,10 @@ void main() {
       // somebody else's theme.
       expect(theme.scaffoldBackgroundColor, const Color(0xff102030));
       expect(theme.colorScheme.primary, const Color(0xff00ff00));
-      expect(FlucordTheme.fromPalette(FlucordPalette.light).brightness,
-          Brightness.light);
+      expect(
+        FlucordTheme.fromPalette(FlucordPalette.light).brightness,
+        Brightness.light,
+      );
     });
   });
 
@@ -230,15 +237,17 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final store = FileThemeStore(directory: () async => directory);
       final themes = await store.themeDirectory();
-      File('${themes.path}${Platform.pathSeparator}midnight.theme.css')
-          .writeAsStringSync('''
+      File(
+        '${themes.path}${Platform.pathSeparator}midnight.theme.css',
+      ).writeAsStringSync('''
 /**
  * @name Midnight
  */
 :root { --background-primary: #101014; }
 ''');
-      File('${themes.path}${Platform.pathSeparator}sunrise.json')
-          .writeAsStringSync(
+      File(
+        '${themes.path}${Platform.pathSeparator}sunrise.json',
+      ).writeAsStringSync(
         jsonEncode({
           'name': 'Sunrise',
           'author': 'me',
@@ -247,10 +256,12 @@ void main() {
       );
       // Somebody else's file in the same folder is left alone rather than
       // guessed at.
-      File('${themes.path}${Platform.pathSeparator}notes.txt')
-          .writeAsStringSync('not a theme');
-      File('${themes.path}${Platform.pathSeparator}broken.json')
-          .writeAsStringSync('{ not json');
+      File(
+        '${themes.path}${Platform.pathSeparator}notes.txt',
+      ).writeAsStringSync('not a theme');
+      File(
+        '${themes.path}${Platform.pathSeparator}broken.json',
+      ).writeAsStringSync('{ not json');
 
       final read = await store.loadThemes();
 
@@ -280,15 +291,17 @@ void main() {
       expect(await store.loadSelection(), isNull);
     });
 
-    test('a profile that cannot be written leaves the built-in theme',
-        () async {
-      final store = FileThemeStore(
-        directory: () async => throw const FileSystemException('nowhere'),
-      );
+    test(
+      'a profile that cannot be written leaves the built-in theme',
+      () async {
+        final store = FileThemeStore(
+          directory: () async => throw const FileSystemException('nowhere'),
+        );
 
-      expect(await store.loadThemes(), isEmpty);
-      expect(await store.loadSelection(), isNull);
-    });
+        expect(await store.loadThemes(), isEmpty);
+        expect(await store.loadSelection(), isNull);
+      },
+    );
   });
 
   group('the controller', () {
@@ -329,30 +342,32 @@ void main() {
       expect(store.saved, hasLength(1));
     });
 
-    test('a theme deleted while the client is open stops being the choice',
-        () async {
-      final store = _MemoryStore()
-        ..themes = [
-          const InstalledTheme(
-            id: 'midnight.json',
-            name: 'Midnight',
-            palette: FlucordPalette.dark,
-          ),
-        ]
-        ..selection = 'midnight.json';
-      final controller = ThemeController(store);
-      addTearDown(controller.dispose);
-      await controller.load();
-      expect(controller.selected, isNotNull);
+    test(
+      'a theme deleted while the client is open stops being the choice',
+      () async {
+        final store = _MemoryStore()
+          ..themes = [
+            const InstalledTheme(
+              id: 'midnight.json',
+              name: 'Midnight',
+              palette: FlucordPalette.dark,
+            ),
+          ]
+          ..selection = 'midnight.json';
+        final controller = ThemeController(store);
+        addTearDown(controller.dispose);
+        await controller.load();
+        expect(controller.selected, isNotNull);
 
-      store.themes = const [];
-      await controller.refresh();
+        store.themes = const [];
+        await controller.refresh();
 
-      expect(controller.selected, isNull);
-      // Cleared on disk too, rather than leaving the client pointing at a
-      // file that is not there.
-      expect(store.saved.last, isNull);
-    });
+        expect(controller.selected, isNull);
+        // Cleared on disk too, rather than leaving the client pointing at a
+        // file that is not there.
+        expect(store.saved.last, isNull);
+      },
+    );
 
     test('a theme dropped in while the client is open appears', () async {
       final store = _MemoryStore();

@@ -14,6 +14,7 @@ final class CommunitySpace {
     this.kind = SpaceKind.guild,
     this.ownerId,
     this.requiresMultiFactorAuth = false,
+    this.premiumTier = 0,
   });
 
   const CommunitySpace.directMessages()
@@ -24,7 +25,8 @@ final class CommunitySpace {
       iconUrl = null,
       kind = SpaceKind.directMessages,
       ownerId = null,
-      requiresMultiFactorAuth = false;
+      requiresMultiFactorAuth = false,
+      premiumTier = 0;
 
   final String id;
   final String name;
@@ -39,6 +41,11 @@ final class CommunitySpace {
   /// The guild's `mfa_level` is elevated, so moderation permissions are
   /// withheld from an account without two-factor auth.
   final bool requiresMultiFactorAuth;
+
+  /// The guild's boost level, Discord's `premium_tier`: 0 none, 1 to 3 the
+  /// boost levels. Levels 2 and 3 raise the upload limit for every member of
+  /// the server, which is the one thing this client reads it for.
+  final int premiumTier;
 
   bool get isDirectMessages => kind == SpaceKind.directMessages;
 }

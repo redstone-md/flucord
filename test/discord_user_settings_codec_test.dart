@@ -242,12 +242,18 @@ void main() {
       final patch = DiscordUserSettingsPatch.build(
         ProtoMessage(),
         const UserSettingsPatch(
+          density: UserInterfaceDensity.compact,
+          darkSidebar: true,
           renderEmbeds: false,
           renderReactions: false,
           inlineAttachmentMedia: false,
           inlineEmbedMedia: false,
+          animateEmoji: false,
+          gifAutoPlay: false,
+          enableTextToSpeechCommand: false,
           spamFilter: DirectMessageSpamFilter.nonFriends,
           quietMode: true,
+          showInAppNotifications: false,
           notifyFriendsOnGoLive: false,
           friendOnlineNotifications: false,
           reactionNotifications: ReactionNotifications.disabled,
@@ -262,17 +268,26 @@ void main() {
       );
       final settings = DiscordUserSettingsProto.read(patch);
 
+      expect(settings.appearance.density, UserInterfaceDensity.compact);
+      expect(settings.appearance.drawsDarkSidebar, isTrue);
       expect(settings.messageDisplay.renderEmbeds, isFalse);
       expect(settings.messageDisplay.renderReactions, isFalse);
       expect(settings.messageDisplay.inlineAttachmentMedia, isFalse);
       expect(settings.messageDisplay.inlineEmbedMedia, isFalse);
+      expect(settings.messageDisplay.animateEmoji, isFalse);
+      expect(settings.messageDisplay.gifAutoPlay, isFalse);
+      expect(
+        settings.messageDisplay.enableTextToSpeechCommand,
+        isFalse,
+        reason: 'the /tts leaf writes with the rest of its group',
+      );
       expect(
         settings.messageDisplay.spamFilter,
         DirectMessageSpamFilter.nonFriends,
       );
       expect(settings.notifications.isQuiet, isTrue);
+      expect(settings.notifications.showsInAppNotifications, isFalse);
       expect(settings.notifications.notifiesFriendsOnGoLive, isFalse);
-      expect(settings.notifications.notifiesOnFriendOnline, isFalse);
       expect(
         settings.notifications.reactionNotifications,
         ReactionNotifications.disabled,

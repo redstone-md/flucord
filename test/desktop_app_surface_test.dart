@@ -10,8 +10,11 @@ import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
+import 'package:flucord/src/domain/conversation_summary.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
@@ -159,6 +162,39 @@ void main() {
     expect(surface.notifications, isEmpty);
 
     repository.settings.quiet = false;
+    await surface.emit(
+      MessageUpsertedEvent(message: message, member: author, isNew: true),
+    );
+    expect(surface.notifications, hasLength(1));
+  });
+
+  test('keeps the toast off when in-app notifications are off', () async {
+    final repository = _QuietChatRepository();
+    repository.settings.quiet = false;
+    repository.settings.showInApp = false;
+    final surface = await _mountedSurface(repository: repository);
+    final workspace = surface.chat.workspace!;
+    final channel = workspace.channels.firstWhere(
+      (item) => item.kind == ChannelKind.text && !item.isThread,
+    );
+    final author = workspace.members.firstWhere(
+      (item) => item.id != workspace.currentMemberId,
+    );
+    final message = ChatMessage(
+      id: 'toast-off-notification',
+      channelId: channel.id,
+      authorId: author.id,
+      body: 'Should stay in the window',
+      sentAt: DateTime.utc(2026, 7, 24),
+    );
+
+    expect(surface.chat.showsInAppNotifications, isFalse);
+    await surface.emit(
+      MessageUpsertedEvent(message: message, member: author, isNew: true),
+    );
+    expect(surface.notifications, isEmpty);
+
+    repository.settings.showInApp = true;
     await surface.emit(
       MessageUpsertedEvent(message: message, member: author, isNew: true),
     );
@@ -389,13 +425,21 @@ final class _QuietChatRepository implements ChatRepository {
   GuildManagementRepository? get guildManagement => null;
 
   @override
+  GuildExpressionRepository? get expressions => null;
+
+  @override
   ModerationRepository? get moderation => null;
+
+  @override
+  ConversationSummaryRepository? get conversationSummaries => null;
 
   @override
   MessageSearchRepository? get messageSearch => null;
 
   @override
   PresenceService? get presence => null;
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   ReadStateRepository? get readState => readStates;
@@ -410,8 +454,12 @@ final class _QuietChatRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
-  }) =>
-      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
+    String? aroundMessageId,
+  }) => _delegate.loadChannelHistory(
+    channelId,
+    beforeMessageId: beforeMessageId,
+    aroundMessageId: aroundMessageId,
+  );
 
   @override
   Future<void> saveChannelActivity(ConversationChannel channel) =>
@@ -463,6 +511,15 @@ final class _StubReadStates implements ReadStateRepository {
   ) async {}
 
   @override
+  Future<void> acknowledgeMessageRequest(String channelId) async {}
+
+  @override
+  Future<void> acknowledgeNotificationCentre(String spaceId) async {}
+
+  @override
+  Future<void> collectGarbage({DateTime? now}) async {}
+
+  @override
   Future<void> updateSpaceNotificationSettings(
     String spaceId,
     GuildNotificationSettingsPatch patch,
@@ -482,9 +539,17 @@ final class _StubReadStates implements ReadStateRepository {
 final class _QuietSettings implements UserSettingsRepository {
   bool quiet = true;
 
+  /// Whether the account wants the toast, flipped by the in-app
+  /// notifications test.
+  bool showInApp = true;
+
   @override
-  UserSettings? get current =>
-      UserSettings(notifications: NotificationPreferences(quietMode: quiet));
+  UserSettings? get current => UserSettings(
+    notifications: NotificationPreferences(
+      quietMode: quiet,
+      showInAppNotifications: showInApp,
+    ),
+  );
 
   @override
   bool get isLoaded => true;

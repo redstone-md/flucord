@@ -3,6 +3,10 @@ import '../../domain/age_verification.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
 import '../../domain/family_centre.dart';
+import '../../domain/account_connections.dart';
+import '../../domain/account_data_package.dart';
+import '../../domain/account_entitlements.dart';
+import '../../domain/app_authorisation.dart';
 import '../../domain/account_standing.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
@@ -15,18 +19,21 @@ import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
 import '../../domain/thread_membership.dart';
 import '../../domain/user_profile.dart';
+import '../../domain/user_notes.dart';
 
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/forum_repository.dart';
+import '../../domain/guild_expression_repository.dart';
 import '../../domain/guild_management_repository.dart';
 import '../../domain/message_forward_repository.dart';
 import '../../domain/moderation_repository.dart';
 import '../../domain/message_flag_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/poll_repository.dart';
+import '../../domain/game_detection.dart';
 import '../../domain/presence_repository.dart';
 import '../../domain/reaction_repository.dart';
 import '../../domain/scheduled_event_repository.dart';
@@ -99,7 +106,9 @@ final class DiscordChatRepository
            messageNonceFactory ?? DiscordMessageNonceFactory(),
        _voiceSignaling = DiscordVoiceSignalingService(
          mainGateway: _gateway,
-         socketFactory: DiscordVoiceGatewaySocketFactory(daveService: daveService),
+         socketFactory: DiscordVoiceGatewaySocketFactory(
+           daveService: daveService,
+         ),
        ) {
     _gatewaySubscription = _gateway.events.listen(_onGatewayEvent);
   }
@@ -204,7 +213,12 @@ final class DiscordChatRepository
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
-  }) => _historyLoader.load(channelId, beforeMessageId: beforeMessageId);
+    String? aroundMessageId,
+  }) => _historyLoader.load(
+    channelId,
+    beforeMessageId: beforeMessageId,
+    aroundMessageId: aroundMessageId,
+  );
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>
@@ -318,12 +332,20 @@ final class DiscordChatRepository
 
   @override
   UserProfileRepository? get userProfile => null;
+  @override
+  UserNotesRepository? get userNotes => null;
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
 
   @override
   StageRepository? get stages => null;
+
+  /// A bot token reaches the expression routes but the settings window is a
+  /// user surface and this transport offers none, so the plane is absent
+  /// rather than one no caller can reach.
+  @override
+  GuildExpressionRepository? get expressions => null;
 
   @override
   SoundboardRepository? get soundboard => null;
@@ -385,6 +407,18 @@ final class DiscordChatRepository
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   /// The search routes are scoped to a signed-in user's own session; a
@@ -399,6 +433,9 @@ final class DiscordChatRepository
   /// as [PresenceChangedEvent]; only the outbound half is absent.
   @override
   PresenceService? get presence => null;
+
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<void> close() async {

@@ -140,7 +140,9 @@ final class KeybindController extends ChangeNotifier {
   /// that is already held, and a toggle is only run from whichever of the two
   /// arrives first.
   bool handleKeyEvent(KeyEvent event) {
-    final modifiers = _modifiersOf(HardwareKeyboard.instance.logicalKeysPressed);
+    final modifiers = _modifiersOf(
+      HardwareKeyboard.instance.logicalKeysPressed,
+    );
     final keyId = event.logicalKey.keyId;
     final recording = _recording;
     if (recording != null) {
@@ -148,7 +150,9 @@ final class KeybindController extends ChangeNotifier {
       // A modifier on its own is not a binding — it is somebody still building
       // one — so it is swallowed rather than assigned.
       if (_modifierOf(event.logicalKey) != null) return true;
-      unawaited(_assign(recording, Keybind(keyId: keyId, modifiers: modifiers)));
+      unawaited(
+        _assign(recording, Keybind(keyId: keyId, modifiers: modifiers)),
+      );
       return true;
     }
     if (event is KeyDownEvent) return _onDown(keyId, modifiers);

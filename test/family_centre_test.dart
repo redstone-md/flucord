@@ -235,7 +235,6 @@ void main() {
       expect(untouched.requests, isEmpty);
     });
 
-
     test('the centre is read from the account route', () async {
       final transport = _Transport([
         DiscordHttpResponse(

@@ -10,9 +10,12 @@
 
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
+#include <audiopolicy.h>
 #include <mmdeviceapi.h>
 #include <wrl/client.h>
 #include <wrl/implements.h>
+
+#include <vector>
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "mmdevapi.lib")
@@ -26,6 +29,28 @@ struct FlucordAudioCapture {
   std::atomic<bool> running{false};
   std::atomic<bool> excludes_own_process{false};
 };
+
+// Attenuation of other applications' audio, for "attenuate while speaking".
+//
+// The session enumerator gives one endpoint per application. Each holds its
+// own ISimpleAudioVolume, so one application can be turned down without
+// touching the rest, and this process's own sessions are skipped: the
+// room's voices come out of them, and the point is to hear those over the
+// rest, not to hear them twice.
+struct Attenuation {
+  // One session's volume knob, kept with the level it had before so restore
+  // puts it back rather than at full.
+  struct Held {
+    Microsoft::WRL::ComPtr<ISimpleAudioVolume> volume;
+    float before = 1.0f;
+  };
+
+  std::mutex lock;
+  bool active = false;
+  std::vector<Held> held;
+};
+
+Attenuation g_attenuation;
 
 namespace {
 
@@ -259,6 +284,55 @@ void CaptureLoop(FlucordAudioCapture* state, std::promise<bool> opened) {
   CoUninitialize();
 }
 
+// Collects every other process's session volumes on the render endpoint.
+// False when the endpoint cannot be reached, which is a machine with no
+// audio device: there is nothing playing and so nothing to attenuate.
+// Sessions are held once, when attenuation starts, and restored by pointer
+// when it ends; an application that starts playing part-way through a
+// burst is picked up at the next one.
+//
+// No CoInitializeEx here, unlike the capture thread: this runs on the app's
+// own thread, where the runner has already brought COM up as STA, and a
+// second initialization with a different apartment would fail and leave
+// the trailing CoUninitialize unbalancing the runner's. Everything the
+// sessions hand back is used on this same thread.
+bool CollectSessionVolumes(Attenuation* out) {
+  Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;
+  Microsoft::WRL::ComPtr<IMMDevice> device;
+  Microsoft::WRL::ComPtr<IAudioSessionManager2> manager;
+  Microsoft::WRL::ComPtr<IAudioSessionEnumerator> sessions;
+  int count = 0;
+  bool ok = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
+                                       CLSCTX_ALL, IID_PPV_ARGS(&enumerator))) &&
+            SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole,
+                                                          &device)) &&
+            SUCCEEDED(device->Activate(__uuidof(IAudioSessionManager2),
+                                       CLSCTX_ALL, nullptr, &manager)) &&
+            SUCCEEDED(manager->GetSessionEnumerator(&sessions)) &&
+            SUCCEEDED(sessions->GetCount(&count));
+  if (ok) {
+    const DWORD own_pid = GetCurrentProcessId();
+    for (int i = 0; i < count; ++i) {
+      // GetSession answers the control, not the volume: the knob is a
+      // second interface on the same session.
+      Microsoft::WRL::ComPtr<IAudioSessionControl> control;
+      if (FAILED(sessions->GetSession(i, control.GetAddressOf()))) continue;
+      Microsoft::WRL::ComPtr<IAudioSessionControl2> named;
+      if (FAILED(control.As(&named))) continue;
+      DWORD pid = 0;
+      // A session with no pid of its own is a system sound, which is not
+      // this process's and is attenuated with the rest.
+      if (SUCCEEDED(named->GetProcessId(&pid)) && pid == own_pid) continue;
+      Microsoft::WRL::ComPtr<ISimpleAudioVolume> volume;
+      if (FAILED(named.As(&volume))) continue;
+      float before = 1.0f;
+      if (FAILED(volume->GetMasterVolume(&before))) continue;
+      out->held.push_back({std::move(volume), before});
+    }
+  }
+  return ok;
+}
+
 }  // namespace
 
 extern "C" {
@@ -293,6 +367,36 @@ flucord_audio_excludes_own_process(FlucordAudioCapture* capture) {
 
 FLUCORD_AUDIO_EXPORT void flucord_audio_release(int16_t* frames) {
   free(frames);
+}
+
+FLUCORD_AUDIO_EXPORT int32_t
+flucord_audio_attenuate_others(double level) {
+  if (level < 0.0 || level > 1.0) return FLUCORD_AUDIO_ERROR_STATE;
+  std::lock_guard<std::mutex> guard(g_attenuation.lock);
+  if (!g_attenuation.active) {
+    Attenuation fresh;
+    // A machine with no endpoint has nothing playing, so nothing to
+    // attenuate and nothing to restore: that is success, not a failure the
+    // room would have to show.
+    CollectSessionVolumes(&fresh);
+    g_attenuation.held = std::move(fresh.held);
+    g_attenuation.active = true;
+  }
+  const float factor = static_cast<float>(1.0 - level);
+  for (auto& held : g_attenuation.held) {
+    held.volume->SetMasterVolume(held.before * factor, nullptr);
+  }
+  return FLUCORD_AUDIO_OK;
+}
+
+FLUCORD_AUDIO_EXPORT int32_t flucord_audio_restore_others(void) {
+  std::lock_guard<std::mutex> guard(g_attenuation.lock);
+  for (auto& held : g_attenuation.held) {
+    held.volume->SetMasterVolume(held.before, nullptr);
+  }
+  g_attenuation.held.clear();
+  g_attenuation.active = false;
+  return FLUCORD_AUDIO_OK;
 }
 
 FLUCORD_AUDIO_EXPORT void flucord_audio_close(FlucordAudioCapture* capture) {

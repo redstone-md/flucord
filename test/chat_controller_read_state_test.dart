@@ -1,4 +1,8 @@
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
+import 'package:flucord/src/domain/account_connections.dart';
+import 'package:flucord/src/domain/account_data_package.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/app_authorisation.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -12,8 +16,10 @@ import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
+import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flucord/src/application/chat_controller.dart';
@@ -26,6 +32,7 @@ import 'package:flucord/src/domain/guild_membership.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/permission_overwrite.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
@@ -36,6 +43,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 part 'chat_controller_read_state_unread_cases.dart';
 part 'chat_controller_read_state_command_cases.dart';
+part 'chat_controller_read_state_request_cases.dart';
 
 const _guildId = '111111111111111111';
 const _generalId = '222222222222222222';
@@ -44,6 +52,11 @@ const _memberId = '987654321098765432';
 const _olderMessage = '123456789012345678';
 const _newerMessage = '234567890123456789';
 
+/// The message-request fixture: a DM channel awaiting an answer, and the
+/// message that asked for one.
+const _requestId = '777777777777777777';
+const _requestMessageId = '123456789012345678';
+
 /// The fixture snowflake pool is a short allow-list, so this literal does
 /// double duty: here it is the other participant, elsewhere the older message.
 const _authorId = '123456789012345678';
@@ -51,6 +64,7 @@ const _authorId = '123456789012345678';
 void main() {
   _unreadCases();
   _commandCases();
+  _messageRequestCases();
 }
 
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
@@ -67,6 +81,9 @@ final class _FakeReadStateRepository implements ReadStateRepository {
   final List<(String, List<String>)> spaceReads = [];
   final List<(String, GuildNotificationSettingsPatch)> spacePatches = [];
   final List<(String, String, ChannelNotificationOverridePatch)> overrides = [];
+  final List<String> messageRequestAcks = [];
+  final List<String> notificationCentreAcks = [];
+  final List<DateTime?> garbageCollections = [];
 
   ReadStateSnapshot _current = ReadStateSnapshot.empty;
 
@@ -114,6 +131,24 @@ final class _FakeReadStateRepository implements ReadStateRepository {
   }
 
   @override
+  Future<void> acknowledgeMessageRequest(String channelId) async {
+    _refuseWhenFailing();
+    messageRequestAcks.add(channelId);
+  }
+
+  @override
+  Future<void> acknowledgeNotificationCentre(String spaceId) async {
+    _refuseWhenFailing();
+    notificationCentreAcks.add(spaceId);
+  }
+
+  @override
+  Future<void> collectGarbage({DateTime? now}) async {
+    _refuseWhenFailing();
+    garbageCollections.add(now);
+  }
+
+  @override
   Future<void> updateSpaceNotificationSettings(
     String spaceId,
     GuildNotificationSettingsPatch patch,
@@ -143,6 +178,8 @@ final class _FakeReadStateRepository implements ReadStateRepository {
 final class _Repository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => null;
+  @override
+  UserNotesRepository? get userNotes => null;
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
@@ -152,6 +189,9 @@ final class _Repository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  @override
+  GuildExpressionRepository? get expressions => null;
 
   @override
   GifRepository? get gifs => null;
@@ -177,6 +217,9 @@ final class _Repository implements ChatRepository {
     this.channelLastMessageId = _newerMessage,
   }) : readStateStore = _FakeReadStateRepository(failing: failing);
 
+  /// A workspace the fake serves instead of the fixture default, so a test
+  /// can name channels the default never carried.
+  ChatWorkspace? workspaceOverride;
   final _FakeReadStateRepository readStateStore;
   final bool withReadState;
   final String channelLastMessageId;
@@ -225,6 +268,18 @@ final class _Repository implements ChatRepository {
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
@@ -232,21 +287,25 @@ final class _Repository implements ChatRepository {
 
   @override
   PresenceService? get presence => null;
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async =>
-      _workspace(channelLastMessageId);
+      workspaceOverride ?? _workspace(channelLastMessageId);
 
   @override
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async => ChannelHistoryPage(
     // The seeded messages come back so that opening a channel does not wipe
     // the very history these tests measure the unread boundary against.
     history: ChannelHistory(
       channelId: channelId,
-      messages: _workspace(channelLastMessageId).messagesFor(channelId),
+      messages: (workspaceOverride ?? _workspace(channelLastMessageId))
+          .messagesFor(channelId),
       members: const [],
     ),
     hasMore: false,
@@ -280,6 +339,7 @@ final class _Repository implements ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => throw UnimplementedError();
 
   @override

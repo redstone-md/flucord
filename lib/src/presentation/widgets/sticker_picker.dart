@@ -10,9 +10,38 @@ import 'message_sticker_view.dart';
 
 typedef SendStickersCallback = Future<bool> Function(List<String> stickerIds);
 
+/// The stickers of one server, listed under the server's own name.
+final class StickerServerSection {
+  const StickerServerSection({required this.spaceName, required this.stickers});
+
+  final String spaceName;
+  final List<GuildSticker> stickers;
+}
+
+/// The servers' stickers grouped for the picker, the space the composer sits
+/// in first.
+List<StickerServerSection> stickerSectionsFromWorkspace(
+  ChatWorkspace workspace,
+  String currentSpaceId,
+) {
+  final sections = <StickerServerSection>[];
+  for (final space in [
+    ...workspace.spaces.where((space) => space.id == currentSpaceId),
+    ...workspace.spaces.where((space) => space.id != currentSpaceId),
+  ]) {
+    final stickers = workspace.stickersFor(space.id);
+    if (stickers.isNotEmpty) {
+      sections.add(
+        StickerServerSection(spaceName: space.name, stickers: stickers),
+      );
+    }
+  }
+  return sections;
+}
+
 class StickerPickerButton extends StatefulWidget {
   const StickerPickerButton({
-    required this.stickers,
+    required this.sections,
     required this.isSending,
     required this.onSend,
     this.assetBuilder = buildStickerAsset,
@@ -20,7 +49,7 @@ class StickerPickerButton extends StatefulWidget {
     super.key,
   });
 
-  final List<GuildSticker> stickers;
+  final List<StickerServerSection> sections;
   final bool isSending;
   final SendStickersCallback onSend;
   final StickerAssetBuilder assetBuilder;
@@ -39,10 +68,14 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
   bool _isSubmitting = false;
   bool _sendFailed = false;
 
+  List<GuildSticker> get _allStickers => [
+    for (final section in widget.sections) ...section.stickers,
+  ];
+
   @override
   void didUpdateWidget(covariant StickerPickerButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final availableIds = widget.stickers.map((sticker) => sticker.id).toSet();
+    final availableIds = _allStickers.map((sticker) => sticker.id).toSet();
     _selectedIds.removeWhere((id) => !availableIds.contains(id));
   }
 
@@ -119,7 +152,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
         child: ListenableBuilder(
           listenable: Listenable.merge([widget.favorites]),
           builder: (context, _) => _StickerPickerPanel(
-            stickers: widget.stickers,
+            sections: widget.sections,
             queryController: _queryController,
             selectedIds: _selectedIds,
             isSending: widget.isSending || _isSubmitting,
@@ -137,9 +170,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       key: const ValueKey('open-sticker-picker'),
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       padding: EdgeInsets.zero,
-      onPressed: widget.isSending || widget.stickers.isEmpty
-          ? null
-          : _toggleMenu,
+      onPressed: widget.isSending || _allStickers.isEmpty ? null : _toggleMenu,
       icon: const Icon(Icons.emoji_emotions_outlined, size: 19),
       tooltip: 'Stickers',
     ),
@@ -148,7 +179,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
 
 class _StickerPickerPanel extends StatelessWidget {
   const _StickerPickerPanel({
-    required this.stickers,
+    required this.sections,
     required this.queryController,
     required this.selectedIds,
     required this.isSending,
@@ -160,7 +191,7 @@ class _StickerPickerPanel extends StatelessWidget {
     required this.onSend,
   });
 
-  final List<GuildSticker> stickers;
+  final List<StickerServerSection> sections;
   final TextEditingController queryController;
   final Set<String> selectedIds;
   final bool isSending;
@@ -171,33 +202,32 @@ class _StickerPickerPanel extends StatelessWidget {
   final ValueChanged<String> onToggle;
   final VoidCallback onSend;
 
+  bool _matches(GuildSticker sticker, String query) {
+    if (query.isEmpty) return true;
+    return sticker.name.toLowerCase().contains(query) ||
+        sticker.tags.any((tag) => tag.toLowerCase().contains(query));
+  }
+
+  List<(String, List<GuildSticker>)> _visibleSections(String query) {
+    return [
+      for (final section in sections)
+        if (section.stickers.any((sticker) => _matches(sticker, query)))
+          (
+            section.spaceName,
+            section.stickers
+                .where((sticker) => _matches(sticker, query))
+                .toList(growable: false),
+          ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = queryController.text.trim().toLowerCase();
-    final visible = stickers
-        .where((sticker) {
-          if (query.isEmpty) return true;
-          return sticker.name.toLowerCase().contains(query) ||
-              sticker.tags.any((tag) => tag.toLowerCase().contains(query));
-        })
-        .toList();
     final starred = favorites;
-    if (starred != null && query.isEmpty) {
-      // Starred first while browsing, but not while searching: a search is a
-      // question about names, and reordering its answers hides the match.
-      final frecency = starred.favorites.stickerFrecency;
-      visible.sort((a, b) {
-        final left = starred.isFavoriteSticker(a.id) ? 0 : 1;
-        final right = starred.isFavoriteSticker(b.id) ? 0 : 1;
-        if (left != right) return left.compareTo(right);
-        // Within each half, what the account actually reaches for. The table
-        // is the server's count, so this matches the order Discord's own
-        // client shows.
-        return (frecency.scoreFor(b.id)?.score ?? 0).compareTo(
-          frecency.scoreFor(a.id)?.score ?? 0,
-        );
-      });
-    }
+    final visible = starred != null && query.isEmpty
+        ? _rankedSections(starred)
+        : _visibleSections(query);
     return Column(
       children: [
         Padding(
@@ -225,65 +255,42 @@ class _StickerPickerPanel extends StatelessWidget {
                     ),
                   ),
                 )
-              : GridView.builder(
+              : CustomScrollView(
+                  key: const ValueKey('sticker-grid-scroll'),
                   primary: false,
-                  padding: const EdgeInsets.all(8),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                  ),
-                  itemCount: visible.length,
-                  itemBuilder: (context, index) {
-                    final sticker = visible[index];
-                    final selected = selectedIds.contains(sticker.id);
-                    return Semantics(
-                      label: sticker.name,
-                      button: true,
-                      selected: selected,
-                      onTap: () => onToggle(sticker.id),
-                      excludeSemantics: true,
-                      child: Stack(
-                        children: [
-                          InkWell(
-                            key: ValueKey('sticker-option-${sticker.id}'),
-                            onTap: () => onToggle(sticker.id),
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? FlucordColors.brand.withValues(alpha: 0.14)
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: selected
-                                      ? FlucordColors.brand
-                                      : Colors.transparent,
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: assetBuilder(context, sticker.item),
+                  slivers: [
+                    for (final (spaceName, stickers) in visible) ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                        sliver: SliverToBoxAdapter(
+                          child: Text(
+                            spaceName.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.surfaces.muted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (favorites case final ExpressionFavoritesController
-                              controller)
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: ExpressionFavoriteStar(
-                                key: ValueKey('sticker-star-${sticker.id}'),
-                                controller: controller,
-                                isFavorite: controller.isFavoriteSticker(
-                                  sticker.id,
-                                ),
-                                onPressed: () =>
-                                    controller.toggleSticker(sticker.id),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
-                    );
-                  },
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        sliver: SliverGrid.builder(
+                          itemCount: stickers.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                mainAxisSpacing: 6,
+                                crossAxisSpacing: 6,
+                              ),
+                          itemBuilder: (context, index) =>
+                              _stickerTile(context, stickers[index]),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
         ),
         Divider(height: 1, color: context.surfaces.border),
@@ -321,6 +328,76 @@ class _StickerPickerPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Sections while browsing: starred first within each server, then what
+  /// the account actually reaches for. A search keeps the servers' own order,
+  /// because a search is a question about names and reordering its answers
+  /// hides the match.
+  List<(String, List<GuildSticker>)> _rankedSections(
+    ExpressionFavoritesController starred,
+  ) {
+    final frecency = starred.favorites.stickerFrecency;
+    return [
+      for (final (spaceName, stickers) in _visibleSections(''))
+        (
+          spaceName,
+          [...stickers]..sort((left, right) {
+            final leftStarred = starred.isFavoriteSticker(left.id) ? 0 : 1;
+            final rightStarred = starred.isFavoriteSticker(right.id) ? 0 : 1;
+            if (leftStarred != rightStarred) {
+              return leftStarred.compareTo(rightStarred);
+            }
+            return (frecency.scoreFor(right.id)?.score ?? 0).compareTo(
+              frecency.scoreFor(left.id)?.score ?? 0,
+            );
+          }),
+        ),
+    ];
+  }
+
+  Widget _stickerTile(BuildContext context, GuildSticker sticker) {
+    final selected = selectedIds.contains(sticker.id);
+    return Semantics(
+      label: sticker.name,
+      button: true,
+      selected: selected,
+      onTap: () => onToggle(sticker.id),
+      excludeSemantics: true,
+      child: Stack(
+        children: [
+          InkWell(
+            key: ValueKey('sticker-option-${sticker.id}'),
+            onTap: () => onToggle(sticker.id),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: selected
+                    ? FlucordColors.brand.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: selected ? FlucordColors.brand : Colors.transparent,
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: assetBuilder(context, sticker.item),
+            ),
+          ),
+          if (favorites case final ExpressionFavoritesController controller)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: ExpressionFavoriteStar(
+                key: ValueKey('sticker-star-${sticker.id}'),
+                controller: controller,
+                isFavorite: controller.isFavoriteSticker(sticker.id),
+                onPressed: () => controller.toggleSticker(sticker.id),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

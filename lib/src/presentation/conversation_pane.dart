@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../application/chat_controller.dart';
+import '../application/voice_controller.dart';
 import '../application/composer_autocomplete_catalog.dart';
 import '../application/direct_call_controller.dart';
 import '../application/go_live_controller.dart';
@@ -10,14 +11,19 @@ import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/stream_viewer_controller.dart';
+import '../domain/account_entitlements.dart';
 import '../domain/channel_capabilities.dart';
 import '../domain/chat_models.dart';
+import '../domain/conversation_summary.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/moderation_report.dart';
+import 'widgets/account_entitlements_scope.dart';
 import 'widgets/attachment_download_scope.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/chat_scope.dart';
+import 'widgets/conversation_summaries.dart';
 import 'widgets/direct_call_scope.dart';
+import 'widgets/emoji_picker.dart';
 import 'widgets/expression_favorites_scope.dart';
 import 'widgets/external_link_launcher_scope.dart';
 import 'widgets/forum_channel_view.dart';
@@ -37,6 +43,7 @@ import 'widgets/report_dialog.dart';
 import 'widgets/slash_command_scope.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/soundboard_scope.dart';
+import 'widgets/sticker_picker.dart';
 import 'widgets/stage_controls.dart';
 import 'widgets/stage_scope.dart';
 import 'widgets/status_views.dart';
@@ -47,6 +54,7 @@ import 'widgets/thread_membership_button.dart';
 import 'widgets/thread_membership_scope.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
+import 'widgets/voice_participant_grid.dart' show VoiceListeningControls;
 import 'widgets/voice_room_view.dart';
 import 'widgets/voice_scope.dart';
 import 'widgets/voice_stream_controls.dart';
@@ -128,6 +136,10 @@ class ConversationPane extends StatefulWidget {
 class _ConversationPaneState extends State<ConversationPane> {
   ChatMessage? _replyTo;
 
+  /// When this account last sent in the channel, for the composer's slowmode
+  /// countdown. Null on a channel without slowmode, where nothing needs it.
+  DateTime? _lastSentAt;
+
   @override
   void initState() {
     super.initState();
@@ -140,8 +152,20 @@ class _ConversationPaneState extends State<ConversationPane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id == widget.channel.id) return;
     _replyTo = null;
+    _lastSentAt = null;
     _watchCall();
     _pointControllersAtChannel();
+  }
+
+  /// When slowmode releases this account's next send, or null while nothing
+  /// is holding it back. Slowmode binds the sender, not the channel: the
+  /// clock starts at this account's own last send.
+  DateTime? get _slowmodeUntil {
+    final seconds = widget.channel.rateLimitPerUser;
+    final lastSentAt = _lastSentAt;
+    if (seconds == 0 || lastSentAt == null) return null;
+    final until = lastSentAt.add(Duration(seconds: seconds));
+    return until.isBefore(DateTime.now()) ? null : until;
   }
 
   /// Subscribes the session to this channel's call (gateway opcode 13).
@@ -340,11 +364,20 @@ class _ConversationPaneState extends State<ConversationPane> {
       selfPreview: selfPreview(),
     );
 
+    // How loud each participant plays. Read straight off the controller, so
+    // a level changed on one tile reaches every other tile showing them.
+    VoiceListeningControls listeningControls() => VoiceListeningControls(
+      volumeFor: voice.volumeFor,
+      onVolumeChanged: (participant, volume) =>
+          unawaited(voice.setParticipantVolume(participant, volume)),
+    );
+
     Widget room() => inCall && !showsMessages
         ? VoiceRoomView(
             // A call has no guild; the DM pseudo-space still supplies avatars.
             guildId: null,
             spaceId: channel.spaceId,
+            listening: listeningControls(),
             // Watching is asked for, never assumed: the pictures cross a
             // second connection Discord only opens when told to, and a room
             // that dialled every stream in it would be paying for pictures
@@ -370,6 +403,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             ChannelKind.voice when !showsMessages => VoiceRoomView(
               streams: streamControls(),
               streamViewer: streamViewer(),
+              listening: listeningControls(),
               focusedUserId: focus.userId,
               onTapParticipant: focus.toggle,
               onClearFocus: focus.clear,
@@ -498,11 +532,17 @@ class _ConversationPaneState extends State<ConversationPane> {
         else if (showsMessages)
           MessageComposer(
             gifPicker: GifPickerScope.read(context),
-            expressionFavorites: ExpressionFavoritesScope.read(context),
-            slashCommands: SlashCommandScope.read(context),
-            canAttachFiles: widget.capabilities.attachFiles,
             channelId: channel.id,
             channelName: channel.name,
+            replyTo: _replyTo,
+            replyAuthor: _replyTo == null
+                ? null
+                : widget.workspace.memberOrNull(_replyTo!.authorId),
+            onCancelReply: () => setState(() => _replyTo = null),
+            slowmode: Duration(seconds: channel.rateLimitPerUser),
+            slowmodeUntil: _slowmodeUntil,
+            characterLimit: _characterLimit(),
+            attachmentSizeLimitBytes: _attachmentSizeLimit(channel),
             channelIsVoice: channel.kind == ChannelKind.voice,
             spaceName: widget.workspace.spaceById(channel.spaceId).name,
             autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
@@ -511,14 +551,15 @@ class _ConversationPaneState extends State<ConversationPane> {
             ),
             onSearchMembers: (query) =>
                 chat.searchGuildMembers(spaceId: channel.spaceId, query: query),
-            customEmojis: widget.workspace.emojisFor(channel.spaceId),
-            guildStickers: widget.workspace.stickersFor(channel.spaceId),
+            emojiSections: emojiSectionsFromWorkspace(
+              widget.workspace,
+              channel.spaceId,
+            ),
+            stickerSections: stickerSectionsFromWorkspace(
+              widget.workspace,
+              channel.spaceId,
+            ),
             isSending: chat.isSending,
-            replyTo: _replyTo,
-            replyAuthor: _replyTo == null
-                ? null
-                : widget.workspace.memberOrNull(_replyTo!.authorId),
-            onCancelReply: () => setState(() => _replyTo = null),
             onTyping: () => chat.startTyping(channel.id),
             onCreatePoll: (poll) =>
                 chat.createPoll(channelId: channel.id, poll: poll),
@@ -545,11 +586,43 @@ class _ConversationPaneState extends State<ConversationPane> {
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (mounted && sent) setState(() => _replyTo = null);
-                  return sent;
+                  if (!mounted || !sent) return false;
+                  setState(() {
+                    _replyTo = null;
+                    if (channel.rateLimitPerUser > 0) {
+                      _lastSentAt = DateTime.now();
+                    }
+                  });
+                  return true;
                 },
           ),
       ],
+    );
+  }
+
+  /// The longest message this account may type, from what it holds. A
+  /// transport without entitlement data keeps the base length: it is what
+  /// every free account gets, and typing past it is refused by the server.
+  int _characterLimit() {
+    final entitlements = AccountEntitlementsScope.maybeOf(
+      context,
+    )?.entitlements;
+    return (entitlements?.premiumTier ?? PremiumTier.none)
+        .messageCharacterLimit;
+  }
+
+  /// The largest file this account may attach in this channel, or null while
+  /// the account's entitlements have not arrived. The answer is whichever is
+  /// larger: what the account itself can upload, or what this server's boost
+  /// level grants everybody in it.
+  int? _attachmentSizeLimit(ConversationChannel channel) {
+    final entitlements = AccountEntitlementsScope.maybeOf(
+      context,
+    )?.entitlements;
+    if (entitlements == null) return null;
+    return GuildUploadLimits.uploadLimitFor(
+      guildTier: widget.workspace.spaceById(channel.spaceId).premiumTier,
+      tier: entitlements.premiumTier,
     );
   }
 
@@ -595,32 +668,67 @@ class _ConversationPaneState extends State<ConversationPane> {
       );
     }
     final workspaceController = WorkspaceScope.of(context);
-    // Kept across rebuilds that leave the conversation as it was, which is
-    // most of them: somebody typing, a voice seat filling and a call ringing
-    // all redraw the pane without changing a message.
-    //
-    // Listed below is every workspace value the timeline draws from. The
-    // controllers it also reads out of the scopes above are not listed,
-    // because a scope hands out the same instance for the life of the
-    // session; were one to be swapped, the timeline would keep the old one.
-    return CachedSubtree(
-      dependencies: [
-        widget.workspace.messagesFor(channel.id),
-        widget.workspace.members,
-        widget.workspace.roles,
-        widget.workspace.channels,
-        widget.workspace.emojis,
-        widget.workspace.currentMemberId,
-        channel,
-        widget.capabilities,
-        workspaceController.query,
-        workspaceController.targetMessageId,
-        chat.canLoadOlderMessages(channel.id),
-        chat.isLoadingOlderMessages(channel.id),
-        chat.olderMessagesError(channel.id),
+    // The strip reads the store on every build, so a summary arriving
+    // mid-conversation is drawn as soon as the controller announces it. An
+    // empty channel draws none of it, which is the timeline the app shipped
+    // before summaries existed.
+    final summaries = chat.conversationSummariesFor(channel.id);
+    return Column(
+      children: [
+        if (summaries.isNotEmpty)
+          ConversationSummaries(
+            workspace: widget.workspace,
+            summaries: summaries,
+            onSelect: (summary) =>
+                _jumpToSummary(chat, workspaceController, summary),
+          ),
+        // The timeline itself is kept across rebuilds that leave the
+        // conversation as it was, which is most of them: somebody typing, a
+        // voice seat filling and a call ringing all redraw the pane without
+        // changing a message.
+        //
+        // Listed below is every workspace value it draws from. The
+        // controllers it also reads out of the scopes above are not listed,
+        // because a scope hands out the same instance for the life of the
+        // session; were one to be swapped, the timeline would keep the old
+        // one.
+        Expanded(
+          child: CachedSubtree(
+            dependencies: [
+              widget.workspace.messagesFor(channel.id),
+              widget.workspace.members,
+              widget.workspace.roles,
+              widget.workspace.channels,
+              widget.workspace.emojis,
+              widget.workspace.currentMemberId,
+              channel,
+              widget.capabilities,
+              workspaceController.query,
+              workspaceController.targetMessageId,
+              chat.canLoadOlderMessages(channel.id),
+              chat.isLoadingOlderMessages(channel.id),
+              chat.olderMessagesError(channel.id),
+            ],
+            builder: (_) => _timeline(chat, workspaceController),
+          ),
+        ),
       ],
-      builder: (_) => _timeline(chat, workspaceController),
     );
+  }
+
+  /// Takes the reader to the message a summary starts at, by the same route
+  /// the inbox and search results take: the selection points at the message
+  /// and the channel opens built around it.
+  void _jumpToSummary(
+    ChatController chat,
+    WorkspaceController workspaceController,
+    ConversationSummary summary,
+  ) {
+    final channelId = summary.channelId;
+    final messageId = summary.startMessageId;
+    if (messageId.isEmpty) return;
+    workspaceController.selectMessage(channelId, messageId);
+    unawaited(chat.openChannel(channelId, anchorMessageId: messageId));
   }
 
   Widget _timeline(

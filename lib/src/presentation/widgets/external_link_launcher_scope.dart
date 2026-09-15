@@ -18,7 +18,7 @@ final class ExternalLinkLauncherScope extends InheritedWidget {
   bool updateShouldNotify(ExternalLinkLauncherScope oldWidget) =>
       oldWidget.launcher != launcher;
 
-  static ExternalLinkLauncher? maybeOf(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<ExternalLinkLauncherScope>()
-          ?.launcher;
+  static ExternalLinkLauncher? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<ExternalLinkLauncherScope>()
+      ?.launcher;
 }

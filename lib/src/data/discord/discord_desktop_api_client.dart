@@ -1,5 +1,9 @@
 import '../../domain/chat_models.dart';
 import 'discord_call_api.dart';
+import 'discord_account_connections_repository.dart';
+import 'discord_account_data_package_repository.dart';
+import 'discord_account_entitlements_repository.dart';
+import 'discord_app_authorisation_repository.dart';
 import 'discord_desktop_rest_protocol.dart';
 import 'discord_age_verification_repository.dart';
 import 'discord_auth_session_repository.dart';
@@ -7,8 +11,9 @@ import 'discord_family_centre_repository.dart';
 import 'discord_guild_management_repository.dart';
 import 'discord_mfa_repository.dart';
 import 'discord_moderation_repository.dart';
-import 'discord_safety_hub_repository.dart';
+import 'discord_expression_service.dart';
 import 'discord_multipart_body.dart';
+import 'discord_safety_hub_repository.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_rest_client.dart';
 import 'discord_application_command_service.dart';
@@ -17,6 +22,7 @@ import 'discord_message_component_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
 import 'discord_thread_membership_service.dart';
+import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_user_settings_transport.dart';
 
@@ -31,7 +37,9 @@ final class DiscordDesktopApiClient
         DiscordApplicationCommandTransport,
         DiscordComponentTransport,
         DiscordUserSettingsTransport,
-        DiscordReadStateTransport {
+        DiscordUserNotesTransport,
+        DiscordReadStateTransport,
+        DiscordExpressionTransport {
   DiscordDesktopApiClient({
     required String authorization,
     required Map<String, String> headers,
@@ -73,6 +81,18 @@ final class DiscordDesktopApiClient
   late final DiscordAgeVerificationRepository ageVerification =
       DiscordAgeVerificationRepository(_rest);
 
+  late final DiscordAccountConnectionsRepository accountConnections =
+      DiscordAccountConnectionsRepository(_rest);
+
+  late final DiscordAccountEntitlementsRepository accountEntitlements =
+      DiscordAccountEntitlementsRepository(_rest);
+
+  late final DiscordAppAuthorisationRepository appAuthorisation =
+      DiscordAppAuthorisationRepository(_rest);
+
+  late final DiscordAccountDataPackageRepository accountDataPackage =
+      DiscordAccountDataPackageRepository(_rest);
+
   @override
   Future<bool> patchThreadMemberSettings({
     required String threadId,
@@ -92,6 +112,14 @@ final class DiscordDesktopApiClient
       rethrow;
     }
   }
+
+  /// `GET /applications/detectable`: the games Discord can recognise.
+  ///
+  /// Not on the public protocol surface: the official client uses it to map
+  /// a running executable to the game a presence card names. Game detection
+  /// does the same thing with it.
+  Future<List<Map<String, Object?>>> getDetectableApplications() =>
+      _rest.getList('/applications/detectable');
 
   /// `GET /friend-suggestions`.
   Future<List<Map<String, Object?>>> getFriendSuggestions() =>
@@ -193,9 +221,14 @@ final class DiscordDesktopApiClient
     String channelId, {
     int limit = 100,
     String? beforeMessageId,
+    String? aroundMessageId,
   }) => _rest.getList(
     '/channels/$channelId/messages',
-    query: {'limit': '${limit.clamp(1, 100)}', 'before': ?beforeMessageId},
+    query: {
+      'limit': '${limit.clamp(1, 100)}',
+      'before': ?beforeMessageId,
+      'around': ?aroundMessageId,
+    },
   );
 
   Future<List<Map<String, Object?>>> getChannelPins(String channelId) async {
@@ -367,6 +400,64 @@ final class DiscordDesktopApiClient
     },
   );
 
+  @override
+  Future<List<Map<String, Object?>>> listGuildEmojis(String guildId) =>
+      _rest.getList('/guilds/$guildId/emojis');
+
+  @override
+  Future<Map<String, Object?>> createGuildEmoji(
+    String guildId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject('POST', '/guilds/$guildId/emojis', body: body);
+
+  @override
+  Future<void> deleteGuildEmoji(String guildId, String emojiId) =>
+      _rest.requestEmpty('DELETE', '/guilds/$guildId/emojis/$emojiId');
+
+  @override
+  Future<List<Map<String, Object?>>> listGuildStickers(String guildId) =>
+      _rest.getList('/guilds/$guildId/stickers');
+
+  /// A form rather than a JSON body: the file is a part of its own, which is
+  /// the one route among these three that does not take an inline image.
+  @override
+  Future<Map<String, Object?>> createGuildSticker(
+    String guildId,
+    DiscordMultipartBody body,
+  ) async {
+    final payload = await _rest.request(
+      'POST',
+      '/guilds/$guildId/stickers',
+      rawBody: body.bytes,
+      contentType: body.contentType,
+    );
+    if (payload is! Map) {
+      throw const DiscordApiException(
+        statusCode: 502,
+        message: 'Expected a sticker object',
+      );
+    }
+    return payload.cast<String, Object?>();
+  }
+
+  @override
+  Future<void> deleteGuildSticker(String guildId, String stickerId) =>
+      _rest.requestEmpty('DELETE', '/guilds/$guildId/stickers/$stickerId');
+
+  @override
+  Future<Map<String, Object?>> createSoundboardSound(
+    String guildId,
+    Map<String, Object?> body,
+  ) => _rest.requestObject(
+    'POST',
+    '/guilds/$guildId/soundboard-sounds',
+    body: body,
+  );
+
+  @override
+  Future<void> deleteSoundboardSound(String guildId, String soundId) => _rest
+      .requestEmpty('DELETE', '/guilds/$guildId/soundboard-sounds/$soundId');
+
   /// The moderator's half of the voice-state route.
   @override
   Future<void> patchMemberVoiceState(
@@ -437,11 +528,12 @@ final class DiscordDesktopApiClient
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) async {
     final payload = <String, Object?>{
       'content': content,
       'nonce': nonce,
-      'tts': false,
+      'tts': textToSpeech,
       'flags': suppressNotifications ? 4096 : 0,
       if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
@@ -595,6 +687,62 @@ final class DiscordDesktopApiClient
       // A wrong password, or a username already taken. Both are answers about
       // the request rather than a fault in the client.
       if (error.statusCode == 400 || error.statusCode == 401) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /users/{id}/profile`, with the mutuals the popover wants.
+  ///
+  /// The route refuses somebody this account has no relationship with, and a
+  /// blocked profile comes back half redacted; both are answers, so a 403 or
+  /// 404 reads as null rather than as an outage.
+  @override
+  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+    try {
+      return await _rest.requestObject(
+        'GET',
+        '/users/${Uri.encodeComponent(userId)}/profile',
+        query: const {
+          'with_mutual_guilds': 'true',
+          'with_mutual_friends': 'true',
+        },
+      );
+    } on DiscordApiException catch (error) {
+      if (error.statusCode == 403 || error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /users/@me/notes`, every note the account holds.
+  ///
+  /// A request that fails to return a map is an account with no notes rather
+  /// than an error: the route answers an empty body, not an empty object,
+  /// for an account that never wrote one.
+  @override
+  Future<Map<String, Object?>> readNotes() async {
+    final payload = await _rest.request('GET', '/users/@me/notes');
+    return payload is Map
+        ? payload.cast<String, Object?>()
+        : const <String, Object?>{};
+  }
+
+  /// `PUT /users/@me/notes/{id}`. A null note key clears the note, which is
+  /// the shape Discord's own client sends.
+  @override
+  Future<Object?> writeNote({
+    required String userId,
+    required Map<String, Object?> body,
+  }) async {
+    try {
+      return await _rest.request(
+        'PUT',
+        '/users/@me/notes/${Uri.encodeComponent(userId)}',
+        body: body,
+      );
+    } on DiscordApiException catch (error) {
+      // A note too long, or an account already holding the maximum number
+      // of them. Both are answers about the request, not a fault in the client.
+      if (error.statusCode == 400 || error.statusCode == 403) return null;
       rethrow;
     }
   }

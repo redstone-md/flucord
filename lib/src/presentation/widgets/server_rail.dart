@@ -6,9 +6,15 @@ import '../../domain/chat_models.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
-import 'remote_identity_image.dart';
-import 'account_standing_scope.dart';
+import 'account_connections_scope.dart';
+import 'account_entitlements_scope.dart';
+import 'account_data_package_scope.dart';
+import 'app_authorisation_scope.dart';
 import 'auth_session_scope.dart';
+import 'account_standing_scope.dart';
+import 'remote_identity_image.dart';
+
+import 'accessibility_scope.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
 import 'mention_badge.dart';
@@ -32,6 +38,7 @@ class ServerRail extends StatelessWidget {
     required this.onOpenConnections,
     required this.sessionMode,
     required this.isDark,
+    this.onAddServer,
     super.key,
   });
 
@@ -49,6 +56,11 @@ class ServerRail extends StatelessWidget {
   final VoidCallback onOpenConnections;
   final SessionMode sessionMode;
   final bool isDark;
+
+  /// Opens the add-server surface, or null on a transport that cannot join,
+  /// create or leave anything. The button is hidden rather than disabled:
+  /// a plus that can do nothing is a lie about what the app offers.
+  final VoidCallback? onAddServer;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +108,11 @@ class ServerRail extends StatelessWidget {
               },
             ),
           ),
+          if (onAddServer != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _AddServerButton(onPressed: onAddServer!),
+            ),
           IconButton(
             key: const ValueKey('open-connections'),
             onPressed: onOpenConnections,
@@ -129,10 +146,23 @@ class ServerRail extends StatelessWidget {
                   standingController: AccountStandingScope.maybeOf(context),
                   familyController: FamilyCentreScope.maybeOf(context),
                   sessionController: AuthSessionScope.maybeOf(context),
+                  connectionsController: AccountConnectionsScope.maybeOf(
+                    context,
+                  ),
+                  entitlementsController: AccountEntitlementsScope.maybeOf(
+                    context,
+                  ),
+                  dataPackageController: AccountDataPackageScope.maybeOf(
+                    context,
+                  ),
+                  appAuthorisationController: AppAuthorisationScope.maybeOf(
+                    context,
+                  ),
                   mfaController: MultiFactorAuthScope.maybeOf(context),
                   ageController: AgeVerificationScope.maybeOf(context),
                   keybindController: KeybindScope.maybeOf(context),
                   streamerModeController: StreamerModeScope.maybeOf(context),
+                  accessibilityController: AccessibilityScope.maybeOf(context),
                   streamQualityController: StreamQualityScope.maybeOf(context),
                   themeController: ThemeScope.maybeOf(context),
                   voiceController: VoiceScope.maybeOf(context),
@@ -143,6 +173,59 @@ class ServerRail extends StatelessWidget {
             ),
           const SizedBox(height: 10),
         ],
+      ),
+    );
+  }
+}
+
+/// The green plus at the foot of the space list, Discord's own add-server
+/// entry. Styled as the inverse of a space button: green idle, deeper when
+/// hovered, the brand colour of joining.
+class _AddServerButton extends StatefulWidget {
+  const _AddServerButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_AddServerButton> createState() => _AddServerButtonState();
+}
+
+class _AddServerButtonState extends State<_AddServerButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _hovered;
+    final radius = BorderRadius.circular(active ? 14 : 22);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: const ValueKey('add-server'),
+          onTap: widget.onPressed,
+          borderRadius: radius,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: active
+                  ? FlucordColors.success
+                  : FlucordColors.success.withValues(alpha: 0.62),
+              borderRadius: radius,
+            ),
+            child: Icon(
+              Icons.add,
+              size: 22,
+              color: active ? Colors.white : context.surfaces.muted,
+            ),
+          ),
+        ),
       ),
     );
   }

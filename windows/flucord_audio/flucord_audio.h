@@ -59,6 +59,42 @@ FLUCORD_AUDIO_EXPORT void flucord_audio_release(int16_t* frames);
 
 FLUCORD_AUDIO_EXPORT void flucord_audio_close(FlucordAudioCapture* capture);
 
+// Attenuates every other application's audio, for "attenuate while
+// speaking": the volume of each audio session not owned by this process is
+// multiplied by (1 - level) and the previous level remembered. level is
+// 0.0 to 1.0; 0.0 restores what each session had. Only one level is in
+// force at a time: a second call replaces it.
+FLUCORD_AUDIO_EXPORT int32_t
+flucord_audio_attenuate_others(double level);
+
+// Restores every other application's audio to the level it had before
+// attenuation started.
+FLUCORD_AUDIO_EXPORT int32_t flucord_audio_restore_others(void);
+
+// The microphone enhancer: takes what the speakers are playing out of the
+// microphone and keeps its level steady, through the Windows voice capture
+// stages. echo_cancellation and automatic_gain_control say which stages run.
+// The stages work a frame behind the microphone: the enhanced frame that
+// comes back is the previous one's, and what is left inside comes out with
+// the next frames given to flucord_audio_enhance_frame.
+typedef struct FlucordAudioEnhancer FlucordAudioEnhancer;
+
+FLUCORD_AUDIO_EXPORT FlucordAudioStatus
+flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
+                                int32_t automatic_gain_control,
+                                FlucordAudioEnhancer** out_enhancer);
+
+// Enhances one frame of interleaved 16-bit PCM in place. samples holds
+// sample_count_per_channel samples on each of channels interleaved channels.
+FLUCORD_AUDIO_EXPORT FlucordAudioStatus
+flucord_audio_enhance_frame(FlucordAudioEnhancer* enhancer,
+                            int16_t* samples,
+                            int32_t sample_count_per_channel,
+                            int32_t channels);
+
+FLUCORD_AUDIO_EXPORT void
+flucord_audio_close_mic_enhancer(FlucordAudioEnhancer* enhancer);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

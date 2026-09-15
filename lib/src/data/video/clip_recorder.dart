@@ -95,9 +95,10 @@ final class NativeClipRecorder implements ClipRecorder {
     }
   }
 
-  static Future<Directory> _documents() async =>
-      Directory('${(await getApplicationDocumentsDirectory()).path}'
-          '${Platform.pathSeparator}Flucord');
+  static Future<Directory> _documents() async => Directory(
+    '${(await getApplicationDocumentsDirectory()).path}'
+    '${Platform.pathSeparator}Flucord',
+  );
 
   /// How much is kept. Discord's own clip length is a setting; this is the
   /// default it ships with.
@@ -160,9 +161,7 @@ final class NativeClipRecorder implements ClipRecorder {
     while (_frames.length > 1 &&
         _frames.last.timestamp - _frames.first.timestamp > window) {
       // Only drop the front while something behind it can still open a clip.
-      final hasLaterKeyframe = _frames
-          .skip(1)
-          .any((frame) => frame.isKeyframe);
+      final hasLaterKeyframe = _frames.skip(1).any((frame) => frame.isKeyframe);
       if (!hasLaterKeyframe) return;
       _frames.removeFirst();
     }

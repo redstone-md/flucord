@@ -131,6 +131,16 @@ final class DiscordPresenceService implements PresenceService {
 
   String? get currentUserId => _currentUserId;
 
+  @override
+  List<UserActivity> get localActivities => _localActivities;
+  List<UserActivity> _localActivities = const [];
+
+  @override
+  Future<void> setLocalActivities(List<UserActivity> activities) async {
+    _localActivities = List.unmodifiable(activities);
+    _recompose();
+  }
+
   /// Applies one gateway dispatch, returning the presences it changed.
   ///
   /// The account's own entry is included so the caller can update its member
@@ -293,6 +303,7 @@ final class DiscordPresenceService implements PresenceService {
       stored: _stored?.status,
       idleSince: _idle.idleSince,
       afk: _idle.isAfk,
+      localActivities: _localActivities,
     );
     _updater.update(_self);
     _publishSelf();

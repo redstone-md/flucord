@@ -1,6 +1,9 @@
+import '../../domain/chat_models.dart';
 import '../../domain/discord_permissions.dart';
 import '../../domain/guild_audit_log.dart';
 import '../../domain/guild_management.dart';
+import 'discord_cdn.dart';
+import 'discord_mapper.dart';
 import 'discord_snowflake.dart';
 
 /// Reads the guild-administration payloads into domain records.
@@ -91,6 +94,27 @@ abstract final class DiscordGuildAdminMapper {
         failedUserIds: _ids(payload['failed_users']),
       );
 
+  /// The member record the member popover moderates from.
+  ///
+  /// Roles and timeout are what the moderation actions read; the user record
+  /// beside them is not, so it is not read here.
+  static GuildMemberProfile memberProfile(
+    Map<String, Object?> payload, {
+    required String guildId,
+    required String userId,
+  }) => GuildMemberProfile(
+    userId: userId,
+    guildId: guildId,
+    roleIds: _ids(payload['roles']),
+    nickname: _string(payload['nick']),
+    timeoutUntil: _timestamp(payload['communication_disabled_until']),
+  );
+
+  static DateTime? _timestamp(Object? value) {
+    final raw = _string(value);
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
   static GuildInvite? invite(Map<String, Object?> payload) {
     final code = _string(payload['code']);
     if (code == null) return null;
@@ -119,6 +143,86 @@ abstract final class DiscordGuildAdminMapper {
     for (final payload in payloads)
       if (invite(payload) case final GuildInvite value) value,
   ];
+
+  /// Reads a webhook payload, or null when it has no id. The token is dropped
+  /// on purpose: this client posts nothing as a webhook, so carrying a
+  /// credential it never uses only widens what a copy-paste leaks.
+  static GuildWebhook? webhook(Map<String, Object?> payload, String guildId) {
+    final id = _string(payload['id']);
+    if (id == null) return null;
+    return GuildWebhook(
+      id: id,
+      guildId: _string(payload['guild_id']) ?? guildId,
+      channelId: _string(payload['channel_id']) ?? '',
+      name: _string(payload['name']) ?? 'unnamed',
+      type:
+          GuildWebhookType.fromWire(payload['type']) ??
+          GuildWebhookType.incoming,
+    );
+  }
+
+  static List<GuildWebhook> webhooks(
+    List<Map<String, Object?>> payloads,
+    String guildId,
+  ) => [
+    for (final payload in payloads)
+      if (webhook(payload, guildId) case final GuildWebhook value) value,
+  ];
+
+  /// The preview `GET /invites/{code}` answers with.
+  ///
+  /// The guild rides nested, and its icon hash becomes the URL the join
+  /// surface draws. Counts arrive only when the request asked for them, so
+  /// they stay optional here exactly as they are on the wire.
+  static InvitePreview? invitePreview(Map<String, Object?> payload) {
+    final code = _string(payload['code']);
+    final guild = payload['guild'];
+    if (code == null || guild is! Map) return null;
+    final guildPayload = guild.cast<String, Object?>();
+    final id = _string(guildPayload['id']);
+    final name = _string(guildPayload['name']);
+    if (id == null || name == null) return null;
+    final channel = payload['channel'];
+    final banner = _string(guildPayload['banner']);
+    return InvitePreview(
+      code: code,
+      name: name,
+      guildId: id,
+      description: _string(guildPayload['description']),
+      iconUrl: DiscordCdn.guildIcon(id, _string(guildPayload['icon'])),
+      bannerUrl: banner == null ? null : DiscordCdn.guildBanner(id, banner),
+      channelName: channel is Map ? _string(channel['name']) : null,
+      approximateMemberCount: _int(payload['approximate_member_count']),
+    );
+  }
+
+  /// A hydration answer, from the guild object plus the routes that fill it.
+  ///
+  /// [channels] and [roles] come from `GET /guilds/{id}/channels` and
+  /// `GET /guilds/{id}/roles`; [members] is this account's own membership,
+  /// which the desktop session is told without a member walk. The space is
+  /// read from the guild object with the same projection READY uses, so a
+  /// joined server draws exactly like one the session was opened with.
+  static JoinedGuild joinedGuild({
+    required Map<String, Object?> guild,
+    required List<Map<String, Object?>> channels,
+    required List<Map<String, Object?>> roles,
+    required DiscordMapper mapper,
+    List<Member> members = const [],
+  }) {
+    final guildId = _string(guild['id']) ?? '';
+    return JoinedGuild(
+      space: mapper.spaceFromGuildPayload(guild),
+      channels: [
+        for (final payload in channels) ?mapper.channel(payload, guildId),
+      ],
+      categories: [
+        for (final payload in channels) ?mapper.category(payload, guildId),
+      ],
+      roles: [for (final payload in roles) mapper.role(payload, guildId)],
+      members: members,
+    );
+  }
 
   static AuditLogPage auditLog(Map<String, Object?> payload) {
     final entries = <AuditLogEntry>[];
@@ -199,4 +303,20 @@ abstract final class DiscordGuildAdminMapper {
     final String raw => int.tryParse(raw),
     _ => null,
   };
+}
+
+/// The guild id a join or create answer names.
+///
+/// The join POST answers a partial guild whose `id` is the guild; the create
+/// POST answers a full guild object with the same field. One reader for both
+/// keeps a change in either shape a change in one place.
+String guildIdOfInvite(Map<String, Object?> payload) {
+  final id = payload['id'];
+  if (id is String && id.isNotEmpty) return id;
+  final guild = payload['guild'];
+  if (guild is Map) {
+    final guildId = guild['id'];
+    if (guildId is String && guildId.isNotEmpty) return guildId;
+  }
+  return '';
 }

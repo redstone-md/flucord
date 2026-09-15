@@ -70,6 +70,72 @@ void main() {
       isEmpty,
     );
   });
+
+  test('a colon matches custom emoji by name across servers, and unicode', () {
+    final catalog = ComposerAutocompleteCatalog.fromWorkspace(
+      _workspace,
+      _workspace.channelById('general'),
+    );
+
+    final forgeQuery = ComposerAutocompleteQuery.parse('a :forge_s', 10)!;
+    expect(forgeQuery.trigger, ComposerAutocompleteTrigger.emoji);
+    final forgeMatches = catalog.suggestionsFor(forgeQuery);
+    expect(forgeMatches.first.kind, ComposerAutocompleteKind.emoji);
+    expect(forgeMatches.first.id, 'forge-spark');
+    expect(forgeMatches.first.label, 'forge_spark');
+    // The other server names the emoji it owns.
+    expect(forgeMatches.first.description, 'Forge');
+    expect(forgeMatches.first.insertText, '<:forge_spark:forge-spark>');
+
+    final relayQuery = ComposerAutocompleteQuery.parse(':relay', 6)!;
+    final relayMatches = catalog.suggestionsFor(relayQuery);
+    // Only the available one; the unavailable `relay_gone` is withheld.
+    expect(
+      relayMatches
+          .where((item) => !item.id.startsWith('unicode-'))
+          .map((item) => item.id),
+      ['relay-horn'],
+    );
+    expect(relayMatches.first.description, 'Night Shift');
+    expect(relayMatches.first.insertText, '<:relay_horn:relay-horn>');
+  });
+
+  test('a colon matches the unicode catalogue and inserts the glyph', () {
+    final catalog = ComposerAutocompleteCatalog.fromWorkspace(
+      _workspace,
+      _workspace.channelById('general'),
+    );
+
+    final rocketQuery = ComposerAutocompleteQuery.parse('Ship it :rocket', 15)!;
+    final matches = catalog.suggestionsFor(rocketQuery);
+    expect(matches.first.id, 'unicode-rocket');
+    expect(matches.first.label, 'rocket');
+    expect(matches.first.insertText, '🚀');
+    // What lands in the composer replaces the whole `:rock` token.
+    final edit = matches.first.apply('Ship it :rocket today', rocketQuery);
+    expect(edit.text, 'Ship it 🚀 today');
+
+    // A keyword also finds it: `launch` is one of the rocket's words.
+    final launchQuery = ComposerAutocompleteQuery.parse('Ship it :launch', 15)!;
+    expect(
+      catalog
+          .suggestionsFor(launchQuery)
+          .any((item) => item.id == 'unicode-rocket'),
+      isTrue,
+    );
+  });
+
+  test('a colon inside a mention is not an emoji trigger', () {
+    // The `:` inside a `<:name:id>` is already spoken for.
+    expect(ComposerAutocompleteQuery.parse('a <:forge:', 10), isNull);
+    // A bare colon at a word boundary opens the emoji trigger, with an empty
+    // name, exactly the way Discord's own client opens it.
+    final bare = ComposerAutocompleteQuery.parse('hi :', 4)!;
+    expect(bare.trigger, ComposerAutocompleteTrigger.emoji);
+    expect(bare.text, '');
+    expect(bare.start, 3);
+    expect(bare.end, 4);
+  });
 }
 
 final _workspace = ChatWorkspace(
@@ -80,7 +146,25 @@ final _workspace = ChatWorkspace(
       monogram: 'FO',
       colorValue: 0xff5865f2,
     ),
+    CommunitySpace(
+      id: 'guild-2',
+      name: 'Night Shift',
+      monogram: 'NS',
+      colorValue: 0xff765341,
+    ),
     CommunitySpace.directMessages(),
+  ],
+  emojis: const [
+    GuildEmoji(id: 'forge-spark', spaceId: 'guild-1', name: 'forge_spark'),
+    GuildEmoji(id: 'relay-horn', spaceId: 'guild-2', name: 'relay_horn'),
+    // Another server's emoji that is unavailable right now: Discord withholds
+    // it from autocomplete, and so does the catalog.
+    GuildEmoji(
+      id: 'gone',
+      spaceId: 'guild-2',
+      name: 'relay_gone',
+      available: false,
+    ),
   ],
   channels: const [
     ConversationChannel(

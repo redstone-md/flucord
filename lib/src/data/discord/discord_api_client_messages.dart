@@ -11,6 +11,7 @@ extension DiscordApiClientMessages on DiscordApiClient {
     String? nonce,
     bool enforceNonce = false,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) {
     if (stickerIds.length > 3) {
       throw ArgumentError.value(stickerIds, 'stickerIds', 'maximum is 3');
@@ -18,6 +19,9 @@ extension DiscordApiClientMessages on DiscordApiClient {
     _validateNonce(nonce, enforceNonce: enforceNonce);
     final payload = <String, Object?>{
       'content': content,
+      // Discord's own client omits `tts` unless the message is spoken aloud,
+      // so the key travels only when it says something.
+      if (textToSpeech) 'tts': true,
       if (replyToMessageId != null)
         'message_reference': {'message_id': replyToMessageId},
       if (poll != null) 'poll': DiscordPollCodec.request(poll),

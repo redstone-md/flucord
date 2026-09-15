@@ -44,6 +44,135 @@ void main() {
     });
   });
 
+  group('other-user profile mapping', () {
+    test('reads a full profile payload', () {
+      final profile = DiscordUserProfileRepository.readOtherProfile(const {
+        'user': {
+          'id': '222222222222222222',
+          'username': 'mira',
+          'global_name': 'Mira Chen',
+          'discriminator': '0',
+          'avatar': 'mhash',
+          'banner': 'a_bhash',
+          'accent_color': 0x5865f2,
+          'avatar_decoration_data': {
+            'asset': 'a_deco',
+            'sku_id': '444444444444444444',
+          },
+        },
+        'user_profile': {
+          'pronouns': 'she/her',
+          'bio': 'ships the parser',
+          'banner': 'a_bhash',
+          'accent_color': 0x5865f2,
+        },
+        'badges': [
+          {
+            'id': 'legacy_username',
+            'description': 'Originally known as mira#1234',
+            'icon': '6de27dcd513adaa7c2eb5a206fb0d47c',
+          },
+        ],
+        'connected_accounts': [
+          {'type': 'twitter', 'id': '123', 'name': 'discord', 'verified': true},
+          {'type': 'github', 'id': '456', 'name': 'mira'},
+        ],
+        'mutual_guilds': [
+          {'id': '666666666666666666', 'nick': 'Liena'},
+          {'id': '999'},
+        ],
+        'mutual_friends': [
+          {
+            'id': '333333333333333333',
+            'username': 'roman',
+            'global_name': 'Roman Vale',
+          },
+        ],
+      })!;
+
+      expect(profile.userId, '222222222222222222');
+      expect(profile.effectiveName, 'Mira Chen');
+      expect(profile.bio, 'ships the parser');
+      expect(profile.pronouns, 'she/her');
+      expect(profile.avatarHash, 'mhash');
+      expect(profile.bannerHash, 'a_bhash');
+      expect(profile.accentColor, 0x5865f2);
+      expect(profile.decoration?.asset, 'a_deco');
+      expect(profile.decoration?.skuId, '444444444444444444');
+      expect(profile.badges.single.description, contains('mira#1234'));
+      expect(profile.connections, hasLength(2));
+      expect(profile.connections.first.type, 'twitter');
+      expect(profile.connections.first.verified, isTrue);
+      expect(profile.connections[1].verified, isFalse);
+      expect(profile.mutualServers, hasLength(2));
+      expect(profile.mutualServers.first.nickname, 'Liena');
+      expect(profile.mutualServers[1].id, '999');
+      expect(profile.mutualFriends.single.displayName, 'Roman Vale');
+      expect(profile.mutualFriends.single.username, 'roman');
+    });
+
+    test('a redacted or bare profile falls back per field', () {
+      final profile = DiscordUserProfileRepository.readOtherProfile(const {
+        'user': {'id': '222222222222222222', 'username': 'mira'},
+        'user_profile': {},
+      })!;
+
+      expect(profile.effectiveName, 'mira');
+      expect(profile.bio, '');
+      expect(profile.pronouns, '');
+      expect(profile.avatarHash, isNull);
+      expect(profile.bannerHash, isNull);
+      expect(profile.accentColor, isNull);
+      expect(profile.decoration, isNull);
+      expect(profile.badges, isEmpty);
+      expect(profile.connections, isEmpty);
+      expect(profile.mutualServers, isEmpty);
+      expect(profile.mutualFriends, isEmpty);
+    });
+
+    test('a payload with no user is refused', () {
+      expect(DiscordUserProfileRepository.readOtherProfile(const {}), isNull);
+      expect(
+        DiscordUserProfileRepository.readOtherProfile(const {
+          'user': {'id': 42},
+        }),
+        isNull,
+      );
+    });
+
+    test('a mutual friend with no display name falls back to the handle', () {
+      final profile = DiscordUserProfileRepository.readOtherProfile(const {
+        'user': {'id': '222222222222222222'},
+        'mutual_friends': [
+          {'id': '333', 'username': 'roman'},
+        ],
+      })!;
+
+      expect(profile.mutualFriends.single.displayName, 'roman');
+    });
+
+    test('the repository fetches the other user over the transport', () async {
+      final transport = _FakeTransport();
+      final repository = DiscordUserProfileRepository(transport);
+      addTearDown(repository.close);
+
+      final profile = await repository.loadProfileOf('222222222222222222');
+
+      expect(transport.requestedProfileIds, ['222222222222222222']);
+      expect(profile, isNotNull);
+      expect(profile!.userId, '222222222222222222');
+    });
+
+    test('a refused or empty fetch answers null without throwing', () async {
+      final refused = _FakeTransport()..refuseProfile = true;
+      final repository = DiscordUserProfileRepository(refused);
+      addTearDown(repository.close);
+      expect(await repository.loadProfileOf('222222222222222222'), isNull);
+
+      expect(await repository.loadProfileOf('  '), isNull);
+    });
+  });
+
   group('patch', () {
     test('sends only what was touched', () {
       expect(const UserProfilePatch().isEmpty, isTrue);
@@ -313,14 +442,26 @@ void main() {
 
 final class _FakeTransport implements DiscordUserProfileTransport {
   final List<Map<String, Object?>> patches = [];
+  final List<String> requestedProfileIds = [];
   bool failWrites = false;
   bool failReads = false;
+  bool refuseProfile = false;
   String _displayName = 'Rx';
 
   @override
   Future<Map<String, Object?>> readCurrentUser() async {
     if (failReads) throw StateError('offline');
     return _user();
+  }
+
+  @override
+  Future<Map<String, Object?>?> readUserProfile(String userId) async {
+    requestedProfileIds.add(userId);
+    if (refuseProfile) return null;
+    return {
+      'user': {'id': userId, 'username': 'mira', 'global_name': 'Mira'},
+      'user_profile': {'bio': 'ships the parser'},
+    };
   }
 
   @override
