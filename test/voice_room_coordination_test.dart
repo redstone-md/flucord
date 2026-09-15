@@ -86,7 +86,9 @@ void main() {
     addTearDown(room.dispose);
 
     await voice.refreshSignalingService();
-    signaling.emit(const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready));
+    signaling.emit(
+      const VoiceSignalingStatusEvent(VoiceConnectionStatus.ready),
+    );
     await Future<void>.delayed(Duration.zero);
     packets.add(('user-a', _cameraFrame([0x65, 1])));
     await Future<void>.delayed(Duration.zero);
@@ -499,4 +501,3 @@ DecodedVideoFrame _picture() => DecodedVideoFrame(
   height: 2,
   timestamp: Duration.zero,
 );
-

@@ -56,8 +56,13 @@ typedef _DecoderInfoNative =
     );
 
 typedef VideoDecoderInfoDart =
-    int Function(Pointer<Void>, Pointer<Int32>, Pointer<Int32>, Pointer<Int32>,
-        Pointer<Int32>);
+    int Function(
+      Pointer<Void>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+      Pointer<Int32>,
+    );
 
 typedef _DecoderReleasePictureNative = Void Function(Pointer<Void>);
 
@@ -67,29 +72,31 @@ typedef _DecoderDroppedNative = Int32 Function(Pointer<Void>);
 
 typedef DecoderDroppedDart = int Function(Pointer<Void>);
 
-typedef _DecoderStatsNative = Void Function(
-  Pointer<Void>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int32>,
-);
+typedef _DecoderStatsNative =
+    Void Function(
+      Pointer<Void>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int32>,
+    );
 
-typedef DecoderStatsDart = void Function(
-  Pointer<Void>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int64>,
-  Pointer<Int32>,
-);
+typedef DecoderStatsDart =
+    void Function(
+      Pointer<Void>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int64>,
+      Pointer<Int32>,
+    );
 
 typedef VideoOpenNative =
     Int32 Function(
@@ -164,10 +171,10 @@ final class NativeVideoBindings {
             'flucord_video_decoder_info',
           ),
       decoderReleasePicture = library
-          .lookupFunction<_DecoderReleasePictureNative,
-              DecoderReleasePictureDart>(
-            'flucord_video_decoder_release_picture',
-          ),
+          .lookupFunction<
+            _DecoderReleasePictureNative,
+            DecoderReleasePictureDart
+          >('flucord_video_decoder_release_picture'),
       decoderDropped = library
           .lookupFunction<_DecoderDroppedNative, DecoderDroppedDart>(
             'flucord_video_decoder_dropped',

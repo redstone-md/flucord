@@ -58,10 +58,7 @@ class _ThemeSectionState extends State<ThemeSection> {
                   _folder ?? 'Reading…',
                   key: const ValueKey('theme-folder'),
                   maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.surfaces.muted,
-                  ),
+                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
                 ),
               ),
               IconButton(
@@ -86,7 +83,8 @@ class _ThemeSectionState extends State<ThemeSection> {
           _ThemeTile(
             tileKey: const ValueKey('theme-builtin'),
             name: 'Flucord',
-            subtitle: 'The built-in theme, following your light or dark '
+            subtitle:
+                'The built-in theme, following your light or dark '
                 'setting.',
             palette: FlucordPalette.dark,
             selected: controller.selected == null,

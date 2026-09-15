@@ -132,9 +132,19 @@ class GuildSettingsRetry extends StatelessWidget {
 
 /// The inline banner a failed write leaves behind.
 class GuildSettingsActionError extends StatelessWidget {
-  const GuildSettingsActionError({required this.error, super.key});
+  const GuildSettingsActionError({
+    required this.error,
+    this.message,
+    super.key,
+  });
 
   final Object? error;
+
+  /// The sentence this failure is explained with. The default covers every
+  /// section; a surface whose refusals have reasons of their own, like a full
+  /// server or an oversized file, passes them here so the person reads why
+  /// and not just that.
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +168,7 @@ class GuildSettingsActionError extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'That change was not saved.',
+              message ?? 'That change was not saved.',
               style: const TextStyle(fontSize: 12),
             ),
           ),

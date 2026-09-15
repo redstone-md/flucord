@@ -1,8 +1,9 @@
 import '../domain/chat_models.dart';
+import '../domain/unicode_emoji.dart';
 
-enum ComposerAutocompleteTrigger { mention, channel }
+enum ComposerAutocompleteTrigger { mention, channel, emoji }
 
-enum ComposerAutocompleteKind { member, role, channel }
+enum ComposerAutocompleteKind { member, role, channel, emoji }
 
 final class ComposerAutocompleteQuery {
   const ComposerAutocompleteQuery({
@@ -31,12 +32,15 @@ final class ComposerAutocompleteQuery {
       final trigger = switch (character) {
         '@' => ComposerAutocompleteTrigger.mention,
         '#' => ComposerAutocompleteTrigger.channel,
+        ':' => ComposerAutocompleteTrigger.emoji,
         _ => null,
       };
       if (trigger == null) continue;
       if (index > 0 && !_isBoundary(value[index - 1])) return null;
       final text = value.substring(index + 1, cursor);
-      if (text.contains('@') || text.contains('#')) return null;
+      if (text.contains('@') || text.contains('#') || text.contains(':')) {
+        return null;
+      }
       return ComposerAutocompleteQuery(
         trigger: trigger,
         text: text.trim(),
@@ -69,6 +73,8 @@ final class ComposerAutocompleteSuggestion {
     this.initials,
     this.colorValue,
     this.avatarUrl,
+    this.emojiUrl,
+    this.unicodeGlyph,
   }) : _searchTerms = List.unmodifiable(searchTerms);
 
   final String id;
@@ -79,6 +85,13 @@ final class ComposerAutocompleteSuggestion {
   final String? initials;
   final int? colorValue;
   final String? avatarUrl;
+
+  /// The custom emoji's image, or null when this suggestion is not one.
+  final String? emojiUrl;
+
+  /// The unicode emoji's own character, or null when this suggestion is not
+  /// one. The row draws it as the emoji rather than a stand-in shape.
+  final String? unicodeGlyph;
   final List<String> _searchTerms;
 
   ComposerAutocompleteEdit apply(
@@ -98,16 +111,20 @@ final class ComposerAutocompleteSuggestion {
 final class ComposerAutocompleteCatalog {
   const ComposerAutocompleteCatalog.empty()
     : _mentionSuggestions = const [],
-      _channelSuggestions = const [];
+      _channelSuggestions = const [],
+      _emojiSuggestions = const [];
 
   ComposerAutocompleteCatalog._({
     required List<ComposerAutocompleteSuggestion> mentionSuggestions,
     required List<ComposerAutocompleteSuggestion> channelSuggestions,
+    required List<ComposerAutocompleteSuggestion> emojiSuggestions,
   }) : _mentionSuggestions = List.unmodifiable(mentionSuggestions),
-       _channelSuggestions = List.unmodifiable(channelSuggestions);
+       _channelSuggestions = List.unmodifiable(channelSuggestions),
+       _emojiSuggestions = List.unmodifiable(emojiSuggestions);
 
   final List<ComposerAutocompleteSuggestion> _mentionSuggestions;
   final List<ComposerAutocompleteSuggestion> _channelSuggestions;
+  final List<ComposerAutocompleteSuggestion> _emojiSuggestions;
 
   factory ComposerAutocompleteCatalog.fromWorkspace(
     ChatWorkspace workspace,
@@ -206,11 +223,56 @@ final class ComposerAutocompleteCatalog {
                 ),
               )
               .toList(growable: false);
+
     return ComposerAutocompleteCatalog._(
       mentionSuggestions: mentionSuggestions,
       channelSuggestions: channelSuggestions,
+      emojiSuggestions: _buildEmojiSuggestions(workspace),
     );
   }
+
+  /// Custom emoji from every server the account is in, each naming its
+  /// server, followed by the whole unicode set.
+  ///
+  /// The custom ones lead because a name typed after a colon is most often a
+  /// server's own; the unicode ones follow, ranked the way the catalogue
+  /// ranks them. Availability is what Discord enforces, not the client: an
+  /// unavailable emoji is left out here rather than sent and refused.
+  static List<ComposerAutocompleteSuggestion> _buildEmojiSuggestions(
+    ChatWorkspace workspace,
+  ) {
+    final spaceNames = {
+      for (final space in workspace.spaces) space.id: space.name,
+    };
+    return [
+      for (final emoji in workspace.emojis.where((emoji) => emoji.available))
+        ComposerAutocompleteSuggestion(
+          id: emoji.id,
+          label: emoji.name,
+          description: spaceNames[emoji.spaceId] ?? emoji.spaceId,
+          insertText: emoji.messageSyntax,
+          kind: ComposerAutocompleteKind.emoji,
+          searchTerms: [emoji.name, spaceNames[emoji.spaceId] ?? ''],
+          emojiUrl: emoji.imageUrl,
+        ),
+      ..._unicodeSuggestions,
+    ];
+  }
+
+  /// The unicode half, built once: it holds no workspace state, and the pane
+  /// rebuilds the catalog on every message that arrives.
+  static final List<ComposerAutocompleteSuggestion> _unicodeSuggestions = [
+    for (final emoji in UnicodeEmojiCatalog.all)
+      ComposerAutocompleteSuggestion(
+        id: 'unicode-${emoji.name}',
+        label: emoji.name,
+        description: 'Unicode',
+        insertText: emoji.glyph,
+        kind: ComposerAutocompleteKind.emoji,
+        searchTerms: [emoji.name, emoji.searchTerms],
+        unicodeGlyph: emoji.glyph,
+      ),
+  ];
 
   List<ComposerAutocompleteSuggestion> suggestionsFor(
     ComposerAutocompleteQuery query, {
@@ -220,6 +282,7 @@ final class ComposerAutocompleteCatalog {
     final source = switch (query.trigger) {
       ComposerAutocompleteTrigger.mention => _mentionSuggestions,
       ComposerAutocompleteTrigger.channel => _channelSuggestions,
+      ComposerAutocompleteTrigger.emoji => _emojiSuggestions,
     };
     final needle = query.text.toLowerCase();
     final matches =

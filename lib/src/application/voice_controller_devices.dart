@@ -74,10 +74,49 @@ extension VoiceControllerDevices on VoiceController {
   /// Separate from [toggleMute] because push to talk is not a toggle: two
   /// quick presses must not leave the microphone in the state the first one
   /// put it in.
+  ///
+  /// A release with a release delay configured does not end the speech at
+  /// once: the uplink stays live for the delay, so the ends of words survive
+  /// the key. A press inside the window cancels the pending end, and the
+  /// uplink that never dropped needs no restart. A toggle mute or a deafen
+  /// takes effect immediately regardless: they are deliberate acts with no
+  /// key to outrun.
   Future<void> setMuted({required bool muted}) async {
-    if (!isConnected || _isMuted == muted) return;
+    if (!isConnected) return;
+    // A press inside the release window cancels the pending end, whatever
+    // the flag already reads: the uplink never dropped, but the timer that
+    // would drop it is still running.
+    if (muted == false) {
+      _releaseDelayTimer?.cancel();
+      _releaseDelayTimer = null;
+    }
+    if (_isMuted == muted) return;
+    if (muted && !_isDeafened && _processing.pushToTalkReleaseDelayMs > 0) {
+      // The key came up: keep transmitting for the configured window. The
+      // room is not told anything, because nothing changed for it.
+      _releaseDelayTimer = Timer(
+        Duration(milliseconds: _processing.pushToTalkReleaseDelayMs),
+        () {
+          _releaseDelayTimer = null;
+          unawaited(_endReleaseDelay());
+        },
+      );
+      return;
+    }
     await _run(() async {
       _isMuted = muted;
+      await _applyMuteState();
+      await _sendJoin();
+    });
+  }
+
+  /// The release delay ran out: the uplink goes quiet now, unless the
+  /// session changed underneath it. The timer's own existence is what held
+  /// the uplink live, so nothing else needs to be checked against it.
+  Future<void> _endReleaseDelay() async {
+    if (!isConnected) return;
+    await _run(() async {
+      _isMuted = true;
       await _applyMuteState();
       await _sendJoin();
     });
@@ -103,6 +142,14 @@ extension VoiceControllerDevices on VoiceController {
     if (_processingTouched || _disposed) return;
     _processing = loaded;
     unawaited(_audioPipeline?.setNoiseSuppression(loaded.noiseSuppression));
+    _audioPipeline?.setInputThreshold(loaded.inputSensitivity);
+    unawaited(
+      _audioPipeline?.setMicrophoneEnhancement(
+        echoCancellation: loaded.echoCancellation,
+        automaticGainControl: loaded.automaticGainControl,
+      ),
+    );
+    unawaited(_applyParticipantVolumes());
     _notify();
   }
 
@@ -123,6 +170,84 @@ extension VoiceControllerDevices on VoiceController {
     } on Object catch (error) {
       _reportBackgroundError(error);
     }
+  }
+
+  /// The level the microphone has to reach to be sent, in dB relative to
+  /// full scale, or null when the gate learns the room's noise floor.
+  double? get inputSensitivity =>
+      _audioPipeline?.inputSensitivity ?? _processing.inputSensitivity;
+
+  /// Sets the gate's level by hand, for this session and the next, or
+  /// returns to the automatic gate with null.
+  Future<void> setInputSensitivity(double? dbfs) async {
+    _processingTouched = true;
+    // Null is a value here: it is the automatic gate, which a copyWith that
+    // took it for "unchanged" would never be able to switch back to.
+    _processing = _processing.copyWith(
+      inputSensitivity: dbfs,
+      automaticSensitivity: dbfs == null,
+    );
+    _audioPipeline?.setInputThreshold(dbfs);
+    _notify();
+    await _saveProcessing();
+  }
+
+  /// How long the uplink stays live after the push-to-talk key is released.
+  int get pushToTalkReleaseDelayMs => _processing.pushToTalkReleaseDelayMs;
+
+  /// Sets the release delay, for this session and the next.
+  Future<void> setPushToTalkReleaseDelayMs(int ms) async {
+    final held = ms < 0 ? 0 : ms;
+    _processingTouched = true;
+    _processing = _processing.copyWith(pushToTalkReleaseDelayMs: held);
+    _notify();
+    await _saveProcessing();
+  }
+
+  /// Whether this build has the machine's echo and gain stages at all.
+  bool get isMicrophoneEnhancementAvailable =>
+      _audioPipeline?.isMicrophoneEnhancementAvailable ?? false;
+
+  /// Whether the microphone's echo is being removed.
+  ///
+  /// Read from the pipeline, which turns itself off when the stages fail,
+  /// so the switch shows what is happening rather than what was asked for.
+  bool get echoCancellation =>
+      _audioPipeline?.isEchoCancellationEnabled ?? _processing.echoCancellation;
+
+  /// Whether the microphone's level is being kept steady.
+  bool get automaticGainControl =>
+      _audioPipeline?.isAutomaticGainControlEnabled ??
+      _processing.automaticGainControl;
+
+  /// Switches the machine's echo and gain stages, for this session and the
+  /// next.
+  ///
+  /// Applied before it is saved, like the noise filter: a file that will
+  /// not write loses the next restart, not this call. Both switches ride
+  /// one open path, and the pipeline reports if it cannot be opened.
+  Future<void> setMicrophoneEnhancement({
+    bool? echoCancellation,
+    bool? automaticGainControl,
+  }) async {
+    _processingTouched = true;
+    final next = _processing.copyWith(
+      echoCancellation: echoCancellation,
+      automaticGainControl: automaticGainControl,
+    );
+    if (next.echoCancellation == _processing.echoCancellation &&
+        next.automaticGainControl == _processing.automaticGainControl) {
+      return;
+    }
+    _processing = next;
+    unawaited(
+      _audioPipeline?.setMicrophoneEnhancement(
+        echoCancellation: next.echoCancellation,
+        automaticGainControl: next.automaticGainControl,
+      ),
+    );
+    _notify();
+    await _saveProcessing();
   }
 
   /// Deafening also mutes, which is what Discord does: somebody who cannot

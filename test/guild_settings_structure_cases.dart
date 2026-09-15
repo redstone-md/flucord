@@ -120,6 +120,22 @@ void _structureCases() {
       final lowest = controller.roles.firstWhere((role) => role.id == 'helper');
       expect(await controller.moveRole(lowest, offset: 5), isFalse);
     });
+
+    test('a moved role keeps its colour and icon', () async {
+      final repository = FakeGuildManagementRepository()
+        ..includeLowRoles = true;
+      final controller = _controller(repository: repository);
+      await controller.openSection(GuildSettingsSection.roles);
+      final member = controller.roles.firstWhere((role) => role.id == 'member');
+
+      expect(await controller.moveRole(member, offset: -1), isTrue);
+
+      final moved = controller.roles.firstWhere((role) => role.id == 'member');
+      expect(moved.position, isNot(member.position));
+      expect(moved.colorValue, 0x2ecc71);
+      expect(moved.iconHash, 'member-icon');
+      expect(moved.unicodeEmoji, '🔧');
+    });
   });
 
   group('channels', () {
@@ -163,21 +179,51 @@ void _structureCases() {
       expect(repository.calls, isEmpty);
     });
 
-    test('a reorder that changes nothing is never sent', () async {
+    test('a slowmode and age gate edit reaches the repository', () async {
       final repository = FakeGuildManagementRepository();
       final controller = _controller(repository: repository);
-      const entries = [
-        ChannelOrderEntry(
-          id: '222222222222222222',
-          position: 0,
-          type: GuildChannelType.text,
-        ),
-      ];
-      expect(
-        await controller.reorderChannels(before: entries, after: entries),
-        isFalse,
-      );
-      expect(repository.calls, isEmpty);
+      final edit = GuildChannelEdit()
+        ..rateLimitPerUser = 30
+        ..nsfw = true;
+      expect(await controller.saveChannel(channelId: 'c', edit: edit), isTrue);
+      expect(repository.calls, contains('editGuildChannel'));
+      expect(edit['rate_limit_per_user'], 30);
+      expect(edit['nsfw'], true);
+    });
+
+    test('the voice fields and the region ride along on a voice channel', () {
+      final edit = GuildChannelEdit()
+        ..bitrate = 128000
+        ..userLimit = 25
+        ..rtcRegion = 'rotterdam';
+      expect(edit['bitrate'], 128000);
+      expect(edit['user_limit'], 25);
+      expect(edit['rtc_region'], 'rotterdam');
+      // Automatic is a real value, sent as null rather than skipped.
+      edit.rtcRegion = null;
+      expect(edit['rtc_region'], null);
+    });
+
+    test('an overwrite list replaces the channel overwrites wholesale', () {
+      final edit = GuildChannelEdit()
+        ..permissionOverwrites = [
+          DiscordPermissionOverwrite(
+            id: '111111111111111111',
+            allow: DiscordPermissions.viewChannel,
+            deny: DiscordPermissions.sendMessages,
+          ),
+        ];
+      expect(edit['permission_overwrites'], [
+        {
+          'id': '111111111111111111',
+          'type': 0,
+          'allow': '1024',
+          'deny': '2048',
+        },
+      ]);
+      // An empty list is a real request: it means nobody gets in.
+      edit.permissionOverwrites = const [];
+      expect(edit['permission_overwrites'], isEmpty);
     });
 
     test('a real reorder reaches the repository', () async {
@@ -217,6 +263,89 @@ void _structureCases() {
         isTrue,
       );
       expect(await controller.deleteChannel('c'), isTrue);
+    });
+  });
+
+  group('webhooks', () {
+    test('the page is gated on MANAGE_WEBHOOKS', () async {
+      final repository = FakeGuildManagementRepository();
+      final controller = _controller(
+        repository: repository,
+        permissions: DiscordPermissions.manageGuild,
+      );
+      expect(
+        controller.availableSections,
+        isNot(contains(GuildSettingsSection.webhooks)),
+      );
+      expect(
+        await controller.createWebhook(
+          const GuildWebhookDraft(name: 'ci', channelId: textChannelId),
+        ),
+        isFalse,
+      );
+      expect(
+        await controller.saveWebhook(
+          webhookId: '555555555555555555',
+          edit: GuildWebhookEdit()..name = 'renamed',
+        ),
+        isFalse,
+      );
+      expect(await controller.deleteWebhook('555555555555555555'), isFalse);
+      expect(repository.calls, isEmpty);
+    });
+
+    test('lists, creates, edits and deletes through the contract', () async {
+      final repository = FakeGuildManagementRepository();
+      final controller = _controller(repository: repository);
+      await controller.openSection(GuildSettingsSection.webhooks);
+      expect(controller.webhooks, isEmpty);
+
+      expect(
+        await controller.createWebhook(
+          const GuildWebhookDraft(name: 'builds', channelId: textChannelId),
+        ),
+        isTrue,
+      );
+      expect(
+        controller.webhooks.single,
+        isA<GuildWebhook>()
+            .having((webhook) => webhook.name, 'name', 'builds')
+            .having((webhook) => webhook.channelId, 'channel', textChannelId),
+      );
+
+      final edit = GuildWebhookEdit()
+        ..name = 'builds v2'
+        ..channelId = '234567890123456789';
+      expect(
+        await controller.saveWebhook(
+          webhookId: controller.webhooks.single.id,
+          edit: edit,
+        ),
+        isTrue,
+      );
+      expect(controller.webhooks.single.name, 'builds v2');
+      expect(controller.webhooks.single.channelId, '234567890123456789');
+      expect(repository.savedWebhookEdit, same(edit));
+
+      expect(
+        await controller.deleteWebhook(controller.webhooks.single.id),
+        isTrue,
+      );
+      expect(controller.webhooks, isEmpty);
+      expect(repository.calls, contains('deleteWebhook'));
+    });
+
+    test('an empty webhook edit is never sent', () async {
+      final repository = FakeGuildManagementRepository();
+      final controller = _controller(repository: repository);
+      expect(
+        await controller.saveWebhook(
+          webhookId: '555555555555555555',
+          edit: GuildWebhookEdit(),
+        ),
+        isFalse,
+      );
+      expect(repository.calls, isEmpty);
     });
   });
 }

@@ -80,9 +80,10 @@ final class NativeScreenshotService implements ScreenshotService {
 
   /// Pictures, with the client's own folder inside it — which is where
   /// somebody looks for a screenshot without being told.
-  static Future<Directory> _pictures() async =>
-      Directory('${(await getApplicationDocumentsDirectory()).path}'
-          '${Platform.pathSeparator}Flucord');
+  static Future<Directory> _pictures() async => Directory(
+    '${(await getApplicationDocumentsDirectory()).path}'
+    '${Platform.pathSeparator}Flucord',
+  );
 
   /// The native entry point, or a stand-in. Held as the function rather than
   /// the whole binding table so a test can drive the capture path without a

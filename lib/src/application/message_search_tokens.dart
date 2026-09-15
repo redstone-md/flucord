@@ -111,6 +111,63 @@ abstract final class _MessageSearchTokens {
   static bool _isSpace(String char) => char.trim().isEmpty;
 }
 
+/// Composes the filter tokens of the search bar.
+///
+/// The grammar is the one home of the token syntax in both directions: this
+/// editor writes the same shapes [MessageSearchGrammar.parse] reads, so a
+/// control that fills the bar can never emit a line the bar would parse
+/// differently than the control meant.
+abstract final class MessageSearchTokenEditor {
+  /// [text] with [filter]'s answer replaced by one naming [value].
+  ///
+  /// A filter names one answer at a time, because the grammar assigns a date
+  /// bound rather than accumulating it and a picker means one person, so the
+  /// earlier token of [filter] is dropped and the new one appended while
+  /// every other word keeps its place.
+  static String withToken(
+    String text, {
+    required String filter,
+    required String value,
+  }) {
+    final kept = _without(text, filter);
+    final token = '$filter:${_quoted(value)}';
+    return kept.isEmpty ? token : '$kept $token';
+  }
+
+  /// [text] with every token of [filter] removed.
+  static String withoutFilter(String text, String filter) =>
+      _without(text, filter);
+
+  /// Whether [text] already carries an answer for [filter].
+  static bool hasFilter(String text, String filter) =>
+      _MessageSearchTokens.split(text).any((token) => token.filter == filter);
+
+  /// Whether [filter]'s tokens in [text] include [value].
+  ///
+  /// The bar can hold several answers for one filter when they were typed,
+  /// so this asks about membership rather than equality.
+  static bool answers(
+    String text, {
+    required String filter,
+    required String value,
+  }) => _MessageSearchTokens.split(
+    text,
+  ).any((token) => token.filter == filter && token.value == value);
+
+  static String _without(String text, String filter) => [
+    for (final token in _MessageSearchTokens.split(text))
+      if (token.filter != filter) token.text,
+  ].join(' ');
+
+  /// Quotes [value] the way the bar reads it back: double quotes hold a
+  /// multi-word answer together, and inside them `\"` and `\\` are escapes.
+  static String _quoted(String value) {
+    if (!value.contains(RegExp(r'[\s"\\]'))) return value;
+    final escaped = value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    return '"$escaped"';
+  }
+}
+
 /// A `before:`/`after:` answer, resolved to the span of time it names.
 ///
 /// Discord accepts a day, a month or a whole year and turns each into a

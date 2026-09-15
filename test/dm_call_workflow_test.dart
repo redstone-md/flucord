@@ -1,4 +1,8 @@
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
+import 'package:flucord/src/domain/account_connections.dart';
+import 'package:flucord/src/domain/account_data_package.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/app_authorisation.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -12,8 +16,10 @@ import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
+import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter/material.dart';
@@ -28,6 +34,7 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
@@ -204,6 +211,8 @@ Future<void> _openDirectMessage(
 final class _CallableRepository implements ChatRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+  @override
+  UserNotesRepository? get userNotes => _delegate.userNotes;
 
   @override
   ThreadMembershipRepository? get threadMembership =>
@@ -214,6 +223,9 @@ final class _CallableRepository implements ChatRepository {
 
   @override
   SoundboardRepository? get soundboard => _delegate.soundboard;
+
+  @override
+  GuildExpressionRepository? get expressions => _delegate.expressions;
 
   @override
   GifRepository? get gifs => _delegate.gifs;
@@ -277,6 +289,18 @@ final class _CallableRepository implements ChatRepository {
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
@@ -284,6 +308,8 @@ final class _CallableRepository implements ChatRepository {
 
   @override
   PresenceService? get presence => null;
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
@@ -292,8 +318,12 @@ final class _CallableRepository implements ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
-  }) =>
-      _delegate.loadChannelHistory(channelId, beforeMessageId: beforeMessageId);
+    String? aroundMessageId,
+  }) => _delegate.loadChannelHistory(
+    channelId,
+    beforeMessageId: beforeMessageId,
+    aroundMessageId: aroundMessageId,
+  );
 
   @override
   Future<ChannelHistory> loadPinnedMessages(String channelId) =>
@@ -324,6 +354,7 @@ final class _CallableRepository implements ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
@@ -331,6 +362,7 @@ final class _CallableRepository implements ChatRepository {
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,
+    textToSpeech: textToSpeech,
   );
 
   @override

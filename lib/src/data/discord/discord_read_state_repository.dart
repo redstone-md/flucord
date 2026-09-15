@@ -60,12 +60,10 @@ final class DiscordReadStateRepository implements ReadStateRepository {
 
   /// R03/R09: the largest ack cursor across every read state.
   ///
-  /// Computed here, but deliberately **not** sent in `client_state`. Echoing it
-  /// asks the server for a delta, and this client can only apply one to the
-  /// read-state and guild-settings blocks — its guild and private-channel
-  /// hydration still replaces whatever `READY` carries. R09 additionally lists
-  /// the server-side effect of `private_channels_version` as unestablished, so
-  /// sending it would be trading a working DM list for an unmeasured saving.
+  /// IDENTIFY echoes it back as `highest_last_message_id` so the server can
+  /// answer a reconnect with a delta instead of the whole read-state block.
+  /// The read-state store folds both shapes: a `partial: true` block merges,
+  /// a full one replaces.
   String get highestLastMessageId => _snapshot.highestLastMessageId;
 
   /// R09: the same maximum over private-channel read states only.
@@ -74,8 +72,10 @@ final class DiscordReadStateRepository implements ReadStateRepository {
 
   /// The `client_state` block a re-IDENTIFY should carry.
   ///
-  /// Only the two counters whose deltas this client can actually apply are
-  /// sent. R03: a client that cannot vouch for its cache collapses the block to
+  /// The negotiated contract has the account echo the four versions its caches
+  /// can vouch for: the two counters, and the two snowflake cursors over all
+  /// and over private channels. The store can apply every delta those unlock.
+  /// R03: a client that cannot vouch for its cache collapses the block to
   /// `guild_versions` alone, which is exactly the position we are in before the
   /// first `READY`.
   Map<String, Object?> identifyClientState() {
@@ -84,12 +84,20 @@ final class DiscordReadStateRepository implements ReadStateRepository {
         snapshot.userGuildSettingsVersion <= 0) {
       return const {'guild_versions': <String, Object?>{}};
     }
+    final highest = snapshot.highestLastMessageId;
+    final privateChannels = _snapshot.privateChannelsVersion(
+      _privateChannelIds,
+    );
     return {
       'guild_versions': const <String, Object?>{},
       if (snapshot.readStateVersion > 0)
         'read_state_version': snapshot.readStateVersion,
       if (snapshot.userGuildSettingsVersion > 0)
         'user_guild_settings_version': snapshot.userGuildSettingsVersion,
+      // "0" is the wire's way of saying "nothing acked"; echoing it would
+      // vouch for a cursor the account never reached.
+      if (highest != '0') 'highest_last_message_id': highest,
+      if (privateChannels != '0') 'private_channels_version': privateChannels,
     };
   }
 
@@ -110,6 +118,32 @@ final class DiscordReadStateRepository implements ReadStateRepository {
       if (channelId is String) _queue.cancel(channelId);
     }
     if (_store.accept(name, data)) _emit();
+  }
+
+  /// Folds the read-state entries one guild carries, as a join's hydration
+  /// step.
+  ///
+  /// The desktop route answers the same block a `READY.read_state` does, so
+  /// the same fold runs over it: the guild's channels keep the cursors the
+  /// account had before it joined here. A block that arrives without a
+  /// version is a delta either way, and one that fails to arrive is not a
+  /// failed join.
+  Future<void> hydrateReadState(String guildId) async {
+    if (guildId.trim().isEmpty || int.tryParse(guildId.trim()) == null) {
+      return;
+    }
+    final payload = await _queue.sendForPayload(
+      DiscordDesktopRestRequest(
+        method: 'GET',
+        path: '/guilds/${guildId.trim()}/read-state',
+      ),
+    );
+    if (payload == null) return;
+    final block = payload['read_state'];
+    if (block is! Map) return;
+    final envelope = block.cast<String, Object?>();
+    final changed = _store.accept('STATE_UPDATE', {'read_state': envelope});
+    if (changed) _emit();
   }
 
   @override
@@ -227,6 +261,62 @@ final class DiscordReadStateRepository implements ReadStateRepository {
       );
     }
     _emit();
+  }
+
+  @override
+  Future<void> acknowledgeMessageRequest(String channelId) =>
+      _acknowledgeUserEntity(
+        type: ReadStateType.messageRequests,
+        entityId: channelId,
+      );
+
+  @override
+  Future<void> acknowledgeNotificationCentre(String spaceId) =>
+      _acknowledgeUserEntity(
+        type: ReadStateType.notificationCenter,
+        entityId: spaceId,
+      );
+
+  /// The account-scoped ack: optimistic locally, then the one request the
+  /// route carries. The acked id is the entity itself, which is what a
+  /// `USER_NON_CHANNEL_ACK` from another session carries back.
+  Future<void> _acknowledgeUserEntity({
+    required ReadStateType type,
+    required String entityId,
+  }) async {
+    _store.put(
+      _store
+          .entityState(type, entityId)
+          .copyWith(lastAckedId: entityId, mentionCount: 0),
+    );
+    _emit();
+    await _queue.sendNow(
+      DiscordDesktopReadStateRequests.ackUserEntity(
+        readStateType: type.wireValue,
+        entityId: entityId,
+      ),
+    );
+  }
+
+  @override
+  Future<void> collectGarbage({DateTime? now}) async {
+    final channelIds = ReadStateCollector.collectableChannelIds(
+      _store.snapshot,
+      now ?? _clock(),
+    );
+    for (final channelId in channelIds) {
+      // The local pass goes first so the cache shrinks on the same stroke
+      // whether or not the request lands; a failed delete is re-read from the
+      // next READY, which is how every other optimistic mutation behaves.
+      _store.removeChannelState(channelId);
+      await _queue.sendNow(
+        DiscordDesktopReadStateRequests.deleteReadState(
+          channelId: channelId,
+          readStateType: ReadStateType.channel.wireValue,
+        ),
+      );
+    }
+    if (channelIds.isNotEmpty) _emit();
   }
 
   @override

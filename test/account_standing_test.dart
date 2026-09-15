@@ -101,7 +101,6 @@ void main() {
       expect(repository.suspendedReviews, isEmpty);
     });
 
-
     test('an appeal that could not be sent is reported', () async {
       final repository = _FakeSafetyHub()
         ..suspension = const AccountSuspension(
@@ -271,7 +270,6 @@ void main() {
       expect(transport.requests.single.uri.path, endsWith('/safety-hub/@me'));
       expect(transport.requests.single.method, 'GET');
     });
-
 
     test('a suspension is read from its own route', () async {
       final transport = _Transport([

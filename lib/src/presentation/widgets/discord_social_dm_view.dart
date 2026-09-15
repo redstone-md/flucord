@@ -8,6 +8,8 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_dm.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_social_dm_message_row.dart';
+import 'accessibility_scope.dart';
+import 'spell_check_scope.dart';
 
 class DiscordSocialDmView extends StatefulWidget {
   const DiscordSocialDmView({
@@ -262,6 +264,9 @@ class _DmComposerState extends State<_DmComposer> {
                   minLines: 1,
                   maxLines: 5,
                   maxLength: 2000,
+                  // Same local dictionary as the guild composer, so direct
+                  // messages underline the same way.
+                  spellCheckConfiguration: _spellCheckConfiguration(context),
                   enabled: !sending,
                   decoration: InputDecoration(
                     hintText: 'Message @${widget.user.displayName}',
@@ -288,6 +293,21 @@ class _DmComposerState extends State<_DmComposer> {
           ],
         ),
       ),
+    );
+  }
+
+  /// The spell check configuration the composer runs with, or none where
+  /// the switch is off or no service is installed. Same shape as the guild
+  /// composer's, so both underlines read as one feature.
+  SpellCheckConfiguration _spellCheckConfiguration(BuildContext context) {
+    final spellcheck = AccessibilityScope.maybeOf(context)?.spellchecks ?? true;
+    final service = SpellCheckScope.maybeOf(context);
+    if (!spellcheck || service == null) {
+      return const SpellCheckConfiguration.disabled();
+    }
+    return SpellCheckConfiguration(
+      spellCheckService: service,
+      misspelledTextStyle: TextField.materialMisspelledTextStyle,
     );
   }
 }

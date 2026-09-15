@@ -8,9 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// The browser identity the client context sends: the installed desktop
 /// client on Windows, this client on the platforms the desktop protocol is
 /// not proven on yet.
-Matcher get _browserAgent => Platform.isWindows
-    ? contains('discord/1.0.9249')
-    : startsWith('Flucord/');
+Matcher get _browserAgent =>
+    Platform.isWindows ? contains('discord/1.0.9249') : startsWith('Flucord/');
 
 void main() {
   test(

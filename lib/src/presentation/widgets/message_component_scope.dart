@@ -11,9 +11,9 @@ final class MessageComponentScope
     super.key,
   }) : super(notifier: controller);
 
-  static MessageComponentController? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<MessageComponentScope>()
-          ?.notifier;
+  static MessageComponentController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<MessageComponentScope>()
+      ?.notifier;
 
   static MessageComponentController of(BuildContext context) {
     final controller = maybeOf(context);
@@ -23,9 +23,9 @@ final class MessageComponentScope
     );
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static MessageComponentController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<MessageComponentScope>()!.notifier!;
-
 }

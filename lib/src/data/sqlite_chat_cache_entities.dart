@@ -42,6 +42,7 @@ Map<String, Object?> _messageToRow(ChatMessage message) => {
   'mentions_current_member': message.mentionsCurrentMember ? 1 : 0,
   'poll_json': ChatModelJson.poll(message.poll),
   'stickers_json': ChatModelJson.stickers(message.stickers),
+  'is_text_to_speech': message.isTextToSpeech ? 1 : 0,
 };
 
 ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -82,4 +83,5 @@ ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
   mentionsCurrentMember: row['mentions_current_member'] == 1,
   poll: ChatModelJson.pollFrom(row['poll_json'] as String?),
   stickers: ChatModelJson.stickersFrom(row['stickers_json']! as String),
+  isTextToSpeech: row['is_text_to_speech'] == 1,
 );

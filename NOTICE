@@ -17,3 +17,9 @@ separate product.
 
 Flucord is not affiliated with or endorsed by Discord. Third-party components
 remain subject to their own copyright notices and licenses.
+
+The spellcheck word list in assets/spellcheck/en.txt is derived from SCOWL
+(Spell Checker Oriented Word Lists), Copyright 2000-2011 Kevin Atkinson, and
+the inflection database built with the WordNet 1.6 database, Copyright 1997
+Princeton University. Permission to use, copy, modify and distribute is
+granted provided this notice is preserved.

@@ -139,7 +139,6 @@ void main() {
         ..close();
     });
 
-
     test('the real window takes a picture and goes away again', () async {
       const path = 'build/windows/x64/runner/Release/flucord_overlay.dll';
       if (!Platform.isWindows || !File(path).existsSync()) return;

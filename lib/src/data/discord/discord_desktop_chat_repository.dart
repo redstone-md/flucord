@@ -7,6 +7,11 @@ import '../../domain/multi_factor_auth.dart';
 import '../../domain/auth_session.dart';
 import '../../domain/family_centre.dart';
 import '../../domain/account_standing.dart';
+import '../../domain/account_connections.dart';
+import '../../domain/account_data_package.dart';
+import '../../domain/account_entitlements.dart';
+import '../../domain/app_authorisation.dart';
+
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
@@ -14,11 +19,14 @@ import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/guild_expression_repository.dart';
+import '../../domain/game_detection.dart';
 import '../../domain/guild_management_repository.dart';
 import '../../domain/guild_member_list.dart';
 import '../../domain/guild_member_list_repository.dart';
 import '../../domain/message_search_repository.dart';
 import '../../domain/moderation_repository.dart';
+import '../../domain/permission_overwrite.dart';
 import '../../domain/presence_repository.dart';
 import '../../domain/read_state_repository.dart';
 import '../../domain/user_settings_repository.dart';
@@ -32,10 +40,12 @@ import '../../domain/soundboard.dart';
 import '../../domain/stage_channel.dart';
 import '../../domain/thread_membership.dart';
 import '../../domain/user_profile.dart';
+import '../../domain/user_notes.dart';
 import '../../domain/voice_connection.dart';
 import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_read_state_repository.dart';
+import 'discord_detectable_game_service.dart';
 import 'discord_user_settings_repository.dart';
 import 'discord_desktop_gateway_client.dart';
 import 'discord_direct_call_service.dart';
@@ -46,6 +56,7 @@ import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
+import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
 import 'discord_conversation_summary_service.dart';
@@ -53,6 +64,7 @@ import 'discord_relationship_service.dart';
 import 'discord_go_live_service.dart';
 import 'discord_message_component_service.dart';
 import 'discord_expression_favorites_repository.dart';
+import 'discord_expression_service.dart';
 import 'discord_gif_service.dart';
 import 'discord_soundboard_service.dart';
 import 'discord_stage_service.dart';
@@ -126,8 +138,13 @@ final class DiscordDesktopChatRepository
       events: _gateway.events,
     );
     _gatewaySubscription = _gateway.events.listen(_acceptGatewayEvent);
-    // R03: a re-IDENTIFY may echo the cache versions the last READY carried, so
-    // the socket asks the read-state store for them at the moment it needs
+    // A guild the account joins or creates mid-session must land in the cache
+    // and start receiving live events, exactly as the guilds READY listed.
+    final access = _api.guildManagement;
+    access.onGuildGained = _persistGainedGuild;
+    access.onGuildLeft = _persistLeftGuild;
+    // R03: a re-IDENTIFY may echo the cache versions the last READY carried,
+    // so the socket asks the read-state store for them at the moment it needs
     // them rather than being handed a snapshot that is stale by then.
     _gateway.useClientStateProvider(_readState.identifyClientState);
   }
@@ -158,15 +175,27 @@ final class DiscordDesktopChatRepository
   late final DiscordGoLiveService _goLive = DiscordGoLiveService(_gateway);
   late final DiscordUserProfileRepository _userProfile =
       DiscordUserProfileRepository(_api);
+  late final DiscordUserNotesRepository _userNotes = DiscordUserNotesRepository(
+    _api,
+  );
   final StreamController<ChatRepositoryEvent> _events =
       StreamController.broadcast();
   late final StreamSubscription<DiscordGatewayEvent> _gatewaySubscription;
   late final DiscordMemberListHandler _memberLists;
   late final DiscordMessageSearchService _messageSearch;
   late final DiscordPresenceService _presence;
+  late final DetectableGameRepository _detectableGames =
+      DiscordDetectableGameService(_api);
   late final DiscordDirectCallService _directCalls;
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
+
+  /// Whether a workspace is being shown, live or from the cache.
+  ///
+  /// A READY that arrives before this is the first hydration and is answered
+  /// by [loadWorkspace]; one that arrives after is a reconnect's fresh view
+  /// and is answered by the in-place rehydration instead.
+  bool _workspaceShown = false;
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
@@ -184,6 +213,12 @@ final class DiscordDesktopChatRepository
   @override
   UserProfileRepository? get userProfile => _userProfile;
 
+  /// Notes are account state on the user's own session: `READY` carries the
+  /// whole map, this socket receives every later revision of it, and these
+  /// credentials are the only ones allowed to write one of its entries.
+  @override
+  UserNotesRepository? get userNotes => _userNotes;
+
   @override
   ThreadMembershipRepository? get threadMembership => _threadMembership;
 
@@ -193,13 +228,30 @@ final class DiscordDesktopChatRepository
   @override
   SoundboardRepository? get soundboard => _soundboard;
 
+  /// Upload and delete for the guild's emoji, stickers and sounds, sharing
+  /// the session's credentials and the soundboard store so a sound uploaded
+  /// here is in the picker the moment the answer arrives.
+  @override
+  GuildExpressionRepository? get expressions => _expressions;
+
+  late final DiscordExpressionService _expressions = DiscordExpressionService(
+    _api,
+    _cache,
+    _mapper,
+    soundboard: _soundboard,
+    // The settings window's own writes reach the picker through the same
+    // event the gateway's emoji and sticker updates do.
+    publish: (event) {
+      if (!_events.isClosed) _events.add(event);
+    },
+  );
+
   @override
   GifRepository? get gifs => _gifs;
 
   @override
   ExpressionFavoritesRepository? get expressionFavorites => _favorites;
 
-  @override
   @override
   MessageComponentRepository? get messageComponents => _messageComponents;
 
@@ -254,6 +306,21 @@ final class DiscordDesktopChatRepository
   AgeVerificationRepository? get ageVerification => _api.ageVerification;
 
   @override
+  AccountConnectionsRepository? get accountConnections =>
+      _api.accountConnections;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements =>
+      _api.accountEntitlements;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => _api.appAuthorisation;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage =>
+      _api.accountDataPackage;
+
+  @override
   DesktopRelationshipRepository? get relationships => _relationshipView;
 
   late final _DesktopRelationshipView _relationshipView =
@@ -269,6 +336,9 @@ final class DiscordDesktopChatRepository
   /// settings blob it alone can read.
   @override
   PresenceService? get presence => _presence;
+
+  @override
+  DetectableGameRepository? get detectableGames => _detectableGames;
 
   @override
   Stream<GuildMemberList> get memberListUpdates => _memberLists.updates;
@@ -340,6 +410,7 @@ final class DiscordDesktopChatRepository
         'cache-write',
         () => _cache.writeWorkspace(workspace),
       );
+      _workspaceShown = true;
       return workspace;
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
@@ -347,6 +418,7 @@ final class DiscordDesktopChatRepository
       if (cached != null) {
         _adoptCurrentMember(cached.currentMemberId);
         _adoptPrivateChannels(cached);
+        _workspaceShown = true;
         _emitStatus(RepositoryConnectionStatus.offline);
         return cached;
       }
@@ -358,10 +430,11 @@ final class DiscordDesktopChatRepository
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async {
     // The held page goes out first, so the conversation is readable while
     // Discord is still being asked for the same one.
-    final restored = beforeMessageId == null
+    final restored = beforeMessageId == null && aroundMessageId == null
         ? await readRestoredHistory(_cache, channelId, pageSize: _pageSize)
         : null;
     if (restored != null) _events.add(restored);
@@ -370,6 +443,7 @@ final class DiscordDesktopChatRepository
         channelId,
         limit: _pageSize,
         beforeMessageId: beforeMessageId,
+        aroundMessageId: aroundMessageId,
       );
       final history = _mapper.history(
         channelId,
@@ -478,6 +552,7 @@ final class DiscordDesktopChatRepository
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) async {
     final payload = await _api.createMessage(
       channelId: channelId,
@@ -486,6 +561,7 @@ final class DiscordDesktopChatRepository
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
+      textToSpeech: textToSpeech,
     );
     return _storeMessage(payload);
   }
@@ -711,6 +787,27 @@ final class DiscordDesktopChatRepository
     }
   }
 
+  /// Writes one gained guild to the cache and starts its live events.
+  ///
+  /// The workspace fold is the caller's; this is the transport half, which
+  /// owns what a restart restores and the socket subscription Discord needs
+  /// before it will push anything for the guild. The read state the account
+  /// already carries for the guild's channels is folded here too: a join must
+  /// show the unreads it had, not a fresh sheet where every channel reads.
+  Future<void> _persistGainedGuild(JoinedGuild guild) async {
+    await _cache.writeGuild(guild);
+    unawaited(
+      _readState.hydrateReadState(guild.space.id).catchError((Object _) {}),
+    );
+    _gateway.subscribeGuildEvents(guild.space.id);
+  }
+
+  /// Removes one left guild from the cache and drops its subscription.
+  Future<void> _persistLeftGuild(String guildId) async {
+    await _cache.deleteGuild(guildId);
+    _gateway.forgetGuild(guildId);
+  }
+
   @override
   Future<void> startTyping(String channelId) => _api.startTyping(channelId);
 
@@ -728,6 +825,7 @@ final class DiscordDesktopChatRepository
     await _userSettings.flush();
     await _userSettings.close();
     _messageSearch.close();
+    await _userNotes.close();
     // An acknowledgement still on its debounce is a channel the account has
     // read; losing it would show the unread pip again on the next launch.
     await _readState.flush();

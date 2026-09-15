@@ -35,9 +35,9 @@ void main() {
         theme: FlucordTheme.dark,
         home: Scaffold(
           body: paneHarness(
-          composition,
-          workspace,
-          channel: workspace.channelById('forge-general'),
+            composition,
+            workspace,
+            channel: workspace.channelById('forge-general'),
           ),
         ),
       ),
@@ -66,9 +66,9 @@ void main() {
         theme: FlucordTheme.dark,
         home: Scaffold(
           body: paneHarness(
-          composition,
-          workspace,
-          channel: workspace.channelById('forge-voice'),
+            composition,
+            workspace,
+            channel: workspace.channelById('forge-voice'),
           ),
         ),
       ),
@@ -106,10 +106,10 @@ void main() {
         theme: FlucordTheme.dark,
         home: Scaffold(
           body: paneHarness(
-          composition,
-          workspace,
-          channel: workspace.channelById('forge-general'),
-          capabilities: ChannelCapabilities.none,
+            composition,
+            workspace,
+            channel: workspace.channelById('forge-general'),
+            capabilities: ChannelCapabilities.none,
           ),
         ),
       ),

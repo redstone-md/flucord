@@ -34,8 +34,26 @@ final class GuildAdminCapabilities {
   bool get canCreateInvite => _has(DiscordPermissions.createInstantInvite);
   bool get canViewAuditLog => _has(DiscordPermissions.viewAuditLog);
 
+  /// Creating, editing and deleting the guild's webhooks.
+  bool get canManageWebhooks => _has(DiscordPermissions.manageWebhooks);
+
+  /// Whether the account may time a member out and lift one again.
+  bool get canModerateMembers => _has(DiscordPermissions.moderateMembers);
+
+  /// Whether the account may rename other members.
+  bool get canManageNicknames => _has(DiscordPermissions.manageNicknames);
+
+  /// Whether the account may rename itself in this guild.
+  bool get canChangeNickname => _has(DiscordPermissions.changeNickname);
+
   /// Creating, editing and deleting the server's scheduled events.
   bool get canManageEvents => _has(DiscordPermissions.manageEvents);
+
+  /// Uploading and deleting the server's emoji, stickers and soundboard
+  /// sounds. Discord names the bit MANAGE_GUILD_EXPRESSIONS and the settings
+  /// page calls it the manage-expressions permission.
+  bool get canManageExpressions =>
+      _has(DiscordPermissions.manageGuildExpressions);
 
   /// Whether the account may grant [permission] to a role.
   ///
@@ -61,8 +79,10 @@ final class GuildAdminCapabilities {
       canManageGuild ||
       canManageRoles ||
       canManageChannels ||
+      canManageWebhooks ||
       canBanMembers ||
       canKickMembers ||
+      canManageExpressions ||
       canViewAuditLog;
 
   /// The position of the account's highest role, or `null` when unknown.
@@ -122,6 +142,27 @@ final class GuildAdminCapabilities {
 
   bool canBan(String memberId) => canBanMembers && outranks(memberId);
   bool canKick(String memberId) => canKickMembers && outranks(memberId);
+
+  /// Whether the account may time [memberId] out, or lift one.
+  bool canTimeout(String memberId) => canModerateMembers && outranks(memberId);
+
+  /// Whether the account may change [memberId]'s nickname in this guild.
+  ///
+  /// The account itself is the exception: renaming yourself needs
+  /// CHANGE_NICKNAME rather than MANAGE_NICKNAMES, and hierarchy never
+  /// applies. `outranks` answers false for the account itself, so the own-name
+  /// case is answered before it is asked.
+  bool canRename(String memberId) => memberId == _permissions._memberId
+      ? canChangeNickname
+      : canManageNicknames && outranks(memberId);
+
+  /// Whether the account may grant or take [role] on another member.
+  ///
+  /// The role itself has to be one the account may edit, and the member has to
+  /// be somebody the account outranks: Discord refuses both halves separately,
+  /// so a surface that checked only one would offer actions the other refuses.
+  bool canAssignRole(String memberId, CommunityRole role) =>
+      outranks(memberId) && canEditRole(role) && !role.isEveryone;
 
   int _highestRoleOf(String memberId) {
     final membership = _permissions._workspace

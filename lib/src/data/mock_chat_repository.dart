@@ -2,6 +2,10 @@ import '../domain/desktop_relationship_repository.dart';
 import '../domain/age_verification.dart';
 import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
+import '../domain/account_connections.dart';
+import '../domain/account_data_package.dart';
+import '../domain/account_entitlements.dart';
+import '../domain/app_authorisation.dart';
 import '../domain/family_centre.dart';
 import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
@@ -19,6 +23,7 @@ import '../domain/user_profile.dart';
 import '../domain/chat_models.dart';
 import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
+import '../domain/guild_expression_repository.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/message_forward_repository.dart';
@@ -26,6 +31,7 @@ import '../domain/moderation_repository.dart';
 import '../domain/message_flag_repository.dart';
 import '../domain/message_search_repository.dart';
 import '../domain/poll_repository.dart';
+import '../domain/game_detection.dart';
 import '../domain/presence_repository.dart';
 import '../domain/reaction_repository.dart';
 import '../domain/scheduled_event_repository.dart';
@@ -33,6 +39,7 @@ import '../domain/sticker_repository.dart';
 import '../domain/thread_repository.dart';
 import '../domain/read_state_repository.dart';
 import '../domain/user_settings_repository.dart';
+import '../domain/user_notes.dart';
 import '../domain/voice_call.dart';
 import '../domain/voice_connection.dart';
 import '../domain/voice_message_recorder.dart';
@@ -95,6 +102,8 @@ final class MockChatRepository
 
   @override
   UserProfileRepository? get userProfile => null;
+  @override
+  UserNotesRepository? get userNotes => null;
 
   @override
   ThreadMembershipRepository? get threadMembership => null;
@@ -104,6 +113,11 @@ final class MockChatRepository
 
   @override
   SoundboardRepository? get soundboard => null;
+
+  /// The demo workspace has no server behind it, so an upload has nothing to
+  /// accept it and the plane is absent rather than always failing.
+  @override
+  GuildExpressionRepository? get expressions => null;
 
   @override
   GifRepository? get gifs => null;
@@ -161,12 +175,27 @@ final class MockChatRepository
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   /// Nothing is signed in, so there is no account whose status could be
   /// broadcast and no socket that could carry it.
   @override
   PresenceService? get presence => null;
+
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() async {
@@ -181,10 +210,13 @@ final class MockChatRepository
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async {
     await _wait();
     final messages = _workspace.messagesFor(channelId);
-    final end = beforeMessageId == null
+    final end = aroundMessageId != null
+        ? messages.indexWhere((message) => message.id == aroundMessageId) + 1
+        : beforeMessageId == null
         ? messages.length
         : messages.indexWhere((message) => message.id == beforeMessageId);
     final safeEnd = end < 0 ? 0 : end;
@@ -255,6 +287,7 @@ final class MockChatRepository
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) async {
     await _wait();
     final message = ChatMessage(
@@ -263,6 +296,7 @@ final class MockChatRepository
       authorId: authorId,
       body: body.trim(),
       sentAt: DateTime.now(),
+      isTextToSpeech: textToSpeech,
       attachments: [
         for (var index = 0; index < attachments.length; index++)
           MessageAttachment(

@@ -265,4 +265,7 @@ final class _FakeProfile implements UserProfileRepository {
     applied.add(patch);
     return const UserProfile(userId: 'user-1', username: 'mira');
   }
+
+  @override
+  Future<OtherUserProfile?> loadProfileOf(String userId) async => null;
 }

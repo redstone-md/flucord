@@ -15,15 +15,54 @@ void main() {
       // further with every line.
       final screen = CapturedScreen(
         pixels: Uint8List.fromList([
-          1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0,
-          9, 10, 11, 12, 13, 14, 15, 16, 0, 0, 0, 0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          0,
+          0,
+          0,
+          0,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          0,
+          0,
+          0,
+          0,
         ]),
         width: 2,
         height: 2,
         stride: 12,
       );
 
-      expect(screen.packed, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+      expect(screen.packed, [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+      ]);
     });
 
     test('an unpadded frame is handed through untouched', () {
@@ -80,7 +119,6 @@ void main() {
       expect((await service.save()).failure, ScreenshotFailure.unsupported);
     });
 
-
     test('a captured screen is written as a PNG where it says', () async {
       final directory = await Directory.systemTemp.createTemp('flucord-shot');
       addTearDown(() => directory.delete(recursive: true));
@@ -99,20 +137,21 @@ void main() {
       expect(written.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     });
 
+    test(
+      'with no directory given it reaches for the documents folder',
+      () async {
+        // No plugin answers in a test, so the reach fails and is reported —
+        // which is also what a machine with an unwritable profile would do.
+        final service = NativeScreenshotService(
+          captureScreen: _stubCapture(width: 2, height: 2),
+        );
 
-    test('with no directory given it reaches for the documents folder',
-        () async {
-      // No plugin answers in a test, so the reach fails and is reported —
-      // which is also what a machine with an unwritable profile would do.
-      final service = NativeScreenshotService(
-        captureScreen: _stubCapture(width: 2, height: 2),
-      );
+        final result = await service.save();
 
-      final result = await service.save();
-
-      expect(result.isSaved, isFalse);
-      expect(result.failure, ScreenshotFailure.write);
-    });
+        expect(result.isSaved, isFalse);
+        expect(result.failure, ScreenshotFailure.write);
+      },
+    );
 
     test('a capture the native side refuses is reported', () async {
       final service = NativeScreenshotService(
@@ -132,18 +171,20 @@ void main() {
       expect((await service.save()).failure, ScreenshotFailure.unsupported);
     });
 
-    test('a directory that cannot be created is reported, not thrown',
-        () async {
-      final service = NativeScreenshotService(
-        captureScreen: _stubCapture(width: 2, height: 2),
-        directory: () async => throw const FileSystemException('nowhere'),
-      );
+    test(
+      'a directory that cannot be created is reported, not thrown',
+      () async {
+        final service = NativeScreenshotService(
+          captureScreen: _stubCapture(width: 2, height: 2),
+          directory: () async => throw const FileSystemException('nowhere'),
+        );
 
-      final result = await service.save();
+        final result = await service.save();
 
-      expect(result.isSaved, isFalse);
-      expect(result.failure, ScreenshotFailure.write);
-    });
+        expect(result.isSaved, isFalse);
+        expect(result.failure, ScreenshotFailure.write);
+      },
+    );
 
     test('a real capture is written where it says it was', () async {
       const path = 'build/windows/x64/runner/Release/flucord_video.dll';
@@ -171,25 +212,27 @@ void main() {
       expect(result.path, endsWith('flucord-20260729-010203.png'));
     });
 
-    test('a directory that cannot be written is reported, not thrown',
-        () async {
-      const path = 'build/windows/x64/runner/Release/flucord_video.dll';
-      if (!Platform.isWindows || !File(path).existsSync()) return;
-      final service = NativeScreenshotService(
-        bindings: NativeVideoBindings(DynamicLibrary.open(path)),
-        directory: () async => throw const FileSystemException('no directory'),
-      );
+    test(
+      'a directory that cannot be written is reported, not thrown',
+      () async {
+        const path = 'build/windows/x64/runner/Release/flucord_video.dll';
+        if (!Platform.isWindows || !File(path).existsSync()) return;
+        final service = NativeScreenshotService(
+          bindings: NativeVideoBindings(DynamicLibrary.open(path)),
+          directory: () async =>
+              throw const FileSystemException('no directory'),
+        );
 
-      final result = await service.save();
-      expect(result.isSaved, isFalse);
-      expect(
-        result.failure,
-        anyOf(ScreenshotFailure.write, ScreenshotFailure.unsupported),
-      );
-    });
+        final result = await service.save();
+        expect(result.isSaved, isFalse);
+        expect(
+          result.failure,
+          anyOf(ScreenshotFailure.write, ScreenshotFailure.unsupported),
+        );
+      },
+    );
   });
 }
-
 
 /// Stands in for `flucord_video_capture_screen`, calling the native callback
 /// the way the module does — through the pointer it was handed.

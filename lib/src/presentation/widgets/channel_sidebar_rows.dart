@@ -1,5 +1,190 @@
 part of 'channel_sidebar.dart';
 
+/// The direct-messages block, with its message-request folder.
+///
+/// The folder is the one piece of state the sidebar keeps: a request row is a
+/// question the account has not answered yet, and the answer (both buttons,
+/// or opening the conversation) closes it. Swapping the list in place keeps
+/// the question and its conversation one gesture apart, the way the official
+/// client does.
+class _DirectMessagesFolder extends StatefulWidget {
+  const _DirectMessagesFolder({
+    required this.requests,
+    required this.conversationRows,
+    required this.requestRows,
+  });
+
+  final List<ConversationChannel> requests;
+  final List<Widget> conversationRows;
+  final List<Widget> requestRows;
+
+  @override
+  State<_DirectMessagesFolder> createState() => _DirectMessagesFolderState();
+}
+
+class _DirectMessagesFolderState extends State<_DirectMessagesFolder> {
+  bool _showingRequests = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final requests = widget.requests;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionLabel(label: 'Messages'),
+        if (requests.isNotEmpty) ...[
+          _FolderRow(
+            key: const ValueKey('message-requests-folder'),
+            label: _showingRequests ? 'Back to messages' : 'Message requests',
+            count: requests.length,
+            open: _showingRequests,
+            onPressed: () =>
+                setState(() => _showingRequests = !_showingRequests),
+          ),
+          const SizedBox(height: 4),
+        ],
+        ...(_showingRequests ? widget.requestRows : widget.conversationRows),
+      ],
+    );
+  }
+}
+
+/// The row that opens and closes the request folder.
+class _FolderRow extends StatelessWidget {
+  const _FolderRow({
+    required this.label,
+    required this.count,
+    required this.open,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final int count;
+  final bool open;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(5),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(5),
+          child: SizedBox(
+            height: 34,
+            child: Row(
+              children: [
+                const SizedBox(width: 10),
+                Icon(
+                  open ? Icons.expand_less : Icons.inbox_outlined,
+                  size: 17,
+                  color: context.surfaces.muted,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.surfaces.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                MentionBadge(
+                  key: const ValueKey('message-requests-count'),
+                  count: count,
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One unanswered message request, with the two answers beside it.
+class _MessageRequestRow extends StatelessWidget {
+  const _MessageRequestRow({
+    required this.channel,
+    required this.onPressed,
+    this.recipient,
+    this.onAccept,
+    this.onDecline,
+  });
+
+  final ConversationChannel channel;
+  final VoidCallback onPressed;
+  final Member? recipient;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(5),
+        child: InkWell(
+          key: ValueKey('request-${channel.id}'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(5),
+          child: SizedBox(
+            height: 34,
+            child: Row(
+              children: [
+                const SizedBox(width: 10),
+                if (recipient != null)
+                  MemberAvatar(member: recipient!, size: 24)
+                else
+                  Icon(
+                    Icons.person_outline,
+                    size: 17,
+                    color: context.surfaces.muted,
+                  ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    recipient?.displayName ?? channel.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                if (onAccept != null)
+                  IconButton(
+                    key: ValueKey('accept-request-${channel.id}'),
+                    tooltip: 'Accept',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 16,
+                    onPressed: onAccept,
+                    icon: const Icon(Icons.check),
+                  ),
+                if (onDecline != null)
+                  IconButton(
+                    key: ValueKey('decline-request-${channel.id}'),
+                    tooltip: 'Decline',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 16,
+                    onPressed: onDecline,
+                    icon: const Icon(Icons.close),
+                  ),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CategorySection extends StatelessWidget {
   const _CategorySection({
     required this.category,

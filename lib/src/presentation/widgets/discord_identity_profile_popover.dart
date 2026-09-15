@@ -32,8 +32,12 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
     this.copyButtonKey,
     this.messageButtonKey,
     this.safetyActions = const [],
+    this.moderation,
     this.extra,
     this.extraLabel,
+    this.bannerImage,
+    this.badges,
+    this.body,
     super.key,
   });
 
@@ -59,6 +63,11 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
   /// buttons on screen that some sessions can never honour.
   final List<Widget> safetyActions;
 
+  /// The moderation block a host with guild authority shows: roles, nickname,
+  /// timeout, kick and ban. Absent everywhere else, so the popover keeps its
+  /// social shape for accounts that cannot moderate.
+  final Widget? moderation;
+
   /// A caller-supplied block rendered under the detail chips.
   ///
   /// The rich-presence card is the only user of it today, and it lives here
@@ -66,6 +75,20 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
   /// while this is a whole layout with artwork in it.
   final Widget? extra;
   final String? extraLabel;
+
+  /// The banner image, drawn over the banner colour when the profile has one.
+  ///
+  /// Discord draws the image over the accent, and so does this: the colour
+  /// is the fallback an account with no banner still carries.
+  final Widget? bannerImage;
+
+  /// The badge row, drawn beside the display name the way Discord puts the
+  /// profile's badges next to the name they belong to.
+  final Widget? badges;
+
+  /// The full profile body under the identity block, for hosts whose
+  /// transport can fetch one: about me, connections, mutuals, the note.
+  final Widget? body;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -98,6 +121,8 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Container(height: 68, color: bannerColor),
+                    if (bannerImage case final image?)
+                      Positioned.fill(child: image),
                     Positioned(
                       left: 16,
                       top: 38,
@@ -119,14 +144,25 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        displayName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (badges case final row?)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: row,
+                            ),
+                        ],
                       ),
                       if (secondaryLabel case final label?) ...[
                         const SizedBox(height: 2),
@@ -157,6 +193,14 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                           _ProfileLabel(label: label),
                           const SizedBox(height: 6),
                         ],
+                        block,
+                      ],
+                      if (body case final sections?) ...[
+                        const SizedBox(height: 14),
+                        sections,
+                      ],
+                      if (moderation case final block?) ...[
+                        const SizedBox(height: 14),
                         block,
                       ],
                       const SizedBox(height: 14),

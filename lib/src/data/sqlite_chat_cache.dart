@@ -110,9 +110,8 @@ final class SqliteChatCache
       }
       // The workspace has always carried its messages oldest first.
       messages.sort(
-        (left, right) => (left['sent_at']! as String).compareTo(
-          right['sent_at']! as String,
-        ),
+        (left, right) =>
+            (left['sent_at']! as String).compareTo(right['sent_at']! as String),
       );
     }
     final (emojis, stickers) = await _readGuildExpressions();
@@ -301,7 +300,8 @@ final class SqliteChatCache
   Future<void> _pruneChannel(DatabaseExecutor executor, String channelId) =>
       executor.delete(
         'messages',
-        where: 'channel_id = ? AND id NOT IN '
+        where:
+            'channel_id = ? AND id NOT IN '
             '(SELECT id FROM messages WHERE channel_id = ? '
             'ORDER BY sent_at DESC LIMIT ?)',
         whereArgs: [channelId, channelId, historyPerChannel],
@@ -328,6 +328,140 @@ final class SqliteChatCache
       ),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  @override
+  Future<void> writeGuild(JoinedGuild guild) async {
+    await _database.transaction((transaction) async {
+      final existing = await transaction.query(
+        'spaces',
+        columns: ['sort_index'],
+        where: 'id = ?',
+        whereArgs: [guild.space.id],
+        limit: 1,
+      );
+      final countRows = await transaction.rawQuery(
+        'SELECT COUNT(*) AS space_count FROM spaces',
+      );
+      final count = countRows.single['space_count']! as int;
+      await transaction.insert(
+        'spaces',
+        _spaceToRow(
+          guild.space,
+          existing.isEmpty ? count : existing.single['sort_index']! as int,
+        ),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      final batch = transaction.batch();
+      for (var index = 0; index < guild.channels.length; index++) {
+        batch.insert(
+          'channels',
+          _channelToRow(guild.channels[index], index),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final category in guild.categories) {
+        batch.insert(
+          'categories',
+          _categoryToRow(category),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final role in guild.roles) {
+        batch.insert(
+          'roles',
+          _roleToRow(role),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      for (final member in guild.members) {
+        batch.insert(
+          'members',
+          _memberToRow(member),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  @override
+  Future<void> deleteGuild(String spaceId) async {
+    await _database.transaction((transaction) async {
+      // Messages reference the channels by id, so they go before the channels
+      // the query reads from.
+      await transaction.rawDelete(
+        'DELETE FROM messages WHERE channel_id IN '
+        '(SELECT id FROM channels WHERE space_id = ?)',
+        [spaceId],
+      );
+      await transaction.delete(
+        'channels',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'categories',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'roles',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete('spaces', where: 'id = ?', whereArgs: [spaceId]);
+      await transaction.delete(
+        'emojis',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'guild_stickers',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await transaction.delete(
+        'guild_scheduled_events',
+        where: 'space_id = ?',
+        whereArgs: [spaceId],
+      );
+      await _dropGuildFromMembers(transaction, spaceId);
+    });
+  }
+
+  /// Rewrites the members that named [spaceId] without it.
+  ///
+  /// A cached membership for a guild the account left would come back on the
+  /// next offline launch as a permission record for a server that is no
+  /// longer on the rail, so the guild leaves the member rows with the guild.
+  /// A member whose only space was this one has nothing left to restore and
+  /// is removed whole.
+  Future<void> _dropGuildFromMembers(
+    DatabaseExecutor transaction,
+    String spaceId,
+  ) async {
+    final rows = await transaction.query('members');
+    for (final row in rows) {
+      final spaceIds = ChatModelJson.stringsFrom(
+        row['space_ids_json']! as String,
+      );
+      if (!spaceIds.contains(spaceId)) continue;
+      final kept = _memberFromRow(row).withoutSpace(spaceId);
+      if (kept == null) {
+        await transaction.delete(
+          'members',
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+        continue;
+      }
+      await transaction.insert(
+        'members',
+        _memberToRow(kept),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 
   @override
@@ -401,6 +535,7 @@ final class SqliteChatCache
     'kind': space.kind.index,
     'owner_id': space.ownerId,
     'requires_mfa': space.requiresMultiFactorAuth ? 1 : 0,
+    'premium_tier': space.premiumTier,
     'sort_index': index,
   };
 
@@ -414,6 +549,7 @@ final class SqliteChatCache
         kind: SpaceKind.values[row['kind']! as int],
         ownerId: row['owner_id'] as String?,
         requiresMultiFactorAuth: row['requires_mfa'] == 1,
+        premiumTier: row['premium_tier'] as int? ?? 0,
       );
 
   static Map<String, Object?> _roleToRow(CommunityRole role) => {
@@ -478,6 +614,11 @@ final class SqliteChatCache
     'permission_overwrites_json': ChatModelJson.permissionOverwrites(
       channel.permissionOverwrites,
     ),
+    'rate_limit_per_user': channel.rateLimitPerUser,
+    'is_age_gated': channel.isAgeGated ? 1 : 0,
+    'bitrate': channel.bitrate,
+    'user_limit': channel.userLimit,
+    'rtc_region': channel.rtcRegion,
     'sort_index': index,
   };
 
@@ -519,6 +660,11 @@ final class SqliteChatCache
         permissionOverwrites: ChatModelJson.permissionOverwritesFrom(
           row['permission_overwrites_json'] as String?,
         ),
+        rateLimitPerUser: row['rate_limit_per_user'] as int? ?? 0,
+        isAgeGated: row['is_age_gated'] == 1,
+        bitrate: row['bitrate'] as int?,
+        userLimit: row['user_limit'] as int?,
+        rtcRegion: row['rtc_region'] as String?,
       );
 
   static Map<String, Object?> _memberToRow(Member member) => {

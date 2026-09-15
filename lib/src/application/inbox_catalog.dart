@@ -79,6 +79,44 @@ final class InboxMentionEntry {
   final Member author;
 }
 
+/// One unanswered message request, as the folder lists it.
+final class InboxRequestEntry {
+  const InboxRequestEntry({
+    required this.target,
+    required this.channel,
+    required this.path,
+    this.recipient,
+    this.requestedAt,
+  });
+
+  final InboxTarget target;
+  final ConversationChannel channel;
+
+  /// The person on the other side, when the workspace knows them.
+  final Member? recipient;
+  final String path;
+  final DateTime? requestedAt;
+}
+
+/// A channel's mentions, as the notification centre groups them.
+///
+/// The centre reads per channel, not per message: one row per conversation,
+/// with the messages under it for jumping.
+final class InboxMentionGroup {
+  const InboxMentionGroup({
+    required this.target,
+    required this.path,
+    required this.entries,
+  });
+
+  /// Jumps to the group's newest mention.
+  final InboxTarget target;
+  final String path;
+  final List<InboxMentionEntry> entries;
+
+  int get mentionCount => entries.length;
+}
+
 /// The last catalogue built for a workspace, so a rebuilt dialog can reuse it.
 final _inboxByWorkspace = Expando<({int mentionLimit, InboxCatalog catalog})>();
 
@@ -87,8 +125,12 @@ final class InboxCatalog {
     required this.summary,
     required List<InboxUnreadEntry> unread,
     required List<InboxMentionEntry> mentions,
+    required List<InboxMentionGroup> mentionGroups,
+    required List<InboxRequestEntry> requests,
   }) : unread = List.unmodifiable(unread),
-       mentions = List.unmodifiable(mentions);
+       mentions = List.unmodifiable(mentions),
+       mentionGroups = List.unmodifiable(mentionGroups),
+       requests = List.unmodifiable(requests);
 
   /// Builds the inbox for [workspace], reusing the last catalogue built for it.
   ///
@@ -187,16 +229,90 @@ final class InboxCatalog {
     final limitedMentions = mentions.length > mentionLimit
         ? mentions.sublist(0, mentionLimit)
         : mentions;
+    // The flat list stays capped; the groups fold whatever survived it, so a
+    // cap smaller than the mention count still reads per channel.
+    final mentionGroups = _groupMentions(limitedMentions);
+    final requests =
+        workspace.channels
+            .where((channel) => channel.isMessageRequest)
+            .map((channel) {
+              final recipientId = channel.recipientId;
+              final recipient = recipientId == null
+                  ? null
+                  : workspace.memberOrNull(recipientId);
+              return InboxRequestEntry(
+                target: InboxTarget(
+                  spaceId: channel.spaceId,
+                  channelId: channel.id,
+                ),
+                channel: channel,
+                recipient: recipient,
+                path: recipient?.displayName ?? channel.name,
+                requestedAt: channel.messageRequestedAt,
+              );
+            })
+            .toList(growable: false)
+          ..sort(_compareRequests);
     return InboxCatalog._(
       summary: InboxSummary.fromWorkspace(workspace),
       unread: unread,
       mentions: limitedMentions,
+      mentionGroups: mentionGroups,
+      requests: requests,
     );
+  }
+
+  /// Folds a newest-first mention list into per-channel groups, keeping the
+  /// list's order: the group of the newest mention leads, and so on.
+  static List<InboxMentionGroup> _groupMentions(
+    List<InboxMentionEntry> mentions,
+  ) {
+    final groups = <String, InboxMentionGroup>{};
+    for (final entry in mentions) {
+      final channelId = entry.target.channelId;
+      final group = groups[channelId];
+      groups[channelId] = group == null
+          ? InboxMentionGroup(
+              target: entry.target,
+              path: entry.path,
+              entries: [entry],
+            )
+          : InboxMentionGroup(
+              target: group.target,
+              path: group.path,
+              entries: [...group.entries, entry],
+            );
+    }
+    return groups.values.toList(growable: false);
+  }
+
+  /// Newest request first. A request that arrived without a timestamp keeps a
+  /// stable place behind the dated ones, ordered by channel id.
+  static int _compareRequests(InboxRequestEntry left, InboxRequestEntry right) {
+    final leftAt = left.requestedAt;
+    final rightAt = right.requestedAt;
+    if (leftAt == null || rightAt == null) {
+      if (leftAt != rightAt) return leftAt == null ? 1 : -1;
+      return right.target.channelId.compareTo(left.target.channelId);
+    }
+    final byTime = rightAt.compareTo(leftAt);
+    return byTime != 0
+        ? byTime
+        : right.target.channelId.compareTo(left.target.channelId);
   }
 
   final InboxSummary summary;
   final List<InboxUnreadEntry> unread;
   final List<InboxMentionEntry> mentions;
+
+  /// The same mentions folded per channel, as the notification centre reads.
+  final List<InboxMentionGroup> mentionGroups;
+
+  /// The conversations waiting in the message-request folder.
+  final List<InboxRequestEntry> requests;
+
+  /// Whether the account has anything waiting in the request folder.
+  bool get hasRequests => requests.isNotEmpty;
 
   static int _compareUnread(InboxUnreadEntry left, InboxUnreadEntry right) {
     final mentions = right.mentionCount.compareTo(left.mentionCount);

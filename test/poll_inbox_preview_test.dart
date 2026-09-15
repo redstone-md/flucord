@@ -16,6 +16,7 @@ void main() {
           body: InboxDialog(
             catalog: InboxCatalog.fromWorkspace(_workspace()),
             onMarkAllRead: () {},
+            onMarkEntryRead: (_) {},
           ),
         ),
       ),

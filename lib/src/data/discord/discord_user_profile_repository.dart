@@ -12,6 +12,14 @@ abstract interface class DiscordUserProfileTransport {
   /// username already taken. Which status codes those are is the transport's
   /// business, not this layer's.
   Future<Map<String, Object?>?> patchCurrentUser(Map<String, Object?> body);
+
+  /// `GET /users/{id}/profile?with_mutual_guilds=true&with_mutual_friends=true`.
+  ///
+  /// Answers null when Discord refused the read, which the route does for
+  /// somebody this account has no relationship with at all. The mutuals are
+  /// asked for up front: the popover wants them, and a second request per
+  /// open would only save a round trip for a profile with none.
+  Future<Map<String, Object?>?> readUserProfile(String userId);
 }
 
 /// The account's own profile over the desktop-user transport.
@@ -49,6 +57,14 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
     // about the request, and reporting either as an outage would be wrong.
     if (payload == null) return null;
     return _install(payload);
+  }
+
+  @override
+  Future<OtherUserProfile?> loadProfileOf(String userId) async {
+    if (userId.trim().isEmpty) return null;
+    final payload = await _transport.readUserProfile(userId);
+    if (payload == null) return null;
+    return readOtherProfile(payload);
   }
 
   /// Applies a `USER_UPDATE` dispatch, which is how a change made on another
@@ -92,6 +108,93 @@ final class DiscordUserProfileRepository implements UserProfileRepository {
           : null,
     );
   }
+
+  /// Maps a `GET /users/{id}/profile` answer.
+  ///
+  /// The route nests the editable half under `user_profile` and the identity
+  /// half under `user`, and redacts several fields for a private profile or a
+  /// user who blocked this account. Anything absent stays absent rather than
+  /// guessing: an empty bio and no bio read the same to the popover.
+  static OtherUserProfile? readOtherProfile(Map<String, Object?> payload) {
+    final user = _object(payload['user']);
+    if (user == null) return null;
+    final id = user['id'];
+    if (id is! String || id.isEmpty) return null;
+    final metadata = _object(payload['user_profile']) ?? const {};
+    final decorationData = _object(user['avatar_decoration_data']);
+    return OtherUserProfile(
+      userId: id,
+      username: _text(user['username']),
+      displayName: _text(user['global_name']),
+      discriminator: _text(user['discriminator']),
+      bio: _text(metadata['bio']),
+      pronouns: _text(metadata['pronouns']),
+      avatarHash: _nullableText(user['avatar']),
+      bannerHash: _metadataText(metadata['banner']),
+      accentColor: metadata['accent_color'] is int
+          ? metadata['accent_color']! as int
+          : null,
+      decoration: decorationData == null
+          ? null
+          : ProfileDecoration(
+              asset: _text(decorationData['asset']),
+              skuId: _nullableText(decorationData['sku_id']),
+            ),
+      badges: [
+        for (final badge in _objects(payload['badges']))
+          if (_text(badge['id']).isNotEmpty)
+            ProfileBadge(
+              id: _text(badge['id']),
+              description: _text(badge['description']),
+              icon: _text(badge['icon']),
+              link: _nullableText(badge['link']),
+            ),
+      ],
+      connections: [
+        for (final connection in _objects(payload['connected_accounts']))
+          if (_text(connection['type']).isNotEmpty &&
+              _text(connection['name']).isNotEmpty)
+            ProfileConnection(
+              type: _text(connection['type']),
+              name: _text(connection['name']),
+              verified: connection['verified'] == true,
+            ),
+      ],
+      mutualServers: [
+        for (final guild in _objects(payload['mutual_guilds']))
+          if (_text(guild['id']).isNotEmpty)
+            MutualServer(
+              id: _text(guild['id']),
+              nickname: _nullableText(guild['nick']),
+            ),
+      ],
+      mutualFriends: [
+        for (final friend in _objects(payload['mutual_friends']))
+          if (_text(friend['id']).isNotEmpty)
+            MutualFriend(
+              id: _text(friend['id']),
+              displayName: _text(friend['global_name']).isNotEmpty
+                  ? _text(friend['global_name'])
+                  : _text(friend['username']),
+              username: _nullableText(friend['username']),
+            ),
+      ],
+    );
+  }
+
+  /// The profile metadata spells an absent banner as null and an absent bio
+  /// as an absent key, and both collapse here.
+  static String? _metadataText(Object? value) =>
+      value is String && value.isNotEmpty ? value : null;
+
+  static Map<String, Object?>? _object(Object? value) =>
+      value is Map ? value.cast<String, Object?>() : null;
+
+  static Iterable<Map<String, Object?>> _objects(Object? value) => [
+    if (value is List)
+      for (final item in value)
+        if (item is Map) item.cast<String, Object?>(),
+  ];
 
   static String _text(Object? value) => value is String ? value : '';
 

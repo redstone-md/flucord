@@ -87,11 +87,11 @@ class StreamerModeSection extends StatelessWidget {
           _Switch(
             switchKey: const ValueKey('streamer-mode-overlay'),
             title: 'Hide the in-game overlay',
-            subtitle: 'It is drawn over whatever is being captured, so '
+            subtitle:
+                'It is drawn over whatever is being captured, so '
                 'hiding the client window does not cover it.',
             value: settings.hideOverlayWidgets,
-            onChanged: (value) =>
-                controller.setHideOverlayWidgets(hide: value),
+            onChanged: (value) => controller.setHideOverlayWidgets(hide: value),
           ),
           _Switch(
             switchKey: const ValueKey('streamer-mode-capture'),
@@ -152,9 +152,7 @@ class _Switch extends StatelessWidget {
     key: switchKey,
     contentPadding: EdgeInsets.zero,
     value: value,
-    onChanged: onChanged == null
-        ? null
-        : (next) => unawaited(onChanged!(next)),
+    onChanged: onChanged == null ? null : (next) => unawaited(onChanged!(next)),
     title: Text(title, style: const TextStyle(fontSize: 13)),
     subtitle: Text(
       subtitle,

@@ -11,6 +11,7 @@ import 'voice_audio_pipeline.dart';
 import '../app_log.dart';
 
 part 'voice_controller_devices.dart';
+part 'voice_controller_listening.dart';
 
 enum VoiceState { idle, loading, ready, failure }
 
@@ -32,8 +33,20 @@ final class VoiceController extends ChangeNotifier {
     /// Opens the microphone noise filter; null on a build without one.
     Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
 
+    /// Opens the machine's echo and gain stages; null on a build without
+    /// them.
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })?
+    microphoneEnhancerFactory,
+
     /// Where the processing switches are kept between runs.
     VoiceProcessingRepository? processingRepository,
+
+    /// Turns other applications down while this account speaks. Null on a
+    /// platform whose attenuation reports itself unavailable.
+    ApplicationAttenuation? applicationAttenuation,
   }) => VoiceController._(
     mediaService,
     signalingServiceProvider ?? _noSignaling,
@@ -43,9 +56,10 @@ final class VoiceController extends ChangeNotifier {
     streamAudio,
     streamAudioEnded,
     noiseSuppressorFactory,
+    microphoneEnhancerFactory,
     processingRepository,
+    applicationAttenuation,
   );
-
   VoiceController._(
     this._mediaService,
     this._signalingServiceProvider,
@@ -55,13 +69,20 @@ final class VoiceController extends ChangeNotifier {
     Stream<VoiceRemotePcmFrame>? streamAudio,
     Stream<String>? streamAudioEnded,
     Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
+    Future<VoiceMicrophoneEnhancer> Function({
+      required bool echoCancellation,
+      required bool automaticGainControl,
+    })?
+    microphoneEnhancerFactory,
     this._processingRepository,
+    this._applicationAttenuation,
   ) : _audioPipeline = audioCodecFactory == null
           ? null
           : VoiceAudioPipeline(
               mediaService: _mediaService,
               codecFactory: audioCodecFactory,
               noiseSuppressorFactory: noiseSuppressorFactory,
+              microphoneEnhancerFactory: microphoneEnhancerFactory,
             ) {
     _audioErrorSubscription = _audioPipeline?.errors.listen((error) {
       _error = error;
@@ -70,6 +91,10 @@ final class VoiceController extends ChangeNotifier {
     _remotePcmSubscription = _audioPipeline?.remotePcm.listen(_handleRemotePcm);
     _ownSpeakingSubscription = _audioPipeline?.speaking.listen(
       _handleOwnSpeaking,
+    );
+    // Attenuation follows the same speech the speaking ring does.
+    _attenuationSpeakingSubscription = _audioPipeline?.speaking.listen(
+      _handleOwnSpeakingForAttenuation,
     );
     // Voice and stream audio share the room playback path.
     _streamAudioSubscription = streamAudio?.listen(_handleRemotePcm);
@@ -84,6 +109,7 @@ final class VoiceController extends ChangeNotifier {
   final VoiceAudioPlaybackService? _playbackService;
   final VoiceAudioPipeline? _audioPipeline;
   final VoiceProcessingRepository? _processingRepository;
+  final ApplicationAttenuation? _applicationAttenuation;
   VoiceProcessingSettings _processing = const VoiceProcessingSettings();
 
   /// Set by the first user change, so a startup load that resolves late
@@ -92,6 +118,7 @@ final class VoiceController extends ChangeNotifier {
   StreamSubscription<Object>? _audioErrorSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _remotePcmSubscription;
   StreamSubscription<bool>? _ownSpeakingSubscription;
+  StreamSubscription<bool>? _attenuationSpeakingSubscription;
   StreamSubscription<VoiceRemotePcmFrame>? _streamAudioSubscription;
   StreamSubscription<String>? _streamAudioEndedSubscription;
   StreamSubscription<VoiceSignalingEvent>? _signalingSubscription;
@@ -108,6 +135,10 @@ final class VoiceController extends ChangeNotifier {
   VoiceTransportSession? _transportSession;
   final Map<String, VoiceParticipant> _participants = {};
   String? _selfUserId;
+
+  /// The pending end of a push-to-talk burst, waiting out the release
+  /// delay. Cancelled by a press inside the window.
+  Timer? _releaseDelayTimer;
 
   /// Runs out [speakingHangover] after a participant's last voice frame.
   final Map<String, Timer> _speakingTimers = {};
@@ -854,12 +885,15 @@ final class VoiceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _releaseDelayTimer?.cancel();
     for (final timer in _speakingTimers.values) {
       timer.cancel();
     }
     unawaited(_audioErrorSubscription?.cancel());
     unawaited(_remotePcmSubscription?.cancel());
     unawaited(_ownSpeakingSubscription?.cancel());
+    unawaited(_attenuationSpeakingSubscription?.cancel());
+    unawaited(_applicationAttenuation?.dispose());
     unawaited(_streamAudioSubscription?.cancel());
     unawaited(_streamAudioEndedSubscription?.cancel());
     unawaited(_signalingSubscription?.cancel());

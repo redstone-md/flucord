@@ -2,13 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../application/account_connections_controller.dart';
+import '../../application/account_data_package_controller.dart';
+import '../../application/accessibility_controller.dart';
+import '../../application/account_entitlements_controller.dart';
+import '../../application/app_authorisation_controller.dart';
 import '../../application/account_standing_controller.dart';
-import '../../application/auth_session_controller.dart';
 import '../../application/family_centre_controller.dart';
-import '../../application/age_verification_controller.dart';
+import '../../application/auth_session_controller.dart';
 import '../../application/keybind_controller.dart';
-import '../../application/stream_quality_controller.dart';
+import '../../application/age_verification_controller.dart';
 import '../../application/streamer_mode_controller.dart';
+import '../../application/stream_quality_controller.dart';
 import '../../application/theme_controller.dart';
 import '../../application/voice_controller.dart';
 import '../../application/multi_factor_auth_controller.dart';
@@ -20,15 +25,20 @@ import '../../theme/flucord_theme.dart';
 import 'user_profile_controls.dart';
 import 'account_credentials_section.dart';
 import 'user_profile_section.dart';
-import 'user_settings_account_sections.dart';
-import 'user_settings_devices_section.dart';
+import 'user_settings_connections_section.dart';
+import 'user_settings_data_package_section.dart';
+import 'user_settings_entitlements_section.dart';
+import 'user_settings_apps_section.dart';
 import 'user_settings_family_section.dart';
+import 'user_settings_devices_section.dart';
 import 'user_settings_age_section.dart';
 import 'user_settings_mfa_section.dart';
 import 'user_settings_standing_section.dart';
 import 'user_settings_sections.dart';
+import 'user_settings_account_sections.dart';
 import 'keybind_section.dart';
 import 'stream_quality_section.dart';
+import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
@@ -43,10 +53,15 @@ enum UserSettingsCategory {
   standing('Account Standing', Icons.gavel_outlined),
   family('Family Center', Icons.family_restroom_outlined),
   devices('Devices', Icons.devices_outlined),
+  connections('Connections', Icons.link_outlined),
+  entitlements('Entitlements', Icons.card_membership_outlined),
   security('Two-Factor', Icons.key_outlined),
   age('Age Verification', Icons.badge_outlined),
+  apps('App Authorisation', Icons.smart_toy_outlined),
+  dataPackage('Data Package', Icons.mark_email_read_outlined),
   keybinds('Keybinds', Icons.keyboard_outlined),
   streamer('Streamer Mode', Icons.videocam_outlined),
+  accessibility('Accessibility', Icons.accessibility_new),
   voice('Voice & Video', Icons.mic_none),
   themes('Themes', Icons.brush_outlined),
   language('Language', Icons.translate),
@@ -66,10 +81,15 @@ class UserSettingsDialog extends StatefulWidget {
     this.standingController,
     this.familyController,
     this.sessionController,
+    this.connectionsController,
+    this.entitlementsController,
+    this.dataPackageController,
+    this.appAuthorisationController,
     this.mfaController,
     this.ageController,
     this.keybindController,
     this.streamerModeController,
+    this.accessibilityController,
     this.streamQualityController,
     this.themeController,
     this.voiceController,
@@ -96,6 +116,22 @@ class UserSettingsDialog extends StatefulWidget {
   /// Answers for the account's sessions, or null on a transport with none.
   final AuthSessionController? sessionController;
 
+  /// Answers for the account's third-party connections, or null on a
+  /// transport with none to read or change.
+  final AccountConnectionsController? connectionsController;
+
+  /// Answers for what the account holds, or null on a transport that reads
+  /// nothing.
+  final AccountEntitlementsController? entitlementsController;
+
+  /// Answers for the account's data package, or null on a transport with no
+  /// account to collect one from.
+  final AccountDataPackageController? dataPackageController;
+
+  /// Answers for authorising an app into a server, or null on a transport
+  /// that cannot consent to one.
+  final AppAuthorisationController? appAuthorisationController;
+
   /// Answers for two-factor authentication, or null where it cannot be set.
   final MultiFactorAuthController? mfaController;
 
@@ -108,6 +144,10 @@ class UserSettingsDialog extends StatefulWidget {
 
   /// Streamer mode, local for the same reason.
   final StreamerModeController? streamerModeController;
+
+  /// The interface adjustments, local like the rest of this run of
+  /// controllers: a screen's size belongs to the machine in front of it.
+  final AccessibilityController? accessibilityController;
 
   /// The bitrates a share and a camera are encoded at. Local like the rest of
   /// this run of controllers: the machine's connection is what they describe.
@@ -127,10 +167,15 @@ class UserSettingsDialog extends StatefulWidget {
     AccountStandingController? standingController,
     FamilyCentreController? familyController,
     AuthSessionController? sessionController,
+    AccountConnectionsController? connectionsController,
+    AccountEntitlementsController? entitlementsController,
+    AccountDataPackageController? dataPackageController,
+    AppAuthorisationController? appAuthorisationController,
     MultiFactorAuthController? mfaController,
     AgeVerificationController? ageController,
     KeybindController? keybindController,
     StreamerModeController? streamerModeController,
+    AccessibilityController? accessibilityController,
     StreamQualityController? streamQualityController,
     ThemeController? themeController,
     VoiceController? voiceController,
@@ -143,10 +188,15 @@ class UserSettingsDialog extends StatefulWidget {
       standingController: standingController,
       familyController: familyController,
       sessionController: sessionController,
+      connectionsController: connectionsController,
+      entitlementsController: entitlementsController,
+      dataPackageController: dataPackageController,
+      appAuthorisationController: appAuthorisationController,
       mfaController: mfaController,
       ageController: ageController,
       keybindController: keybindController,
       streamerModeController: streamerModeController,
+      accessibilityController: accessibilityController,
       streamQualityController: streamQualityController,
       themeController: themeController,
       voiceController: voiceController,
@@ -190,10 +240,15 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
               standingController: widget.standingController,
               familyController: widget.familyController,
               sessionController: widget.sessionController,
+              connectionsController: widget.connectionsController,
+              entitlementsController: widget.entitlementsController,
+              dataPackageController: widget.dataPackageController,
+              appAuthorisationController: widget.appAuthorisationController,
               mfaController: widget.mfaController,
               ageController: widget.ageController,
               keybindController: widget.keybindController,
               streamerModeController: widget.streamerModeController,
+              accessibilityController: widget.accessibilityController,
               streamQualityController: widget.streamQualityController,
               themeController: widget.themeController,
               voiceController: widget.voiceController,
@@ -350,10 +405,15 @@ class _Body extends StatelessWidget {
     required this.standingController,
     required this.familyController,
     required this.sessionController,
+    required this.connectionsController,
+    required this.entitlementsController,
+    required this.dataPackageController,
+    required this.appAuthorisationController,
     required this.mfaController,
     required this.ageController,
     required this.keybindController,
     required this.streamerModeController,
+    required this.accessibilityController,
     required this.streamQualityController,
     required this.themeController,
     required this.voiceController,
@@ -365,10 +425,18 @@ class _Body extends StatelessWidget {
   final AccountStandingController? standingController;
   final FamilyCentreController? familyController;
   final AuthSessionController? sessionController;
+  final AccountConnectionsController? connectionsController;
+  final AccountEntitlementsController? entitlementsController;
+  final AccountDataPackageController? dataPackageController;
+  final AppAuthorisationController? appAuthorisationController;
   final MultiFactorAuthController? mfaController;
   final AgeVerificationController? ageController;
   final KeybindController? keybindController;
   final StreamerModeController? streamerModeController;
+
+  /// The interface adjustments, local like the keybinds.
+  final AccessibilityController? accessibilityController;
+
   final StreamQualityController? streamQualityController;
   final ThemeController? themeController;
   final VoiceController? voiceController;
@@ -475,6 +543,19 @@ class _Body extends StatelessWidget {
       }
       return StreamerModeSection(controller: streamer);
     }
+    // The accessibility dials are the machine's too: they describe the
+    // screen in front of it rather than anything on the account.
+    if (category == UserSettingsCategory.accessibility) {
+      final accessibility = accessibilityController;
+      if (accessibility == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-accessibility-unavailable'),
+          icon: Icons.accessibility_new,
+          message: 'Accessibility settings are unavailable in this build.',
+        );
+      }
+      return AccessibilitySection(controller: accessibility);
+    }
     if (category == UserSettingsCategory.voice) {
       final voice = voiceController;
       final quality = streamQualityController;
@@ -551,6 +632,64 @@ class _Body extends StatelessWidget {
       }
       return DevicesSettingsSection(controller: sessions);
     }
+
+    // Connections, entitlements and app authorisation are their own routes
+    // too, and answer for themselves rather than being gated on the
+    // settings store.
+    if (category == UserSettingsCategory.connections) {
+      final connections = connectionsController;
+      if (connections == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-connections-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to link third-party accounts to '
+              'it. The demo and bot transports have no account to link.',
+        );
+      }
+      return ConnectionsSettingsSection(controller: connections);
+    }
+    if (category == UserSettingsCategory.entitlements) {
+      final entitlements = entitlementsController;
+      if (entitlements == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-entitlements-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to see what it holds. The demo '
+              'and bot transports have no account behind them.',
+        );
+      }
+      return EntitlementsSettingsSection(controller: entitlements);
+    }
+    if (category == UserSettingsCategory.apps) {
+      final apps = appAuthorisationController;
+      if (apps == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-apps-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to authorise apps into servers '
+              'it manages. The demo and bot transports have no account to '
+              'consent with.',
+        );
+      }
+      return AppAuthorisationSection(controller: apps);
+    }
+
+    if (category == UserSettingsCategory.dataPackage) {
+      final dataPackage = dataPackageController;
+      if (dataPackage == null) {
+        return const ProfileNotice(
+          key: ValueKey('user-data-package-unavailable'),
+          icon: Icons.cloud_off_outlined,
+          message:
+              'Connect a Discord account to request its data. The demo '
+              'and bot transports have no account to collect from.',
+        );
+      }
+      return DataPackageSettingsSection(controller: dataPackage);
+    }
     if (category == UserSettingsCategory.security) {
       final mfa = mfaController;
       if (mfa == null) {
@@ -621,6 +760,7 @@ class _Body extends StatelessWidget {
     UserSettingsCategory.profile ||
     UserSettingsCategory.keybinds ||
     UserSettingsCategory.streamer ||
+    UserSettingsCategory.accessibility ||
     UserSettingsCategory.themes ||
     UserSettingsCategory.voice => const SizedBox.shrink(),
     UserSettingsCategory.appearance => AppearanceSettingsSection(
@@ -643,8 +783,12 @@ class _Body extends StatelessWidget {
     UserSettingsCategory.standing => const SizedBox.shrink(),
     UserSettingsCategory.family => const SizedBox.shrink(),
     UserSettingsCategory.devices => const SizedBox.shrink(),
+    UserSettingsCategory.connections => const SizedBox.shrink(),
+    UserSettingsCategory.entitlements => const SizedBox.shrink(),
     UserSettingsCategory.security => const SizedBox.shrink(),
     UserSettingsCategory.age => const SizedBox.shrink(),
+    UserSettingsCategory.apps => const SizedBox.shrink(),
+    UserSettingsCategory.dataPackage => const SizedBox.shrink(),
     UserSettingsCategory.language => LanguageSettingsSection(
       settings: settings,
     ),

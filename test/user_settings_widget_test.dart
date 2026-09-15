@@ -97,6 +97,10 @@ void main() {
       repository.applied.last.timestampHourCycle,
       TimestampHourCycle.hour12,
     );
+    await _tapChoice(tester, 'setting-density-compact');
+    expect(repository.applied.last.density, UserInterfaceDensity.compact);
+    await _tapSetting(tester, 'setting-dark-sidebar');
+    expect(repository.applied.last.darkSidebar, isTrue);
 
     await _openSection(tester, 'chat');
     await _tapSetting(tester, 'setting-render-embeds');
@@ -105,8 +109,14 @@ void main() {
     expect(repository.applied.last.inlineEmbedMedia, isFalse);
     await _tapSetting(tester, 'setting-inline-attachment-media');
     expect(repository.applied.last.inlineAttachmentMedia, isFalse);
+    await _tapSetting(tester, 'setting-animate-emoji');
+    expect(repository.applied.last.animateEmoji, isFalse);
+    await _tapSetting(tester, 'setting-gif-autoplay');
+    expect(repository.applied.last.gifAutoPlay, isFalse);
 
     await _openSection(tester, 'notifications');
+    await _tapSetting(tester, 'setting-in-app-notifications');
+    expect(repository.applied.last.showInAppNotifications, isFalse);
     await _tapSetting(tester, 'setting-go-live-notifications');
     expect(repository.applied.last.notifyFriendsOnGoLive, isFalse);
     await _tapSetting(tester, 'setting-friend-online-notifications');
@@ -391,7 +401,8 @@ Future<void> _tapSetting(WidgetTester tester, String key) async {
 
 Future<void> _openSection(WidgetTester tester, String name) async {
   // The rail scrolls: with every category installed it is taller than the
-  // window, and a lazy list has not built what is off-screen.
+  // window, and a tile near the bottom is built but off-screen. Visible
+  // does not mean tappable, so every section is brought into view first.
   final tile = find.byKey(ValueKey('settings-nav-$name'));
   if (tile.evaluate().isEmpty) {
     await tester.scrollUntilVisible(
@@ -399,6 +410,8 @@ Future<void> _openSection(WidgetTester tester, String name) async {
       120,
       scrollable: find.byType(Scrollable).first,
     );
+  } else {
+    await tester.ensureVisible(tile);
   }
   await tester.tap(tile);
   await tester.pumpAndSettle();

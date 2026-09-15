@@ -35,6 +35,11 @@ final class UserSettingsScope
       maybeOf(context)?.settings?.messageDisplay ??
       const MessageDisplayPreferences();
 
+  /// The appearance settings in force, for the rows whose effect is layout
+  /// rather than message content.
+  static AppearancePreferences appearanceOf(BuildContext context) =>
+      maybeOf(context)?.settings?.appearance ?? const AppearancePreferences();
+
   static TimestampHourCycle hourCycleOf(BuildContext context) =>
       maybeOf(context)?.settings?.appearance.timestampHourCycle ??
       TimestampHourCycle.auto;

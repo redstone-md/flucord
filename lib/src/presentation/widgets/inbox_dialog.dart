@@ -80,11 +80,15 @@ class InboxDialog extends StatelessWidget {
   const InboxDialog({
     required this.catalog,
     required this.onMarkAllRead,
+    required this.onMarkEntryRead,
     super.key,
   });
 
   final InboxCatalog catalog;
   final VoidCallback onMarkAllRead;
+
+  /// Marks one mentioned channel read, from its group in the centre.
+  final void Function(String channelId) onMarkEntryRead;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +124,10 @@ class InboxDialog extends StatelessWidget {
                   child: TabBarView(
                     children: [
                       _UnreadList(entries: catalog.unread),
-                      _MentionList(entries: catalog.mentions),
+                      _MentionList(
+                        groups: catalog.mentionGroups,
+                        onMarkEntryRead: onMarkEntryRead,
+                      ),
                     ],
                   ),
                 ),
@@ -299,13 +306,14 @@ class _UnreadRow extends StatelessWidget {
 }
 
 class _MentionList extends StatelessWidget {
-  const _MentionList({required this.entries});
+  const _MentionList({required this.groups, required this.onMarkEntryRead});
 
-  final List<InboxMentionEntry> entries;
+  final List<InboxMentionGroup> groups;
+  final void Function(String channelId) onMarkEntryRead;
 
   @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty) {
+    if (groups.isEmpty) {
       return const _InboxEmptyState(
         icon: Icons.alternate_email,
         title: 'No recent mentions',
@@ -314,8 +322,76 @@ class _MentionList extends StatelessWidget {
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: entries.length,
-      itemBuilder: (context, index) => _MentionRow(entry: entries[index]),
+      itemCount: groups.length,
+      itemBuilder: (context, index) => _MentionGroupSection(
+        group: groups[index],
+        onMarkEntryRead: onMarkEntryRead,
+      ),
+    );
+  }
+}
+
+/// One channel's slice of the notification centre: a header that jumps to the
+/// channel, and the mention messages under it.
+class _MentionGroupSection extends StatelessWidget {
+  const _MentionGroupSection({
+    required this.group,
+    required this.onMarkEntryRead,
+  });
+
+  final InboxMentionGroup group;
+  final void Function(String channelId) onMarkEntryRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final channelId = group.target.channelId;
+    final count = group.mentionCount;
+    return Column(
+      children: [
+        Semantics(
+          label: '${group.path}, $count mention${count == 1 ? '' : 's'}',
+          button: true,
+          onTap: () => Navigator.of(context).pop(group.target),
+          excludeSemantics: true,
+          child: InkWell(
+            key: ValueKey('inbox-mention-group-$channelId'),
+            onTap: () => Navigator.of(context).pop(group.target),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: context.surfaces.border),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${group.path}  •  $count mention${count == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: ValueKey('inbox-mention-read-$channelId'),
+                    onPressed: () => onMarkEntryRead(channelId),
+                    child: const Text(
+                      'Mark read',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        for (final entry in group.entries) _MentionRow(entry: entry),
+      ],
     );
   }
 }

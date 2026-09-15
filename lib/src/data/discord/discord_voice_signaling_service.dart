@@ -125,7 +125,7 @@ final class DiscordVoiceSignalingService
     AppLog.warning(
       'stream',
       'identity voice=…${_tail(_currentSessionId)} '
-      'gateway=…${_tail(_gateway.sessionId)}',
+          'gateway=…${_tail(_gateway.sessionId)}',
     );
     return (sessionId: sessionId, userId: userId);
   }

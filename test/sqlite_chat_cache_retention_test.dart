@@ -32,31 +32,39 @@ void main() {
   );
 
   ChannelHistory historyOf(String channelId, List<ChatMessage> messages) =>
-      ChannelHistory(channelId: channelId, messages: messages, members: const []);
+      ChannelHistory(
+        channelId: channelId,
+        messages: messages,
+        members: const [],
+      );
 
-  test('history writes beyond the cap prune the oldest of the channel', () async {
-    final cache = await openCache();
-    final count = SqliteChatCache.historyPerChannel + 20;
-    await cache.writeChannelHistory(
-      historyOf(
-        'channel-1',
-        List.generate(count, (index) => message('m-$index', 'channel-1', index)),
-      ),
-    );
+  test(
+    'history writes beyond the cap prune the oldest of the channel',
+    () async {
+      final cache = await openCache();
+      final count = SqliteChatCache.historyPerChannel + 20;
+      await cache.writeChannelHistory(
+        historyOf(
+          'channel-1',
+          List.generate(
+            count,
+            (index) => message('m-$index', 'channel-1', index),
+          ),
+        ),
+      );
 
-    final history = await cache.readChannelHistory('channel-1');
-    expect(history.messages, hasLength(SqliteChatCache.historyPerChannel));
-    // The tail survives, the head does not.
-    expect(history.messages.first.id, 'm-20');
-    expect(history.messages.last.id, 'm-${count - 1}');
-  });
+      final history = await cache.readChannelHistory('channel-1');
+      expect(history.messages, hasLength(SqliteChatCache.historyPerChannel));
+      // The tail survives, the head does not.
+      expect(history.messages.first.id, 'm-20');
+      expect(history.messages.last.id, 'm-${count - 1}');
+    },
+  );
 
   test('single message writes prune the channel too', () async {
     final cache = await openCache();
     for (var index = 0; index < 5; index++) {
-      await cache.writeMessage(
-        message('m-$index', 'channel-1', index),
-      );
+      await cache.writeMessage(message('m-$index', 'channel-1', index));
     }
     final before = await cache.readChannelHistory('channel-1');
     expect(before.messages, hasLength(5));

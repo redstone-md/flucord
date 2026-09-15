@@ -17,16 +17,10 @@ void main() {
         isToolWindow: false,
       );
 
-      expect(
-        WindowsWindowCaptureShield.pickOwnWindow([overlay, main]),
-        1,
-      );
+      expect(WindowsWindowCaptureShield.pickOwnWindow([overlay, main]), 1);
       // The same walk with the overlay hidden picks the main window either
       // way, so the two orders answer the same window.
-      expect(
-        WindowsWindowCaptureShield.pickOwnWindow([main, overlay]),
-        0,
-      );
+      expect(WindowsWindowCaptureShield.pickOwnWindow([main, overlay]), 0);
     });
 
     test('a runner class that has moved on falls back to the first plain '
@@ -40,10 +34,7 @@ void main() {
         isToolWindow: false,
       );
 
-      expect(
-        WindowsWindowCaptureShield.pickOwnWindow([overlay, other]),
-        1,
-      );
+      expect(WindowsWindowCaptureShield.pickOwnWindow([overlay, other]), 1);
     });
 
     test('a process of nothing but tool windows shields nothing', () {

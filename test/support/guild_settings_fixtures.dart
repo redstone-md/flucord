@@ -4,6 +4,7 @@ import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/guild_membership.dart';
+import 'package:flucord/src/domain/permission_overwrite.dart';
 import 'fake_automod_routes.dart';
 
 /// Fixtures shared by the guild-settings controller and widget tests.
@@ -22,10 +23,15 @@ final allModerationPermissions = DiscordPermissions.combine([
   DiscordPermissions.manageGuild,
   DiscordPermissions.manageRoles,
   DiscordPermissions.manageChannels,
+  DiscordPermissions.manageWebhooks,
   DiscordPermissions.banMembers,
   DiscordPermissions.kickMembers,
   DiscordPermissions.createInstantInvite,
   DiscordPermissions.viewAuditLog,
+  DiscordPermissions.moderateMembers,
+  DiscordPermissions.manageNicknames,
+  DiscordPermissions.changeNickname,
+  DiscordPermissions.manageGuildExpressions,
 ]);
 
 /// A guild with a moderator at role position 5, a member below them and an
@@ -39,8 +45,8 @@ ChatWorkspace guildWorkspace({BigInt? moderatorPermissions}) => ChatWorkspace(
       colorValue: 0xff456b5a,
     ),
   ],
-  channels: const [
-    ConversationChannel(
+  channels: [
+    const ConversationChannel(
       id: textChannelId,
       spaceId: guildId,
       name: 'general',
@@ -54,6 +60,16 @@ ChatWorkspace guildWorkspace({BigInt? moderatorPermissions}) => ChatWorkspace(
       topic: '',
       kind: ChannelKind.voice,
       position: 1,
+      bitrate: 64000,
+      userLimit: 0,
+      rtcRegion: 'rotterdam',
+      permissionOverwrites: {
+        guildId: DiscordPermissionOverwrite(
+          id: guildId,
+          allow: BigInt.zero,
+          deny: DiscordPermissions.viewChannel,
+        ),
+      },
     ),
   ],
   members: const [
@@ -152,10 +168,16 @@ final class FakeGuildManagementRepository
 
   /// Returns no audit entries at all.
   bool emptyAuditPage = false;
-
   BanRequest? bannedRequest;
+  GuildRoleEdit? lastRoleEdit;
   List<RolePositionDelta>? reorderedDeltas;
   AuditLogQuery? lastAuditQuery;
+  GuildWebhookEdit? savedWebhookEdit;
+  List<DiscordPermissionOverwrite>? savedOverwrites;
+
+  /// The member standings `loadMember` answers with, and the routes in this
+  /// fake update. Keyed by user id; an absent key answers the empty profile.
+  final Map<String, GuildMemberProfile> memberProfiles = {};
 
   String _guildName = 'The Forge';
   int _createdRoles = 0;
@@ -223,6 +245,7 @@ final class FakeGuildManagementRepository
     required GuildRoleEdit edit,
   }) async {
     _record('updateRole');
+    lastRoleEdit = edit;
     return _role(roleId, 1, name: edit['name'] as String? ?? roleId);
   }
 
@@ -262,6 +285,18 @@ final class FakeGuildManagementRepository
     required GuildChannelEdit edit,
   }) async {
     _record('editGuildChannel');
+    final rawOverwrites = edit['permission_overwrites'];
+    if (rawOverwrites is List) {
+      savedOverwrites = [
+        for (final entry in rawOverwrites.whereType<Map>())
+          DiscordPermissionOverwrite(
+            id: entry['id']! as String,
+            allow: DiscordPermissions.parse(entry['allow']),
+            deny: DiscordPermissions.parse(entry['deny']),
+            kind: PermissionOverwriteKind.fromDiscordValue(entry['type']),
+          ),
+      ];
+    }
     return ConversationChannel(
       id: channelId,
       spaceId: guildId,
@@ -340,6 +375,89 @@ final class FakeGuildManagementRepository
   }) async => _record('kickMember');
 
   @override
+  Future<GuildMemberProfile> loadMember({
+    required String guildId,
+    required String userId,
+  }) async {
+    _record('loadMember');
+    return memberProfiles[userId] ??
+        GuildMemberProfile(userId: userId, guildId: guildId, roleIds: const []);
+  }
+
+  @override
+  Future<GuildMemberProfile> updateMember({
+    required String guildId,
+    required String userId,
+    required GuildMemberEdit edit,
+  }) async {
+    _record('updateMember');
+    final current =
+        memberProfiles[userId] ??
+        GuildMemberProfile(userId: userId, guildId: guildId, roleIds: const []);
+    final updated = GuildMemberProfile(
+      userId: userId,
+      guildId: guildId,
+      roleIds: edit.contains('roles')
+          ? [for (final id in (edit['roles'] as List).whereType<String>()) id]
+          : current.roleIds,
+      nickname: edit.contains('nick')
+          ? edit['nick'] as String?
+          : current.nickname,
+      timeoutUntil: edit.contains('communication_disabled_until')
+          ? _parseTimestamp(edit['communication_disabled_until'])
+          : current.timeoutUntil,
+    );
+    memberProfiles[userId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> grantMemberRole({
+    required String guildId,
+    required String userId,
+    required String roleId,
+    String? reason,
+  }) async {
+    _record('grantMemberRole');
+    final current = memberProfiles[userId];
+    if (current != null && !current.roleIds.contains(roleId)) {
+      memberProfiles[userId] = GuildMemberProfile(
+        userId: userId,
+        guildId: guildId,
+        roleIds: [...current.roleIds, roleId],
+        nickname: current.nickname,
+        timeoutUntil: current.timeoutUntil,
+      );
+    }
+  }
+
+  @override
+  Future<void> revokeMemberRole({
+    required String guildId,
+    required String userId,
+    required String roleId,
+    String? reason,
+  }) async {
+    _record('revokeMemberRole');
+    final current = memberProfiles[userId];
+    if (current != null && current.roleIds.contains(roleId)) {
+      memberProfiles[userId] = GuildMemberProfile(
+        userId: userId,
+        guildId: guildId,
+        roleIds: [
+          for (final id in current.roleIds)
+            if (id != roleId) id,
+        ],
+        nickname: current.nickname,
+        timeoutUntil: current.timeoutUntil,
+      );
+    }
+  }
+
+  DateTime? _parseTimestamp(Object? value) =>
+      value is String ? DateTime.tryParse(value) : null;
+
+  @override
   Future<List<GuildInvite>> loadGuildInvites(String guildId) async {
     _record('loadGuildInvites');
     return [
@@ -376,6 +494,78 @@ final class FakeGuildManagementRepository
     _revokedInvites.add(code);
   }
 
+  final Map<String, GuildWebhook> _webhooks = {};
+
+  @override
+  Future<List<GuildWebhook>> loadWebhooks(String id) async {
+    _record('loadWebhooks');
+    return [for (final webhook in _webhooks.values) webhook];
+  }
+
+  @override
+  Future<GuildWebhook> createWebhook({
+    required String guildId,
+    required GuildWebhookDraft draft,
+  }) async {
+    _record('createWebhook');
+    final webhook = GuildWebhook(
+      id: '555555555555555555',
+      guildId: guildId,
+      channelId: draft.channelId,
+      name: draft.name,
+    );
+    _webhooks[webhook.id] = webhook;
+    return webhook;
+  }
+
+  @override
+  Future<GuildWebhook> updateWebhook({
+    required String webhookId,
+    required GuildWebhookEdit edit,
+  }) async {
+    _record('updateWebhook');
+    savedWebhookEdit = edit;
+    final existing = _webhooks[webhookId];
+    if (existing == null) {
+      throw StateError('no webhook $webhookId');
+    }
+    return _webhooks[webhookId] = GuildWebhook(
+      id: existing.id,
+      guildId: existing.guildId,
+      channelId: edit['channel_id'] as String? ?? existing.channelId,
+      name: edit['name'] as String? ?? existing.name,
+    );
+  }
+
+  @override
+  Future<void> deleteWebhook(String webhookId) async {
+    _record('deleteWebhook');
+    _webhooks.remove(webhookId);
+  }
+  // The server-access routes are recorded but not served: the guild-settings
+  // window never calls them, and this fixture exists for its sections.
+
+  @override
+  Future<InvitePreview> previewInvite(String code) async {
+    _record('previewInvite');
+    throw UnsupportedError('Not served by the settings fixture');
+  }
+
+  @override
+  Future<JoinedGuild> joinGuild(String code) async {
+    _record('joinGuild');
+    throw UnsupportedError('Not served by the settings fixture');
+  }
+
+  @override
+  Future<JoinedGuild> createGuild({required String name}) async {
+    _record('createGuild');
+    throw UnsupportedError('Not served by the settings fixture');
+  }
+
+  @override
+  Future<void> leaveGuild(String id) async => _record('leaveGuild');
+
   @override
   Future<AuditLogPage> loadAuditLog({
     required String guildId,
@@ -408,7 +598,10 @@ final class FakeGuildManagementRepository
     name: name ?? id,
     position: position,
     permissions: BigInt.zero,
+    colorValue: id == 'member' ? 0x2ecc71 : 0,
     managed: managed,
+    iconHash: id == 'member' ? 'member-icon' : null,
+    unicodeEmoji: id == 'member' ? '🔧' : null,
   );
 
   AuditLogEntry _entry(String id, {int minutes = 0}) => AuditLogEntry(

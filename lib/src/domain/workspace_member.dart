@@ -147,6 +147,25 @@ final class Member {
     presenceDetail: presenceDetail ?? this.presenceDetail,
   );
 
+  /// This member with [spaceId] gone, or null when nothing of them is left.
+  ///
+  /// A member who still holds another space keeps their record under it; one
+  /// whose only space was this one has nothing left to show. A member with no
+  /// spaces at all is kept, because an empty record is how the workspace says
+  /// "we know this person, no server in common", which the direct-message
+  /// surfaces rely on.
+  Member? withoutSpace(String spaceId) {
+    if (!spaceIds.contains(spaceId)) return this;
+    final spaces = {...spaceIds}..remove(spaceId);
+    if (spaces.isEmpty) return null;
+    return copyWith(
+      spaceIds: spaces,
+      rolesBySpace: {...rolesBySpace}..remove(spaceId),
+      avatarUrlsBySpace: {...avatarUrlsBySpace}..remove(spaceId),
+      membershipsBySpace: {...membershipsBySpace}..remove(spaceId),
+    );
+  }
+
   /// Replaces the whole presence, detail included.
   ///
   /// Separate from [copyWith] because presence is the one field whose new

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../application/connection_controller.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
+import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
-import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'account_panel.dart';
 import 'friends_panel.dart';
@@ -13,6 +14,8 @@ import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
 import 'mention_badge.dart';
 import 'notification_settings_menu.dart';
+import 'theme_scope.dart';
+import 'user_settings_scope.dart';
 
 part 'channel_sidebar_rows.dart';
 
@@ -42,6 +45,8 @@ class ChannelSidebar extends StatelessWidget {
     required this.collapsedCategoryIds,
     required this.onToggleCategory,
     required this.onNewDirectMessage,
+    this.onAcceptMessageRequest,
+    this.onDeclineMessageRequest,
     this.readState,
     this.onNotificationRequest,
     this.scheduledEventCount = 0,
@@ -49,6 +54,7 @@ class ChannelSidebar extends StatelessWidget {
     this.scheduledEventsError,
     this.onOpenEvents,
     this.onOpenServerSettings,
+    this.onLeaveServer,
     this.onReportServer,
     this.friends,
     this.seatedByChannel = const {},
@@ -104,6 +110,11 @@ class ChannelSidebar extends StatelessWidget {
   final ValueChanged<String> onToggleCategory;
   final VoidCallback onNewDirectMessage;
 
+  /// Answers a message request in the folder, by channel id. Null on a
+  /// surface that cannot answer one, which leaves the folder read-only.
+  final void Function(String channelId)? onAcceptMessageRequest;
+  final void Function(String channelId)? onDeclineMessageRequest;
+
   /// The server's read state, or null on a transport that has none.
   ///
   /// Mute, the resolved notification level and the unread-badge rule all come
@@ -120,6 +131,10 @@ class ChannelSidebar extends StatelessWidget {
   /// nothing here, or when the transport has no admin plane at all — the header
   /// then simply has no gear, which is what Discord does too.
   final VoidCallback? onOpenServerSettings;
+
+  /// Leaves the server. Null on a transport that cannot leave anything and
+  /// in the direct-messages space, which is nobody's server.
+  final VoidCallback? onLeaveServer;
 
   /// Reports the server to Discord, or null on a transport with no report
   /// flow and in the direct-messages space, which is nobody's server.
@@ -141,11 +156,19 @@ class ChannelSidebar extends StatelessWidget {
               channel.isThread && !channel.isArchived && !_isForumPost(channel),
         )
         .toList(growable: false);
-    return Container(
+    // The account's dark-sidebar answer, read here so the flag from any
+    // device repaints the rail. It only applies to the built-in light
+    // palette: an installed theme is never overridden, its author picked
+    // the panel colours on purpose.
+    final darkSidebar =
+        UserSettingsScope.appearanceOf(context).drawsDarkSidebar &&
+        Theme.of(context).brightness == Brightness.light &&
+        ThemeScope.maybeOf(context) == null;
+    final content = Container(
       key: const ValueKey('channel-sidebar'),
       width: 236,
       decoration: BoxDecoration(
-        color: context.surfaces.surface,
+        color: context.surfaces.rail,
         border: Border(right: BorderSide(color: context.surfaces.border)),
       ),
       child: Column(
@@ -211,6 +234,13 @@ class ChannelSidebar extends StatelessWidget {
                     icon: const Icon(Icons.settings_outlined, size: 18),
                     tooltip: 'Server settings',
                   ),
+                if (!isDirect && onLeaveServer != null)
+                  IconButton(
+                    key: const ValueKey('leave-server'),
+                    onPressed: onLeaveServer,
+                    icon: const Icon(Icons.logout_outlined, size: 18),
+                    tooltip: 'Leave server',
+                  ),
                 if (!isDirect && onReportServer != null)
                   IconButton(
                     key: const ValueKey('report-server'),
@@ -267,6 +297,13 @@ class ChannelSidebar extends StatelessWidget {
         ],
       ),
     );
+    if (!darkSidebar) return content;
+    // The whole rail repaints with the dark palette, so the rows keep a
+    // readable foreground instead of light-theme text on a dark ground.
+    return Theme(
+      data: FlucordTheme.fromPalette(FlucordPalette.dark),
+      child: content,
+    );
   }
 
   ReadStateSnapshot get _readState => readState ?? ReadStateSnapshot.empty;
@@ -318,12 +355,7 @@ class ChannelSidebar extends StatelessWidget {
     required List<ConversationChannel> regularChannels,
     required List<ConversationChannel> threads,
   }) {
-    if (isDirect) {
-      return [
-        const _SectionLabel(label: 'Messages'),
-        for (final channel in regularChannels) _rowFor(channel),
-      ];
-    }
+    if (isDirect) return _directMessageEntries(regularChannels);
     final sortedCategories = [...categories]
       ..sort((left, right) => left.position.compareTo(right.position));
     if (sortedCategories.isEmpty) {
@@ -378,6 +410,45 @@ class ChannelSidebar extends StatelessWidget {
       ],
     ];
   }
+
+  /// The direct-messages block: the conversations, with the unanswered
+  /// requests folded into their folder.
+  ///
+  /// A request never sits in the main list. Discord hides it there until the
+  /// account answers it, which is the whole point of the folder, so the split
+  /// happens here rather than in whatever built the channel list.
+  List<Widget> _directMessageEntries(List<ConversationChannel> channels) {
+    final requests = channels
+        .where((channel) => channel.isMessageRequest)
+        .toList(growable: false);
+    final conversations = channels
+        .where((channel) => !channel.isMessageRequest)
+        .toList(growable: false);
+    return [
+      _DirectMessagesFolder(
+        requests: requests,
+        conversationRows: [
+          for (final channel in conversations) _rowFor(channel),
+        ],
+        requestRows: [for (final channel in requests) _requestRowFor(channel)],
+      ),
+    ];
+  }
+
+  _MessageRequestRow _requestRowFor(ConversationChannel channel) =>
+      _MessageRequestRow(
+        channel: channel,
+        recipient: channel.recipientId == null
+            ? null
+            : memberOf(channel.recipientId!),
+        onPressed: () => onSelectChannel(channel.id),
+        onAccept: onAcceptMessageRequest == null
+            ? null
+            : () => onAcceptMessageRequest!(channel.id),
+        onDecline: onDeclineMessageRequest == null
+            ? null
+            : () => onDeclineMessageRequest!(channel.id),
+      );
 
   List<Widget> _eventEntries() {
     if (scheduledEventCount == 0 &&

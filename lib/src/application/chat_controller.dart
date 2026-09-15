@@ -1,8 +1,13 @@
+import '../domain/game_detection.dart';
 import '../domain/desktop_relationship_repository.dart';
 import '../domain/age_verification.dart';
 import '../domain/multi_factor_auth.dart';
 import '../domain/auth_session.dart';
 import '../domain/family_centre.dart';
+import '../domain/account_connections.dart';
+import '../domain/account_data_package.dart';
+import '../domain/account_entitlements.dart';
+import '../domain/app_authorisation.dart';
 import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
 import 'dart:async';
@@ -15,6 +20,8 @@ import '../domain/chat_repository.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/discord_snowflake.dart';
 import '../domain/forum_repository.dart';
+import '../domain/guild_management.dart';
+import '../domain/guild_expression_repository.dart';
 import '../domain/guild_management_repository.dart';
 import '../domain/guild_member_list_repository.dart';
 import '../domain/moderation_repository.dart';
@@ -37,6 +44,7 @@ import '../domain/soundboard.dart';
 import '../domain/stage_channel.dart';
 import '../domain/thread_membership.dart';
 import '../domain/thread_repository.dart';
+import '../domain/user_notes.dart';
 import '../domain/user_profile.dart';
 import '../domain/user_settings_repository.dart';
 import '../domain/voice_call.dart';
@@ -59,6 +67,7 @@ part 'chat_controller_stickers.dart';
 part 'chat_controller_voice_messages.dart';
 part 'chat_controller_scheduled_events.dart';
 part 'chat_controller_user_settings.dart';
+part 'chat_controller_guild_access.dart';
 part 'chat_controller_read_state.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
@@ -71,6 +80,7 @@ final class ChatController extends ChangeNotifier {
   ChatRepository _repository;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
   StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
+  StreamSubscription<String>? _conversationSummarySubscription;
   final StreamController<MessageUpsertedEvent> _incomingMessages =
       StreamController.broadcast();
 
@@ -103,6 +113,7 @@ final class ChatController extends ChangeNotifier {
   final Map<String, DateTime> _typingRequests = {};
   final _archivedThreadState = _ArchivedThreadState();
   String? _activeChannelId;
+  String? _guildAccessError;
   bool _isApplicationActive = true;
   bool _disposed = false;
 
@@ -112,6 +123,14 @@ final class ChatController extends ChangeNotifier {
   bool get isSending => _isSending;
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
   String? get activeChannelId => _activeChannelId;
+
+  /// Whether the window has the user's attention, as the platform sees it.
+  ///
+  /// The same fact the read-state acknowledgement reads: an incoming message
+  /// that lands while this is true, in the channel being looked at, is one the
+  /// user is already seeing.
+  bool get isApplicationActive => _isApplicationActive;
+
   Stream<MessageUpsertedEvent> get incomingMessages => _incomingMessages.stream;
   VoiceSignalingService? get voiceSignalingService =>
       _repository.voiceSignaling;
@@ -128,6 +147,9 @@ final class ChatController extends ChangeNotifier {
 
   /// The presence plane of the active transport, when it has one.
   PresenceService? get presenceService => _repository.presence;
+
+  /// The games the active transport can name as a game, when it has one.
+  DetectableGameRepository? get detectableGames => _repository.detectableGames;
 
   /// The lazy member-list surface, when the active transport offers one.
   ///
@@ -190,6 +212,7 @@ final class ChatController extends ChangeNotifier {
   Future<void> useRepository(ChatRepository repository) async {
     await _eventSubscription?.cancel();
     await _readStateSubscription?.cancel();
+    await _conversationSummarySubscription?.cancel();
     await _repository.close();
     _repository = repository;
     _workspace = null;
@@ -234,6 +257,10 @@ final class ChatController extends ChangeNotifier {
     notifyListeners();
     final workspace = _workspace;
     if (_state == ChatLoadState.ready && workspace != null) {
+      // The read state came back whole with the workspace, so this is the one
+      // moment a session can judge which entries are older than the collector
+      // keeps. A transport without read state has nothing to collect.
+      unawaited(collectReadStateGarbage());
       // A voice channel does carry messages, but it is never the channel the
       // app lands on unasked, so warming its history here would be wasted work.
       // The same visibility filter the shell lands by is applied here, or the
@@ -283,7 +310,13 @@ final class ChatController extends ChangeNotifier {
     _olderChannelErrors.remove(channelId);
     notifyListeners();
     try {
-      final page = await _repository.loadChannelHistory(channelId);
+      // A link that names a message lands on that message: the window is
+      // asked for around the anchor, which reaches history the client holds
+      // no page of. The plain open still reads forward from the end.
+      final page = await _repository.loadChannelHistory(
+        channelId,
+        aroundMessageId: anchorMessageId,
+      );
       _workspace = _workspace?.mergeInitialHistory(
         page.history,
         retainExisting: anchorMessageId != null,
@@ -415,7 +448,8 @@ final class ChatController extends ChangeNotifier {
     bool suppressNotifications = false,
   }) async {
     final workspace = _workspace;
-    final content = body.trim();
+    final spoken = _spokenCommandFrom(body.trim());
+    final content = spoken.$2;
     if (workspace == null ||
         (content.isEmpty && attachments.isEmpty) ||
         _isSending) {
@@ -432,6 +466,7 @@ final class ChatController extends ChangeNotifier {
         attachments: attachments,
         replyToMessageId: replyToMessageId,
         suppressNotifications: suppressNotifications,
+        textToSpeech: spoken.$1,
       );
       _workspace = _workspace?.upsertMessage(message);
       _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
@@ -444,6 +479,19 @@ final class ChatController extends ChangeNotifier {
       _isSending = false;
       notifyListeners();
     }
+  }
+
+  /// The spoken-aloud command: `/tts <message>` sends the message flagged to
+  /// be read aloud, without the command in the text.
+  ///
+  /// The account's own setting gates it, and an account that turned it off
+  /// types a literal slash message like any other text. The command needs an
+  /// argument, so a bare `/tts` is not one either.
+  (bool, String) _spokenCommandFrom(String content) {
+    if (!allowsTextToSpeech || !content.startsWith('/tts ')) {
+      return (false, content);
+    }
+    return (true, content.substring('/tts '.length).trim());
   }
 
   Future<bool> editMessage(ChatMessage message, String body) async {
@@ -578,6 +626,7 @@ final class ChatController extends ChangeNotifier {
     _clearTyping();
     unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
+    unawaited(_conversationSummarySubscription?.cancel());
     unawaited(_repository.close());
     unawaited(_incomingMessages.close());
     super.dispose();

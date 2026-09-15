@@ -23,9 +23,9 @@ final class VoiceScope extends InheritedNotifier<VoiceController> {
     assert(controller != null, 'VoiceScope is missing above this widget.');
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static VoiceController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<VoiceScope>()!.notifier!;
-
 }

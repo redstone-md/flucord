@@ -51,3 +51,7 @@ flutter:
   assets:
     - windows/runner/resources/app_icon.ico
     - macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png
+    - assets/sounds/call_ring.wav
+    - assets/sounds/call_accept.wav
+    - assets/sounds/call_hang_up.wav
+    - assets/spellcheck/en.txt

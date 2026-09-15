@@ -51,12 +51,76 @@ void main() {
     expect(find.byKey(const ValueKey('sticker-picker')), findsOneWidget);
     expect(find.text('Could not send stickers.'), findsOneWidget);
   });
+
+  testWidgets('a sticker from another server appears under its own name', (
+    tester,
+  ) async {
+    List<String>? submitted;
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _PickerApp(
+        sections: [
+          StickerServerSection(spaceName: 'Guild', stickers: _stickers),
+          StickerServerSection(
+            spaceName: 'Night Shift',
+            stickers: [_otherServerSticker],
+          ),
+        ],
+        onSend: (ids) async {
+          submitted = ids;
+          return true;
+        },
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-sticker-picker')));
+    await tester.pumpAndSettle();
+    // The other server's section sits below the fold; scrolling reaches it,
+    // and one more push brings its first sticker fully inside.
+    final grid = find.descendant(
+      of: find.byKey(const ValueKey('sticker-grid-scroll')),
+      matching: find.byType(Scrollable),
+    );
+    final tile = find.byKey(const ValueKey('sticker-option-relay-click'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('sticker-option-relay-click')),
+      150,
+      scrollable: grid,
+    );
+    expect(find.text('NIGHT SHIFT'), findsOneWidget);
+    final gridRect = tester.getRect(grid);
+    while (tester.getRect(tile).bottom > gridRect.bottom) {
+      await tester.drag(grid, const Offset(0, -40));
+      await tester.pump();
+    }
+    await tester.tap(tile);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-stickers')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sticker-picker')), findsNothing);
+    expect(submitted, ['relay-click']);
+  });
+
+  testWidgets('a picker with no stickers anywhere offers no button press', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _PickerApp(sections: const [], onSend: (_) async => true),
+    );
+    final button = tester.widget<IconButton>(
+      find.byKey(const ValueKey('open-sticker-picker')),
+    );
+    expect(button.onPressed, isNull);
+  });
 }
 
 class _PickerApp extends StatelessWidget {
-  const _PickerApp({required this.onSend});
+  const _PickerApp({required this.onSend, this.sections});
 
   final SendStickersCallback onSend;
+  final List<StickerServerSection>? sections;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -65,7 +129,9 @@ class _PickerApp extends StatelessWidget {
       body: Align(
         alignment: Alignment.bottomRight,
         child: StickerPickerButton(
-          stickers: _stickers,
+          sections:
+              sections ??
+              [StickerServerSection(spaceName: 'Guild', stickers: _stickers)],
           isSending: false,
           onSend: onSend,
           assetBuilder: (_, sticker) =>
@@ -75,6 +141,18 @@ class _PickerApp extends StatelessWidget {
     ),
   );
 }
+
+final _otherServerSticker = GuildSticker(
+  item: const MessageSticker(
+    id: 'relay-click',
+    name: 'Relay click',
+    format: StickerFormat.png,
+    url: 'https://invalid.example/relay.png',
+  ),
+  spaceId: 'guild-2',
+  tags: ['relay'],
+  available: true,
+);
 
 final _stickers = [
   for (var index = 1; index <= 4; index++)

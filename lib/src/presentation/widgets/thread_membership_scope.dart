@@ -11,9 +11,9 @@ final class ThreadMembershipScope
     super.key,
   }) : super(notifier: controller);
 
-  static ThreadMembershipController? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<ThreadMembershipScope>()
-          ?.notifier;
+  static ThreadMembershipController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<ThreadMembershipScope>()
+      ?.notifier;
 
   static ThreadMembershipController of(BuildContext context) {
     final controller = maybeOf(context);
@@ -23,9 +23,9 @@ final class ThreadMembershipScope
     );
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static ThreadMembershipController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ThreadMembershipScope>()!.notifier!;
-
 }

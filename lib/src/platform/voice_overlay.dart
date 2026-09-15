@@ -60,10 +60,7 @@ typedef _UpdateDart = int Function(Pointer<Uint8>, int, int);
 /// `UpdateLayeredWindow` through `flucord_overlay.dll`.
 final class WindowsVoiceOverlay implements VoiceOverlay {
   WindowsVoiceOverlay({DynamicLibrary? library, OverlayPainter? painter})
-    : this.withLibrary(
-        Platform.isWindows ? _open() : null,
-        painter: painter,
-      );
+    : this.withLibrary(Platform.isWindows ? _open() : null, painter: painter);
 
   /// The module handed in rather than opened, so a test can state that it is
   /// genuinely absent.
@@ -101,10 +98,9 @@ final class WindowsVoiceOverlay implements VoiceOverlay {
     if (picture == null) return false;
 
     final showWindow = library
-        .lookupFunction<
-          Int32 Function(Int32, Int32),
-          int Function(int, int)
-        >('flucord_overlay_show');
+        .lookupFunction<Int32 Function(Int32, Int32), int Function(int, int)>(
+          'flucord_overlay_show',
+        );
     if (showWindow(24, 24) != 0) return false;
 
     final update = library

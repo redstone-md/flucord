@@ -44,6 +44,68 @@ final class GuildInvite {
   String get url => 'https://discord.gg/$code';
 }
 
+/// What an invite resolves to before anybody joins: `GET /invites/{code}`.
+///
+/// The preview is what the join surface shows before the user commits, so it
+/// carries exactly the fields that surface draws: the server's name, its icon
+/// URL, a member count, and the channel the invite lands in.
+final class InvitePreview {
+  const InvitePreview({
+    required this.code,
+    required this.name,
+    this.iconUrl,
+    this.guildId,
+    this.description,
+    this.channelName,
+    this.approximateMemberCount,
+    this.bannerUrl,
+  });
+
+  final String code;
+
+  /// The server's name, as Discord renders it.
+  final String name;
+
+  /// The server's icon URL, or null when it has none.
+  final String? iconUrl;
+
+  /// The server the invite points at, when the payload carried it.
+  final String? guildId;
+
+  /// The server's description, or null when it has none.
+  final String? description;
+
+  /// The channel the invite lands in, or null when the payload named none.
+  final String? channelName;
+
+  /// How many members the server reports, or null when not reported.
+  final int? approximateMemberCount;
+
+  /// The server's banner URL, or null when it has none.
+  final String? bannerUrl;
+}
+
+/// A join, a create, or a leave was refused. The refusal kind says which
+/// failure the user is looking at, so the message can be plain about it.
+enum GuildAccessRefusal { invalid, expired, alreadyJoined, unknown }
+
+/// The refusal the transport carried, with the text the surface shows.
+///
+/// Discord codes join refusals ("Unknown Invite", "Invite expired", and the
+/// 403 the POST answers when the account is already a member), but a raw
+/// status code is not something a user can read, so the transport folds the
+/// three honest answers into [GuildAccessRefusal] plus a message.
+final class GuildAccessException implements Exception {
+  const GuildAccessException({required this.refusal, required this.message});
+
+  final GuildAccessRefusal refusal;
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// The options `POST /channels/{id}/invites` accepts.
 final class InviteOptions {
   const InviteOptions({

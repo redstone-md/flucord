@@ -19,6 +19,13 @@ final class DiscordCdn {
   static String? userBanner(String userId, String? hash, {int size = 512}) =>
       _asset(['banners', userId], hash, size: size);
 
+  /// An application's icon, as an invite's page shows it.
+  static String? appIcon(
+    String applicationId,
+    String? hash, {
+    int size = 128,
+  }) => _asset(['app-icons', applicationId], hash, size: size);
+
   static String? guildMemberAvatar(
     String guildId,
     String userId,

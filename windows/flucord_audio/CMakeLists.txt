@@ -3,6 +3,7 @@ project(flucord_audio LANGUAGES CXX)
 
 add_library(flucord_audio SHARED
   "flucord_audio.cpp"
+  "mic_enhancer.cpp"
 )
 
 target_include_directories(flucord_audio PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

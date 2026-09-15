@@ -9,9 +9,12 @@ import 'discord_guild_admin_mapper.dart';
 import 'discord_mapper.dart';
 import 'discord_rest_client.dart';
 
+part 'discord_guild_management_access.dart';
 part 'discord_guild_management_automod.dart';
 part 'discord_guild_management_channels.dart';
+part 'discord_guild_management_members.dart';
 part 'discord_guild_management_moderation.dart';
+part 'discord_guild_management_webhooks.dart';
 
 /// The guild-administration routes, over the desktop-user session's REST
 /// credentials.
@@ -28,12 +31,25 @@ part 'discord_guild_management_moderation.dart';
 /// bug.
 final class DiscordGuildManagementRepository
     with
+        _DiscordGuildAccess,
         _DiscordGuildChannelAdministration,
+        _DiscordGuildMemberAdministration,
         _DiscordGuildModeration,
-        _DiscordGuildAutoMod
+        _DiscordGuildAutoMod,
+        _DiscordGuildWebhooks
     implements GuildManagementRepository {
   DiscordGuildManagementRepository(this._rest, {DiscordMapper? mapper})
     : _mapper = mapper ?? DiscordMapper();
+
+  /// Set by the transport that owns this session's cache and socket, so a
+  /// guild the account gains or loses is persisted and subscribed the same
+  /// way READY's guilds are. The routes answer before the sink runs, and a
+  /// transport that sets no sink simply does not persist.
+  @override
+  void Function(JoinedGuild guild)? onGuildGained;
+
+  @override
+  void Function(String guildId)? onGuildLeft;
 
   @override
   final DiscordRestClient _rest;

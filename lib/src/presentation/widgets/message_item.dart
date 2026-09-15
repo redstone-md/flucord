@@ -161,6 +161,10 @@ class _MessageItemState extends State<MessageItem> {
   @override
   Widget build(BuildContext context) {
     final time = MessageTimestamp.of(context, widget.message.sentAt);
+    // The account's density answer, read in the row rather than threaded
+    // through constructors: a change from another device tightens the list
+    // without anybody rebuilding it by hand.
+    final compact = UserSettingsScope.appearanceOf(context).packsDensely;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -180,7 +184,12 @@ class _MessageItemState extends State<MessageItem> {
                     ? context.surfaces.raised.withValues(alpha: 0.45)
                     : Colors.transparent,
               ),
-              padding: EdgeInsets.fromLTRB(20, widget.grouped ? 3 : 9, 20, 5),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
+                20,
+                compact ? 4 : 5,
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -335,6 +344,32 @@ class _MessageItemState extends State<MessageItem> {
           time,
           style: TextStyle(color: context.surfaces.muted, fontSize: 10),
         ),
+        // The flags a reader cannot guess from the text: why nothing
+        // notified them, and why the machine just spoke.
+        if (widget.message.suppressesNotifications) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Silent message',
+            child: Icon(
+              Icons.notifications_off_outlined,
+              key: const ValueKey('silent-message-marker'),
+              size: 11,
+              color: context.surfaces.muted,
+            ),
+          ),
+        ],
+        if (widget.message.isTextToSpeech) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: 'Text-to-speech message',
+            child: Icon(
+              Icons.record_voice_over_outlined,
+              key: const ValueKey('text-to-speech-message-marker'),
+              size: 11,
+              color: context.surfaces.muted,
+            ),
+          ),
+        ],
       ],
     ),
   );

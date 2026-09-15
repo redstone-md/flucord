@@ -9,13 +9,7 @@ Uint8List _packet(int count, int type, List<int> body) {
   // The length field is the whole packet in 32-bit words minus one; with a
   // one-word header that is exactly the body's word count.
   final bodyWords = body.length ~/ 4;
-  return Uint8List.fromList([
-    0x80 | count,
-    type,
-    0,
-    bodyWords,
-    ...body,
-  ]);
+  return Uint8List.fromList([0x80 | count, type, 0, bodyWords, ...body]);
 }
 
 List<int> _u32(int value) => [
@@ -122,8 +116,9 @@ void main() {
       0x00, 0x0a, 0x00, 0x00, // just packet 10
     ]);
 
-    final reports =
-        DiscordRtcpPacket.parse(Uint8List.fromList([...pli, ...nack]));
+    final reports = DiscordRtcpPacket.parse(
+      Uint8List.fromList([...pli, ...nack]),
+    );
 
     expect(reports, hasLength(2));
     expect(reports[0], isA<DiscordRtcpPictureLoss>());
@@ -161,12 +156,16 @@ void main() {
 
   test('isRtcp accepts the feedback types and rejects RTP', () {
     expect(
-      DiscordRtcpPacket.isRtcp(Uint8List.fromList([0x80, 206, 0, 0, 0, 0, 0, 0])),
+      DiscordRtcpPacket.isRtcp(
+        Uint8List.fromList([0x80, 206, 0, 0, 0, 0, 0, 0]),
+      ),
       isTrue,
     );
     // Payload type 101 is video RTP, not RTCP.
     expect(
-      DiscordRtcpPacket.isRtcp(Uint8List.fromList([0x80, 101, 0, 0, 0, 0, 0, 0])),
+      DiscordRtcpPacket.isRtcp(
+        Uint8List.fromList([0x80, 101, 0, 0, 0, 0, 0, 0]),
+      ),
       isFalse,
     );
   });

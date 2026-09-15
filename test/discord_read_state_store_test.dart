@@ -279,6 +279,118 @@ void main() {
     );
   });
 
+  test('STATE_UPDATE merges both blocks without clearing', () {
+    final store = DiscordReadStateStore()..accept('READY', _ready());
+
+    expect(
+      store.accept('STATE_UPDATE', {
+        'read_state': {
+          'version': 43,
+          // The block spells no `partial`: a state update is a delta by
+          // construction, so the store must not read that as "replace all".
+          'entries': [
+            {
+              'id': _otherChannelId,
+              'last_message_id': _newestMessage,
+              'mention_count': 1,
+            },
+          ],
+        },
+        'user_guild_settings': {
+          'version': 8,
+          'partial': false,
+          'entries': [
+            {'guild_id': _guildId, 'muted': false},
+          ],
+        },
+      }),
+      isTrue,
+    );
+
+    final snapshot = store.snapshot;
+    expect(snapshot.forChannel(_channelId), isNotNull);
+    expect(snapshot.forChannel(_otherChannelId)!.mentionCount, 1);
+    expect(snapshot.forChannel(_otherChannelId)!.lastAckedId, _newestMessage);
+    expect(snapshot.settingsFor(_guildId).muted, isFalse);
+    expect(
+      snapshot.settingsFor(CommunitySpace.directMessagesId).suppressEveryone,
+      isTrue,
+    );
+    expect(snapshot.readStateVersion, 43);
+    expect(snapshot.userGuildSettingsVersion, 8);
+
+    // An out-of-order state update must not walk a counter back.
+    store.accept('STATE_UPDATE', {
+      'read_state': {'version': 41, 'entries': const []},
+    });
+    expect(store.snapshot.readStateVersion, 43);
+  });
+
+  test('a STATE_UPDATE with no modelled block changes nothing', () {
+    final store = DiscordReadStateStore()..accept('READY', _ready());
+
+    expect(store.accept('STATE_UPDATE', const {'read_state': 1}), isFalse);
+    expect(store.accept('STATE_UPDATE', const {}), isFalse);
+    expect(store.snapshot.readStateVersion, 42);
+    expect(store.snapshot.readStates, hasLength(2));
+  });
+
+  test('DELETED_ENTITY_IDS forgets the collected read states', () {
+    final store = DiscordReadStateStore()..accept('READY', _ready());
+
+    expect(
+      store.accept('DELETED_ENTITY_IDS', {
+        'read_state_type': 0,
+        'ids': [_channelId, '444444444444444444'],
+        'version': 51,
+      }),
+      isTrue,
+    );
+    expect(store.snapshot.forChannel(_channelId), isNull);
+    expect(
+      store.entityState(ReadStateType.guildEvent, _guildId).lastAckedId,
+      _newerMessage,
+    );
+    expect(store.snapshot.readStateVersion, 51);
+
+    // The ids may also arrive wrapped in objects, the way entries do.
+    expect(
+      store.accept('DELETED_ENTITY_IDS', {
+        'read_state_type': 1,
+        'ids': [
+          {'id': _guildId},
+        ],
+      }),
+      isTrue,
+    );
+    expect(
+      store.entityState(ReadStateType.guildEvent, _guildId).lastAckedId,
+      isNull,
+    );
+  });
+
+  test('DELETED_ENTITY_IDS refuses shapes it cannot act on', () {
+    final store = DiscordReadStateStore()..accept('READY', _ready());
+
+    expect(
+      store.accept('DELETED_ENTITY_IDS', {
+        'read_state_type': 99,
+        'ids': [_channelId],
+      }),
+      isFalse,
+    );
+    expect(store.accept('DELETED_ENTITY_IDS', {'read_state_type': 0}), isFalse);
+    expect(
+      store.accept('DELETED_ENTITY_IDS', {
+        'read_state_type': 0,
+        'ids': ['555555555555555555'],
+      }),
+      isFalse,
+    );
+    expect(store.snapshot.readStateVersion, 42);
+    expect(store.snapshot.forChannel(_channelId), isNotNull);
+  });
+
   test('USER_GUILD_SETTINGS_UPDATE replaces one guild and bumps the max', () {
     final store = DiscordReadStateStore()..accept('READY', _ready());
 

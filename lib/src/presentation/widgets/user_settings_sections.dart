@@ -80,27 +80,39 @@ class AppearanceSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'Display density',
-          description: 'How tightly Discord packs its lists.',
-          support: UserSettingSupport.unavailable,
-          child: SettingValue(_densityLabel(appearance.density)),
+          description: 'How tightly the message list packs its rows.',
+          support: UserSettingSupport.applied,
+          child: SettingChoices<UserInterfaceDensity>(
+            keyPrefix: 'setting-density',
+            selected: appearance.density,
+            onSelected: (density) =>
+                onEdit(UserSettingsPatch(density: density)),
+            options: const [
+              SettingChoice(UserInterfaceDensity.compact, 'Compact'),
+              SettingChoice(UserInterfaceDensity.cozy, 'Cozy'),
+              // The two Discord also lists, which this client draws the same
+              // way it draws cozy: the account keeps them for the client
+              // that distinguishes them.
+              SettingChoice(UserInterfaceDensity.responsive, 'Responsive'),
+              SettingChoice(UserInterfaceDensity.standard, 'Default'),
+            ],
+          ),
         ),
         SettingRow(
           title: 'Dark sidebar',
-          support: UserSettingSupport.unavailable,
-          child: SettingSwitch.readOnly(value: appearance.darkSidebar),
+          description:
+              'The channel list keeps the dark rail in the light '
+              'theme.',
+          support: UserSettingSupport.applied,
+          child: SettingSwitch(
+            key: const ValueKey('setting-dark-sidebar'),
+            value: appearance.darkSidebar,
+            onChanged: (value) => onEdit(UserSettingsPatch(darkSidebar: value)),
+          ),
         ),
       ],
     );
   }
-
-  static String _densityLabel(UserInterfaceDensity density) =>
-      switch (density) {
-        UserInterfaceDensity.compact => 'Compact',
-        UserInterfaceDensity.cozy => 'Cozy',
-        UserInterfaceDensity.responsive => 'Responsive',
-        UserInterfaceDensity.standard => 'Default',
-        UserInterfaceDensity.unset => 'Not set',
-      };
 }
 
 /// Message display, from `PreloadedUserSettings.text_and_images`.
@@ -175,13 +187,26 @@ class ChatSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'Play animated emoji',
-          support: UserSettingSupport.unavailable,
-          child: SettingSwitch.readOnly(value: display.animateEmoji ?? true),
+          description:
+              'A still frame stands in for a custom emoji that '
+              'moves.',
+          support: UserSettingSupport.applied,
+          child: SettingSwitch(
+            key: const ValueKey('setting-animate-emoji'),
+            value: display.playsAnimatedEmoji,
+            onChanged: (value) =>
+                onEdit(UserSettingsPatch(animateEmoji: value)),
+          ),
         ),
         SettingRow(
           title: 'Autoplay GIFs',
-          support: UserSettingSupport.unavailable,
-          child: SettingSwitch.readOnly(value: display.gifAutoPlay ?? true),
+          description: 'Messages keep GIFs on their first frame.',
+          support: UserSettingSupport.applied,
+          child: SettingSwitch(
+            key: const ValueKey('setting-gif-autoplay'),
+            value: display.playsGifs,
+            onChanged: (value) => onEdit(UserSettingsPatch(gifAutoPlay: value)),
+          ),
         ),
         SettingRow(
           title: 'Convert emoticons to emoji',
@@ -192,9 +217,12 @@ class ChatSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'Enable /tts',
-          support: UserSettingSupport.unavailable,
-          child: SettingSwitch.readOnly(
+          support: UserSettingSupport.applied,
+          child: SettingSwitch(
+            key: const ValueKey('setting-enable-tts'),
             value: display.enableTextToSpeechCommand ?? true,
+            onChanged: (value) =>
+                onEdit(UserSettingsPatch(enableTextToSpeechCommand: value)),
           ),
         ),
       ],
@@ -274,10 +302,13 @@ class NotificationSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'In-app notifications',
-          description: 'Discord\'s toast above the window.',
-          support: UserSettingSupport.unavailable,
-          child: SettingSwitch.readOnly(
+          description: 'The toast a new message raises.',
+          support: UserSettingSupport.applied,
+          child: SettingSwitch(
+            key: const ValueKey('setting-in-app-notifications'),
             value: notifications.showsInAppNotifications,
+            onChanged: (value) =>
+                onEdit(UserSettingsPatch(showInAppNotifications: value)),
           ),
         ),
       ],

@@ -1,4 +1,7 @@
+import 'package:flutter/services.dart';
+
 import 'application/connection_controller.dart';
+import 'domain/accessibility.dart';
 import 'domain/attachment_download.dart';
 import 'domain/chat_repository.dart';
 import 'domain/chat_repository_factory.dart';
@@ -9,6 +12,7 @@ import 'domain/discord_social_dm.dart';
 import 'domain/discord_social_sdk.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/keybind.dart';
+import 'domain/message_speech.dart';
 import 'domain/soundboard_playback.dart';
 import 'domain/stream_quality.dart';
 import 'domain/streamer_mode.dart';
@@ -16,12 +20,14 @@ import 'domain/video_decoder.dart';
 import 'domain/video_encoder.dart';
 import 'domain/voice_audio.dart';
 import 'domain/voice_media.dart';
+
 import 'domain/voice_message_recorder.dart';
 import 'domain/voice_processing.dart';
 import 'platform/desktop_integration.dart';
 import 'platform/global_keyboard_hook.dart';
 import 'platform/voice_overlay.dart';
 import 'platform/window_capture_shield.dart';
+import 'platform/game_process_scanner.dart';
 import 'data/theme/file_theme_store.dart';
 import 'data/video/clip_recorder.dart';
 import 'data/video/screenshot_service.dart';
@@ -49,14 +55,19 @@ class AppBootstrap {
     this.attachmentDownloadService,
     this.externalLinkLauncher,
     this.soundboardAudioPlayer,
+    this.messageSpeechPlayer,
     this.videoEncoderService,
     this.videoDecoderService,
     this.keybindRepository,
     this.themeStore,
     this.streamerModeRepository,
     this.streamQualityRepository,
+    this.accessibilityRepository,
+    this.spellCheckService,
     this.voiceProcessingRepository,
+    this.applicationAttenuation,
     this.windowCaptureShield,
+    this.gameProcessScanner,
     this.globalKeyboardHook,
     this.screenshotService,
     this.clipRecorder,
@@ -95,6 +106,10 @@ class AppBootstrap {
   /// Overridden in tests, which have no audio device to open.
   final SoundboardAudioPlayer? soundboardAudioPlayer;
 
+  /// Reads spoken-aloud messages out loud, or null on a machine with no
+  /// speech synthesiser, in which case they arrive as ordinary text.
+  final MessageSpeechPlayer? messageSpeechPlayer;
+
   /// Overridden in tests, which have no display to capture.
   final VideoEncoderService? videoEncoderService;
 
@@ -114,13 +129,28 @@ class AppBootstrap {
   /// Where the stream quality bitrates are kept, injected for the same reason.
   final StreamQualityRepository? streamQualityRepository;
 
+  /// Where the accessibility dials are kept, injected for the same reason.
+  final AccessibilityRepository? accessibilityRepository;
+
+  /// The local spell checker, injected so a test can hand the composer a
+  /// dictionary it controls.
+  final SpellCheckService? spellCheckService;
+
   /// Where the microphone processing switches are kept, injected for the
   /// same reason.
   final VoiceProcessingRepository? voiceProcessingRepository;
 
+  /// Turns other applications down while this account speaks. Injected so a
+  /// test does not touch the machine's other applications.
+  final ApplicationAttenuation? applicationAttenuation;
+
   /// Keeps the window out of screen recordings. Injected so a test does not
   /// reach for the real window list.
   final WindowCaptureShield? windowCaptureShield;
+
+  /// The processes running on this machine, for game detection. Injected so
+  /// a test does not walk the real process list.
+  final GameProcessScanner? gameProcessScanner;
 
   /// Keys from outside this window. Injected so a test does not install a
   /// system-wide hook on the machine running it.

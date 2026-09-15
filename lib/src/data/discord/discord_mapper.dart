@@ -178,10 +178,20 @@ final class DiscordMapper {
         topic: 'Direct message with ${recipient.displayName}',
         kind: ChannelKind.text,
         recipientId: recipient.id,
+        isMessageRequest: payload['is_message_request'] as bool? ?? false,
+        messageRequestedAt: _messageRequestTimestamp(
+          payload['is_message_request_timestamp'],
+        ),
         lastMessageId: _lastMessageId(payload),
       ),
     );
   }
+
+  /// The request's own timestamp, promoted out of its ISO string. Discord
+  /// sorts unanswered requests on it, and the folder does the same; a value
+  /// that will not parse is dropped rather than guessed at.
+  static DateTime? _messageRequestTimestamp(Object? value) =>
+      value is String ? DateTime.tryParse(value) : null;
 
   ChannelHistory history(
     String channelId,
@@ -431,8 +441,15 @@ final class DiscordMapper {
       iconUrl: DiscordCdn.guildIcon(id, icon),
       ownerId: (payload['owner_id'] ?? core['owner_id']) as String?,
       requiresMultiFactorAuth: (payload['mfa_level'] ?? core['mfa_level']) == 1,
+      premiumTier:
+          (payload['premium_tier'] ?? core['premium_tier']) as int? ?? 0,
     );
   }
+
+  /// The same projection for the join and create answers, which must draw a
+  /// joined server exactly like one the session was opened with.
+  CommunitySpace spaceFromGuildPayload(Map<String, Object?> payload) =>
+      _space(payload);
 
   static String _monogram(String name) {
     final words = name

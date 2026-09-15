@@ -116,6 +116,10 @@ final class FlucordAppSurface extends ChangeNotifier
     // constructed.
     if (_chat.suppressesMessageNotifications) return;
 
+    // The account's own answer to whether the toast itself should exist,
+    // read per message for the same reason as quiet mode.
+    if (!_chat.showsInAppNotifications) return;
+
     final channel = workspace.channelOrNull(event.message.channelId);
     if (channel == null) return;
 

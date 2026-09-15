@@ -28,8 +28,12 @@ final class DiscordHistoryLoader {
   Future<ChannelHistoryPage> load(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) async {
-    final restored = beforeMessageId == null && _onRestored != null
+    final restored =
+        beforeMessageId == null &&
+            aroundMessageId == null &&
+            _onRestored != null
         ? await readRestoredHistory(_cache, channelId, pageSize: pageSize)
         : null;
     if (restored != null) _onRestored!(restored);
@@ -38,6 +42,7 @@ final class DiscordHistoryLoader {
         channelId,
         limit: pageSize,
         beforeMessageId: beforeMessageId,
+        aroundMessageId: aroundMessageId,
       );
       final history = _mapper.history(
         channelId,

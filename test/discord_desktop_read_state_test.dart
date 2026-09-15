@@ -92,6 +92,66 @@ void main() {
     expect(readState.current.readStateVersion, 22);
   });
 
+  test(
+    'STATE_UPDATE and DELETED_ENTITY_IDS reach the read-state store',
+    () async {
+      final (repository, socket) = await connect();
+      final readState = repository.readState!;
+
+      socket
+        ..receiveTerm(_ready)
+        ..receiveTerm(const {
+          'op': 0,
+          's': 2,
+          't': 'STATE_UPDATE',
+          'd': {
+            'read_state': {
+              'version': 22,
+              'entries': [
+                {
+                  'id': _channelId,
+                  'last_message_id': _newerMessage,
+                  'mention_count': 0,
+                },
+              ],
+            },
+            'user_guild_settings': {
+              'version': 5,
+              'entries': [
+                {'guild_id': _guildId, 'muted': false},
+              ],
+            },
+          },
+        });
+      await _waitFor(
+        () =>
+            readState.current.forChannel(_channelId)?.lastAckedId ==
+            _newerMessage,
+      );
+
+      // The state update is a delta: what READY carried survives it.
+      expect(readState.current.forChannel(_channelId)!.mentionCount, 0);
+      expect(readState.current.settingsFor(_guildId).muted, isFalse);
+      expect(readState.current.readStateVersion, 22);
+      expect(readState.current.userGuildSettingsVersion, 5);
+
+      socket.receiveTerm(const {
+        'op': 0,
+        's': 3,
+        't': 'DELETED_ENTITY_IDS',
+        'd': {
+          'read_state_type': 0,
+          'ids': [_channelId],
+          'version': 23,
+        },
+      });
+      await _waitFor(() => readState.current.forChannel(_channelId) == null);
+
+      // The unread pip a collected cursor would keep alive forever is gone.
+      expect(readState.current.readStateVersion, 23);
+    },
+  );
+
   test('PASSIVE_UPDATE_V2 republishes the last-message pointers', () async {
     final (repository, socket) = await connect();
     final events = <ChatRepositoryEvent>[];

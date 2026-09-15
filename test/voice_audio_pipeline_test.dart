@@ -375,6 +375,216 @@ void main() {
       expect(codecs.encoder.inputs.single, samples);
     });
   });
+
+  group('microphone enhancement', () {
+    final samples = _speech;
+    final bytes = _speechBytes;
+
+    Future<(VoiceAudioPipeline, _FakeCodecFactory, List<Object>)> pump(
+      _FakeMediaService media, {
+      required Future<VoiceMicrophoneEnhancer> Function({
+        required bool echoCancellation,
+        required bool automaticGainControl,
+      })?
+      factory,
+      required bool echoCancellation,
+      required bool automaticGainControl,
+      _FakeAudioTransport? transport,
+    }) async {
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        microphoneEnhancerFactory: factory,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      final errors = <Object>[];
+      pipeline.errors.listen(errors.add);
+      await pipeline.bindTransport(transport ?? _FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: echoCancellation,
+        automaticGainControl: automaticGainControl,
+      );
+      return (pipeline, codecs, errors);
+    }
+
+    test('passes microphone PCM through untouched while off', () async {
+      final media = _FakeMediaService();
+      var opened = 0;
+      final (_, codecs, errors) = await pump(
+        media,
+        factory:
+            ({required echoCancellation, required automaticGainControl}) async {
+              opened++;
+              return FakeMicrophoneEnhancer();
+            },
+        echoCancellation: false,
+        automaticGainControl: false,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(codecs.encoder.inputs.single, samples);
+      expect(opened, 0);
+      expect(errors, isEmpty);
+    });
+
+    test('runs every frame through one enhancer while on', () async {
+      final media = _FakeMediaService();
+      final enhancer = FakeMicrophoneEnhancer();
+      var opened = 0;
+      final (pipeline, codecs, _) = await pump(
+        media,
+        factory:
+            ({required echoCancellation, required automaticGainControl}) async {
+              opened++;
+              return enhancer;
+            },
+        echoCancellation: true,
+        automaticGainControl: true,
+      );
+      media.addPcm(bytes);
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(opened, 1);
+      expect(enhancer.frames, hasLength(2));
+      expect(enhancer.channels, 2);
+      // Halved on its way out, which is what the fake does.
+      expect(
+        codecs.encoder.inputs.last,
+        Int16List.fromList([for (final sample in samples) sample ~/ 2]),
+      );
+
+      await pipeline.dispose();
+      expect(enhancer.disposed, isTrue);
+    });
+
+    test('the enhancer runs before the noise filter', () async {
+      final media = _FakeMediaService();
+      final enhancer = _RecordingEnhancer();
+      final suppressor = FakeNoiseSuppressor();
+      final codecs = _FakeCodecFactory();
+      final pipeline = VoiceAudioPipeline(
+        mediaService: media,
+        codecFactory: codecs,
+        noiseSuppressorFactory: () async => suppressor,
+        microphoneEnhancerFactory:
+            ({
+              required echoCancellation,
+              required automaticGainControl,
+            }) async => enhancer,
+      );
+      addTearDown(pipeline.dispose);
+      addTearDown(media.dispose);
+      await pipeline.bindTransport(_FakeAudioTransport());
+      await pipeline.setEnabled(true);
+      await pipeline.setNoiseSuppression(true);
+      await pipeline.setMicrophoneEnhancement(
+        echoCancellation: true,
+        automaticGainControl: false,
+      );
+
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      // The suppressor saw the enhanced frame, not the raw one: echo and
+      // gain run first, so the noise filter cleans a microphone the room
+      // is already out of.
+      expect(suppressor.frames.single.first, _RecordingEnhancer.enhanced);
+      expect(enhancer.sawRaw, isTrue);
+    });
+
+    test(
+      'an enhancer that throws is dropped and both switches go off',
+      () async {
+        final media = _FakeMediaService();
+        final enhancer = _BrokenEnhancer();
+        var opened = 0;
+        final (pipeline, codecs, errors) = await pump(
+          media,
+          factory:
+              ({
+                required echoCancellation,
+                required automaticGainControl,
+              }) async {
+                opened++;
+                return enhancer;
+              },
+          echoCancellation: true,
+          automaticGainControl: true,
+        );
+        media.addPcm(bytes);
+        media.addPcm(bytes);
+        await _flushEvents();
+
+        expect(errors, hasLength(1));
+        expect(pipeline.isEchoCancellationEnabled, isFalse);
+        expect(pipeline.isAutomaticGainControlEnabled, isFalse);
+        expect(enhancer.disposed, isTrue);
+        expect(codecs.encoder.inputs, hasLength(2));
+        expect(codecs.encoder.inputs.last, samples);
+
+        // Switching on again is the retry.
+        await pipeline.setMicrophoneEnhancement(
+          echoCancellation: true,
+          automaticGainControl: true,
+        );
+        await _flushEvents();
+        expect(opened, 2);
+      },
+    );
+
+    test('a build without the stages says so', () async {
+      final media = _FakeMediaService();
+      final (pipeline, codecs, errors) = await pump(
+        media,
+        factory: null,
+        echoCancellation: true,
+        automaticGainControl: true,
+      );
+      media.addPcm(bytes);
+      await _flushEvents();
+
+      expect(pipeline.isMicrophoneEnhancementAvailable, isFalse);
+      expect(pipeline.isEchoCancellationEnabled, isFalse);
+      expect(pipeline.isAutomaticGainControlEnabled, isFalse);
+      expect(errors, isEmpty);
+      expect(codecs.encoder.inputs.single, samples);
+    });
+  });
+}
+
+/// An enhancer that marks each sample it hands on, so a downstream filter
+/// can be checked for having seen the enhanced frame.
+final class _RecordingEnhancer implements VoiceMicrophoneEnhancer {
+  static const int enhanced = 12000;
+
+  bool sawRaw = false;
+  bool disposed = false;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    sawRaw = frame.any((sample) => sample != enhanced);
+    frame.fillRange(0, frame.length, enhanced);
+  }
+
+  @override
+  void dispose() => disposed = true;
+}
+
+final class _BrokenEnhancer implements VoiceMicrophoneEnhancer {
+  bool disposed = false;
+
+  @override
+  Future<void> process(Int16List frame, {required int channels}) async {
+    throw StateError('the stages failed');
+  }
+
+  @override
+  void dispose() => disposed = true;
 }
 
 final class _BrokenSuppressor extends FakeNoiseSuppressor {

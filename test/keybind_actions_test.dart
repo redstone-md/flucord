@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:fake_async/fake_async.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +69,28 @@ void main() {
     actions(KeybindAction.pushToTalk, pressed: false);
     await Future<void>.delayed(Duration.zero);
     expect(voice.isMuted, isTrue);
+  });
+
+  test('a release through the push to talk key still waits the delay', () {
+    fakeAsync((async) async {
+      await voice.initialize();
+      await voice.setPushToTalkReleaseDelayMs(200);
+      await voice.connect(guildId: 'forge', channelId: 'forge-voice');
+      async.flushMicrotasks();
+
+      actions(KeybindAction.pushToTalk, pressed: true);
+      async.flushMicrotasks();
+      expect(voice.isMuted, isFalse);
+
+      actions(KeybindAction.pushToTalk, pressed: false);
+      async.flushMicrotasks();
+      // The key came up, but the uplink stays live through the window.
+      expect(voice.isMuted, isFalse);
+
+      async.elapse(const Duration(milliseconds: 250));
+      async.flushMicrotasks();
+      expect(voice.isMuted, isTrue);
+    });
   });
 
   test('push to mute is the opposite direction of the same flag', () async {

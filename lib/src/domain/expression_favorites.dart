@@ -85,8 +85,7 @@ final class FavoriteGif {
   ///
   /// A grid that divided by a zero height would lay out an infinitely tall
   /// tile, so the absent case is stated rather than defaulted to a square.
-  double? get aspectRatio =>
-      width > 0 && height > 0 ? width / height : null;
+  double? get aspectRatio => width > 0 && height > 0 ? width / height : null;
 
   @override
   bool operator ==(Object other) =>
@@ -185,8 +184,7 @@ final class ExpressionFavorites {
 
   static const empty = ExpressionFavorites();
 
-  bool get isEmpty =>
-      gifs.isEmpty && stickerIds.isEmpty && emojis.isEmpty;
+  bool get isEmpty => gifs.isEmpty && stickerIds.isEmpty && emojis.isEmpty;
 
   bool isFavoriteGif(String url) => gifs.any((gif) => gif.url == url);
 

@@ -18,9 +18,9 @@ final class GifPickerScope extends InheritedNotifier<GifPickerController> {
     assert(controller != null, 'GifPickerScope is missing above this widget.');
     return controller!;
   }
+
   /// The controller above [context], without subscribing the caller to it:
   /// for imperative calls, and for widgets that listen on their own.
   static GifPickerController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<GifPickerScope>()!.notifier!;
-
 }

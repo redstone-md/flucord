@@ -146,7 +146,10 @@ final class DiscordVoiceGatewayDispatch extends DiscordVoiceGatewayAction {
 /// instruction to the driver rather than a decision the protocol applies
 /// itself.
 final class DiscordVoiceGatewayDiscoverUdp extends DiscordVoiceGatewayAction {
-  const DiscordVoiceGatewayDiscoverUdp({required this.ready, required this.mode});
+  const DiscordVoiceGatewayDiscoverUdp({
+    required this.ready,
+    required this.mode,
+  });
 
   final DiscordVoiceReady ready;
   final String mode;
@@ -349,7 +352,9 @@ final class DiscordVoiceGatewayProtocol {
 
   /// Continues the handshake after the driver punched the UDP hole: the
   /// address it learned is the one SELECT_PROTOCOL announces.
-  List<DiscordVoiceGatewayAction> udpDiscovered(DiscordVoiceIpDiscovery discovered) {
+  List<DiscordVoiceGatewayAction> udpDiscovered(
+    DiscordVoiceIpDiscovery discovered,
+  ) {
     _discovered = discovered;
     final mode = _mode;
     if (mode == null) return const [];
@@ -443,7 +448,12 @@ final class DiscordVoiceGatewayProtocol {
       // payload types are Discord's own: 120 for Opus, 101 for H.264 with 102
       // for its retransmissions.
       'codecs': const [
-        {'name': 'opus', 'type': 'audio', 'priority': 1000, 'payload_type': 120},
+        {
+          'name': 'opus',
+          'type': 'audio',
+          'priority': 1000,
+          'payload_type': 120,
+        },
         {
           'name': 'H264',
           'type': 'video',
@@ -621,9 +631,7 @@ final class DiscordVoiceGatewayProtocol {
     _audioSsrc = ready.ssrc;
     _mode = mode;
     _discovered = null;
-    return [
-      DiscordVoiceGatewayDiscoverUdp(ready: ready, mode: mode),
-    ];
+    return [DiscordVoiceGatewayDiscoverUdp(ready: ready, mode: mode)];
   }
 
   List<DiscordVoiceGatewayAction> _acceptSessionDescription(
@@ -636,7 +644,10 @@ final class DiscordVoiceGatewayProtocol {
     // A description with no handshake behind it means Discord and this client
     // disagree about where the session is: nothing downstream could be built
     // from it.
-    if (description == null || ssrc == null || mode == null || discovered == null) {
+    if (description == null ||
+        ssrc == null ||
+        mode == null ||
+        discovered == null) {
       return const [
         DiscordVoiceGatewayFail(
           FormatException('Invalid Discord voice session description'),

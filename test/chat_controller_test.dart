@@ -1,5 +1,9 @@
 import 'package:flucord/src/domain/desktop_relationship_repository.dart';
 import 'package:flucord/src/domain/scheduled_event_repository.dart';
+import 'package:flucord/src/domain/account_connections.dart';
+import 'package:flucord/src/domain/account_data_package.dart';
+import 'package:flucord/src/domain/account_entitlements.dart';
+import 'package:flucord/src/domain/app_authorisation.dart';
 import 'package:flucord/src/domain/age_verification.dart';
 import 'package:flucord/src/domain/multi_factor_auth.dart';
 import 'package:flucord/src/domain/auth_session.dart';
@@ -13,8 +17,10 @@ import 'package:flucord/src/domain/message_component.dart';
 import 'package:flucord/src/domain/application_command.dart';
 import 'package:flucord/src/domain/gif_picker.dart';
 import 'package:flucord/src/domain/soundboard.dart';
+import 'package:flucord/src/domain/guild_expression_repository.dart';
 import 'package:flucord/src/domain/stage_channel.dart';
 import 'package:flucord/src/domain/thread_membership.dart';
+import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +33,7 @@ import 'package:flucord/src/domain/guild_member_list.dart';
 import 'package:flucord/src/domain/guild_member_list_repository.dart';
 import 'package:flucord/src/domain/moderation_repository.dart';
 import 'package:flucord/src/domain/message_search_repository.dart';
+import 'package:flucord/src/domain/game_detection.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/domain/read_state_repository.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';

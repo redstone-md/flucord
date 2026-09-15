@@ -16,10 +16,9 @@ void main() {
 
   group('hello and the heartbeat watchdog', () {
     test('hello schedules the interval the server named', () {
-      final actions = protocol()
-          .accept(frame(DiscordVoiceGatewayOpcode.hello, {
-            'heartbeat_interval': 13750,
-          }));
+      final actions = protocol().accept(
+        frame(DiscordVoiceGatewayOpcode.hello, {'heartbeat_interval': 13750}),
+      );
 
       expect(
         (actions.single as DiscordVoiceGatewayScheduleHeartbeat).interval,
@@ -29,8 +28,9 @@ void main() {
 
     test('a hello without an interval decides nothing', () {
       expect(
-        protocol()
-            .accept(frame(DiscordVoiceGatewayOpcode.hello, <String, Object?>{})),
+        protocol().accept(
+          frame(DiscordVoiceGatewayOpcode.hello, <String, Object?>{}),
+        ),
         isEmpty,
       );
       expect(
@@ -48,7 +48,9 @@ void main() {
     });
 
     test('an acknowledgement settles the count', () {
-      final gateway = protocol()..heartbeatDue()..heartbeatDue();
+      final gateway = protocol()
+        ..heartbeatDue()
+        ..heartbeatDue();
       gateway.accept(frame(DiscordVoiceGatewayOpcode.heartbeatAck, null));
 
       expect(gateway.heartbeatDue(), isA<DiscordVoiceGatewaySend>());
@@ -67,15 +69,17 @@ void main() {
   });
 
   group('close-code triage', () {
-    test('codes Discord re-issues wait for new credentials instead of redialling',
-        () {
-      for (final code in [4006, 4014, 4022]) {
-        expect(
-          protocol().closedWithCode(code),
-          isA<DiscordVoiceGatewayAwaitCredentials>(),
-        );
-      }
-    });
+    test(
+      'codes Discord re-issues wait for new credentials instead of redialling',
+      () {
+        for (final code in [4006, 4014, 4022]) {
+          expect(
+            protocol().closedWithCode(code),
+            isA<DiscordVoiceGatewayAwaitCredentials>(),
+          );
+        }
+      },
+    );
 
     test('codes a redial cannot fix fail the connection', () {
       for (final code in [4004, 4009, 4011, 4017, 4020, 4021]) {
@@ -88,34 +92,48 @@ void main() {
     });
 
     test('anything else, including no code at all, reconnects', () {
-      expect(protocol().closedWithCode(null), isA<DiscordVoiceGatewayReconnect>());
-      expect(protocol().closedWithCode(1006), isA<DiscordVoiceGatewayReconnect>());
-      expect(protocol().closedWithCode(4000), isA<DiscordVoiceGatewayReconnect>());
+      expect(
+        protocol().closedWithCode(null),
+        isA<DiscordVoiceGatewayReconnect>(),
+      );
+      expect(
+        protocol().closedWithCode(1006),
+        isA<DiscordVoiceGatewayReconnect>(),
+      );
+      expect(
+        protocol().closedWithCode(4000),
+        isA<DiscordVoiceGatewayReconnect>(),
+      );
     });
   });
 
   group('resume eligibility', () {
-    test('a fresh connection cannot resume, and neither can one still connecting',
-        () {
-      final gateway = protocol();
+    test(
+      'a fresh connection cannot resume, and neither can one still connecting',
+      () {
+        final gateway = protocol();
 
-      expect(gateway.canResume, isFalse);
-      gateway.accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
-      expect(gateway.canResume, isFalse);
-    });
+        expect(gateway.canResume, isFalse);
+        gateway.accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
+        expect(gateway.canResume, isFalse);
+      },
+    );
 
     test('a session description makes the session resumable', () {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
         ..udpDiscovered(_discovery)
-        ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
+        );
 
       expect(gateway.canResume, isTrue);
     });
 
     test('RESUMED makes the session resumable and reports ready', () {
-      final actions = protocol()
-          .accept(frame(DiscordVoiceGatewayOpcode.resumed, null));
+      final actions = protocol().accept(
+        frame(DiscordVoiceGatewayOpcode.resumed, null),
+      );
 
       final dispatch = actions.single as DiscordVoiceGatewayDispatch;
       expect(
@@ -128,7 +146,9 @@ void main() {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
         ..udpDiscovered(_discovery)
-        ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
+        );
       final session = gateway.session;
 
       final events = gateway
@@ -149,22 +169,26 @@ void main() {
       expect(events.whereType<VoiceKeyframeRequestedEvent>(), hasLength(1));
     });
 
-    test('a heartbeat timeout withdraws resume: the redial identifies afresh',
-        () {
-      final gateway = protocol()
-        ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-        ..udpDiscovered(_discovery)
-        ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData));
-      expect(gateway.canResume, isTrue);
+    test(
+      'a heartbeat timeout withdraws resume: the redial identifies afresh',
+      () {
+        final gateway = protocol()
+          ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
+          ..udpDiscovered(_discovery)
+          ..accept(
+            frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
+          );
+        expect(gateway.canResume, isTrue);
 
-      gateway.heartbeatDue();
-      gateway.heartbeatDue();
-      final reconnect = gateway.heartbeatDue()
-          as DiscordVoiceGatewayReconnect;
+        gateway.heartbeatDue();
+        gateway.heartbeatDue();
+        final reconnect =
+            gateway.heartbeatDue() as DiscordVoiceGatewayReconnect;
 
-      expect(gateway.canResume, isFalse);
-      expect(reconnect.error.toString(), contains('heartbeats'));
-    });
+        expect(gateway.canResume, isFalse);
+        expect(reconnect.error.toString(), contains('heartbeats'));
+      },
+    );
 
     test('a revoked resume keeps the next connect identifying afresh', () {
       final gateway = protocol()..revokeResume();
@@ -176,7 +200,9 @@ void main() {
   group('the identify to transport-ready handshake', () {
     test('a READY nobody can parse fails the connection', () {
       expect(
-        protocol().accept(frame(DiscordVoiceGatewayOpcode.ready, <String, Object?>{})),
+        protocol().accept(
+          frame(DiscordVoiceGatewayOpcode.ready, <String, Object?>{}),
+        ),
         [isA<DiscordVoiceGatewayFail>()],
       );
     });
@@ -193,8 +219,9 @@ void main() {
     });
 
     test('a READY asks the driver to discover UDP with the chosen mode', () {
-      final actions = protocol()
-          .accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
+      final actions = protocol().accept(
+        frame(DiscordVoiceGatewayOpcode.ready, _readyData),
+      );
 
       final discover = actions.single as DiscordVoiceGatewayDiscoverUdp;
 
@@ -209,53 +236,63 @@ void main() {
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
 
       expect(
-        gateway.accept(
-          frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
-        ).single,
+        gateway
+            .accept(
+              frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
+            )
+            .single,
         isA<DiscordVoiceGatewayFail>(),
       );
     });
 
-    test('a description naming another mode or an oversized DAVE version fails',
-        () {
-      for (final description in [
-        {..._sessionData, 'mode': 'xsalsa20_poly1305_lite'},
-        {..._sessionData, 'dave_protocol_version': 2},
-      ]) {
-        final gateway = protocol()
-          ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
-          ..udpDiscovered(_discovery);
+    test(
+      'a description naming another mode or an oversized DAVE version fails',
+      () {
+        for (final description in [
+          {..._sessionData, 'mode': 'xsalsa20_poly1305_lite'},
+          {..._sessionData, 'dave_protocol_version': 2},
+        ]) {
+          final gateway = protocol()
+            ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
+            ..udpDiscovered(_discovery);
 
-        expect(
-          gateway.accept(
-            frame(DiscordVoiceGatewayOpcode.sessionDescription, description),
-          ).single,
-          isA<DiscordVoiceGatewayFail>(),
-          reason: 'description $description',
-        );
-      }
-    });
+          expect(
+            gateway
+                .accept(
+                  frame(
+                    DiscordVoiceGatewayOpcode.sessionDescription,
+                    description,
+                  ),
+                )
+                .single,
+            isA<DiscordVoiceGatewayFail>(),
+            reason: 'description $description',
+          );
+        }
+      },
+    );
 
     test('a completed handshake hands the driver a negotiated session', () {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData));
-      final select = gateway
-          .udpDiscovered(_discovery)
-          .single as DiscordVoiceGatewaySend;
+      final select =
+          gateway.udpDiscovered(_discovery).single as DiscordVoiceGatewaySend;
 
       expect(select.payload['op'], DiscordVoiceGatewayOpcode.selectProtocol);
-      expect(
-        (select.payload['d'] as Map)['data'],
-        {
-          'address': '203.0.113.7',
-          'port': 50000,
-          'mode': 'aead_aes256_gcm_rtpsize',
-        },
-      );
+      expect((select.payload['d'] as Map)['data'], {
+        'address': '203.0.113.7',
+        'port': 50000,
+        'mode': 'aead_aes256_gcm_rtpsize',
+      });
       // Without the codecs list the server carries the session as audio-only
       // and drops every picture, which is a stream that never loads.
       expect((select.payload['d'] as Map)['codecs'], [
-        {'name': 'opus', 'type': 'audio', 'priority': 1000, 'payload_type': 120},
+        {
+          'name': 'opus',
+          'type': 'audio',
+          'priority': 1000,
+          'payload_type': 120,
+        },
         {
           'name': 'H264',
           'type': 'video',
@@ -265,9 +302,16 @@ void main() {
         },
       ]);
 
-      final ready = gateway
-          .accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData))
-          .single as DiscordVoiceGatewayTransportReady;
+      final ready =
+          gateway
+                  .accept(
+                    frame(
+                      DiscordVoiceGatewayOpcode.sessionDescription,
+                      _sessionData,
+                    ),
+                  )
+                  .single
+              as DiscordVoiceGatewayTransportReady;
 
       expect(ready.session.guildId, 'guild-1');
       expect(ready.session.ssrc, 42);
@@ -284,17 +328,23 @@ void main() {
       final gateway = protocol()
         ..accept(frame(DiscordVoiceGatewayOpcode.ready, _readyData))
         ..udpDiscovered(_discovery)
-        ..accept(frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData))
-        ..accept(frame(DiscordVoiceGatewayOpcode.clientVideo, {
-          'user_id': 'remote-2',
-          'audio_ssrc': 91,
-          'video_ssrc': 92,
-        }))
-        ..accept(frame(DiscordVoiceGatewayOpcode.speaking, {
-          'user_id': 'remote-1',
-          'ssrc': 77,
-          'speaking': 1,
-        }));
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.sessionDescription, _sessionData),
+        )
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.clientVideo, {
+            'user_id': 'remote-2',
+            'audio_ssrc': 91,
+            'video_ssrc': 92,
+          }),
+        )
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.speaking, {
+            'user_id': 'remote-1',
+            'ssrc': 77,
+            'speaking': 1,
+          }),
+        );
 
       gateway.dropSession();
 
@@ -320,9 +370,7 @@ void main() {
     });
 
     test('per-SSRC qualities go in as stringly-keyed entries', () {
-      final payload = protocol().mediaSinkWants(
-        perSsrc: {8964: 100, 9100: 50},
-      );
+      final payload = protocol().mediaSinkWants(perSsrc: {8964: 100, 9100: 50});
 
       expect((payload['d'] as Map)['8964'], 100);
       expect((payload['d'] as Map)['9100'], 50);
@@ -364,19 +412,23 @@ void main() {
       final gateway = protocol();
 
       expect(
-        gateway.accept(frame(DiscordVoiceGatewayOpcode.speaking, {
-          'user_id': 'remote-1',
-          'ssrc': -1,
-          'speaking': 1,
-        })),
+        gateway.accept(
+          frame(DiscordVoiceGatewayOpcode.speaking, {
+            'user_id': 'remote-1',
+            'ssrc': -1,
+            'speaking': 1,
+          }),
+        ),
         isEmpty,
       );
       expect(
-        gateway.accept(frame(DiscordVoiceGatewayOpcode.speaking, {
-          'user_id': 5,
-          'ssrc': 77,
-          'speaking': 1,
-        })),
+        gateway.accept(
+          frame(DiscordVoiceGatewayOpcode.speaking, {
+            'user_id': 5,
+            'ssrc': 77,
+            'speaking': 1,
+          }),
+        ),
         isEmpty,
       );
     });
@@ -398,19 +450,25 @@ void main() {
 
     test('a departure drops the user from both rosters', () {
       final gateway = protocol()
-        ..accept(frame(DiscordVoiceGatewayOpcode.clientVideo, {
-          'user_id': 'remote-2',
-          'audio_ssrc': 91,
-          'video_ssrc': 92,
-        }))
-        ..accept(frame(DiscordVoiceGatewayOpcode.speaking, {
-          'user_id': 'remote-1',
-          'ssrc': 77,
-          'speaking': 1,
-        }));
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.clientVideo, {
+            'user_id': 'remote-2',
+            'audio_ssrc': 91,
+            'video_ssrc': 92,
+          }),
+        )
+        ..accept(
+          frame(DiscordVoiceGatewayOpcode.speaking, {
+            'user_id': 'remote-1',
+            'ssrc': 77,
+            'speaking': 1,
+          }),
+        );
 
       final actions = gateway.accept(
-        frame(DiscordVoiceGatewayOpcode.clientDisconnect, {'user_id': 'remote-2'}),
+        frame(DiscordVoiceGatewayOpcode.clientDisconnect, {
+          'user_id': 'remote-2',
+        }),
       );
 
       expect(
@@ -440,10 +498,7 @@ final _readyData = {
   'modes': ['aead_aes256_gcm_rtpsize'],
 };
 
-const _discovery = DiscordVoiceIpDiscovery(
-  address: '203.0.113.7',
-  port: 50000,
-);
+const _discovery = DiscordVoiceIpDiscovery(address: '203.0.113.7', port: 50000);
 
 final _sessionData = {
   'mode': 'aead_aes256_gcm_rtpsize',

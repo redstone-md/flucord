@@ -292,7 +292,12 @@ void main() {
         'avatar': 'bot-avatar',
       },
       guilds: [
-        {'id': 'guild-1', 'name': 'The Forge', 'icon': 'guild-icon'},
+        {
+          'id': 'guild-1',
+          'name': 'The Forge',
+          'icon': 'guild-icon',
+          'premium_tier': 2,
+        },
       ],
       channelsByGuild: {
         'guild-1': [
@@ -339,6 +344,11 @@ void main() {
 
     expect(workspace.spaces.single.name, 'The Forge');
     expect(workspace.spaces.single.iconUrl, contains('/icons/guild-1/'));
+    expect(
+      workspace.spaces.single.premiumTier,
+      2,
+      reason: 'the boost level is what the composer reads for its limits',
+    );
     expect(workspace.channels.single.name, 'general');
     expect(workspace.roles.single.name, 'Operator');
     expect(workspace.roles.single.colorValue, 0xff336699);

@@ -3,6 +3,7 @@ import 'discord_snowflake.dart';
 
 part 'notification_settings.dart';
 part 'read_state_snapshot.dart';
+part 'read_state_collector.dart';
 
 /// The kind of entity a read state tracks (R04 `read_state_type`).
 ///

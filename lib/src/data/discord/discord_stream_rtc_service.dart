@@ -294,7 +294,8 @@ final class DiscordStreamRtcService {
         // Receiving uses the same factory as the call, so the two agree about
         // DAVE without this module knowing a version number.
         socketFactory:
-            _socketFactoryProvider?.call() ?? DiscordVoiceGatewaySocketFactory(),
+            _socketFactoryProvider?.call() ??
+            DiscordVoiceGatewaySocketFactory(),
       );
       _held[key.value] = _Held(
         session,
@@ -317,10 +318,7 @@ final class DiscordStreamRtcService {
       return;
     }
     if (event is! VoiceCredentialsNeededEvent) return;
-    _recover(
-      key,
-      _recovering.putIfAbsent(key, _Recovery.new),
-    );
+    _recover(key, _recovering.putIfAbsent(key, _Recovery.new));
   }
 
   /// Recovers a connection whose session Discord ended: fresh credentials are

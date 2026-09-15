@@ -872,10 +872,7 @@ void main() {
       // The status is the state; the event is the ask. The call's recovery
       // reads the transition into reconnecting, and the stream planes read
       // the ask: only fresh credentials bring the connection back.
-      expect(
-        events.whereType<VoiceCredentialsNeededEvent>(),
-        hasLength(1),
-      );
+      expect(events.whereType<VoiceCredentialsNeededEvent>(), hasLength(1));
       final statuses = events.whereType<VoiceSignalingStatusEvent>().toList();
       expect(statuses.last.status, VoiceConnectionStatus.reconnecting);
     });

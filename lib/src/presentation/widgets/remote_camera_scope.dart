@@ -8,7 +8,8 @@ import '../../application/remote_camera_controller.dart';
 /// decodes: the pictures travel on the per-sender streams the camera tiles
 /// hold, so a camera runs at its frame rate without rebuilding the pane
 /// around it.
-final class RemoteCameraScope extends InheritedNotifier<RemoteCameraController> {
+final class RemoteCameraScope
+    extends InheritedNotifier<RemoteCameraController> {
   const RemoteCameraScope({
     required RemoteCameraController controller,
     required super.child,

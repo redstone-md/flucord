@@ -26,6 +26,7 @@ class VoiceRoomView extends StatefulWidget {
     this.goLive,
     this.streamViewer,
     this.streams,
+    this.listening,
     this.cameraFrameFor,
     this.cameraFramesFor,
     this.focusedUserId,
@@ -81,6 +82,10 @@ class VoiceRoomView extends StatefulWidget {
   /// The streams this client has open, and the controls the tiles offer for
   /// them.
   final VoiceStreamControls? streams;
+
+  /// The per-participant volume controls the tiles offer, or null where
+  /// the pane behind the room has no voice controller to hand them to.
+  final VoiceListeningControls? listening;
 
   /// Which space's per-guild avatars to render. Defaults to [guildId] because
   /// for guild voice they are the same thing; a DM call has to supply the DM
@@ -139,6 +144,7 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
               child: _VoiceStage(
                 streamViewer: widget.streamViewer,
                 streams: widget.streams,
+                listening: widget.listening,
                 focusedUserId: widget.focusedUserId,
                 onTapParticipant: widget.onTapParticipant,
                 onClearFocus: widget.onClearFocus,
@@ -257,6 +263,7 @@ class _VoiceStage extends StatelessWidget {
     this.cameraFrameFor,
     this.cameraFramesFor,
     this.streams,
+    this.listening,
     this.focusedUserId,
     this.onTapParticipant,
     this.onClearFocus,
@@ -283,6 +290,7 @@ class _VoiceStage extends StatelessWidget {
   final Widget? goLive;
   final Widget? streamViewer;
   final VoiceStreamControls? streams;
+  final VoiceListeningControls? listening;
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +311,7 @@ class _VoiceStage extends StatelessWidget {
           cameraFrameFor: cameraFrameFor,
           cameraFramesFor: cameraFramesFor,
           streams: streams,
+          listening: listening,
           onTapParticipant: onTapParticipant,
           compact: compact,
         );

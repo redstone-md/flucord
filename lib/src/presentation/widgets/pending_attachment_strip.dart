@@ -7,12 +7,17 @@ class PendingAttachmentStrip extends StatelessWidget {
   const PendingAttachmentStrip({
     required this.attachments,
     required this.onRemove,
+    this.onToggleSpoiler,
     this.enabled = true,
     super.key,
   });
 
   final List<PendingAttachment> attachments;
   final ValueChanged<int> onRemove;
+
+  /// Tags one file as a spoiler, or null where the surface attaching files
+  /// offers no tagging.
+  final ValueChanged<int>? onToggleSpoiler;
   final bool enabled;
 
   @override
@@ -25,16 +30,24 @@ class PendingAttachmentStrip extends StatelessWidget {
       itemBuilder: (context, index) => _PendingAttachmentTile(
         attachment: attachments[index],
         onRemove: enabled ? () => onRemove(index) : null,
+        onToggleSpoiler: enabled && onToggleSpoiler != null
+            ? () => onToggleSpoiler!(index)
+            : null,
       ),
     ),
   );
 }
 
 class _PendingAttachmentTile extends StatelessWidget {
-  const _PendingAttachmentTile({required this.attachment, this.onRemove});
+  const _PendingAttachmentTile({
+    required this.attachment,
+    this.onRemove,
+    this.onToggleSpoiler,
+  });
 
   final PendingAttachment attachment;
   final VoidCallback? onRemove;
+  final VoidCallback? onToggleSpoiler;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -49,7 +62,9 @@ class _PendingAttachmentTile extends StatelessWidget {
     child: Row(
       children: [
         Icon(
-          Icons.insert_drive_file_outlined,
+          attachment.isSpoiler
+              ? Icons.visibility_off_outlined
+              : Icons.insert_drive_file_outlined,
           size: 18,
           color: context.surfaces.muted,
         ),
@@ -62,6 +77,20 @@ class _PendingAttachmentTile extends StatelessWidget {
             style: const TextStyle(fontSize: 11),
           ),
         ),
+        if (onToggleSpoiler != null)
+          IconButton(
+            key: ValueKey('toggle-spoiler-${attachment.path}'),
+            onPressed: onToggleSpoiler,
+            icon: Icon(
+              attachment.isSpoiler
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 15,
+            ),
+            tooltip: attachment.isSpoiler
+                ? 'Remove spoiler tag'
+                : 'Mark as spoiler',
+          ),
         IconButton(
           onPressed: onRemove,
           icon: const Icon(Icons.close, size: 15),

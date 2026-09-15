@@ -63,14 +63,17 @@ void main() {
       expect(gif.aspectRatio, isNull);
     });
 
-    test('a format a newer client wrote reads as none rather than throwing', () {
-      final blob = _blob(gifs: {'a': _gifEntry(format: 7)});
+    test(
+      'a format a newer client wrote reads as none rather than throwing',
+      () {
+        final blob = _blob(gifs: {'a': _gifEntry(format: 7)});
 
-      expect(
-        DiscordFrecencyProtoCodec.decode(blob).gifs.single.format,
-        FavoriteGifFormat.none,
-      );
-    });
+        expect(
+          DiscordFrecencyProtoCodec.decode(blob).gifs.single.format,
+          FavoriteGifFormat.none,
+        );
+      },
+    );
 
     test('a half-written map entry is skipped', () {
       final group = ProtoMessage()
@@ -97,12 +100,16 @@ void main() {
       final packed = ProtoMessage()
         ..setFixed64List(FavoriteStickersField.stickerIds, [7, 8]);
       final loose = ProtoMessage()
-        ..addField(ProtoField(FavoriteStickersField.stickerIds, ProtoFixed64(9)))
+        ..addField(
+          ProtoField(FavoriteStickersField.stickerIds, ProtoFixed64(9)),
+        )
         ..addField(
           ProtoField(FavoriteStickersField.stickerIds, ProtoFixed64(10)),
         )
         // A varint under the same number is not a sticker id at all.
-        ..addField(ProtoField(FavoriteStickersField.stickerIds, ProtoVarint(3)));
+        ..addField(
+          ProtoField(FavoriteStickersField.stickerIds, ProtoVarint(3)),
+        );
 
       expect(packed.fixed64ListAt(FavoriteStickersField.stickerIds), [7, 8]);
       expect(loose.fixed64ListAt(FavoriteStickersField.stickerIds), [9, 10]);
@@ -112,7 +119,8 @@ void main() {
       final root = ProtoMessage()
         ..setMessage(
           FrecencyUserSettingsField.favoriteStickers,
-          ProtoMessage()..setFixed64List(FavoriteStickersField.stickerIds, [-1]),
+          ProtoMessage()
+            ..setFixed64List(FavoriteStickersField.stickerIds, [-1]),
         );
 
       expect(DiscordFrecencyProtoCodec.decodeMessage(root).stickerIds, [
@@ -133,50 +141,43 @@ void main() {
         FavoriteGifFormat.fromMediaType('video/mp4'),
         FavoriteGifFormat.video,
       );
-      expect(
-        FavoriteGifFormat.fromMediaType('WEBM'),
-        FavoriteGifFormat.video,
-      );
+      expect(FavoriteGifFormat.fromMediaType('WEBM'), FavoriteGifFormat.video);
       expect(FavoriteGifFormat.fromMediaType('gif'), FavoriteGifFormat.image);
       expect(FavoriteGifFormat.fromMediaType(''), FavoriteGifFormat.none);
     });
   });
-
-
 
   group('how often each was used', () {
     test('the frecency tables are read, keyed the way each one writes it', () {
       final root = ProtoMessage()
         ..setMessage(
           FrecencyUserSettingsField.stickerFrecency,
-          ProtoMessage()
-            ..addMessage(
-              1,
-              ProtoMessage()
-                ..setFixed64(ProtoMapEntryField.key, 55)
-                ..setMessage(
-                  ProtoMapEntryField.value,
-                  ProtoMessage()
-                    ..setVarint(FrecencyItemField.totalUses, 9)
-                    ..setVarint(FrecencyItemField.score, 40)
-                    ..setFixed64List(FrecencyItemField.recentUses, [1, 2, 3]),
-                ),
-            ),
+          ProtoMessage()..addMessage(
+            1,
+            ProtoMessage()
+              ..setFixed64(ProtoMapEntryField.key, 55)
+              ..setMessage(
+                ProtoMapEntryField.value,
+                ProtoMessage()
+                  ..setVarint(FrecencyItemField.totalUses, 9)
+                  ..setVarint(FrecencyItemField.score, 40)
+                  ..setFixed64List(FrecencyItemField.recentUses, [1, 2, 3]),
+              ),
+          ),
         )
         ..setMessage(
           FrecencyUserSettingsField.emojiFrecency,
-          ProtoMessage()
-            ..addMessage(
-              1,
-              ProtoMessage()
-                ..setString(ProtoMapEntryField.key, 'grinning')
-                // Only `frecency` filled: another client may write one of the
-                // two and not the other.
-                ..setMessage(
-                  ProtoMapEntryField.value,
-                  ProtoMessage()..setVarint(FrecencyItemField.frecency, 7),
-                ),
-            ),
+          ProtoMessage()..addMessage(
+            1,
+            ProtoMessage()
+              ..setString(ProtoMapEntryField.key, 'grinning')
+              // Only `frecency` filled: another client may write one of the
+              // two and not the other.
+              ..setMessage(
+                ProtoMapEntryField.value,
+                ProtoMessage()..setVarint(FrecencyItemField.frecency, 7),
+              ),
+          ),
         );
 
       final read = DiscordFrecencyProtoCodec.decodeMessage(root);
@@ -194,10 +195,14 @@ void main() {
         ..setMessage(
           FrecencyUserSettingsField.emojiFrecency,
           ProtoMessage()
-            ..addMessage(1, ProtoMessage()..setString(ProtoMapEntryField.key, 'a'))
             ..addMessage(
               1,
-              ProtoMessage()..setMessage(ProtoMapEntryField.value, ProtoMessage()),
+              ProtoMessage()..setString(ProtoMapEntryField.key, 'a'),
+            )
+            ..addMessage(
+              1,
+              ProtoMessage()
+                ..setMessage(ProtoMapEntryField.value, ProtoMessage()),
             ),
         );
 
@@ -233,16 +238,15 @@ void main() {
       final root = ProtoMessage()
         ..setMessage(
           FrecencyUserSettingsField.emojiFrecency,
-          ProtoMessage()
-            ..addMessage(
-              1,
-              ProtoMessage()
-                ..setString(ProtoMapEntryField.key, 'grinning')
-                ..setMessage(
-                  ProtoMapEntryField.value,
-                  ProtoMessage()..setVarint(FrecencyItemField.score, 5),
-                ),
-            ),
+          ProtoMessage()..addMessage(
+            1,
+            ProtoMessage()
+              ..setString(ProtoMapEntryField.key, 'grinning')
+              ..setMessage(
+                ProtoMapEntryField.value,
+                ProtoMessage()..setVarint(FrecencyItemField.score, 5),
+              ),
+          ),
         );
 
       final written = DiscordFrecencyProtoCodec.apply(
@@ -273,7 +277,9 @@ void main() {
       );
 
       expect(written.messageAt(9)?.varintAt(1), 42);
-      expect(DiscordFrecencyProtoCodec.decodeMessage(written).stickerIds, ['5']);
+      expect(DiscordFrecencyProtoCodec.decodeMessage(written).stickerIds, [
+        '5',
+      ]);
     });
 
     test('a sticker id that is not a number is not written', () {
@@ -284,7 +290,9 @@ void main() {
         const ExpressionFavorites(stickerIds: ['nonsense', '6']),
       );
 
-      expect(DiscordFrecencyProtoCodec.decodeMessage(written).stickerIds, ['6']);
+      expect(DiscordFrecencyProtoCodec.decodeMessage(written).stickerIds, [
+        '6',
+      ]);
     });
 
     test('a round trip keeps every field', () {
@@ -334,8 +342,9 @@ void main() {
     test('the next GIF sorts above everything held', () {
       expect(const ExpressionFavorites().nextGifOrder, 1);
       expect(
-        ExpressionFavorites(gifs: [_gif('a', order: 4), _gif('b', order: 2)])
-            .nextGifOrder,
+        ExpressionFavorites(
+          gifs: [_gif('a', order: 4), _gif('b', order: 2)],
+        ).nextGifOrder,
         5,
       );
     });
@@ -437,16 +446,17 @@ void main() {
       expect(transport.reads, 1);
     });
 
-    test('an undecodable blob leaves the store empty rather than broken',
-        () async {
-      final transport = _FakeTransport()..blob = 'not base64 at all !!';
-      final store = DiscordExpressionFavoritesRepository(transport);
-      addTearDown(store.close);
+    test(
+      'an undecodable blob leaves the store empty rather than broken',
+      () async {
+        final transport = _FakeTransport()..blob = 'not base64 at all !!';
+        final store = DiscordExpressionFavoritesRepository(transport);
+        addTearDown(store.close);
 
-      expect((await store.load()).isEmpty, isTrue);
-      expect(store.isLoaded, isTrue);
-    });
-
+        expect((await store.load()).isEmpty, isTrue);
+        expect(store.isLoaded, isTrue);
+      },
+    );
 
     test('a write says which version of the blob it was built on', () async {
       final root = ProtoMessage()
@@ -632,19 +642,21 @@ void main() {
       expect(store.current.emojis, isEmpty);
     });
 
-    test('the merged blob the server answers with replaces what was sent',
-        () async {
-      final transport = _FakeTransport()
-        ..response = DiscordSettingsWriteResult(
-          settings: _base64(_blob(emojis: ['from-server'])),
-        );
-      final store = DiscordExpressionFavoritesRepository(transport);
-      addTearDown(store.close);
+    test(
+      'the merged blob the server answers with replaces what was sent',
+      () async {
+        final transport = _FakeTransport()
+          ..response = DiscordSettingsWriteResult(
+            settings: _base64(_blob(emojis: ['from-server'])),
+          );
+        final store = DiscordExpressionFavoritesRepository(transport);
+        addTearDown(store.close);
 
-      await store.setEmojiFavorite(idOrName: 'mine', favorite: true);
+        await store.setEmojiFavorite(idOrName: 'mine', favorite: true);
 
-      expect(store.current.emojis, ['from-server']);
-    });
+        expect(store.current.emojis, ['from-server']);
+      },
+    );
 
     test('a stale write is dropped and the held blob re-read', () async {
       final transport = _FakeTransport()
@@ -694,20 +706,22 @@ void main() {
       expect(store.current.emojis, ['mine']);
     });
 
-    test('a write against an account whose blob went away empties it',
-        () async {
-      final transport = _FakeTransport()
-        ..blob = _base64(_blob(emojis: ['held']))
-        ..failWrite = true
-        ..clearBlobOnRead = true;
-      final store = DiscordExpressionFavoritesRepository(transport);
-      addTearDown(store.close);
-      await store.load();
+    test(
+      'a write against an account whose blob went away empties it',
+      () async {
+        final transport = _FakeTransport()
+          ..blob = _base64(_blob(emojis: ['held']))
+          ..failWrite = true
+          ..clearBlobOnRead = true;
+        final store = DiscordExpressionFavoritesRepository(transport);
+        addTearDown(store.close);
+        await store.load();
 
-      await store.setEmojiFavorite(idOrName: 'mine', favorite: true);
+        await store.setEmojiFavorite(idOrName: 'mine', favorite: true);
 
-      expect(store.current.isEmpty, isTrue);
-    });
+        expect(store.current.isEmpty, isTrue);
+      },
+    );
 
     test('a star made on another device arrives as a dispatch', () async {
       final transport = _FakeTransport();
@@ -715,7 +729,10 @@ void main() {
       addTearDown(store.close);
 
       store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
-        'settings': {'type': 2, 'proto': _base64(_blob(emojis: ['elsewhere']))},
+        'settings': {
+          'type': 2,
+          'proto': _base64(_blob(emojis: ['elsewhere'])),
+        },
       });
 
       expect(store.current.emojis, ['elsewhere']);
@@ -734,7 +751,10 @@ void main() {
             'settings': {'type': 1, 'proto': 'ignored'},
           },
         ),
-        ('USER_SETTINGS_PROTO_UPDATE', <String, Object?>{'settings': 'nonsense'}),
+        (
+          'USER_SETTINGS_PROTO_UPDATE',
+          <String, Object?>{'settings': 'nonsense'},
+        ),
         (
           'USER_SETTINGS_PROTO_UPDATE',
           <String, Object?>{
@@ -748,29 +768,37 @@ void main() {
       expect(store.isLoaded, isFalse);
     });
 
-    test('a partial update before the blob is ignored, and after it merges',
-        () async {
-      final transport = _FakeTransport()
-        ..blob = _base64(_blob(emojis: ['held'], stickerIds: [5]));
-      final store = DiscordExpressionFavoritesRepository(transport);
-      addTearDown(store.close);
+    test(
+      'a partial update before the blob is ignored, and after it merges',
+      () async {
+        final transport = _FakeTransport()
+          ..blob = _base64(_blob(emojis: ['held'], stickerIds: [5]));
+        final store = DiscordExpressionFavoritesRepository(transport);
+        addTearDown(store.close);
 
-      store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
-        'partial': true,
-        'settings': {'type': 2, 'proto': _base64(_blob(emojis: ['partial']))},
-      });
-      expect(store.isLoaded, isFalse);
+        store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
+          'partial': true,
+          'settings': {
+            'type': 2,
+            'proto': _base64(_blob(emojis: ['partial'])),
+          },
+        });
+        expect(store.isLoaded, isFalse);
 
-      await store.load();
-      store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
-        'partial': true,
-        'settings': {'type': 2, 'proto': _base64(_blob(emojis: ['partial']))},
-      });
+        await store.load();
+        store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
+          'partial': true,
+          'settings': {
+            'type': 2,
+            'proto': _base64(_blob(emojis: ['partial'])),
+          },
+        });
 
-      expect(store.current.emojis, ['partial']);
-      // The group the partial did not name is still held.
-      expect(store.current.stickerIds, ['5']);
-    });
+        expect(store.current.emojis, ['partial']);
+        // The group the partial did not name is still held.
+        expect(store.current.stickerIds, ['5']);
+      },
+    );
 
     test('an undecodable dispatch changes nothing', () async {
       final transport = _FakeTransport();
@@ -793,7 +821,10 @@ void main() {
 
       // Closing must not make a late dispatch throw on a dead controller.
       store.acceptGatewayDispatch('USER_SETTINGS_PROTO_UPDATE', {
-        'settings': {'type': 2, 'proto': _base64(_blob(emojis: ['late']))},
+        'settings': {
+          'type': 2,
+          'proto': _base64(_blob(emojis: ['late'])),
+        },
       });
 
       expect(store.current.emojis, ['late']);

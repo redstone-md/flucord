@@ -7,6 +7,8 @@ final class _EventRepository
         GuildMemberListRepository {
   @override
   UserProfileRepository? get userProfile => _delegate.userProfile;
+  @override
+  UserNotesRepository? get userNotes => _delegate.userNotes;
 
   @override
   ThreadMembershipRepository? get threadMembership =>
@@ -17,6 +19,9 @@ final class _EventRepository
 
   @override
   SoundboardRepository? get soundboard => _delegate.soundboard;
+
+  @override
+  GuildExpressionRepository? get expressions => _delegate.expressions;
 
   @override
   GifRepository? get gifs => _delegate.gifs;
@@ -85,6 +90,18 @@ final class _EventRepository
   AgeVerificationRepository? get ageVerification => null;
 
   @override
+  AccountConnectionsRepository? get accountConnections => null;
+
+  @override
+  AccountEntitlementsRepository? get accountEntitlements => null;
+
+  @override
+  AppAuthorisationRepository? get appAuthorisation => null;
+
+  @override
+  AccountDataPackageRepository? get accountDataPackage => null;
+
+  @override
   DesktopRelationshipRepository? get relationships => null;
 
   @override
@@ -92,6 +109,9 @@ final class _EventRepository
 
   @override
   PresenceService? get presence => null;
+
+  @override
+  DetectableGameRepository? get detectableGames => null;
 
   @override
   Future<ChatWorkspace> loadWorkspace() => _delegate.loadWorkspace();
@@ -104,6 +124,7 @@ final class _EventRepository
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   }) {
     final pending = pendingHistory;
     if (pending != null) {
@@ -145,6 +166,7 @@ final class _EventRepository
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) => _delegate.sendMessage(
     channelId: channelId,
     authorId: authorId,
@@ -152,6 +174,7 @@ final class _EventRepository
     attachments: attachments,
     replyToMessageId: replyToMessageId,
     suppressNotifications: suppressNotifications,
+    textToSpeech: textToSpeech,
   );
 
   @override

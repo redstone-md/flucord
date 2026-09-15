@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_call.dart';
+import 'package:flucord/src/domain/soundboard_playback.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 
 void main() {
@@ -223,6 +225,147 @@ void main() {
     expect(harness.controller.callFor('dm-1')?.isRingable, isTrue);
   });
 
+  test('a ring repeats while it is up, and stops with the surface', () {
+    fakeAsync((async) {
+      final harness = _Harness();
+      harness.controller.reconcileService();
+      addTearDown(harness.dispose);
+
+      harness.service!.emitIncoming(
+        const IncomingCall(channelId: 'dm-1', callerId: 'friend-1'),
+      );
+      async.flushMicrotasks();
+      expect(harness.sounds.played, ['asset://assets/sounds/call_ring.wav']);
+
+      // Two seconds pass: the ring repeats, so somebody away from the
+      // window still hears it.
+      async.elapse(const Duration(seconds: 2));
+      expect(harness.sounds.played, hasLength(2));
+      async.elapse(const Duration(seconds: 4));
+      expect(harness.sounds.played, hasLength(4));
+
+      // A re-announcement of the same ring does not stack a second cadence
+      // on top of the first.
+      harness.service!.emitIncoming(
+        const IncomingCall(channelId: 'dm-1', callerId: 'friend-1'),
+      );
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 2));
+      expect(harness.sounds.played, hasLength(5));
+
+      // The ring retracting stops the sound.
+      harness.service!.emitIncoming(null);
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 6));
+      expect(harness.sounds.played, hasLength(5));
+    });
+  });
+
+  test('accepting plays the accept sound and stops the ring', () {
+    fakeAsync((async) {
+      final harness = _Harness();
+      harness.controller.reconcileService();
+      addTearDown(harness.dispose);
+
+      harness.service!.emitIncoming(
+        const IncomingCall(channelId: 'dm-1', callerId: 'friend-1'),
+      );
+      async.flushMicrotasks();
+      final ringsBefore = harness.sounds.played.length;
+      expect(ringsBefore, 1);
+
+      harness.controller.acceptIncomingCall();
+      async.flushMicrotasks();
+
+      // The accept sound is the last thing played.
+      expect(
+        harness.sounds.played.last,
+        'asset://assets/sounds/call_accept.wav',
+      );
+
+      // The cadence is gone: time passes and nothing rings again.
+      async.elapse(const Duration(seconds: 6));
+      expect(harness.sounds.played, hasLength(ringsBefore + 1));
+    });
+  });
+
+  test('declining plays the hang-up sound and stops the ring', () {
+    fakeAsync((async) {
+      final harness = _Harness();
+      harness.controller.reconcileService();
+      addTearDown(harness.dispose);
+
+      harness.service!.emitIncoming(
+        const IncomingCall(channelId: 'dm-2', callerId: 'friend-1'),
+      );
+      async.flushMicrotasks();
+
+      harness.controller.declineIncomingCall();
+      async.flushMicrotasks();
+
+      expect(
+        harness.sounds.played.last,
+        'asset://assets/sounds/call_hang_up.wav',
+      );
+      async.elapse(const Duration(seconds: 6));
+      expect(harness.sounds.played, hasLength(2));
+    });
+  });
+
+  test(
+    'hanging up plays the hang-up sound, and so does leaving the room',
+    () async {
+      final harness = _Harness()..service!.ringable = true;
+      addTearDown(harness.dispose);
+      harness.controller.reconcileService();
+
+      await harness.controller.placeCall('dm-1');
+      expect(harness.sounds.played, isEmpty);
+
+      await harness.controller.hangUp();
+      expect(harness.sounds.played, ['asset://assets/sounds/call_hang_up.wav']);
+    },
+  );
+
+  test(
+    'a machine with no playback layer still places and answers calls',
+    () async {
+      // The sounds are a courtesy: a session without a player answers, rings,
+      // and hangs up exactly the same.
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      harness.controller.reconcileService();
+
+      harness.service!.emitIncoming(
+        const IncomingCall(channelId: 'dm-1', callerId: 'friend-1'),
+      );
+      await harness.settle();
+      await harness.controller.acceptIncomingCall();
+
+      expect(harness.controller.activeCallChannelId, 'dm-1');
+    },
+  );
+
+  test('a rebind adopts a ring that arrived while nobody was listening', () {
+    fakeAsync((async) {
+      final harness = _Harness();
+      harness.service!.holdIncoming = const IncomingCall(
+        channelId: 'dm-1',
+        callerId: 'friend-1',
+      );
+      harness.controller.reconcileService();
+      addTearDown(harness.dispose);
+      async.flushMicrotasks();
+
+      expect(harness.controller.incomingCall?.callerId, 'friend-1');
+      expect(harness.sounds.played, ['asset://assets/sounds/call_ring.wav']);
+
+      // And it keeps repeating like any ring.
+      async.elapse(const Duration(seconds: 2));
+      expect(harness.sounds.played, hasLength(2));
+    });
+  });
+
   test('one action at a time', () async {
     final harness = _Harness()..service!.ringable = true;
     addTearDown(harness.dispose);
@@ -250,12 +393,17 @@ final class _Harness {
     controller = DirectCallController(
       serviceProvider: () => service,
       voiceController: voice,
+      sounds: sounds,
     );
   }
 
   _FakeCallService? service;
   late final VoiceController voice;
   late final DirectCallController controller;
+
+  /// What a call played, and how loud: the playback hooks the call sounds
+  /// are verified through.
+  final _RecordingSounds sounds = _RecordingSounds();
 
   Future<void> settle() => Future<void>.delayed(Duration.zero);
 
@@ -266,6 +414,16 @@ final class _Harness {
   }
 }
 
+final class _RecordingSounds implements SoundboardAudioPlayer {
+  final List<String> played = [];
+
+  @override
+  Future<void> play(String url, {double volume = 1}) async => played.add(url);
+
+  @override
+  Future<void> dispose() async {}
+}
+
 final class _FakeCallService implements DirectCallService {
   final StreamController<VoiceCallEvent> _events = StreamController.broadcast();
   final List<String> log = [];
@@ -274,11 +432,15 @@ final class _FakeCallService implements DirectCallService {
   DirectCall? record;
   IncomingCall? _incomingCall;
 
+  /// Held as if a ring had arrived before the controller subscribed, which
+  /// is what a rebind sees.
+  IncomingCall? holdIncoming;
+
   @override
   Stream<VoiceCallEvent> get callEvents => _events.stream;
 
   @override
-  IncomingCall? get incomingCall => _incomingCall;
+  IncomingCall? get incomingCall => holdIncoming ?? _incomingCall;
 
   void emit(VoiceCallEvent event) => _events.add(event);
 

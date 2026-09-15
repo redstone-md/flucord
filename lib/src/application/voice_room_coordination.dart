@@ -44,9 +44,7 @@ final class VoiceRoomCoordination {
     _voice.addListener(_refreshOverlay);
     _streamerMode.addListener(_refreshOverlay);
     _goLive.addListener(_syncStreamerMode);
-    _camerasGoneSubscription = voice.camerasGone.listen(
-      _remoteCameras.forget,
-    );
+    _camerasGoneSubscription = voice.camerasGone.listen(_remoteCameras.forget);
   }
 
   final VoiceController _voice;

@@ -279,7 +279,6 @@ void main() {
       expect(repository.lastWriteError, isNull);
     });
 
-
     test('every write says which version it was composed against', () async {
       final transport = _Transport(stored: _blob(theme: 1, dataVersion: 7));
       final repository = DiscordUserSettingsRepository(transport);

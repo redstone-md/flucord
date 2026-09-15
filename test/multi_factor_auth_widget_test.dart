@@ -10,10 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 Future<MultiFactorAuthController> _pump(
   WidgetTester tester, {
   MultiFactorAuthRepository? repository,
+  SecurityKeyCeremony? ceremony,
+  SecurityKeyAccount? Function()? account,
 }) async {
-  await tester.binding.setSurfaceSize(const Size(900, 1000));
+  await tester.binding.setSurfaceSize(const Size(900, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final controller = MultiFactorAuthController(() => repository);
+  final controller = MultiFactorAuthController(
+    () => repository,
+    securityKeyCeremony: ceremony ?? _FakeCeremony(),
+    securityKeyAccount:
+        account ??
+        () => const SecurityKeyAccount(userId: 'user-1', displayName: 'Ada'),
+  );
   addTearDown(controller.dispose);
   await tester.pumpWidget(
     MaterialApp(
@@ -290,6 +298,162 @@ void main() {
     expect(controller.secret, isNull);
   });
 
+  testWidgets('a security key is added with a name and the password', (
+    tester,
+  ) async {
+    final repository = _FakeMfa();
+    final ceremony = _FakeCeremony();
+    await _pump(tester, repository: repository, ceremony: ceremony);
+
+    // Nothing to send until the name and password are both in.
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('mfa-security-key-add')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-name')),
+      'Hello key',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-password')),
+      'hunter2',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-security-key-add')));
+    await tester.pumpAndSettle();
+
+    expect(repository.challengePasswords, ['hunter2']);
+    expect(repository.registered.single.$1, 'Hello key');
+    expect(
+      find.byKey(const ValueKey('mfa-security-key-added')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mfa-security-key-cred-1')),
+      findsOneWidget,
+    );
+    // Back on the form: the password did not sit in the field while the
+    // prompt was up.
+    await tester.tap(find.byKey(const ValueKey('mfa-security-key-done')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('mfa-security-key-password')),
+          )
+          .controller
+          ?.text,
+      isEmpty,
+    );
+  });
+
+  testWidgets('a machine with no platform authenticator says so', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      repository: _FakeMfa(),
+      ceremony: const UnavailableSecurityKeyCeremony(),
+    );
+
+    expect(
+      find.byKey(const ValueKey('mfa-security-key-unavailable')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mfa-security-key-add')), findsNothing);
+  });
+
+  testWidgets('a closed prompt is explained, not read as a failure', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      repository: _FakeMfa(),
+      ceremony: _FakeCeremony()..decline = true,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-name')),
+      'Hello key',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-password')),
+      'hunter2',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-security-key-add')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('mfa-security-key-refusal')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('The prompt was closed before a key was made.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mfa-error')), findsNothing);
+  });
+
+  testWidgets('a refused password is explained by the security key block', (
+    tester,
+  ) async {
+    await _pump(tester, repository: _FakeMfa()..acceptPassword = false);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-name')),
+      'Hello key',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-password')),
+      'wrong',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mfa-security-key-add')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('That password was not accepted.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mfa-error')), findsNothing);
+  });
+
+  testWidgets('a registered key is listed and can be removed', (tester) async {
+    final repository = _FakeMfa()
+      ..securityKeys = const [SecurityKey(id: 'cred-1', name: 'Hello key')];
+    await _pump(tester, repository: repository);
+
+    expect(
+      find.byKey(const ValueKey('mfa-security-key-cred-1')),
+      findsOneWidget,
+    );
+    // Nothing to remove without the password.
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('mfa-security-key-remove-cred-1')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('mfa-security-key-password')),
+      'hunter2',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mfa-security-key-remove-cred-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('mfa-security-key-cred-1')), findsNothing);
+    expect(find.byKey(const ValueKey('mfa-security-key-none')), findsOneWidget);
+  });
+
   testWidgets('the settings window offers the page and opens it', (
     tester,
   ) async {
@@ -345,6 +509,57 @@ final class _FakeMfa implements MultiFactorAuthRepository {
   bool smsEnabled = false;
   final List<String> passwords = [];
   final List<(String, String, bool)> viewed = [];
+
+  List<SecurityKey> securityKeys = const [];
+  final List<String> challengePasswords = [];
+  final List<(String, String, SecurityKeyRegistration)> registered = [];
+  final List<(SecurityKey, String)> removed = [];
+  bool acceptPassword = true;
+
+  @override
+  Future<List<SecurityKey>> loadSecurityKeys() async => securityKeys;
+
+  @override
+  Future<String?> requestSecurityKeyChallenge(String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('challenge failed');
+    }
+    challengePasswords.add(password);
+    return acceptPassword ? 'challenge-1' : null;
+  }
+
+  @override
+  Future<bool> registerSecurityKey({
+    required String name,
+    required String challenge,
+    required SecurityKeyRegistration registration,
+  }) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('register failed');
+    }
+    registered.add((name, challenge, registration));
+    securityKeys = [
+      ...securityKeys,
+      SecurityKey(id: registration.credentialId, name: name),
+    ];
+    return true;
+  }
+
+  @override
+  Future<bool> removeSecurityKey(SecurityKey key, String password) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('remove failed');
+    }
+    removed.add((key, password));
+    securityKeys = [
+      for (final other in securityKeys)
+        if (other.id != key.id) other,
+    ];
+    return true;
+  }
 
   @override
   Future<MfaEnrolment?> enableTotp({
@@ -422,4 +637,23 @@ final class _FakeMfa implements MultiFactorAuthRepository {
     viewed.add((key, nonces.forRequest(regenerating: regenerate), regenerate));
     return regenerate ? const ['cccc-dddd'] : const ['aaaa-bbbb'];
   }
+}
+
+final class _FakeCeremony implements SecurityKeyCeremony {
+  bool decline = false;
+
+  @override
+  bool get isAvailable => true;
+
+  @override
+  Future<SecurityKeyRegistration?> createCredential({
+    required String challenge,
+    required SecurityKeyAccount account,
+  }) async => decline
+      ? null
+      : const SecurityKeyRegistration(
+          credentialId: 'cred-1',
+          attestationObject: 'attestation',
+          clientDataJson: 'client-data',
+        );
 }

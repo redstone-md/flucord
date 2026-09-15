@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/call_sounds.dart';
+import '../domain/soundboard_playback.dart';
 import '../domain/voice_call.dart';
+import '../app_log.dart';
 import 'voice_controller.dart';
 
 /// Drives calls in DMs and group DMs.
 ///
 /// The two halves a call needs already exist and are deliberately not merged
-/// here: [VoiceController] owns the media session — microphone, uplink,
-/// participant grid — and [DirectCallService] owns the call record and the ring
+/// here: [VoiceController] owns the media session (microphone, uplink,
+/// participant grid), and [DirectCallService] owns the call record and the ring
 /// routes. This controller is only the order they happen in, which is the part
 /// the UI cannot be trusted to get right: ringing before joining leaves the
 /// caller outside the call they placed, and declining without stopping the ring
@@ -18,12 +21,26 @@ final class DirectCallController extends ChangeNotifier {
   DirectCallController({
     required this._serviceProvider,
     required VoiceController voiceController,
-  }) : _voice = voiceController {
+
+    /// Plays the ring, accept, and hang-up sounds. Null on a session with
+    /// no playback at all, in which case calls arrive silently.
+    SoundboardAudioPlayer? sounds,
+    CallSounds soundAssets = const CallSounds(),
+  }) : _voice = voiceController,
+       _sounds = sounds,
+       _soundAssets = soundAssets {
     _voice.addListener(_onVoiceChanged);
   }
 
   final DirectCallServiceProvider _serviceProvider;
   final VoiceController _voice;
+  final SoundboardAudioPlayer? _sounds;
+  final CallSounds _soundAssets;
+
+  /// Repeats the ring while the incoming surface is up. A single chirp
+  /// reaches nobody who is not looking at the window, which is the whole
+  /// reason a ring has a sound.
+  Timer? _ringTimer;
   StreamSubscription<VoiceCallEvent>? _subscription;
   DirectCallService? _service;
   IncomingCall? _incomingCall;
@@ -68,6 +85,11 @@ final class DirectCallController extends ChangeNotifier {
     unawaited(_subscription?.cancel());
     _service = service;
     _incomingCall = service?.incomingCall;
+    _stopRinging();
+    // A ring that arrived while the session was being swapped is adopted
+    // with its sound: the service holds it before this listens, and a ring
+    // nobody hears is a call nobody answers.
+    if (_incomingCall != null) _startRinging();
     _outgoingRings.clear();
     _ringsSeen.clear();
     _subscription = service?.callEvents.listen(_onCallEvent);
@@ -111,6 +133,10 @@ final class DirectCallController extends ChangeNotifier {
     final call = _incomingCall;
     if (call == null) return;
     _incomingCall = null;
+    // Answering replaces the ring with the accept sound and its cadence
+    // stops with it.
+    _stopRinging();
+    _playSound(_soundAssets.accept);
     await _voice.connectToCall(channelId: call.channelId);
   });
 
@@ -121,11 +147,17 @@ final class DirectCallController extends ChangeNotifier {
     final service = _service;
     if (call == null || service == null) return;
     _incomingCall = null;
+    // Declining says no: the ring stops with the surface.
+    _stopRinging();
+    _playSound(_soundAssets.hangUp);
     await service.stopRinging(call.channelId);
   });
 
   /// Leaves the call. Any ring the local user still has out is retracted by
-  /// [_onVoiceChanged], which sees every departure rather than only this one.
+  /// [_onVoiceChanged], which sees every departure rather than only this one,
+  /// and it is the departure that plays the hang-up sound: the room's own
+  /// button bypasses this method, and a call that ends on the other end is
+  /// a departure here too.
   Future<void> hangUp() => _run(() async {
     if (activeCallChannelId == null) return;
     await _voice.disconnect();
@@ -134,11 +166,23 @@ final class DirectCallController extends ChangeNotifier {
   void _onCallEvent(VoiceCallEvent event) {
     switch (event) {
       case IncomingCallChangedEvent():
+        // The sound rides the appearance, not the event: a service that
+        // re-announces the same ring (or rebinds its stream) must not
+        // restart the sound over the one already playing.
+        final previous = _incomingCall;
         _incomingCall = event.call;
+        if (_incomingCall != null && previous == null) {
+          _startRinging();
+        } else if (_incomingCall == null) {
+          _stopRinging();
+        }
       case DirectCallEndedEvent():
         _outgoingRings.remove(event.channelId);
         _ringsSeen.remove(event.channelId);
-        if (_incomingCall?.channelId == event.channelId) _incomingCall = null;
+        if (_incomingCall?.channelId == event.channelId) {
+          _incomingCall = null;
+          _stopRinging();
+        }
       case DirectCallUpdatedEvent():
         final channelId = event.call.channelId;
         if (event.call.ringing.isNotEmpty) {
@@ -157,7 +201,7 @@ final class DirectCallController extends ChangeNotifier {
   ///
   /// Only that one fact is forwarded. The voice controller notifies on every
   /// device enumeration and busy flip, and it does so synchronously from the
-  /// room's `initState` — which lands mid-build for anything that hosts the
+  /// room's `initState`, which lands mid-build for anything that hosts the
   /// room, and marking an ancestor dirty during its own build is an error. The
   /// channel cannot change during that window, so filtering on it is both the
   /// correct signal and the one that is safe to relay.
@@ -166,15 +210,51 @@ final class DirectCallController extends ChangeNotifier {
     final previous = _lastActiveCallChannelId;
     if (active == previous) return;
     _lastActiveCallChannelId = active;
+    // The room's own hang-up button goes straight to the voice controller
+    // without passing through [hangUp], so the departure is what the sound
+    // hangs off, exactly like the ring retraction below.
+    if (previous != null && active == null) {
+      _playSound(_soundAssets.hangUp);
+    }
     // Leaving a call the local user placed has to retract the ring, and the
-    // room's own hang-up button goes straight to the voice controller without
-    // passing through [hangUp] — so the departure, not the button, is what this
-    // hangs off. Otherwise the other end keeps ringing an empty call.
+    // room's own hang-up button goes straight to the voice controller
+    // without passing through [hangUp], so the departure, not the button,
+    // is what this hangs off. Otherwise the other end keeps ringing an
+    // empty call.
     _ringsSeen.remove(previous);
     if (previous != null && _outgoingRings.remove(previous)) {
       unawaited(_service?.stopRinging(previous));
     }
     _notify();
+  }
+
+  /// How often the ring repeats: Discord's own cadence.
+  static const Duration _ringInterval = Duration(seconds: 2);
+
+  void _startRinging() {
+    _stopRinging();
+    _playSound(_soundAssets.ring);
+    _ringTimer = Timer.periodic(_ringInterval, (_) {
+      _playSound(_soundAssets.ring);
+    });
+  }
+
+  void _stopRinging() {
+    _ringTimer?.cancel();
+    _ringTimer = null;
+  }
+
+  /// Plays one call sound. A failure to play is not a failed call: the
+  /// sound is a courtesy, and a machine with no speakers is still worth
+  /// talking on.
+  void _playSound(String url) {
+    final sounds = _sounds;
+    if (sounds == null || _disposed) return;
+    unawaited(
+      sounds.play(url).catchError((Object error) {
+        AppLog.warning('voice.call', 'call sound would not play', error: error);
+      }),
+    );
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -199,6 +279,7 @@ final class DirectCallController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _stopRinging();
     _voice.removeListener(_onVoiceChanged);
     unawaited(_subscription?.cancel());
     super.dispose();

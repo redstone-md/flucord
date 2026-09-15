@@ -103,6 +103,52 @@ void main() {
     expect(find.byKey(const ValueKey('composer-autocomplete')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a colon offers emoji from both servers and the catalogue', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_composerApp());
+    final composer = find.byKey(const ValueKey('message-composer'));
+
+    await tester.enterText(composer, ':forge_s');
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('composer-autocomplete')), findsOneWidget);
+    expect(find.text('EMOJI'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('composer-suggestion-emoji-forge-spark')),
+      findsOneWidget,
+    );
+    // The server that owns it is what the row says beside the name.
+    expect(find.text('Forge'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(_composerText(tester), '<:forge_spark:forge-spark> ');
+    expect(find.byKey(const ValueKey('composer-autocomplete')), findsNothing);
+  });
+
+  testWidgets('a colon inserts a unicode glyph in place of the name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_composerApp());
+    final composer = find.byKey(const ValueKey('message-composer'));
+
+    await tester.enterText(composer, ':rocket');
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('composer-suggestion-emoji-unicode-rocket')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('composer-suggestion-emoji-unicode-rocket')),
+    );
+    await tester.pump();
+
+    expect(_composerText(tester), '🚀 ');
+    expect(find.byKey(const ValueKey('composer-autocomplete')), findsNothing);
+  });
 }
 
 String _composerText(WidgetTester tester) => tester
@@ -123,8 +169,8 @@ Widget _composerApp({List<String>? sentBodies}) => MaterialApp(
           _workspace,
           _workspace.channelById('general'),
         ),
-        customEmojis: const [],
-        guildStickers: const [],
+        emojiSections: const [],
+        stickerSections: const [],
         isSending: false,
         onSend: (body, _, _, _) async {
           sentBodies?.add(body);
@@ -147,6 +193,16 @@ final _workspace = ChatWorkspace(
       monogram: 'FO',
       colorValue: 0xff5865f2,
     ),
+    CommunitySpace(
+      id: 'guild-2',
+      name: 'Night Shift',
+      monogram: 'NS',
+      colorValue: 0xff765341,
+    ),
+  ],
+  emojis: const [
+    GuildEmoji(id: 'forge-spark', spaceId: 'guild-1', name: 'forge_spark'),
+    GuildEmoji(id: 'relay-horn', spaceId: 'guild-2', name: 'relay_horn'),
   ],
   channels: const [
     ConversationChannel(

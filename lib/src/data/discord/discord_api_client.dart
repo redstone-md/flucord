@@ -138,11 +138,13 @@ final class DiscordApiClient {
     String channelId, {
     int limit = 100,
     String? beforeMessageId,
+    String? aroundMessageId,
   }) => _getList(
     '/channels/$channelId/messages',
     query: {
       'limit': limit.clamp(1, 100).toString(),
       'before': ?beforeMessageId,
+      'around': ?aroundMessageId,
     },
   );
 

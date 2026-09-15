@@ -57,7 +57,6 @@ extension _FlucordShellConversation on FlucordShell {
   ) {
     final controller = messageSearchController;
     if (controller == null) return;
-    final permissions = WorkspacePermissions(workspace);
     workspaceController.openSearch();
     unawaited(
       controller.search(
@@ -66,20 +65,27 @@ extension _FlucordShellConversation on FlucordShell {
             : GuildMessageSearchScope(space.id),
         text: text,
         grammar: MessageSearchGrammar(
-          channels: space.isDirectMessages
-              ? [channel]
-              : [
-                  for (final item in permissions.visibleChannelsFor(space.id))
-                    if (permissions.can(
-                      DiscordPermissions.readMessageHistory,
-                      item,
-                    ))
-                      item,
-                ],
+          channels: _searchChannels(workspace, space, channel),
           members: workspace.members,
           currentMemberId: workspace.currentMemberId,
         ),
       ),
     );
+  }
+
+  /// The channels a search of [space] may name in an `in:` filter: exactly
+  /// the ones the account can read the history of, so a filter can never ask
+  /// the server about a channel it is not allowed to see.
+  List<ConversationChannel> _searchChannels(
+    ChatWorkspace workspace,
+    CommunitySpace space,
+    ConversationChannel channel,
+  ) {
+    if (space.isDirectMessages) return [channel];
+    final permissions = WorkspacePermissions(workspace);
+    return [
+      for (final item in permissions.visibleChannelsFor(space.id))
+        if (permissions.can(DiscordPermissions.readMessageHistory, item)) item,
+    ];
   }
 }

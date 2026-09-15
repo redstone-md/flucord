@@ -277,6 +277,9 @@ final class _RefusingPlayback implements VoiceAudioPlaybackService {
   Future<void> removeSource(String sourceId) async {}
 
   @override
+  Future<void> setSourceVolume(String sourceId, double volume) async {}
+
+  @override
   Future<void> dispose() async {}
 }
 

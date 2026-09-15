@@ -42,11 +42,11 @@ final class IsolateNoiseSuppressor implements VoiceNoiseSuppressor {
   }) async {
     final replies = ReceivePort();
     final exited = ReceivePort();
-    final isolate = await Isolate.spawn(
-      _entry,
-      (replies.sendPort, loader, recipe),
-      debugName: 'noise suppressor',
-    );
+    final isolate = await Isolate.spawn(_entry, (
+      replies.sendPort,
+      loader,
+      recipe,
+    ), debugName: 'noise suppressor');
     isolate.addOnExitListener(exited.sendPort);
     final suppressor = IsolateNoiseSuppressor._(replies, exited);
     final answer = await suppressor._ready.future;

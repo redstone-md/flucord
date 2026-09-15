@@ -115,6 +115,9 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   Future<void> _openInbox(BuildContext context) async {
+    // Opening the centre is what acks it: the dialog below is a snapshot of
+    // what was waiting, so its rows stay listed while the badge goes quiet.
+    chatController.acknowledgeNotificationCentre();
     final target = await showDialog<InboxTarget>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.58),
@@ -129,6 +132,10 @@ extension _FlucordShellNavigation on FlucordShell {
           catalog: InboxCatalog.fromWorkspace(chatController.workspace!),
           onMarkAllRead: () {
             chatController.markAllChannelsRead();
+            setDialogState(() {});
+          },
+          onMarkEntryRead: (channelId) {
+            chatController.acknowledgeChannel(channelId, immediate: true);
             setDialogState(() {});
           },
         ),
@@ -257,6 +264,11 @@ extension _FlucordShellNavigation on FlucordShell {
       repository,
       capabilities,
       guildId: space.id,
+      // The expression plane and the soundboard are read live off the
+      // session the same way the guild-management repository is, so a
+      // swapped transport leaves no controller talking to a closed socket.
+      expressions: chatController.expressions,
+      soundboard: chatController.soundboard,
     );
     try {
       await showGuildSettingsDialog(
@@ -268,6 +280,30 @@ extension _FlucordShellNavigation on FlucordShell {
     } finally {
       controller.dispose();
     }
+  }
+
+  /// The moderation controller for one member's popover, or null where the
+  /// account holds no guild-administration plane.
+  ///
+  /// Built per popover and disposed with it, like the settings window's
+  /// controller: it holds a member's standing and the guild's roles, and
+  /// keeping one alive per member ever clicked would pin all of it.
+  GuildMemberAdminController? _memberAdminController(
+    String spaceId,
+    String userId,
+  ) {
+    final repository = chatController.guildManagement;
+    final workspace = chatController.workspace;
+    if (repository == null || workspace == null) return null;
+    return GuildMemberAdminController(
+      repository,
+      WorkspacePermissions(
+        workspace,
+        memberId: workspace.currentMemberId,
+      ).administrationOf(spaceId),
+      guildId: spaceId,
+      userId: userId,
+    );
   }
 
   /// Opens the in-app report flow for [member].
@@ -302,6 +338,39 @@ extension _FlucordShellNavigation on FlucordShell {
     } finally {
       controller.dispose();
     }
+  }
+
+  /// Runs the add-server flow and lands the user in whatever it gained.
+  Future<void> _addServer(BuildContext context) async {
+    final spaceId = await showAddServerFlow(context, chat: chatController);
+    if (spaceId == null || !context.mounted) return;
+    _selectSpace(spaceId);
+  }
+
+  /// Leaves [space], after asking. Leaving is not undoable from any surface
+  /// Flucord has, so it confirms first, and a refusal from the server (an
+  /// owner leaving their own server) is shown as the message it is.
+  Future<void> _leaveServer(BuildContext context, CommunitySpace space) async {
+    final confirmed = await showLeaveServerConfirmation(
+      context,
+      serverName: space.name,
+    );
+    if (!confirmed || !context.mounted) return;
+    final left = await chatController.leaveGuild(space.id);
+    if (!context.mounted) return;
+    if (!left) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            chatController.guildAccessError ?? 'The server was not left.',
+          ),
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('You left ${space.name}.')));
   }
 
   /// Blocks [member], after a confirmation. Blocking is not undoable from any
@@ -451,6 +520,9 @@ extension _FlucordShellNavigation on FlucordShell {
     final workspace = chatController.workspace;
     final member = workspace?.memberOrNull(userId);
     if (member == null || !context.mounted) return;
+    // The fetch starts with the dialog rather than after it.
+    final profile = memberProfileController;
+    if (profile != null) unawaited(profile.open(userId));
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog(
@@ -461,6 +533,7 @@ extension _FlucordShellNavigation on FlucordShell {
           child: MemberProfilePopover(
             member: member,
             spaceId: spaceId,
+            profile: profile,
             canMessage: member.id != workspace!.currentMemberId,
             onMessage: () {
               Navigator.of(dialogContext).pop();

@@ -1,11 +1,17 @@
+import 'game_detection.dart';
 import 'automod_rule.dart';
 import 'account_standing.dart';
+import 'account_connections.dart';
+import 'account_data_package.dart';
+import 'account_entitlements.dart';
 import 'age_verification.dart';
+import 'app_authorisation.dart';
 import 'auth_session.dart';
 import 'chat_models.dart';
 import 'desktop_relationship_repository.dart';
 import 'multi_factor_auth.dart';
 import 'family_centre.dart';
+import 'guild_expression_repository.dart';
 import 'guild_management_repository.dart';
 import 'message_search_repository.dart';
 import 'moderation_repository.dart';
@@ -22,6 +28,7 @@ import 'go_live_stream.dart';
 import 'soundboard.dart';
 import 'stage_channel.dart';
 import 'thread_membership.dart';
+import 'user_notes.dart';
 import 'user_profile.dart';
 import 'voice_connection.dart';
 
@@ -182,6 +189,17 @@ final class ChannelDeletedEvent extends ChatRepositoryEvent {
   final String channelId;
 }
 
+/// A server the account can no longer see.
+///
+/// A `READY` that stops naming a guild says the account left it while the
+/// socket was down. The server's channels each carry their own deletion event,
+/// so this one only takes the server row off the rail.
+final class SpaceRemovedEvent extends ChatRepositoryEvent {
+  const SpaceRemovedEvent(this.spaceId);
+
+  final String spaceId;
+}
+
 final class CategoryDeletedEvent extends ChatRepositoryEvent {
   const CategoryDeletedEvent(this.categoryId);
 
@@ -234,6 +252,12 @@ abstract interface class ChatRepository {
   /// than presenting an editor that cannot save.
   UserProfileRepository? get userProfile;
 
+  /// The account's private notes, or `null` on a transport with no account
+  /// behind it. Notes follow the account between machines the way the
+  /// settings blobs do, and only a session authenticated as that account can
+  /// read the map READY carries or write one of its entries.
+  UserNotesRepository? get userNotes;
+
   /// Joining, leaving and listing a thread's members.
   ///
   /// Null on a transport with no account behind it: membership is per-account
@@ -247,6 +271,15 @@ abstract interface class ChatRepository {
   /// The soundboard, or null on a transport that cannot play into a voice
   /// channel.
   SoundboardRepository? get soundboard;
+
+  /// Upload and delete for a guild's emoji, stickers and soundboard sounds,
+  /// or `null` on a transport whose session cannot manage them.
+  ///
+  /// The routes answer to a signed-in member holding the manage-expressions
+  /// permission, which is the settings window's own gate. A demo workspace
+  /// with no server behind it reports null here rather than offering an
+  /// upload nothing would accept.
+  GuildExpressionRepository? get expressions;
 
   /// GIFs through Discord's provider proxy, or null on a transport that has
   /// no account to ask on behalf of.
@@ -323,6 +356,38 @@ abstract interface class ChatRepository {
   /// Age verification, or `null` on a transport that offers none.
   AgeVerificationRepository? get ageVerification;
 
+  /// The account's third-party connections, or `null` on a transport that
+  /// cannot read or change them.
+  ///
+  /// Connections are read and written with the signed-in account's own
+  /// session: an OAuth grant holds a copy it may look at, and a demo or bot
+  /// transport holds nothing at all. Stating the answer here keeps the
+  /// settings page honest about which session can link an account.
+  AccountConnectionsRepository? get accountConnections;
+
+  /// What the account holds, or `null` on a transport with no account to
+  /// hold anything.
+  ///
+  /// Entitlements are read-only everywhere in this client; a transport that
+  /// cannot read them says so rather than offering a page that could only
+  /// fail.
+  AccountEntitlementsRepository? get accountEntitlements;
+
+  /// Bot and app authorisation, or `null` on a transport that cannot add an
+  /// app to a guild.
+  ///
+  /// Adding a bot is consented with the account's own session, so the demo
+  /// and bot transports have nothing to consent with.
+  AppAuthorisationRepository? get appAuthorisation;
+
+  /// The account's data package, or `null` on a transport that has no
+  /// account to collect one from.
+  ///
+  /// Requesting the archive needs the account's own session, so the demo and
+  /// bot transports have nothing to ask for and say so here rather than
+  /// opening a page whose every button could only fail.
+  AccountDataPackageRepository? get accountDataPackage;
+
   /// The account's friend graph as this session knows it, or `null` on a
   /// transport that is never told one.
   DesktopRelationshipRepository? get relationships;
@@ -345,6 +410,13 @@ abstract interface class ChatRepository {
   /// instead of leaving the status picker to discover it by failing.
   PresenceService? get presence;
 
+  /// The games Discord can recognise as a game, or `null` on a transport
+  /// with no account to read the list with.
+  ///
+  /// Game detection maps running executables against this list; a demo or
+  /// bot transport has nothing to detect against and says so here.
+  DetectableGameRepository? get detectableGames;
+
   /// The account's server-held read state, or `null` when this transport has
   /// none.
   ///
@@ -361,6 +433,7 @@ abstract interface class ChatRepository {
   Future<ChannelHistoryPage> loadChannelHistory(
     String channelId, {
     String? beforeMessageId,
+    String? aroundMessageId,
   });
 
   Future<ChannelHistory> loadPinnedMessages(String channelId);
@@ -381,6 +454,7 @@ abstract interface class ChatRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   });
 
   Future<ChatMessage> editMessage({

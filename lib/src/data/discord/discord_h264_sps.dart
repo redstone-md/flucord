@@ -22,7 +22,9 @@ abstract final class DiscordH264Sps {
     var codeStart = -1;
     var nalStart = 0;
     for (var i = 0; i + 2 < accessUnit.length; i++) {
-      if (accessUnit[i] != 0 || accessUnit[i + 1] != 0 || accessUnit[i + 2] != 1) {
+      if (accessUnit[i] != 0 ||
+          accessUnit[i + 1] != 0 ||
+          accessUnit[i + 2] != 1) {
         continue;
       }
       nalStart = i + 3;
@@ -303,7 +305,17 @@ abstract final class DiscordH264Sps {
   /// Profile ids whose SPS carries the chroma, bit depth and scaling list
   /// syntax the baseline and main profiles leave out.
   static const _highProfiles = {
-    100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 144,
+    100,
+    110,
+    122,
+    244,
+    44,
+    83,
+    86,
+    118,
+    128,
+    138,
+    144,
   };
 }
 

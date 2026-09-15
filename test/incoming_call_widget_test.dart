@@ -59,11 +59,17 @@ void main() {
     addTearDown(harness.dispose);
     await tester.pumpWidget(harness.app());
     harness.ring(channelId: 'unlisted-dm', callerId: 'stranger');
-    await tester.pumpAndSettle();
+    // A settled pump would outlast the ring, which repeats by design: one
+    // frame is what the card needs.
+    await tester.pump();
 
     expect(find.text('Someone'), findsOneWidget);
     expect(find.text('Incoming call'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    // The ring stops with the surface, before the binding checks for
+    // timers left pending.
+    harness.stopRinging();
   });
 
   testWidgets('the card survives a compact window', (tester) async {
@@ -73,12 +79,17 @@ void main() {
     addTearDown(harness.dispose);
     await tester.pumpWidget(harness.app());
     harness.ring();
-    await tester.pumpAndSettle();
+    // The ring repeats, so the pump is bounded to what the card needs.
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('incoming-call-card')), findsOneWidget);
     expect(find.byKey(_accept), findsOneWidget);
     expect(find.byKey(_decline), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    // The ring stops with the surface, before the binding checks for
+    // timers left pending.
+    harness.stopRinging();
   });
 
   testWidgets('the room shows the people in it while nobody is watched', (
@@ -111,7 +122,10 @@ void main() {
 
     // The room gets as far as the grid: no stream is on the stage, and an
     // empty box handed over as one would read as a stream and take the room.
-    expect(find.byKey(const ValueKey('voice-participants-empty')), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('voice-participants-empty')),
+      findsWidgets,
+    );
   });
 
   testWidgets('the room joins a call when there is no guild', (tester) async {
@@ -184,6 +198,9 @@ final class _Harness {
       service.emitIncoming(
         IncomingCall(channelId: channelId, callerId: callerId),
       );
+
+  /// Takes the ring away, which is also what stops its sound.
+  void stopRinging() => service.emitIncoming(null);
 
   Widget app() => MaterialApp(
     theme: FlucordTheme.dark,

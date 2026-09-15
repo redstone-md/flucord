@@ -24,7 +24,9 @@ void main() {
     test('a binding survives a round trip', () async {
       final directory = await Directory.systemTemp.createTemp('flucord-keys');
       addTearDown(() => directory.delete(recursive: true));
-      final repository = FileKeybindRepository(directory: () async => directory);
+      final repository = FileKeybindRepository(
+        directory: () async => directory,
+      );
 
       // Nothing stored yet is an empty map, not a failure.
       expect(await repository.load(), isEmpty);
@@ -38,7 +40,10 @@ void main() {
       final read = await repository.load();
 
       expect(read.keys, [KeybindAction.pushToTalk]);
-      expect(read[KeybindAction.pushToTalk]!.keyId, LogicalKeyboardKey.keyT.keyId);
+      expect(
+        read[KeybindAction.pushToTalk]!.keyId,
+        LogicalKeyboardKey.keyT.keyId,
+      );
       expect(read[KeybindAction.pushToTalk]!.modifiers, {
         KeybindModifier.control,
         KeybindModifier.shift,
@@ -53,11 +58,16 @@ void main() {
       ).writeAsString(
         jsonEncode({
           'OVERLAY_ACTIVATE_REGION_TEXT_WIDGET': {'key': 1},
-          'TOGGLE_MUTE': {'key': 2, 'modifiers': ['control', 'nonsense']},
+          'TOGGLE_MUTE': {
+            'key': 2,
+            'modifiers': ['control', 'nonsense'],
+          },
           'TOGGLE_DEAFEN': 'not a binding',
         }),
       );
-      final repository = FileKeybindRepository(directory: () async => directory);
+      final repository = FileKeybindRepository(
+        directory: () async => directory,
+      );
 
       final read = await repository.load();
 
@@ -69,8 +79,7 @@ void main() {
       });
     });
 
-    test('a file that is not a map, or not readable, reads as nothing',
-        () async {
+    test('a file that is not a map, or not readable, reads as nothing', () async {
       final directory = await Directory.systemTemp.createTemp('flucord-keys');
       addTearDown(() => directory.delete(recursive: true));
       await File(
@@ -126,7 +135,11 @@ void main() {
       expect(controller.recording, isNull);
 
       // And now the chord runs the action rather than being recorded.
-      await _chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.keyM);
+      await _chord(
+        tester,
+        LogicalKeyboardKey.controlLeft,
+        LogicalKeyboardKey.keyM,
+      );
       expect(fired, [(KeybindAction.toggleMute, true)]);
     });
 
@@ -135,11 +148,7 @@ void main() {
     ) async {
       final fired = <(KeybindAction, bool)>[];
       final controller = await _controllerWith(
-        {
-          KeybindAction.pushToTalk: Keybind(
-            keyId: LogicalKeyboardKey.f1.keyId,
-          ),
-        },
+        {KeybindAction.pushToTalk: Keybind(keyId: LogicalKeyboardKey.f1.keyId)},
         onTriggered: (action, {required pressed}) =>
             fired.add((action, pressed)),
       );
@@ -183,10 +192,9 @@ void main() {
 
     testWidgets('an unbound key is left to whatever had focus', (tester) async {
       var fired = 0;
-      final controller = await _controllerWith(
-        {KeybindAction.toggleMute: Keybind(keyId: LogicalKeyboardKey.f2.keyId)},
-        onTriggered: (_, {required pressed}) => fired++,
-      );
+      final controller = await _controllerWith({
+        KeybindAction.toggleMute: Keybind(keyId: LogicalKeyboardKey.f2.keyId),
+      }, onTriggered: (_, {required pressed}) => fired++);
       addTearDown(controller.dispose);
 
       expect(
@@ -236,9 +244,7 @@ void main() {
     test('clearing removes the binding and saves', () async {
       final repository = _MemoryKeybinds()
         ..stored = {
-          KeybindAction.toggleMute: Keybind(
-            keyId: LogicalKeyboardKey.f4.keyId,
-          ),
+          KeybindAction.toggleMute: Keybind(keyId: LogicalKeyboardKey.f4.keyId),
         };
       final controller = KeybindController(
         repository: repository,
@@ -284,20 +290,11 @@ void main() {
       expect(controller.toggleVoiceChannelChat(), isFalse);
 
       controller.selectChannel('channel-1');
-      expect(
-        controller.voiceSurfaceOf('channel-1'),
-        VoiceChannelSurface.room,
-      );
+      expect(controller.voiceSurfaceOf('channel-1'), VoiceChannelSurface.room);
       expect(controller.toggleVoiceChannelChat(), isTrue);
-      expect(
-        controller.voiceSurfaceOf('channel-1'),
-        VoiceChannelSurface.chat,
-      );
+      expect(controller.voiceSurfaceOf('channel-1'), VoiceChannelSurface.chat);
       expect(controller.toggleVoiceChannelChat(), isTrue);
-      expect(
-        controller.voiceSurfaceOf('channel-1'),
-        VoiceChannelSurface.room,
-      );
+      expect(controller.voiceSurfaceOf('channel-1'), VoiceChannelSurface.room);
     });
   });
 
@@ -381,9 +378,33 @@ void main() {
       expect(virtualKeyToLogicalKey(0x87), LogicalKeyboardKey.f24);
       expect(virtualKeyToLogicalKey(0x20), LogicalKeyboardKey.space);
       expect(virtualKeyToLogicalKey(0xa2), LogicalKeyboardKey.controlLeft);
-      // A key nobody can bind is dropped rather than mapped to something
-      // that would then match by accident.
-      expect(virtualKeyToLogicalKey(0x5f), isNull);
+      // A code the short list above does not carry still answers, from
+      // Flutter's own Windows table first: a wider keyboard key keeps the
+      // name it has everywhere else in the client.
+      expect(virtualKeyToLogicalKey(0x5f), LogicalKeyboardKey.sleep);
+      expect(virtualKeyToLogicalKey(0xba), LogicalKeyboardKey.semicolon);
+      expect(virtualKeyToLogicalKey(0x60), LogicalKeyboardKey.numpad0);
+      expect(virtualKeyToLogicalKey(0x5d), LogicalKeyboardKey.contextMenu);
+      // A code no table knows still reports a key rather than dropping the
+      // press, so a binding recorded for it round-trips. The id is the one
+      // Flutter's own Windows embedder mints for an unknown code.
+      final minted = virtualKeyToLogicalKey(0x5e);
+      expect(minted.keyId, 0x5e | LogicalKeyboardKey.windowsPlane);
+      expect(minted.keyId, isNot(0x5e));
+    });
+
+    test('a key no table names still records, labels and round-trips', () {
+      // The key the hook reports for a code nothing knows, as the previous
+      // test mints it.
+      final minted = virtualKeyToLogicalKey(0x5e);
+      final binding = Keybind(keyId: minted.keyId);
+
+      // The label says the number rather than a name it has not got, and the
+      // binding survives the file, which is the whole point of reporting a
+      // key rather than dropping the press.
+      expect(binding.label, 'Key ${minted.keyId}');
+      expect(Keybind.fromJson(binding.toJson())!.keyId, minted.keyId);
+      expect(minted.keyId, isNot(LogicalKeyboardKey.contextMenu.keyId));
     });
 
     testWidgets('a global key runs the action without swallowing it', (
@@ -534,29 +555,30 @@ void main() {
       await hook.stop();
     });
 
+    test(
+      'the real hook installs against the built module and comes back out',
+      () async {
+        // The module the client ships. Skipped where it has not been built, so
+        // a checkout that has only run `flutter test` still passes.
+        const path = 'build/windows/x64/runner/Release/flucord_hotkeys.dll';
+        if (!Platform.isWindows || !File(path).existsSync()) return;
+        final hook = WindowsGlobalKeyboardHook.withLibrary(
+          DynamicLibrary.open(path),
+        );
+        addTearDown(hook.close);
 
-    test('the real hook installs against the built module and comes back out',
-        () async {
-      // The module the client ships. Skipped where it has not been built, so
-      // a checkout that has only run `flutter test` still passes.
-      const path = 'build/windows/x64/runner/Release/flucord_hotkeys.dll';
-      if (!Platform.isWindows || !File(path).existsSync()) return;
-      final hook = WindowsGlobalKeyboardHook.withLibrary(
-        DynamicLibrary.open(path),
-      );
-      addTearDown(hook.close);
+        expect(hook.isSupported, isTrue);
+        expect(await hook.start(), isTrue);
+        expect(hook.isRunning, isTrue);
+        // Asked twice: the second is the same answer, not a second hook.
+        expect(await hook.start(), isTrue);
 
-      expect(hook.isSupported, isTrue);
-      expect(await hook.start(), isTrue);
-      expect(hook.isRunning, isTrue);
-      // Asked twice: the second is the same answer, not a second hook.
-      expect(await hook.start(), isTrue);
-
-      await hook.stop();
-      expect(hook.isRunning, isFalse);
-      // And stopping what is already stopped does nothing.
-      await hook.stop();
-    });
+        await hook.stop();
+        expect(hook.isRunning, isFalse);
+        // And stopping what is already stopped does nothing.
+        await hook.stop();
+      },
+    );
 
     test('a build without the native module reports no hook', () async {
       final hook = WindowsGlobalKeyboardHook.withLibrary(null);
@@ -571,93 +593,99 @@ void main() {
   });
 
   group('the settings window', () {
-    testWidgets('the keybind page is reachable, with and without a controller',
-        (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final settings = UserSettingsController(() => null);
-      addTearDown(settings.dispose);
+    testWidgets(
+      'the keybind page is reachable, with and without a controller',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1000, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final settings = UserSettingsController(() => null);
+        addTearDown(settings.dispose);
 
-      // A build with no keybind controller says so rather than drawing an
-      // empty list that reads as bindings taken and lost.
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: Scaffold(body: UserSettingsDialog(controller: settings)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('settings-nav-keybinds')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('user-keybinds-unavailable')),
-        findsOneWidget,
-      );
+        // A build with no keybind controller says so rather than drawing an
+        // empty list that reads as bindings taken and lost.
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: FlucordTheme.dark,
+            home: Scaffold(body: UserSettingsDialog(controller: settings)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('settings-nav-keybinds')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('user-keybinds-unavailable')),
+          findsOneWidget,
+        );
 
-      final keybinds = await _controllerWith(const {});
-      addTearDown(keybinds.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: Scaffold(
-            body: UserSettingsDialog(
-              controller: settings,
-              keybindController: keybinds,
+        final keybinds = await _controllerWith(const {});
+        addTearDown(keybinds.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: FlucordTheme.dark,
+            home: Scaffold(
+              body: UserSettingsDialog(
+                controller: settings,
+                keybindController: keybinds,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('settings-nav-keybinds')));
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('settings-nav-keybinds')));
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('keybind-section')), findsOneWidget);
-    });
+        expect(find.byKey(const ValueKey('keybind-section')), findsOneWidget);
+      },
+    );
 
-    testWidgets('the streamer page is reachable, with and without a controller',
-        (tester) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final settings = UserSettingsController(() => null);
-      addTearDown(settings.dispose);
+    testWidgets(
+      'the streamer page is reachable, with and without a controller',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1000, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final settings = UserSettingsController(() => null);
+        addTearDown(settings.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: Scaffold(body: UserSettingsDialog(controller: settings)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('user-streamer-unavailable')),
-        findsOneWidget,
-      );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: FlucordTheme.dark,
+            home: Scaffold(body: UserSettingsDialog(controller: settings)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('user-streamer-unavailable')),
+          findsOneWidget,
+        );
 
-      final streamer = StreamerModeController(_NoStreamerSettings());
-      addTearDown(streamer.dispose);
-      await streamer.load();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: FlucordTheme.dark,
-          home: Scaffold(
-            body: UserSettingsDialog(
-              controller: settings,
-              streamerModeController: streamer,
+        final streamer = StreamerModeController(_NoStreamerSettings());
+        addTearDown(streamer.dispose);
+        await streamer.load();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: FlucordTheme.dark,
+            home: Scaffold(
+              body: UserSettingsDialog(
+                controller: settings,
+                streamerModeController: streamer,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('settings-nav-streamer')));
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('streamer-mode-section')), findsOneWidget);
-    });
+        expect(
+          find.byKey(const ValueKey('streamer-mode-section')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
-
 
 Future<KeybindController> _controllerWith(
   Map<KeybindAction, Keybind> stored, {
@@ -722,7 +750,6 @@ final class _MemoryKeybinds implements KeybindRepository {
       saved.add(Map.of(bindings));
 }
 
-
 final class _NoStreamerSettings implements StreamerModeRepository {
   @override
   Future<StreamerModeSettings> load() async => const StreamerModeSettings();
@@ -731,10 +758,8 @@ final class _NoStreamerSettings implements StreamerModeRepository {
   Future<void> save(StreamerModeSettings settings) async {}
 }
 
-
 final class _FakeHook implements GlobalKeyboardHook {
-  final StreamController<GlobalKeyEvent> _events =
-      StreamController.broadcast();
+  final StreamController<GlobalKeyEvent> _events = StreamController.broadcast();
   int starts = 0;
   bool accept = true;
   bool _running = false;

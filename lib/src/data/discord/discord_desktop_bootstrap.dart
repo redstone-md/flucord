@@ -1,4 +1,3 @@
-
 import '../../domain/read_state.dart';
 import 'discord_private_channel_directory.dart';
 import 'discord_read_state_codec.dart';
@@ -187,7 +186,7 @@ final class DiscordDesktopBootstrap {
       AppLog.warning(
         'discord.gateway',
         'Discord private channels referenced $missed recipient(s) missing '
-        'from the READY user table.',
+            'from the READY user table.',
       );
     }
     return expanded;

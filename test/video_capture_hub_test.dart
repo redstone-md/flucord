@@ -406,9 +406,8 @@ final class _FakeDestination implements ShareFrameDestination {
 
   /// The capture dies on the destination's side, as a share delivered to the
   /// media isolate would report it.
-  void loseCapture() => _lost.add(
-    const VideoEncoderException(VideoEncoderFailure.captureLost),
-  );
+  void loseCapture() =>
+      _lost.add(const VideoEncoderException(VideoEncoderFailure.captureLost));
 
   @override
   Future<int?> get nativeFrameSink => Future.value(sink);

@@ -123,6 +123,21 @@ final class GuildMemberListController extends ChangeNotifier {
     });
   }
 
+  /// Asks the guild about members whose name starts with [query].
+  ///
+  /// The same member-chunking route mention completion rides: the answer is
+  /// an ordinary member update that folds into the workspace, so anything
+  /// reading the member table sees who it found. A blank query asks nothing,
+  /// because an empty ask would be a request for the whole guild.
+  void searchMembers(String query) {
+    final guildId = _guildId;
+    final repository = _repository;
+    final trimmed = query.trim();
+    if (_disposed || guildId == null || repository == null) return;
+    if (trimmed.isEmpty) return;
+    repository.searchGuildMembers(guildId: guildId, query: trimmed);
+  }
+
   /// Stops watching, releasing the channel's subscription.
   void clear() => viewChannel(guildId: null, channelId: null);
 

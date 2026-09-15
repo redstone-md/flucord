@@ -6,6 +6,7 @@ class RemoteIdentityImage extends StatelessWidget {
     required this.fallback,
     this.imageKey,
     this.animatesOnHover = false,
+    this.playsAnimations = true,
     super.key,
   });
 
@@ -17,12 +18,22 @@ class RemoteIdentityImage extends StatelessWidget {
   /// is what Discord does with an animated icon. A still asset ignores this.
   final bool animatesOnHover;
 
+  /// The account's answer to whether emoji may move at all. Off means the
+  /// webp first frame is drawn instead, which is the same glyph.
+  final bool playsAnimations;
+
   @override
   Widget build(BuildContext context) {
     final imageUrl = url;
     final stillUrl = imageUrl != null && animatesOnHover
         ? _stillFrameOf(imageUrl)
         : null;
+    if (imageUrl != null && !playsAnimations) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [fallback, _image(_stillFrameOf(imageUrl) ?? imageUrl)],
+      );
+    }
     return Stack(
       fit: StackFit.expand,
       children: [

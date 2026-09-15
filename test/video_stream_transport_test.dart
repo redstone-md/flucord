@@ -503,13 +503,7 @@ void _pacingTests() {
       // What drained is the newest of what queued: nothing newer was
       // sacrificed for it.
       clock.elapse(async, const Duration(seconds: 1));
-      expect(sent.map((frame) => frame.header.sequence), [
-        0,
-        6,
-        7,
-        8,
-        9,
-      ]);
+      expect(sent.map((frame) => frame.header.sequence), [0, 6, 7, 8, 9]);
     });
   });
 

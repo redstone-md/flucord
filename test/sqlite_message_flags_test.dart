@@ -9,8 +9,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('SQLite v21 retains raw Discord message flags', () async {
-    expect(SqliteChatSchema.version, 21);
+  test('SQLite v22 retains raw Discord message flags', () async {
+    expect(SqliteChatSchema.version, 23);
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
@@ -35,6 +35,28 @@ void main() {
     expect(restored?.flags, flags);
     expect(restored?.suppressesNotifications, isTrue);
     expect(restored?.hasFlag(DiscordMessageFlag.hasThread), isTrue);
+  });
+
+  test('SQLite v23 keeps the spoken-aloud flag across a restart', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    addTearDown(cache.close);
+    final message = ChatMessage(
+      id: 'spoken-message',
+      channelId: 'channel-1',
+      authorId: 'bot-1',
+      body: 'The release is out.',
+      sentAt: DateTime.utc(2026, 7, 24, 8),
+      isTextToSpeech: true,
+    );
+
+    await cache.writeMessage(message);
+    final restored = await cache.readMessage(message.id);
+
+    expect(restored?.isTextToSpeech, isTrue);
+    expect(restored?.body, 'The release is out.');
   });
 
   test('migrates v18 messages with safe flag defaults', () async {

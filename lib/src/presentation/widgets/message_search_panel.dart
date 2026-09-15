@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/message_search_controller.dart';
+import '../../application/message_search_grammar.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/message_search.dart';
@@ -9,6 +10,7 @@ import 'member_avatar.dart';
 import 'message_content_view.dart';
 import 'message_timestamp.dart';
 
+part 'message_search_filter_controls.dart';
 part 'message_search_result_views.dart';
 
 /// The results of a server-side search, beside the timeline.
@@ -26,6 +28,9 @@ class MessageSearchPanel extends StatelessWidget {
     required this.onClose,
     required this.onJump,
     required this.onSelectChannel,
+    this.channels = const [],
+    this.query = '',
+    this.onSubmitQuery,
     super.key,
   });
 
@@ -33,10 +38,21 @@ class MessageSearchPanel extends StatelessWidget {
   final ChatWorkspace workspace;
   final ExternalLinkLauncher linkLauncher;
   final VoidCallback onClose;
+  final ValueChanged<String> onSelectChannel;
+
+  /// The channels an `in:` filter may name: the ones the running search was
+  /// allowed to resolve.
+  final List<ConversationChannel> channels;
+
+  /// The search bar's text, which the controls edit and the header echoes.
+  final String query;
+
+  /// Runs a line the controls composed. Null when the session cannot search,
+  /// which is how the controls stay out of a panel that could not submit.
+  final ValueChanged<String>? onSubmitQuery;
 
   /// Opens the timeline at one hit.
   final void Function(String channelId, String messageId) onJump;
-  final ValueChanged<String> onSelectChannel;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +69,16 @@ class MessageSearchPanel extends StatelessWidget {
           children: [
             _header(context),
             Divider(height: 1, color: context.surfaces.border),
+            if (onSubmitQuery case final submit?) ...[
+              MessageSearchFilterControls(
+                query: query,
+                members: workspace.members,
+                channels: channels,
+                showChannelFilter: channels.length > 1,
+                onSubmit: submit,
+              ),
+              Divider(height: 1, color: context.surfaces.border),
+            ],
             if (controller.unresolved.isNotEmpty)
               _UnusableFilters(tokens: controller.unresolved),
             Expanded(child: _body(context)),

@@ -12,7 +12,9 @@ void main() {
   setUp(() async {
     heldRequests.clear();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    uri = Uri.parse('http://${server.address.host}:${server.port}/api/v10/ping');
+    uri = Uri.parse(
+      'http://${server.address.host}:${server.port}/api/v10/ping',
+    );
     // Accepting and never answering is the hang the transport has to survive.
     server.listen(heldRequests.add);
     addTearDown(server.close);
@@ -38,7 +40,10 @@ void main() {
 
   test('a response body that never finishes times the request out', () async {
     final instance = await transport();
-    final headersServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final headersServer = await HttpServer.bind(
+      InternetAddress.loopbackIPv4,
+      0,
+    );
     addTearDown(headersServer.close);
     // Headers arrive, the body never does.
     headersServer.listen((request) {
@@ -101,9 +106,7 @@ void main() {
 
     final response = await instance.send(
       method: 'GET',
-      uri: Uri.parse(
-        'http://${answering.address.host}:${answering.port}/ok',
-      ),
+      uri: Uri.parse('http://${answering.address.host}:${answering.port}/ok'),
       headers: const {},
     );
     expect(response.statusCode, 200);

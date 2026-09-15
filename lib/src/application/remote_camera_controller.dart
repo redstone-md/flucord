@@ -155,10 +155,12 @@ final class RemoteCameraController extends ChangeNotifier {
   /// is logged, and the camera keeps counting packets for the next attempt.
   void _setDecoding(String userId, _RemoteCamera camera, {required bool on}) {
     unawaited(
-      camera.pipeline.setDecoding(on).catchError(
-        (Object error) =>
-            AppLog.warning('camera', 'decoder failed for $userId: $error'),
-      ),
+      camera.pipeline
+          .setDecoding(on)
+          .catchError(
+            (Object error) =>
+                AppLog.warning('camera', 'decoder failed for $userId: $error'),
+          ),
     );
   }
 

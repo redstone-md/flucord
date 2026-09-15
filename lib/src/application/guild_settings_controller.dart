@@ -4,14 +4,17 @@ import '../domain/automod_rule.dart';
 import '../domain/automod_rule_editing.dart';
 import '../domain/chat_models.dart';
 import '../domain/guild_audit_log.dart';
+import '../domain/guild_expression_repository.dart';
 import '../domain/guild_management.dart';
 import '../domain/guild_management_repository.dart';
+import '../domain/soundboard.dart';
 import '../domain/workspace_permissions.dart';
-
 part 'guild_settings_controller_automod.dart';
 part 'guild_settings_controller_channels.dart';
 part 'guild_settings_controller_moderation.dart';
 part 'guild_settings_controller_roles.dart';
+part 'guild_settings_controller_webhooks.dart';
+part 'guild_settings_controller_expressions.dart';
 
 /// The pages of the server-settings window.
 enum GuildSettingsSection {
@@ -21,6 +24,8 @@ enum GuildSettingsSection {
   bans,
   automod,
   invites,
+  webhooks,
+  expressions,
   auditLog,
 }
 
@@ -41,9 +46,21 @@ final class GuildSettingsController extends ChangeNotifier {
     this._repository,
     this._capabilities, {
     required this.guildId,
+    this.expressions,
+    this.soundboard,
   });
 
   final GuildManagementRepository _repository;
+
+  /// The upload and delete plane for emoji, stickers and sounds, or null on
+  /// a transport that offers none. A null keeps the page out of the window
+  /// rather than showing controls that cannot save.
+  final GuildExpressionRepository? expressions;
+
+  /// The soundboard the expressions page lists the guild's sounds from.
+  /// Sharing the live store is what keeps a sound deleted here from staying
+  /// in the picker: both read the same service.
+  final SoundboardRepository? soundboard;
   final String guildId;
 
   GuildAdminCapabilities _capabilities;
@@ -58,6 +75,10 @@ final class GuildSettingsController extends ChangeNotifier {
   List<GuildBan> _bans = const [];
   List<AutoModRule> _automodRules = const [];
   List<GuildInvite> _invites = const [];
+  List<GuildWebhook> _webhooks = const [];
+  List<GuildEmoji> _emoji = const [];
+  List<GuildSticker> _stickers = const [];
+  List<SoundboardSound> _sounds = const [];
   List<AuditLogRecord> _auditRecords = const [];
   Map<String, String> _auditUserNames = const {};
   AuditLogQuery _auditQuery = const AuditLogQuery();
@@ -84,6 +105,10 @@ final class GuildSettingsController extends ChangeNotifier {
   List<GuildBan> get bans => List.unmodifiable(_bans);
   List<AutoModRule> get automodRules => List.unmodifiable(_automodRules);
   List<GuildInvite> get invites => List.unmodifiable(_invites);
+  List<GuildWebhook> get webhooks => List.unmodifiable(_webhooks);
+  List<GuildEmoji> get emoji => List.unmodifiable(_emoji);
+  List<GuildSticker> get stickers => List.unmodifiable(_stickers);
+  List<SoundboardSound> get sounds => List.unmodifiable(_sounds);
   List<AuditLogRecord> get auditRecords => List.unmodifiable(_auditRecords);
   Map<String, String> get auditUserNames => Map.unmodifiable(_auditUserNames);
   AuditLogQuery get auditQuery => _auditQuery;
@@ -116,6 +141,9 @@ final class GuildSettingsController extends ChangeNotifier {
     // the page on Manage Server rather than on the ban permission.
     GuildSettingsSection.automod => _capabilities.canManageGuild,
     GuildSettingsSection.invites => _capabilities.canManageGuild,
+    GuildSettingsSection.webhooks => _capabilities.canManageWebhooks,
+    GuildSettingsSection.expressions =>
+      _capabilities.canManageExpressions && expressions != null,
     GuildSettingsSection.auditLog => _capabilities.canViewAuditLog,
   };
 
@@ -168,6 +196,10 @@ final class GuildSettingsController extends ChangeNotifier {
         _automodRules = await _repository.loadAutoModRules(guildId);
       case GuildSettingsSection.invites:
         _invites = await _repository.loadGuildInvites(guildId);
+      case GuildSettingsSection.webhooks:
+        _webhooks = await _repository.loadWebhooks(guildId);
+      case GuildSettingsSection.expressions:
+        await _fetchExpressions();
       case GuildSettingsSection.auditLog:
         await _fetchAuditPage(_auditQuery, append: false);
     }

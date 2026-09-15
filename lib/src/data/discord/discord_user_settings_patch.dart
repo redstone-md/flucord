@@ -76,6 +76,12 @@ abstract final class DiscordUserSettingsPatch {
     if (patch.timestampHourCycle case final cycle?) {
       group.setVarint(AppearanceField.timestampHourCycle, cycle.wireValue);
     }
+    if (patch.density case final density?) {
+      group.setVarint(AppearanceField.uiDensity, density.wireValue);
+    }
+    if (patch.darkSidebar case final value?) {
+      group.setBool(AppearanceField.darkSidebar, value);
+    }
     return group;
   }
 
@@ -96,6 +102,15 @@ abstract final class DiscordUserSettingsPatch {
     if (patch.inlineEmbedMedia case final value?) {
       group.setBoolWrapper(TextAndImagesField.inlineEmbedMedia, value);
     }
+    if (patch.animateEmoji case final value?) {
+      group.setBoolWrapper(TextAndImagesField.animateEmoji, value);
+    }
+    if (patch.gifAutoPlay case final value?) {
+      group.setBoolWrapper(TextAndImagesField.gifAutoPlay, value);
+    }
+    if (patch.enableTextToSpeechCommand case final value?) {
+      group.setBoolWrapper(TextAndImagesField.enableTtsCommand, value);
+    }
     if (patch.spamFilter case final value?) {
       group.setVarint(TextAndImagesField.dmSpamFilterV2, value.wireValue);
     }
@@ -109,6 +124,9 @@ abstract final class DiscordUserSettingsPatch {
     final group = _group(root, PreloadedUserSettingsField.notifications);
     if (patch.quietMode case final value?) {
       group.setBoolWrapper(NotificationField.quietMode, value);
+    }
+    if (patch.showInAppNotifications case final value?) {
+      group.setBoolWrapper(NotificationField.showInAppNotifications, value);
     }
     if (patch.notifyFriendsOnGoLive case final value?) {
       group.setBoolWrapper(NotificationField.notifyFriendsOnGoLive, value);

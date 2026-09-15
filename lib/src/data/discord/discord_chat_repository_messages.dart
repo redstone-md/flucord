@@ -14,6 +14,7 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
     List<PendingAttachment> attachments = const [],
     String? replyToMessageId,
     bool suppressNotifications = false,
+    bool textToSpeech = false,
   }) async {
     final payload = await _api.createMessage(
       channelId: channelId,
@@ -23,6 +24,7 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
       nonce: _messageNonceFactory.next(),
       enforceNonce: true,
       suppressNotifications: suppressNotifications,
+      textToSpeech: textToSpeech,
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);

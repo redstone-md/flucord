@@ -194,6 +194,14 @@ final class DiscordDesktopGatewayClient
   @override
   String? get currentUserId => _protocol.currentUserId;
 
+  /// The hydration state as the opening dispatches currently describe it.
+  ///
+  /// `null` before the first READY. A READY that lands after the first one,
+  /// which is what a reconnect that could not resume produces, keeps this
+  /// current, and the in-place rehydration reads it from there.
+  DiscordDesktopWorkspaceSnapshot? get workspaceSnapshot =>
+      _bootstrap.snapshot();
+
   /// Opcode 18. `type` is `guild` or `call`, matching how the stream key is
   /// composed, and the region is a preference Discord may ignore.
   @override
@@ -252,7 +260,7 @@ final class DiscordDesktopGatewayClient
       AppLog.info(
         'discord.gateway',
         'Discord Gateway bootstrap frame: op=${payload['op']}, '
-        'event=${payload['t'] ?? '-'}',
+            'event=${payload['t'] ?? '-'}',
       );
     }
     for (final action in _protocol.accept(payload)) {
@@ -371,6 +379,21 @@ final class DiscordDesktopGatewayClient
     if (!_subscriptions.removeChannel(guildId, channelId)) return;
     _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
   }
+
+  /// Registers the base flags for a guild the session gained after READY.
+  ///
+  /// Discord pushes live events for a guild only once it is subscribed, and
+  /// the subscriptions map is a replace: without this, typing, thread and
+  /// member events for a joined server never arrive, because READY named the
+  /// guilds it listed and nothing else.
+  void subscribeGuildEvents(String guildId) {
+    if (!_subscriptions.setFlags(guildId)) return;
+    _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+  }
+
+  /// Forgets a guild the account left, so a reconnect does not resubscribe
+  /// to a server the account can no longer open.
+  void forgetGuild(String guildId) => _subscriptions.removeGuild(guildId);
 
   void _subscribeReadyGuilds(Map<String, Object?> ready) {
     final guilds = ready['guilds'];
