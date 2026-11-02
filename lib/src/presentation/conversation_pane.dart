@@ -9,6 +9,7 @@ import '../application/direct_call_controller.dart';
 import '../application/go_live_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
+import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
@@ -135,6 +136,11 @@ class ConversationPane extends StatefulWidget {
 
 class _ConversationPaneState extends State<ConversationPane> {
   ChatMessage? _replyTo;
+
+  /// Holds a send failure's note clear of the composer, even with four lines
+  /// of text in it. A note at the window's edge would cover the restored text
+  /// and the Send button the user needs to try again.
+  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
 
   static String _composerHintPrefix(ConversationChannel channel) {
     if (channel.isDirectMessage) return '@';
@@ -592,6 +598,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                   replyToMessageId,
                   suppressNotifications,
                 ) async {
+                  final messenger = ScaffoldMessenger.maybeOf(context);
                   final sent = await chat.sendMessage(
                     channelId: channel.id,
                     body: body,
@@ -599,9 +606,24 @@ class _ConversationPaneState extends State<ConversationPane> {
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!mounted || !sent) return false;
+                  if (!sent) {
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        margin: _aboveComposer,
+                        content: Text(
+                          'Your message to ${_composerHintPrefix(channel)}'
+                          '${channel.name} did not send. '
+                          '${sendFailureReason(chat.error)}',
+                        ),
+                      ),
+                    );
+                    return false;
+                  }
+                  if (!mounted) return true;
                   setState(() {
-                    _replyTo = null;
+                    // A reply picked while this send ran is not this send's.
+                    if (_replyTo?.id == replyToMessageId) _replyTo = null;
                     if (channel.rateLimitPerUser > 0) {
                       _lastSentAt = DateTime.now();
                     }

@@ -447,6 +447,8 @@ final class ChatController extends ChangeNotifier {
     String? replyToMessageId,
     bool suppressNotifications = false,
   }) async {
+    // A refusal below must not be read as the failure of some earlier action.
+    _error = null;
     final workspace = _workspace;
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;

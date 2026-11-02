@@ -384,13 +384,13 @@ class _MessageComposerState extends State<MessageComposer>
 
   Future<void> _send() async {
     if (!_canSend || widget.isSending || _runTypedCommand()) return;
-    final sent = await widget.onSend(
-      _controller.text,
-      _attachments.items,
-      widget.replyTo?.id,
-      _suppressNotifications,
-    );
-    if (!mounted || !sent) return;
+    final channelId = widget.channelId;
+    final text = _controller.text;
+    final attachments = _attachments.items;
+    final silent = _suppressNotifications;
+    final send = widget.onSend(text, attachments, widget.replyTo?.id, silent);
+    // The box empties on the press, not on the answer, so whatever is typed
+    // while the request runs belongs to the next message.
     _controller.clear();
     // Clearing from code does not reach the field's onChanged.
     widget.slashCommands?.close();
@@ -401,6 +401,33 @@ class _MessageComposerState extends State<MessageComposer>
       _suppressNotifications = false;
     });
     _focusNode.requestFocus();
+    final sent = await send;
+    if (sent || !mounted || widget.channelId != channelId) return;
+    _restoreFailedSend(text, attachments, silent);
+  }
+
+  /// Puts a failed send back without overwriting anything: text typed since
+  /// then is the user's newer work and stays, while the files can join it.
+  void _restoreFailedSend(
+    String text,
+    List<PendingAttachment> attachments,
+    bool silent,
+  ) {
+    final restoresText = !_hasContent;
+    if (restoresText) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    setState(() {
+      if (restoresText) {
+        _hasContent = text.trim().isNotEmpty;
+        _charactersUsed = text.characters.length;
+        _suppressNotifications = silent;
+      }
+      _attachments.merge(attachments);
+    });
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
