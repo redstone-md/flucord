@@ -13,10 +13,9 @@ extension ChatControllerForwards on ChatController {
     if (workspace == null ||
         repository == null ||
         !source.canForward ||
-        !workspace.messages.any(
-          (message) =>
-              message.id == source.id && message.channelId == source.channelId,
-        ) ||
+        !workspace
+            .messagesFor(source.channelId)
+            .any((message) => message.id == source.id) ||
         target == null ||
         !target.canAcceptMessageForward ||
         _isSending) {
