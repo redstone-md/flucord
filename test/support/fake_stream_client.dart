@@ -23,6 +23,9 @@ final class FakeStreamClient
   final List<int> groupEncryptions = [];
   final List<Uint8List> opus = [];
   int connects = 0;
+
+  /// How many times the sender was asked for a keyframe.
+  int keyframeAsks = 0;
   bool closed = false;
 
   /// A connection whose audio path refuses: what a fault on the worker
@@ -80,7 +83,7 @@ final class FakeStreamClient
   }
 
   @override
-  void sendPictureLoss({required int mediaSsrc}) {}
+  void sendPictureLoss({required int mediaSsrc}) => keyframeAsks++;
 
   @override
   Uint8List decryptVideoGroupFrame({

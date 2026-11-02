@@ -66,7 +66,11 @@ final class StreamRoomHarness {
     )..reconcileService();
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
-      decoderFactory: StreamRoomDecoder.new,
+      decoderFactory: () {
+        final decoder = StreamRoomDecoder();
+        viewerDecoders.add(decoder);
+        return decoder;
+      },
       onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
     );
     streamRtc = DiscordStreamRtcService(
@@ -102,7 +106,7 @@ final class StreamRoomHarness {
       goLive: goLive,
       streamViewer: viewer,
       selfVideo: camera,
-      focus: composition.roomFocus,
+      focus: focus,
     );
     composition.workspace
       ..reconcile(streamRoomWorkspace)
@@ -133,6 +137,16 @@ final class StreamRoomHarness {
 
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
+
+  /// Every decoder the viewer made, oldest first. One is made just to ask
+  /// whether the build can decode, and is never opened.
+  final List<StreamRoomDecoder> viewerDecoders = [];
+
+  /// The viewer's decoders that were opened, oldest first.
+  List<StreamRoomDecoder> get openedViewerDecoders => [
+    for (final decoder in viewerDecoders)
+      if (decoder.started > 0) decoder,
+  ];
   final StreamRoomMedia media = StreamRoomMedia();
 
   /// The voice connection's service. A test replaces it to play a new gateway
@@ -166,8 +180,10 @@ final class StreamRoomHarness {
   late final AppComposition composition;
   late final VoiceRoomCoordination coordination;
 
-  /// Whose tile is on the stage, as the pane reads it.
-  RoomFocus get focus => composition.roomFocus;
+  /// Whose tile is on the stage, as the pane reads it. Not the composition's:
+  /// that one follows the composition's own voice controller, which is never
+  /// in this room, and would clear the focus the first time it spoke.
+  final RoomFocus focus = RoomFocus();
 
   /// Walks into the room, which is where the grid and its stream controls
   /// live. Left to a test that wants the unjoined preview instead.
@@ -175,18 +191,30 @@ final class StreamRoomHarness {
       ? voice.connectToCall(channelId: channel.id)
       : voice.connect(guildId: channel.spaceId, channelId: channel.id);
 
-  Widget pane() => MaterialApp(
+  /// What Discord sends in answer to an ask: the stream, and where to dial it.
+  void answerWatch(GoLiveStreamKey key) => repository
+    ..dispatch('STREAM_CREATE', {'stream_key': key.value})
+    ..dispatch('STREAM_SERVER_UPDATE', {
+      'stream_key': key.value,
+      'endpoint': 'stream.discord.gg',
+      'token': 'stream-token',
+    });
+
+  /// The pane the app builds, on [showing] when the person has moved away from
+  /// the room's own channel.
+  Widget pane({ConversationChannel? showing}) => MaterialApp(
     theme: FlucordTheme.dark,
     home: Scaffold(
       body: paneHarness(
         composition,
         streamRoomWorkspace,
-        channel: channel,
+        channel: showing ?? channel,
         voice: voice,
         directCall: calls,
         goLive: goLive,
         streamViewer: viewer,
         camera: camera,
+        focus: focus,
       ),
     ),
   );
@@ -200,6 +228,7 @@ final class StreamRoomHarness {
     calls.dispose();
     voice.dispose();
     router.dispose();
+    focus.dispose();
     unawaited(streamRtc.close().then((_) => repository.close()));
     unawaited(receivedAudio.close());
   }
@@ -227,6 +256,28 @@ Future<StreamRoomHarness> pumpStreamRoom(
   await tester.pumpAndSettle();
   return harness;
 }
+
+/// Lets the news reach the room, then draws what the room became.
+///
+/// Closing a connection cancels subscriptions, which is real async work that a
+/// fake-async test body cannot wait out, so the wait in the middle is a real
+/// one.
+Future<void> settleStreamRoom(WidgetTester tester) async {
+  await tester.pump();
+  await tester.runAsync(pumpEventQueue);
+  await tester.pump();
+}
+
+/// The session a stream connection reports once it is ready.
+const streamRoomTransport = VoiceTransportSession(
+  guildId: 'guild-1',
+  ssrc: 4242,
+  address: '127.0.0.1',
+  port: 50000,
+  mode: 'aead_aes256_gcm_rtpsize',
+  secretKey: <int>[],
+  daveProtocolVersion: 0,
+);
 
 /// Somebody in the room, and whether they are sending a stream.
 final class StreamRoomSeat {
@@ -691,6 +742,11 @@ final class StreamRoomDecoder implements VideoDecoderService {
   final StreamController<DecodedVideoFrame> _frames =
       StreamController.broadcast();
   int started = 0;
+  int stopped = 0;
+
+  /// The timestamp of each picture handed to this decoder, in the order it
+  /// was handed over.
+  final List<Duration?> submitted = [];
 
   @override
   bool get isSupported => true;
@@ -708,8 +764,9 @@ final class StreamRoomDecoder implements VideoDecoderService {
   }
 
   @override
-  Future<void> submit(List<int> accessUnit, {Duration? timestamp}) async {}
+  Future<void> submit(List<int> accessUnit, {Duration? timestamp}) async =>
+      submitted.add(timestamp);
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stopped++;
 }
