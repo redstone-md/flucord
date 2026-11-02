@@ -22,9 +22,8 @@ final class GuildEmoji {
 }
 
 extension GuildEmojiWorkspace on ChatWorkspace {
-  List<GuildEmoji> emojisFor(String spaceId) => emojis
-      .where((emoji) => emoji.spaceId == spaceId && emoji.available)
-      .toList(growable: false);
+  List<GuildEmoji> emojisFor(String spaceId) =>
+      ChatWorkspace._group(_emojisBySpaceId, spaceId);
 
   ChatWorkspace replaceGuildEmojis(
     String spaceId,
