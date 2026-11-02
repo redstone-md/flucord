@@ -1,18 +1,13 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
-import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
-import 'package:flucord/src/data/discord/discord_etf_codec.dart';
-import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'support/fake_discord_wire.dart';
 
 const _currentUserId = '333333333333333333';
 const _guildId = '111111111111111111';
@@ -29,13 +24,13 @@ const _heldMessage = '999999999999999999';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  int identifies(_MemoryDesktopWebSocket socket) =>
-      socket.terms.where((frame) => frame['op'] == 2).length;
+  int identifies(MemoryDesktopWebSocket socket) =>
+      socket.frames.where((frame) => frame['op'] == 2).length;
 
   Future<
     (
       DiscordDesktopChatRepository,
-      _MemoryDesktopWebSocket,
+      MemoryDesktopWebSocket,
       List<ChatRepositoryEvent>,
     )
   >
@@ -44,18 +39,18 @@ void main() {
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final socket = _MemoryDesktopWebSocket();
+    final connector = MemoryDesktopWebSocketConnector();
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
       profile: _uncompressed,
-      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      socketConnector: connector,
     );
     final repository = DiscordDesktopChatRepository(
       DiscordDesktopApiClient(
         authorization: 'account-session',
         headers: const {},
-        transport: _FakeTransport(),
+        transport: _transport(),
       ),
       gateway,
       cache,
@@ -63,28 +58,29 @@ void main() {
     final events = <ChatRepositoryEvent>[];
     addTearDown(repository.close);
     final loading = repository.loadWorkspace();
-    await _waitFor(() => socket.isOpen);
-    socket.receiveTerm(const {
+    await _waitFor(() => connector.sockets.isNotEmpty);
+    final socket = connector.sockets.single;
+    socket.receive(const {
       'op': 10,
       'd': {'heartbeat_interval': 60000},
     });
     await _waitFor(() => identifies(socket) == 1);
-    socket.receiveTerm(_firstReady);
+    socket.receive(_firstReady);
     await loading;
     events.clear();
     repository.events.listen(events.add);
     return (repository, socket, events);
   }
 
-  Future<void> reconnect(_MemoryDesktopWebSocket socket) async {
+  Future<void> reconnect(MemoryDesktopWebSocket socket) async {
     // An invalid session is the reconnect that cannot resume: the client
     // identifies again, and Discord answers with a fresh READY.
-    socket.receiveTerm(const {'op': 9, 'd': false});
+    socket.receive(const {'op': 9, 'd': false});
     await _waitFor(() => identifies(socket) == 2);
   }
 
-  Map<String, Object?> identifyClientState(_MemoryDesktopWebSocket socket) {
-    final identify = socket.terms.lastWhere((frame) => frame['op'] == 2);
+  Map<String, Object?> identifyClientState(MemoryDesktopWebSocket socket) {
+    final identify = socket.frames.lastWhere((frame) => frame['op'] == 2);
     return (identify['d']! as Map)['client_state']! as Map<String, Object?>;
   }
 
@@ -110,7 +106,7 @@ void main() {
     final (repository, socket, events) = await connect();
 
     await reconnect(socket);
-    socket.receiveTerm(_secondReady);
+    socket.receive(_secondReady);
     await _waitFor(
       () =>
           events.whereType<ChannelUpsertedEvent>().length == 2 &&
@@ -156,7 +152,7 @@ void main() {
     expect(held, 1);
 
     await reconnect(socket);
-    socket.receiveTerm(_secondReady);
+    socket.receive(_secondReady);
     await _waitFor(() => events.whereType<ChannelUpsertedEvent>().isNotEmpty);
     await _drain();
 
@@ -168,33 +164,32 @@ void main() {
   });
 }
 
-Map<String, Object?> _channel(String id, String name, String lastMessageId) => {
-  'id': id,
-  'type': 0,
-  'name': name,
-  'last_message_id': lastMessageId,
-  'permission_overwrites': <Object?>[],
-};
-
-Map<String, Object?> _guild(String id, String name, List<Object?> channels) => {
-  'id': id,
-  'name': name,
-  'roles': [
-    {'id': id, 'name': '@everyone', 'permissions': '1024'},
-  ],
-  'channels': channels,
-};
-
 final Map<String, Object?> _firstReady = _readyDispatch(
   1,
   _readyPayload(
     guilds: [
-      _guild(_guildId, 'Kept', [
-        _channel(_keptChannelId, 'general', _ackedMessage),
-      ]),
-      _guild(_goneGuildId, 'Gone', [
-        _channel(_deletedChannelId, 'doomed', _ackedMessage),
-      ]),
+      rawGuild(
+        id: _guildId,
+        name: 'Kept',
+        channels: [
+          rawChannel(
+            id: _keptChannelId,
+            name: 'general',
+            lastMessageId: _ackedMessage,
+          ),
+        ],
+      ),
+      rawGuild(
+        id: _goneGuildId,
+        name: 'Gone',
+        channels: [
+          rawChannel(
+            id: _deletedChannelId,
+            name: 'doomed',
+            lastMessageId: _ackedMessage,
+          ),
+        ],
+      ),
     ],
   ),
 );
@@ -204,10 +199,22 @@ final Map<String, Object?> _secondReady = _readyDispatch(
   _readyPayload(
     readStateVersion: 22,
     guilds: [
-      _guild(_guildId, 'Kept', [
-        _channel(_keptChannelId, 'renamed', _newestMessage),
-        _channel(_newChannelId, 'fresh', _ackedMessage),
-      ]),
+      rawGuild(
+        id: _guildId,
+        name: 'Kept',
+        channels: [
+          rawChannel(
+            id: _keptChannelId,
+            name: 'renamed',
+            lastMessageId: _newestMessage,
+          ),
+          rawChannel(
+            id: _newChannelId,
+            name: 'fresh',
+            lastMessageId: _ackedMessage,
+          ),
+        ],
+      ),
     ],
   ),
 );
@@ -276,86 +283,20 @@ Future<void> _waitFor(bool Function() condition) async {
 
 Future<void> _drain() => Future<void>.delayed(const Duration(milliseconds: 30));
 
-final class _FakeTransport implements DiscordHttpTransport {
-  @override
-  Future<DiscordHttpResponse> send({
-    required String method,
-    required Uri uri,
-    required Map<String, String> headers,
-    List<int>? body,
-  }) async {
-    if (uri.path == '/api/v9/gateway') {
-      return _json({'url': 'wss://gateway.discord.gg'});
-    }
-    if (uri.path == '/api/v9/channels/$_keptChannelId/messages') {
-      return _json([
-        {
-          'id': _heldMessage,
-          'channel_id': _keptChannelId,
-          'author': {
-            'id': _recipientId,
-            'username': 'jack',
-            'global_name': 'Jack',
-          },
-          'content': 'hello',
-          'timestamp': '2026-07-25T10:00:00+00:00',
-        },
-      ]);
-    }
-    throw StateError('Unexpected REST call: ${uri.path}');
-  }
-
-  static DiscordHttpResponse _json(Object payload) => DiscordHttpResponse(
-    statusCode: 200,
-    headers: const {},
-    body: jsonEncode(payload),
-  );
-
-  @override
-  void close() {}
-}
-
-final class _MemoryDesktopWebSocketConnector
-    implements DiscordDesktopWebSocketConnector {
-  _MemoryDesktopWebSocketConnector(this.socket);
-
-  final DiscordDesktopWebSocket socket;
-
-  @override
-  Future<DiscordDesktopWebSocket> connect(Uri uri) async => socket;
-}
-
-final class _MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
-  final StreamController<Object?> _messages = StreamController();
-  final List<Object> sent = [];
-  bool _open = true;
-
-  List<Map<String, Object?>> get terms => sent
-      .whereType<Uint8List>()
-      .map((bytes) => DiscordEtfCodec.decode(bytes)! as Map<String, Object?>)
-      .toList(growable: false);
-
-  @override
-  int? get closeCode => null;
-
-  @override
-  bool get isOpen => _open;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void receiveTerm(Map<String, Object?> payload) =>
-      _messages.add(DiscordEtfCodec.encode(payload));
-
-  @override
-  void send(String data) => sent.add(data);
-
-  @override
-  void sendBinary(List<int> data) => sent.add(Uint8List.fromList(data));
-
-  @override
-  Future<void> close() async {
-    _open = false;
-    if (!_messages.isClosed) await _messages.close();
-  }
-}
+/// A REST call this file did not plan for fails the test.
+FakeDiscordTransport _transport() =>
+    FakeDiscordTransport(
+      fallback: (request) =>
+          throw StateError('Unexpected REST call: ${request.uri.path}'),
+    )..on(
+      'GET',
+      '/api/v9/channels/$_keptChannelId/messages',
+      (_) => jsonResponse([
+        rawMessage(
+          id: _heldMessage,
+          channelId: _keptChannelId,
+          authorId: _recipientId,
+          content: 'hello',
+        ),
+      ]),
+    );
