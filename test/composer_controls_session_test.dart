@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/domain/discord_permissions.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';
@@ -157,4 +158,51 @@ void main() {
     expect(sent.json, containsPair('flags', 4096));
     expect(find.byKey(const ValueKey('composer-silent-notice')), findsNothing);
   });
+
+  testSession(
+    'a channel that denies ATTACH_FILES shows no attach button',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(find.byTooltip('Add attachment'), findsNothing);
+      expect(find.byIcon(Icons.add_circle_outline), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('composer-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('add-attachment')), findsNothing);
+      expect(find.byKey(const ValueKey('create-poll')), findsOneWidget);
+    },
+    ready: SessionHarness.defaultReady()
+      // Without the account's member record the client cannot judge permissions
+      // and allows everything, so this READY has to carry one.
+      ..['users'] = [
+        {'id': SessionHarness.currentUserId, 'username': 'me'},
+      ]
+      ..['private_channels'] = <Object?>[]
+      ..['merged_members'] = [
+        [
+          {'user_id': SessionHarness.currentUserId, 'roles': <String>[]},
+        ],
+      ]
+      ..['guilds'] = [
+        rawGuild(
+          id: SessionHarness.guildId,
+          name: 'The Forge',
+          channels: [
+            {
+              ...rawChannel(id: SessionHarness.channelId, name: 'general'),
+              'permission_overwrites': [
+                {
+                  'id': SessionHarness.guildId,
+                  'type': 0,
+                  'allow': '0',
+                  'deny': '${DiscordPermissions.attachFiles}',
+                },
+              ],
+            },
+          ],
+          everyonePermissions:
+              '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.attachFiles}',
+        ),
+      ],
+  );
 }
