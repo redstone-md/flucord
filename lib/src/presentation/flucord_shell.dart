@@ -436,7 +436,12 @@ class FlucordShell extends StatelessWidget {
                                   seats,
                                   channelId,
                                   workspaceController.collapsedCategoryIds,
-                                  chatController.readState,
+                                  // Not the whole snapshot: each ack makes a new
+                                  // one, and the sidebar reads only these.
+                                  chatController.readState.settings,
+                                  chatController
+                                      .readState
+                                      .accountNotificationFlags,
                                   connectionController.mode,
                                   chatController.connectionStatus,
                                   canOpenSettings,

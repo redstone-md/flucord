@@ -98,8 +98,8 @@ class MessageList extends StatefulWidget {
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
 
-  /// An edit field closed, saved or not, so the keyboard can go back to where
-  /// the next message is written.
+  /// An edit field closed, saved or not, and it was not opened from its row, so
+  /// the keyboard can go back to where the next message is written.
   final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
@@ -336,7 +336,6 @@ class MessageListState extends State<MessageList>
     if (_editingMessageId == messageId) {
       setState(() => _editingMessageId = null);
     }
-    widget.onEditClosed?.call();
   }
 
   /// Opens the account's newest message that can be edited, and answers whether
@@ -668,6 +667,7 @@ class MessageListState extends State<MessageList>
                 isEditing: message.id == _editingMessageId,
                 onEditingChanged: (editing) =>
                     _setEditing(message.id, editing: editing),
+                onEditClosed: widget.onEditClosed,
                 onDelete: widget.onDelete,
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
