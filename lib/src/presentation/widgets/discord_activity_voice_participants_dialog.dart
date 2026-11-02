@@ -107,7 +107,7 @@ class _Header extends StatelessWidget {
         Icon(
           Icons.headset_mic_outlined,
           size: 20,
-          color: connected ? FlucordColors.success : context.surfaces.muted,
+          color: connected ? context.surfaces.success : context.surfaces.muted,
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -173,7 +173,7 @@ class _ParticipantRow extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: speaking ? FlucordColors.success : Colors.transparent,
+                color: speaking ? context.surfaces.success : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -201,7 +201,7 @@ class _ParticipantRow extends StatelessWidget {
                   _connectionLabel,
                   style: TextStyle(
                     color: speaking
-                        ? FlucordColors.success
+                        ? context.surfaces.success
                         : context.surfaces.muted,
                     fontSize: 11,
                   ),
@@ -221,11 +221,7 @@ class _ParticipantRow extends StatelessWidget {
             ),
           ),
           if (speaking)
-            const Icon(
-              Icons.graphic_eq,
-              color: FlucordColors.success,
-              size: 20,
-            ),
+            Icon(Icons.graphic_eq, color: context.surfaces.success, size: 20),
           if (!currentUser) ...[
             const SizedBox(width: 4),
             if (pending)
