@@ -15,10 +15,10 @@ import 'voice_overlay_controller.dart';
 /// Remote cameras are read only while a connection is actually up, the
 /// in-game overlay is redrawn on every roster change and whenever streamer
 /// mode moves it, streamer mode's automatic switch follows this client's own
-/// stream, watched streams end with the room, the camera goes off with it,
-/// and the stage's focus follows its participant out of it. These rules used
-/// to sit in the app widget, where no test could reach them without pumping
-/// the whole client.
+/// stream, watched streams and this client's own stream end with the room, the
+/// camera goes off with it, and the stage's focus follows its participant out
+/// of it. These rules used to sit in the app widget, where no test could reach
+/// them without pumping the whole client.
 final class VoiceRoomCoordination {
   VoiceRoomCoordination({
     required VoiceController voice,
@@ -39,6 +39,7 @@ final class VoiceRoomCoordination {
        _focus = focus {
     _voice.addListener(_syncRemoteCameras);
     _voice.addListener(_endWatchesWithRoom);
+    _voice.addListener(_endShareWithRoom);
     _voice.addListener(_endCameraWithRoom);
     _voice.addListener(_keepFocusInRoom);
     _voice.addListener(_refreshOverlay);
@@ -60,6 +61,7 @@ final class VoiceRoomCoordination {
   void dispose() {
     _voice.removeListener(_syncRemoteCameras);
     _voice.removeListener(_endWatchesWithRoom);
+    _voice.removeListener(_endShareWithRoom);
     _voice.removeListener(_endCameraWithRoom);
     _voice.removeListener(_keepFocusInRoom);
     _voice.removeListener(_refreshOverlay);
@@ -90,6 +92,28 @@ final class VoiceRoomCoordination {
     if (_roomIsUp) return;
     unawaited(_streamViewer.stop());
   }
+
+  /// The stream ends with the room, and the capture behind it is released.
+  /// The only control that stops a stream is drawn in its room, so a stream
+  /// that outlived the room would keep the screen captured with nothing on
+  /// screen to end it.
+  ///
+  /// A reconnect is not the room ending: the status stays up through it.
+  void _endShareWithRoom() {
+    if (!_goLive.isSharing) return;
+    if (_roomIsUp && _shareIsInThisSession) return;
+    unawaited(_goLive.stop());
+  }
+
+  /// Whether the running stream was sent into the voice session this client
+  /// holds now. Moving to another guild or call changes the session without
+  /// the status ever saying the room went down. A stream still being created
+  /// has no key yet, so there is nothing to compare.
+  bool get _shareIsInThisSession => switch (_goLive.streamKey) {
+    null => true,
+    final key when key.isCall => key.channelId == _voice.connectedChannelId,
+    final key => key.guildId == _voice.connectedGuildId,
+  };
 
   /// The camera goes off with the room, without announcing it: the voice
   /// state that said the camera was on dies with the socket, and the socket
