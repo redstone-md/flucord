@@ -134,7 +134,11 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
+  final _typingSignal = _TypingSignal();
   final _archivedThreadState = _ArchivedThreadState();
+
+  /// Per space, the authors a member request has already asked about.
+  final Map<String, Set<String>> _askedAuthors = {};
   String? _activeChannelId;
   String? _guildAccessError;
   bool _isApplicationActive = true;
@@ -198,6 +202,29 @@ final class ChatController extends ChangeNotifier {
     memberListRepository?.searchGuildMembers(
       guildId: spaceId,
       query: query.trim(),
+    );
+  }
+
+  /// Asks about the authors of a history page whose roles in the guild are not
+  /// known yet. A page names none, and a name's colour comes from them. Each
+  /// author is asked about once per session, so moving between channels sends
+  /// nothing new.
+  void _askAboutAuthors(ChannelHistory history) {
+    final workspace = _workspace;
+    final channel = workspace?.channelOrNull(history.channelId);
+    if (workspace == null || channel == null || channel.isDirectMessage) return;
+    final spaceId = channel.spaceId;
+    final asked = _askedAuthors.putIfAbsent(spaceId, () => {});
+    final unknown = [
+      for (final author in history.members)
+        if (workspace.memberOrNull(author.id)?.membershipIn(spaceId) == null &&
+            asked.add(author.id))
+          author.id,
+    ];
+    if (unknown.isEmpty) return;
+    memberListRepository?.requestGuildMembers(
+      guildId: spaceId,
+      userIds: unknown,
     );
   }
 
@@ -304,6 +331,7 @@ final class ChatController extends ChangeNotifier {
     // late, still writes to the store of the account it belongs to.
     _drafts = MemoryComposerDraftStore();
     _archivedThreadState.clear();
+    _askedAuthors.clear();
     _clearTyping();
     _unreadOpenings.clear();
     _activeChannelId = null;
@@ -530,6 +558,7 @@ final class ChatController extends ChangeNotifier {
         page.history,
         replaceChannel: false,
       );
+      _askAboutAuthors(page.history);
       _setHistoryExhausted(
         channelId,
         !page.hasMore || page.history.messages.isEmpty,
@@ -547,9 +576,10 @@ final class ChatController extends ChangeNotifier {
   ///
   /// The channel counts as loaded from here: it has messages to read, so the
   /// loading view would only hide them. The one exception is below.
-  void _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
+  /// Answers whether the channel took the restored page.
+  bool _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
     final channelId = event.history.channelId;
-    if (_workspace == null || _loadedChannels.contains(channelId)) return;
+    if (_workspace == null || _loadedChannels.contains(channelId)) return false;
     _workspace = _workspace?.mergeInitialHistory(event.history);
     _loadedChannels.add(channelId);
     _restoredChannels.add(channelId);
@@ -559,6 +589,7 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.remove(channelId);
     }
     _setHistoryExhausted(channelId, !event.hasMore);
+    return true;
   }
 
   /// Answers a stretch with no live events.
@@ -871,6 +902,7 @@ final class ChatController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _clearTyping();
+    _typingSignal.dispose();
     unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
     unawaited(_conversationSummarySubscription?.cancel());

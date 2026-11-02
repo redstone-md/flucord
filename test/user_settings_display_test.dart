@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
@@ -136,10 +137,7 @@ void main() {
     );
     await _pumpMessage(tester, controller: controller, message: _gifMessage);
 
-    final image = tester.widget<Image>(
-      find.byKey(const ValueKey('embed-image')),
-    );
-    expect((image.image as NetworkImage).url, endsWith('format=png'));
+    expect(_embedImageAddress(tester).queryParameters['format'], 'png');
     expect(tester.takeException(), isNull);
   });
 
@@ -151,12 +149,19 @@ void main() {
     );
     await _pumpMessage(tester, controller: controller, message: _gifMessage);
 
-    final image = tester.widget<Image>(
-      find.byKey(const ValueKey('embed-image')),
+    expect(
+      _embedImageAddress(tester).queryParameters,
+      isNot(contains('format')),
     );
-    expect((image.image as NetworkImage).url, isNot(contains('format=png')));
     expect(tester.takeException(), isNull);
   });
+}
+
+/// The address the embed's picture is fetched from.
+Uri _embedImageAddress(WidgetTester tester) {
+  final image = tester.widget<Image>(find.byKey(const ValueKey('embed-image')));
+  final resized = image.image as ResizeImage;
+  return Uri.parse((resized.imageProvider as CachedNetworkImageProvider).url);
 }
 
 Future<UserSettingsController> _controller(UserSettings settings) async {

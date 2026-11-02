@@ -90,6 +90,7 @@ class ConversationPane extends StatefulWidget {
     required this.onSelectChannel,
     this.onSubmitQuery,
     required this.onOpenInbox,
+    this.onOpenMemberProfile,
     super.key,
   });
 
@@ -130,6 +131,9 @@ class ConversationPane extends StatefulWidget {
   /// Opens the inbox, which belongs to the whole workspace rather than the
   /// open channel.
   final VoidCallback onOpenInbox;
+
+  /// Opens the profile of a message's author, by user id.
+  final ValueChanged<String>? onOpenMemberProfile;
 
   @override
   State<ConversationPane> createState() => _ConversationPaneState();
@@ -552,7 +556,11 @@ class _ConversationPaneState extends State<ConversationPane> {
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
-          TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ListenableBuilder(
+            listenable: chat.activeChannelTyping,
+            builder: (_, _) =>
+                TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
         else if (showsMessages && !widget.capabilities.sendMessages)
@@ -827,6 +835,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.loadReactionUsers,
       onAddReaction: chat.addReaction,
+      onMarkUnread: chat.readStateRepository == null
+          ? null
+          : chat.markChannelUnreadFrom,
       onCreateThread: (message, name, duration) async {
         final thread = await chat.createThreadFromMessage(
           message,
@@ -853,6 +864,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       olderLoadError: chat.olderMessagesError(channel.id),
       onLoadOlder: () => unawaited(chat.loadOlderMessages(channel.id)),
       onSelectChannel: widget.onSelectChannel,
+      onOpenMemberProfile: widget.onOpenMemberProfile,
     );
   }
 

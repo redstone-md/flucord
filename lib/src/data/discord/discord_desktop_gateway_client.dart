@@ -423,6 +423,15 @@ final class DiscordDesktopGatewayClient
     );
   }
 
+  /// Opcode 8 by id: asks the guild for exactly these members.
+  void requestGuildMembersByIds({
+    required String guildId,
+    required List<String> userIds,
+  }) {
+    if (guildId.isEmpty || userIds.isEmpty) return;
+    _send(_protocol.requestGuildMembersByIds(guildId, userIds));
+  }
+
   /// Subscribes a channel's member-list row ranges.
   ///
   /// Discord answers with `GUILD_MEMBER_LIST_UPDATE` for the channel's
