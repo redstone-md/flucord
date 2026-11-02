@@ -12,7 +12,16 @@ on:
       - "**.md"
       - "docs/**"
       - ".github/release.yml"
+  # Declared here too: without it the input is empty on a manual run, the
+  # build job's `inputs.build != false` reads empty as false, and the build
+  # the job's comment promises is skipped.
   workflow_dispatch:
+    inputs:
+      build:
+        description: Whether to build Windows too.
+        type: boolean
+        required: false
+        default: true
   # The release calls this for its checks, so a tag is tested by exactly the
   # workflow main is.
   workflow_call:
