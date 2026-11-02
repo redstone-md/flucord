@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -358,7 +359,9 @@ enum SessionLaunch {
 /// before the first request; after that, use `session.transport.on`. Pass a
 /// [voiceMessageRecorder] for the composer's voice message button, which only
 /// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
-/// memory, which a test of a relaunch or of the cache file needs.
+/// memory, which a test of a relaunch or of the cache file needs. Pass a
+/// [platform] when a test depends on platform gestures, such as the right button
+/// on selectable text. Without one, Flutter tests run as Android.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -368,8 +371,10 @@ void testSession(
   SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
+  TargetPlatform? platform,
 }) {
   testWidgets(description, (tester) async {
+    debugDefaultTargetPlatformOverride = platform;
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final transport = FakeDiscordTransport(fallback: _emptyHistoryOrNotFound);
@@ -390,6 +395,7 @@ void testSession(
       await body(tester, session);
     } finally {
       await session._end();
+      debugDefaultTargetPlatformOverride = null;
     }
   });
 }
