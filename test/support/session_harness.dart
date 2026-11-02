@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -295,8 +296,65 @@ final class SessionHarness {
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
 
+  /// Whether the message with this [id] has reached the disk, as read by a
+  /// connection of its own. This is what a launch after a crash would find. The
+  /// test must use `onDisk`.
+  Future<bool> messageOnDisk(String id) async {
+    final found = await _tester.runAsync(() async {
+      final reader = await databaseFactoryFfiNoIsolate.openDatabase(
+        _factory.diskPath!,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      try {
+        return await reader.query(
+          'messages',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      } finally {
+        await reader.close();
+      }
+    });
+    return found!.isNotEmpty;
+  }
+
   /// How many commits the cache has made in this session.
   int get cacheCommits => _factory.databases.commits;
+
+  /// What the session's open database answers to `PRAGMA name`.
+  Future<Object?> cachePragma(String name) async {
+    final rows = await _tester.runAsync(
+      () => _factory.databases.opened!.rawQuery('PRAGMA $name'),
+    );
+    return rows!.single.values.single;
+  }
+
+  /// The system asks the app to exit, as it does when its window closes. This
+  /// lets the real event loop run while the fake clock stands still, so no timer
+  /// of the app can have done any work by the time it returns. Call [settle] to
+  /// let the app finish, then read [exitAnswer].
+  Future<void> systemAsksToExit() async {
+    // Not awaited: the answer needs time on the fake clock.
+    unawaited(
+      _tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        SystemChannels.platform.codec.encodeMethodCall(
+          const MethodCall('System.requestAppExit'),
+        ),
+        (reply) => exitAnswer = reply == null
+            ? null
+            : SystemChannels.platform.codec.decodeEnvelope(reply),
+      ),
+    );
+    for (var round = 0; round < 12; round++) {
+      await _tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await _tester.pump();
+    }
+  }
+
+  /// What the app answered to [systemAsksToExit], once it has.
+  Object? exitAnswer;
 
   /// The message with this [id] in the running session's cache, which is what
   /// the next launch reads. A cache read needs the real event loop.

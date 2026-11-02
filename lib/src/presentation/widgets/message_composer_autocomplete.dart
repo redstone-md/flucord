@@ -5,8 +5,21 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       OverlayPortalController();
   final LayerLink _autocompleteLayerLink = LayerLink();
   List<ComposerAutocompleteSuggestion> _autocompleteSuggestions = const [];
-  ComposerAutocompleteQuery? _autocompleteQuery;
   int _autocompleteSelection = 0;
+
+  /// The query being typed, also while nothing loaded matches it. Null once
+  /// the user closed the list, so nothing opens it again until they type.
+  ComposerAutocompleteQuery? _autocompleteQuery;
+
+  /// The catalog queries read. It moves only to a catalog with different data,
+  /// so the suggestions it built survive a rebuild of the pane.
+  late ComposerAutocompleteCatalog _autocompleteCatalog =
+      widget.autocompleteCatalog;
+
+  /// The last text asked about in this channel. Updates that arrive while the
+  /// query stays the same must not ask again: each one is a gateway frame, and
+  /// the gateway limits them.
+  String? _requestedMemberQuery;
 
   TextEditingController get _autocompleteTextController;
   FocusNode get _autocompleteFocusNode;
@@ -26,6 +39,30 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
 
   void _handleAutocompleteFocus() {
     if (!_autocompleteFocusNode.hasFocus) _dismissComposerAutocomplete();
+  }
+
+  /// Takes the catalog of a rebuilt pane. A closed list stays closed, and the
+  /// new catalog builds nothing until a query needs it.
+  void _updateAutocompleteCatalog({required bool channelChanged}) {
+    if (channelChanged) _requestedMemberQuery = null;
+    if (_autocompleteCatalog == widget.autocompleteCatalog) return;
+    _autocompleteCatalog = widget.autocompleteCatalog;
+    if (channelChanged || _autocompleteQuery == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshComposerAutocomplete();
+    });
+  }
+
+  /// A large guild sends only a fraction of its members at login, so the names
+  /// already loaded are not the names that can be mentioned. The answer arrives
+  /// as ordinary member updates, which is what refreshes the list.
+  void _requestMembersFor(ComposerAutocompleteQuery query) {
+    if (query.trigger != ComposerAutocompleteTrigger.mention ||
+        query.text == _requestedMemberQuery) {
+      return;
+    }
+    _requestedMemberQuery = query.text;
+    widget.onSearchMembers?.call(query.text);
   }
 
   void _refreshComposerAutocomplete() {
@@ -48,9 +85,11 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _dismissComposerAutocomplete();
       return;
     }
-    final suggestions = widget.autocompleteCatalog.suggestionsFor(query);
+    _requestMembersFor(query);
+    final suggestions = _autocompleteCatalog.suggestionsFor(query);
     if (suggestions.isEmpty) {
       _dismissComposerAutocomplete();
+      _autocompleteQuery = query;
       return;
     }
     final selectedId = _autocompleteSuggestions.isEmpty
@@ -68,13 +107,6 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _autocompleteSuggestions = suggestions;
       _autocompleteSelection = retainedIndex < 0 ? 0 : retainedIndex;
     });
-    // A large guild sends only a fraction of its members at login, so the
-    // names already loaded are not the names that can be mentioned. Asking
-    // costs one gateway frame and the answer arrives as ordinary member
-    // updates, which is what refreshes this list.
-    if (query.trigger == ComposerAutocompleteTrigger.mention) {
-      widget.onSearchMembers?.call(query.text);
-    }
     if (!_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.show();
     }

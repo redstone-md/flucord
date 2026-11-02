@@ -1,5 +1,12 @@
 import 'chat_models.dart';
 
+/// What the app keeps of an account between launches.
+///
+/// [writeMessage], [updateMessage], [writeMember], [writeSpace], [writeChannel],
+/// [writeChannelActivity] and [deleteMessage] only queue their work and finish
+/// at once, so nobody waits for the disk on them. The queue applies in order,
+/// and flushes within a moment, on [flush] and on [close]. Every read finds the
+/// writes asked for before it.
 abstract interface class ChatCache {
   Future<ChatWorkspace?> readWorkspace();
 
@@ -36,6 +43,17 @@ abstract interface class ChatCache {
   });
 
   Future<void> writeMessage(ChatMessage message, {Member? member});
+
+  /// Changes a held message in place, after the writes asked for before this.
+  ///
+  /// Nothing is written when the message is not held: not the message, and not
+  /// [member]. Use this for a change to part of a message. It needs no read
+  /// first, so it cannot wait for the disk.
+  Future<void> updateMessage(
+    String messageId,
+    ChatMessage Function(ChatMessage held) change, {
+    Member? member,
+  });
 
   Future<void> writeMember(Member member);
   Future<void> writeSpace(CommunitySpace space);
@@ -87,6 +105,9 @@ abstract interface class ChatCache {
   /// Removes everything held, for good, so that nothing of the account can be
   /// read back from the disk. Sign-out and a change of account call this.
   Future<void> clear();
+
+  /// Finishes when every write asked for so far is on disk.
+  Future<void> flush();
 
   Future<void> close();
 }
