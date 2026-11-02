@@ -94,6 +94,7 @@ void main() {
 
       expect(harness.audio.playing, isEmpty);
       expect(harness.voice.isDeafened, isTrue);
+      expect(harness.signaling.frames.last.selfDeaf, isTrue);
     });
 
     testWidgets('undeafening afterwards brings the sound back', (tester) async {
