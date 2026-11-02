@@ -19,6 +19,7 @@ import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_thread_dialog.dart';
+import 'destructive_confirmation.dart';
 import 'forwarded_message_view.dart';
 import 'member_avatar.dart';
 import 'message_action_bar.dart';
@@ -138,24 +139,13 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: const Text('This message will be permanently deleted.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete message?',
+      message: 'This message will be permanently deleted.',
+      confirmLabel: 'Delete',
     );
-    if (confirmed == true) await widget.onDelete(widget.message);
+    if (confirmed) await widget.onDelete(widget.message);
   }
 
   @override
