@@ -19,6 +19,7 @@ import '../domain/chat_models.dart';
 import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/navigation_memory.dart';
 import '../domain/discord_snowflake.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_management.dart';
@@ -77,15 +78,20 @@ enum ChatLoadState { idle, loading, ready, failure }
 final class ChatController extends ChangeNotifier {
   /// [landingChannelIn] names the channel the app opens on when a workspace
   /// first loads. Without it the app opens on the first text channel.
+  /// [readingPositions] says where the reader stopped in each channel, so that
+  /// opening a channel can load that stretch of it.
   ChatController(
     ChatRepository repository, {
     String? Function(ChatWorkspace workspace)? landingChannelIn,
+    ReadingPositions? readingPositions,
   }) : _repository = repository,
-       _landingChannelIn = landingChannelIn {
+       _landingChannelIn = landingChannelIn,
+       _readingPositions = readingPositions {
     _listenToRepository();
   }
 
   final String? Function(ChatWorkspace workspace)? _landingChannelIn;
+  final ReadingPositions? _readingPositions;
   ChatRepository _repository;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
   StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
@@ -384,13 +390,17 @@ final class ChatController extends ChangeNotifier {
     }
     if (_loadedChannels.contains(channelId) && !refresh) {
       if (anchorMessageId == null) {
-        // Coming back to a channel left in an old window opens on the present.
-        // Tapping the channel already open leaves the reader in place.
-        if (hasNewerMessages(channelId) && previousChannelId != channelId) {
+        // Coming back to a channel left in an old window opens on the present,
+        // unless the reader scrolled there and so has a place in it to return
+        // to. Tapping the channel already open leaves the reader in place.
+        if (hasNewerMessages(channelId) &&
+            previousChannelId != channelId &&
+            !_holdsReadingPosition(channelId)) {
           await jumpToPresent(channelId);
         } else {
           notifyListeners();
         }
+        await _returnToReadingPosition(channelId);
       } else if (workspace
           .messagesFor(channelId)
           .any((message) => message.id == anchorMessageId)) {
@@ -430,7 +440,10 @@ final class ChatController extends ChangeNotifier {
       );
       if (!isCurrent()) return;
       _applyWindow(channelId, page, aroundMessageId: anchorMessageId);
-      await _reachFirstUnread(channelId, page, isCurrent);
+      final reached =
+          anchorMessageId == null &&
+          await _reachReadingPosition(channelId, isCurrent);
+      if (!reached) await _reachFirstUnread(channelId, page, isCurrent);
       if (!isCurrent()) return;
       _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);

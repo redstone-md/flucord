@@ -27,7 +27,8 @@ void _routeChannels(FakeDiscordTransport transport) {
   transport.on(
     'GET',
     '/api/v9/channels/${SessionHarness.channelId}/messages',
-    (_) => jsonResponse([_messageIn(_generalMessage, SessionHarness.channelId)]),
+    (_) =>
+        jsonResponse([_messageIn(_generalMessage, SessionHarness.channelId)]),
   );
   transport.on(
     'GET',
@@ -44,33 +45,35 @@ Finder get _randomRow =>
     find.byKey(const ValueKey('channel-${SessionHarness.otherChannelId}'));
 
 /// The default READY with the guild's second channel inside a category.
-Map<String, Object?> _readyWithCategory() => SessionHarness.defaultReady()
-  ..['guilds'] = [
-    rawGuild(
-      id: SessionHarness.guildId,
-      name: 'The Forge',
-      channels: [
-        rawChannel(id: SessionHarness.channelId, name: 'general'),
-        {...rawChannel(id: _categoryId, name: 'rooms'), 'type': 4},
-        {
-          ...rawChannel(id: SessionHarness.otherChannelId, name: 'random'),
-          'parent_id': _categoryId,
-        },
-      ],
-      everyonePermissions: '${DiscordPermissions.viewChannel}',
-    ),
-  ];
+Map<String, Object?> _readyWithCategory() =>
+    SessionHarness.defaultReady()
+      ..['guilds'] = [
+        rawGuild(
+          id: SessionHarness.guildId,
+          name: 'The Forge',
+          channels: [
+            rawChannel(id: SessionHarness.channelId, name: 'general'),
+            {...rawChannel(id: _categoryId, name: 'rooms'), 'type': 4},
+            {
+              ...rawChannel(id: SessionHarness.otherChannelId, name: 'random'),
+              'parent_id': _categoryId,
+            },
+          ],
+          everyonePermissions: '${DiscordPermissions.viewChannel}',
+        ),
+      ];
 
 /// The default READY without the guild's second channel.
-Map<String, Object?> _readyWithoutRandom() => SessionHarness.defaultReady()
-  ..['guilds'] = [
-    rawGuild(
-      id: SessionHarness.guildId,
-      name: 'The Forge',
-      channels: [rawChannel(id: SessionHarness.channelId, name: 'general')],
-      everyonePermissions: '${DiscordPermissions.viewChannel}',
-    ),
-  ];
+Map<String, Object?> _readyWithoutRandom() =>
+    SessionHarness.defaultReady()
+      ..['guilds'] = [
+        rawGuild(
+          id: SessionHarness.guildId,
+          name: 'The Forge',
+          channels: [rawChannel(id: SessionHarness.channelId, name: 'general')],
+          everyonePermissions: '${DiscordPermissions.viewChannel}',
+        ),
+      ];
 
 /// The default READY with the guild out of reach, as in an outage.
 Map<String, Object?> _readyWithGuildUnavailable() =>
@@ -101,36 +104,43 @@ void main() {
   });
 
   group('a restart', () {
-    testSession('opens the last location', (tester, session) async {
-      await session.openChannel(SessionHarness.otherChannelId);
+    testSession(
+      'opens the last location',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.otherChannelId);
 
-      session.transport.requests.clear();
-      await session.relaunch(ready: SessionHarness.defaultReady());
+        session.transport.requests.clear();
+        await session.relaunch(ready: SessionHarness.defaultReady());
 
-      expect(session.messageRow(_randomMessage), findsOneWidget);
-      expect(_channelsFetched(session), [SessionHarness.otherChannelId]);
-    }, routes: _routeChannels, onDisk: true);
+        expect(session.messageRow(_randomMessage), findsOneWidget);
+        expect(_channelsFetched(session), [SessionHarness.otherChannelId]);
+      },
+      routes: _routeChannels,
+      onDisk: true,
+    );
 
-    testSession('keeps collapsed categories collapsed', (
-      tester,
-      session,
-    ) async {
-      await tester.tap(find.byKey(_guildRail));
-      await session.settle();
-      await tester.tap(find.byKey(const ValueKey('category-$_categoryId')));
-      await session.settle();
-      expect(_randomRow, findsNothing);
+    testSession(
+      'keeps collapsed categories collapsed',
+      (tester, session) async {
+        await tester.tap(find.byKey(_guildRail));
+        await session.settle();
+        await tester.tap(find.byKey(const ValueKey('category-$_categoryId')));
+        await session.settle();
+        expect(_randomRow, findsNothing);
 
-      await session.relaunch(ready: _readyWithCategory());
-      await tester.tap(find.byKey(_guildRail));
-      await session.settle();
+        await session.relaunch(ready: _readyWithCategory());
+        await tester.tap(find.byKey(_guildRail));
+        await session.settle();
 
-      expect(_randomRow, findsNothing);
-      expect(
-        find.byKey(const ValueKey('channel-${SessionHarness.channelId}')),
-        findsOneWidget,
-      );
-    }, ready: _readyWithCategory(), onDisk: true);
+        expect(_randomRow, findsNothing);
+        expect(
+          find.byKey(const ValueKey('channel-${SessionHarness.channelId}')),
+          findsOneWidget,
+        );
+      },
+      ready: _readyWithCategory(),
+      onDisk: true,
+    );
 
     testSession(
       'keeps a category collapsed through a launch that lacks its guild',
@@ -179,49 +189,55 @@ void main() {
       onDisk: true,
     );
 
-    testSession('a link at launch wins over the last location', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.otherChannelId);
+    testSession(
+      'a link at launch wins over the last location',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.otherChannelId);
 
-      session.transport.requests.clear();
-      await session.relaunchWithLink(
-        const ChannelLink(
-          spaceId: SessionHarness.guildId,
-          channelId: SessionHarness.channelId,
-        ),
-        ready: SessionHarness.defaultReady(),
-      );
+        session.transport.requests.clear();
+        await session.relaunchWithLink(
+          const ChannelLink(
+            spaceId: SessionHarness.guildId,
+            channelId: SessionHarness.channelId,
+          ),
+          ready: SessionHarness.defaultReady(),
+        );
 
-      expect(session.messageRow(_generalMessage), findsOneWidget);
-      expect(_channelsFetched(session), [SessionHarness.channelId]);
-    }, routes: _routeChannels, onDisk: true);
+        expect(session.messageRow(_generalMessage), findsOneWidget);
+        expect(_channelsFetched(session), [SessionHarness.channelId]);
+      },
+      routes: _routeChannels,
+      onDisk: true,
+    );
 
-    testSession('another account does not get the location', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.otherChannelId);
+    testSession(
+      'another account does not get the location',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.otherChannelId);
 
-      await session.relaunch(
-        accountId: SessionHarness.friendId,
-        ready: SessionHarness.defaultReady(),
-      );
+        await session.relaunch(
+          accountId: SessionHarness.friendId,
+          ready: SessionHarness.defaultReady(),
+        );
 
-      expect(session.messageRow(_randomMessage), findsNothing);
-    }, routes: _routeChannels, onDisk: true);
+        expect(session.messageRow(_randomMessage), findsNothing);
+      },
+      routes: _routeChannels,
+      onDisk: true,
+    );
 
-    testSession('after a sign-out the location is gone', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.otherChannelId);
+    testSession(
+      'after a sign-out the location is gone',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.otherChannelId);
 
-      await session.signOut();
-      await session.relaunch(ready: SessionHarness.defaultReady());
+        await session.signOut();
+        await session.relaunch(ready: SessionHarness.defaultReady());
 
-      expect(session.messageRow(_randomMessage), findsNothing);
-    }, routes: _routeChannels, onDisk: true);
+        expect(session.messageRow(_randomMessage), findsNothing);
+      },
+      routes: _routeChannels,
+      onDisk: true,
+    );
   });
 }

@@ -267,6 +267,7 @@ final class AppComposition {
             (_demo ? MockChatRepository() : const DisconnectedChatRepository()),
         landingChannelIn: (workspace) =>
             this.workspace.landingChannelIn(workspace),
+        readingPositions: navigationMemory,
       ),
     );
     connection = _register(

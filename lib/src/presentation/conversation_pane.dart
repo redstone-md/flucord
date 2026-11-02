@@ -814,6 +814,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
       hasNewerMessages: chat.hasNewerMessages(channel.id),
       windowError: chat.historyWindowError(channel.id),
+      readingPositions: workspaceController.readingPositions,
       onOpenMessage: (messageId) =>
           _jumpToMessage(chat, workspaceController, channel.id, messageId),
       onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
