@@ -15,6 +15,7 @@ import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/data/file_navigation_memory_repository.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flucord/src/domain/channel_link.dart';
@@ -25,6 +26,7 @@ import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/navigation_memory.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
@@ -72,6 +74,13 @@ final class SessionHarness {
     this._linkAtLaunch,
     this._chatImagesOnDisk,
   ) : _diskDirectory = diskDirectory,
+      _navigationMemory = _WatchedNavigationMemory(
+        diskDirectory == null
+            ? _HeldNavigationMemory()
+            : FileNavigationMemoryRepository(
+                directory: () async => diskDirectory,
+              ),
+      ),
       _factory = _FakeWireRepositoryFactory(
         transport,
         _connector,
@@ -98,10 +107,11 @@ final class SessionHarness {
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final _MemoryCredentialVault _vault = _MemoryCredentialVault();
-  late final _FakeDesktopWindow _window = _FakeDesktopWindow(_linkAtLaunch);
+  late _FakeDesktopWindow _window = _FakeDesktopWindow(_linkAtLaunch);
 
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
+  final _WatchedNavigationMemory _navigationMemory;
   final _FakeWireRepositoryFactory _factory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
   final AccessibilitySettings _accessibility;
@@ -170,6 +180,7 @@ final class SessionHarness {
         chatRepositoryFactory: _factory,
         clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
         discordRemoteAuthGatewayFactory: remoteAuth,
+        navigationMemoryRepository: _navigationMemory,
       ),
     ),
   );
@@ -232,6 +243,7 @@ final class SessionHarness {
   Future<void> _end() async {
     await _tester.pumpWidget(const SizedBox());
     await settle();
+    await _tester.runAsync(() => _navigationMemory.lastWrite);
   }
 
   /// Quits the app and opens it again, signed in as [accountId], up to READY.
@@ -245,6 +257,17 @@ final class SessionHarness {
   }) async {
     await _end();
     _vault.saveAccount(accountId);
+    await _start(ready);
+  }
+
+  /// Quits the app and opens it again from [link], as a link does that starts
+  /// the app, up to READY.
+  Future<void> relaunchWithLink(
+    ChannelLink link, {
+    required Map<String, Object?> ready,
+  }) async {
+    await _end();
+    _window = _FakeDesktopWindow(link);
     await _start(ready);
   }
 
@@ -355,6 +378,10 @@ final class SessionHarness {
       await _tester.pump();
     }
   }
+
+  /// What the next launch would read as the navigation memory.
+  Future<NavigationMemory?> savedNavigation() async =>
+      _tester.runAsync<NavigationMemory?>(_navigationMemory.load);
 
   /// What the app answered to [systemAsksToExit], once it has.
   Object? exitAnswer;
@@ -647,6 +674,39 @@ final class FakeRemoteAuth
   // this one object plays every gateway of the session.
   @override
   Future<void> close() async {}
+}
+
+/// The navigation memory with no file behind it, for a test not on disk. It still
+/// lasts through a relaunch.
+final class _HeldNavigationMemory implements NavigationMemoryRepository {
+  NavigationMemory? _held;
+
+  @override
+  Future<NavigationMemory?> load() async => _held;
+
+  @override
+  Future<void> save(NavigationMemory memory) async => _held = memory;
+
+  @override
+  Future<void> clear() async => _held = null;
+}
+
+/// Knows when the last write ended, because a write to a real file finishes on
+/// the real event loop, and a relaunch must find it done.
+final class _WatchedNavigationMemory implements NavigationMemoryRepository {
+  _WatchedNavigationMemory(this._inner);
+
+  final NavigationMemoryRepository _inner;
+  Future<void> lastWrite = Future.value();
+
+  @override
+  Future<NavigationMemory?> load() => _inner.load();
+
+  @override
+  Future<void> save(NavigationMemory memory) => lastWrite = _inner.save(memory);
+
+  @override
+  Future<void> clear() => lastWrite = _inner.clear();
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.

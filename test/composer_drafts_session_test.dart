@@ -359,6 +359,9 @@ void main() {
       ),
     );
     await session.connectToReady(SessionHarness.defaultReady());
+    // The Connections dialog stays open through a sign-in, in front of the app.
+    await tester.tap(find.byTooltip('Close'));
+    await session.settle();
     await session.openChannel(SessionHarness.channelId);
 
     expect(_boxText(tester), isEmpty);
