@@ -27,15 +27,17 @@ class PresenceIndicator extends StatelessWidget {
   final Color? borderColor;
   final double borderWidth;
 
-  static Color colorOf(Presence status) => switch (status) {
-    Presence.online => FlucordColors.success,
-    Presence.idle => FlucordColors.warning,
-    Presence.doNotDisturb => FlucordColors.danger,
-    Presence.streaming => FlucordColors.brand,
-    Presence.offline ||
-    Presence.invisible ||
-    Presence.unknown => FlucordColors.offline,
-  };
+  /// The colour [status] is drawn in, from the theme's own status colours.
+  static Color colorOf(FlucordSurfaceTheme surfaces, Presence status) =>
+      switch (status) {
+        Presence.online => surfaces.success,
+        Presence.idle => surfaces.warning,
+        Presence.doNotDisturb => surfaces.danger,
+        Presence.streaming => surfaces.brand,
+        Presence.offline ||
+        Presence.invisible ||
+        Presence.unknown => surfaces.offline,
+      };
 
   /// What a screen reader announces, mobile included.
   static String labelOf(UserPresence presence) {
@@ -54,7 +56,7 @@ class PresenceIndicator extends StatelessWidget {
           painter: _PresencePainter(
             status: status,
             mobile: presence.isMobileOnly,
-            color: colorOf(status),
+            color: colorOf(context.surfaces, status),
             borderColor:
                 borderColor ?? Theme.of(context).scaffoldBackgroundColor,
             borderWidth: borderWidth,

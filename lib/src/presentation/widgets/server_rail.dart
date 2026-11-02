@@ -223,8 +223,8 @@ class _AddServerButtonState extends State<_AddServerButton> {
             height: 44,
             decoration: BoxDecoration(
               color: active
-                  ? FlucordColors.success
-                  : FlucordColors.success.withValues(alpha: 0.62),
+                  ? context.surfaces.success
+                  : context.surfaces.success.withValues(alpha: 0.62),
               borderRadius: radius,
             ),
             child: Icon(
@@ -259,7 +259,7 @@ class _HomeButton extends StatelessWidget {
     onPressed: onPressed,
     tooltip: onPressed == null ? 'Flucord' : 'Direct Messages',
     idleColor: context.surfaces.raised,
-    activeColor: FlucordColors.brand,
+    activeColor: context.surfaces.brand,
     builder: (context, active) => Icon(
       Icons.forum_rounded,
       size: 21,

@@ -124,17 +124,17 @@ class AccountPanel extends StatelessWidget {
         SessionMode.discord => switch (connectionStatus) {
           RepositoryConnectionStatus.connected => (
             'Discord online',
-            FlucordColors.success,
+            context.surfaces.success,
             'Connected to Discord',
           ),
           RepositoryConnectionStatus.connecting => (
             'Connecting...',
-            FlucordColors.warning,
+            context.surfaces.warning,
             'Connecting to Discord',
           ),
           RepositoryConnectionStatus.reconnecting => (
             'Reconnecting...',
-            FlucordColors.warning,
+            context.surfaces.warning,
             'Reconnecting to Discord',
           ),
           RepositoryConnectionStatus.offline => (

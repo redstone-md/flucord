@@ -103,7 +103,7 @@ final class _ConnectionFailure extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Column(
         children: [
-          const Icon(Icons.cloud_off, size: 28, color: FlucordColors.warning),
+          Icon(Icons.cloud_off, size: 28, color: context.surfaces.warning),
           const SizedBox(height: 10),
           Text(
             reason,

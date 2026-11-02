@@ -65,9 +65,9 @@ class DiscordRelationshipAvatar extends StatelessWidget {
     BuildContext context,
     DiscordPresenceStatus status,
   ) => switch (status) {
-    DiscordPresenceStatus.online => FlucordColors.success,
-    DiscordPresenceStatus.idle => FlucordColors.warning,
-    DiscordPresenceStatus.doNotDisturb => FlucordColors.danger,
+    DiscordPresenceStatus.online => context.surfaces.success,
+    DiscordPresenceStatus.idle => context.surfaces.warning,
+    DiscordPresenceStatus.doNotDisturb => context.surfaces.danger,
     DiscordPresenceStatus.offline ||
     DiscordPresenceStatus.unknown => context.surfaces.muted,
   };

@@ -195,7 +195,7 @@ final class _TransportStatus extends StatelessWidget {
       ),
       SessionMode.discord => (
         '${controller.activeSession?.displayName ?? 'Discord bot'} connected',
-        FlucordColors.success,
+        context.surfaces.success,
       ),
     };
     return Row(

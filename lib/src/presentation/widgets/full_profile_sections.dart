@@ -199,7 +199,7 @@ class ProfileConnectionRows extends StatelessWidget {
                     Icons.verified_outlined,
                     key: const ValueKey('profile-connection-verified'),
                     size: 14,
-                    color: FlucordColors.success,
+                    color: context.surfaces.success,
                   ),
                 ),
             ],

@@ -216,7 +216,7 @@ class _OAuthGuildRailButtonState extends State<_OAuthGuildRailButton> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: active
-                            ? FlucordColors.brand
+                            ? context.surfaces.brand
                             : context.surfaces.raised,
                         borderRadius: radius,
                       ),

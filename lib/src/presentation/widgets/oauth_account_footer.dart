@@ -102,7 +102,7 @@ class OAuthAccountFooter extends StatelessWidget {
             size: 18,
             color: hasNativePresence
                 ? context.surfaces.muted
-                : FlucordColors.success,
+                : context.surfaces.success,
           ),
         ],
       ),
@@ -190,8 +190,8 @@ String _statusLabel(DiscordOnlineStatus status) => switch (status) {
 
 Color _statusColor(BuildContext context, DiscordOnlineStatus status) =>
     switch (status) {
-      DiscordOnlineStatus.online => FlucordColors.success,
-      DiscordOnlineStatus.idle => FlucordColors.warning,
-      DiscordOnlineStatus.doNotDisturb => FlucordColors.danger,
+      DiscordOnlineStatus.online => context.surfaces.success,
+      DiscordOnlineStatus.idle => context.surfaces.warning,
+      DiscordOnlineStatus.doNotDisturb => context.surfaces.danger,
       DiscordOnlineStatus.invisible => context.surfaces.muted,
     };

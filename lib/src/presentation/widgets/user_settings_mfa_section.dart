@@ -269,7 +269,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
           'Added ${controller.addedSecurityKey?.name ?? 'the key'}. It '
           'answers for this account now.',
           key: const ValueKey('mfa-security-key-added'),
-          style: const TextStyle(fontSize: 12, color: FlucordColors.success),
+          style: TextStyle(fontSize: 12, color: context.surfaces.success),
         ),
         const SizedBox(height: 8),
         TextButton(
