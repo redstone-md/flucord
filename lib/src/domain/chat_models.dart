@@ -27,6 +27,7 @@ part 'guild_scheduled_event_editing.dart';
 part 'held_messages.dart';
 part 'user_activity.dart';
 part 'user_presence.dart';
+part 'workspace_diff.dart';
 part 'workspace_member.dart';
 
 enum ChannelKind { text, voice, forum, media }
@@ -627,6 +628,83 @@ final class ChatWorkspace {
         .where((category) => category.id != categoryId)
         .toList(),
   );
+
+  /// Folds one [diff] in, with one pass over each list.
+  ///
+  /// Servers and channels end where [removeGuild], [removeChannel],
+  /// [upsertSpace] and [upsertChannel] would put them, one item at a time. Those
+  /// copy the whole list for each item, which stalls the screen on a reconnect
+  /// that changes thousands of channels. A changed category keeps its place in
+  /// the list, and the channel sidebar sorts categories by position anyway.
+  ChatWorkspace applyDiff(WorkspaceDiff diff) {
+    if (diff.isEmpty) return this;
+    final removedSpaces = diff.removedSpaceIds;
+    final changedChannels = {
+      for (final channel in diff.channels) channel.id: channel,
+    };
+    final gainedChannels = diff.channels.where(
+      (channel) => channelOrNull(channel.id) == null,
+    );
+    return _copy(
+      spaces: _withChanged(
+        spaces.where((space) => !removedSpaces.contains(space.id)),
+        diff.spaces,
+        (space) => space.id,
+      ),
+      channels: [
+        // Each new DM goes on top in turn, as with [upsertChannel].
+        ...gainedChannels
+            .where((channel) => channel.isDirectMessage)
+            .toList()
+            .reversed,
+        for (final channel in channels)
+          if (!diff.removes(channel))
+            changedChannels[channel.id]?.withActivityOf(channel) ?? channel,
+        ...gainedChannels.where((channel) => !channel.isDirectMessage),
+      ],
+      categories: _withChanged(
+        categories.where(
+          (category) =>
+              !removedSpaces.contains(category.spaceId) &&
+              !diff.removedCategoryIds.contains(category.id),
+        ),
+        diff.categories,
+        (category) => category.id,
+      ),
+      roles: removedSpaces.isEmpty
+          ? null
+          : roles
+                .where((role) => !removedSpaces.contains(role.spaceId))
+                .toList(),
+      members: removedSpaces.isEmpty
+          ? null
+          : [
+              for (final member in members)
+                ?removedSpaces.fold<Member?>(
+                  member,
+                  (left, spaceId) => left?.withoutSpace(spaceId),
+                ),
+            ],
+      held: _held.withoutChannels({
+        for (final channel in channels)
+          if (diff.removes(channel)) channel.id,
+      }),
+    ).upsertMembers(diff.members);
+  }
+
+  /// [kept] with each item of [changed] in place of its earlier copy, so an
+  /// item keeps its place in the list. A new one goes last.
+  static List<T> _withChanged<T>(
+    Iterable<T> kept,
+    List<T> changed,
+    String Function(T item) idOf,
+  ) {
+    final items = {for (final item in kept) idOf(item): item};
+    for (final item in changed) {
+      items[idOf(item)] = item;
+    }
+    return items.values.toList(growable: false);
+  }
 
   /// Applies a gateway presence to the member it names.
   ///

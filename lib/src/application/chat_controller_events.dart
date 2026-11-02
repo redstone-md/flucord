@@ -64,6 +64,8 @@ extension _ChatControllerEvents on ChatController {
         _removeChannel(event.channelId);
       case CategoryDeletedEvent():
         _workspace = _workspace?.removeCategory(event.categoryId);
+      case WorkspaceDiffEvent(:final diff):
+        _applyWorkspaceDiff(diff);
       case MemberUpsertedEvent():
         _workspace = _workspace?.upsertMember(event.member);
       case MembersUpsertedEvent():
