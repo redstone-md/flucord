@@ -15,7 +15,6 @@ import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/voice_room_coordination.dart';
 import 'package:flucord/src/data/discord/discord_go_live_service.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
-import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
