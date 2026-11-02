@@ -17,6 +17,10 @@ import 'package:flucord/src/data/discord/discord_rest_client.dart';
 final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
   MemoryDesktopWebSocket._({required bool etf}) : _etf = etf;
 
+  /// A socket that speaks ETF, made before the dial so a test can fill it
+  /// first. Hand it to [MemoryDesktopWebSocketConnector.answering].
+  MemoryDesktopWebSocket.etf() : this._(etf: true);
+
   final bool _etf;
   final StreamController<Object?> _messages = StreamController();
   final List<Object> _sent = [];
@@ -99,6 +103,14 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
 /// Answers each dial with a new socket, and keeps them all in order.
 final class MemoryDesktopWebSocketConnector
     implements DiscordDesktopWebSocketConnector {
+  MemoryDesktopWebSocketConnector() : _prepared = null;
+
+  /// Answers every dial with [socket], which the test made and may have filled
+  /// before the client connected.
+  MemoryDesktopWebSocketConnector.answering(MemoryDesktopWebSocket socket)
+    : _prepared = socket;
+
+  final MemoryDesktopWebSocket? _prepared;
   final List<MemoryDesktopWebSocket> sockets = [];
 
   /// Every dial the client started, including one still held open.
@@ -119,9 +131,9 @@ final class MemoryDesktopWebSocketConnector
   Future<DiscordDesktopWebSocket> connect(Uri uri) async {
     dials++;
     await _heldDials?.future;
-    final socket = MemoryDesktopWebSocket._(
-      etf: uri.queryParameters['encoding'] == 'etf',
-    );
+    final socket =
+        _prepared ??
+        MemoryDesktopWebSocket._(etf: uri.queryParameters['encoding'] == 'etf');
     sockets.add(socket);
     return socket;
   }

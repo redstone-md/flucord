@@ -9,7 +9,6 @@ import 'package:flucord/src/application/discord_social_sdk_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
-import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_oauth.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
@@ -23,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/developer_terms.dart';
+import 'support/memory_credential_vault.dart';
 
 void main() {
   testWidgets('the connection dialog offers the OAuth identity', (
@@ -31,7 +31,7 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final connection = ConnectionController(
       chat,
-      _MemoryVault(),
+      MemoryCredentialVault(),
       _RepositoryFactory(),
     );
     final login = DiscordDesktopLoginController(
@@ -74,7 +74,7 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final connection = ConnectionController(
       chat,
-      _MemoryVault(),
+      MemoryCredentialVault(),
       _RepositoryFactory(),
     );
     final login = DiscordDesktopLoginController(
@@ -98,20 +98,6 @@ void main() {
 
     expect(find.byType(OAuthConnectionSection), findsNothing);
   });
-}
-
-final class _MemoryVault implements CredentialVault {
-  DiscordAccountSession? _session;
-
-  @override
-  Future<void> clearDiscordSession() async => _session = null;
-
-  @override
-  Future<DiscordAccountSession?> readDiscordSession() async => _session;
-
-  @override
-  Future<void> writeDiscordSession(DiscordAccountSession session) async =>
-      _session = session;
 }
 
 final class _RepositoryFactory implements ChatRepositoryFactory {

@@ -13,6 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
+import 'support/fake_chat_gateway.dart';
 
 const _messageId = '900000000000000001';
 const _historyPath = '/api/v9/channels/${SessionHarness.channelId}/messages';
@@ -347,14 +348,14 @@ void main() {
   });
 
   group('on the bot transport', () {
-    late _FakeGateway gateway;
+    late FakeChatGateway gateway;
     late SqliteChatCache cache;
     late DiscordChatRepository repository;
 
     setUpAll(sqfliteFfiInit);
 
     setUp(() async {
-      gateway = _FakeGateway();
+      gateway = FakeChatGateway();
       cache = await SqliteChatCache.openAt(
         inMemoryDatabasePath,
         factory: databaseFactoryFfi,
@@ -393,7 +394,7 @@ void main() {
       final directory = await Directory.systemTemp.createTemp('flucord-queue-');
       addTearDown(() => directory.delete(recursive: true));
       final path = '${directory.path}${Platform.pathSeparator}cache.sqlite3';
-      final ownGateway = _FakeGateway();
+      final ownGateway = FakeChatGateway();
       final closing = DiscordChatRepository(
         DiscordApiClient(botToken: 'token', transport: FakeDiscordTransport()),
         ownGateway,
@@ -444,35 +445,4 @@ void main() {
       expect((await cache.readMessage(_messageId))?.body, 'second');
     });
   });
-}
-
-final class _FakeGateway implements DiscordChatGateway {
-  final StreamController<DiscordGatewayEvent> _events =
-      StreamController.broadcast();
-
-  void emit(DiscordGatewayEvent event) => _events.add(event);
-
-  @override
-  Stream<DiscordGatewayEvent> get events => _events.stream;
-
-  @override
-  String? get sessionId => 'session-1';
-
-  @override
-  Future<void> connect(String gatewayUrl) async {}
-
-  @override
-  void updateVoiceState({
-    required String guildId,
-    required String? channelId,
-    bool selfMute = false,
-    bool selfDeaf = false,
-    bool selfVideo = false,
-  }) {}
-
-  @override
-  void pingVoiceServer() {}
-
-  @override
-  Future<void> close() => _events.close();
 }

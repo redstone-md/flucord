@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
 import 'package:flucord/src/data/discord/discord_chat_repository.dart';
@@ -8,6 +6,7 @@ import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'support/fake_chat_gateway.dart';
 
 void main() {
   setUpAll(sqfliteFfiInit);
@@ -17,7 +16,7 @@ void main() {
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final gateway = _FakeGateway();
+    final gateway = FakeChatGateway();
     final transport = _QueueTransport([
       const DiscordHttpResponse(
         statusCode: 200,
@@ -92,37 +91,6 @@ void main() {
     expect(reloaded.channels.single.id, 'dm-1');
     expect(reloaded.messages.single.body, 'Native DM path');
   });
-}
-
-final class _FakeGateway implements DiscordChatGateway {
-  final StreamController<DiscordGatewayEvent> _events =
-      StreamController.broadcast();
-
-  void emit(DiscordGatewayEvent event) => _events.add(event);
-
-  @override
-  Stream<DiscordGatewayEvent> get events => _events.stream;
-
-  @override
-  String? get sessionId => 'session-1';
-
-  @override
-  Future<void> connect(String gatewayUrl) async {}
-
-  @override
-  void updateVoiceState({
-    required String guildId,
-    required String? channelId,
-    bool selfMute = false,
-    bool selfDeaf = false,
-    bool selfVideo = false,
-  }) {}
-
-  @override
-  void pingVoiceServer() {}
-
-  @override
-  Future<void> close() => _events.close();
 }
 
 final class _QueueTransport implements DiscordHttpTransport {

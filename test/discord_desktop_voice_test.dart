@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/data/disconnected_chat_repository.dart';
@@ -8,8 +5,6 @@ import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
-import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
-import 'package:flucord/src/data/discord/discord_etf_codec.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -17,11 +12,13 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/fake_discord_wire.dart';
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
   test('joins and leaves a voice channel on the desktop-user session', () async {
-    final socket = _MemoryDesktopWebSocket();
+    final socket = MemoryDesktopWebSocket.etf();
     final repository = await _openRepository(socket);
     addTearDown(repository.close);
 
@@ -56,7 +53,7 @@ void main() {
   });
 
   test('seats the members already in the room when joining', () async {
-    final socket = _MemoryDesktopWebSocket();
+    final socket = MemoryDesktopWebSocket.etf();
     final repository = await _openRepository(socket);
     addTearDown(repository.close);
 
@@ -93,7 +90,7 @@ void main() {
     addTearDown(offline.dispose);
     expect(offline.voiceSignalingService, isNull);
 
-    final repository = await _openRepository(_MemoryDesktopWebSocket());
+    final repository = await _openRepository(MemoryDesktopWebSocket.etf());
     final controller = ChatController(repository);
     addTearDown(controller.dispose);
     addTearDown(repository.close);
@@ -118,7 +115,7 @@ const _uncompressed = DiscordDesktopProtocolProfile(
 );
 
 Future<DiscordDesktopChatRepository> _openRepository(
-  _MemoryDesktopWebSocket socket,
+  MemoryDesktopWebSocket socket,
 ) async {
   final cache = await SqliteChatCache.openAt(
     inMemoryDatabasePath,
@@ -134,7 +131,7 @@ Future<DiscordDesktopChatRepository> _openRepository(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
       profile: _uncompressed,
-      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      socketConnector: MemoryDesktopWebSocketConnector.answering(socket),
     ),
     cache,
     daveService: _CapabilityOnlyDaveService(),
@@ -145,12 +142,12 @@ Future<DiscordDesktopChatRepository> _openRepository(
 /// settle timer from two seconds to the supplemental's 350 ms.
 Future<ChatWorkspace> _bootstrap(
   DiscordDesktopChatRepository repository,
-  _MemoryDesktopWebSocket socket, {
+  MemoryDesktopWebSocket socket, {
   Map<String, Object?>? guildCreate,
 }) async {
   final workspaceFuture = repository.loadWorkspace();
   await _settle();
-  socket.receiveTerm(const {
+  socket.receive(const {
     'op': 0,
     's': 1,
     't': 'READY',
@@ -170,14 +167,9 @@ Future<ChatWorkspace> _bootstrap(
     },
   });
   if (guildCreate != null) {
-    socket.receiveTerm({
-      'op': 0,
-      's': 2,
-      't': 'GUILD_CREATE',
-      'd': guildCreate,
-    });
+    socket.receive({'op': 0, 's': 2, 't': 'GUILD_CREATE', 'd': guildCreate});
   }
-  socket.receiveTerm(const {
+  socket.receive(const {
     'op': 0,
     's': 3,
     't': 'READY_SUPPLEMENTAL',
@@ -186,8 +178,8 @@ Future<ChatWorkspace> _bootstrap(
   return workspaceFuture;
 }
 
-Map<String, Object?> _lastVoiceState(_MemoryDesktopWebSocket socket) {
-  final frame = socket.terms.lastWhere((term) => term['op'] == 4);
+Map<String, Object?> _lastVoiceState(MemoryDesktopWebSocket socket) {
+  final frame = socket.frames.lastWhere((term) => term['op'] == 4);
   return (frame['d']! as Map).cast<String, Object?>();
 }
 
@@ -211,51 +203,6 @@ final class _GatewayUrlTransport implements DiscordHttpTransport {
 
   @override
   void close() {}
-}
-
-final class _MemoryDesktopWebSocketConnector
-    implements DiscordDesktopWebSocketConnector {
-  _MemoryDesktopWebSocketConnector(this.socket);
-
-  final DiscordDesktopWebSocket socket;
-
-  @override
-  Future<DiscordDesktopWebSocket> connect(Uri uri) async => socket;
-}
-
-final class _MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
-  final StreamController<Object?> _messages = StreamController();
-  final List<Object> sent = [];
-  bool _open = true;
-
-  List<Map<String, Object?>> get terms => sent
-      .whereType<Uint8List>()
-      .map((bytes) => DiscordEtfCodec.decode(bytes)! as Map<String, Object?>)
-      .toList(growable: false);
-
-  @override
-  int? get closeCode => null;
-
-  @override
-  bool get isOpen => _open;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void receiveTerm(Map<String, Object?> payload) =>
-      _messages.add(DiscordEtfCodec.encode(payload));
-
-  @override
-  void send(String data) => sent.add(data);
-
-  @override
-  void sendBinary(List<int> data) => sent.add(Uint8List.fromList(data));
-
-  @override
-  Future<void> close() async {
-    _open = false;
-    if (!_messages.isClosed) await _messages.close();
-  }
 }
 
 final class _CapabilityOnlyDaveService implements VoiceDaveService {
