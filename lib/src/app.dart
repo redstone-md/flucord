@@ -109,12 +109,7 @@ class _FlucordAppState extends State<FlucordApp> {
         // for it to turn pale when the account's setting says light.
         theme: _installedTheme(dark: false),
         darkTheme: _installedTheme(dark: true),
-        // The account's theme wins whenever it names one Flucord can draw;
-        // the rail's toggle stays usable for sessions that have no account
-        // behind them, and for a stored theme Flucord does not ship.
-        themeMode:
-            _composition.userSettings.themeMode ??
-            _composition.workspace.themeMode,
+        themeMode: _composition.themeMode,
         builder: (context, child) => AccessibilityScope(
           controller: _composition.accessibility,
           child: AccessibilityDials(
@@ -204,6 +199,12 @@ class _FlucordAppState extends State<FlucordApp> {
                                                                 workspaceController:
                                                                     _composition
                                                                         .workspace,
+                                                                themeMode:
+                                                                    _composition
+                                                                        .themeMode,
+                                                                onToggleTheme:
+                                                                    _composition
+                                                                        .toggleTheme,
                                                                 memberListController:
                                                                     _composition
                                                                         .memberList,

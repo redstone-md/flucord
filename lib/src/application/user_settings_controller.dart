@@ -58,6 +58,17 @@ final class UserSettingsController extends ChangeNotifier {
     if (_bind()) unawaited(load());
   }
 
+  /// Stores [mode] as the account's theme, as Discord's own theme switch does.
+  ///
+  /// Returns `false` when there is no account to store it in.
+  Future<bool> applyThemeMode(ThemeMode mode) => apply(
+    UserSettingsPatch(
+      theme: mode == ThemeMode.light
+          ? UserSettingsTheme.light
+          : UserSettingsTheme.dark,
+    ),
+  );
+
   /// Reads the settings, unless the gateway already delivered them.
   Future<void> load() async {
     _bind();

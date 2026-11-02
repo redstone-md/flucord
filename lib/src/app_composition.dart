@@ -4,7 +4,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
-    show AppLifecycleListener, GlobalKey, ScaffoldMessengerState;
+    show AppLifecycleListener, GlobalKey, ScaffoldMessengerState, ThemeMode;
 import 'package:flutter/services.dart';
 
 import 'app_bootstrap.dart';
@@ -817,6 +817,29 @@ final class AppComposition {
     );
     oauth.initialize();
     socialSdk.initialize();
+  }
+
+  /// Light or dark, as the app draws it.
+  ///
+  /// The account's theme wins whenever it names one Flucord can draw. The
+  /// session's own choice covers sessions with no account behind them, and a
+  /// stored theme Flucord does not ship.
+  ThemeMode get themeMode => userSettings.themeMode ?? workspace.themeMode;
+
+  /// Flips [themeMode] where it is kept: in the account when the account
+  /// names a theme, so the stored value cannot win it back, and in the
+  /// session otherwise.
+  void toggleTheme() {
+    final stored = userSettings.themeMode;
+    if (stored == null) {
+      workspace.toggleTheme();
+      return;
+    }
+    unawaited(
+      userSettings.applyThemeMode(
+        stored == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
+      ),
+    );
   }
 
   /// Tears the graph down in reverse construction order: whatever reads

@@ -96,6 +96,8 @@ class FlucordShell extends StatelessWidget {
     required this.oauthGuildDirectoryController,
     required this.oauthGuildMembershipController,
     required this.workspaceController,
+    required this.themeMode,
+    required this.onToggleTheme,
     required this.voiceController,
     required this.selfVideoController,
     required this.externalLinkLauncher,
@@ -113,6 +115,11 @@ class FlucordShell extends StatelessWidget {
   final OAuthGuildDirectoryController oauthGuildDirectoryController;
   final OAuthGuildMembershipController oauthGuildMembershipController;
   final WorkspaceController workspaceController;
+
+  /// Light or dark, as the app draws it, and the rail's switch between them.
+  final ThemeMode themeMode;
+  final VoidCallback onToggleTheme;
+
   final VoiceController voiceController;
   final SelfVideoController selfVideoController;
   final ExternalLinkLauncher externalLinkLauncher;
@@ -386,14 +393,14 @@ class FlucordShell extends StatelessWidget {
                             activityBySpaceId,
                             spaceId,
                             connectionController.mode,
-                            workspaceController.themeMode,
+                            themeMode,
                           ],
                           builder: (_) => ServerRail(
                             spaces: workspace.spaces,
                             activity: activityBySpaceId,
                             selectedSpaceId: spaceId,
                             onSelectSpace: _selectSpace,
-                            onToggleTheme: workspaceController.toggleTheme,
+                            onToggleTheme: onToggleTheme,
                             onOpenConnections: () => _openConnections(context),
                             onAddServer: canManageServers
                                 ? () => unawaited(_addServer(context))
@@ -402,8 +409,7 @@ class FlucordShell extends StatelessWidget {
                               _openSpaceMenu(context, spaceId, position),
                             ),
                             sessionMode: connectionController.mode,
-                            isDark:
-                                workspaceController.themeMode == ThemeMode.dark,
+                            isDark: themeMode == ThemeMode.dark,
                           ),
                         ),
                         if (showChannels)
