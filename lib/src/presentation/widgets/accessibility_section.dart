@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/accessibility_controller.dart';
 import '../../domain/accessibility.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The interface adjustments: font scale, zoom, reduced motion and the
 /// local spellcheck switch.
@@ -62,7 +63,7 @@ class AccessibilitySection extends StatelessWidget {
             child: Text(
               'The change is on screen but was not saved: $error',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: FlucordType.caption,
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
@@ -97,11 +98,19 @@ class _Dial extends StatelessWidget {
     children: [
       Row(
         children: [
-          Expanded(child: Text(title, style: const TextStyle(fontSize: 13))),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: FlucordType.label),
+            ),
+          ),
           Text(
             // A percentage reads better than a bare ratio on a dial.
             '${(value * 100).round()}%',
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ],
       ),
@@ -122,7 +131,10 @@ class _Dial extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 12),
         child: Text(
           subtitle,
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ),
     ],
@@ -150,10 +162,13 @@ class _Switch extends StatelessWidget {
     contentPadding: EdgeInsets.zero,
     value: value,
     onChanged: onChanged,
-    title: Text(title, style: const TextStyle(fontSize: 13)),
+    title: Text(title, style: const TextStyle(fontSize: FlucordType.label)),
     subtitle: Text(
       subtitle,
-      style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
   );
 }

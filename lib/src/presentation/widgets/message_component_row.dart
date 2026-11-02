@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_component_controller.dart';
 import '../../domain/message_component.dart';
+import '../../theme/flucord_type.dart';
 import 'component_directory_picker.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 /// The buttons and selects an application hung off a message.
 class MessageComponentRows extends StatelessWidget {
@@ -131,7 +133,7 @@ class _Button extends StatelessWidget {
       children: [
         if (component.emojiName case final emoji?
             when component.label.isNotEmpty) ...[
-          Text(emoji, style: const TextStyle(fontSize: 13)),
+          Text(emoji, style: const TextStyle(fontSize: FlucordType.label)),
           const SizedBox(width: 6),
         ],
         Text(label),
@@ -307,7 +309,7 @@ class _MessageModalDialogState extends State<MessageModalDialog> {
       .every((field) => _fields[field.customId]!.text.trim().isNotEmpty);
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('message-modal'),
     title: Text(widget.modal.title.isEmpty ? 'Form' : widget.modal.title),
     content: SingleChildScrollView(

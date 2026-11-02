@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/attachment_download.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../attachment_download_controller.dart';
 import 'attachment_download_button.dart';
 import 'chat_image.dart';
@@ -207,13 +209,13 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
           child: InkWell(
             key: const ValueKey('attachment-spoiler-cover'),
             onTap: () => setState(() => _revealed = true),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
             child: Container(
               width: 210,
               height: 58,
               decoration: BoxDecoration(
                 color: context.surfaces.muted,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: FlucordRadius.small,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -320,13 +322,13 @@ class _ImageAttachment extends StatelessWidget {
               child: AspectRatio(
                 aspectRatio: ratio,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: FlucordRadius.small,
                   // A hairline on the clipped edge. Painted over the image, so
                   // a light picture still reads against a light background.
                   child: DecoratedBox(
                     position: DecorationPosition.foreground,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: FlucordRadius.small,
                       border: Border.all(
                         color: Theme.of(context).brightness == Brightness.light
                             ? Colors.black.withValues(alpha: 0.1)
@@ -367,7 +369,7 @@ class _FileAttachment extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.surfaces.inset,
           border: Border.all(color: context.surfaces.border),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
         child: Row(
           children: [
@@ -387,7 +389,7 @@ class _FileAttachment extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -396,7 +398,7 @@ class _FileAttachment extends StatelessWidget {
                     _formatBytes(attachment.size),
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],

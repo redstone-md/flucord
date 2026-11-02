@@ -2,6 +2,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import '../../theme/flucord_type.dart';
 import 'emoji_picker.dart';
 import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
@@ -139,6 +140,10 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
+  /// The avatar's lane at the default font size. `12:59 PM` in the caption
+  /// size is 54 px wide in the bundled font.
+  static const _leadingLaneWidth = 60.0;
+
   bool _hovered = false;
   bool _reactionPickerOpen = false;
 
@@ -285,7 +290,7 @@ class _MessageItemState extends State<MessageItem> {
                     minHeight: MessageActionBar.height,
                   ),
                   padding: EdgeInsets.fromLTRB(
-                    20,
+                    6,
                     widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
                     20,
                     compact ? 4 : 5,
@@ -293,31 +298,39 @@ class _MessageItemState extends State<MessageItem> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // The lane holds the avatar, or on a grouped row the
+                      // clock. It fits the widest clock, `12:59 PM`, and grows
+                      // with the font dial, so the clock never wraps.
                       SizedBox(
-                        width: 38,
-                        child: widget.grouped
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: MessageTimeLabel(
-                                  widget.message.sentAt,
-                                  style: TextStyle(
-                                    color: context.surfaces.muted,
-                                    fontSize: 9,
+                        width: MediaQuery.textScalerOf(
+                          context,
+                        ).scale(_leadingLaneWidth),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: widget.grouped
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: MessageTimeLabel(
+                                    widget.message.sentAt,
+                                    style: TextStyle(
+                                      color: context.surfaces.muted,
+                                      fontSize: FlucordType.caption,
+                                    ),
+                                  ),
+                                )
+                              : _opensAuthorProfile(
+                                  key: const ValueKey('message-author-avatar'),
+                                  child: MemberAvatar(
+                                    member: widget.member,
+                                    size: 34,
+                                    spaceId: widget.workspace
+                                        .channelById(widget.message.channelId)
+                                        .spaceId,
                                   ),
                                 ),
-                              )
-                            : _opensAuthorProfile(
-                                key: const ValueKey('message-author-avatar'),
-                                child: MemberAvatar(
-                                  member: widget.member,
-                                  size: 34,
-                                  spaceId: widget.workspace
-                                      .channelById(widget.message.channelId)
-                                      .spaceId,
-                                ),
-                              ),
+                        ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: MessageMenuScope(
                           onOpen: (position) =>
@@ -410,7 +423,10 @@ class _MessageItemState extends State<MessageItem> {
         if (message.isEdited && !widget.isEditing)
           Text(
             '(edited)',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         if (message.attachments.isNotEmpty)
           MessageAttachmentGallery(
@@ -492,7 +508,7 @@ class _MessageItemState extends State<MessageItem> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: FlucordType.body,
                 fontWeight: FontWeight.w600,
                 color: _nameColor(widget.member),
               ),
@@ -502,7 +518,10 @@ class _MessageItemState extends State<MessageItem> {
         const SizedBox(width: 8),
         MessageTimeLabel(
           widget.message.sentAt,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         // The flags a reader cannot guess from the text: why nothing
         // notified them, and why the machine just spoke.
@@ -599,7 +618,7 @@ class _MessageItemState extends State<MessageItem> {
             Text(
               author?.displayName ?? 'Unknown user',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: FlucordType.label,
                 fontWeight: FontWeight.w600,
                 color: author == null ? null : _nameColor(author),
               ),
@@ -612,7 +631,10 @@ class _MessageItemState extends State<MessageItem> {
                     : messagePreviewText(context, reply.body, widget.workspace),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.label,
+                ),
               ),
             ),
           ],
@@ -640,7 +662,10 @@ class _MessageItemState extends State<MessageItem> {
       const SizedBox(height: 4),
       Text(
         'Escape to cancel · Enter to save',
-        style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
     ],
   );

@@ -21,7 +21,9 @@ import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_profile_controls.dart';
 import 'account_credentials_section.dart';
 import 'user_profile_section.dart';
@@ -42,6 +44,7 @@ import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
+import 'flucord_dialog.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -181,7 +184,6 @@ class UserSettingsDialog extends StatefulWidget {
     VoiceController? voiceController,
   }) => showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.58),
     builder: (_) => UserSettingsDialog(
       controller: controller,
       profileController: profileController,
@@ -221,62 +223,59 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('user-settings-dialog'),
-    insetPadding: const EdgeInsets.all(24),
-    backgroundColor: context.surfaces.canvas,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 940, maxHeight: 720),
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
-            final navigation = _Navigation(
-              selected: _category,
-              horizontal: !wide,
-              onSelected: (category) => setState(() => _category = category),
-            );
-            final body = _Body(
-              controller: widget.controller,
-              profileController: widget.profileController,
-              standingController: widget.standingController,
-              familyController: widget.familyController,
-              sessionController: widget.sessionController,
-              connectionsController: widget.connectionsController,
-              entitlementsController: widget.entitlementsController,
-              dataPackageController: widget.dataPackageController,
-              appAuthorisationController: widget.appAuthorisationController,
-              mfaController: widget.mfaController,
-              ageController: widget.ageController,
-              keybindController: widget.keybindController,
-              streamerModeController: widget.streamerModeController,
-              accessibilityController: widget.accessibilityController,
-              streamQualityController: widget.streamQualityController,
-              themeController: widget.themeController,
-              voiceController: widget.voiceController,
-              category: _category,
-            );
-            return wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: 232, child: navigation),
-                      VerticalDivider(width: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      navigation,
-                      Divider(height: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  );
-          },
-        ),
+    maxWidth: 940,
+    maxHeight: 720,
+    child: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final wide =
+              constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
+          final navigation = _Navigation(
+            selected: _category,
+            horizontal: !wide,
+            onSelected: (category) => setState(() => _category = category),
+          );
+          final body = _Body(
+            controller: widget.controller,
+            profileController: widget.profileController,
+            standingController: widget.standingController,
+            familyController: widget.familyController,
+            sessionController: widget.sessionController,
+            connectionsController: widget.connectionsController,
+            entitlementsController: widget.entitlementsController,
+            dataPackageController: widget.dataPackageController,
+            appAuthorisationController: widget.appAuthorisationController,
+            mfaController: widget.mfaController,
+            ageController: widget.ageController,
+            keybindController: widget.keybindController,
+            streamerModeController: widget.streamerModeController,
+            accessibilityController: widget.accessibilityController,
+            streamQualityController: widget.streamQualityController,
+            themeController: widget.themeController,
+            voiceController: widget.voiceController,
+            category: _category,
+          );
+          return wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 232, child: navigation),
+                    VerticalDivider(width: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    navigation,
+                    Divider(height: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                );
+        },
       ),
     ),
   );
@@ -316,7 +315,7 @@ class _Navigation extends StatelessWidget {
                 'User settings',
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 10,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                 ),
@@ -370,7 +369,7 @@ class _NavigationTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: foreground,
-        fontSize: 12,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -378,10 +377,10 @@ class _NavigationTile extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: compact ? 0 : 1),
       child: Material(
         color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           key: ValueKey('settings-nav-${category.name}'),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           onTap: onPressed,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -459,7 +458,7 @@ class _Body extends StatelessWidget {
                 category.label,
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -481,7 +480,7 @@ class _Body extends StatelessWidget {
             'Discord did not accept the last change.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
-              fontSize: 11,
+              fontSize: FlucordType.caption,
             ),
           ),
         ),
@@ -820,7 +819,10 @@ class _Notice extends StatelessWidget {
       Expanded(
         child: Text(
           message,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ),
     ],

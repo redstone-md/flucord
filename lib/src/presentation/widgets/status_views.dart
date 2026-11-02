@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class LoadingWorkspaceView extends StatelessWidget {
   const LoadingWorkspaceView({super.key});
@@ -19,7 +20,10 @@ class LoadingWorkspaceView extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Opening workspace',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
@@ -53,7 +57,10 @@ class FailedWorkspaceView extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Your servers and messages could not be loaded.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -132,7 +139,10 @@ class EmptyWorkspaceView extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               'Install the bot in a server with channel access.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'flucord_dialog.dart';
 
 /// The command list Discord shows above the composer after a slash.
 class SlashCommandList extends StatelessWidget {
@@ -47,7 +50,7 @@ class SlashCommandList extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         border: Border.all(color: context.surfaces.border),
       ),
       child: _body(context),
@@ -75,7 +78,10 @@ class SlashCommandList extends StatelessWidget {
               ? 'No command matches that.'
               : 'Discord did not return any commands.',
           key: const ValueKey('slash-command-empty'),
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       );
     }
@@ -135,7 +141,10 @@ class _CommandRow extends StatelessWidget {
         children: [
           Text(
             '/${command.name}',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (command.description.isNotEmpty) ...[
             const SizedBox(width: 10),
@@ -144,7 +153,10 @@ class _CommandRow extends StatelessWidget {
                 command.description,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ),
           ] else
@@ -212,7 +224,7 @@ class _SlashCommandOptionsDialogState extends State<SlashCommandOptionsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('slash-command-options'),
     title: Text('/${widget.command.name}'),
     content: SingleChildScrollView(

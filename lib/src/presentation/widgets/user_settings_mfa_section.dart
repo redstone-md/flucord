@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/multi_factor_auth_controller.dart';
 import '../../domain/multi_factor_auth.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// Two-factor authentication: add an authenticator or a security key, or
@@ -95,7 +96,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
               child: Text(
                 'Discord did not answer. Nothing was changed.',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -149,7 +150,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
       // Discord uses the number already on the account, so there is nothing
       // to type; saying so is better than an empty field nobody can fill.
       'Codes go to the phone number already on the account.',
-      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
     const SizedBox(height: 6),
     _PasswordField(controller: _password),
@@ -178,7 +182,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
     const SizedBox(height: 4),
     Text(
       'Your password and a current code, because these are the way back in.',
-      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
     const SizedBox(height: 8),
     Row(
@@ -221,7 +228,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
           'This machine has no platform authenticator Flucord can use for a '
           'security key.',
           key: const ValueKey('mfa-security-key-unavailable'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ];
     }
@@ -231,7 +241,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
       Text(
         'Windows makes a key that stays on this machine and proves it is you '
         'with your face, fingerprint, or PIN.',
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       ),
       const SizedBox(height: 8),
       if (controller.securityKeyRefusal case final refusal?)
@@ -251,7 +264,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
                     'be gone.',
             },
             style: TextStyle(
-              fontSize: 12,
+              fontSize: FlucordType.caption,
               color: refusal == MfaSecurityKeyRefusal.keyDeclined
                   ? context.surfaces.muted
                   : Theme.of(context).colorScheme.error,
@@ -269,7 +282,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
           'Added ${controller.addedSecurityKey?.name ?? 'the key'}. It '
           'answers for this account now.',
           key: const ValueKey('mfa-security-key-added'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.success),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.success,
+          ),
         ),
         const SizedBox(height: 8),
         TextButton(
@@ -316,7 +332,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
         Text(
           'No security keys are on this account yet.',
           key: const ValueKey('mfa-security-key-none'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
     ];
   }
@@ -354,13 +373,16 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
       style: const TextStyle(
         fontFamily: 'monospace',
         fontWeight: FontWeight.w600,
-        fontSize: 16,
+        fontSize: FlucordType.body,
       ),
     ),
     const SizedBox(height: 4),
     Text(
       'Shown once. If you lose it before the first code works, start again.',
-      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
     const SizedBox(height: 12),
     _CodeField(
@@ -414,7 +436,10 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
       Text(
         'Discord sent no backup codes.',
         key: const ValueKey('mfa-no-backup'),
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       ),
     const SizedBox(height: 12),
     TextButton(
@@ -515,7 +540,10 @@ class _SecurityKeyRow extends StatelessWidget {
               padding: const EdgeInsets.only(left: 8),
               child: Text(
                 'added ${created.year}-${created.month.toString().padLeft(2, '0')}-${created.day.toString().padLeft(2, '0')}',
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ),
           TextButton(

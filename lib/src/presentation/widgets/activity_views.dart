@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 /// Formats the durations a rich presence card shows.
@@ -58,7 +60,7 @@ class ActivityEmojiView extends StatelessWidget {
     }
     return Text(
       emoji.name,
-      style: TextStyle(fontSize: size),
+      style: TextStyle(fontSize: FlucordType.fitting(size)),
       semanticsLabel: emoji.isCustom ? ':${emoji.name}:' : emoji.name,
     );
   }
@@ -68,7 +70,7 @@ class ActivityEmojiView extends StatelessWidget {
 class ActivitySummaryLine extends StatelessWidget {
   const ActivitySummaryLine({
     required this.activity,
-    this.fontSize = 10,
+    this.fontSize = FlucordType.caption,
     this.color,
     super.key,
   });
@@ -146,7 +148,7 @@ class ActivityCard extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +172,7 @@ class ActivityCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -182,7 +184,7 @@ class ActivityCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],
@@ -220,7 +222,7 @@ class _ActivityArtwork extends StatelessWidget {
             message: largeText ?? '',
             excludeFromSemantics: largeText == null,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: FlucordRadius.medium,
               child: RemoteIdentityImage(
                 url: largeUrl,
                 imageKey: const ValueKey('activity-large-image'),

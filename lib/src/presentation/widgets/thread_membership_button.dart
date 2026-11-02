@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/thread_membership_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Join or leave the thread on screen, with how many people are in it.
 ///
@@ -46,7 +47,7 @@ class ThreadMembershipButton extends StatelessWidget {
                     key: const ValueKey('thread-member-count'),
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],
@@ -93,7 +94,7 @@ class ThreadMembershipButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             visualDensity: VisualDensity.compact,
             textStyle: const TextStyle(
-              fontSize: 12,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w600,
             ),
           ),

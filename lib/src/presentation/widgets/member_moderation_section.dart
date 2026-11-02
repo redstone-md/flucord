@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/guild_member_admin_controller.dart';
 import '../../domain/guild_management.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
 
 /// The moderation block of a member popover: roles, nickname, timeout, kick
@@ -79,7 +80,7 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
                 Expanded(
                   child: Text(
                     'That change was not saved.',
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: FlucordType.caption),
                   ),
                 ),
               ],
@@ -194,7 +195,10 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
         if (timedOut) ...[
           Text(
             'Timed out until ${_format(controller.profile!.timeoutUntil!)}',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
           OutlinedButton(
             key: const ValueKey('member-timeout-lift'),
@@ -313,7 +317,7 @@ class _BlockLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     label,
     style: TextStyle(
-      fontSize: 11,
+      fontSize: FlucordType.caption,
       letterSpacing: 0.5,
       fontWeight: FontWeight.w700,
       color: context.surfaces.muted,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'create_forum_post_dialog.dart';
 import 'forum_post_tile.dart';
 
@@ -154,7 +155,7 @@ class _ForumToolbar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   height: 1.35,
                 ),
               ),
@@ -306,7 +307,7 @@ class _ForumSectionSliver extends StatelessWidget {
         label.toUpperCase(),
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 10,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -370,7 +371,7 @@ class _ForumState extends StatelessWidget {
       children: [
         Icon(icon, size: 28, color: context.surfaces.muted),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontSize: 12)),
+        Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,
       ],
     ),

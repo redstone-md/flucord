@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/video_decoder.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Draws somebody else's Go Live stream.
 ///
@@ -128,7 +129,7 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
           'Stream unavailable',
           style: TextStyle(
             color: Theme.of(context).colorScheme.error,
-            fontSize: 12,
+            fontSize: FlucordType.caption,
           ),
         ),
       ]);
@@ -147,7 +148,10 @@ class _GoLiveViewerState extends State<GoLiveViewer> {
           const SizedBox(height: 10),
           Text(
             'Waiting for ${widget.label}',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ],
       ]);

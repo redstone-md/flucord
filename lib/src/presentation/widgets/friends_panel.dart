@@ -6,7 +6,9 @@ import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/friend_suggestion.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'presence_indicator.dart';
 
 /// The account's friends, requests and blocks.
@@ -101,7 +103,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
                 // failure here, so it reads as one.
                 'Discord would not send that request.',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -143,7 +145,7 @@ class _FriendsPanelState extends State<FriendsPanel> {
                     child: Text(
                       'You may know — ${suggestions.length}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
                         color: context.surfaces.muted,
                       ),
@@ -205,7 +207,7 @@ class _Group extends StatelessWidget {
         child: Text(
           '$title — ${entries.length}',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
             color: context.surfaces.muted,
           ),
@@ -239,7 +241,7 @@ class _RelationshipRow extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -264,7 +266,10 @@ class _RelationshipRow extends StatelessWidget {
               ),
               Text(
                 _describe(entry.kind),
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ],
           ),
@@ -326,7 +331,7 @@ class _SuggestionRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -343,7 +348,7 @@ class _SuggestionRow extends StatelessWidget {
                   Text(
                     reason,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),

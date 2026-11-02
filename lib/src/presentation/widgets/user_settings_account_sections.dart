@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 import 'user_settings_sections.dart';
 
@@ -284,10 +285,13 @@ class _CustomStatusField extends StatelessWidget {
           key: const ValueKey('setting-custom-status-field'),
           controller: controller,
           maxLength: 128,
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: FlucordType.caption),
           decoration: InputDecoration(
             isDense: true,
-            counterStyle: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            counterStyle: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
             hintText: "What's happening?",
           ),
           onSubmitted: onSave,

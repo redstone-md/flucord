@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class MessagePollView extends StatelessWidget {
   const MessagePollView({
@@ -32,7 +34,7 @@ class MessagePollView extends StatelessWidget {
                 child: Text(
                   poll.question,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: FlucordType.label,
                     fontWeight: FontWeight.w700,
                     height: 1.3,
                   ),
@@ -51,7 +53,10 @@ class MessagePollView extends StatelessWidget {
               Expanded(
                 child: Text(
                   _statusText(total, ended),
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ),
               if (canEnd && !ended)
@@ -61,7 +66,7 @@ class MessagePollView extends StatelessWidget {
                   style: TextButton.styleFrom(
                     minimumSize: const Size(0, 28),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    textStyle: const TextStyle(fontSize: 10),
+                    textStyle: const TextStyle(fontSize: FlucordType.caption),
                   ),
                   child: const Text('End poll'),
                 ),
@@ -117,7 +122,7 @@ class _PollAnswerRow extends StatelessWidget {
                 ? context.surfaces.brand.withValues(alpha: 0.75)
                 : context.surfaces.border,
           ),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -136,7 +141,10 @@ class _PollAnswerRow extends StatelessWidget {
               child: Row(
                 children: [
                   if (answer.emojiName case final emoji?) ...[
-                    Text(emoji, style: const TextStyle(fontSize: 13)),
+                    Text(
+                      emoji,
+                      style: const TextStyle(fontSize: FlucordType.label),
+                    ),
                     const SizedBox(width: 7),
                   ],
                   Expanded(
@@ -145,7 +153,7 @@ class _PollAnswerRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -155,7 +163,7 @@ class _PollAnswerRow extends StatelessWidget {
                     '$percent%',
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

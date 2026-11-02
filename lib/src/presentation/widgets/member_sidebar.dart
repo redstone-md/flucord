@@ -8,7 +8,9 @@ import '../../application/guild_member_list_controller.dart';
 import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'member_profile_popover.dart';
@@ -228,7 +230,7 @@ class _MemberSidebarState extends State<MemberSidebar> {
           Center(
             child: Text(
               'Nobody by that name yet.',
-              style: TextStyle(fontSize: 12),
+              style: TextStyle(fontSize: FlucordType.caption),
             ),
           ),
         ],
@@ -458,7 +460,7 @@ class _MemberRow extends StatelessWidget {
         opacity: offline ? 0.58 : 1,
         child: Material(
           color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: Semantics(
             button: true,
             label: 'Open profile for ${member.displayName}',
@@ -468,7 +470,7 @@ class _MemberRow extends StatelessWidget {
               // Discord opens the same card from the right button. A row that
               // ignores it is a place where the mouse stops working.
               onSecondaryTap: () => onPressed(context),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: FlucordRadius.small,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                 child: Row(
@@ -484,7 +486,7 @@ class _MemberRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: FlucordType.caption,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -501,7 +503,7 @@ class _MemberRow extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.surfaces.muted,
-                                fontSize: 10,
+                                fontSize: FlucordType.caption,
                               ),
                             ),
                         ],

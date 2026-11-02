@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 class DiscordRelationshipAvatar extends StatelessWidget {
@@ -32,7 +33,7 @@ class DiscordRelationshipAvatar extends StatelessWidget {
                   child: Text(
                     user.displayName.characters.first.toUpperCase(),
                     style: TextStyle(
-                      fontSize: size * 0.38,
+                      fontSize: FlucordType.fitting(size * 0.38),
                       fontWeight: FontWeight.w700,
                     ),
                   ),

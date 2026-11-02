@@ -4,6 +4,7 @@ import '../../application/chat_controller.dart';
 import '../../theme/flucord_theme.dart';
 import 'create_server_dialog.dart';
 import 'join_server_dialog.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's add-a-server entry: two choices, one that joins and one that
 /// creates. Each opens its own dialog and hands back the space that was
@@ -14,7 +15,7 @@ enum AddServerChoice { join, create }
 Future<AddServerChoice> showAddServerChoice(BuildContext context) async {
   final choice = await showDialog<AddServerChoice>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => FlucordDialog(
       key: const ValueKey('add-server-dialog'),
       title: const Text('Add a server'),
       content: const SizedBox.shrink(),

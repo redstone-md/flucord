@@ -39,7 +39,7 @@ class _HitGroupView extends StatelessWidget {
                   channelName == null ? 'Unknown channel' : '#$channelName',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                     color: context.surfaces.muted,
                   ),
@@ -53,7 +53,10 @@ class _HitGroupView extends StatelessWidget {
                   minimumSize: const Size(0, 28),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Jump', style: TextStyle(fontSize: 11)),
+                child: const Text(
+                  'Jump',
+                  style: TextStyle(fontSize: FlucordType.caption),
+                ),
               ),
             ],
           ),
@@ -110,7 +113,7 @@ class _SearchMessageRow extends StatelessWidget {
       decoration: isHit
           ? BoxDecoration(
               color: context.surfaces.raised,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: FlucordRadius.small,
             )
           : null,
       child: Row(
@@ -135,7 +138,7 @@ class _SearchMessageRow extends StatelessWidget {
                         author?.displayName ?? 'Unknown user',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: FlucordType.caption,
                           fontWeight: FontWeight.w600,
                           color: isHit ? null : muted,
                         ),
@@ -144,7 +147,10 @@ class _SearchMessageRow extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       MessageTimestamp.of(context, message.sentAt),
-                      style: TextStyle(fontSize: 10, color: muted),
+                      style: TextStyle(
+                        fontSize: FlucordType.caption,
+                        color: muted,
+                      ),
                     ),
                   ],
                 ),
@@ -158,7 +164,7 @@ class _SearchMessageRow extends StatelessWidget {
                         linkLauncher: linkLauncher,
                         onSelectChannel: onSelectChannel,
                         textStyle: TextStyle(
-                          fontSize: 11,
+                          fontSize: FlucordType.label,
                           height: 1.35,
                           color: isHit ? null : muted,
                         ),
@@ -169,7 +175,10 @@ class _SearchMessageRow extends StatelessWidget {
                   Text(
                     message.attachments.first.fileName,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: muted),
+                    style: TextStyle(
+                      fontSize: FlucordType.caption,
+                      color: muted,
+                    ),
                   ),
               ],
             ),
@@ -218,7 +227,7 @@ class _SearchPager extends StatelessWidget {
           ),
           Text(
             'Page ${pageIndex + 1} of $pageCount',
-            style: const TextStyle(fontSize: 11),
+            style: const TextStyle(fontSize: FlucordType.caption),
           ),
           IconButton(
             key: const ValueKey('search-next-page'),
@@ -274,7 +283,10 @@ class _PartialIndexNotice extends StatelessWidget {
         Expanded(
           child: Text(
             'Older messages are still being indexed.',
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ),
       ],
@@ -295,7 +307,10 @@ class _UnusableFilters extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
     child: Text(
       'Ignored: ${tokens.join(', ')}',
-      style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
   );
 }
@@ -326,14 +341,20 @@ class _SearchPanelState extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (detail case final text?) ...[
             const SizedBox(height: 6),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ],
           ?action,

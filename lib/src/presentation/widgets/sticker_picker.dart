@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'accessibility_dials.dart';
 import 'expression_favorite_star.dart';
 import 'message_sticker_view.dart';
@@ -254,7 +256,7 @@ class _StickerPickerPanel extends StatelessWidget {
                     'No stickers found',
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 )
@@ -272,7 +274,7 @@ class _StickerPickerPanel extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: context.surfaces.muted,
-                              fontSize: 9,
+                              fontSize: FlucordType.caption,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -311,7 +313,7 @@ class _StickerPickerPanel extends StatelessWidget {
                     color: sendFailed
                         ? Theme.of(context).colorScheme.error
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ),
@@ -373,7 +375,7 @@ class _StickerPickerPanel extends StatelessWidget {
           InkWell(
             key: ValueKey('sticker-option-${sticker.id}'),
             onTap: () => onToggle(sticker.id),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
             child: Container(
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
@@ -383,7 +385,7 @@ class _StickerPickerPanel extends StatelessWidget {
                 border: Border.all(
                   color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: FlucordRadius.small,
               ),
               child: assetBuilder(context, sticker.item),
             ),

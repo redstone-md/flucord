@@ -8,6 +8,7 @@ import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_type.dart';
 import 'voice_control.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
@@ -212,14 +213,20 @@ class _VoiceChannelPreview extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             channelName,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.body,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             seated.isEmpty
                 ? 'No one is in the voice channel right now'
                 : '${seated.length} in the channel',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           if (seated.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -373,20 +380,26 @@ class _VoiceStage extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: FlucordType.body,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               ?soundboard,
               const SizedBox(width: 12),
-              Text(
-                voiceRoomStatusLabel(controller),
-                style: TextStyle(
-                  color: controller.isTransportReady
-                      ? context.surfaces.success
-                      : context.surfaces.muted,
-                  fontSize: 11,
+              // Shares the row with the name on a narrow window, rather than
+              // pushing past its edge.
+              Flexible(
+                child: Text(
+                  voiceRoomStatusLabel(controller),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: controller.isTransportReady
+                        ? context.surfaces.success
+                        : context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ),
             ],
@@ -411,7 +424,7 @@ class _VoiceStage extends StatelessWidget {
                         key: const ValueKey('voice-room-warning'),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
-                          fontSize: 11,
+                          fontSize: FlucordType.caption,
                         ),
                       ),
                     ),

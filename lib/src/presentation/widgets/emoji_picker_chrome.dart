@@ -15,14 +15,20 @@ class _PickerHeader extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               spaceName,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ),
         ],
@@ -45,7 +51,7 @@ class _SectionLabel extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: context.surfaces.muted,
-        fontSize: 9,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
       ),
     ),

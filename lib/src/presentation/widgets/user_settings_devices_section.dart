@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/auth_session_controller.dart';
 import '../../domain/auth_session.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
 import 'user_settings_controls.dart';
 
@@ -57,7 +59,7 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
                   'Discord would not end that session. It asks for the '
                   'account password first, which Flucord does not hold.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -119,7 +121,7 @@ class _SessionRow extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -139,7 +141,7 @@ class _SessionRow extends StatelessWidget {
                       'This device',
                       key: ValueKey('device-current-${session.idHash}'),
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -150,7 +152,10 @@ class _SessionRow extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   _describe(session),
-                  style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
               ),
             ],

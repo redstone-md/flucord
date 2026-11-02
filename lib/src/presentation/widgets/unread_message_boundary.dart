@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class UnreadMessageBoundary extends StatelessWidget {
   const UnreadMessageBoundary({super.key});
@@ -21,7 +23,7 @@ class UnreadMessageBoundary extends StatelessWidget {
             'NEW',
             style: TextStyle(
               color: context.surfaces.mention,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -46,12 +48,12 @@ class JumpToPresentButton extends StatelessWidget {
     color: context.surfaces.canvas,
     shape: RoundedRectangleBorder(
       side: BorderSide(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: InkWell(
       key: const ValueKey('jump-to-present'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox(
         height: 30,
         child: Padding(
@@ -67,7 +69,10 @@ class JumpToPresentButton extends StatelessWidget {
               const SizedBox(width: 5),
               const Text(
                 'Jump to present',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -87,12 +92,12 @@ class JumpToUnreadButton extends StatelessWidget {
     color: context.surfaces.canvas,
     shape: RoundedRectangleBorder(
       side: BorderSide(color: context.surfaces.mention),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: InkWell(
       key: const ValueKey('jump-to-unread'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox(
         height: 30,
         child: Padding(
@@ -108,7 +113,10 @@ class JumpToUnreadButton extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 'Jump to unread',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),

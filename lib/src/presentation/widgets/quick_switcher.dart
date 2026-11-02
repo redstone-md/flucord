@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 
 import '../../application/quick_switcher_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'mention_badge.dart';
+import 'flucord_dialog.dart';
 
 part 'quick_switcher_destination_row.dart';
 
@@ -19,7 +22,6 @@ Future<QuickSwitcherDestination?> showQuickSwitcher(
   final previousFocus = FocusManager.instance.primaryFocus;
   final selected = await showDialog<QuickSwitcherDestination>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.68),
     builder: (context) => _QuickSwitcherDialog(
       catalog: QuickSwitcherCatalog.fromWorkspace(workspace),
     ),
@@ -67,15 +69,10 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
       namesRoute: true,
       label: 'Quick Switcher',
       explicitChildNodes: true,
-      child: Dialog(
+      child: FlucordDialog.frame(
         key: const ValueKey('quick-switcher'),
         alignment: const Alignment(0, -0.48),
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        elevation: 18,
-        shadowColor: Colors.black.withValues(alpha: 0.42),
-        backgroundColor: context.surfaces.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: SizedBox(
           width: 640,
           height: math.min(520, availableHeight),
@@ -112,7 +109,10 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
             const SizedBox(height: 2),
             Text(
               'Try a server, channel, thread, or person',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
@@ -230,7 +230,10 @@ class _SearchField extends StatelessWidget {
       autocorrect: false,
       enableSuggestions: false,
       onChanged: onChanged,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        fontSize: FlucordType.body,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: 'Where would you like to go?',
         semanticCounterText: '$resultCount destinations',
@@ -242,12 +245,15 @@ class _SearchField extends StatelessWidget {
             child: Text(
               '$resultCount',
               key: const ValueKey('quick-switcher-result-count'),
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide(color: context.surfaces.focusRing, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -268,7 +274,7 @@ class _GroupLabel extends StatelessWidget {
       _groupName(kind).toUpperCase(),
       style: TextStyle(
         color: context.surfaces.muted,
-        fontSize: 10,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.55,
       ),

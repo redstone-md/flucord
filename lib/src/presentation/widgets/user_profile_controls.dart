@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/user_profile.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
@@ -31,13 +33,19 @@ class ProfilePreviewHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: FlucordType.title,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           'How your account looks to everyone else. Changes are saved '
           'together.',
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ],
     ),
@@ -77,7 +85,7 @@ class ProfileField extends StatelessWidget {
           label.toUpperCase(),
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
           ),
@@ -89,16 +97,19 @@ class ProfileField extends StatelessWidget {
           onChanged: onChanged,
           maxLength: maxLength,
           maxLines: maxLines,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: FlucordType.label),
           decoration: InputDecoration(
             hintText: hint,
             helperText: helper,
-            helperStyle: TextStyle(color: context.surfaces.muted, fontSize: 11),
+            helperStyle: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
             isDense: true,
             filled: true,
             fillColor: context.surfaces.canvas,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: FlucordRadius.small,
               borderSide: BorderSide(color: context.surfaces.border),
             ),
           ),
@@ -140,7 +151,10 @@ class ProfileAvatarButton extends StatelessWidget {
           fallback: Center(
             child: Text(
               initial.isEmpty ? '?' : initial.characters.first.toUpperCase(),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                fontSize: FlucordType.display,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -259,7 +273,7 @@ class ProfileAccentPicker extends StatelessWidget {
         'ACCENT COLOUR',
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 11,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.4,
         ),
@@ -311,7 +325,7 @@ class _Swatch extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: colour ?? context.surfaces.canvas,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       side: BorderSide(
         color: selected
             ? Theme.of(context).colorScheme.onSurface
@@ -321,7 +335,7 @@ class _Swatch extends StatelessWidget {
     ),
     child: InkWell(
       key: swatchKey,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       onTap: onPressed,
       child: SizedBox(width: 30, height: 30, child: Center(child: child)),
     ),
@@ -344,7 +358,7 @@ class ProfileIdentityFacts extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       border: Border.all(color: context.surfaces.border),
     ),
     child: Column(
@@ -358,7 +372,10 @@ class ProfileIdentityFacts extends StatelessWidget {
         Text(
           'Your username and password are changed in Discord itself: both '
           'need a password confirmation Flucord does not ask for.',
-          style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ],
     ),
@@ -380,11 +397,17 @@ class _Fact extends StatelessWidget {
           width: 92,
           child: Text(
             label,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
         Expanded(
-          child: SelectableText(value, style: const TextStyle(fontSize: 12)),
+          child: SelectableText(
+            value,
+            style: const TextStyle(fontSize: FlucordType.caption),
+          ),
         ),
       ],
     ),
@@ -410,7 +433,7 @@ class ProfileSaveBar extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       border: Border.all(color: context.surfaces.border),
     ),
     child: Row(
@@ -418,7 +441,7 @@ class ProfileSaveBar extends StatelessWidget {
         const Expanded(
           child: Text(
             'Careful — you have unsaved changes.',
-            style: TextStyle(fontSize: 12),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         TextButton(
@@ -453,7 +476,10 @@ class ProfileNotice extends StatelessWidget {
       Expanded(
         child: Text(
           message,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ),
     ],

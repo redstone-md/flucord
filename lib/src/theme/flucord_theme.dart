@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../domain/flucord_palette.dart';
+import 'flucord_radius.dart';
+import 'flucord_type.dart';
 
 abstract final class FlucordTheme {
   // WCAG AA: 4.5:1 for text, 3:1 for icons and focus rings.
@@ -118,14 +120,17 @@ abstract final class FlucordTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
       dividerColor: border,
-      fontFamily: 'Bahnschrift',
+      fontFamily: FlucordType.family,
     );
+    final textTheme = FlucordType.textTheme(
+      base.textTheme,
+    ).apply(bodyColor: text, displayColor: text);
     return base.copyWith(
       canvasColor: canvas,
       cardColor: raised,
       hoverColor: text.withValues(alpha: 0.05),
       focusColor: brand.withValues(alpha: 0.24),
-      textTheme: base.textTheme.apply(bodyColor: text, displayColor: text),
+      textTheme: textTheme,
       iconTheme: IconThemeData(color: muted, size: 19),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
@@ -151,8 +156,8 @@ abstract final class FlucordTheme {
             return null;
           }),
           side: focusSide,
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
           ),
         ),
       ),
@@ -166,8 +171,8 @@ abstract final class FlucordTheme {
           }),
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
           side: focusSide,
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
           ),
         ),
       ),
@@ -175,32 +180,39 @@ abstract final class FlucordTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(side: focusSide),
       ),
-      // AlertDialogs get the same 8px corners as the hand-built Dialogs;
-      // Material 3 would otherwise round them to 28.
+      // Every dialog is a FlucordDialog, which takes its frame from here:
+      // one barrier, one background and one corner, in every theme.
       dialogTheme: DialogThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        barrierColor: Colors.black.withValues(alpha: 0.58),
+        backgroundColor: surface,
+        insetPadding: const EdgeInsets.all(24),
+        shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.medium),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: textTheme.bodyMedium,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: rail,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
-        textStyle: TextStyle(color: text, fontSize: 12),
+        textStyle: TextStyle(color: text, fontSize: FlucordType.caption),
         waitDuration: const Duration(milliseconds: 450),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: control,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide(color: focusRing, width: _focusRingWidth),
         ),
       ),

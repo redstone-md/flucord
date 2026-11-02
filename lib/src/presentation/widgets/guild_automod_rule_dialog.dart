@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/automod_rule_editing.dart';
 import 'guild_automod_rule_fields.dart';
+import 'flucord_dialog.dart';
 
 /// What the dialog hands back: a draft for a new rule, or an edit for an
 /// existing one. Never both — which of the two it is follows from whether the
@@ -118,7 +119,7 @@ class _GuildAutoModRuleDialogState extends State<GuildAutoModRuleDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('automod-rule-dialog'),
     title: Text(_isEditing ? 'Edit rule' : 'New AutoMod rule'),
     content: SizedBox(

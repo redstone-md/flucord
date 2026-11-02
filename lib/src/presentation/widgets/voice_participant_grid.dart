@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_type.dart';
 import 'camera_picture.dart';
 import 'go_live_viewer.dart';
 import 'member_avatar.dart';
@@ -71,7 +73,10 @@ class VoiceParticipantGrid extends StatelessWidget {
               const SizedBox(height: 10),
               const Text(
                 'Waiting for participants',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.label,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -241,7 +246,7 @@ class VoiceParticipantTile extends StatelessWidget {
               color: borderColor,
               width: participant.isSpeaking ? 2 : 1,
             ),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: FlucordRadius.medium,
           ),
           child: Stack(
             children: [
@@ -249,7 +254,7 @@ class VoiceParticipantTile extends StatelessWidget {
                 Positioned.fill(
                   key: ValueKey('voice-self-preview-${participant.userId}'),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: FlucordRadius.small,
                     child: _SelfPreview(preview: preview),
                   ),
                 )
@@ -258,7 +263,7 @@ class VoiceParticipantTile extends StatelessWidget {
                 Positioned.fill(
                   key: ValueKey('voice-camera-${participant.userId}'),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: FlucordRadius.small,
                     child: CameraPicture(
                       frame: frame,
                       frames: cameraFramesFor?.call(participant.userId),
@@ -312,7 +317,7 @@ class VoiceParticipantTile extends StatelessWidget {
                           'You',
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 10,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ],
@@ -380,7 +385,7 @@ class _SelfPreview extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -444,7 +449,7 @@ class _StreamCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.raised,
         border: Border.all(color: showsLive ? accent : context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
@@ -503,7 +508,7 @@ class _StreamCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -529,7 +534,10 @@ class _StreamCard extends StatelessWidget {
       null => Text(
         'Streaming',
         key: ValueKey('voice-stream-idle-$userId'),
-        style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
       final watch => _button(
         context,
@@ -561,7 +569,10 @@ class _StreamCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         foregroundColor: danger ? context.surfaces.danger : null,
-        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(
+          fontSize: FlucordType.caption,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       child: Text(label),
     ),
@@ -579,7 +590,10 @@ class _TileName extends StatelessWidget {
       name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      style: const TextStyle(
+        fontSize: FlucordType.caption,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -644,7 +658,7 @@ class _TileVolumeSlider extends StatelessWidget {
         height: 24,
         decoration: BoxDecoration(
           color: context.surfaces.raised.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           border: Border.all(color: context.surfaces.border),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8),

@@ -30,7 +30,7 @@ class _HistoryBoundary extends StatelessWidget {
                     'Older messages unavailable',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -48,7 +48,7 @@ class _HistoryBoundary extends StatelessWidget {
                 icon: const Icon(Icons.arrow_upward, size: 14),
                 label: const Text(
                   'Load older messages',
-                  style: TextStyle(fontSize: 10),
+                  style: TextStyle(fontSize: FlucordType.caption),
                 ),
               ),
       ),
@@ -76,12 +76,18 @@ class _ChannelStart extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '${channel.isThread ? '' : '# '}${channel.name}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.display,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 5),
           Text(
             channel.topic,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 13),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.label,
+            ),
           ),
         ],
       ),
@@ -118,7 +124,10 @@ class _MessageEmptyState extends StatelessWidget {
               hasQuery
                   ? 'Try a different phrase, author, or filename.'
                   : 'Start the conversation from the field below.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),

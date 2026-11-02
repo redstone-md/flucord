@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/direct_message_candidate.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
+import 'flucord_dialog.dart';
 
 /// Finds somebody to message. Pops with their user id.
 class DirectMessageDialog extends StatefulWidget {
@@ -33,7 +35,7 @@ class _DirectMessageDialogState extends State<DirectMessageDialog> {
   @override
   Widget build(BuildContext context) {
     final matches = _matches;
-    return AlertDialog(
+    return FlucordDialog(
       title: const Text('New message'),
       content: SizedBox(
         width: 360,
@@ -130,7 +132,10 @@ class DirectMessagesEmptyView extends StatelessWidget {
         const SizedBox(height: 12),
         const Text(
           'No direct messages',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(

@@ -10,6 +10,7 @@ import 'package:flucord/src/presentation/widgets/message_list.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/channel_history_fixture.dart';
 import 'support/fake_user_settings_repository.dart';
 import 'support/zoomed_app.dart';
 
@@ -55,18 +56,15 @@ void main() {
     await tester.pump();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
     await tester.pumpAndSettle();
-    final anchor = find.byKey(const ValueKey('message-m020'));
-    expect(anchor, findsOneWidget);
-    final before = tester.getTopLeft(anchor).dy;
+    final anchor = ChannelHistoryFixture.rowOnScreen(tester);
 
     await tester.pumpWidget(
       _host([...List.generate(10, _message), ...current]),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('message-m020')), findsOneWidget);
-    final after = tester.getTopLeft(anchor).dy;
-    expect(after, closeTo(before, 1));
+    expect(anchor.row, findsOneWidget);
+    expect(tester.getTopLeft(anchor.row).dy, closeTo(anchor.top, 1));
   });
 
   testWidgets('positions the timeline at the first unread message', (

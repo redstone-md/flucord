@@ -6,7 +6,9 @@ import '../../application/self_video_controller.dart';
 
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'voice_control.dart';
 import 'voice_room_status.dart';
 
@@ -95,7 +97,7 @@ class VoiceConnectionBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: accent,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -109,7 +111,7 @@ class VoiceConnectionBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],
@@ -159,7 +161,7 @@ class VoiceConnectionBar extends StatelessWidget {
                 key: const ValueKey('voice-bar-warning'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
-                  fontSize: 10,
+                  fontSize: FlucordType.caption,
                   height: 1.35,
                 ),
               ),
@@ -211,7 +213,7 @@ class _BarButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         key: buttonKey,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         onTap: onPressed,
         child: SizedBox(
           width: 36,

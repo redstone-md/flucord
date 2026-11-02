@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/guild_member_list.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Reports the panel's scroll position in the units the range maths needs.
 typedef MemberRosterViewportReport =
@@ -144,7 +146,7 @@ class MemberGroupLabel extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -183,7 +185,7 @@ class MemberRosterPlaceholderRow extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: BorderRadius.circular(5),
+                  borderRadius: FlucordRadius.small,
                 ),
               ),
             ),

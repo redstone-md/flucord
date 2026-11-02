@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/report_flow_controller.dart';
 import '../../domain/moderation_report.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Renders one server-supplied report element.
 ///
@@ -140,7 +141,10 @@ class ReportElementView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         body,
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       ),
     );
   }
@@ -153,7 +157,10 @@ class ReportElementView extends StatelessWidget {
         if (element.title != null) ...[
           Text(
             element.title!,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 6),
         ],

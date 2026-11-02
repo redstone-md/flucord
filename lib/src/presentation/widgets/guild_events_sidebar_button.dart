@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class GuildEventsSidebarButton extends StatelessWidget {
   const GuildEventsSidebarButton({
@@ -22,7 +24,7 @@ class GuildEventsSidebarButton extends StatelessWidget {
     child: InkWell(
       key: const ValueKey('guild-events-button'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox(
         height: 40,
         child: Padding(
@@ -38,7 +40,10 @@ class GuildEventsSidebarButton extends StatelessWidget {
               const Expanded(
                 child: Text(
                   'Events',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: FlucordType.label,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               if (isLoading)
@@ -52,13 +57,13 @@ class GuildEventsSidebarButton extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   decoration: BoxDecoration(
                     color: context.surfaces.raised,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: FlucordRadius.small,
                   ),
                   child: Text(
                     '$count',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

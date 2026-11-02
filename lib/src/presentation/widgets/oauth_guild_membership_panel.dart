@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 class OAuthGuildMembershipPanel extends StatefulWidget {
@@ -62,7 +64,7 @@ class _OAuthGuildMembershipPanelState extends State<OAuthGuildMembershipPanel> {
           decoration: BoxDecoration(
             color: context.surfaces.inset,
             border: Border.all(color: context.surfaces.border),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: FlucordRadius.medium,
           ),
           child: switch (snapshot.state) {
             OAuthGuildMembershipLoadState.idle ||
@@ -98,7 +100,7 @@ class _LoadingMembership extends StatelessWidget {
         const Expanded(
           child: Text(
             'Loading server profile…',
-            style: TextStyle(fontSize: 11),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         const SizedBox.square(
@@ -140,7 +142,7 @@ class _LoadedMembership extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -150,7 +152,7 @@ class _LoadedMembership extends StatelessWidget {
                   detail,
                   style: TextStyle(
                     color: context.surfaces.muted,
-                    fontSize: 9,
+                    fontSize: FlucordType.caption,
                     height: 1.35,
                   ),
                 ),
@@ -183,7 +185,10 @@ class _FailedMembership extends StatelessWidget {
         Text(
           message,
           key: const ValueKey('oauth-guild-membership-error'),
-          style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         const SizedBox(height: 4),
         TextButton(

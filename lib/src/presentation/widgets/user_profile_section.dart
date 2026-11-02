@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../application/user_profile_controller.dart';
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/user_profile.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../profile_image_picker.dart';
 import 'remote_identity_image.dart';
 import 'user_profile_controls.dart';
@@ -145,7 +147,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
               key: const ValueKey('user-profile-picker-error'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 11,
+                fontSize: FlucordType.caption,
               ),
             ),
           ),
@@ -190,7 +192,7 @@ class _UserProfileSectionState extends State<UserProfileSection> {
               key: const ValueKey('user-profile-save-error'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
+                fontSize: FlucordType.caption,
               ),
             ),
           ),
@@ -268,7 +270,7 @@ class ProfilePreviewCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         border: Border.all(color: context.surfaces.border),
       ),
       child: Column(
@@ -325,7 +327,7 @@ class ProfilePreviewCard extends StatelessWidget {
                                     : displayName,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 17,
+                                  fontSize: FlucordType.title,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -337,7 +339,7 @@ class ProfilePreviewCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: context.surfaces.muted,
-                                  fontSize: 12,
+                                  fontSize: FlucordType.caption,
                                 ),
                               ),
                             ],
@@ -354,7 +356,7 @@ class ProfilePreviewCard extends StatelessWidget {
                       profile.pronouns,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ),
@@ -363,7 +365,10 @@ class ProfilePreviewCard extends StatelessWidget {
                     offset: const Offset(0, -12),
                     child: Text(
                       profile.bio,
-                      style: const TextStyle(fontSize: 12, height: 1.4),
+                      style: const TextStyle(
+                        fontSize: FlucordType.caption,
+                        height: 1.4,
+                      ),
                     ),
                   ),
               ],

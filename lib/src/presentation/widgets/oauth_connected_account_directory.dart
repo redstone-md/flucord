@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class OAuthConnectedAccountDirectory extends StatelessWidget {
   const OAuthConnectedAccountDirectory({
@@ -23,7 +25,7 @@ class OAuthConnectedAccountDirectory extends StatelessWidget {
             'CONNECTED ACCOUNTS · ${connections.length}',
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
@@ -34,7 +36,10 @@ class OAuthConnectedAccountDirectory extends StatelessWidget {
           Text(
             'No third-party accounts were returned by the connections scope.',
             key: const ValueKey('discord-oauth-connections-empty'),
-            style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           )
         else
           Container(
@@ -42,7 +47,7 @@ class OAuthConnectedAccountDirectory extends StatelessWidget {
             decoration: BoxDecoration(
               color: context.surfaces.inset,
               border: Border.all(color: context.surfaces.border),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: FlucordRadius.medium,
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -88,7 +93,7 @@ class _ConnectedAccountRow extends StatelessWidget {
               height: 30,
               decoration: BoxDecoration(
                 color: context.surfaces.raised,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: FlucordRadius.medium,
               ),
               child: Icon(
                 _serviceIcon(connection.type),
@@ -106,7 +111,7 @@ class _ConnectedAccountRow extends StatelessWidget {
                   Text(
                     service,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -117,7 +122,7 @@ class _ConnectedAccountRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],

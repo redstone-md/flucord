@@ -6,6 +6,7 @@ import '../../application/discord_social_presence_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_social_presence.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_social_presence_scope.dart';
 import 'remote_identity_image.dart';
 
@@ -71,7 +72,7 @@ class OAuthAccountFooter extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -87,7 +88,7 @@ class OAuthAccountFooter extends StatelessWidget {
                             DiscordSocialPresenceState.failure
                         ? context.surfaces.errorText
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],
@@ -152,7 +153,10 @@ class _StatusMenuItem extends StatelessWidget {
         Expanded(
           child: Text(
             _statusLabel(status),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         if (selected)

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class ThreadBrowserPanel extends StatelessWidget {
   const ThreadBrowserPanel({
@@ -136,7 +138,10 @@ class LockedThreadComposerNotice extends StatelessWidget {
         const Expanded(
           child: Text(
             'This archived thread is locked.',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -168,12 +173,18 @@ class _ThreadPanelHeader extends StatelessWidget {
             children: [
               const Text(
                 'Threads',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.label,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 '#$channelName',
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ],
           ),
@@ -208,7 +219,7 @@ class _ThreadSectionLabel extends StatelessWidget {
       label.toUpperCase(),
       style: TextStyle(
         color: context.surfaces.muted,
-        fontSize: 10,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
       ),
     ),
@@ -227,7 +238,7 @@ class _ThreadRow extends StatelessWidget {
     child: InkWell(
       key: ValueKey('thread-row-${thread.id}'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
         child: Row(
@@ -247,7 +258,7 @@ class _ThreadRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -259,7 +270,7 @@ class _ThreadRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -317,7 +328,7 @@ class _InlineArchiveError extends StatelessWidget {
         const Expanded(
           child: Text(
             'Archived threads unavailable',
-            style: TextStyle(fontSize: 11),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -344,7 +355,7 @@ class _ThreadPanelState extends StatelessWidget {
       children: [
         Icon(icon, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontSize: 12)),
+        Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,
       ],
     ),

@@ -488,7 +488,14 @@ void main() {
     olderPage.complete(jsonResponse(_page(0, _firstHeld)));
     await session.settle();
 
-    expect(session.messageRow(_idOf(_firstHeld - 1)), findsOneWidget);
+    // The page sits above the screen, built but out of sight.
+    expect(
+      find.byKey(
+        ValueKey('message-${_idOf(_firstHeld - 1)}'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
     expect(tester.getTopLeft(watched.row).dy, watched.top);
   });
 }

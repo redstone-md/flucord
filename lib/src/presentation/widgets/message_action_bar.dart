@@ -4,6 +4,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'emoji_picker.dart';
 
@@ -72,7 +73,7 @@ class MessageActionBar extends StatelessWidget {
       message,
       currentMemberId: workspace.currentMemberId,
     );
-    final corners = BorderRadius.circular(4);
+    final corners = FlucordRadius.small;
     return Container(
       height: height,
       decoration: BoxDecoration(

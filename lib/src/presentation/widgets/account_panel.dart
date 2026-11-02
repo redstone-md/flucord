@@ -4,6 +4,7 @@ import '../../application/connection_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'activity_views.dart';
 import 'member_avatar.dart';
 import 'streamer_mode_scope.dart';
@@ -56,7 +57,7 @@ class AccountPanel extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -77,7 +78,7 @@ class AccountPanel extends StatelessWidget {
                     color: presence?.isAvailable ?? false
                         ? context.surfaces.muted
                         : color,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
             ],

@@ -6,6 +6,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'account_connections_scope.dart';
 import 'account_entitlements_scope.dart';
 import 'account_data_package_scope.dart';
@@ -303,7 +304,7 @@ class _SpaceButton extends StatelessWidget {
           space.monogram,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w600,
           ),
         ),

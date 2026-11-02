@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../domain/message_embed.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'chat_image.dart';
 import 'message_content_view.dart';
 import 'native_inline_video_player.dart';
@@ -38,7 +40,7 @@ class MessageEmbedView extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.surfaces.inset,
           border: Border.all(color: context.surfaces.border),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
         child: Stack(
           children: [
@@ -186,7 +188,10 @@ class _EmbedTextContent extends StatelessWidget {
         if (embed.title case final title?) ...[
           Text(
             title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 5),
         ],
@@ -196,7 +201,10 @@ class _EmbedTextContent extends StatelessWidget {
             workspace: workspace,
             linkLauncher: linkLauncher,
             onSelectChannel: onSelectChannel,
-            textStyle: const TextStyle(fontSize: 12, height: 1.35),
+            textStyle: const TextStyle(
+              fontSize: FlucordType.label,
+              height: 1.35,
+            ),
           ),
         if (embed.fields.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -236,7 +244,10 @@ class _EmbedSource extends StatelessWidget {
           child: Text(
             name,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -314,7 +325,10 @@ class _EmbedFieldView extends StatelessWidget {
       children: [
         Text(
           field.name,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 3),
         MessageContentView(
@@ -324,7 +338,7 @@ class _EmbedFieldView extends StatelessWidget {
           onSelectChannel: onSelectChannel,
           textStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 11,
+            fontSize: FlucordType.label,
             height: 1.3,
           ),
         ),
@@ -341,7 +355,7 @@ class _EmbedThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox.square(
         dimension: 80,
         child: _RemoteEmbedImage(media: media, box: const Size.square(80)),
@@ -365,7 +379,7 @@ class _EmbedMediaView extends StatelessWidget {
       child: AspectRatio(
         aspectRatio: ratio,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: _RemoteEmbedImage(
             media: media,
             box: boxFitting(_bounds, ratio),
@@ -511,7 +525,10 @@ class _EmbedFooterRow extends StatelessWidget {
           child: Text(
             [?footer?.text, ?timestampLabel].join(' • '),
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
       ],

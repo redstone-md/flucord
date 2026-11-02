@@ -285,7 +285,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
       color: context.surfaces.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
@@ -306,7 +306,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
                     },
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.5,
                     ),
@@ -392,7 +392,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                               : '$prefix${suggestion.label}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: FlucordType.caption,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -404,7 +404,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 10,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ),
@@ -435,14 +435,17 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
         return SizedBox.square(
           dimension: 28,
           child: Center(
-            child: Text(glyph, style: const TextStyle(fontSize: 20)),
+            child: Text(
+              glyph,
+              style: const TextStyle(fontSize: FlucordType.title),
+            ),
           ),
         );
       }
       return SizedBox.square(
         dimension: 28,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: RemoteIdentityImage(
             url: suggestion.emojiUrl,
             fallback: Container(
@@ -450,7 +453,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 suggestion.label.substring(0, 1).toUpperCase(),
-                style: TextStyle(fontSize: 11, color: color),
+                style: TextStyle(fontSize: FlucordType.caption, color: color),
               ),
             ),
           ),
@@ -470,7 +473,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
                   suggestion.initials ?? '?',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -485,7 +488,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
       height: 28,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Icon(
         suggestion.kind == ComposerAutocompleteKind.role

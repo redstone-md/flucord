@@ -139,7 +139,6 @@ extension _FlucordShellNavigation on FlucordShell {
     chatController.acknowledgeNotificationCentre();
     final target = await showDialog<InboxTarget>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.58),
       // The inbox is a snapshot of what was waiting when it was opened, not a
       // live feed. Following the chat controller here rebuilt the whole
       // catalogue on every gateway event — on a busy account that is every
@@ -181,7 +180,6 @@ extension _FlucordShellNavigation on FlucordShell {
     ).administrationOf(space.id).canManageEvents;
     final channelId = await showDialog<String>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.58),
       builder: (_) => ListenableBuilder(
         listenable: chatController,
         builder: (dialogContext, _) => GuildScheduledEventsDialog(

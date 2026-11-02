@@ -6,8 +6,10 @@ import '../../application/inbox_catalog.dart';
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 import 'mention_badge.dart';
+import 'flucord_dialog.dart';
 
 class InboxActivityButton extends StatelessWidget {
   const InboxActivityButton({
@@ -98,15 +100,10 @@ class InboxDialog extends StatelessWidget {
       scopesRoute: true,
       namesRoute: true,
       explicitChildNodes: true,
-      child: Dialog(
+      child: FlucordDialog.frame(
         key: const ValueKey('inbox-dialog'),
         alignment: Alignment.topRight,
         insetPadding: const EdgeInsets.fromLTRB(24, 64, 12, 24),
-        elevation: 16,
-        shadowColor: Colors.black.withValues(alpha: 0.38),
-        backgroundColor: context.surfaces.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: SizedBox(
           width: 480,
           height: math.min(680, availableHeight),
@@ -159,7 +156,10 @@ class _InboxHeader extends StatelessWidget {
           const Expanded(
             child: Text(
               'Inbox',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: FlucordType.title,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           if (showMarkAllRead)
@@ -168,7 +168,7 @@ class _InboxHeader extends StatelessWidget {
               onPressed: onMarkAllRead,
               child: const Text(
                 'Mark all as read',
-                style: TextStyle(fontSize: 11),
+                style: TextStyle(fontSize: FlucordType.caption),
               ),
             ),
           const SizedBox(width: 4),
@@ -197,7 +197,10 @@ class _InboxTabs extends StatelessWidget {
       child: TabBar(
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(
+          fontSize: FlucordType.caption,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelColor: context.surfaces.muted,
         tabs: [
           Tab(text: 'Unreads  ${catalog.unread.length}'),
@@ -281,7 +284,7 @@ class _UnreadRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: FlucordType.label,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -290,7 +293,7 @@ class _UnreadRow extends StatelessWidget {
                       metadata,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 10,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],
@@ -372,7 +375,7 @@ class _MentionGroupSection extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -382,7 +385,7 @@ class _MentionGroupSection extends StatelessWidget {
                     onPressed: () => onMarkEntryRead(channelId),
                     child: const Text(
                       'Mark read',
-                      style: TextStyle(fontSize: 11),
+                      style: TextStyle(fontSize: FlucordType.caption),
                     ),
                   ),
                 ],
@@ -442,7 +445,7 @@ class _MentionRow extends StatelessWidget {
                             entry.author.displayName,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: FlucordType.caption,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -451,7 +454,7 @@ class _MentionRow extends StatelessWidget {
                           _relativeTime(entry.message.sentAt),
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 9,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ],
@@ -463,7 +466,7 @@ class _MentionRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.surfaces.mention,
-                        fontSize: 10,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -472,7 +475,10 @@ class _MentionRow extends StatelessWidget {
                       preview,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, height: 1.3),
+                      style: const TextStyle(
+                        fontSize: FlucordType.caption,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
@@ -517,7 +523,10 @@ class _InboxEmptyState extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           detail,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ],
     ),

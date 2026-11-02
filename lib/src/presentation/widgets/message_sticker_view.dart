@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 typedef StickerAssetBuilder =
     Widget Function(BuildContext context, MessageSticker sticker);
@@ -78,7 +80,7 @@ class _StickerFallback extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: context.surfaces.inset,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       border: Border.all(color: context.surfaces.border),
     ),
     child: Center(
@@ -94,7 +96,10 @@ class _StickerFallback extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
