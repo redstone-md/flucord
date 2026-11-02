@@ -13,6 +13,7 @@ import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 import 'package:flucord/src/presentation/widgets/discord_desktop_login_section.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
@@ -94,6 +95,7 @@ void main() {
     await tester.pump();
     await tester.pumpWidget(
       MaterialApp(
+        theme: FlucordTheme.dark,
         home: Scaffold(
           body: DiscordDesktopLoginSection(
             controller: controller,

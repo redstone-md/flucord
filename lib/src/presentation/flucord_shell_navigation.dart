@@ -3,7 +3,7 @@ part of 'flucord_shell.dart';
 extension _FlucordShellNavigation on FlucordShell {
   /// What stands in for the workspace when there are no spaces to show: the
   /// OAuth account's guild directory when one is signed in, and otherwise the
-  /// prompt to connect a transport.
+  /// sign-in screen.
   Widget _buildEmptyWorkspace(BuildContext context) {
     if (connectionController.isBusy) return const LoadingWorkspaceView();
     if (connectionController.mode != SessionMode.disconnected) {
@@ -14,6 +14,8 @@ extension _FlucordShellNavigation on FlucordShell {
     final account = discordOAuthController.account;
     if (account == null) {
       return DisconnectedWorkspaceView(
+        connection: connectionController,
+        login: DiscordDesktopLoginScope.of(context),
         onOpenConnections: () => _openConnections(context),
       );
     }

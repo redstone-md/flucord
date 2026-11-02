@@ -21,10 +21,15 @@ final class ConnectionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => switch (status) {
     RepositoryConnectionStatus.connected => const SizedBox.shrink(),
-    // A session that cannot resume dials again from the start, so "connecting"
-    // here is still the same outage as "reconnecting". The banner must not
-    // blink off in between.
-    RepositoryConnectionStatus.connecting ||
+    // A session that cannot resume dials again from the start, and the bot
+    // transport shows its workspace before its first READY. Neither is
+    // connected yet, so the banner stays up, but only one of them lost anything.
+    RepositoryConnectionStatus.connecting => const _Bar(
+      icon: Icons.sync,
+      message: 'Connecting to Discord...',
+      background: FlucordColors.warning,
+      foreground: Colors.black,
+    ),
     RepositoryConnectionStatus.reconnecting => const _Bar(
       icon: Icons.sync,
       message: 'Connection lost. Reconnecting...',
