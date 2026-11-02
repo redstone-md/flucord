@@ -240,7 +240,7 @@ void main() {
       final receivedFrame = client.audioPackets.first;
       final frame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 3, timestamp: 4, ssrc: 42),
-        payload: [9, 9, 9],
+        payload: Uint8List.fromList([9, 9, 9]),
       );
       client.sendAudioFrame(frame);
       udp.addPacket(udp.sentPackets.last);
@@ -373,7 +373,7 @@ void main() {
       final receivedFrame = client.audioPackets.first;
       final frame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
-        payload: [3, 4, 5],
+        payload: Uint8List.fromList([3, 4, 5]),
       );
       expect(client.sendAudioFrame(frame), greaterThan(frame.payload.length));
       udp.addPacket(udp.sentPackets.single);
@@ -406,7 +406,7 @@ void main() {
       final remoteAudio = client.remoteAudio.first;
       final remoteAudioFrame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 2, timestamp: 3, ssrc: 91),
-        payload: const [6, 7, 8],
+        payload: Uint8List.fromList([6, 7, 8]),
       );
       client.sendAudioFrame(remoteAudioFrame);
       udp.addPacket(udp.sentPackets.last);
@@ -487,7 +487,7 @@ void main() {
       // A real one still arrives afterwards: the stream was not torn down.
       final frame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
-        payload: const [3, 4, 5],
+        payload: Uint8List.fromList([3, 4, 5]),
       );
       client.sendAudioFrame(frame);
       udp.addPacket(udp.sentPackets.last);
@@ -605,7 +605,7 @@ void main() {
             timestamp: 2,
             ssrc: 12,
           ),
-          payload: const [3, 4, 5],
+          payload: Uint8List.fromList([3, 4, 5]),
         );
         client.sendAudioFrame(picture);
         udp.addPacket(udp.sentPackets.last);
@@ -671,7 +671,7 @@ void main() {
         // camera from somebody whose opcode 12 has not arrived.
         DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 42),
-          payload: const [1, 2, 3],
+          payload: Uint8List.fromList([1, 2, 3]),
         ),
         DiscordRtpFrame(
           header: DiscordRtpHeader(
@@ -680,7 +680,7 @@ void main() {
             ssrc: 92,
             payloadType: DiscordRtpHeader.discordVideoPayloadType,
           ),
-          payload: const [4, 5, 6],
+          payload: Uint8List.fromList([4, 5, 6]),
         ),
         DiscordRtpFrame(
           header: DiscordRtpHeader(
@@ -689,7 +689,7 @@ void main() {
             ssrc: 500,
             payloadType: DiscordRtpHeader.discordVideoPayloadType,
           ),
-          payload: const [7, 8, 9],
+          payload: Uint8List.fromList([7, 8, 9]),
         ),
       ]) {
         client.sendAudioFrame(frame);
@@ -702,6 +702,10 @@ void main() {
       // dropped rather than drawn over somebody else's tile.
       expect(video.single.$1, 'remote-2');
       expect(video.single.$2.payload, [4, 5, 6]);
+      // Bytes, not a list with a boxed int per byte: the rest of the receive
+      // path reads them as they are.
+      expect(audio.single.payload, isA<Uint8List>());
+      expect(video.single.$2.payload, isA<Uint8List>());
 
       socket.addJson({
         'op': 13,
@@ -755,7 +759,7 @@ void main() {
         // a RESUMED brings no second session description to build it from.
         final frame = DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 7, timestamp: 8, ssrc: 42),
-          payload: [1, 2, 3],
+          payload: Uint8List.fromList([1, 2, 3]),
         );
         expect(client.sendAudioFrame(frame), greaterThan(0));
       },
@@ -1050,6 +1054,50 @@ void main() {
         'd': {'transition_id': 7},
       });
     });
+
+    test('group decryption adds no copy of its own', () async {
+      final socket = _FakeVoiceWebSocket();
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 1,
+        // Its decryptor hands back what it is given, so whatever else comes
+        // out is a copy this client made.
+        daveService: _GatewayFakeDaveService(),
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: _FakeVoiceUdpTransport(),
+      );
+      addTearDown(client.close);
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'd': {
+          'ssrc': 42,
+          'ip': '127.0.0.1',
+          'port': 5000,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      socket.addJson({
+        'op': 4,
+        'd': {
+          'mode': 'aead_aes256_gcm_rtpsize',
+          'secret_key': List<int>.generate(32, (index) => index),
+          'dave_protocol_version': 0,
+        },
+      });
+      await _flushEvents();
+      final bytes = Uint8List.fromList([1, 2, 3]);
+
+      expect(
+        client.decryptVideoGroupFrame(userId: 'remote-1', picture: bytes),
+        same(bytes),
+      );
+      expect(
+        client.decryptDaveAudioFrame(userId: 'remote-1', encryptedFrame: bytes),
+        same(bytes),
+      );
+    });
   });
 }
 
@@ -1157,7 +1205,7 @@ DiscordRtpFrame _video(int sequence) => DiscordRtpFrame(
     payloadType: DiscordRtpHeader.discordVideoPayloadType,
     marker: true,
   ),
-  payload: [sequence],
+  payload: Uint8List.fromList([sequence]),
 );
 
 /// [sequence]'s retransmission (RFC 4588): on the SSRC above, with the
@@ -1170,7 +1218,7 @@ DiscordRtpFrame _retransmission(int sequence) => DiscordRtpFrame(
     payloadType: DiscordRtpHeader.discordVideoRtxPayloadType,
     marker: true,
   ),
-  payload: [sequence >> 8, sequence & 0xff, sequence],
+  payload: Uint8List.fromList([sequence >> 8, sequence & 0xff, sequence]),
 );
 
 (String, Map<String, Object?>) _voiceServer() => (
@@ -1366,9 +1414,9 @@ final class _GatewayFakeDaveDecryptor implements VoiceDaveDecryptor {
   void transitionToPassthrough(bool enabled) {}
 
   @override
-  List<int> decrypt({
+  Uint8List decrypt({
     required DaveMediaType mediaType,
-    required List<int> encryptedFrame,
+    required Uint8List encryptedFrame,
   }) => encryptedFrame;
 
   @override

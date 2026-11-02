@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_rtp_reorder_buffer.dart';
@@ -54,7 +56,7 @@ List<int> _sequences(List<DiscordOrderedRtpFrame> frames) => frames
 
 DiscordRtpFrame _frame(int sequence) => DiscordRtpFrame(
   header: DiscordRtpHeader(sequence: sequence, timestamp: sequence, ssrc: 7),
-  payload: [sequence & 0xff],
+  payload: Uint8List.fromList([sequence & 0xff]),
 );
 
 /// The time-based window: what video uses, so a hole waits for a

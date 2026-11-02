@@ -473,7 +473,7 @@ DiscordRtpFrame _cameraFrame(List<int> payload) => DiscordRtpFrame(
     ssrc: 41,
     marker: true,
   ),
-  payload: payload,
+  payload: Uint8List.fromList(payload),
 );
 
 /// A picture with something in it, as a decoder would produce.
