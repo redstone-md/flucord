@@ -154,6 +154,7 @@ extension _ChatControllerEvents on ChatController {
     final isOwn = message.authorId == _workspace?.currentMemberId;
     if (!event.isNew || !_keepOutOfOldWindow(message, member: event.member)) {
       _workspace = _workspace?.upsertMessage(message, member: event.member);
+      if (event.isNew) _catchingUpChannels[message.channelId]?.add(message.id);
     }
     _capChannelIfNotOpen(message.channelId);
     if (isOwn) {

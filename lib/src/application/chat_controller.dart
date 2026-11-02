@@ -117,7 +117,10 @@ final class ChatController extends ChangeNotifier {
   /// Held channels that may lack messages since a [HistoryGapEvent]. A page from
   /// Discord clears a channel, and a page from the cache does not.
   final Set<String> _channelsWithGap = {};
-  final Set<String> _catchingUpChannels = {};
+
+  /// Per channel catching up, the messages that came live since its page was
+  /// asked for. The page may lack them, and they stay when it lands.
+  final Map<String, Set<String>> _catchingUpChannels = {};
 
   /// Channels showing a locally held page while their refresh is in flight.
   /// A refresh that then fails leaves what is on screen rather than an error.
@@ -646,9 +649,10 @@ final class ChatController extends ChangeNotifier {
   Future<void> _catchUpChannel(String channelId) async {
     if (!_channelsWithGap.contains(channelId) ||
         hasNewerMessages(channelId) ||
-        !_catchingUpChannels.add(channelId)) {
+        _catchingUpChannels.containsKey(channelId)) {
       return;
     }
+    final arrived = _catchingUpChannels[channelId] = {};
     final window = _windowLoads[channelId];
     try {
       final page = await _repository.loadChannelHistory(channelId);
@@ -657,7 +661,7 @@ final class ChatController extends ChangeNotifier {
           !identical(_windowLoads[channelId], window)) {
         return;
       }
-      _workspace = _workspace?.catchUpHistory(page.history);
+      _workspace = _workspace?.catchUpHistory(page.history, arrived: arrived);
       _channelsWithGap.remove(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
       // The window may be away: then the missed messages stay unread.
@@ -911,6 +915,7 @@ final class ChatController extends ChangeNotifier {
     _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
     _persistChannelActivity(channelId);
     _lastSentMessage = message;
+    _catchingUpChannels[channelId]?.add(message.id);
     // Slowmode counts every kind of message, so every send starts its clock.
     _lastSentAt[channelId] = DateTime.now();
   }

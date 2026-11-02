@@ -447,21 +447,29 @@ final class ChatWorkspace {
   /// place. A page that does not reach them replaces them, because keeping both
   /// would leave a hole nothing marks. Inside the page's own span the page is
   /// the truth, so a message deleted during the gap goes. Anything newer came
-  /// live while the page was on its way, and stays.
-  ChatWorkspace catchUpHistory(ChannelHistory page) {
-    if (page.messages.isEmpty) return mergeHistory(page);
+  /// live while the page was on its way, and stays. So does each message named
+  /// in [arrived], which came live after the page was asked for: the page may
+  /// have been built before it reached Discord, and may even be empty.
+  ChatWorkspace catchUpHistory(
+    ChannelHistory page, {
+    Set<String> arrived = const {},
+  }) {
     final held = messagesFor(page.channelId);
-    final oldest = page.messages.first.sentAt;
-    final newest = page.messages.last.sentAt;
+    final oldest = page.messages.firstOrNull?.sentAt;
+    final newest = page.messages.lastOrNull?.sentAt;
+    bool cameLive(ChatMessage message) =>
+        arrived.contains(message.id) ||
+        (newest != null && message.sentAt.isAfter(newest));
     return mergeHistory(
       ChannelHistory(
         channelId: page.channelId,
         members: page.members,
         messages: [
-          if (_reachesHeldMessages(page))
+          if (oldest != null && _reachesHeldMessages(page))
             ...held.where((message) => message.sentAt.isBefore(oldest)),
+          ...held.where(cameLive),
+          // After the live ones, so the page's copy of a message wins.
           ...page.messages,
-          ...held.where((message) => message.sentAt.isAfter(newest)),
         ],
       ),
     );

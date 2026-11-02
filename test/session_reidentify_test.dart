@@ -347,6 +347,29 @@ void main() {
     );
 
     testSession(
+      'a message right behind READY stays when the page is empty',
+      (tester, session) async {
+        await session.openChannel(_channelId);
+        _historyAnswers(session, _channelId, []);
+
+        await _loseSession(session);
+        await session.dispatch(
+          'READY',
+          SessionHarness.defaultReady(),
+          settle: false,
+        );
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _guildMessage('900000000000000051', 51),
+          settle: false,
+        );
+        await session.settle();
+
+        expect(session.messageRow('900000000000000051'), findsOneWidget);
+      },
+    );
+
+    testSession(
       'the missed messages are acked with the window in focus, and stay unread '
       'with it away',
       (tester, session) async {
