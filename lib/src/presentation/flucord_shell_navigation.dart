@@ -255,6 +255,77 @@ extension _FlucordShellNavigation on FlucordShell {
     if (confirmed) await chatController.deleteScheduledEvent(event);
   }
 
+  /// Whether the settings window has anything to show this account.
+  bool _canOpenSettings(GuildAdminCapabilities administration) =>
+      administration.hasAnySurface && chatController.guildManagement != null;
+
+  /// The menu of a server on the rail, which may not be the one on screen. It
+  /// holds what the server's header offers, and Mark as read up front.
+  Future<void> _openSpaceMenu(
+    BuildContext context,
+    String spaceId,
+    Offset position,
+  ) async {
+    final workspace = chatController.workspace;
+    final space = workspace?.spaceOrNull(spaceId);
+    if (workspace == null || space == null) return;
+    final administration = WorkspacePermissions(
+      workspace,
+    ).administrationOf(spaceId);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final at = RelativeRect.fromRect(
+      overlay.globalToLocal(position) & Size.zero,
+      Offset.zero & overlay.size,
+    );
+    final action = await showMenu<ServerMenuAction>(
+      context: context,
+      position: at,
+      items: serverMenuItems({
+        if (chatController.readStateRepository != null) ...{
+          ServerMenuAction.markRead,
+          ServerMenuAction.notifications,
+        },
+        if (_canOpenSettings(administration)) ServerMenuAction.settings,
+        if (chatController.moderation != null) ServerMenuAction.report,
+        if (chatController.guildManagement != null) ServerMenuAction.leave,
+      }),
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case ServerMenuAction.markRead:
+        await chatController.markSpaceRead(space.id);
+      case ServerMenuAction.settings:
+        await _openGuildSettings(context, space, administration);
+      case ServerMenuAction.notifications:
+        await _openSpaceNotificationMenu(context, space, at);
+      case ServerMenuAction.report:
+        await _reportSpace(context, space);
+      case ServerMenuAction.leave:
+        await _leaveServer(context, space);
+    }
+  }
+
+  Future<void> _openSpaceNotificationMenu(
+    BuildContext context,
+    CommunitySpace space,
+    RelativeRect at,
+  ) async {
+    final readState = chatController.readState;
+    final settings = readState.settingsFor(space.id);
+    final request = await showNotificationSettingsMenu(
+      context: context,
+      position: at,
+      muted: readState.isSpaceMuted(space.id),
+      level: settings.messageNotifications,
+      isSpaceScope: true,
+      suppressEveryone: settings.suppressEveryone,
+      mobilePush: settings.mobilePush,
+    );
+    if (request == null) return;
+    _applyNotificationRequest(request, space: space, channel: null);
+  }
+
   /// Opens the server-settings window for [space].
   ///
   /// The controller is built per opening and disposed with the dialog: it holds
@@ -590,9 +661,18 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   Future<void> _openDirectMessage(BuildContext context) async {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
     final recipientId = await showDialog<String>(
       context: context,
-      builder: (_) => const DirectMessageDialog(),
+      builder: (_) => DirectMessageDialog(
+        people: DirectMessageCandidate.from(
+          members: workspace.members,
+          currentMemberId: workspace.currentMemberId,
+          relationships:
+              chatController.relationships?.relationships ?? const [],
+        ),
+      ),
     );
     if (recipientId == null || !context.mounted) return;
     await _openDirectConversation(context, recipientId);

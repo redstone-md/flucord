@@ -2,6 +2,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import 'emoji_picker.dart';
 import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
@@ -28,6 +29,7 @@ import 'message_content_view.dart';
 import 'message_embed_view.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
+import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
@@ -48,6 +50,7 @@ class MessageItem extends StatefulWidget {
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
@@ -57,6 +60,8 @@ class MessageItem extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
+    this.onOpenMemberProfile,
+    this.onOpenMessage,
     this.componentController,
     this.applicationCommands,
     this.expressionFavorites,
@@ -97,6 +102,10 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Makes this message and everything after it unread again. Null on a
+  /// transport with no read state.
+  final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
 
@@ -110,6 +119,13 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
+
+  /// Opens the profile of the user with this id. Null where no profile can
+  /// show, which leaves the author's name and avatar as plain content.
+  final ValueChanged<String>? onOpenMemberProfile;
+
+  /// Jumps to another message of this channel, by id.
+  final ValueChanged<String>? onOpenMessage;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -231,12 +247,15 @@ class _MessageItemState extends State<MessageItem> {
                               ),
                             ),
                           )
-                        : MemberAvatar(
-                            member: widget.member,
-                            size: 34,
-                            spaceId: widget.workspace
-                                .channelById(widget.message.channelId)
-                                .spaceId,
+                        : _opensAuthorProfile(
+                            key: const ValueKey('message-author-avatar'),
+                            child: MemberAvatar(
+                              member: widget.member,
+                              size: 34,
+                              spaceId: widget.workspace
+                                  .channelById(widget.message.channelId)
+                                  .spaceId,
+                            ),
                           ),
                   ),
                   const SizedBox(width: 10),
@@ -369,11 +388,18 @@ class _MessageItemState extends State<MessageItem> {
     child: Row(
       children: [
         Flexible(
-          child: Text(
-            widget.member.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          child: _opensAuthorProfile(
+            key: const ValueKey('message-author-name'),
+            child: Text(
+              widget.member.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _nameColor(widget.member),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -411,32 +437,89 @@ class _MessageItemState extends State<MessageItem> {
     ),
   );
 
+  /// The colour of [member]'s role here, or null for the normal text colour.
+  Color? _nameColor(Member member) {
+    final spaceId = widget.workspace
+        .channelOrNull(widget.message.channelId)
+        ?.spaceId;
+    final value = spaceId == null
+        ? null
+        : widget.workspace.nameColorOf(member, spaceId);
+    return value == null ? null : Color(value);
+  }
+
+  /// Makes [child] a target for the pointer, or leaves it as it is when there
+  /// is nothing to do. The label replaces what [child] would announce.
+  Widget _clickable({
+    required Key key,
+    required String label,
+    required VoidCallback? onTap,
+    required Widget child,
+  }) {
+    if (onTap == null) return child;
+    return Semantics(
+      button: true,
+      label: label,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: key,
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _opensAuthorProfile({required Key key, required Widget child}) {
+    final open = widget.onOpenMemberProfile;
+    return _clickable(
+      key: key,
+      label: '${widget.member.displayName} profile',
+      onTap: open == null ? null : () => open(widget.message.authorId),
+      child: child,
+    );
+  }
+
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final author = widget.workspace.memberOrNull(reply.authorId);
+    final open = widget.onOpenMessage;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(
-            Icons.subdirectory_arrow_right,
-            size: 13,
-            color: context.surfaces.muted,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            author?.displayName ?? 'Unknown user',
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 5),
-          Expanded(
-            child: Text(
-              reply.body.isEmpty ? 'Message unavailable' : reply.body,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+      child: _clickable(
+        key: const ValueKey('message-reply-preview'),
+        label: 'Go to the replied message',
+        onTap: open == null ? null : () => open(reply.messageId),
+        child: Row(
+          children: [
+            Icon(
+              Icons.subdirectory_arrow_right,
+              size: 13,
+              color: context.surfaces.muted,
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            Text(
+              author?.displayName ?? 'Unknown user',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: author == null ? null : _nameColor(author),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                reply.body.isEmpty
+                    ? 'Message unavailable'
+                    : messagePreviewText(context, reply.body, widget.workspace),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -474,10 +557,15 @@ class _MessageItemState extends State<MessageItem> {
       message: widget.message,
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
+      canMarkUnread: widget.onMarkUnread != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
     switch (action) {
+      case MessageMenuAction.addReaction:
+        await _pickReactionAt(position);
+      case MessageMenuAction.markUnread:
+        await widget.onMarkUnread?.call(widget.message);
       case MessageMenuAction.reply:
         widget.onReply(widget.message);
       case MessageMenuAction.edit:
@@ -508,6 +596,23 @@ class _MessageItemState extends State<MessageItem> {
         await copyToClipboard(widget.message.id);
       case MessageMenuAction.delete:
         await _confirmDelete();
+    }
+  }
+
+  Future<void> _pickReactionAt(Offset position) async {
+    final spaceId = widget.workspace
+        .channelById(widget.message.channelId)
+        .spaceId;
+    final emoji = await showEmojiPickerAt(
+      context: context,
+      position: position,
+      spaceName: widget.workspace.spaceById(spaceId).name,
+      emojiSections: emojiSectionsFromWorkspace(widget.workspace, spaceId),
+      purpose: EmojiPickerPurpose.reaction,
+      favorites: widget.expressionFavorites,
+    );
+    if (emoji != null && mounted) {
+      await widget.onAddReaction(widget.message, emoji);
     }
   }
 

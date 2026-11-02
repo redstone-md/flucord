@@ -155,6 +155,35 @@ void main() {
       expect(tester.getRect(menu.first).left, closeTo(click.dx, 1));
     }, accessibility: zoomed);
 
+    testSession('the server menu on the rail', (tester, session) async {
+      final click = tester.getCenter(
+        find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
+      );
+      await tester.tapAt(click, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      final menu = find.byKey(const ValueKey('server-menu-mark-read'));
+      expect(tester.getRect(menu).left, closeTo(click.dx, 1));
+    }, accessibility: zoomed);
+
+    testSession('the reaction picker of the message menu', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await session.dispatch('MESSAGE_CREATE', _message('hello'));
+
+      final click = tester.getTopLeft(_row) + const Offset(10, 10);
+      await tester.tapAt(click, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message-menu-add-reaction')));
+      await tester.pumpAndSettle();
+
+      final picker = tester.getRect(find.byKey(const ValueKey('emoji-picker')));
+      expect(picker.left, closeTo(click.dx, 1));
+      _expectInside(picker, window);
+    }, accessibility: zoomed);
+
     for (final (where, toward) in [
       ('in the middle', Alignment.center),
       ('at the right end', const Alignment(0.95, 0)),
