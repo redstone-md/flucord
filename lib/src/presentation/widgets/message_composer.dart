@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,6 +9,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_theme.dart';
+import '../clipboard_attachments.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
 import '../../application/expression_favorites_controller.dart';
@@ -143,6 +145,7 @@ class _MessageComposerState extends State<MessageComposer>
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
+  late final _pasteAction = _PasteAction(_paste);
   bool _hasContent = false;
   bool _suppressNotifications = false;
   int _charactersUsed = 0;
@@ -186,6 +189,9 @@ class _MessageComposerState extends State<MessageComposer>
     _initializeComposerAutocomplete();
     _listenToVoiceProgress();
     _startSlowmodeTicker();
+    DesktopDrop.instance
+      ..init()
+      ..addRawDropEventListener(_onFilesDropped);
   }
 
   @override
@@ -216,6 +222,7 @@ class _MessageComposerState extends State<MessageComposer>
 
   @override
   void dispose() {
+    DesktopDrop.instance.removeRawDropEventListener(_onFilesDropped);
     _saveDraft(widget.channelId);
     _disposeComposerAutocomplete();
     _slowmodeTicker?.cancel();
@@ -348,10 +355,51 @@ class _MessageComposerState extends State<MessageComposer>
         'before sending again.',
   );
 
-  Future<void> _pickAttachments() async {
+  Future<void> _pickAttachments() => _attachFrom(
+    widget.attachmentPicker.pick,
+    failure: 'The file picker could not be opened.',
+  );
+
+  /// A drop anywhere in the window lands here, as it does in Discord: the
+  /// system offers a drop over the whole window, so a part of it that ignored
+  /// the file would look broken.
+  void _onFilesDropped(DropEvent event) {
+    if (event is! DropDoneEvent || !widget.canAttachFiles) return;
+    // A dialog in front of the chat has the user's attention, not this box.
+    if (ModalRoute.isCurrentOf(context) == false) return;
+    unawaited(
+      _attachFrom(
+        () => pendingAttachmentsAt(event.files.map((file) => file.path)),
+        failure: 'Those files could not be read.',
+      ),
+    );
+  }
+
+  /// Ctrl+V. Text pastes as it always has, even with a picture beside it: a
+  /// spreadsheet or a document copies both, and the user wants the words. So
+  /// only a clipboard with no text attaches anything.
+  Future<void> _paste(VoidCallback pasteText) async {
+    final attaches = widget.canAttachFiles && !await Clipboard.hasStrings();
+    if (!mounted) return;
+    if (!attaches) return pasteText();
+    await _attachFrom(
+      ClipboardAttachments.read,
+      failure: 'The clipboard could not be read.',
+    );
+  }
+
+  /// The one way a file reaches the strip, wherever it came from.
+  ///
+  /// A channel left while [source] reads keeps nothing: a file meant for one
+  /// conversation must not appear in the next.
+  Future<void> _attachFrom(
+    Future<List<PendingAttachment>> Function() source, {
+    required String failure,
+  }) async {
+    final channelId = widget.channelId;
     try {
-      final picked = await widget.attachmentPicker.pick();
-      if (!mounted || picked.isEmpty) return;
+      final picked = await source();
+      if (!mounted || widget.channelId != channelId || picked.isEmpty) return;
       // The size is checked before anything is attached, so the answer
       // arrives up front rather than as a failure after an upload.
       final limit = widget.attachmentSizeLimitBytes;
@@ -383,9 +431,9 @@ class _MessageComposerState extends State<MessageComposer>
       _focusNode.requestFocus();
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The file picker could not be opened.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(failure)));
     }
   }
 
@@ -454,7 +502,10 @@ class _MessageComposerState extends State<MessageComposer>
     });
     _focusNode.requestFocus();
     final sent = await send;
-    if (sent) return;
+    if (sent) {
+      await ClipboardAttachments.release(content.attachments);
+      return;
+    }
     if (mounted && widget.channelId == channelId) {
       setState(() => _showInBox(_boxContent.withFailedSend(content)));
     } else {
@@ -565,7 +616,7 @@ class _MessageComposerState extends State<MessageComposer>
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): _send,
               },
-              child: _buildComposerAutocompletePortal(
+              child: _fieldTakingPaste(
                 child: TextField(
                   key: const ValueKey('message-composer'),
                   controller: _controller,
@@ -680,6 +731,11 @@ class _MessageComposerState extends State<MessageComposer>
       ),
     );
   }
+
+  Widget _fieldTakingPaste({required Widget child}) => Actions(
+    actions: {PasteTextIntent: _pasteAction},
+    child: _buildComposerAutocompletePortal(child: child),
+  );
 
   /// The spell check configuration the composer runs with, or none where the
   /// switch is off or no service is installed.
@@ -871,6 +927,20 @@ class _MessageComposerState extends State<MessageComposer>
       ],
     ),
   );
+}
+
+/// Takes Ctrl+V from the text field. [callingAction] is the field's own paste,
+/// and it is only set while [invoke] runs, so it is passed on as a callback.
+final class _PasteAction extends Action<PasteTextIntent> {
+  _PasteAction(this._onPaste);
+
+  final Future<void> Function(VoidCallback pasteText) _onPaste;
+
+  @override
+  Future<void> invoke(PasteTextIntent intent) {
+    final fieldPaste = callingAction;
+    return _onPaste(() => fieldPaste?.invoke(intent));
+  }
 }
 
 enum _ComposerMenuAction { attach, poll, silent }

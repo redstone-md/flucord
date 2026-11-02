@@ -20,15 +20,20 @@ final class ConnectionController extends ChangeNotifier {
     this._repositoryFactory, {
     SessionMode initialMode = SessionMode.disconnected,
     this.botTransportEnabled = false,
+    Future<void> Function() clearChatImages = _noChatImages,
     NavigationMemoryStore? navigationMemory,
   }) : _mode = initialMode,
+       _clearChatImages = clearChatImages,
        _navigationMemory = navigationMemory;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
+  final Future<void> Function() _clearChatImages;
   final bool botTransportEnabled;
   final NavigationMemoryStore? _navigationMemory;
+
+  static Future<void> _noChatImages() async {}
 
   SessionMode _mode;
   ConnectionActionState _state = ConnectionActionState.idle;
@@ -202,27 +207,38 @@ final class ConnectionController extends ChangeNotifier {
     await forgetSavedCredential();
   }
 
-  /// Forgets the account on this machine: its credential and its cached data.
+  /// Forgets the account on this machine: its credential, its cached data and
+  /// the pictures of its chats.
   ///
   /// A live session ends first, because it holds the cache open and would keep
   /// writing to it. A cache that cannot be cleared must not keep the credential
-  /// alive, so the credential goes either way and the failure is reported.
+  /// alive, or the other cache, so everything else goes either way and the
+  /// failure is reported.
   Future<void> forgetSavedCredential() async {
     if (_mode == SessionMode.discord) await disconnect();
-    try {
-      await _repositoryFactory.clearCache();
-    } catch (error, stackTrace) {
-      AppLog.error(
-        'connection',
-        'The chat cache could not be cleared: $error',
-        stackTrace: stackTrace,
-      );
-      _errorMessage = 'Your cached messages could not be removed from disk.';
-    }
+    await _clearFromDisk(_repositoryFactory.clearCache, 'messages');
+    await _clearFromDisk(_clearChatImages, 'images');
     await _navigationMemory?.forget();
     await _credentialVault.clearDiscordSession();
     _hasSavedCredential = false;
     notifyListeners();
+  }
+
+  /// Runs [clear], and reports a failure as the cached [what] left on disk.
+  Future<void> _clearFromDisk(
+    Future<void> Function() clear,
+    String what,
+  ) async {
+    try {
+      await clear();
+    } catch (error, stackTrace) {
+      AppLog.error(
+        'connection',
+        'The cached $what could not be cleared: $error',
+        stackTrace: stackTrace,
+      );
+      _errorMessage = 'Your cached $what could not be removed from disk.';
+    }
   }
 
   Future<void> _ensureDisconnectedWorkspace() async {
