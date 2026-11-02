@@ -68,6 +68,7 @@ final class SessionHarness {
     this._voiceMessageRecorder,
     this._accessibility,
     this._linkAtLaunch,
+    this._chatImagesOnDisk,
   ) : _diskDirectory = diskDirectory,
       _factory = _FakeWireRepositoryFactory(
         transport,
@@ -103,6 +104,7 @@ final class SessionHarness {
   final VoiceMessageRecorder? _voiceMessageRecorder;
   final AccessibilitySettings _accessibility;
   final ChannelLink? _linkAtLaunch;
+  final bool _chatImagesOnDisk;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
@@ -164,6 +166,7 @@ final class SessionHarness {
         accessibilityRepository: FixedDials(_accessibility),
         desktopIntegration: _window,
         chatRepositoryFactory: _factory,
+        clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
         discordRemoteAuthGatewayFactory: remoteAuth,
       ),
     ),
@@ -270,7 +273,7 @@ final class SessionHarness {
     await _tester.tap(find.text('Sign out'));
     await settle();
     await _tester.tap(find.byKey(destructiveConfirmKey));
-    await settle();
+    await _settleUntil(() => !_vault.hasSession, 'the end of the sign-out');
   }
 
   /// Every byte the cache has on disk, as text, with its side files.
@@ -392,6 +395,8 @@ enum SessionLaunch {
 /// Pass a [platform] when a test depends on platform gestures, such as the right
 /// button on selectable text. Without one, Flutter tests run as Android.
 /// [accessibility] is what the zoom and font dials are set to at launch.
+/// [chatImagesOnDisk] makes a sign-out clear the real chat image cache, which
+/// needs a `ChatImageDisk` declared in the test file.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -404,6 +409,7 @@ void testSession(
   AccessibilitySettings accessibility = AccessibilitySettings.off,
   ChannelLink? linkAtLaunch,
   TargetPlatform? platform,
+  bool chatImagesOnDisk = false,
 }) {
   testWidgets(description, (tester) async {
     debugDefaultTargetPlatformOverride = platform;
@@ -423,6 +429,7 @@ void testSession(
       voiceMessageRecorder,
       accessibility,
       linkAtLaunch,
+      chatImagesOnDisk,
     );
     try {
       await session._start(ready ?? SessionHarness.defaultReady(), launch);
@@ -433,6 +440,9 @@ void testSession(
     }
   });
 }
+
+/// A test with no folder for the chat image cache has nothing in it to clear.
+Future<void> _noChatImagesToClear() async {}
 
 final _channelHistoryPath = RegExp(r'^/api/v9/channels/\d+/messages$');
 
@@ -567,6 +577,8 @@ final class _MemoryCredentialVault implements CredentialVault {
       DiscordDesktopUserSession(SessionHarness.tokenOf(accountId));
 
   void saveAccount(String accountId) => _session = _sessionOf(accountId);
+
+  bool get hasSession => _session != null;
 
   @override
   Future<DiscordAccountSession?> readDiscordSession() async => _session;
