@@ -32,8 +32,23 @@ final class _DisconnectedWorkspaceViewState
   @override
   void initState() {
     super.initState();
-    // A new user gets the QR at once. Someone with a saved session gets Retry
-    // instead, and a sign-in that just failed keeps its error on screen.
+    widget.connection.addListener(_offerSignIn);
+    _offerSignIn();
+  }
+
+  @override
+  void dispose() {
+    widget.connection.removeListener(_offerSignIn);
+    super.dispose();
+  }
+
+  /// A new user gets the QR at once. Someone with a saved session gets Retry
+  /// instead, and a sign-in that just failed keeps its error on screen.
+  ///
+  /// It runs again on each change of the connection, because a sign-out shows
+  /// this screen before it has finished: the saved session goes last, once the
+  /// files of the account are off the disk.
+  void _offerSignIn() {
     if (widget.connection.state == ConnectionActionState.idle &&
         !widget.connection.hasSavedCredential &&
         widget.login.state == DiscordDesktopLoginState.idle) {
