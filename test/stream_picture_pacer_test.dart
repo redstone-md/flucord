@@ -101,6 +101,49 @@ void main() {
     });
   });
 
+  test('a late picture waits for the queued pictures older than it', () {
+    fakeAsync((async) {
+      final decoded = <int>[];
+      final pacer = StreamPicturePacer(
+        submit: (unit, _) => decoded.add(unit.length),
+        now: () => async.elapsed,
+      );
+      pacer.submit(_unit(1), 0);
+      pacer.submit(_unit(2), _frameTicks);
+      pacer.submit(_unit(3), 2 * _frameTicks);
+      pacer.submit(_unit(5), 5 * _frameTicks);
+      // Older than the newest in the queue, newer than the first two in it.
+      pacer.submit(_unit(4), 3 * _frameTicks);
+      expect(decoded, [1, 2, 3, 4]);
+      async.elapse(const Duration(seconds: 1));
+      expect(decoded, [1, 2, 3, 4, 5]);
+      pacer.dispose();
+    });
+  });
+
+  test(
+    'a late picture stays in order after the queue has started to drain',
+    () {
+      fakeAsync((async) {
+        final decoded = <int>[];
+        final pacer = StreamPicturePacer(
+          submit: (unit, _) => decoded.add(unit.length),
+          now: () => async.elapsed,
+        );
+        pacer.submit(_unit(1), 0);
+        pacer.submit(_unit(2), _frameTicks);
+        pacer.submit(_unit(4), 3 * _frameTicks);
+        // The second picture's slot comes; the fourth is still waiting.
+        async.elapse(const Duration(milliseconds: 45));
+        expect(decoded, [1, 2]);
+        pacer.submit(_unit(3), 2 * _frameTicks);
+        async.elapse(const Duration(seconds: 1));
+        expect(decoded, [1, 2, 3, 4]);
+        pacer.dispose();
+      });
+    },
+  );
+
   test('a picture whose slot is far ahead decodes now and re-anchors', () {
     fakeAsync((async) {
       final decoded = <int>[];

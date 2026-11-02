@@ -21,6 +21,7 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
   final StreamController<Object?> _messages = StreamController();
   final List<Object> _sent = [];
   bool _open = true;
+  bool _closeHeld = false;
   int? _closeCode;
 
   /// Every frame the client sent on this socket, decoded, oldest first.
@@ -40,8 +41,19 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
   /// Closes from the server's side, as a dropped connection does.
   Future<void> dropConnection({int? code}) {
     _closeCode = code;
-    return close();
+    return _finishClose();
   }
+
+  /// Makes a close from the client slow, as a real close handshake is: the
+  /// socket stops being open at once, frames can still arrive, and the done
+  /// event waits for [completeClose].
+  void holdClose() => _closeHeld = true;
+
+  /// The server answers the close, so the done event of a held close arrives.
+  Future<void> completeClose() => _finishClose();
+
+  /// The connection fails with [error], which ends the client's subscription.
+  void failConnection(Object error) => _messages.addError(error);
 
   @override
   int? get closeCode => _closeCode;
@@ -60,6 +72,14 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
 
   @override
   Future<void> close() async {
+    if (_closeHeld) {
+      _open = false;
+      return;
+    }
+    await _finishClose();
+  }
+
+  Future<void> _finishClose() async {
     _open = false;
     if (!_messages.isClosed) await _messages.close();
   }
@@ -70,8 +90,24 @@ final class MemoryDesktopWebSocketConnector
     implements DiscordDesktopWebSocketConnector {
   final List<MemoryDesktopWebSocket> sockets = [];
 
+  /// Every dial the client started, including one still held open.
+  int dials = 0;
+
+  Completer<void>? _heldDials;
+
+  /// Keeps each later dial in flight until [releaseDials]. Its socket joins
+  /// [sockets] when the dial returns.
+  void holdDials() => _heldDials ??= Completer();
+
+  void releaseDials() {
+    _heldDials?.complete();
+    _heldDials = null;
+  }
+
   @override
   Future<DiscordDesktopWebSocket> connect(Uri uri) async {
+    dials++;
+    await _heldDials?.future;
     final socket = MemoryDesktopWebSocket._(
       etf: uri.queryParameters['encoding'] == 'etf',
     );

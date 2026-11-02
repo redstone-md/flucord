@@ -53,6 +53,27 @@ final class MessageUpsertedEvent extends ChatRepositoryEvent {
   final bool mentionsCurrentMember;
 }
 
+/// Discord changed a message that already exists.
+///
+/// Kept distinct from [MessageUpsertedEvent] because it changes only a message
+/// the workspace holds. It adds no message to the timeline, marks no channel
+/// read and does not move a channel's latest message.
+final class MessageUpdatedEvent extends ChatRepositoryEvent {
+  const MessageUpdatedEvent({
+    required this.messageId,
+    required this.applyTo,
+    this.member,
+  });
+
+  final String messageId;
+
+  /// The held message with the change applied. An update can name only some
+  /// fields, and the held message supplies the rest.
+  final ChatMessage Function(ChatMessage held) applyTo;
+
+  final Member? member;
+}
+
 /// The reactions on a message changed.
 ///
 /// Kept distinct from [MessageUpsertedEvent] because a reaction is not a new

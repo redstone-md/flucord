@@ -16,16 +16,6 @@ const _key = GoLiveStreamKey.guild(
   userId: 'friend-1',
 );
 
-const _transport = VoiceTransportSession(
-  guildId: 'guild-1',
-  ssrc: 4242,
-  address: '127.0.0.1',
-  port: 50000,
-  mode: 'aead_aes256_gcm_rtpsize',
-  secretKey: <int>[],
-  daveProtocolVersion: 0,
-);
-
 /// One whole picture in one packet: a single keyframe unit, with the marker
 /// that closes it.
 final _picture = DiscordRtpFrame(
@@ -49,18 +39,9 @@ Future<void> _askAndAnswer(
 ) async {
   await tester.tap(_watchButton);
   await tester.pump();
-  _answerAsk(harness);
+  harness.answerWatch(_key);
   await tester.pump();
 }
-
-/// What Discord sends in answer to an ask: the stream, and where to dial it.
-void _answerAsk(StreamRoomHarness harness) => harness.repository
-  ..dispatch('STREAM_CREATE', {'stream_key': _key.value})
-  ..dispatch('STREAM_SERVER_UPDATE', {
-    'stream_key': _key.value,
-    'endpoint': 'stream.discord.gg',
-    'token': 'stream-token',
-  });
 
 /// A session Discord asked for and whose connection then fails.
 Future<StreamRoomHarness> _failedWatch(WidgetTester tester) async {
@@ -72,19 +53,8 @@ Future<StreamRoomHarness> _failedWatch(WidgetTester tester) async {
       error: StateError('watch denied'),
     ),
   );
-  await _settle(tester);
+  await settleStreamRoom(tester);
   return harness;
-}
-
-/// Lets the news reach the room, then draws what the room became.
-///
-/// Closing a connection cancels subscriptions, which is real async work that a
-/// fake-async test body cannot wait out, so the wait in the middle is a real
-/// one.
-Future<void> _settle(WidgetTester tester) async {
-  await tester.pump();
-  await tester.runAsync(pumpEventQueue);
-  await tester.pump();
 }
 
 void main() {
@@ -113,10 +83,10 @@ void main() {
     ]);
 
     final fresh = harness.streamClients.last;
-    fresh.emit(const VoiceTransportReadyEvent(_transport));
-    await _settle(tester);
+    fresh.emit(const VoiceTransportReadyEvent(streamRoomTransport));
+    await settleStreamRoom(tester);
     fresh.emitVideo(_key.userId, _picture);
-    await _settle(tester);
+    await settleStreamRoom(tester);
 
     expect(harness.viewer.decodedUnitsFor(_key), 1);
     expect(_failedMark, findsNothing);
@@ -139,9 +109,9 @@ void main() {
     final framesAtFailure = [...harness.repository.watchFrames];
 
     await harness.voice.disconnect();
-    await _settle(tester);
+    await settleStreamRoom(tester);
     await harness.joinRoom();
-    await _settle(tester);
+    await settleStreamRoom(tester);
 
     // Withdrawn once, at the failure: the room has nothing more to take back.
     expect(harness.repository.watchFrames, framesAtFailure);
@@ -169,9 +139,9 @@ void main() {
     final harness = await pumpStreamRoom(tester, streamRoomVoiceChannel);
     await _askAndAnswer(tester, harness);
     harness.streamClients.single.emit(
-      const VoiceTransportReadyEvent(_transport),
+      const VoiceTransportReadyEvent(streamRoomTransport),
     );
-    await _settle(tester);
+    await settleStreamRoom(tester);
 
     await _exhaustRecovery(tester, harness);
 
@@ -187,12 +157,12 @@ Future<void> _exhaustRecovery(
 ) async {
   for (var round = 0; round < DiscordStreamRtcService.maxRecoveries; round++) {
     harness.streamClients.last.emit(const VoiceCredentialsNeededEvent());
-    await _settle(tester);
-    _answerAsk(harness);
-    await _settle(tester);
+    await settleStreamRoom(tester);
+    harness.answerWatch(_key);
+    await settleStreamRoom(tester);
   }
   harness.streamClients.last.emit(const VoiceCredentialsNeededEvent());
-  await _settle(tester);
+  await settleStreamRoom(tester);
 }
 
 void _expectGaveUp(StreamRoomHarness harness) {

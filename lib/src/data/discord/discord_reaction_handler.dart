@@ -13,18 +13,18 @@ final class DiscordReactionHandler {
   final ChatCache _cache;
   final String? Function() _currentMemberId;
 
-  /// The last cache update. Each one reads a message and writes it back, so
-  /// reactions that land together wait in line or one would overwrite another.
-  Future<void> _cacheUpdates = Future.value();
-
   /// Applies [event] to the cached message, if there is one, and returns the
   /// event to announce. Null when the payload describes no change.
+  ///
+  /// This reads a message and writes it back, so calls must not overlap, or one
+  /// reaction would overwrite another. `DiscordSharedDispatches` runs them one
+  /// at a time.
   Future<MessageReactionChangedEvent?> apply(
     DiscordGatewayDispatch event,
   ) async {
     final change = _changeFrom(event);
     if (change == null) return null;
-    await (_cacheUpdates = _cacheUpdates.then((_) => _updateCache(change)));
+    await _updateCache(change);
     return MessageReactionChangedEvent(change);
   }
 

@@ -111,6 +111,10 @@ class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
   bool _editing = false;
   bool _reactionPickerOpen = false;
+
+  /// The text selected in this row now. Opening the menu takes focus, and that
+  /// clears the selection, so the menu keeps its own copy.
+  String _selectedText = '';
   late final TextEditingController _editController = TextEditingController(
     text: widget.message.body,
   );
@@ -165,13 +169,17 @@ class _MessageItemState extends State<MessageItem> {
         onSecondaryTapDown: (details) =>
             unawaited(_openContextMenu(context, details.globalPosition)),
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
             Container(
               decoration: BoxDecoration(
                 color: _hovered
                     ? context.surfaces.raised.withValues(alpha: 0.45)
                     : Colors.transparent,
+              ),
+              // The bar must fit inside the row. A part of it outside the row
+              // gets no clicks, and the pointer there hovers the next row.
+              constraints: const BoxConstraints(
+                minHeight: MessageActionBar.height,
               ),
               padding: EdgeInsets.fromLTRB(
                 20,
@@ -204,12 +212,20 @@ class _MessageItemState extends State<MessageItem> {
                           ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: _content(context)),
+                  Expanded(
+                    child: MessageMenuScope(
+                      onOpen: (position) =>
+                          unawaited(_openContextMenu(context, position)),
+                      onSelectionChanged: (content) =>
+                          _selectedText = content?.plainText ?? '',
+                      child: _content(context),
+                    ),
+                  ),
                 ],
               ),
             ),
             if ((_hovered || _reactionPickerOpen) && !_editing)
-              Positioned(right: 18, top: -12, child: _actionBar(context)),
+              Positioned(right: 18, top: 0, child: _actionBar(context)),
           ],
         ),
       ),
@@ -420,12 +436,14 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
+    final selectedText = _selectedText;
     final action = await showMessageContextMenu(
       context: context,
       position: position,
       message: widget.message,
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
+      selectedText: selectedText,
     );
     if (action == null || !mounted) return;
     switch (action) {
@@ -440,6 +458,8 @@ class _MessageItemState extends State<MessageItem> {
         _showForwardDialog();
       case MessageMenuAction.createThread:
         _showCreateThreadDialog();
+      case MessageMenuAction.copySelection:
+        await copyToClipboard(selectedText);
       case MessageMenuAction.copyText:
         await copyToClipboard(widget.message.body);
       case MessageMenuAction.copyLink:
