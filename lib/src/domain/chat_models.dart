@@ -1,5 +1,8 @@
 import 'dart:collection';
 
+import 'package:collection/collection.dart'
+    show ListEquality, MapEquality, SetEquality;
+
 import 'discord_snowflake.dart';
 import 'go_live_stream.dart';
 import 'message_component.dart';
@@ -511,8 +514,11 @@ final class ChatWorkspace {
         (channel) => channel.withLatestMessage(messageId),
       );
 
-  ChatWorkspace upsertMember(Member member) =>
-      copyWith(members: _mergeMemberInto(members, member));
+  /// Answers this same workspace when [member] says nothing new.
+  ChatWorkspace upsertMember(Member member) {
+    final next = _mergeMemberInto(members, member);
+    return identical(next, members) ? this : _copy(members: next);
+  }
 
   /// Folds a batch of members in with one pass over the member table.
   ///
@@ -628,32 +634,31 @@ final class ChatWorkspace {
   /// rather than turned into a nameless row: Discord streams presence for
   /// friends and for every subscribed guild, so an unmatched id is routine.
   ChatWorkspace applyPresence(String memberId, UserPresence presence) =>
-      copyWith(
-        members: [
-          for (final member in members)
-            member.id == memberId ? member.withPresence(presence) : member,
-        ],
-      );
+      applyPresences({memberId: presence});
 
   /// Applies a batch of presences with one pass over the member table.
   ///
   /// `READY_SUPPLEMENTAL` alone carries a presence for every online friend and
   /// every subscribed guild member, and folding them in one at a time would
   /// rebuild the table once per presence.
+  ///
+  /// Answers this same workspace, at no cost, when no member's presence moves.
+  /// Discord repeats itself, because it reports a user once per shared guild.
   ChatWorkspace applyPresences(Map<String, UserPresence> presences) {
-    if (presences.isEmpty) return this;
-    var touched = false;
-    final next = <Member>[];
-    for (final member in members) {
-      final presence = presences[member.id];
-      if (presence == null) {
-        next.add(member);
-        continue;
-      }
-      touched = true;
-      next.add(member.withPresence(presence));
-    }
-    return touched ? copyWith(members: next) : this;
+    final moved = {
+      for (final MapEntry(key: id, value: presence) in presences.entries)
+        if (_memberById[id]?.hasPresence(presence) == false) id: presence,
+    };
+    if (moved.isEmpty) return this;
+    return _copy(
+      members: [
+        for (final member in members)
+          switch (moved[member.id]) {
+            final presence? => member.withPresence(presence),
+            null => member,
+          },
+      ],
+    );
   }
 
   ChatWorkspace removeMemberFromSpace(String memberId, String spaceId) {
@@ -706,15 +711,26 @@ final class ChatWorkspace {
 
   ChatWorkspace removeMessage(String messageId) => removeMessages({messageId});
 
-  ChatWorkspace removeMessages(Set<String> messageIds) => _copy(
-    held: _held.without(messageIds),
-    channels: [
-      for (final channel in channels)
-        messageIds.contains(channel.firstUnreadMessageId)
-            ? channel.clearUnreadBoundary()
-            : channel,
-    ],
-  );
+  /// Answers this same workspace when no id names a message it holds or an
+  /// unread boundary. Discord deletes messages this client never loaded.
+  ChatWorkspace removeMessages(Set<String> messageIds) {
+    final held = _held.without(messageIds);
+    final movesBoundary = channels.any(
+      (channel) => messageIds.contains(channel.firstUnreadMessageId),
+    );
+    if (identical(held, _held) && !movesBoundary) return this;
+    return _copy(
+      held: held,
+      channels: !movesBoundary
+          ? channels
+          : [
+              for (final channel in channels)
+                messageIds.contains(channel.firstUnreadMessageId)
+                    ? channel.clearUnreadBoundary()
+                    : channel,
+            ],
+    );
+  }
 
   /// A channel the workspace holds keeps its place and its unread state. A new
   /// DM is the newest conversation, so it goes first in the list.
@@ -750,6 +766,7 @@ final class ChatWorkspace {
     final existing = current.where((member) => member.id == incoming.id);
     if (existing.isEmpty) return [...current, incoming];
     final merged = _mergeMember(existing.first, incoming);
+    if (merged == existing.first) return current;
     return [...current.where((member) => member.id != incoming.id), merged];
   }
 

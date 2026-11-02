@@ -117,6 +117,15 @@ final class ActivityTimestamps {
     final remaining = end - now.millisecondsSinceEpoch;
     return Duration(milliseconds: remaining < 0 ? 0 : remaining);
   }
+
+  Object get _fields => (startMs, endMs, isCountDown);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActivityTimestamps && other._fields == _fields;
+
+  @override
+  int get hashCode => _fields.hashCode;
 }
 
 /// `activity.assets`, the two artwork slots a rich presence card draws.
@@ -155,6 +164,24 @@ final class ActivityAssets {
       smallImage == null &&
       smallText == null &&
       smallUrl == null;
+
+  Object get _fields => (
+    largeImage,
+    largeText,
+    largeUrl,
+    smallImage,
+    smallText,
+    smallUrl,
+    largeImageUrl,
+    smallImageUrl,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActivityAssets && other._fields == _fields;
+
+  @override
+  int get hashCode => _fields.hashCode;
 }
 
 /// `activity.party.privacy`, R07's `KIY`.
@@ -185,6 +212,15 @@ final class ActivityParty {
   final ActivityPartyPrivacy? privacy;
 
   bool get hasSize => currentSize != null && maxSize != null;
+
+  Object get _fields => (id, currentSize, maxSize, privacy);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActivityParty && other._fields == _fields;
+
+  @override
+  int get hashCode => _fields.hashCode;
 }
 
 /// `activity.secrets`. `spectate` is accepted on write but is not on the read
@@ -194,6 +230,15 @@ final class ActivitySecrets {
 
   final String? match;
   final String? join;
+
+  Object get _fields => (match, join);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActivitySecrets && other._fields == _fields;
+
+  @override
+  int get hashCode => _fields.hashCode;
 }
 
 /// The emoji beside a custom status.
@@ -217,6 +262,15 @@ final class ActivityEmoji {
   final String? imageUrl;
 
   bool get isCustom => id != null && id!.isNotEmpty;
+
+  Object get _fields => (name, id, animated, imageUrl);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActivityEmoji && other._fields == _fields;
+
+  @override
+  int get hashCode => _fields.hashCode;
 }
 
 /// One entry of a presence's `activities` array.
@@ -300,4 +354,40 @@ final class UserActivity {
     final verb = type.verb;
     return verb.isEmpty ? subject : '$verb $subject';
   }
+
+  Object get _fields => (
+    name,
+    type,
+    sessionId,
+    url,
+    applicationId,
+    statusDisplayType,
+    state,
+    stateUrl,
+    details,
+    detailsUrl,
+    emoji,
+    assets,
+    timestamps,
+    party,
+    secrets,
+    syncId,
+    createdAtMs,
+    instance,
+    flags,
+    platform,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is UserActivity &&
+      other._fields == _fields &&
+      const ListEquality<String>().equals(
+        other.supportedPlatforms,
+        supportedPlatforms,
+      ) &&
+      const ListEquality<String>().equals(other.buttons, buttons);
+
+  @override
+  int get hashCode => _fields.hashCode;
 }

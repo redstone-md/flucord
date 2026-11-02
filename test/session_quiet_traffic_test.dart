@@ -64,6 +64,11 @@ Future<void> _openAndRest(
   String channelId,
 ) async {
   await session.openChannel(channelId);
+  await _rest(tester, session);
+}
+
+/// Waits for the app to come to rest. See [_openAndRest].
+Future<void> _rest(WidgetTester tester, SessionHarness session) async {
   var quietRounds = 0;
   for (var round = 0; round < 40 && quietRounds < 2; round++) {
     final builds = await countBuilds(() async {
@@ -321,6 +326,56 @@ void main() {
       final builds = await countBuilds(() => _presence(session, _friendId));
 
       expect(_shellBuilds(builds), greaterThan(0));
+    });
+
+    testSession('that repeats what the app shows builds nothing', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'on screen');
+      await _presence(session, _friendId);
+      await _rest(tester, session);
+
+      final builds = await countBuilds(() => _presence(session, _friendId));
+
+      expect(_shellBuilds(builds), 0);
+      expect(builds.of<MessageItem>(), 0);
+    });
+  });
+
+  group('traffic that changes nothing', () {
+    testSession('a member update builds nothing', (tester, session) async {
+      await _openAndRest(tester, session, _channelId);
+      Future<void> update() => session.dispatch('GUILD_MEMBER_UPDATE', {
+        'guild_id': _guildId,
+        'user': {'id': _friendId, 'username': 'friend'},
+        'nick': 'Friend',
+        'roles': <Object?>[],
+      });
+      await update();
+      await _rest(tester, session);
+
+      final builds = await countBuilds(update);
+
+      expect(_shellBuilds(builds), 0);
+    });
+
+    testSession('a delete of a message the app does not hold builds nothing', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+
+      final builds = await countBuilds(
+        () => session.dispatch('MESSAGE_DELETE', {
+          'id': '900000000000000099',
+          'channel_id': _channelId,
+          'guild_id': _guildId,
+        }),
+      );
+
+      expect(_shellBuilds(builds), 0);
     });
   });
 
