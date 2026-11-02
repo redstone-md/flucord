@@ -167,6 +167,11 @@ void main() {
         );
 
         test(
+          'the default icon colour reaches 3:1',
+          () => expectContrast(surfaces.muted, 3),
+        );
+
+        test(
           'the accent icon reaches 3:1',
           () => expectContrast(surfaces.accentIcon, 3),
         );
