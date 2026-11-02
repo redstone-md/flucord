@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_account_connection_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
 
@@ -22,14 +24,17 @@ class OAuthConnectionSection extends StatelessWidget {
         children: [
           const Text(
             'Discord account',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             'Connect your Discord account once to bring in your profile, servers, friends and direct messages.',
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 11,
+              fontSize: FlucordType.caption,
               height: 1.35,
             ),
           ),
@@ -67,7 +72,7 @@ class _OAuthIdentityTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Row(
         children: [
@@ -79,7 +84,7 @@ class _OAuthIdentityTile extends StatelessWidget {
               key: const ValueKey('discord-oauth-status'),
               style: TextStyle(
                 color: failed ? context.surfaces.errorText : null,
-                fontSize: 12,
+                fontSize: FlucordType.caption,
               ),
             ),
           ),
@@ -189,7 +194,7 @@ class _OAuthGuildDirectory extends StatelessWidget {
           'AUTHORIZED SERVERS · ${guilds.length}',
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 10,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
@@ -198,14 +203,17 @@ class _OAuthGuildDirectory extends StatelessWidget {
         if (guilds.isEmpty)
           Text(
             'Discord listed no servers for this account.',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           )
         else
           Container(
             decoration: BoxDecoration(
               color: context.surfaces.inset,
               border: Border.all(color: context.surfaces.border),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: FlucordRadius.medium,
             ),
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
@@ -244,7 +252,7 @@ class _OAuthGuildRow extends StatelessWidget {
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: FlucordRadius.medium,
               child: SizedBox.square(
                 dimension: 32,
                 child: RemoteIdentityImage(
@@ -255,7 +263,7 @@ class _OAuthGuildRow extends StatelessWidget {
                       child: Text(
                         _initial(guild.name),
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: FlucordType.caption,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -274,7 +282,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -285,7 +293,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],

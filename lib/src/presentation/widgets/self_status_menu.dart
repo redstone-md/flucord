@@ -4,6 +4,7 @@ import '../../application/self_presence_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/presence_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'presence_indicator.dart';
 import 'flucord_dialog.dart';
 
@@ -189,7 +190,7 @@ class _CustomStatusDialogState extends State<CustomStatusDialog> {
                     isDense: true,
                     counterStyle: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 9,
+                      fontSize: FlucordType.caption,
                     ),
                     hintText: "What's happening?",
                   ),

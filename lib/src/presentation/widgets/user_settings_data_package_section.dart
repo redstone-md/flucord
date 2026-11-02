@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/account_data_package_controller.dart';
 import '../../domain/account_data_package.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// The account's data package: a request that can be started, and the state
@@ -53,7 +55,10 @@ class _DataPackageSettingsSectionState
             'email address. Collecting it can take up to thirty days, and '
             'only one request can run at a time.',
             key: const ValueKey('data-package-explainer'),
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 12),
           if (controller.isLoading && package == null)
@@ -75,7 +80,7 @@ class _DataPackageSettingsSectionState
                   'Discord did not start one. The account needs a verified '
                   'email address, and only one request can run at a time.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -126,7 +131,7 @@ class _StatusCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,7 +173,10 @@ class _StatusCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 package.progressStep!,
-                style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ),
         ],

@@ -8,6 +8,7 @@ import '../../domain/discord_permissions.dart';
 import '../../domain/guild_management.dart';
 import '../../domain/permission_overwrite.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
 import 'flucord_dialog.dart';
@@ -633,7 +634,7 @@ class _OverwriteEditor extends StatelessWidget {
         Text(
           'PERMISSION OVERRIDES',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             letterSpacing: 0.5,
             fontWeight: FontWeight.w700,
             color: context.surfaces.muted,
@@ -643,7 +644,10 @@ class _OverwriteEditor extends StatelessWidget {
         Text(
           'Private channels are made by denying View channel to @everyone '
           'and granting it to the roles and members who belong.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
         const SizedBox(height: 10),
         for (final overwrite in entries)

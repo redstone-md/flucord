@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/account_connections_controller.dart';
 import '../../domain/account_connections.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// The account's third-party connections: what is linked, what can be.
@@ -49,7 +51,10 @@ class _ConnectionsSettingsSectionState
             'A link opens the service\'s own page in your browser. '
             'Flucord never sees the sign-in you do there.',
             key: const ValueKey('connections-disclaimer'),
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 12),
           if (controller.isLoading && controller.connections.isEmpty)
@@ -70,7 +75,7 @@ class _ConnectionsSettingsSectionState
                 child: Text(
                   'Discord will not start a $refused link for this account.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -83,7 +88,7 @@ class _ConnectionsSettingsSectionState
                   'Discord refused to remove $refused. It may already be '
                   'gone.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -136,7 +141,7 @@ class _ConnectionRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -151,7 +156,10 @@ class _ConnectionRow extends StatelessWidget {
                 const SizedBox(height: 1),
                 Text(
                   connection.name,
-                  style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
                 if (status.isNotEmpty)
                   Padding(
@@ -160,7 +168,7 @@ class _ConnectionRow extends StatelessWidget {
                       status.join(' · '),
                       key: ValueKey('connection-status-${connection.type}'),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         color: connection.revoked
                             ? Theme.of(context).colorScheme.error
                             : context.surfaces.muted,
@@ -216,7 +224,10 @@ class _LinkButtons extends StatelessWidget {
         for (final (type, label) in _services)
           ActionChip(
             key: ValueKey('connection-link-$type'),
-            label: Text(label, style: const TextStyle(fontSize: 11)),
+            label: Text(
+              label,
+              style: const TextStyle(fontSize: FlucordType.caption),
+            ),
             onPressed: controller.isLinking
                 ? null
                 : () => unawaited(controller.startLink(type)),

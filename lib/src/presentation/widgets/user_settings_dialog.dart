@@ -21,7 +21,9 @@ import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_profile_controls.dart';
 import 'account_credentials_section.dart';
 import 'user_profile_section.dart';
@@ -313,7 +315,7 @@ class _Navigation extends StatelessWidget {
                 'User settings',
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 10,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                 ),
@@ -367,7 +369,7 @@ class _NavigationTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: foreground,
-        fontSize: 12,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -375,10 +377,10 @@ class _NavigationTile extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: compact ? 0 : 1),
       child: Material(
         color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           key: ValueKey('settings-nav-${category.name}'),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           onTap: onPressed,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -456,7 +458,7 @@ class _Body extends StatelessWidget {
                 category.label,
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -478,7 +480,7 @@ class _Body extends StatelessWidget {
             'Discord did not accept the last change.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
-              fontSize: 11,
+              fontSize: FlucordType.caption,
             ),
           ),
         ),
@@ -817,7 +819,10 @@ class _Notice extends StatelessWidget {
       Expanded(
         child: Text(
           message,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ),
     ],

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 final class DiscordIdentityProfileDetail {
   const DiscordIdentityProfileDetail({
@@ -100,7 +102,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
       color: context.surfaces.raised,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
         side: BorderSide(color: context.surfaces.border),
       ),
       child: ConstrainedBox(
@@ -152,7 +154,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: FlucordType.title,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -170,7 +172,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(fontSize: FlucordType.caption),
                         ),
                       ],
                       const SizedBox(height: 3),
@@ -178,7 +180,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                         statusLabel,
                         style: TextStyle(
                           color: context.surfaces.muted,
-                          fontSize: 12,
+                          fontSize: FlucordType.caption,
                         ),
                       ),
                       for (final detail in details) ...[
@@ -215,7 +217,7 @@ class DiscordIdentityProfilePopover extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: context.surfaces.muted,
-                                fontSize: 11,
+                                fontSize: FlucordType.caption,
                               ),
                             ),
                           ),
@@ -264,7 +266,7 @@ class _ProfileDetailChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -282,7 +284,7 @@ class _ProfileDetailChip extends StatelessWidget {
               detail.value,
               maxLines: detail.maxLines,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
+              style: const TextStyle(fontSize: FlucordType.caption),
             ),
           ),
         ],
@@ -335,7 +337,7 @@ class _ProfileLabel extends StatelessWidget {
     label,
     style: TextStyle(
       color: context.surfaces.muted,
-      fontSize: 10,
+      fontSize: FlucordType.caption,
       fontWeight: FontWeight.w700,
     ),
   );

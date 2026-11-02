@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_social_sdk.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_social_sdk_scope.dart';
 
@@ -20,7 +22,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,7 +42,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                 Text(
                   presentation.title,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -49,7 +51,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                   presentation.detail,
                   style: TextStyle(
                     color: context.surfaces.muted,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     height: 1.35,
                   ),
                 ),

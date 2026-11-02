@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/streamer_mode_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Streamer mode's switches.
 ///
@@ -30,11 +31,17 @@ class StreamerModeSection extends StatelessWidget {
             value: settings.enabled,
             onChanged: (value) =>
                 unawaited(controller.setEnabled(enabled: value)),
-            title: const Text('Streamer mode', style: TextStyle(fontSize: 13)),
+            title: const Text(
+              'Streamer mode',
+              style: TextStyle(fontSize: FlucordType.label),
+            ),
             subtitle: Text(
               'On right now. Turning it on by hand keeps it on after a '
               'stream ends.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
           SwitchListTile(
@@ -45,12 +52,15 @@ class StreamerModeSection extends StatelessWidget {
                 unawaited(controller.setAutomatic(automatic: value)),
             title: const Text(
               'Enable automatically',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: FlucordType.label),
             ),
             subtitle: Text(
               'Turns on when this client starts a stream, and off again '
               'when it stops.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
           const Divider(height: 24),
@@ -117,7 +127,7 @@ class StreamerModeSection extends StatelessWidget {
                 'Windows would not exclude the window. It is still visible '
                 'to a screen recorder.',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -153,10 +163,13 @@ class _Switch extends StatelessWidget {
     contentPadding: EdgeInsets.zero,
     value: value,
     onChanged: onChanged == null ? null : (next) => unawaited(onChanged!(next)),
-    title: Text(title, style: const TextStyle(fontSize: 13)),
+    title: Text(title, style: const TextStyle(fontSize: FlucordType.label)),
     subtitle: Text(
       subtitle,
-      style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
   );
 }

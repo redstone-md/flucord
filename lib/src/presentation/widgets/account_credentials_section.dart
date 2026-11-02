@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/user_profile_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Changing the account name and the password.
 ///
@@ -71,7 +72,10 @@ class _AccountCredentialsSectionState extends State<AccountCredentialsSection> {
             // Worth saying, because the two are separate fields on Discord
             // and changing the wrong one is a surprise.
             'Not your display name. This is the name people type to add you.',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -104,7 +108,7 @@ class _AccountCredentialsSectionState extends State<AccountCredentialsSection> {
                 'Discord would not take that. The password may be wrong, or '
                 'the name already taken.',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -140,7 +144,10 @@ class _AccountCredentialsSectionState extends State<AccountCredentialsSection> {
           Text(
             'Discord signs this device back in afterwards. Other devices are '
             'signed out.',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ],
       );

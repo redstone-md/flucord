@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'guild_settings_audit_section.dart';
 import 'guild_settings_automod_section.dart';
 import 'guild_settings_channels_section.dart';
@@ -117,7 +119,10 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
           child: Text(
             widget.space.name,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.title,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         if (widget.controller.isBusy)
@@ -300,10 +305,10 @@ class _RailEntry extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 2),
     child: Material(
       color: selected ? context.surfaces.control : Colors.transparent,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: InkWell(
         key: ValueKey('guild-settings-rail-${section.name}'),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         onTap: onSelected,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/family_centre_controller.dart';
 import '../../domain/family_centre.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// The family centre: who is linked to this account, and what Discord reports
@@ -81,7 +83,10 @@ class _FamilyCentreSectionState extends State<FamilyCentreSection> {
           // legal question this client has no standing to answer.
           'Age group: ${family.ageGroup}',
           key: const ValueKey('family-age-group'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ),
     if (!family.hasLinkedUsers)
@@ -100,7 +105,7 @@ class _FamilyCentreSectionState extends State<FamilyCentreSection> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: context.surfaces.raised,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
           ),
           child: Text(family.nameFor(userId)),
         ),
@@ -130,7 +135,10 @@ class _ActivitySummary extends StatelessWidget {
         // Said plainly, because a parent reading this should not have to
         // guess whether Flucord is showing them somebody's messages.
         'Counts only. Discord reports how much, never what was said.',
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       ),
       const SizedBox(height: 8),
       for (final entry in activity.totals.entries)
@@ -145,7 +153,10 @@ class _ActivitySummary extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             'People: ${activity.userIds.map(family.nameFor).join(', ')}',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ),
       if (activity.guildIds.isNotEmpty)
@@ -155,7 +166,10 @@ class _ActivitySummary extends StatelessWidget {
           child: Text(
             '${activity.guildIds.length} server'
             '${activity.guildIds.length == 1 ? '' : 's'}',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ),
     ],
@@ -179,14 +193,17 @@ class _LinkCode extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,
-              fontSize: 18,
+              fontSize: FlucordType.title,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'A parent enters this to link to your account. It is forgotten '
             'when this page closes.',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ],
       );
@@ -200,7 +217,10 @@ class _LinkCode extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
               'Discord will not issue a code for this account.',
-              style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
         FilledButton.tonal(

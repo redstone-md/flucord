@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/account_entitlements_controller.dart';
 import '../../domain/user_settings.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// What the account holds: its Nitro tier, its boosts, and what those change.
@@ -48,7 +50,10 @@ class _EntitlementsSettingsSectionState
             'This page only reports what Discord has already granted. '
             'Flucord cannot buy, gift, or cancel anything.',
             key: const ValueKey('entitlements-disclaimer'),
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 12),
           if (controller.isLoading && entitlements == null)
@@ -78,7 +83,10 @@ class _EntitlementsSettingsSectionState
                 child: Text(
                   '${entitlements.boostsHeld} server boost'
                   '${entitlements.boostsHeld == 1 ? '' : 's'} held.',
-                  style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
               ),
             if (entitlements.premiumPerks.isNotEmpty) ...[
@@ -95,7 +103,7 @@ class _EntitlementsSettingsSectionState
                   child: Text(
                     perk,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -118,7 +126,7 @@ class _EntitlementsSettingsSectionState
                   ),
                   decoration: BoxDecoration(
                     color: context.surfaces.raised,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: FlucordRadius.small,
                   ),
                   child: Row(
                     children: [
@@ -135,7 +143,7 @@ class _EntitlementsSettingsSectionState
                             Text(
                               grant.describeExpiry(),
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: FlucordType.caption,
                                 color: context.surfaces.muted,
                               ),
                             ),

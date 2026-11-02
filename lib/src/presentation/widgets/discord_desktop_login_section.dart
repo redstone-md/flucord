@@ -5,6 +5,7 @@ import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../domain/discord_session.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'destructive_confirmation.dart';
 import 'discord_hcaptcha_panel.dart';
 
@@ -35,7 +36,7 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
                 child: Text(
                   connected ? 'Discord chat' : 'Sign in to Discord',
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: FlucordType.body,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -127,7 +128,10 @@ final class _DisconnectedContent extends StatelessWidget {
         if (controller.errorMessage case final error?) ...[
           Text(
             error,
-            style: TextStyle(color: context.surfaces.errorText, fontSize: 13),
+            style: TextStyle(
+              color: context.surfaces.errorText,
+              fontSize: FlucordType.label,
+            ),
           ),
           const SizedBox(height: 12),
         ],
@@ -159,7 +163,10 @@ final class _Caption extends StatelessWidget {
     child: Text(
       text,
       textAlign: TextAlign.center,
-      style: TextStyle(color: context.surfaces.muted, fontSize: 13),
+      style: TextStyle(
+        color: context.surfaces.muted,
+        fontSize: FlucordType.label,
+      ),
     ),
   );
 }
@@ -203,7 +210,7 @@ final class _StateLabel extends StatelessWidget {
     children: [
       Icon(Icons.circle, size: 8, color: color),
       const SizedBox(width: 6),
-      Text(label, style: const TextStyle(fontSize: 12)),
+      Text(label, style: const TextStyle(fontSize: FlucordType.caption)),
     ],
   );
 }

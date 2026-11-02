@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/guild_settings_controller.dart';
 import '../../domain/guild_audit_log.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'guild_settings_controls.dart';
 
 /// The audit log: what happened, who did it, and when.
@@ -103,7 +104,10 @@ class GuildSettingsAuditSection extends StatelessWidget {
       subtitle: _subtitle(record),
       trailing: Text(
         _formatTime(record.timestampStart),
-        style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       ),
     );
   }

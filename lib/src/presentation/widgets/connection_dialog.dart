@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'developer_bot_transport_section.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_desktop_login_section.dart';
@@ -90,7 +91,10 @@ class _DialogHeader extends StatelessWidget {
             const Expanded(
               child: Text(
                 'Connections',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.body,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             IconButton(

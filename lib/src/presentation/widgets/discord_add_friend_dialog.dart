@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 
 Future<void> showDiscordAddFriendDialog(
@@ -69,7 +70,7 @@ class _DiscordAddFriendDialogState extends State<_DiscordAddFriendDialog> {
                   'Enter their Discord user ID to send a standard friend request.',
                   style: TextStyle(
                     color: context.surfaces.muted,
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     height: 1.35,
                   ),
                 ),
@@ -106,7 +107,7 @@ class _DiscordAddFriendDialogState extends State<_DiscordAddFriendDialog> {
                     key: const ValueKey('discord-add-friend-error'),
                     style: TextStyle(
                       color: context.surfaces.errorText,
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],

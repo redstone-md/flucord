@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/app_authorisation_controller.dart';
 import '../../domain/app_authorisation.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// Authorising a bot or app into a server this account manages.
@@ -78,7 +80,7 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
               'An invite link looks like '
               'discord.com/oauth2/authorize?... and names the app it adds.',
               key: ValueKey('app-invite-idle'),
-              style: TextStyle(fontSize: 12),
+              style: TextStyle(fontSize: FlucordType.caption),
             )
           else
             ..._stages(context, controller),
@@ -125,7 +127,7 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
             child: Text(
               'Discord refused to remove $refused. It may already be gone.',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: FlucordType.caption,
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
@@ -165,7 +167,7 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
               Text(
                 'Discord did not answer about this invite.',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -222,7 +224,7 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
                       'server and that the app may be added.',
               },
               style: TextStyle(
-                fontSize: 12,
+                fontSize: FlucordType.caption,
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
@@ -234,7 +236,10 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
             child: Text(
               'Added. ${controller.application?.name ?? 'The app'} is now in '
               'the server.',
-              style: TextStyle(fontSize: 12, color: context.surfaces.success),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.success,
+              ),
             ),
           )
         else if (controller.selectedGuildId != null)
@@ -271,7 +276,7 @@ class _InvitationCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +296,10 @@ class _InvitationCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 2),
               child: Text(
                 app.description,
-                style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ),
           if (application != null && !application.isPublic)
@@ -301,7 +309,7 @@ class _InvitationCard extends StatelessWidget {
               child: Text(
                 'Only the app\'s own team can add it.',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
@@ -310,7 +318,10 @@ class _InvitationCard extends StatelessWidget {
           Text(
             'What it asks for',
             key: const ValueKey('app-invite-scopes-title'),
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 4),
           Wrap(
@@ -327,12 +338,12 @@ class _InvitationCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: context.surfaces.inset,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: FlucordRadius.small,
                   ),
                   child: Text(
                     scope,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -344,14 +355,20 @@ class _InvitationCard extends StatelessWidget {
             Text(
               'Bot permissions',
               key: const ValueKey('app-invite-permissions-title'),
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
             const SizedBox(height: 4),
             for (final label in controller.requestedPermissionLabels)
               Padding(
                 key: ValueKey('app-invite-permission-$label'),
                 padding: const EdgeInsets.only(bottom: 2),
-                child: Text(label, style: const TextStyle(fontSize: 12)),
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: FlucordType.caption),
+                ),
               ),
           ],
         ],
@@ -379,7 +396,7 @@ class _GuildChoice extends StatelessWidget {
       child: InkWell(
         key: ValueKey('app-invite-guild-${guild.id}'),
         onTap: selected ? null : onSelected,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
@@ -389,7 +406,7 @@ class _GuildChoice extends StatelessWidget {
                   ? Theme.of(context).colorScheme.primary
                   : context.surfaces.border,
             ),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
           ),
           child: Row(
             children: [
@@ -440,7 +457,7 @@ class _GrantRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -458,7 +475,7 @@ class _GrantRow extends StatelessWidget {
                     child: Text(
                       grant.description,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -480,11 +497,13 @@ class _GrantRow extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: context.surfaces.canvas,
-                              borderRadius: BorderRadius.circular(3),
+                              borderRadius: FlucordRadius.small,
                             ),
                             child: Text(
                               scope,
-                              style: const TextStyle(fontSize: 10),
+                              style: const TextStyle(
+                                fontSize: FlucordType.caption,
+                              ),
                             ),
                           ),
                       ],
@@ -499,7 +518,7 @@ class _GrantRow extends StatelessWidget {
                       '-${grant.authorizedAt!.day.toString().padLeft(2, '0')}',
                       key: ValueKey('app-grant-when-${grant.applicationId}'),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         color: context.surfaces.muted,
                       ),
                     ),
