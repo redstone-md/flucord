@@ -66,10 +66,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // showing a friend list that is quietly wrong.
         _relationships.accept(event.name, event.data);
         _sharedDispatches.route(event);
-        if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
-          unawaited(_acceptMessage(event));
-        } else if (event.name == 'MESSAGE_DELETE') {
-          unawaited(_acceptDelete(event.data));
+        if (event.name == 'MESSAGE_CREATE') {
+          _sharedDispatches.inOrder(() => _acceptNewMessage(event.data));
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
@@ -259,31 +257,16 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
   }
 
-  Future<void> _acceptMessage(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'];
-    if (messageId is! String) return;
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = await _storeMessage(event.data, fallback: fallback);
-    final rawAuthor = event.data['author'];
-    final member = rawAuthor is Map
-        ? _mapper.member(
-            rawAuthor.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
+  Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
+    if (payload['id'] is! String) return;
+    final message = await _storeMessage(payload);
+    final member = _mapper.messageAuthor(payload);
     if (member != null) await _cache.writeMember(member);
     _events.add(
       MessageUpsertedEvent(
         message: message,
         member: member,
-        isNew: event.name == 'MESSAGE_CREATE',
+        isNew: true,
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
@@ -300,16 +283,6 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     );
     await _cache.writeMessage(message);
     return message;
-  }
-
-  Future<void> _acceptDelete(Map<String, Object?> data) async {
-    final messageId = data['id'];
-    final channelId = data['channel_id'];
-    if (messageId is! String || channelId is! String) return;
-    await _cache.deleteMessage(messageId);
-    _events.add(
-      MessageDeletedEvent(messageId: messageId, channelId: channelId),
-    );
   }
 
   void _acceptTyping(Map<String, Object?> data) {

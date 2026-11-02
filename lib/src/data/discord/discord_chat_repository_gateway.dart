@@ -22,12 +22,10 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
       case DiscordGatewayDispatch():
         _sharedDispatches.route(event);
         switch (event.name) {
-          case 'MESSAGE_CREATE' || 'MESSAGE_UPDATE':
-            unawaited(_handleMessageDispatch(event));
-          case 'MESSAGE_DELETE':
-            unawaited(_handleMessageDelete(event.data));
+          case 'MESSAGE_CREATE':
+            _sharedDispatches.inOrder(() => _handleNewMessage(event.data));
           case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
-            unawaited(_handlePollVote(event));
+            _sharedDispatches.inOrder(() => _handlePollVote(event));
           case 'CHANNEL_CREATE' ||
               'CHANNEL_UPDATE' ||
               'THREAD_CREATE' ||
@@ -63,18 +61,6 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
               'GUILD_SCHEDULED_EVENT_EXCEPTIONS_DELETE':
             unawaited(_handleGuildScheduledEventException(event));
         }
-    }
-  }
-
-  Future<void> _handleMessageDelete(Map<String, Object?> data) async {
-    final messageId = data['id'] as String?;
-    final channelId = data['channel_id'] as String?;
-    if (messageId == null || channelId == null) return;
-    await _cache.deleteMessage(messageId);
-    if (!_events.isClosed) {
-      _events.add(
-        MessageDeletedEvent(messageId: messageId, channelId: channelId),
-      );
     }
   }
 

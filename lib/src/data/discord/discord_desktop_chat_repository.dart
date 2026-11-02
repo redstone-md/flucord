@@ -194,7 +194,7 @@ final class DiscordDesktopChatRepository
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
   late final DiscordSharedDispatches _sharedDispatches =
-      DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
+      DiscordSharedDispatches(_cache, _mapper, () => _currentMemberId, _events);
 
   /// Who the session's credential says it is, before Discord has confirmed it.
   /// The offline fallback compares this with the account of the cache.
@@ -833,6 +833,7 @@ final class DiscordDesktopChatRepository
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _sharedDispatches.drained;
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

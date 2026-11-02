@@ -13,6 +13,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
@@ -56,9 +57,14 @@ final class SessionHarness {
     this._tester,
     this.transport,
     this._connector,
-    this._diskDirectory,
+    Directory? diskDirectory,
     this._voiceMessageRecorder,
-  );
+  ) : _diskDirectory = diskDirectory,
+      _factory = _FakeWireRepositoryFactory(
+        transport,
+        _connector,
+        diskDirectory,
+      );
 
   /// The account the default READY signs in.
   static const currentUserId = '100000000000000001';
@@ -83,6 +89,7 @@ final class SessionHarness {
 
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
+  final _FakeWireRepositoryFactory _factory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
@@ -139,11 +146,7 @@ final class SessionHarness {
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
-        chatRepositoryFactory: _FakeWireRepositoryFactory(
-          transport,
-          _connector,
-          _diskDirectory,
-        ),
+        chatRepositoryFactory: _factory,
       ),
     ),
   );
@@ -218,6 +221,16 @@ final class SessionHarness {
     for (final file in _diskDirectory!.listSync().whereType<File>())
       latin1.decode(file.readAsBytesSync()),
   ].join();
+
+  /// The message with this [id] in the running session's cache, which is what
+  /// the next launch reads. A cache read needs the real event loop.
+  Future<ChatMessage?> cachedMessage(String id) => _tester
+      .runAsync<ChatMessage?>(() => _factory.openedCache!.readMessage(id));
+
+  /// Removes a row behind the app's back, for a state the wire cannot reach,
+  /// such as a cache write that failed earlier.
+  Future<void> dropCachedMessage(String id) async =>
+      _tester.runAsync(() => _factory.openedCache!.deleteMessage(id));
 
   /// The socket the client dialled last.
   MemoryDesktopWebSocket get socket => _connector.sockets.last;
@@ -332,7 +345,7 @@ DiscordHttpResponse _emptyHistoryOrNotFound(RecordedRequest request) =>
 
 /// Builds the same repository as `DiscordRepositoryFactory`, on the fake wire.
 final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
-  const _FakeWireRepositoryFactory(
+  _FakeWireRepositoryFactory(
     this._transport,
     this._connector,
     this._diskDirectory,
@@ -341,6 +354,9 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
   final Directory? _diskDirectory;
+
+  /// The cache of the repository built last.
+  SqliteChatCache? openedCache;
 
   // No isolate: the widget tester's fake clock would never see an isolate's
   // answer, so the cache has to run on the test's own event loop.
@@ -356,6 +372,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     final desktop = session as DiscordDesktopUserSession;
     const profile = DiscordDesktopProtocolProfile.installedStable20260725;
     final context = DiscordDesktopClientContext.create(profile: profile);
+    final cache = openedCache = await _openCache();
     return DiscordDesktopChatRepository(
       DiscordDesktopApiClient(
         authorization: desktop.transportCredential,
@@ -369,7 +386,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
         socketConnector: _connector,
       ),
-      await _openCache(),
+      cache,
       accountId: session.accountId,
     );
   }

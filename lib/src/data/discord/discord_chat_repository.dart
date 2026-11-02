@@ -156,7 +156,7 @@ final class DiscordChatRepository
   String? _currentMemberId;
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   late final DiscordSharedDispatches _sharedDispatches =
-      DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
+      DiscordSharedDispatches(_cache, _mapper, () => _currentMemberId, _events);
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
@@ -446,6 +446,7 @@ final class DiscordChatRepository
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _sharedDispatches.drained;
     await _voiceSignaling.close();
     await _gateway.close();
     _api.close();
