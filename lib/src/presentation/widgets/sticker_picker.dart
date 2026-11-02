@@ -171,7 +171,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       padding: EdgeInsets.zero,
       onPressed: widget.isSending || _allStickers.isEmpty ? null : _toggleMenu,
-      icon: const Icon(Icons.emoji_emotions_outlined, size: 19),
+      icon: const Icon(Icons.sticky_note_2_outlined, size: 19),
       tooltip: 'Stickers',
     ),
   );

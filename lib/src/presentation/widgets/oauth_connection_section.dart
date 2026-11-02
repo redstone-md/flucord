@@ -26,7 +26,7 @@ class OAuthConnectionSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'One account action coordinates your normal OAuth identity and the native Social SDK grant for approved friends and Direct Messages. Their credentials remain separate.',
+            'Connect your Discord account once to bring in your profile, servers, friends and direct messages.',
             style: TextStyle(
               color: context.surfaces.muted,
               fontSize: 11,
@@ -137,8 +137,8 @@ String _connectionStatus(
     controller.errorMessage ?? 'Discord account connection failed.',
   DiscordAccountConnectionState.partiallyConnected =>
     controller.needsSocial
-        ? '${account?.displayName ?? 'Discord account'} · Complete native social authorization'
-        : 'Native social access connected · Complete profile authorization',
+        ? '${account?.displayName ?? 'Discord account'} · Finish connecting friends and direct messages'
+        : 'Friends and direct messages connected · Finish connecting your profile',
   DiscordAccountConnectionState.connected =>
     controller.socialConnected
         ? '${account?.displayName ?? 'Discord account'} · ${account?.guildCount ?? 0} servers · Friends and DMs connected'
@@ -197,7 +197,7 @@ class _OAuthGuildDirectory extends StatelessWidget {
         const SizedBox(height: 8),
         if (guilds.isEmpty)
           Text(
-            'No servers were returned by the guilds scope.',
+            'Discord listed no servers for this account.',
             style: TextStyle(color: context.surfaces.muted, fontSize: 11),
           )
         else
@@ -237,7 +237,7 @@ class _OAuthGuildRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final metadata = _metadata(guild);
     return Semantics(
-      label: '${guild.name}, $metadata, messages unavailable through OAuth',
+      label: '${guild.name}, $metadata, messages not available here',
       child: Padding(
         key: ValueKey('discord-oauth-guild-${guild.id}'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -293,7 +293,7 @@ class _OAuthGuildRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Tooltip(
-              message: 'OAuth does not grant message access',
+              message: 'Messages from this server are not available here',
               child: Icon(
                 Icons.lock_outline,
                 size: 15,

@@ -23,6 +23,7 @@ import 'package:flucord/src/domain/user_notes.dart';
 import 'package:flucord/src/domain/user_profile.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
@@ -46,6 +47,31 @@ const _searchField = ValueKey('message-search');
 const _panel = ValueKey('message-search-panel');
 
 void main() {
+  testWidgets('a 1280 window with members open shows the whole search hint', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _SearchableRepository();
+    addTearDown(repository.dispose);
+
+    await _openWorkspace(tester, repository);
+
+    expect(find.byTooltip('Hide members'), findsOneWidget);
+    // The field keeps its size inside a strip that scrolls, so what counts is
+    // how much of it the strip leaves on screen.
+    final strip = find.ancestor(
+      of: find.byKey(_searchField),
+      matching: find.byType(SingleChildScrollView),
+    );
+    expect(
+      tester.getRect(find.byKey(_searchField)).left,
+      greaterThanOrEqualTo(tester.getRect(strip).left),
+    );
+    final hint = tester.renderObject<RenderParagraph>(find.text('Search'));
+    expect(hint.didExceedMaxLines, isFalse);
+  });
+
   testWidgets('searches the server from the header and jumps to a hit', (
     tester,
   ) async {

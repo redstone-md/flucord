@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
+import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
 
 /// The webhooks page: what exists, where each one posts, and the controls to
@@ -69,7 +70,7 @@ class _GuildSettingsWebhooksSectionState
                     key: ValueKey('guild-webhook-delete-${webhook.id}'),
                     onPressed: controller.isBusy
                         ? null
-                        : () => unawaited(controller.deleteWebhook(webhook.id)),
+                        : () => unawaited(_confirmDelete(webhook)),
                     child: const Text('Delete'),
                   ),
                 ],
@@ -81,6 +82,16 @@ class _GuildSettingsWebhooksSectionState
 
   String _channelName(String channelId) =>
       widget.workspace.channelOrNull(channelId)?.name ?? 'unknown channel';
+
+  Future<void> _confirmDelete(GuildWebhook webhook) async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete ${webhook.name}?',
+      message: 'Anything posting through this webhook stops working.',
+      confirmLabel: 'Delete',
+    );
+    if (confirmed) await widget.controller.deleteWebhook(webhook.id);
+  }
 
   Future<void> _create(BuildContext context) async {
     final channels = _postableChannels();

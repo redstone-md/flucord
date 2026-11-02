@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/auth_session_controller.dart';
 import '../../domain/auth_session.dart';
 import '../../theme/flucord_theme.dart';
+import 'destructive_confirmation.dart';
 import 'user_settings_controls.dart';
 
 /// Every device signed in to this account, and the way to sign one out.
@@ -90,30 +91,18 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
   ) async {
     // Signing another device out cannot be undone from here, so it asks
     // first — the same reason blocking somebody does.
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('devices-confirm'),
-        title: const Text('Sign out everywhere else?'),
-        content: Text(
-          '${controller.otherSessions.length} other session'
-          '${controller.otherSessions.length == 1 ? '' : 's'} will be ended. '
+    final others = controller.otherSessions.length;
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Sign out everywhere else?',
+      message:
+          '$others other session${others == 1 ? '' : 's'} will be ended. '
           'This one stays signed in.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('devices-confirm-accept'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Sign out',
+      dialogKey: const ValueKey('devices-confirm'),
+      confirmKey: const ValueKey('devices-confirm-accept'),
     );
-    if (confirmed ?? false) await controller.endOtherSessions();
+    if (confirmed) await controller.endOtherSessions();
   }
 }
 

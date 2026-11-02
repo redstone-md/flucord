@@ -22,6 +22,8 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/developer_terms.dart';
+
 void main() {
   testWidgets('the connection dialog offers the OAuth identity', (
     tester,
@@ -63,6 +65,7 @@ void main() {
     // The section was written and never placed; this is what keeps it placed.
     expect(find.byType(OAuthConnectionSection), findsOne);
     expect(find.text('Discord account'), findsOne);
+    expect(developerTermsOnScreen(tester), isEmpty);
   });
 
   testWidgets('a host with no account scope shows only the session login', (
