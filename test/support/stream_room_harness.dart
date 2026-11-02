@@ -186,6 +186,7 @@ final class StreamRoomHarness {
         directCall: calls,
         goLive: goLive,
         streamViewer: viewer,
+        camera: camera,
       ),
     ),
   );
