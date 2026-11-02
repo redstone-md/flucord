@@ -12,11 +12,15 @@ final class FakeVideoDecoder implements VideoDecoderService {
   final bool failStart;
   final StreamController<DecodedVideoFrame> _frames =
       StreamController.broadcast();
+  final StreamController<int> _drops = StreamController.broadcast();
   final List<Uint8List> submitted = [];
   int started = 0;
   int stopped = 0;
 
   void emit(DecodedVideoFrame frame) => _frames.add(frame);
+
+  /// Reports that the decode queue has dropped [total] access units so far.
+  void drop(int total) => _drops.add(total);
 
   @override
   bool get isSupported => supported;
@@ -25,7 +29,7 @@ final class FakeVideoDecoder implements VideoDecoderService {
   Stream<DecodedVideoFrame> get frames => _frames.stream;
 
   @override
-  Stream<int> get droppedAccessUnits => const Stream.empty();
+  Stream<int> get droppedAccessUnits => _drops.stream;
 
   @override
   Future<void> start() async {

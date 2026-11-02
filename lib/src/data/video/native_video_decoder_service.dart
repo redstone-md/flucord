@@ -511,10 +511,16 @@ final class _NativeDecoder {
         (tag >> 16) & 0xff,
         (tag >> 24) & 0xff,
       ]);
+      final gpu = _bindings.decoderGpuStatus?.call(_handle);
+      final where = switch (gpu) {
+        null => '',
+        0 => ', decoded on the GPU',
+        _ => ', decoded on the CPU (0x${gpu.toUnsigned(32).toRadixString(16)})',
+      };
       AppLog.warning(
         'video',
         'decoder output: $name ${width.value}x${height.value} '
-            'stride ${stride.value}',
+            'stride ${stride.value}$where',
       );
     } finally {
       calloc.free(fourcc);
