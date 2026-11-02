@@ -210,6 +210,8 @@ final class DiscordDesktopChatRepository
         directMessages: _directMessages,
         currentMemberId: () => _currentMemberId,
         rolesOf: _memberLists.rolesOf,
+        updatedMessage: (payload, held) =>
+            _messageFrom(payload, fallback: held),
         events: _events,
       );
 
@@ -837,6 +839,7 @@ final class DiscordDesktopChatRepository
   @override
   Future<void> close() async {
     await _gatewaySubscription.cancel();
+    await _sharedDispatches.drained;
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

@@ -22,10 +22,10 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
       case DiscordGatewayDispatch():
         _sharedDispatches.route(event);
         switch (event.name) {
-          case 'MESSAGE_CREATE' || 'MESSAGE_UPDATE':
-            unawaited(_handleMessageDispatch(event));
+          case 'MESSAGE_CREATE':
+            _sharedDispatches.inOrder(() => _handleNewMessage(event.data));
           case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
-            unawaited(_handlePollVote(event));
+            _sharedDispatches.inOrder(() => _handlePollVote(event));
           case 'PRESENCE_UPDATE':
             _handlePresence(event.data);
           case 'TYPING_START':
