@@ -415,7 +415,7 @@ class _EventDate extends StatelessWidget {
         Text(
           active ? 'NOW' : _months[start.month - 1],
           style: TextStyle(
-            color: active ? FlucordColors.success : FlucordColors.mention,
+            color: active ? context.surfaces.success : context.surfaces.mention,
             fontSize: 10,
             fontWeight: FontWeight.w700,
           ),
@@ -434,12 +434,12 @@ class _LiveLabel extends StatelessWidget {
   const _LiveLabel();
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.only(bottom: 4),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
     child: Text(
       'LIVE NOW',
       style: TextStyle(
-        color: FlucordColors.success,
+        color: context.surfaces.success,
         fontSize: 10,
         fontWeight: FontWeight.w700,
       ),

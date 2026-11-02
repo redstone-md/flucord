@@ -126,7 +126,7 @@ class _CommandRow extends StatelessWidget {
         border: Border(
           left: BorderSide(
             width: 2,
-            color: isFirst ? FlucordColors.brand : Colors.transparent,
+            color: isFirst ? context.surfaces.brand : Colors.transparent,
           ),
         ),
       ),

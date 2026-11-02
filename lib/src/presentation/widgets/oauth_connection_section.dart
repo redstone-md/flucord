@@ -57,9 +57,9 @@ class _OAuthIdentityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final failed = controller.state == DiscordAccountConnectionState.failure;
     final statusColor = failed
-        ? FlucordColors.danger
+        ? context.surfaces.danger
         : controller.isConnected
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.muted;
     final status = _connectionStatus(controller, account);
     return Container(
@@ -78,7 +78,7 @@ class _OAuthIdentityTile extends StatelessWidget {
               status,
               key: const ValueKey('discord-oauth-status'),
               style: TextStyle(
-                color: failed ? FlucordColors.danger : null,
+                color: failed ? context.surfaces.errorText : null,
                 fontSize: 12,
               ),
             ),

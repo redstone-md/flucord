@@ -124,12 +124,12 @@ class _ConnectedAccountRow extends StatelessWidget {
               ),
             ),
             if (connection.verified)
-              const Tooltip(
+              Tooltip(
                 message: 'Verified connection',
                 child: Icon(
                   Icons.verified_outlined,
                   size: 15,
-                  color: FlucordColors.success,
+                  color: context.surfaces.success,
                 ),
               ),
             if (connection.isPublic) ...[

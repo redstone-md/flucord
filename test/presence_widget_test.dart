@@ -4,6 +4,7 @@ import 'package:flucord/src/application/connection_controller.dart';
 import 'package:flucord/src/application/self_presence_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/flucord_palette.dart';
 import 'package:flucord/src/domain/presence_repository.dart';
 import 'package:flucord/src/presentation/widgets/account_panel.dart';
 import 'package:flucord/src/presentation/widgets/activity_views.dart';
@@ -146,29 +147,30 @@ void main() {
       }
     });
 
-    test('assigns each status its own colour', () {
-      expect(PresenceIndicator.colorOf(Presence.online), FlucordColors.success);
-      expect(PresenceIndicator.colorOf(Presence.idle), FlucordColors.warning);
-      expect(
-        PresenceIndicator.colorOf(Presence.doNotDisturb),
-        FlucordColors.danger,
-      );
-      expect(
-        PresenceIndicator.colorOf(Presence.streaming),
-        FlucordColors.brand,
-      );
-      expect(
-        PresenceIndicator.colorOf(Presence.offline),
-        FlucordColors.offline,
-      );
-      expect(
-        PresenceIndicator.colorOf(Presence.invisible),
-        FlucordColors.offline,
-      );
-      expect(
-        PresenceIndicator.colorOf(Presence.unknown),
-        FlucordColors.offline,
-      );
+    test('draws each status in the installed theme\'s colour', () {
+      final surfaces = FlucordTheme.fromPalette(
+        FlucordPalette.dark.copyWith(
+          success: 0xff00aa00,
+          warning: 0xffaaaa00,
+          danger: 0xffaa0000,
+          brand: 0xff0000aa,
+          offline: 0xff555555,
+        ),
+      ).extension<FlucordSurfaceTheme>()!;
+      Color colour(Presence status) =>
+          PresenceIndicator.colorOf(surfaces, status);
+
+      expect(colour(Presence.online), const Color(0xff00aa00));
+      expect(colour(Presence.idle), const Color(0xffaaaa00));
+      expect(colour(Presence.doNotDisturb), const Color(0xffaa0000));
+      expect(colour(Presence.streaming), const Color(0xff0000aa));
+      for (final quiet in [
+        Presence.offline,
+        Presence.invisible,
+        Presence.unknown,
+      ]) {
+        expect(colour(quiet), const Color(0xff555555));
+      }
     });
 
     testWidgets('announces a mobile-only friend as such', (tester) async {

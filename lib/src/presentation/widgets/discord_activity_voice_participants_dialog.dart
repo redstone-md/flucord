@@ -107,7 +107,7 @@ class _Header extends StatelessWidget {
         Icon(
           Icons.headset_mic_outlined,
           size: 20,
-          color: connected ? FlucordColors.success : context.surfaces.muted,
+          color: connected ? context.surfaces.success : context.surfaces.muted,
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -173,7 +173,7 @@ class _ParticipantRow extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: speaking ? FlucordColors.success : Colors.transparent,
+                color: speaking ? context.surfaces.success : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -201,28 +201,27 @@ class _ParticipantRow extends StatelessWidget {
                   _connectionLabel,
                   style: TextStyle(
                     color: speaking
-                        ? FlucordColors.success
+                        ? context.surfaces.success
                         : context.surfaces.muted,
                     fontSize: 11,
                   ),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'Could not update local volume',
-                    key: ValueKey('activity-participant-mute-error'),
-                    style: TextStyle(color: FlucordColors.danger, fontSize: 10),
+                    key: const ValueKey('activity-participant-mute-error'),
+                    style: TextStyle(
+                      color: context.surfaces.errorText,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ],
             ),
           ),
           if (speaking)
-            const Icon(
-              Icons.graphic_eq,
-              color: FlucordColors.success,
-              size: 20,
-            ),
+            Icon(Icons.graphic_eq, color: context.surfaces.success, size: 20),
           if (!currentUser) ...[
             const SizedBox(width: 4),
             if (pending)
@@ -252,7 +251,7 @@ class _ParticipantRow extends StatelessWidget {
                       : Icons.volume_up_outlined,
                   size: 19,
                   color: locallyMuted
-                      ? FlucordColors.brand
+                      ? context.surfaces.accentIcon
                       : context.surfaces.muted,
                 ),
               ),

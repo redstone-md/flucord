@@ -108,17 +108,17 @@ final class _DeveloperBotTransportSectionState
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline,
                 size: 16,
-                color: FlucordColors.danger,
+                color: context.surfaces.errorText,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   error,
-                  style: const TextStyle(
-                    color: FlucordColors.danger,
+                  style: TextStyle(
+                    color: context.surfaces.errorText,
                     fontSize: 11,
                   ),
                 ),
@@ -195,7 +195,7 @@ final class _TransportStatus extends StatelessWidget {
       ),
       SessionMode.discord => (
         '${controller.activeSession?.displayName ?? 'Discord bot'} connected',
-        FlucordColors.success,
+        context.surfaces.success,
       ),
     };
     return Row(

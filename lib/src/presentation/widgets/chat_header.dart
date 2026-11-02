@@ -113,7 +113,11 @@ class ChatHeader extends StatelessWidget {
                     constraints.maxWidth,
                   ),
                 ),
-                child: _controls(showTopic: showTopic, showSearch: showSearch),
+                child: _controls(
+                  context,
+                  showTopic: showTopic,
+                  showSearch: showSearch,
+                ),
               ),
             ],
           );
@@ -168,7 +172,11 @@ class ChatHeader extends StatelessWidget {
     ],
   );
 
-  Widget _controls({required bool showTopic, required bool showSearch}) => Row(
+  Widget _controls(
+    BuildContext context, {
+    required bool showTopic,
+    required bool showSearch,
+  }) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       if (threadMembership case final membership?) ...[
@@ -181,7 +189,7 @@ class ChatHeader extends StatelessWidget {
           key: const ValueKey('toggle-call'),
           onPressed: onToggleCall,
           tooltip: callLabel ?? 'Start call',
-          color: isInCall ? FlucordColors.danger : null,
+          color: isInCall ? context.surfaces.danger : null,
           icon: Icon(isInCall ? Icons.call_end : Icons.call),
         ),
       ],

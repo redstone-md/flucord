@@ -114,7 +114,7 @@ class _PollAnswerRow extends StatelessWidget {
           color: context.surfaces.inset,
           border: Border.all(
             color: answer.votedByCurrentUser
-                ? FlucordColors.brand.withValues(alpha: 0.75)
+                ? context.surfaces.brand.withValues(alpha: 0.75)
                 : context.surfaces.border,
           ),
           borderRadius: BorderRadius.circular(4),
@@ -127,7 +127,7 @@ class _PollAnswerRow extends StatelessWidget {
               child: FractionallySizedBox(
                 widthFactor: fraction.clamp(0, 1),
                 child: ColoredBox(
-                  color: FlucordColors.brand.withValues(alpha: 0.14),
+                  color: context.surfaces.brand.withValues(alpha: 0.14),
                 ),
               ),
             ),

@@ -234,7 +234,7 @@ class _AppAuthorisationSectionState extends State<AppAuthorisationSection> {
             child: Text(
               'Added. ${controller.application?.name ?? 'The app'} is now in '
               'the server.',
-              style: TextStyle(fontSize: 12, color: FlucordColors.success),
+              style: TextStyle(fontSize: 12, color: context.surfaces.success),
             ),
           )
         else if (controller.selectedGuildId != null)

@@ -1,39 +1,39 @@
 import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/contrast.dart';
+
 void main() {
   test('dark theme exposes Discord workspace surface roles', () {
     final theme = FlucordTheme.dark;
     final surfaces = theme.extension<FlucordSurfaceTheme>()!;
 
-    expect(theme.colorScheme.primary, FlucordColors.brand);
-    expect(theme.colorScheme.secondary, FlucordColors.success);
-    expect(theme.colorScheme.error, FlucordColors.danger);
-    expect(surfaces.rail, FlucordColors.darkRail);
-    expect(surfaces.canvas, FlucordColors.darkCanvas);
-    expect(surfaces.surface, FlucordColors.darkSurface);
-    expect(surfaces.raised, FlucordColors.darkRaised);
-    expect(surfaces.inset, FlucordColors.darkInset);
-    expect(surfaces.control, FlucordColors.darkControl);
-    expect(theme.inputDecorationTheme.fillColor, FlucordColors.darkControl);
+    expect(theme.colorScheme.primary, const Color(0xff5865f2));
+    expect(theme.colorScheme.secondary, const Color(0xff23a55a));
+    expect(theme.colorScheme.error, const Color(0xffda373c));
+    expect(surfaces.rail, const Color(0xff1e1f22));
+    expect(surfaces.canvas, const Color(0xff313338));
+    expect(surfaces.surface, const Color(0xff2b2d31));
+    expect(surfaces.raised, const Color(0xff3f4147));
+    expect(surfaces.inset, const Color(0xff232428));
+    expect(surfaces.control, const Color(0xff383a40));
+    expect(theme.inputDecorationTheme.fillColor, const Color(0xff383a40));
   });
 
   test('light theme keeps rail, sidebar, chat, and controls distinct', () {
     final theme = FlucordTheme.light;
     final surfaces = theme.extension<FlucordSurfaceTheme>()!;
 
-    expect(surfaces.rail, FlucordColors.lightRail);
-    expect(surfaces.canvas, FlucordColors.lightCanvas);
-    expect(surfaces.surface, FlucordColors.lightSurface);
-    expect(surfaces.raised, FlucordColors.lightRaised);
-    expect(surfaces.inset, FlucordColors.lightInset);
-    expect(surfaces.control, FlucordColors.lightControl);
+    expect(surfaces.rail, const Color(0xffe3e5e8));
+    expect(surfaces.canvas, const Color(0xffffffff));
+    expect(surfaces.surface, const Color(0xfff2f3f5));
+    expect(surfaces.raised, const Color(0xffdfe3e8));
+    expect(surfaces.inset, const Color(0xffebedef));
+    expect(surfaces.control, const Color(0xffebedef));
     expect(surfaces.rail, isNot(surfaces.canvas));
     expect(surfaces.surface, isNot(surfaces.canvas));
   });
@@ -50,13 +50,13 @@ void main() {
     );
     expect(
       style.overlayColor!.resolve({WidgetState.focused}),
-      FlucordColors.brand.withValues(alpha: 0.2),
+      const Color(0xff5865f2).withValues(alpha: 0.2),
     );
     final filled = theme.filledButtonTheme.style!;
-    expect(filled.backgroundColor!.resolve({}), FlucordColors.brand);
+    expect(filled.backgroundColor!.resolve({}), const Color(0xff5865f2));
     expect(
       filled.backgroundColor!.resolve({WidgetState.pressed}),
-      FlucordColors.brandPressed,
+      const Color(0xff4752c4),
     );
   });
 
@@ -114,6 +114,49 @@ void main() {
     expect(surfaces.offline, const Color(0xff000010));
   });
 
+  testWidgets('an installed theme paints buttons in its own brand', (
+    tester,
+  ) async {
+    const brand = Color(0xff2a9d8f);
+    const pressed = Color(0xff1f776c);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.fromPalette(
+          FlucordPalette.dark.copyWith(
+            brand: brand.toARGB32(),
+            brandPressed: pressed.toARGB32(),
+          ),
+        ),
+        home: Scaffold(
+          body: Column(
+            children: [
+              FilledButton(onPressed: () {}, child: const Text('Save')),
+              const FilledButton(onPressed: null, child: Text('Off')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Color fill(String label) => tester
+        .widget<Material>(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Material))
+              .first,
+        )
+        .color!;
+
+    expect(fill('Save'), brand);
+    expect(fill('Off'), brand.withValues(alpha: 0.38));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Save')),
+    );
+    await tester.pumpAndSettle();
+    expect(fill('Save'), pressed);
+    await gesture.up();
+  });
+
   group('WCAG AA contrast', () {
     test('the measure agrees with published values', () {
       expect(contrast(Colors.black, Colors.white), closeTo(21, 0.01));
@@ -134,27 +177,11 @@ void main() {
 
     themes.forEach((name, palette) {
       group('in $name', () {
-        final surfaces = FlucordTheme.fromPalette(
-          palette,
-        ).extension<FlucordSurfaceTheme>()!;
-        final backgrounds = <String, Color>{
-          'rail': surfaces.rail,
-          'canvas': surfaces.canvas,
-          'surface': surfaces.surface,
-          'raised': surfaces.raised,
-          'inset': surfaces.inset,
-          'control': surfaces.control,
-        };
+        final theme = FlucordTheme.fromPalette(palette);
+        final surfaces = theme.extension<FlucordSurfaceTheme>()!;
 
-        void expectContrast(Color foreground, double minimum) {
-          backgrounds.forEach((backgroundName, background) {
-            expect(
-              contrast(foreground, background),
-              greaterThanOrEqualTo(minimum),
-              reason: 'on $backgroundName',
-            );
-          });
-        }
+        void expectContrast(Color foreground, double minimum) =>
+            expectReadable(theme, foreground, minimum);
 
         test(
           'link text reaches 4.5:1',
@@ -196,13 +223,13 @@ void main() {
       expect(surfaces.focusRing, const Color(brand));
     });
 
-    test('colours nothing has moved to yet stay as they were', () {
+    test('fills keep Discord\'s brand and danger as written', () {
       final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
 
-      expect(surfaces.brand, FlucordColors.brand);
-      expect(surfaces.danger, FlucordColors.danger);
-      expect(FlucordTheme.dark.colorScheme.primary, FlucordColors.brand);
-      expect(FlucordTheme.dark.colorScheme.error, FlucordColors.danger);
+      expect(surfaces.brand, const Color(0xff5865f2));
+      expect(surfaces.danger, const Color(0xffda373c));
+      expect(FlucordTheme.dark.colorScheme.primary, const Color(0xff5865f2));
+      expect(FlucordTheme.dark.colorScheme.error, const Color(0xffda373c));
     });
   });
 
@@ -230,11 +257,4 @@ void main() {
       });
     }
   });
-}
-
-/// The WCAG 2 contrast ratio between two opaque colours.
-double contrast(Color a, Color b) {
-  final lighter = max(a.computeLuminance(), b.computeLuminance());
-  final darker = min(a.computeLuminance(), b.computeLuminance());
-  return (lighter + 0.05) / (darker + 0.05);
 }

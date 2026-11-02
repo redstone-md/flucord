@@ -73,7 +73,7 @@ class GoLiveButton extends StatelessWidget {
           onPressed: !controller.canEncode && !streaming
               ? null
               : () => unawaited(_toggle(context, streaming: streaming)),
-          color: streaming ? FlucordColors.danger : null,
+          color: streaming ? context.surfaces.danger : null,
           icon: Icon(
             streaming ? Icons.stop_screen_share : Icons.screen_share_outlined,
           ),

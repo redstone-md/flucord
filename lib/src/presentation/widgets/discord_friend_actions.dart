@@ -78,7 +78,7 @@ class DiscordFriendActions extends StatelessWidget {
             key: ValueKey('discord-friend-accept-$userId'),
             tooltip: 'Accept friend request',
             icon: Icons.check,
-            color: FlucordColors.success,
+            color: context.surfaces.success,
             onPressed: () =>
                 _perform(context, DiscordRelationshipAction.acceptRequest),
           ),
@@ -182,7 +182,7 @@ class _MoreActions extends StatelessWidget {
             child: Text(
               _menuLabel(action),
               style: action == DiscordRelationshipAction.blockUser
-                  ? const TextStyle(color: FlucordColors.danger)
+                  ? TextStyle(color: context.surfaces.errorText)
                   : null,
             ),
           ),
