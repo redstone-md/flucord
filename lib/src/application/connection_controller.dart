@@ -6,6 +6,7 @@ import '../domain/chat_repository_factory.dart';
 import '../domain/credential_vault.dart';
 import '../domain/discord_session.dart';
 import 'chat_controller.dart';
+import 'navigation_memory_store.dart';
 import '../app_log.dart';
 
 enum SessionMode { disconnected, demo, discord }
@@ -19,12 +20,15 @@ final class ConnectionController extends ChangeNotifier {
     this._repositoryFactory, {
     SessionMode initialMode = SessionMode.disconnected,
     this.botTransportEnabled = false,
-  }) : _mode = initialMode;
+    NavigationMemoryStore? navigationMemory,
+  }) : _mode = initialMode,
+       _navigationMemory = navigationMemory;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
   final bool botTransportEnabled;
+  final NavigationMemoryStore? _navigationMemory;
 
   SessionMode _mode;
   ConnectionActionState _state = ConnectionActionState.idle;
@@ -144,6 +148,8 @@ final class ConnectionController extends ChangeNotifier {
         _activeSession = null;
       }
       final repository = await _repositoryFactory.create(session);
+      // Before the first workspace, which lands where this account last was.
+      await _navigationMemory?.openAccount(session.accountId);
       await _chatController.useRepository(repository);
     } catch (error, stackTrace) {
       AppLog.error(
@@ -213,6 +219,7 @@ final class ConnectionController extends ChangeNotifier {
       );
       _errorMessage = 'Your cached messages could not be removed from disk.';
     }
+    await _navigationMemory?.forget();
     await _credentialVault.clearDiscordSession();
     _hasSavedCredential = false;
     notifyListeners();

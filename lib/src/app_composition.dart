@@ -60,6 +60,7 @@ import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/stream_suspension.dart';
 import 'application/accessibility_controller.dart';
+import 'application/navigation_memory_store.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
 import 'application/text_to_speech_playback_controller.dart';
@@ -96,6 +97,7 @@ import 'data/file_keybind_repository.dart';
 import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'data/file_accessibility_repository.dart';
+import 'data/file_navigation_memory_repository.dart';
 import 'data/spell_check/word_list_spell_check_service.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
@@ -175,6 +177,7 @@ final class AppComposition {
   late final DiscordSocialDmNavigationController socialDmNavigation;
   late final OAuthGuildMembershipController oauthGuildMembership;
   late final OAuthGuildDirectoryController oauthGuildDirectory;
+  late final NavigationMemoryStore navigationMemory;
   late final WorkspaceController workspace;
   late final GuildMemberListController memberList;
   late final UserSettingsController userSettings;
@@ -254,10 +257,16 @@ final class AppComposition {
   }
 
   void _buildSessionPlane() {
+    navigationMemory = NavigationMemoryStore(
+      bootstrap.navigationMemoryRepository ?? FileNavigationMemoryRepository(),
+    );
+    _teardown.add(navigationMemory.dispose);
     chat = _register(
       ChatController(
         bootstrap.initialRepository ??
             (_demo ? MockChatRepository() : const DisconnectedChatRepository()),
+        landingChannelIn: (workspace) =>
+            this.workspace.landingChannelIn(workspace),
       ),
     );
     connection = _register(
@@ -267,6 +276,7 @@ final class AppComposition {
         bootstrap.chatRepositoryFactory ?? const DiscordRepositoryFactory(),
         initialMode: bootstrap.initialSessionMode,
         botTransportEnabled: bootstrap.enableBotTransport,
+        navigationMemory: navigationMemory,
       ),
     );
     desktopLogin = _register(
@@ -329,7 +339,7 @@ final class AppComposition {
   }
 
   void _buildWorkspacePlane() {
-    workspace = _register(WorkspaceController());
+    workspace = _register(WorkspaceController(memory: navigationMemory));
     // Everything below resolves its plane off the live session through a
     // provider rather than capturing it: the transport is swapped when the
     // account changes, and a controller holding the old one would talk to a

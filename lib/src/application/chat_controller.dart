@@ -75,10 +75,17 @@ part 'chat_controller_history_window.dart';
 enum ChatLoadState { idle, loading, ready, failure }
 
 final class ChatController extends ChangeNotifier {
-  ChatController(ChatRepository repository) : _repository = repository {
+  /// [landingChannelIn] names the channel the app opens on when a workspace
+  /// first loads. Without it the app opens on the first text channel.
+  ChatController(
+    ChatRepository repository, {
+    String? Function(ChatWorkspace workspace)? landingChannelIn,
+  }) : _repository = repository,
+       _landingChannelIn = landingChannelIn {
     _listenToRepository();
   }
 
+  final String? Function(ChatWorkspace workspace)? _landingChannelIn;
   ChatRepository _repository;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
   StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
@@ -323,21 +330,27 @@ final class ChatController extends ChangeNotifier {
     if (_state == ChatLoadState.ready &&
         workspace != null &&
         _activeChannelId == null) {
-      // A voice channel does carry messages, but it is never the channel the
-      // app lands on unasked, so warming its history here would be wasted work.
-      // The same visibility filter the shell lands by is applied here, or the
-      // two would disagree and the channel actually shown would never load.
-      final permissions = WorkspacePermissions(workspace);
-      final textChannels = workspace.channels.where(
-        (channel) =>
-            channel.kind != ChannelKind.voice &&
-            !channel.isThread &&
-            permissions.can(DiscordPermissions.viewChannel, channel),
-      );
-      if (textChannels.isNotEmpty) {
-        unawaited(openChannel(textChannels.first.id));
-      }
+      final landing = _landingChannelIn;
+      final channelId = landing == null
+          ? _firstTextChannelIn(workspace)
+          : landing(workspace);
+      if (channelId != null) unawaited(openChannel(channelId));
     }
+  }
+
+  /// A voice channel does carry messages, but it is never the channel the app
+  /// lands on unasked, so warming its history here would be wasted work.
+  String? _firstTextChannelIn(ChatWorkspace workspace) {
+    final permissions = WorkspacePermissions(workspace);
+    return workspace.channels
+        .where(
+          (channel) =>
+              channel.kind != ChannelKind.voice &&
+              !channel.isThread &&
+              permissions.can(DiscordPermissions.viewChannel, channel),
+        )
+        .firstOrNull
+        ?.id;
   }
 
   Future<void> openChannel(
