@@ -533,8 +533,8 @@ final class DiscordDesktopApiClient
     final payload = <String, Object?>{
       'content': content,
       'nonce': nonce,
-      // Discord answers a repeat of this nonce with the first message, so a
-      // send that was retried cannot post twice.
+      // Within Discord's dedup window of a few minutes, a repeat of this nonce
+      // gets the first message back, so a quick retry does not post twice.
       'enforce_nonce': true,
       'tts': textToSpeech,
       'flags': suppressNotifications ? 4096 : 0,
