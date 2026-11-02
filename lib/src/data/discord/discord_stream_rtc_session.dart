@@ -67,6 +67,12 @@ final class DiscordStreamRtcSession {
     await close();
   }
 
+  /// Reports a failure only the connection's holder can see, the same way the
+  /// socket reports its own, so listeners have one failure to handle.
+  void reportFailure(Object error) => _onEvent(
+    VoiceSignalingStatusEvent(VoiceConnectionStatus.failure, error: error),
+  );
+
   /// Pictures arriving on this connection, tagged with whose SSRC carried them.
   Stream<(String, DiscordRtpFrame)> get video => _video.stream;
 

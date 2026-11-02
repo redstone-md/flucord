@@ -330,6 +330,21 @@ void main() {
     expect(controller.errorFor(_key), isNull);
   });
 
+  test('stopping a session forgets the failure on it', () async {
+    final repository = _FakeRepository();
+    final controller = StreamViewerController(
+      repositoryProvider: () => repository,
+      decoderFactory: () => _FakeDecoder(failStart: true),
+    );
+    addTearDown(controller.dispose);
+    await controller.watch(_key, packets: const Stream.empty());
+    expect(controller.errorFor(_key), isNotNull);
+
+    await controller.stop(_key);
+
+    expect(controller.errorFor(_key), isNull);
+  });
+
   test('an error on the packet stream is reported, not thrown', () async {
     final repository = _FakeRepository();
     final packets = StreamController<IncomingVideoPacket>();

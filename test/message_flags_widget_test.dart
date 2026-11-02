@@ -44,7 +44,10 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const ValueKey('composer-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('send-silently')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('message-composer')),
       'Quiet release',
@@ -61,7 +64,7 @@ void main() {
           ?.text,
       isEmpty,
     );
-    expect(find.byTooltip('Send silently'), findsOneWidget);
+    expect(find.byKey(const ValueKey('composer-silent-notice')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
