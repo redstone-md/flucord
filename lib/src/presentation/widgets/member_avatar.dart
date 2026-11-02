@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import 'presence_indicator.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 class MemberAvatar extends StatelessWidget {
@@ -36,9 +37,10 @@ class MemberAvatar extends StatelessWidget {
                 child: Center(
                   child: Text(
                     member.initials,
+                    softWrap: false,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: size * 0.32,
+                      fontSize: FlucordType.fitting(size * 0.32),
                       fontWeight: FontWeight.w600,
                     ),
                   ),

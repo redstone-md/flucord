@@ -716,7 +716,7 @@ class MessageComposerState extends State<MessageComposer>
                         ? null
                         : const OutlineInputBorder(
                             borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(6),
+                              bottom: FlucordRadius.mediumCorner,
                             ),
                             borderSide: BorderSide.none,
                           ),
@@ -724,7 +724,7 @@ class MessageComposerState extends State<MessageComposer>
                         ? null
                         : OutlineInputBorder(
                             borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(6),
+                              bottom: FlucordRadius.mediumCorner,
                             ),
                             borderSide: BorderSide(
                               color: context.surfaces.focusRing,
@@ -965,7 +965,9 @@ class MessageComposerState extends State<MessageComposer>
         left: BorderSide(color: context.surfaces.border),
         right: BorderSide(color: context.surfaces.border),
       ),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+      borderRadius: const BorderRadius.vertical(
+        top: FlucordRadius.mediumCorner,
+      ),
     ),
     child: Row(
       children: [
