@@ -80,6 +80,35 @@ final class DiscordGatewayJsonFraming implements DiscordGatewayFraming {
   }
 }
 
+/// A JSON text frame that a socket's worker isolate has already decoded.
+///
+/// It crosses to the main isolate in this form, so that isolate does no JSON
+/// work. A broken frame keeps its error, which [payloads] throws on the main
+/// isolate, so it fails there just as a text frame does.
+final class DiscordGatewayDecodedJsonFrame {
+  const DiscordGatewayDecodedJsonFrame._(this._payload, this._failure);
+
+  factory DiscordGatewayDecodedJsonFrame.read(String text) {
+    try {
+      final payload = const DiscordGatewayJsonFraming().decode(text);
+      return DiscordGatewayDecodedJsonFrame._(payload, null);
+    } on FormatException catch (failure) {
+      return DiscordGatewayDecodedJsonFrame._(null, failure);
+    }
+  }
+
+  final Map<String, Object?>? _payload;
+  final FormatException? _failure;
+
+  /// The frame's payload, as [DiscordGatewayFraming.decode] gives it.
+  List<Map<String, Object?>> get payloads {
+    final failure = _failure;
+    if (failure != null) throw failure;
+    final payload = _payload;
+    return payload == null ? const [] : [payload];
+  }
+}
+
 /// Binary framing used by the installed desktop client.
 final class DiscordGatewayEtfFraming implements DiscordGatewayFraming {
   const DiscordGatewayEtfFraming();

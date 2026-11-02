@@ -10,6 +10,7 @@ import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
 import 'server_menu.dart';
 import 'account_panel.dart';
+import 'activity_label.dart';
 import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
