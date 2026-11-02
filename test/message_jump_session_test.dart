@@ -203,6 +203,52 @@ void main() {
     }, routes: _routeHistory);
   });
 
+  group('a jump while another load is running', () {
+    testSession('takes the place of a plain load in flight', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.otherChannelId);
+      await _search(tester, session, _old);
+      final plain = Completer<DiscordHttpResponse>();
+      session.transport.on('GET', _messagesPath, (request) {
+        return request.uri.queryParameters['around'] == null
+            ? plain.future
+            : jsonResponse(_page(_old - 50, 100));
+      });
+      await tester.tap(
+        find.byKey(const ValueKey('channel-${SessionHarness.channelId}')),
+      );
+      await session.settle();
+
+      await _jumpToResult(tester, session, _old);
+      plain.complete(jsonResponse(_page(_newestPageStart, 100)));
+      await session.settle();
+
+      expect(session.messageRow(_idOf(_old)), findsOneWidget);
+      expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+    });
+
+    testSession('to a held message drops a window still on its way', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _search(tester, session, _old);
+      final window = Completer<DiscordHttpResponse>();
+      session.transport.on('GET', _messagesPath, (_) => window.future);
+      await _jumpToResult(tester, session, _old);
+
+      await _search(tester, session, _newest - 5);
+      await _jumpToResult(tester, session, _newest - 5);
+      window.complete(jsonResponse(_page(_old - 50, 100)));
+      await session.settle();
+
+      expect(session.messageRow(_idOf(_newest - 5)), findsOneWidget);
+      expect(session.messageRow(_idOf(_old)), findsNothing);
+    }, routes: _routeHistory);
+  });
+
   group('an around page and the start of history', () {
     testSession('a short page in a loaded channel can still load older', (
       tester,
