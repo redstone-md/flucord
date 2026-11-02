@@ -78,8 +78,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           unawaited(_acceptGuildUpdate(event.data));
         } else if (event.name == 'GUILD_DELETE') {
           unawaited(_acceptGuildRemoval(event.data));
-        } else if (event.name == 'READY' ||
-            event.name == 'READY_SUPPLEMENTAL') {
+        } else if (event.name == 'READY') {
+          _sharedDispatches.inOrder(_acceptNewSession);
+        } else if (event.name == 'READY_SUPPLEMENTAL') {
           _sharedDispatches.inOrder(_rehydrateWorkspace);
         }
     }
@@ -114,6 +115,15 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
     _events.publish(SpaceRemovedEvent(guildId));
     await _persistLeftGuild(guildId);
+  }
+
+  /// A READY with a workspace on screen ends a stretch with no live events. The
+  /// gap goes out after the pass, so the history is asked for only in channels
+  /// that are still there.
+  Future<void> _acceptNewSession() async {
+    if (!_workspaceShown) return;
+    await _rehydrateWorkspace();
+    _events.publish(const HistoryGapEvent());
   }
 
   /// Applies a post-load READY to the workspace in place.
