@@ -312,6 +312,7 @@ final class ChatController extends ChangeNotifier {
       _persistChannelActivity(previousChannelId);
     }
     _activeChannelId = channelId;
+    if (previousChannelId != null) _capChannelIfNotOpen(previousChannelId);
     _workspace = _workspace?.markChannelRead(channelId);
     _persistChannelActivity(channelId);
     acknowledgeChannel(channelId);
@@ -357,8 +358,19 @@ final class ChatController extends ChangeNotifier {
       }
     } finally {
       _loadingChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Keeps a channel the reader is not in under the cap. A channel that lost
+  /// messages counts as not loaded, so opening it fetches its history again.
+  void _capChannelIfNotOpen(String channelId) {
+    if (channelId == _activeChannelId) return;
+    final capped = _workspace?.capChannel(channelId);
+    if (identical(capped, _workspace)) return;
+    _workspace = capped;
+    _loadedChannels.remove(channelId);
   }
 
   Future<String?> openDirectConversation(String recipientId) async {
@@ -412,6 +424,7 @@ final class ChatController extends ChangeNotifier {
       _olderChannelErrors[channelId] = error;
     } finally {
       _loadingOlderChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
       if (!_disposed) notifyListeners();
     }
   }
