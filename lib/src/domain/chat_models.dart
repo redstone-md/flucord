@@ -405,8 +405,43 @@ final class ChatWorkspace {
     history,
     replaceChannel:
         !retainExisting &&
-        channelById(history.channelId).firstUnreadMessageId == null,
+        (channelById(history.channelId).firstUnreadMessageId == null ||
+            !_reachesHeldMessages(history)),
   );
+
+  /// Folds in the newest page of a channel that may have missed messages.
+  ///
+  /// A page that shares a message with what the channel holds has no hole
+  /// behind it, so older messages stay and a reader scrolled up keeps their
+  /// place. A page that does not reach them replaces them, because keeping both
+  /// would leave a hole nothing marks. Inside the page's own span the page is
+  /// the truth, so a message deleted during the gap goes. Anything newer came
+  /// live while the page was on its way, and stays.
+  ChatWorkspace catchUpHistory(ChannelHistory page) {
+    if (page.messages.isEmpty) return mergeHistory(page);
+    final held = messagesFor(page.channelId);
+    final oldest = page.messages.first.sentAt;
+    final newest = page.messages.last.sentAt;
+    return mergeHistory(
+      ChannelHistory(
+        channelId: page.channelId,
+        members: page.members,
+        messages: [
+          if (_reachesHeldMessages(page))
+            ...held.where((message) => message.sentAt.isBefore(oldest)),
+          ...page.messages,
+          ...held.where((message) => message.sentAt.isAfter(newest)),
+        ],
+      ),
+    );
+  }
+
+  bool _reachesHeldMessages(ChannelHistory page) {
+    final pageIds = {for (final message in page.messages) message.id};
+    return messagesFor(
+      page.channelId,
+    ).any((message) => pageIds.contains(message.id));
+  }
 
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
     final nextMembers = member == null
@@ -730,10 +765,18 @@ final class ChannelHistory {
 }
 
 final class ChannelHistoryPage {
-  const ChannelHistoryPage({required this.history, required this.hasMore});
+  const ChannelHistoryPage({
+    required this.history,
+    required this.hasMore,
+    this.fromCache = false,
+  });
 
   final ChannelHistory history;
   final bool hasMore;
+
+  /// True when Discord could not be asked and this is the local copy. It says
+  /// nothing about messages sent since that copy was written.
+  final bool fromCache;
 
   bool holds(String messageId) =>
       history.messages.any((message) => message.id == messageId);
