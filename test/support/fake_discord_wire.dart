@@ -38,6 +38,10 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
     _etf ? DiscordEtfCodec.encode(payload) : jsonEncode(payload),
   );
 
+  /// Delivers [frame] as the socket hands it over, with no encoding. For a frame
+  /// that is broken, or one the test has already encoded.
+  void receiveRaw(Object? frame) => _messages.add(frame);
+
   /// Closes from the server's side, as a dropped connection does.
   Future<void> dropConnection({int? code}) {
     _closeCode = code;
@@ -64,8 +68,15 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
   @override
   Stream<Object?> get messages => _messages.stream;
 
+  /// While set, a write throws this, as a socket that closed mid-frame does.
+  Object? sendFailure;
+
   @override
-  void send(String data) => _sent.add(data);
+  void send(String data) {
+    final failure = sendFailure;
+    if (failure != null) throw failure;
+    _sent.add(data);
+  }
 
   @override
   void sendBinary(List<int> data) => _sent.add(Uint8List.fromList(data));

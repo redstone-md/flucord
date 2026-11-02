@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import 'discord_desktop_voice_frames.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
 import 'discord_gateway_rules.dart';
+import 'discord_gateway_socket_queue.dart';
 import 'discord_gateway_transport_codec.dart';
 import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
@@ -25,7 +27,9 @@ final class DiscordDesktopGatewayClient
     required String authorization,
     required Map<String, Object?> properties,
     this.profile = DiscordDesktopProtocolProfile.installedStable20260725,
-    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(),
+    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(
+      decodeJsonInWorker: true,
+    ),
   }) : _protocol = DiscordDesktopGatewayProtocol(
          token: authorization,
          properties: properties,
@@ -158,60 +162,93 @@ final class DiscordDesktopGatewayClient
   void _listenTo(DiscordDesktopWebSocket socket) {
     _socket = socket;
     bool isCurrent() => identical(socket, _socket);
+    final queue = DiscordGatewaySocketQueue();
+    void inOrder(FutureOr<void> Function() step) =>
+        queue.add(() => isCurrent() ? step() : null);
     socket.messages.listen(
-      (raw) {
-        if (isCurrent()) _accept(raw);
-      },
-      onDone: () {
-        if (isCurrent()) _onDone(socket);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (isCurrent()) _onSocketError(error, stackTrace);
-      },
+      (raw) => inOrder(() => _accept(raw, isCurrent)),
+      onDone: () => inOrder(() => _onDone(socket)),
+      onError: (Object error, StackTrace stackTrace) =>
+          inOrder(() => _onSocketError(error, stackTrace)),
       cancelOnError: true,
     );
   }
 
-  void _accept(Object? raw) {
+  /// Handles one frame, at once or, for a large one, after a worker decoded it.
+  FutureOr<void> _accept(Object? raw, bool Function() isCurrent) {
     try {
-      final payloads = _codec.decode(raw);
-      if (payloads.isEmpty) {
-        if (_bootstrapCompleter?.isCompleted == false) {
-          AppLog.warning(
-            'discord.gateway',
-            'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
-          );
-        }
-        return;
+      final decoded = _codec.decode(raw);
+      if (decoded is Future<List<Map<String, Object?>>>) {
+        return _acceptDecoding(raw, decoded, isCurrent);
       }
-      for (final payload in payloads) {
-        _acceptPayload(payload);
+      _acceptPayloads(raw, decoded);
+    } on Object catch (error, stackTrace) {
+      _onFrameFailed(error, stackTrace);
+    }
+  }
+
+  /// A socket can stop being current during the decoding, and then the frame
+  /// means nothing, whether or not it was good.
+  Future<void> _acceptDecoding(
+    Object? raw,
+    Future<List<Map<String, Object?>>> decoding,
+    bool Function() isCurrent,
+  ) async {
+    try {
+      final payloads = await decoding;
+      if (isCurrent()) _acceptPayloads(raw, payloads);
+    } on Object catch (error, stackTrace) {
+      if (isCurrent()) _onFrameFailed(error, stackTrace);
+    }
+  }
+
+  void _acceptPayloads(Object? raw, List<Map<String, Object?>> payloads) {
+    if (payloads.isEmpty) {
+      if (_bootstrapCompleter?.isCompleted == false) {
+        AppLog.warning(
+          'discord.gateway',
+          'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
+        );
       }
-    } on ZstdException catch (error, stackTrace) {
-      // A decompression failure is not recoverable in place. The stream is one
-      // continuous context, so once it desynchronises every later frame is
-      // garbage decoded against poisoned history — and logging and returning
-      // would leave the socket looking healthy while delivering nothing.
-      // Reconnecting is the only correct response; _open resets the decoder.
-      _lastBootstrapError = error;
-      _logBootstrapFailure('transport-compression', error, stackTrace);
-      _scheduleReconnect(
-        immediate: true,
-        reason: 'transport compression failed: $error',
-      );
       return;
-    } on FormatException catch (error, stackTrace) {
-      _lastBootstrapError = error;
-      _logBootstrapFailure(
-        'frame-${_codec.framing.encoding}',
-        error,
-        stackTrace,
-      );
-      return;
-    } on TypeError catch (error, stackTrace) {
-      _lastBootstrapError = error;
-      _logBootstrapFailure('frame-shape', error, stackTrace);
-      return;
+    }
+    for (final payload in payloads) {
+      _acceptPayload(payload);
+    }
+  }
+
+  void _onFrameFailed(Object error, StackTrace stackTrace) {
+    switch (error) {
+      case ZstdException():
+        // A decompression failure is not recoverable in place. The stream is one
+        // continuous context, so once it desynchronises every later frame is
+        // garbage decoded against poisoned history, and logging and returning
+        // would leave the socket looking healthy while delivering nothing.
+        // Reconnecting is the only correct response; _open resets the decoder.
+        _lastBootstrapError = error;
+        _logBootstrapFailure('transport-compression', error, stackTrace);
+        _scheduleReconnect(
+          immediate: true,
+          reason: 'transport compression failed: $error',
+        );
+      case FormatException():
+        _lastBootstrapError = error;
+        _logBootstrapFailure(
+          'frame-${_codec.framing.encoding}',
+          error,
+          stackTrace,
+        );
+      case TypeError():
+        _lastBootstrapError = error;
+        _logBootstrapFailure('frame-shape', error, stackTrace);
+      case IsolateSpawnException() || RemoteError():
+        // The worker itself failed, so the frame was never read. Its sequence
+        // number was not counted either, so a resume brings it back.
+        _lastBootstrapError = error;
+        _logBootstrapFailure('frame-worker', error, stackTrace);
+        _scheduleReconnect(reason: 'frame worker failed: $error');
+      default:
+        Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
