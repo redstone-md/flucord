@@ -288,6 +288,8 @@ class VoiceParticipantTile extends StatelessWidget {
                     name: member.displayName,
                     stateIcons: _stateIcons,
                     isOpen: isOpen,
+                    hasFailed:
+                        streams?.hasFailed?.call(participant.userId) ?? false,
                     isOwn: isCurrentUser,
                     onWatch: isCurrentUser ? null : streams?.onWatch,
                     onStopShare: isCurrentUser ? streams?.onStopShare : null,
@@ -404,6 +406,7 @@ class _StreamCard extends StatelessWidget {
     required this.name,
     required this.stateIcons,
     required this.isOpen,
+    required this.hasFailed,
     required this.isOwn,
     this.onWatch,
     this.onStopShare,
@@ -413,6 +416,10 @@ class _StreamCard extends StatelessWidget {
   final String name;
   final List<Widget> stateIcons;
   final bool isOpen;
+
+  /// The last watch of this stream failed. The control offers Watch again, so
+  /// this is what says why nothing is showing.
+  final bool hasFailed;
   final bool isOwn;
 
   /// Opens this participant's stream, or closes it once it is open. Null where
@@ -445,24 +452,18 @@ class _StreamCard extends StatelessWidget {
             // The mark says what is true of this tile, not what is on the
             // stage. The sender is live before its receiving connection opens.
             if (showsLive)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.live_tv, size: 12, color: accent),
-                    const SizedBox(width: 4),
-                    Text(
-                      isOwn ? 'Live' : 'Watching',
-                      key: ValueKey('voice-stream-open-$userId'),
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+              _mark(
+                key: 'voice-stream-open-$userId',
+                icon: Icons.live_tv,
+                label: isOwn ? 'Live' : 'Watching',
+                color: accent,
+              )
+            else if (hasFailed)
+              _mark(
+                key: 'voice-stream-error-$userId',
+                icon: Icons.error_outline,
+                label: 'Stream unavailable',
+                color: Theme.of(context).colorScheme.error,
               ),
             Row(
               children: [
@@ -477,6 +478,36 @@ class _StreamCard extends StatelessWidget {
       ),
     );
   }
+
+  /// One small line above the name: what is true of this stream right now.
+  Widget _mark({
+    required String key,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 5),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            key: ValueKey(key),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _control(BuildContext context) {
     if (onStopShare case final stop?) {
