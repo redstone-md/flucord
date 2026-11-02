@@ -296,13 +296,16 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
     if (payload['id'] is! String) return;
-    final currentUserId = _currentMemberId;
-    if (currentUserId != null) {
-      await _directMessages.acceptMessage(payload, currentUserId);
-    }
-    final message = await _storeMessage(payload);
+    final message = _messageFrom(payload);
     final member = _mapper.messageAuthor(payload);
-    if (member != null) await _cache.writeMember(member);
+    final currentUserId = _currentMemberId;
+    // This announces a new channel at once, and its write finishes later.
+    final channelAdopted = currentUserId == null
+        ? null
+        : _directMessages.acceptMessage(payload, currentUserId);
+    // Nothing may wait between the fold and the announce. A frame drawn in
+    // between would show a badge on the channel on screen, because the message
+    // that clears it has not arrived yet.
     _readState.acceptNewMessage(payload);
     _events.add(
       MessageUpsertedEvent(
@@ -312,6 +315,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
+    await _cache.writeMessage(message, member: member);
+    await channelAdopted;
   }
 
   Future<ChatMessage> _storeMessage(

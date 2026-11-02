@@ -93,12 +93,12 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
   Future<void> _handleNewMessage(Map<String, Object?> payload) async {
     if (payload['id'] is! String) return;
     final currentUserId = _currentMemberId;
-    if (currentUserId != null) {
-      await _directMessages.acceptMessage(payload, currentUserId);
-    }
     final message = _mapper.message(payload, currentMemberId: currentUserId);
     final member = _mapper.messageAuthor(payload);
-    await _cache.writeMessage(message, member: member);
+    // This announces a new channel at once, and its write finishes later.
+    final channelAdopted = currentUserId == null
+        ? null
+        : _directMessages.acceptMessage(payload, currentUserId);
     _events.add(
       MessageUpsertedEvent(
         message: message,
@@ -107,5 +107,7 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
+    await _cache.writeMessage(message, member: member);
+    await channelAdopted;
   }
 }

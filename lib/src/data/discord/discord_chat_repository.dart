@@ -453,6 +453,8 @@ final class DiscordChatRepository
   Future<void> close() async {
     await _gatewaySubscription.cancel();
     await _sharedDispatches.drained;
+    // First, so that a slow socket further down cannot cost what is waiting.
+    await _cache.flush();
     await _voiceSignaling.close();
     await _gateway.close();
     _api.close();

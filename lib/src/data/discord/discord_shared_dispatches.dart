@@ -32,8 +32,17 @@ final class DiscordSharedDispatches {
        _currentMemberId = currentMemberId,
        _rolesOf = rolesOf,
        _events = events,
-       _reactions = DiscordReactionHandler(cache, currentMemberId),
-       _updates = DiscordMessageUpdateHandler(cache, mapper, updatedMessage),
+       _reactions = DiscordReactionHandler(
+         cache,
+         currentMemberId,
+         events.publish,
+       ),
+       _updates = DiscordMessageUpdateHandler(
+         cache,
+         mapper,
+         updatedMessage,
+         events.publish,
+       ),
        _channels = DiscordChannelHandler(cache, mapper, events.publish);
 
   final ChatCache _cache;
@@ -59,9 +68,9 @@ final class DiscordSharedDispatches {
           'MESSAGE_REACTION_REMOVE' ||
           'MESSAGE_REACTION_REMOVE_EMOJI' ||
           'MESSAGE_REACTION_REMOVE_ALL':
-        inOrder(() => _announce(_reactions.apply(event)));
+        inOrder(() => _reactions.apply(event));
       case 'MESSAGE_UPDATE':
-        inOrder(() => _announce(_updates.apply(event.data)));
+        inOrder(() => _updates.apply(event.data));
       case 'MESSAGE_DELETE':
         inOrder(() => _deleteMessage(event.data));
       case 'MESSAGE_DELETE_BULK':
@@ -84,10 +93,11 @@ final class DiscordSharedDispatches {
 
   /// Runs [step] after every step added before it.
   ///
-  /// Each dispatch about a message goes through here, because each one waits on
-  /// the cache. Run side by side, a slow create or edit would finish after the
-  /// delete that followed it and bring the message back. A step that fails is
-  /// logged, and the next one still runs.
+  /// Each dispatch about a message goes through here, so that nothing overtakes
+  /// a step that has to wait, such as a first DM writing its new channel. A step
+  /// announces first and writes after, and the cache applies its writes in the
+  /// order they came, so a delete has the last word. A step that fails is logged,
+  /// and the next one still runs.
   void inOrder(Future<void> Function() step) {
     _lastStep = _lastStep.then((_) async {
       try {
@@ -102,20 +112,14 @@ final class DiscordSharedDispatches {
     });
   }
 
-  /// Announces what a handler answered, once the handler has its answer.
-  Future<void> _announce(Future<ChatRepositoryEvent?> answer) async {
-    final update = await answer;
-    if (update != null) _events.publish(update);
-  }
-
   Future<void> _deleteMessage(Map<String, Object?> data) async {
     final messageId = data['id'] as String?;
     final channelId = data['channel_id'] as String?;
     if (messageId == null || channelId == null) return;
-    await _cache.deleteMessage(messageId);
     _events.publish(
       MessageDeletedEvent(messageId: messageId, channelId: channelId),
     );
+    await _cache.deleteMessage(messageId);
   }
 
   Future<void> _deleteMessages(Map<String, Object?> data) async {
@@ -123,10 +127,10 @@ final class DiscordSharedDispatches {
     final channelId = data['channel_id'] as String?;
     if (ids is! List || channelId == null) return;
     final messageIds = ids.whereType<String>().toSet();
-    await Future.wait(messageIds.map(_cache.deleteMessage));
     _events.publish(
       MessagesDeletedEvent(messageIds: messageIds, channelId: channelId),
     );
+    await Future.wait(messageIds.map(_cache.deleteMessage));
   }
 
   Future<void> _upsertChannel(Map<String, Object?> data) async {
