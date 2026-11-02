@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/user_settings.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Heading for one group of settings rows.
 class SettingsSectionHeader extends StatelessWidget {
@@ -18,13 +20,19 @@ class SettingsSectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: FlucordType.title,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         if (subtitle case final text?) ...[
           const SizedBox(height: 4),
           Text(
             text,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ],
       ],
@@ -64,13 +72,19 @@ class SettingRow extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         if (description case final text?) ...[
           const SizedBox(height: 2),
           Text(
             text,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ],
         if (_verdict case final text?) ...[
@@ -104,7 +118,7 @@ class SettingRow extends StatelessWidget {
     UserSettingSupport.accountOnly =>
       note ?? 'Saved to your Discord account. Flucord does not act on it.',
     UserSettingSupport.unavailable =>
-      note ?? 'Flucord has no surface for this setting yet.',
+      note ?? 'Flucord has no screen for this setting yet.',
   };
 }
 
@@ -117,8 +131,8 @@ class _SupportBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (support) {
-      UserSettingSupport.applied => FlucordColors.success,
-      UserSettingSupport.accountOnly => FlucordColors.brand,
+      UserSettingSupport.applied => context.surfaces.success,
+      UserSettingSupport.accountOnly => context.surfaces.link,
       UserSettingSupport.unavailable => context.surfaces.muted,
     };
     return Row(
@@ -137,7 +151,10 @@ class _SupportBadge extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Flexible(
-          child: Text(text, style: TextStyle(color: color, fontSize: 10)),
+          child: Text(
+            text,
+            style: TextStyle(color: color, fontSize: FlucordType.caption),
+          ),
         ),
       ],
     );
@@ -213,7 +230,10 @@ class SettingChoices<T extends Enum> extends StatelessWidget {
             key: keyPrefix == null
                 ? null
                 : ValueKey('$keyPrefix-${option.value.name}'),
-            label: Text(option.label, style: const TextStyle(fontSize: 11)),
+            label: Text(
+              option.label,
+              style: const TextStyle(fontSize: FlucordType.caption),
+            ),
             selected: option.value == selected,
             onSelected: option.enabled
                 ? (isSelected) {
@@ -239,11 +259,14 @@ class SettingValue extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Text(
         value,
-        style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
     ),
   );

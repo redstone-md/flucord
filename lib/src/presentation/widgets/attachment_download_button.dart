@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../attachment_download_controller.dart';
 
@@ -25,7 +26,7 @@ class AttachmentDownloadButton extends StatelessWidget {
           ? BoxDecoration(
               color: context.surfaces.surface.withValues(alpha: 0.94),
               border: Border.all(color: context.surfaces.border),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: FlucordRadius.small,
             )
           : null,
       child: IconButton(
@@ -83,10 +84,10 @@ class AttachmentDownloadButton extends StatelessWidget {
         strokeWidth: 2,
       ),
     ),
-    AttachmentDownloadPhase.saved => const Icon(
+    AttachmentDownloadPhase.saved => Icon(
       Icons.check_rounded,
       size: 17,
-      color: FlucordColors.success,
+      color: context.surfaces.success,
     ),
     AttachmentDownloadPhase.failed => Icon(
       Icons.refresh_rounded,

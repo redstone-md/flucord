@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/auth_session_controller.dart';
 import '../../domain/auth_session.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'destructive_confirmation.dart';
 import 'user_settings_controls.dart';
 
 /// Every device signed in to this account, and the way to sign one out.
@@ -56,7 +59,7 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
                   'Discord would not end that session. It asks for the '
                   'account password first, which Flucord does not hold.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -90,30 +93,18 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
   ) async {
     // Signing another device out cannot be undone from here, so it asks
     // first — the same reason blocking somebody does.
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('devices-confirm'),
-        title: const Text('Sign out everywhere else?'),
-        content: Text(
-          '${controller.otherSessions.length} other session'
-          '${controller.otherSessions.length == 1 ? '' : 's'} will be ended. '
+    final others = controller.otherSessions.length;
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Sign out everywhere else?',
+      message:
+          '$others other session${others == 1 ? '' : 's'} will be ended. '
           'This one stays signed in.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('devices-confirm-accept'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Sign out',
+      dialogKey: const ValueKey('devices-confirm'),
+      confirmKey: const ValueKey('devices-confirm-accept'),
     );
-    if (confirmed ?? false) await controller.endOtherSessions();
+    if (confirmed) await controller.endOtherSessions();
   }
 }
 
@@ -130,7 +121,7 @@ class _SessionRow extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -150,7 +141,7 @@ class _SessionRow extends StatelessWidget {
                       'This device',
                       key: ValueKey('device-current-${session.idHash}'),
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -161,7 +152,10 @@ class _SessionRow extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   _describe(session),
-                  style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
               ),
             ],

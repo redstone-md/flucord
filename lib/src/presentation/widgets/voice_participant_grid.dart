@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_type.dart';
 import 'camera_picture.dart';
 import 'go_live_viewer.dart';
 import 'member_avatar.dart';
@@ -58,20 +60,26 @@ class VoiceParticipantGrid extends StatelessWidget {
     if (participants.isEmpty) {
       return Center(
         key: const ValueKey('voice-participants-empty'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.headset_mic_outlined,
-              size: 32,
-              color: context.surfaces.muted,
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Waiting for participants',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ],
+        // A short window at a large font has less height than this text needs.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.headset_mic_outlined,
+                size: 32,
+                color: context.surfaces.muted,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Waiting for participants',
+                style: TextStyle(
+                  fontSize: FlucordType.label,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -219,7 +227,7 @@ class VoiceParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = participant.isSpeaking
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.border;
     final onTap = this.onTap;
     return GestureDetector(
@@ -238,7 +246,7 @@ class VoiceParticipantTile extends StatelessWidget {
               color: borderColor,
               width: participant.isSpeaking ? 2 : 1,
             ),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: FlucordRadius.medium,
           ),
           child: Stack(
             children: [
@@ -246,7 +254,7 @@ class VoiceParticipantTile extends StatelessWidget {
                 Positioned.fill(
                   key: ValueKey('voice-self-preview-${participant.userId}'),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: FlucordRadius.small,
                     child: _SelfPreview(preview: preview),
                   ),
                 )
@@ -255,7 +263,7 @@ class VoiceParticipantTile extends StatelessWidget {
                 Positioned.fill(
                   key: ValueKey('voice-camera-${participant.userId}'),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: FlucordRadius.small,
                     child: CameraPicture(
                       frame: frame,
                       frames: cameraFramesFor?.call(participant.userId),
@@ -288,6 +296,8 @@ class VoiceParticipantTile extends StatelessWidget {
                     name: member.displayName,
                     stateIcons: _stateIcons,
                     isOpen: isOpen,
+                    hasFailed:
+                        streams?.hasFailed?.call(participant.userId) ?? false,
                     isOwn: isCurrentUser,
                     onWatch: isCurrentUser ? null : streams?.onWatch,
                     onStopShare: isCurrentUser ? streams?.onStopShare : null,
@@ -307,7 +317,7 @@ class VoiceParticipantTile extends StatelessWidget {
                           'You',
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 10,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ],
@@ -375,7 +385,7 @@ class _SelfPreview extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -404,6 +414,7 @@ class _StreamCard extends StatelessWidget {
     required this.name,
     required this.stateIcons,
     required this.isOpen,
+    required this.hasFailed,
     required this.isOwn,
     this.onWatch,
     this.onStopShare,
@@ -413,6 +424,10 @@ class _StreamCard extends StatelessWidget {
   final String name;
   final List<Widget> stateIcons;
   final bool isOpen;
+
+  /// The last watch of this stream failed. The control offers Watch again, so
+  /// this is what says why nothing is showing.
+  final bool hasFailed;
   final bool isOwn;
 
   /// Opens this participant's stream, or closes it once it is open. Null where
@@ -428,13 +443,13 @@ class _StreamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = FlucordColors.danger;
+    final accent = context.surfaces.danger;
     return DecoratedBox(
       key: ValueKey('voice-stream-card-$userId'),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
         border: Border.all(color: showsLive ? accent : context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
@@ -445,24 +460,18 @@ class _StreamCard extends StatelessWidget {
             // The mark says what is true of this tile, not what is on the
             // stage. The sender is live before its receiving connection opens.
             if (showsLive)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.live_tv, size: 12, color: accent),
-                    const SizedBox(width: 4),
-                    Text(
-                      isOwn ? 'Live' : 'Watching',
-                      key: ValueKey('voice-stream-open-$userId'),
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+              _mark(
+                key: 'voice-stream-open-$userId',
+                icon: Icons.live_tv,
+                label: isOwn ? 'Live' : 'Watching',
+                color: accent,
+              )
+            else if (hasFailed)
+              _mark(
+                key: 'voice-stream-error-$userId',
+                icon: Icons.error_outline,
+                label: 'Stream unavailable',
+                color: Theme.of(context).colorScheme.error,
               ),
             Row(
               children: [
@@ -478,9 +487,40 @@ class _StreamCard extends StatelessWidget {
     );
   }
 
+  /// One small line above the name: what is true of this stream right now.
+  Widget _mark({
+    required String key,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 5),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            key: ValueKey(key),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _control(BuildContext context) {
     if (onStopShare case final stop?) {
       return _button(
+        context,
         key: 'voice-stop-share-$userId',
         label: 'Stop sharing',
         tooltip: 'Stop sharing your stream',
@@ -494,9 +534,13 @@ class _StreamCard extends StatelessWidget {
       null => Text(
         'Streaming',
         key: ValueKey('voice-stream-idle-$userId'),
-        style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
       final watch => _button(
+        context,
         key: 'voice-watch-$userId',
         label: isOpen ? 'Stop watching' : 'Watch',
         // The name sits beside the button, not in it, so without this two
@@ -508,7 +552,8 @@ class _StreamCard extends StatelessWidget {
     };
   }
 
-  Widget _button({
+  Widget _button(
+    BuildContext context, {
     required String key,
     required String label,
     required String tooltip,
@@ -523,8 +568,11 @@ class _StreamCard extends StatelessWidget {
         minimumSize: Size.zero,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: danger ? FlucordColors.danger : null,
-        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        foregroundColor: danger ? context.surfaces.danger : null,
+        textStyle: const TextStyle(
+          fontSize: FlucordType.caption,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       child: Text(label),
     ),
@@ -542,7 +590,10 @@ class _TileName extends StatelessWidget {
       name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      style: const TextStyle(
+        fontSize: FlucordType.caption,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -559,7 +610,7 @@ class _StateIcon extends StatelessWidget {
       padding: const EdgeInsets.only(left: 7),
       child: Tooltip(
         message: label,
-        child: Icon(icon, size: 15, color: FlucordColors.danger),
+        child: Icon(icon, size: 15, color: context.surfaces.danger),
       ),
     );
   }
@@ -607,7 +658,7 @@ class _TileVolumeSlider extends StatelessWidget {
         height: 24,
         decoration: BoxDecoration(
           color: context.surfaces.raised.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           border: Border.all(color: context.surfaces.border),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8),

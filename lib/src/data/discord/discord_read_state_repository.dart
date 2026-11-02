@@ -106,6 +106,10 @@ final class DiscordReadStateRepository implements ReadStateRepository {
   void setPrivateChannelIds(Iterable<String> ids) =>
       _privateChannelIds = Set.unmodifiable(ids.toSet());
 
+  /// Adds a DM the account gained during the session.
+  void addPrivateChannel(String id) =>
+      _privateChannelIds = Set.unmodifiable({..._privateChannelIds, id});
+
   /// Rebinds the account this store belongs to, resetting the ack token.
   void setCurrentUserId(String? userId) => _queue.bindSession(userId);
 
@@ -119,6 +123,20 @@ final class DiscordReadStateRepository implements ReadStateRepository {
     }
     if (_store.accept(name, data)) _emit();
   }
+
+  /// Feeds in a message the account has just received or sent, as a raw payload.
+  ///
+  /// The transport calls this once the message is stored, right before it
+  /// announces the message. The two updates then reach the controller with no
+  /// frame between them, so a mention in the channel on screen is read before
+  /// any badge can draw.
+  void acceptNewMessage(Map<String, Object?> payload) {
+    if (_store.acceptNewMessage(payload)) _emit();
+  }
+
+  /// Whether [payload] mentions a role the account holds in its guild.
+  bool mentionsAccountRole(Map<String, Object?> payload) =>
+      _store.mentionsAccountRole(payload);
 
   /// Folds the read-state entries one guild carries, as a join's hydration
   /// step.
@@ -304,11 +322,13 @@ final class DiscordReadStateRepository implements ReadStateRepository {
       _store.snapshot,
       now ?? _clock(),
     );
+    // The local pass goes first so the cache shrinks on the same stroke whether
+    // or not the requests land, and no surface draws a collected cursor. A failed
+    // delete is re-read from the next READY, which is how every other optimistic
+    // mutation behaves.
+    channelIds.forEach(_store.removeChannelState);
+    if (channelIds.isNotEmpty) _emit();
     for (final channelId in channelIds) {
-      // The local pass goes first so the cache shrinks on the same stroke
-      // whether or not the request lands; a failed delete is re-read from the
-      // next READY, which is how every other optimistic mutation behaves.
-      _store.removeChannelState(channelId);
       await _queue.sendNow(
         DiscordDesktopReadStateRequests.deleteReadState(
           channelId: channelId,
@@ -316,7 +336,6 @@ final class DiscordReadStateRepository implements ReadStateRepository {
         ),
       );
     }
-    if (channelIds.isNotEmpty) _emit();
   }
 
   @override

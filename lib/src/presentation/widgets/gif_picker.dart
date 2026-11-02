@@ -6,7 +6,9 @@ import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/gif_picker.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'expression_favorite_star.dart';
 
 /// The composer's GIF button, and the sheet it opens.
@@ -149,7 +151,9 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
                 ),
               ),
             const SizedBox(height: 10),
-            SizedBox(height: 320, child: _body(context)),
+            // Less than this on a short window, so the search field stays on
+            // screen.
+            Flexible(child: SizedBox(height: 320, child: _body(context))),
           ],
         ),
       ),
@@ -164,7 +168,15 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
-    if (controller.results.isEmpty && controller.categories.isEmpty) {
+    final favorites = widget.favorites;
+    // Only on the idle picker: a search is a question about Tenor, and
+    // answering it with what was starred last week would bury the results.
+    final starred = controller.query.trim().isEmpty && favorites != null
+        ? favorites.favorites.gifs
+        : const <FavoriteGif>[];
+    if (starred.isEmpty &&
+        controller.results.isEmpty &&
+        controller.categories.isEmpty) {
       return Center(
         child: Column(
           key: const ValueKey('gif-empty'),
@@ -174,7 +186,10 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
               controller.error == null
                   ? 'Nothing matched that.'
                   : 'Discord did not return any GIFs.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 10),
             FilledButton(
@@ -190,12 +205,6 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
         ),
       );
     }
-    final favorites = widget.favorites;
-    // Only on the idle picker: a search is a question about Tenor, and
-    // answering it with what was starred last week would bury the results.
-    final starred = controller.query.trim().isEmpty && favorites != null
-        ? favorites.favorites.gifs
-        : const <FavoriteGif>[];
     return GridView.count(
       crossAxisCount: 3,
       crossAxisSpacing: 6,
@@ -301,7 +310,7 @@ class _TileFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.surfaces.raised,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: FlucordRadius.medium,
     clipBehavior: Clip.antiAlias,
     child: Stack(
       fit: StackFit.expand,
@@ -334,7 +343,7 @@ class _CategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.surfaces.raised,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: FlucordRadius.medium,
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       key: ValueKey('gif-category-${category.name}'),
@@ -359,7 +368,7 @@ class _CategoryTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),

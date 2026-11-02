@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
@@ -55,12 +57,15 @@ class ReactionGlyph extends StatelessWidget {
   Widget build(BuildContext context) {
     final emoji = _guildEmoji();
     if (emoji == null) {
-      return Text(reaction.emojiName, style: TextStyle(fontSize: size - 4));
+      return Text(
+        reaction.emojiName,
+        style: TextStyle(fontSize: FlucordType.fitting(size - 4)),
+      );
     }
     return SizedBox.square(
       dimension: size,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: FlucordRadius.small,
         child: RemoteIdentityImage(
           url: emoji.imageUrl,
           // The account's animate-emoji answer, read here so the flag from
@@ -74,7 +79,7 @@ class ReactionGlyph extends StatelessWidget {
               child: Text(
                 emoji.name.substring(0, 1).toUpperCase(),
                 style: TextStyle(
-                  fontSize: size / 2,
+                  fontSize: FlucordType.fitting(size / 2),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -130,23 +135,23 @@ class _ReactionChip extends StatelessWidget {
         message: 'Click to toggle · Right-click for details',
         child: Material(
           color: selected
-              ? FlucordColors.brand.withValues(alpha: 0.16)
+              ? context.surfaces.brand.withValues(alpha: 0.16)
               : context.surfaces.inset,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: InkWell(
             onTap: onToggle,
             onSecondaryTap: onShowDetails,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
             child: Container(
               height: 24,
               padding: const EdgeInsets.symmetric(horizontal: 7),
               decoration: BoxDecoration(
                 border: Border.all(
                   color: selected
-                      ? FlucordColors.brand.withValues(alpha: 0.65)
+                      ? context.surfaces.brand.withValues(alpha: 0.65)
                       : context.surfaces.border,
                 ),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: FlucordRadius.small,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -167,7 +172,7 @@ class _ReactionChip extends StatelessWidget {
                       Icons.auto_awesome,
                       size: 10,
                       color: burstColor == null
-                          ? FlucordColors.warning
+                          ? context.surfaces.warning
                           : Color(burstColor),
                     ),
                   ],
@@ -175,7 +180,7 @@ class _ReactionChip extends StatelessWidget {
                   Text(
                     '${reaction.count}',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),

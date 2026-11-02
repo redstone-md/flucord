@@ -575,7 +575,7 @@ DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
         ssrc: 41,
         marker: marker,
       ),
-      payload: payload,
+      payload: Uint8List.fromList(payload),
     );
 
 /// A frame with something in it.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class TypingIndicator extends StatefulWidget {
   const TypingIndicator({required this.members, super.key});
@@ -99,7 +100,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10),
+                  style: const TextStyle(fontSize: FlucordType.caption),
                 ),
               ),
             ],

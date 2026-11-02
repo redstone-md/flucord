@@ -154,7 +154,10 @@ class MessageSearchFilterControls extends StatelessWidget {
     final selected = MessageSearchTokenEditor.hasFilter(query, 'pinned');
     return FilterChip(
       key: const ValueKey('search-filter-pinned'),
-      label: const Text('Pinned', style: TextStyle(fontSize: 11)),
+      label: const Text(
+        'Pinned',
+        style: TextStyle(fontSize: FlucordType.caption),
+      ),
       avatar: const Icon(Icons.push_pin_outlined, size: 13),
       selected: selected,
       showCheckmark: false,
@@ -243,7 +246,7 @@ class _DateFilterDialogState extends State<_DateFilterDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: ValueKey('search-date-${widget.filter}'),
     title: Text('${widget.filter == 'before' ? 'Before' : 'After'} date'),
     content: Column(
@@ -252,7 +255,10 @@ class _DateFilterDialogState extends State<_DateFilterDialog> {
         Text(
           'Messages ${widget.filter == 'before' ? 'older' : 'newer'} than a '
           'year, month or day.',
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
         const SizedBox(height: 12),
         TextField(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// A section's scrollable body, with its heading.
 ///
@@ -35,7 +37,7 @@ class GuildSettingsPanel extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: FlucordType.body,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -44,7 +46,7 @@ class GuildSettingsPanel extends StatelessWidget {
                   Text(
                     subtitle!,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -83,7 +85,7 @@ class GuildSettingsField extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             letterSpacing: 0.5,
             fontWeight: FontWeight.w700,
             color: context.surfaces.muted,
@@ -95,7 +97,10 @@ class GuildSettingsField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             hint!,
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ],
       ],
@@ -155,7 +160,7 @@ class GuildSettingsActionError extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         border: Border.all(color: Theme.of(context).colorScheme.error),
       ),
       child: Row(
@@ -169,7 +174,7 @@ class GuildSettingsActionError extends StatelessWidget {
           Expanded(
             child: Text(
               message ?? 'That change was not saved.',
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: FlucordType.caption),
             ),
           ),
         ],
@@ -199,7 +204,7 @@ class GuildSettingsRow extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -217,7 +222,10 @@ class GuildSettingsRow extends StatelessWidget {
                 Text(
                   subtitle!,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
             ],
           ),

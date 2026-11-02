@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class PendingAttachmentStrip extends StatelessWidget {
   const PendingAttachmentStrip({
@@ -57,7 +59,7 @@ class _PendingAttachmentTile extends StatelessWidget {
     decoration: BoxDecoration(
       color: context.surfaces.inset,
       border: Border.all(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -74,7 +76,7 @@ class _PendingAttachmentTile extends StatelessWidget {
             attachment.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11),
+            style: const TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         if (onToggleSpoiler != null)

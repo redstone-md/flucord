@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import 'destructive_confirmation.dart';
 import 'discord_social_activity_scope.dart';
 
 class DiscordFriendActions extends StatelessWidget {
@@ -77,7 +78,7 @@ class DiscordFriendActions extends StatelessWidget {
             key: ValueKey('discord-friend-accept-$userId'),
             tooltip: 'Accept friend request',
             icon: Icons.check,
-            color: FlucordColors.success,
+            color: context.surfaces.success,
             onPressed: () =>
                 _perform(context, DiscordRelationshipAction.acceptRequest),
           ),
@@ -109,12 +110,18 @@ class DiscordFriendActions extends StatelessWidget {
     DiscordRelationshipAction action,
   ) async {
     if (_requiresConfirmation(action)) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) =>
-            _ConfirmationDialog(relationship: relationship, action: action),
+      final blocking = action == DiscordRelationshipAction.blockUser;
+      final verb = blocking ? 'Block' : 'Remove Friend';
+      final confirmed = await confirmDestructiveAction(
+        context,
+        title: '$verb ${relationship.user.displayName}?',
+        message: blocking
+            ? 'They will no longer be able to message or invite you through Discord.'
+            : 'This removes the Discord and game friendship.',
+        confirmLabel: verb,
+        confirmKey: const ValueKey('confirm-relationship-action'),
       );
-      if (confirmed != true || !context.mounted) return;
+      if (!confirmed || !context.mounted) return;
     }
     await controller.updateRelationship(relationship, action);
   }
@@ -175,7 +182,7 @@ class _MoreActions extends StatelessWidget {
             child: Text(
               _menuLabel(action),
               style: action == DiscordRelationshipAction.blockUser
-                  ? const TextStyle(color: FlucordColors.danger)
+                  ? TextStyle(color: context.surfaces.errorText)
                   : null,
             ),
           ),
@@ -190,37 +197,4 @@ class _MoreActions extends StatelessWidget {
         DiscordRelationshipAction.blockUser => 'Block',
         _ => action.name,
       };
-}
-
-class _ConfirmationDialog extends StatelessWidget {
-  const _ConfirmationDialog({required this.relationship, required this.action});
-
-  final DiscordRelationship relationship;
-  final DiscordRelationshipAction action;
-
-  @override
-  Widget build(BuildContext context) {
-    final blocking = action == DiscordRelationshipAction.blockUser;
-    final verb = blocking ? 'Block' : 'Remove Friend';
-    return AlertDialog(
-      title: Text('$verb ${relationship.user.displayName}?'),
-      content: Text(
-        blocking
-            ? 'They will no longer be able to message or invite you through Discord.'
-            : 'This removes the Discord and game friendship.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('confirm-relationship-action'),
-          style: FilledButton.styleFrom(backgroundColor: FlucordColors.danger),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(verb),
-        ),
-      ],
-    );
-  }
 }

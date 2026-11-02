@@ -1,17 +1,24 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/composer_autocomplete_catalog.dart';
+import '../../application/send_failure.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import '../clipboard_attachments.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../application/slash_command_controller.dart';
+import 'accessibility_dials.dart';
 import 'accessibility_scope.dart';
 import 'emoji_picker.dart';
 import 'gif_picker.dart';
@@ -39,7 +46,8 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelId,
     required this.channelName,
-    this.channelIsVoice = false,
+    required this.drafts,
+    this.channelHintPrefix = '#',
     required this.spaceName,
     required this.emojiSections,
     required this.stickerSections,
@@ -49,6 +57,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
+    this.onEditLastMessage,
     this.gifPicker,
     this.expressionFavorites,
     this.slashCommands,
@@ -70,9 +79,12 @@ class MessageComposer extends StatefulWidget {
   final String channelId;
   final String channelName;
 
-  /// A voice channel's chat is not addressed with a hash, because the
-  /// channel is not a text channel and `#name` would not resolve to it.
-  final bool channelIsVoice;
+  /// Where the box keeps its text and files while another channel is open.
+  final ComposerDraftStore drafts;
+
+  /// What stands before the channel's name in the box's hint: `#` for a text
+  /// channel, `@` for a person, nothing where `#name` would not resolve.
+  final String channelHintPrefix;
   final String spaceName;
 
   /// Every server's emoji, the space this channel lives in first. The picker
@@ -93,6 +105,10 @@ class MessageComposer extends StatefulWidget {
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
+
+  /// Opens the account's last message for editing, and answers whether there
+  /// was one. Up on an empty box asks for it.
+  final bool Function()? onEditLastMessage;
 
   /// The GIF picker, or null on a transport that has no provider proxy.
   final GifPickerController? gifPicker;
@@ -115,8 +131,8 @@ class MessageComposer extends StatefulWidget {
   final Duration slowmode;
 
   /// When slowmode lets this account send again, or null while it does not
-  /// hold them. Fed by the surface that owns the last-send time, which is the
-  /// channel model plus the composer's own successful sends.
+  /// hold them. Until then nothing goes out from here: the server would only
+  /// refuse it.
   final DateTime? slowmodeUntil;
 
   /// The longest message this account may type here, in characters. Fed from
@@ -129,22 +145,30 @@ class MessageComposer extends StatefulWidget {
   final int? attachmentSizeLimitBytes;
 
   @override
-  State<MessageComposer> createState() => _MessageComposerState();
+  State<MessageComposer> createState() => MessageComposerState();
 }
 
-class _MessageComposerState extends State<MessageComposer>
+/// Public so the conversation pane can reach the box through a global key: the
+/// keyboard works from outside this widget.
+class MessageComposerState extends State<MessageComposer>
     with _ComposerAutocompleteStateMixin, _VoiceMessageComposerStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final PendingAttachmentSelection _attachments = PendingAttachmentSelection();
+  late final _pasteAction = _PasteAction(_paste);
   bool _hasContent = false;
   bool _suppressNotifications = false;
   int _charactersUsed = 0;
   bool get _canSend =>
-      (_hasContent || _attachments.isNotEmpty) && !_isOverCharacterLimit;
+      (_hasContent || _attachments.isNotEmpty) &&
+      !_isOverCharacterLimit &&
+      !_isHeldBySlowmode;
 
   @override
   bool get _hasRegularMessageContent => _canSend;
+
+  @override
+  bool get _isHeldBySlowmode => _slowmodeRemaining != null;
 
   /// How many characters the typed message still has room for. Counted by
   /// characters rather than the string's code units, because Discord counts
@@ -169,11 +193,23 @@ class _MessageComposerState extends State<MessageComposer>
   FocusNode get _autocompleteFocusNode => _focusNode;
 
   @override
+  FocusOnKeyEventCallback get _composerKeyHandler => _handleComposerKey;
+
+  @override
   void initState() {
     super.initState();
+    _openDraft();
     _initializeComposerAutocomplete();
     _listenToVoiceProgress();
     _startSlowmodeTicker();
+    // A box that appears under a room or a read-only notice is where typing
+    // goes next. It has no route to ask about until the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) focus();
+    });
+    DesktopDrop.instance
+      ..init()
+      ..addRawDropEventListener(_onFilesDropped);
   }
 
   @override
@@ -181,13 +217,10 @@ class _MessageComposerState extends State<MessageComposer>
     super.didUpdateWidget(oldWidget);
     final channelChanged = oldWidget.channelId != widget.channelId;
     if (channelChanged) {
-      _controller.clear();
-      _attachments.clear();
-      _hasContent = false;
-      _charactersUsed = 0;
-      _suppressNotifications = false;
+      _saveDraft(oldWidget.channelId);
       _discardVoiceState(oldWidget.voiceMessageRecorder);
-      _resetComposerAutocomplete();
+      _withAutocompleteClosed(_openDraft);
+      focus();
     }
     if (oldWidget.slowmodeUntil != widget.slowmodeUntil ||
         oldWidget.slowmode != widget.slowmode) {
@@ -200,12 +233,7 @@ class _MessageComposerState extends State<MessageComposer>
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
     }
-    if (oldWidget.autocompleteCatalog != widget.autocompleteCatalog &&
-        !channelChanged) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _refreshComposerAutocomplete();
-      });
-    }
+    _updateAutocompleteCatalog(channelChanged: channelChanged);
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
       _focusNode.requestFocus();
     }
@@ -213,6 +241,8 @@ class _MessageComposerState extends State<MessageComposer>
 
   @override
   void dispose() {
+    DesktopDrop.instance.removeRawDropEventListener(_onFilesDropped);
+    _saveDraft(widget.channelId);
     _disposeComposerAutocomplete();
     _slowmodeTicker?.cancel();
     _voiceGeneration++;
@@ -228,6 +258,85 @@ class _MessageComposerState extends State<MessageComposer>
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// Puts the cursor in the box, unless a dialog or a menu covers it. A focus
+  /// request from behind one would take the keyboard away from it.
+  void focus() {
+    if (ModalRoute.isCurrentOf(context) ?? true) _focusNode.requestFocus();
+  }
+
+  /// Types [text] at the caret on behalf of a key pressed elsewhere, as if the
+  /// box had the focus all along. Answers false while a voice message stands in
+  /// for the box.
+  bool typeText(String text) {
+    if (_hasVoiceSession) return false;
+    _focusNode.requestFocus();
+    // Suggestions only open for a box that has the focus, and a request lands
+    // at the end of this event. A first `@` must not miss them.
+    FocusManager.instance.applyFocusChangesIfNeeded();
+    _insertText(text);
+    return true;
+  }
+
+  /// Up on an empty box edits the last message, as in Discord. Suggestions see
+  /// the key first, and any other Up moves the caret.
+  KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
+    final suggestions = _handleComposerAutocompleteKey(node, event);
+    if (suggestions != KeyEventResult.ignored) return suggestions;
+    if (_controller.text.isNotEmpty ||
+        !const SingleActivator(
+          LogicalKeyboardKey.arrowUp,
+        ).accepts(event, HardwareKeyboard.instance)) {
+      return KeyEventResult.ignored;
+    }
+    return (widget.onEditLastMessage?.call() ?? false)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
+
+  /// What the box holds now. The reply target is the pane's to set, so it is
+  /// not part of this.
+  ComposerDraft get _boxContent => ComposerDraft(
+    text: _controller.text,
+    attachments: _attachments.items,
+    silent: _suppressNotifications,
+  );
+
+  void _saveDraft(String channelId) {
+    final replyTo = widget.drafts.read(channelId).replyTo;
+    widget.drafts.write(channelId, _boxContent.withReply(replyTo));
+  }
+
+  /// Fills the box from the open channel's draft, without telling anyone that
+  /// the user is typing.
+  void _openDraft() {
+    final draft = widget.drafts.read(widget.channelId);
+    _showInBox(draft);
+    if (draft.text.isEmpty) return;
+    // The pane points the command list at this channel in a microtask, which
+    // closes the list, and it queued that one first. A `/ban` that comes back
+    // with no list would go out as plain text.
+    scheduleMicrotask(() {
+      if (mounted) widget.slashCommands?.syncComposer(_controller.text);
+    });
+  }
+
+  void _showInBox(ComposerDraft draft) {
+    final text = draft.text;
+    // Leaves the caret alone when the text stays.
+    if (_controller.text != text) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    _hasContent = text.trim().isNotEmpty;
+    _charactersUsed = text.characters.length;
+    _suppressNotifications = draft.silent;
+    _attachments
+      ..clear()
+      ..merge(draft.attachments);
   }
 
   /// How long until slowmode lets this account send again, or null when
@@ -264,33 +373,88 @@ class _MessageComposerState extends State<MessageComposer>
         remaining.inSeconds +
         (remaining.inMilliseconds.remainder(1000) > 0 ? 1 : 0);
     if (seconds >= 60) {
-      final minutes = seconds ~/ 60;
-      final rest = seconds % 60;
-      return rest == 0 ? '$minutes:00' : '$minutes:$rest';
+      final rest = (seconds % 60).toString().padLeft(2, '0');
+      return '${seconds ~/ 60}:$rest';
     }
     return '$seconds';
   }
 
-  Widget _slowmodeNotice(Duration remaining) => Padding(
-    key: const ValueKey('composer-slowmode-countdown'),
+  /// One line of small text above the field.
+  Widget _composerNotice({
+    required Key key,
+    required IconData icon,
+    required String text,
+  }) => Padding(
+    key: key,
     padding: const EdgeInsets.only(left: 14, bottom: 4),
     child: Row(
       children: [
-        Icon(Icons.timer_outlined, size: 13, color: context.surfaces.muted),
+        Icon(icon, size: 13, color: context.surfaces.muted),
         const SizedBox(width: 5),
-        Text(
-          'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
-          'before sending again.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
+          ),
         ),
       ],
     ),
   );
 
-  Future<void> _pickAttachments() async {
+  Widget _slowmodeNotice(Duration remaining) => _composerNotice(
+    key: const ValueKey('composer-slowmode-countdown'),
+    icon: Icons.timer_outlined,
+    text: sendingTooFast(_slowmodeLabel(remaining)),
+  );
+
+  Future<void> _pickAttachments() => _attachFrom(
+    widget.attachmentPicker.pick,
+    failure: 'The file picker could not be opened.',
+  );
+
+  /// A drop anywhere in the window lands here, as it does in Discord: the
+  /// system offers a drop over the whole window, so a part of it that ignored
+  /// the file would look broken.
+  void _onFilesDropped(DropEvent event) {
+    if (event is! DropDoneEvent || !widget.canAttachFiles) return;
+    // A dialog in front of the chat has the user's attention, not this box.
+    if (ModalRoute.isCurrentOf(context) == false) return;
+    unawaited(
+      _attachFrom(
+        () => pendingAttachmentsAt(event.files.map((file) => file.path)),
+        failure: 'Those files could not be read.',
+      ),
+    );
+  }
+
+  /// Ctrl+V. Text pastes as it always has, even with a picture beside it: a
+  /// spreadsheet or a document copies both, and the user wants the words. So
+  /// only a clipboard with no text attaches anything.
+  Future<void> _paste(VoidCallback pasteText) async {
+    final attaches = widget.canAttachFiles && !await Clipboard.hasStrings();
+    if (!mounted) return;
+    if (!attaches) return pasteText();
+    await _attachFrom(
+      ClipboardAttachments.read,
+      failure: 'The clipboard could not be read.',
+    );
+  }
+
+  /// The one way a file reaches the strip, wherever it came from.
+  ///
+  /// A channel left while [source] reads keeps nothing: a file meant for one
+  /// conversation must not appear in the next.
+  Future<void> _attachFrom(
+    Future<List<PendingAttachment>> Function() source, {
+    required String failure,
+  }) async {
+    final channelId = widget.channelId;
     try {
-      final picked = await widget.attachmentPicker.pick();
-      if (!mounted || picked.isEmpty) return;
+      final picked = await source();
+      if (!mounted || widget.channelId != channelId || picked.isEmpty) return;
       // The size is checked before anything is attached, so the answer
       // arrives up front rather than as a failure after an upload.
       final limit = widget.attachmentSizeLimitBytes;
@@ -322,15 +486,23 @@ class _MessageComposerState extends State<MessageComposer>
       _focusNode.requestFocus();
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The file picker could not be opened.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(failure)));
     }
   }
 
   String _formatSizeLimit(int bytes) {
     final megabytes = bytes ~/ (1024 * 1024);
     return '$megabytes MB';
+  }
+
+  /// Takes one file off the strip. A pasted picture's temp file goes with it,
+  /// because nothing will send it now.
+  void _removeAttachment(int index) {
+    final removed = _attachments.items[index];
+    setState(() => _attachments.removeAt(index));
+    unawaited(ClipboardAttachments.release([removed]));
   }
 
   /// Applies or removes the spoiler tag on one attached file. The tag is the
@@ -345,16 +517,46 @@ class _MessageComposerState extends State<MessageComposer>
     );
   });
 
-  Future<void> _send() async {
-    if (!_canSend || widget.isSending) return;
-    final sent = await widget.onSend(
-      _controller.text,
-      _attachments.items,
-      widget.replyTo?.id,
-      _suppressNotifications,
+  /// Whether a slash in the box took the send, rather than the text going out.
+  ///
+  /// The text waits while the list is still looking, because `/ban` must not
+  /// post just because Enter beat the answer. A slash no command matches is
+  /// ordinary text, as it is in Discord.
+  bool _runTypedCommand() {
+    final commands = widget.slashCommands;
+    if (commands == null || !commands.isSupported || !commands.isOpen) {
+      return false;
+    }
+    if (commands.isLoading || commands.isSending) return true;
+    final command = commands.commands.firstOrNull;
+    if (command == null) return false;
+    unawaited(
+      SlashCommandList.run(
+        context,
+        controller: commands,
+        command: command,
+        onPicked: _clearComposer,
+      ),
     );
-    if (!mounted || !sent) return;
+    return true;
+  }
+
+  Future<void> _send() async {
+    if (!_canSend || widget.isSending || _runTypedCommand()) return;
+    final channelId = widget.channelId;
+    final drafts = widget.drafts;
+    final content = _boxContent;
+    final send = widget.onSend(
+      content.text,
+      content.attachments,
+      widget.replyTo?.id,
+      content.silent,
+    );
+    // The box empties on the press, not on the answer, so whatever is typed
+    // while the request runs belongs to the next message.
     _controller.clear();
+    // Clearing from code does not reach the field's onChanged.
+    widget.slashCommands?.close();
     setState(() {
       _hasContent = false;
       _charactersUsed = 0;
@@ -362,12 +564,23 @@ class _MessageComposerState extends State<MessageComposer>
       _suppressNotifications = false;
     });
     _focusNode.requestFocus();
+    final sent = await send;
+    if (sent) {
+      await ClipboardAttachments.release(content.attachments);
+      return;
+    }
+    if (mounted && widget.channelId == channelId) {
+      setState(() => _showInBox(_boxContent.withFailedSend(content)));
+    } else {
+      // The user has left that channel, so its draft takes the message.
+      drafts.write(channelId, drafts.read(channelId).withFailedSend(content));
+    }
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
   /// a send action, not a way to paste a link into a half-written message.
   Future<void> _sendGif(String url) async {
-    if (widget.isSending) return;
+    if (widget.isSending || _isHeldBySlowmode) return;
     await widget.onSend(
       url,
       const [],
@@ -376,7 +589,7 @@ class _MessageComposerState extends State<MessageComposer>
     );
   }
 
-  void _insertEmoji(String token) {
+  void _insertText(String token) {
     final text = _controller.text;
     final selection = _controller.selection;
     final start = selection.isValid ? selection.start : text.length;
@@ -388,6 +601,7 @@ class _MessageComposerState extends State<MessageComposer>
     );
     final hasContent = next.trim().isNotEmpty;
     if (hasContent) widget.onTyping();
+    widget.slashCommands?.syncComposer(next);
     setState(() {
       _hasContent = hasContent;
       _charactersUsed = next.characters.length;
@@ -408,7 +622,7 @@ class _MessageComposerState extends State<MessageComposer>
   }
 
   void _showPollDialog() {
-    if (widget.isSending) return;
+    if (widget.isSending || _isHeldBySlowmode) return;
     CreatePollDialog.show(context, onCreate: widget.onCreatePoll);
   }
 
@@ -430,12 +644,19 @@ class _MessageComposerState extends State<MessageComposer>
             ),
           if (_slowmodeRemaining case final remaining?)
             _slowmodeNotice(remaining),
+          // The switch lives in a closed menu, so its state shows here.
+          if (_suppressNotifications)
+            _composerNotice(
+              key: const ValueKey('composer-silent-notice'),
+              icon: Icons.notifications_off_outlined,
+              text: 'This message will send without notifications.',
+            ),
           if (widget.replyTo != null) _replyBar(context),
           if (_attachments.isNotEmpty) ...[
             PendingAttachmentStrip(
               attachments: _attachments.items,
               enabled: !widget.isSending,
-              onRemove: (index) => setState(() => _attachments.removeAt(index)),
+              onRemove: _removeAttachment,
               onToggleSpoiler: _toggleAttachmentSpoiler,
             ),
             const SizedBox(height: 6),
@@ -458,8 +679,9 @@ class _MessageComposerState extends State<MessageComposer>
             CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): _send,
+                const SingleActivator(LogicalKeyboardKey.numpadEnter): _send,
               },
-              child: _buildComposerAutocompletePortal(
+              child: _fieldTakingPaste(
                 child: TextField(
                   key: const ValueKey('message-composer'),
                   controller: _controller,
@@ -471,6 +693,7 @@ class _MessageComposerState extends State<MessageComposer>
                   // nowhere: a misspelling is information for whoever is
                   // typing, not something to attach to the message.
                   spellCheckConfiguration: _spellCheckConfiguration(context),
+                  contextMenuBuilder: zoomedTextFieldMenu,
                   onChanged: (value) {
                     final hasContent = value.trim().isNotEmpty;
                     if (hasContent) widget.onTyping();
@@ -487,9 +710,11 @@ class _MessageComposerState extends State<MessageComposer>
                     }
                   },
                   decoration: InputDecoration(
-                    hintText: widget.channelIsVoice
-                        ? 'Message ${widget.channelName}'
-                        : 'Message #${widget.channelName}',
+                    hintText:
+                        'Message ${widget.channelHintPrefix}${widget.channelName}',
+                    // In a narrow composer a wrapped hint is what makes the box
+                    // tall, and that takes the height from the timeline.
+                    hintMaxLines: 1,
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
                     // Square top corners under the reply bar, so the two read
                     // as one surface. Null elsewhere keeps the theme's rounded
@@ -498,7 +723,7 @@ class _MessageComposerState extends State<MessageComposer>
                         ? null
                         : const OutlineInputBorder(
                             borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(6),
+                              bottom: FlucordRadius.mediumCorner,
                             ),
                             borderSide: BorderSide.none,
                           ),
@@ -506,36 +731,21 @@ class _MessageComposerState extends State<MessageComposer>
                         ? null
                         : OutlineInputBorder(
                             borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(6),
+                              bottom: FlucordRadius.mediumCorner,
                             ),
                             borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: context.surfaces.focusRing,
+                              width: 2,
                             ),
                           ),
-                    prefixIcon: widget.canAttachFiles
-                        ? IconButton(
-                            key: const ValueKey('add-attachment'),
-                            onPressed: widget.isSending
-                                ? null
-                                : _pickAttachments,
-                            icon: const Icon(
-                              Icons.add_circle_outline,
-                              size: 20,
-                            ),
-                            tooltip: 'Add attachment',
-                          )
-                        : null,
-                    suffixIconConstraints: const BoxConstraints.tightFor(
-                      width: 240,
-                      height: 48,
-                    ),
+                    prefixIcon: _composerMenu(),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         EmojiPickerButton(
                           spaceName: widget.spaceName,
                           emojiSections: widget.emojiSections,
-                          onSelected: _insertEmoji,
+                          onSelected: _insertText,
                           favorites: widget.expressionFavorites,
                         ),
                         if (widget.gifPicker case final picker?)
@@ -552,47 +762,9 @@ class _MessageComposerState extends State<MessageComposer>
                           ),
                         StickerPickerButton(
                           sections: widget.stickerSections,
-                          isSending: widget.isSending,
+                          isSending: widget.isSending || _isHeldBySlowmode,
                           onSend: widget.onSendStickers,
                           favorites: widget.expressionFavorites,
-                        ),
-                        IconButton(
-                          key: const ValueKey('create-poll'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: widget.isSending ? null : _showPollDialog,
-                          icon: const Icon(Icons.poll_outlined, size: 19),
-                          tooltip: 'Create poll',
-                        ),
-                        IconButton(
-                          key: const ValueKey('send-silently'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          isSelected: _suppressNotifications,
-                          onPressed: widget.isSending
-                              ? null
-                              : () => setState(
-                                  () => _suppressNotifications =
-                                      !_suppressNotifications,
-                                ),
-                          icon: const Icon(
-                            Icons.notifications_outlined,
-                            size: 19,
-                          ),
-                          selectedIcon: const Icon(
-                            Icons.notifications_off_outlined,
-                            size: 19,
-                            color: FlucordColors.brand,
-                          ),
-                          tooltip: _suppressNotifications
-                              ? 'Send with notifications'
-                              : 'Send silently',
                         ),
                         // The two send buttons share one key, so a disabled
                         // send updates in place; only the spinner and the
@@ -626,6 +798,11 @@ class _MessageComposerState extends State<MessageComposer>
     );
   }
 
+  Widget _fieldTakingPaste({required Widget child}) => Actions(
+    actions: {PasteTextIntent: _pasteAction},
+    child: _buildComposerAutocompletePortal(child: child),
+  );
+
   /// The spell check configuration the composer runs with, or none where the
   /// switch is off or no service is installed.
   ///
@@ -654,7 +831,7 @@ class _MessageComposerState extends State<MessageComposer>
         Text(
           '$_charactersRemaining',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             color: _isOverCharacterLimit
                 ? Theme.of(context).colorScheme.error
                 : context.surfaces.muted,
@@ -665,13 +842,68 @@ class _MessageComposerState extends State<MessageComposer>
           Text(
             'Your message is above the limit.',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: FlucordType.caption,
               color: Theme.of(context).colorScheme.error,
             ),
           ),
         ],
       ],
     ),
+  );
+
+  /// The button at the start of the field: uploads, polls and silent send.
+  ///
+  /// Without `ATTACH_FILES` it holds no upload and stops looking like an
+  /// attach button, while polls and silent send stay in reach.
+  Widget _composerMenu() => PopupMenuButton<_ComposerMenuAction>(
+    key: const ValueKey('composer-menu'),
+    enabled: !widget.isSending,
+    tooltip: 'More options',
+    icon: Icon(
+      widget.canAttachFiles ? Icons.add_circle_outline : Icons.more_horiz,
+      size: 20,
+    ),
+    onSelected: (action) => switch (action) {
+      _ComposerMenuAction.attach => unawaited(_pickAttachments()),
+      _ComposerMenuAction.poll => _showPollDialog(),
+      _ComposerMenuAction.silent => setState(
+        () => _suppressNotifications = !_suppressNotifications,
+      ),
+    },
+    itemBuilder: (_) => [
+      if (widget.canAttachFiles)
+        const PopupMenuItem(
+          key: ValueKey('add-attachment'),
+          value: _ComposerMenuAction.attach,
+          child: _ComposerMenuRow(
+            icon: Icons.upload_file_outlined,
+            label: 'Add attachment',
+          ),
+        ),
+      PopupMenuItem(
+        key: const ValueKey('create-poll'),
+        value: _ComposerMenuAction.poll,
+        // A poll is a message, so slowmode holds it like the rest.
+        enabled: !_isHeldBySlowmode,
+        child: const _ComposerMenuRow(
+          icon: Icons.poll_outlined,
+          label: 'Create poll',
+        ),
+      ),
+      PopupMenuItem(
+        key: const ValueKey('send-silently'),
+        value: _ComposerMenuAction.silent,
+        child: _suppressNotifications
+            ? const _ComposerMenuRow(
+                icon: Icons.notifications_outlined,
+                label: 'Send with notifications',
+              )
+            : const _ComposerMenuRow(
+                icon: Icons.notifications_off_outlined,
+                label: 'Send silently',
+              ),
+      ),
+    ],
   );
 
   /// The last control in the composer's trailing cluster.
@@ -694,7 +926,7 @@ class _MessageComposerState extends State<MessageComposer>
         constraints: const BoxConstraints.tightFor(width: 48, height: 48),
         padding: EdgeInsets.zero,
         onPressed: _send,
-        icon: const Icon(Icons.send, size: 19, color: FlucordColors.brand),
+        icon: Icon(Icons.send, size: 19, color: context.surfaces.accentIcon),
         tooltip: 'Send message',
       );
     }
@@ -742,7 +974,9 @@ class _MessageComposerState extends State<MessageComposer>
         left: BorderSide(color: context.surfaces.border),
         right: BorderSide(color: context.surfaces.border),
       ),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+      borderRadius: const BorderRadius.vertical(
+        top: FlucordRadius.mediumCorner,
+      ),
     ),
     child: Row(
       children: [
@@ -752,7 +986,10 @@ class _MessageComposerState extends State<MessageComposer>
           child: Text(
             'Replying to ${widget.replyAuthor?.displayName ?? 'Unknown user'}',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         IconButton(
@@ -762,6 +999,39 @@ class _MessageComposerState extends State<MessageComposer>
         ),
       ],
     ),
+  );
+}
+
+/// Takes Ctrl+V from the text field. [callingAction] is the field's own paste,
+/// and it is only set while [invoke] runs, so it is passed on as a callback.
+final class _PasteAction extends Action<PasteTextIntent> {
+  _PasteAction(this._onPaste);
+
+  final Future<void> Function(VoidCallback pasteText) _onPaste;
+
+  @override
+  Future<void> invoke(PasteTextIntent intent) {
+    final fieldPaste = callingAction;
+    return _onPaste(() => fieldPaste?.invoke(intent));
+  }
+}
+
+enum _ComposerMenuAction { attach, poll, silent }
+
+class _ComposerMenuRow extends StatelessWidget {
+  const _ComposerMenuRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 10),
+      Text(label, style: const TextStyle(fontSize: FlucordType.label)),
+    ],
   );
 }
 
@@ -787,7 +1057,10 @@ class ReadOnlyChannelNotice extends StatelessWidget {
         const Expanded(
           child: Text(
             'You do not have permission to send messages here.',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],

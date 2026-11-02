@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../../application/discord_social_dm_controller.dart';
 import '../../domain/discord_social_dm.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'destructive_confirmation.dart';
 
 class DiscordSocialDmMessageRow extends StatefulWidget {
   const DiscordSocialDmMessageRow({
@@ -66,7 +69,7 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                     child: Text(
                       author.characters.first.toUpperCase(),
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: FlucordType.body,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -83,7 +86,10 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                         else
                           SelectableText(
                             message.content,
-                            style: const TextStyle(fontSize: 13, height: 1.35),
+                            style: const TextStyle(
+                              fontSize: FlucordType.body,
+                              height: 1.35,
+                            ),
                           ),
                         if (actionError != null) ...[
                           const SizedBox(height: 4),
@@ -92,9 +98,9 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                             key: ValueKey(
                               'social-dm-action-error-${message.id}',
                             ),
-                            style: const TextStyle(
-                              color: FlucordColors.danger,
-                              fontSize: 10,
+                            style: TextStyle(
+                              color: context.surfaces.errorText,
+                              fontSize: FlucordType.caption,
                             ),
                           ),
                         ],
@@ -145,7 +151,7 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
               filled: true,
               fillColor: context.surfaces.inset,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: FlucordRadius.small,
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
@@ -159,7 +165,10 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
         const SizedBox(height: 4),
         Text(
           'Escape to cancel · Enter to save',
-          style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ],
     );
@@ -190,32 +199,14 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: Text(
-          widget.message.content,
-          maxLines: 5,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: ValueKey('social-dm-confirm-delete-${widget.message.id}'),
-            style: FilledButton.styleFrom(
-              backgroundColor: FlucordColors.danger,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete message?',
+      message: widget.message.content,
+      confirmLabel: 'Delete',
+      confirmKey: ValueKey('social-dm-confirm-delete-${widget.message.id}'),
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await widget.controller.deleteMessage(
       widget.message.conversationUserId,
       widget.message.id,
@@ -238,19 +229,28 @@ class _MessageMetadata extends StatelessWidget {
             author,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         const SizedBox(width: 7),
         Text(
           _timestamp(message.sentAt),
-          style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         if (message.editedAt != null) ...[
           const SizedBox(width: 4),
           Text(
             '(edited)',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ],
       ],
@@ -286,7 +286,7 @@ class _MessageActions extends StatelessWidget {
       color: context.surfaces.raised,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: mutating
           ? const Padding(

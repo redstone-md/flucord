@@ -126,7 +126,8 @@ final class StreamViewerController extends ChangeNotifier {
   /// Pictures from [key]'s stream.
   ///
   /// Per key rather than one stream for the room: the stage draws one session,
-  /// and which one changes.
+  /// and which one changes. Listening is what opens the session's decoder, and
+  /// the last listener leaving lets it go (ADR-0003).
   Stream<DecodedVideoFrame> framesFor(GoLiveStreamKey key) =>
       _sessions[key]?.pipeline.frames ??
       const Stream<DecodedVideoFrame>.empty();
@@ -180,16 +181,17 @@ final class StreamViewerController extends ChangeNotifier {
   /// Why [key] could not be opened, or null when it was, or has been since.
   Object? errorFor(GoLiveStreamKey key) => _errors[key];
 
-  /// Records a refusal from the RTC side, which can happen after the watch ask
-  /// itself already succeeded. The tile keeps this error while the next ask
-  /// gets a clean attempt.
+  /// Ends [key]'s watch because its connection failed, and keeps the reason
+  /// for the tile until the next ask.
+  ///
+  /// Ended the way a stop ends it: Discord is told, and the connection goes.
+  /// Left listed there, this client's next ask may get no answer, and the tile
+  /// would say "Stop watching" over no picture.
   void reportError(GoLiveStreamKey key, Object error) {
     if (_disposed) return;
     _errors[key] = error;
     _diagnose('watch failed ${key.userId}: $error');
-    _order.remove(key);
-    _cancelled.add(key);
-    unawaited(_teardown(key));
+    unawaited(_end(key));
     _notify();
   }
 
@@ -249,12 +251,11 @@ final class StreamViewerController extends ChangeNotifier {
     return _ask(repository, key);
   }
 
-  /// Starts decoding [packets] as [key], without asking Discord again.
+  /// Starts reading [packets] as [key], without asking Discord again.
   ///
   /// Used once the stream connection is up: the ask already went out, and
-  /// repeating it would open a second one. A decoder that will not open
-  /// becomes the session's error rather than its end: the session is still
-  /// held, and the tile says why there is no picture on it.
+  /// repeating it would open a second one. Nothing is decoded until a tile
+  /// listens on [framesFor]. Answers whether the session is held.
   Future<bool> attach(
     GoLiveStreamKey key, {
     required Stream<IncomingVideoPacket> packets,
@@ -293,42 +294,14 @@ final class StreamViewerController extends ChangeNotifier {
         return false;
       }
     }
-    final session = _install(
-      key,
-      packets,
-      audio,
-      groupDecryptor,
-      requestKeyframe,
-    );
+    _install(key, packets, audio, groupDecryptor, requestKeyframe);
     _notify();
-    // Suspended: the connection is read and counted, and nothing decodes it
-    // until the window is back. The session is installed either way, so the
-    // room goes on showing the stream it was holding (ADR-0003), and no
-    // decoder is opened for a window that is not looking at it.
-    if (_suspended) return true;
-    try {
-      await session.pipeline.setDecoding(true);
-    } on Object catch (error) {
-      // The session stays, the way a resume keeps a session whose decoder
-      // would not open: the connection is still there and the packets still
-      // count, and the room is told why there is no picture. The next
-      // suspension cycle is a clean attempt with a new decoder.
-      if (identical(_sessions[key], session)) {
-        _errors[key] = error;
-        _notify();
-      }
-      return false;
-    }
-    // That await is a crossing: the ask may have been withdrawn, the
-    // controller disposed, or the connection reopened and another session
-    // installed over this one. The pipeline handed its decoder back in each
-    // case; this only answers whether the session is still the one held.
-    return identical(_sessions[key], session);
+    return true;
   }
 
   /// Starts watching [key], reading packets from [packets].
   ///
-  /// The ask and the decode in one call, for a caller holding the packet
+  /// The ask and the attach in one call, for a caller holding the packet
   /// stream already. The router's path splits them, because Discord answers
   /// with an endpoint seconds after the ask.
   Future<bool> watch(
@@ -367,38 +340,26 @@ final class StreamViewerController extends ChangeNotifier {
   /// holding goes.
   Future<void> stop([GoLiveStreamKey? key]) async {
     final targets = key == null ? [..._order] : [key];
+    // A failure is the last thing that happened to a watch. Once that watch is
+    // stopped or its room is left, the tile starts clean.
+    final failures = _errors.length;
+    if (key == null) {
+      _errors.clear();
+    } else {
+      _errors.remove(key);
+    }
     // The room is left far more often than a watch is held through it.
-    if (targets.isEmpty) return;
-    final repository = _repositoryProvider();
+    if (targets.isEmpty && _errors.length == failures) return;
     for (final each in targets) {
-      final wasOpen = _order.remove(each);
-      final arrived = _sessions.containsKey(each);
       // A control that answers a press by withdrawing a held ask looks
       // exactly like a button that does nothing. Say so.
       if (key != null) {
         _diagnose(
-          'watch stop for ${each.userId}: was held $wasOpen, '
-          'arrived $arrived',
+          'watch stop for ${each.userId}: was held ${isOpen(each)}, '
+          'arrived ${isWatching(each)}',
         );
       }
-      // Everything decided about this stop is recorded before the first
-      // await: an ask made again meanwhile is a new one, and must find
-      // neither a withdrawal filed against it nor its connection taken down.
-      _onWatchStopped?.call(each);
-      if (wasOpen && !arrived) {
-        // Withdrawing an ask Discord never answered has to be both announced
-        // and remembered: announced so the tile's control goes back to opening
-        // the stream, remembered so the connection Discord opens anyway is
-        // dropped here instead of taking the stage.
-        _cancelled.add(each);
-      }
-      // Discord keeps a watcher on its list until told, and then answers no
-      // second ask for that stream. Told for a held ask that never arrived
-      // too: the answer may still be on its way.
-      if (wasOpen && repository != null) {
-        unawaited(_withdraw(repository, each));
-      }
-      await _teardown(each);
+      await _end(each);
     }
     // Once for the whole stop, not once per session: the room is rebuilt
     // either way, and it cannot be drawn between the two.
@@ -415,6 +376,31 @@ final class StreamViewerController extends ChangeNotifier {
       }),
     );
     super.dispose();
+  }
+
+  /// Lets go of everything held for [key]: its place, its connection, its
+  /// session, and Discord's record of this client as a watcher.
+  ///
+  /// Everything decided here is recorded before the first await: an ask made
+  /// again meanwhile is a new one, and must find neither a withdrawal filed
+  /// against it nor its connection taken down.
+  Future<void> _end(GoLiveStreamKey key) async {
+    final wasOpen = _order.remove(key);
+    final arrived = _sessions.containsKey(key);
+    _onWatchStopped?.call(key);
+    if (wasOpen && !arrived) {
+      // Withdrawing an ask Discord never answered has to be both announced
+      // and remembered: announced so the tile's control goes back to opening
+      // the stream, remembered so the connection Discord opens anyway is
+      // dropped here instead of taking the stage.
+      _cancelled.add(key);
+    }
+    // Discord keeps a watcher on its list until told, and then answers no
+    // second ask for that stream. Told for a held ask that never arrived too:
+    // the answer may still be on its way.
+    final repository = _repositoryProvider();
+    if (wasOpen && repository != null) unawaited(_withdraw(repository, key));
+    await _teardown(key);
   }
 
   /// Puts [key] last, which is where the stage reads from.
@@ -481,31 +467,43 @@ final class StreamViewerController extends ChangeNotifier {
     await session.close();
   }
 
-  /// Brings every session to what [_suspended] asks of it: decoding let go
-  /// when the window is away, and reopened when it is back.
-  ///
-  /// Nothing here touches Discord, and nothing here touches sending, so a
-  /// session comes back with the connection it already had (ADR-0003).
+  /// Brings every session to what [_suspended] asks of it.
   Future<void> _applySuspension() async {
     // A copy: a session can be stopped while the others are being brought
     // back, and the map is not theirs to hold still.
     for (final entry in _sessions.entries.toList()) {
-      final key = entry.key;
-      final decoding = !_suspended;
-      try {
-        await entry.value.pipeline.setDecoding(decoding);
-      } on Object catch (error) {
-        // The session is not thrown away because a decoder would not open:
-        // the connection is still there, and the room is told why there is
-        // no picture.
-        _errors[key] = error;
-        _diagnose('decoder failed for ${key.userId}: $error');
-        _notify();
-        continue;
-      }
-      // A decoder that opened clears the failure of one that would not.
-      if (decoding && _errors.remove(key) != null) _notify();
+      await _applyDecoding(entry.key, entry.value);
     }
+  }
+
+  /// Decodes [session] only while a tile draws it and the window is on screen:
+  /// let go otherwise, and reopened when both are true again.
+  ///
+  /// Nothing here touches Discord, and nothing here touches sending, so a
+  /// session comes back with the connection it already had (ADR-0003).
+  Future<void> _applyDecoding(
+    GoLiveStreamKey key,
+    _WatchedSession session,
+  ) async {
+    // A session being closed loses its tile on the way out, which asks nothing
+    // of this one or of the session that replaced it.
+    if (_disposed || !identical(_sessions[key], session)) return;
+    final decoding = !_suspended && session.pipeline.isDrawn;
+    try {
+      await session.pipeline.setDecoding(decoding);
+    } on Object catch (error) {
+      // The session is not thrown away because a decoder would not open: the
+      // connection is still there and the packets still count, and the room is
+      // told why there is no picture. The next time the tile comes back or the
+      // window does is a clean attempt with a new decoder.
+      if (!identical(_sessions[key], session)) return;
+      _errors[key] = error;
+      _diagnose('decoder failed for ${key.userId}: $error');
+      _notify();
+      return;
+    }
+    // A decoder that opened clears the failure of one that would not.
+    if (decoding && _errors.remove(key) != null) _notify();
   }
 
   /// Starts reading [packets] as [key], and records the session as held.
@@ -513,7 +511,7 @@ final class StreamViewerController extends ChangeNotifier {
   /// Arrival is not an ask, so it does not move this key: the stage shows
   /// whichever was asked for last, and an endpoint Discord was slow to answer
   /// must not overtake a newer one on its way in.
-  _WatchedSession _install(
+  void _install(
     GoLiveStreamKey key,
     Stream<IncomingVideoPacket> packets,
     Stream<VoiceRemoteOpusFrame>? audio,
@@ -522,6 +520,7 @@ final class StreamViewerController extends ChangeNotifier {
   ) {
     _admitted(key);
     final audioDecoders = _audioDecoderFactory;
+    late final _WatchedSession session;
     final pipeline = WatchedSessionPipeline(
       decoderFactory: _decoderFactory,
       groupDecryptor: groupDecryptor,
@@ -541,8 +540,9 @@ final class StreamViewerController extends ChangeNotifier {
         _diagnose('first picture handed to the decoder for ${key.userId}');
         _notify();
       },
+      onDrawnChanged: () => unawaited(_applyDecoding(key, session)),
     );
-    final session = _WatchedSession(pipeline);
+    session = _WatchedSession(pipeline);
     // In the map before it is listened to: a stream that already has a
     // packet in it delivers on subscription.
     _sessions[key] = session;
@@ -557,7 +557,6 @@ final class StreamViewerController extends ChangeNotifier {
     session.audioEnded = pipeline.audioEnded.listen((sourceId) {
       if (!_audioEnded.isClosed) _audioEnded.add(sourceId);
     });
-    return session;
   }
 
   void _diagnose(String what) {

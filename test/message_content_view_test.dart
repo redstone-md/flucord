@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/native_external_link_launcher.dart';
 import 'package:flucord/src/domain/chat_models.dart';
@@ -6,7 +7,105 @@ import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_content_view.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/contrast.dart';
+
 void main() {
+  group('a body with no markup', () {
+    // Each pair draws the same text. The backslash only sends the second body
+    // through the markdown parser.
+    const pairs = {
+      'hello world.': r'hello world\.',
+      'first line.\nsecond line.':
+          r'first line\.'
+          '\nsecond line.',
+      'Two  spaces, a colon: and 12:30, 3 + 4 = 7 (really)!':
+          r'Two  spaces, a colon: and 12:30, 3 + 4 = 7 (really)\!',
+      'a line long enough that it has to wrap at the width of this row, and '
+              'then it keeps going for a while longer so nobody can doubt it.':
+          'a line long enough that it has to wrap at the width of this row, and '
+          r'then it keeps going for a while longer so nobody can doubt it\.',
+    };
+
+    for (final MapEntry(key: plain, value: parsed) in pairs.entries) {
+      testWidgets('draws as it does through markdown: $plain', (tester) async {
+        await tester.pumpWidget(_host(parsed));
+        expect(find.byType(MarkdownBody), findsOneWidget);
+        final expected = _drawnBody(tester);
+
+        await tester.pumpWidget(_host(plain));
+        expect(find.byType(MarkdownBody), findsNothing);
+        final drawn = _drawnBody(tester);
+
+        expect(drawn.text, expected.text);
+        expect(drawn.style, expected.style);
+        expect(drawn.textAlign, expected.textAlign);
+        expect(drawn.rowSize, expected.rowSize);
+        expect(drawn.textSize, expected.textSize);
+      });
+    }
+  });
+
+  group('a body with markup still draws as markup', () {
+    const bodies = {
+      '# heading': 'heading',
+      '- item': 'item',
+      '+ item': 'item',
+      '> quote': 'quote',
+      '**bold**': 'bold',
+      '_slanted_': 'slanted',
+      '~~gone~~': 'gone',
+      '`code`': 'code',
+      '||hidden||': 'hidden',
+      '[docs](https://example.com)': 'docs',
+      'salt &amp; pepper': 'salt & pepper',
+      r'not \*bold\*': 'not *bold*',
+      'title\n===': 'title',
+      'title\n---': 'title',
+      '    indented': 'indented',
+      '<#300>': '#general',
+      '<@100>': '@Mira',
+    };
+
+    for (final MapEntry(key: body, value: drawn) in bodies.entries) {
+      testWidgets(body, (tester) async {
+        await tester.pumpWidget(_host(body));
+        await tester.pump();
+
+        expect(_plainText(tester), contains(drawn));
+        expect(_plainText(tester), isNot(contains(body)));
+      });
+    }
+
+    for (final body in [
+      '1. one',
+      '2) two',
+      'https://example.com/a',
+      'www.example.com',
+      '@everyone',
+    ]) {
+      testWidgets(body, (tester) async {
+        await tester.pumpWidget(_host(body));
+
+        expect(find.byType(MarkdownBody), findsOneWidget);
+      });
+    }
+
+    testWidgets('a blank line makes two paragraphs', (tester) async {
+      await tester.pumpWidget(_host('first\n\nsecond'));
+
+      expect(find.text('first', findRichText: true), findsOneWidget);
+      expect(find.text('second', findRichText: true), findsOneWidget);
+    });
+
+    testWidgets('a trailing space before a new line is dropped', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host('first  \nsecond'));
+
+      expect(_plainText(tester), isNot(contains('first  ')));
+    });
+  });
+
   testWidgets('renders Markdown and resolved Discord inline entities', (
     tester,
   ) async {
@@ -87,6 +186,47 @@ void main() {
     expect(find.text('The link could not be opened.'), findsOneWidget);
   });
 
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('links and image fallbacks read at 4.5:1 in $name', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          '[Docs](https://example.com/path) ![Map](https://example.com/m.png)',
+          theme: theme,
+        ),
+      );
+
+      expectReadable(theme, _spanWithText(tester, 'Docs').style?.color, 4.5);
+      expectReadable(
+        theme,
+        tester.widget<Text>(find.text('Map')).style?.color,
+        4.5,
+      );
+    });
+  }
+
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('mentions and commands read at 4.5:1 in $name', (tester) async {
+      await tester.pumpWidget(_host('<@100> </deploy:500>', theme: theme));
+      await tester.pump();
+
+      for (final label in ['@Mira', '/deploy']) {
+        expectReadable(
+          theme,
+          tester.widget<Text>(find.text(label)).style?.color,
+          4.5,
+        );
+      }
+    });
+  }
+
   test(
     'native launcher rejects non-web schemes before platform dispatch',
     () async {
@@ -103,8 +243,9 @@ Widget _host(
   DateTime? now,
   ExternalLinkLauncher? launcher,
   ValueChanged<String>? onSelectChannel,
+  ThemeData? theme,
 }) => MaterialApp(
-  theme: FlucordTheme.dark,
+  theme: theme ?? FlucordTheme.dark,
   home: Scaffold(
     body: Align(
       alignment: Alignment.topLeft,
@@ -121,6 +262,41 @@ Widget _host(
     ),
   ),
 );
+
+/// What a body draws, for comparing two bodies.
+({
+  String text,
+  TextStyle? style,
+  TextAlign textAlign,
+  Size rowSize,
+  Size textSize,
+})
+_drawnBody(WidgetTester tester) {
+  final richText = find.descendant(
+    of: find.byType(MessageContentView),
+    matching: find.byType(RichText),
+  );
+  final widget = tester.widget<RichText>(richText);
+  return (
+    text: widget.text.toPlainText(),
+    style: _styleOfText(widget.text),
+    textAlign: widget.textAlign,
+    rowSize: tester.getSize(find.byType(MessageContentView)),
+    textSize: tester.getSize(richText),
+  );
+}
+
+/// The style of the first span that holds text, with what it inherits.
+TextStyle? _styleOfText(InlineSpan span, [TextStyle? inherited]) {
+  final style = inherited?.merge(span.style) ?? span.style;
+  if (span is TextSpan && span.text != null) return style;
+  InlineSpan? child;
+  span.visitDirectChildren((next) {
+    child = next;
+    return false;
+  });
+  return child == null ? style : _styleOfText(child!, style);
+}
 
 String _plainText(WidgetTester tester) => tester
     .widgetList<Text>(find.byType(Text))

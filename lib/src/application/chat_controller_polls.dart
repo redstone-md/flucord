@@ -14,31 +14,17 @@ extension ChatControllerPolls on ChatController {
     if (workspace == null ||
         repository == null ||
         channel?.hasMessageTimeline != true ||
-        !normalized.isValid ||
-        _isSending) {
+        !normalized.isValid) {
       return false;
     }
-    _isSending = true;
-    _notify();
-    try {
+    return _sendingIn(channelId, () async {
       final message = await repository.createPoll(
         channelId: channelId,
         authorId: workspace.currentMemberId,
         poll: normalized,
       );
-      _workspace = _workspace
-          ?.upsertMessage(message)
-          .clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+      _applySentMessage(message);
+    });
   }
 
   Future<bool> endPoll(ChatMessage message) async {
@@ -50,26 +36,15 @@ extension ChatControllerPolls on ChatController {
         repository == null ||
         message.authorId != workspace.currentMemberId ||
         message.poll == null ||
-        message.poll!.isFinalized ||
-        _isSending) {
+        message.poll!.isFinalized) {
       return false;
     }
-    _isSending = true;
-    _notify();
-    try {
+    return _sendingIn(message.channelId, () async {
       final updated = await repository.endPoll(
         channelId: message.channelId,
         messageId: message.id,
       );
       _workspace = _workspace?.upsertMessage(updated);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+    });
   }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 import '../../domain/discord_remote_auth.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_hcaptcha_bridge.dart';
 
@@ -179,10 +180,10 @@ final class _DiscordHcaptchaPanelState extends State<DiscordHcaptchaPanel> {
         decoration: BoxDecoration(
           color: const Color(0xff1e1f22),
           border: Border.all(color: context.surfaces.border),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: _error != null
               ? _CaptchaError(message: _error!, onRetry: _retry)
               : Stack(
@@ -222,7 +223,7 @@ final class _CaptchaError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, color: FlucordColors.danger),
+          Icon(Icons.error_outline, color: context.surfaces.errorText),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),

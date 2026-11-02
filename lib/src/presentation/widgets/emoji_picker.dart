@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/unicode_emoji.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'accessibility_dials.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
@@ -74,6 +78,69 @@ class EmojiPickerButton extends StatefulWidget {
   State<EmojiPickerButton> createState() => _EmojiPickerButtonState();
 }
 
+/// Opens the picker over the window at [position], moved as far as it needs to
+/// stay inside. Answers the emoji chosen, or null.
+///
+/// For a place with no button to hang the picker on, such as a menu item.
+Future<String?> showEmojiPickerAt({
+  required BuildContext context,
+  required Offset position,
+  required String spaceName,
+  required List<EmojiServerSection> emojiSections,
+  required EmojiPickerPurpose purpose,
+  ExpressionFavoritesController? favorites,
+}) {
+  unawaited(favorites?.load());
+  // Zoom scales everything under the overlay, and the position is in window
+  // pixels.
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final local = overlay.globalToLocal(position);
+  return showDialog<String>(
+    context: context,
+    barrierColor: Colors.transparent,
+    builder: (dialogContext) {
+      final window = MediaQuery.sizeOf(dialogContext);
+      const size = EmojiPickerPanel.size;
+      return Stack(
+        children: [
+          Positioned(
+            left: _insideWindow(local.dx, size.width, window.width),
+            top: _insideWindow(local.dy, size.height, window.height),
+            child: Material(
+              color: dialogContext.surfaces.surface,
+              elevation: _panelElevation,
+              shadowColor: _panelShadow,
+              shape: _panelShape(dialogContext),
+              child: EmojiPickerPanel(
+                spaceName: spaceName,
+                emojiSections: emojiSections,
+                purpose: purpose,
+                favorites: favorites,
+                onSelected: (value) => Navigator.pop(dialogContext, value),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Where a box of [extent] starts, as near [start] as fits in [available].
+double _insideWindow(double start, double extent, double available) {
+  const margin = 8.0;
+  return start.clamp(margin, math.max(margin, available - extent - margin));
+}
+
+const double _panelElevation = 14;
+final Color _panelShadow = Colors.black.withValues(alpha: 0.42);
+
+RoundedRectangleBorder _panelShape(BuildContext context) =>
+    RoundedRectangleBorder(
+      borderRadius: FlucordRadius.medium,
+      side: BorderSide(color: context.surfaces.border),
+    );
+
 class _EmojiPickerButtonState extends State<EmojiPickerButton> {
   final MenuController _menuController = MenuController();
 
@@ -90,14 +157,9 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
     style: MenuStyle(
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
       backgroundColor: WidgetStatePropertyAll(context.surfaces.surface),
-      elevation: const WidgetStatePropertyAll(14),
-      shadowColor: WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.42)),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: context.surfaces.border),
-        ),
-      ),
+      elevation: const WidgetStatePropertyAll(_panelElevation),
+      shadowColor: WidgetStatePropertyAll(_panelShadow),
+      shape: WidgetStatePropertyAll(_panelShape(context)),
     ),
     menuChildren: [
       EmojiPickerPanel(
@@ -129,7 +191,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
             ? Icons.emoji_emotions
             : Icons.emoji_emotions_outlined,
         size: widget.iconSize,
-        color: controller.isOpen ? FlucordColors.brand : null,
+        color: controller.isOpen ? context.surfaces.accentIcon : null,
       ),
     ),
   );
@@ -144,6 +206,8 @@ class EmojiPickerPanel extends StatefulWidget {
     this.favorites,
     super.key,
   });
+
+  static const size = Size(360, 420);
 
   final String spaceName;
   final List<EmojiServerSection> emojiSections;
@@ -271,8 +335,8 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
         unicode.isEmpty;
     return SizedBox(
       key: const ValueKey('emoji-picker'),
-      width: 360,
-      height: 420,
+      width: EmojiPickerPanel.size.width,
+      height: heightWithinWindow(context, EmojiPickerPanel.size.height),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -287,7 +351,7 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
               autofocus: true,
               onChanged: (value) =>
                   setState(() => _query = value.trim().toLowerCase()),
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: FlucordType.caption),
               decoration: const InputDecoration(
                 hintText: 'Find emoji',
                 prefixIcon: Icon(Icons.search, size: 16),
@@ -403,7 +467,7 @@ class _CategoryBar extends StatelessWidget {
                     categories[index].$1,
                     size: 15,
                     color: index == selected
-                        ? FlucordColors.brand
+                        ? context.surfaces.accentIcon
                         : context.surfaces.muted,
                   ),
                 ),
@@ -446,7 +510,7 @@ class _ToneBar extends StatelessWidget {
               icon: Text(
                 _swatches[index],
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: FlucordType.body,
                   color: index == tone
                       ? null
                       : context.surfaces.muted.withValues(alpha: 0.6),
@@ -528,40 +592,43 @@ class _EmojiTile extends StatelessWidget {
     final star = store == null
         ? null
         : () => unawaited(store.toggleEmoji(choice.favoriteKey));
+    // The tap, the long press and the focus come from the InkWell, so a screen
+    // reader hears when the keyboard lands on a choice.
     return Semantics(
+      container: true,
       label: starred
           ? '${choice.semanticLabel}, favourite'
           : choice.semanticLabel,
       button: true,
-      onTap: () => onSelected(choice),
-      onLongPress: star,
-      excludeSemantics: true,
       child: Tooltip(
+        excludeFromSemantics: true,
         message: store == null
             ? choice.tooltip
             : '${choice.tooltip}\nRight-click to '
                   '${starred ? 'unfavourite' : 'favourite'}',
         child: InkWell(
           key: ValueKey('emoji-choice-${choice.key}'),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           onTap: () => onSelected(choice),
           onSecondaryTap: star,
           onLongPress: star,
-          child: Stack(
-            children: [
-              Center(child: _EmojiGlyph(choice: choice)),
-              if (starred)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Icon(
-                    Icons.star,
-                    key: ValueKey('emoji-starred-${choice.key}'),
-                    size: 9,
-                    color: Colors.amber,
+          child: ExcludeSemantics(
+            child: Stack(
+              children: [
+                Center(child: _EmojiGlyph(choice: choice)),
+                if (starred)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Icon(
+                      Icons.star,
+                      key: ValueKey('emoji-starred-${choice.key}'),
+                      size: 9,
+                      color: Colors.amber,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -577,12 +644,12 @@ class _EmojiGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (choice.unicodeGlyph case final String glyph) {
-      return Text(glyph, style: const TextStyle(fontSize: 22));
+      return Text(glyph, style: const TextStyle(fontSize: FlucordType.display));
     }
     return SizedBox.square(
       dimension: 27,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: FlucordRadius.small,
         child: RemoteIdentityImage(
           url: choice.imageUrl,
           // The account's animate-emoji answer, read here so the flag from
@@ -596,7 +663,7 @@ class _EmojiGlyph extends StatelessWidget {
               child: Text(
                 choice.fallback,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -618,7 +685,10 @@ class _EmojiEmptyState extends StatelessWidget {
       children: [
         Icon(Icons.search_off, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 8),
-        const Text('No emoji found', style: TextStyle(fontSize: 12)),
+        const Text(
+          'No emoji found',
+          style: TextStyle(fontSize: FlucordType.caption),
+        ),
       ],
     ),
   );

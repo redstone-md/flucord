@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/member_profile_controller.dart';
 import '../../domain/user_profile.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 /// The full profile underneath the identity block: pronouns, about me,
@@ -68,7 +70,7 @@ class FullProfileSections extends StatelessWidget {
         label,
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 10,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -122,7 +124,7 @@ class ProfileBadgeRow extends StatelessWidget {
             child: SizedBox.square(
               dimension: 22,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(3),
+                borderRadius: FlucordRadius.small,
                 child: RemoteIdentityImage(
                   url: badges[index].icon.isEmpty
                       ? null
@@ -175,7 +177,7 @@ class ProfileConnectionRows extends StatelessWidget {
                           ? connection.type.toUpperCase()
                           : connection.type.substring(0, 2).toUpperCase(),
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
                         color: context.surfaces.muted,
                       ),
@@ -189,7 +191,7 @@ class ProfileConnectionRows extends StatelessWidget {
                   connection.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: FlucordType.caption),
                 ),
               ),
               if (connection.verified)
@@ -199,7 +201,7 @@ class ProfileConnectionRows extends StatelessWidget {
                     Icons.verified_outlined,
                     key: const ValueKey('profile-connection-verified'),
                     size: 14,
-                    color: FlucordColors.success,
+                    color: context.surfaces.success,
                   ),
                 ),
             ],
@@ -231,7 +233,7 @@ class ProfileMutualServerRows extends StatelessWidget {
                   server.nickname ?? server.id,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: FlucordType.caption),
                 ),
               ),
             ],
@@ -262,7 +264,7 @@ class ProfileMutualFriendRows extends StatelessWidget {
                   friend.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: FlucordType.caption),
                 ),
               ),
             ],
@@ -322,7 +324,7 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
           'NOTE',
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 10,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -344,7 +346,7 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
                 ? 'Click to add a note'
                 : 'Notes need a signed-in account',
           ),
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: FlucordType.caption),
         ),
         if (controller.noteRefused)
           const Padding(
@@ -352,7 +354,7 @@ class _ProfileNoteSectionState extends State<ProfileNoteSection> {
             child: Text(
               'Discord did not take that note.',
               key: ValueKey('profile-note-refused'),
-              style: TextStyle(fontSize: 11),
+              style: TextStyle(fontSize: FlucordType.caption),
             ),
           ),
         if (_dirty && controller.isSupported)

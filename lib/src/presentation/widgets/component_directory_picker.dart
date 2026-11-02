@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/message_component.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'flucord_dialog.dart';
 
 /// One thing a directory select can resolve to.
 final class DirectoryEntry {
@@ -143,7 +145,7 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('directory-picker'),
     title: Text(widget.title.isEmpty ? 'Choose' : widget.title),
     content: SizedBox(
@@ -170,7 +172,7 @@ class _ComponentDirectoryPickerState extends State<ComponentDirectoryPicker> {
                       key: const ValueKey('directory-empty'),
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 12,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   )

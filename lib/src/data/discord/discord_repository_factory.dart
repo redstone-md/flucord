@@ -4,6 +4,7 @@ import '../../domain/chat_repository_factory.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/discord_session.dart';
 import '../../domain/voice_dave.dart';
+import '../chat_image_cache.dart';
 import '../dave/native_dave_service.dart';
 import '../sqlite_chat_cache.dart';
 import 'discord_api_client.dart';
@@ -14,10 +15,23 @@ import 'discord_desktop_gateway_client.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_gateway_client.dart';
 
+/// Both transports share one cache file.
+Future<void> _clearDefaultCache() async {
+  final cache = await SqliteChatCache.openDefault();
+  try {
+    await cache.clear();
+  } finally {
+    await cache.close();
+  }
+}
+
 final class DiscordRepositoryFactory implements ChatRepositoryFactory {
   const DiscordRepositoryFactory({this.daveService});
 
   final VoiceDaveService? daveService;
+
+  @override
+  Future<void> clearCache() => _clearDefaultCache();
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -49,7 +63,9 @@ final class DiscordRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
       ),
       cache,
+      accountId: session.accountId,
       daveService: _resolveDaveService(),
+      clearChatImages: ChatImageCache.clear,
     );
   }
 
@@ -67,6 +83,9 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
   final VoiceDaveService? daveService;
 
   @override
+  Future<void> clearCache() => _clearDefaultCache();
+
+  @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
     if (session is! DiscordBotSession) {
       throw UnsupportedDiscordSessionException(session.kind);
@@ -77,8 +96,10 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
       DiscordApiClient(botToken: botToken),
       DiscordGatewayClient(botToken: botToken),
       cache,
+      accountId: session.accountId,
       daveService:
           daveService ?? (Platform.isWindows ? NativeDaveService.open() : null),
+      clearChatImages: ChatImageCache.clear,
     );
   }
 }

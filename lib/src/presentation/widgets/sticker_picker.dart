@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'accessibility_dials.dart';
 import 'expression_favorite_star.dart';
 import 'message_sticker_view.dart';
 
@@ -135,7 +138,9 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
     consumeOutsideTap: false,
     crossAxisUnconstrained: false,
     style: MenuStyle(
-      fixedSize: const WidgetStatePropertyAll(Size(336, 380)),
+      fixedSize: WidgetStatePropertyAll(
+        Size(336, heightWithinWindow(context, 380)),
+      ),
       backgroundColor: WidgetStatePropertyAll(context.surfaces.surface),
       side: WidgetStatePropertyAll(BorderSide(color: context.surfaces.border)),
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
@@ -148,7 +153,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       SizedBox(
         key: const ValueKey('sticker-picker'),
         width: 336,
-        height: 380,
+        height: heightWithinWindow(context, 380),
         child: ListenableBuilder(
           listenable: Listenable.merge([widget.favorites]),
           builder: (context, _) => _StickerPickerPanel(
@@ -171,7 +176,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       padding: EdgeInsets.zero,
       onPressed: widget.isSending || _allStickers.isEmpty ? null : _toggleMenu,
-      icon: const Icon(Icons.emoji_emotions_outlined, size: 19),
+      icon: const Icon(Icons.sticky_note_2_outlined, size: 19),
       tooltip: 'Stickers',
     ),
   );
@@ -251,7 +256,7 @@ class _StickerPickerPanel extends StatelessWidget {
                     'No stickers found',
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 )
@@ -269,7 +274,7 @@ class _StickerPickerPanel extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: context.surfaces.muted,
-                              fontSize: 9,
+                              fontSize: FlucordType.caption,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -308,7 +313,7 @@ class _StickerPickerPanel extends StatelessWidget {
                     color: sendFailed
                         ? Theme.of(context).colorScheme.error
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ),
@@ -370,17 +375,17 @@ class _StickerPickerPanel extends StatelessWidget {
           InkWell(
             key: ValueKey('sticker-option-${sticker.id}'),
             onTap: () => onToggle(sticker.id),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
             child: Container(
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: selected
-                    ? FlucordColors.brand.withValues(alpha: 0.14)
+                    ? context.surfaces.brand.withValues(alpha: 0.14)
                     : Colors.transparent,
                 border: Border.all(
-                  color: selected ? FlucordColors.brand : Colors.transparent,
+                  color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: FlucordRadius.small,
               ),
               child: assetBuilder(context, sticker.item),
             ),

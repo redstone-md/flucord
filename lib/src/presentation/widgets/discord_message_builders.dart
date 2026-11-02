@@ -4,7 +4,10 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/duration_in_words.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import 'message_preview_text.dart';
 import 'user_settings_scope.dart';
 
 Map<String, MarkdownElementBuilder> discordMessageBuilders({
@@ -44,19 +47,16 @@ final class _MentionBuilder extends MarkdownElementBuilder {
   ) {
     final id = element.attributes['id'] ?? element.textContent;
     final label = switch (_kind) {
-      _MentionKind.user =>
-        '@${_workspace.memberOrNull(id)?.displayName ?? 'unknown-user'}',
-      _MentionKind.role =>
-        '@${_workspace.roleOrNull(id)?.name ?? 'unknown-role'}',
-      _MentionKind.channel =>
-        '#${_workspace.channelOrNull(id)?.name ?? 'unknown-channel'}',
+      _MentionKind.user => DiscordMentionLabel.user(_workspace, id),
+      _MentionKind.role => DiscordMentionLabel.role(_workspace, id),
+      _MentionKind.channel => DiscordMentionLabel.channel(_workspace, id),
       _MentionKind.broadcast => '@${element.textContent}',
     };
     final roleColor = _kind == _MentionKind.role
         ? _workspace.roleOrNull(id)?.colorValue
         : null;
     final foreground = roleColor == null
-        ? FlucordColors.brand
+        ? context.surfaces.link
         : Color(roleColor);
     final channel = _kind == _MentionKind.channel
         ? _workspace.channelOrNull(id)
@@ -70,11 +70,11 @@ final class _MentionBuilder extends MarkdownElementBuilder {
       child: InkWell(
         key: ValueKey('discord-${_kind.name}-$id'),
         onTap: enabled ? () => onSelectChannel?.call(id) : null,
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: FlucordRadius.small,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: foreground.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: FlucordRadius.small,
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
@@ -157,7 +157,7 @@ final class _TimestampBuilder extends MarkdownElementBuilder {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: context.surfaces.raised,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: FlucordRadius.small,
         ),
         child: Padding(
           key: ValueKey('discord-timestamp-$epoch'),
@@ -190,15 +190,8 @@ final class _TimestampBuilder extends MarkdownElementBuilder {
   String _relative(DateTime value) {
     final difference = value.difference(now);
     final future = !difference.isNegative;
-    final duration = difference.abs();
-    final (amount, unit) = duration.inDays >= 1
-        ? (duration.inDays, duration.inDays == 1 ? 'day' : 'days')
-        : duration.inHours >= 1
-        ? (duration.inHours, duration.inHours == 1 ? 'hour' : 'hours')
-        : duration.inMinutes >= 1
-        ? (duration.inMinutes, duration.inMinutes == 1 ? 'minute' : 'minutes')
-        : (duration.inSeconds, duration.inSeconds == 1 ? 'second' : 'seconds');
-    return future ? 'in $amount $unit' : '$amount $unit ago';
+    final words = durationInWords(difference.abs());
+    return future ? 'in $words' : '$words ago';
   }
 
   static String _time(
@@ -229,8 +222,8 @@ final class _CommandBuilder extends MarkdownElementBuilder {
     TextStyle? parentStyle,
   ) => DecoratedBox(
     decoration: BoxDecoration(
-      color: FlucordColors.brand.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(3),
+      color: context.surfaces.brand.withValues(alpha: 0.14),
+      borderRadius: FlucordRadius.small,
     ),
     child: Padding(
       key: ValueKey('discord-command-${element.attributes['id']}'),
@@ -238,7 +231,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
       child: Text(
         '/${element.textContent}',
         style: (parentStyle ?? preferredStyle)?.copyWith(
-          color: FlucordColors.brand,
+          color: context.surfaces.link,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -279,11 +272,11 @@ class _DiscordSpoilerState extends State<_DiscordSpoiler> {
     child: InkWell(
       key: const ValueKey('discord-spoiler'),
       onTap: () => setState(() => _revealed = !_revealed),
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: FlucordRadius.small,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: _revealed ? context.surfaces.raised : context.surfaces.muted,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: FlucordRadius.small,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),

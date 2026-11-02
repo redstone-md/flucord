@@ -7,15 +7,24 @@ import '../data/discord/discord_voice_gateway_protocol.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
+import '../domain/voice_connection.dart';
 
 /// Sets `self_video` on the account's voice state and answers whether the
 /// gateway took it.
 typedef SelfVideoAnnouncer = Future<bool> Function({required bool enabled});
 
+/// What the camera sends through: the voice session's transport and sink, and
+/// the audio SSRC that session holds.
+typedef _VoiceConnection = ({
+  VoiceVideoTransport transport,
+  VideoFrameSink sink,
+  int ssrc,
+});
+
 /// The account's own camera in the voice channel it is sitting in.
 ///
 /// Deliberately apart from Go Live: a screen share is its own connection with
-/// its own stream key and its own viewers, while a camera rides the voice
+/// its own stream key and its own watchers, while a camera rides the voice
 /// connection that is already open. The two share the capture module and the
 /// packetiser and nothing above them.
 ///
@@ -96,10 +105,8 @@ final class SelfVideoController extends ChangeNotifier {
       _fail(const VideoEncoderException(VideoEncoderFailure.noCamera));
       return false;
     }
-    final transport = _transportProvider();
-    final sink = _sinkProvider();
-    final audioSsrc = transport?.audioSsrc;
-    if (transport == null || sink == null || audioSsrc == null) {
+    final voice = _voiceConnection();
+    if (voice == null) {
       // Before the voice READY there is no SSRC to derive the video one from,
       // and pictures sent on a number the server allocated nothing for are
       // forwarded to nobody.
@@ -109,35 +116,16 @@ final class SelfVideoController extends ChangeNotifier {
     _isBusy = true;
     _error = null;
     notifyListeners();
+    final VideoCaptureLease lease;
     try {
-      _lease = await _capture.startCamera(cameraIndex: _selectedCamera);
+      lease = _lease = await _capture.startCamera(cameraIndex: _selectedCamera);
     } on Object catch (error) {
       _fail(error);
       return false;
     }
-    // Declared before the first packet: a receiver that saw RTP on an
-    // undeclared SSRC would drop it.
-    transport.announceVideo(enabled: true, settings: _lease!.settings);
-    _transport?.stop();
-    final encryptor = _groupEncryptorProvider?.call();
-    _transport = DiscordVideoStreamTransport(
-      ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(audioSsrc),
-      // Held on a voice connection that is not up, the same gate the Go Live
-      // sender puts on its sink: during a reconnect the cipher and the socket
-      // are gone, a picture pushed through then throws, and the transport
-      // treats that throw as a dead socket and stops for good. Held (0), the
-      // camera keeps its state and resumes when the connection answers.
-      //
-      // The encryptor has no hold answer, so not-ready answers an empty
-      // picture: nothing packetises and nothing leaves, and no clear bytes
-      // exist to be sent by accident.
-      sink: (frame) => _isVoiceReady() ? sink(frame) : 0,
-      groupEncryptor: encryptor == null
-          ? null
-          : (frame) => _isVoiceReady() ? encryptor(frame) : Uint8List(0),
-    )..attach(_capture.frames);
+    _startSending(voice, lease);
     if (!await _announce(enabled: true)) {
-      await _tearDown(transport);
+      await _tearDown(voice.transport);
       _fail(StateError('The gateway would not take the camera'));
       return false;
     }
@@ -147,11 +135,42 @@ final class SelfVideoController extends ChangeNotifier {
     return true;
   }
 
+  /// Moves the camera to the SSRC the voice session holds now.
+  ///
+  /// A reconnect that identifies again is handed a new SSRC, and the server
+  /// forwards nothing sent on the old one, so the camera declares itself again
+  /// and sends on the new number. A resume keeps its SSRC and changes nothing
+  /// here. For a connection that is up: until then the numbers are not settled.
+  void followVoiceSession() {
+    final lease = _lease;
+    final sending = _transport;
+    final voice = _voiceConnection();
+    if (lease == null || sending == null || voice == null) return;
+    if (sending.ssrc == DiscordVoiceGatewayProtocol.videoSsrcFor(voice.ssrc)) {
+      return;
+    }
+    _startSending(voice, lease);
+    // A participant on the new numbering decodes nothing until a keyframe.
+    unawaited(lease.requestKeyframe());
+  }
+
+  /// Answers the media server about the camera's pictures: a keyframe for a
+  /// participant who cannot decode, or lost packets again from the history.
+  /// With no camera running, there is nothing to answer with.
+  void answer(VoicePictureAsk ask) {
+    switch (ask) {
+      case VoiceKeyframeRequestedEvent():
+        unawaited(_lease?.requestKeyframe());
+      case VoiceRetransmitRequestedEvent(:final sequences):
+        _transport?.retransmit(sequences);
+    }
+  }
+
   Future<void> turnOff() async {
     if (!_isOn) return;
     _isBusy = true;
     notifyListeners();
-    // Told first this time: a viewer still drawing the last picture of a
+    // Told first this time: a participant still drawing the last picture of a
     // camera that already stopped is worse than one told a moment early.
     await _announce(enabled: false);
     await _tearDown(_transportProvider());
@@ -178,6 +197,42 @@ final class SelfVideoController extends ChangeNotifier {
     if (!_isOn) return turnOn();
     await turnOff();
     return false;
+  }
+
+  /// The live voice connection, once it holds an SSRC.
+  _VoiceConnection? _voiceConnection() {
+    final transport = _transportProvider();
+    final sink = _sinkProvider();
+    final ssrc = transport?.audioSsrc;
+    if (transport == null || sink == null || ssrc == null) return null;
+    return (transport: transport, sink: sink, ssrc: ssrc);
+  }
+
+  /// Declares the camera on [voice] and sends its pictures on that session's
+  /// SSRC, in place of whatever was sending before.
+  void _startSending(_VoiceConnection voice, VideoCaptureLease lease) {
+    // Declared before the first packet: a receiver that saw RTP on an
+    // undeclared SSRC would drop it.
+    voice.transport.announceVideo(enabled: true, settings: lease.settings);
+    _transport?.stop();
+    final encryptor = _groupEncryptorProvider?.call();
+    final sink = voice.sink;
+    _transport = DiscordVideoStreamTransport(
+      ssrc: DiscordVoiceGatewayProtocol.videoSsrcFor(voice.ssrc),
+      // Held on a voice connection that is not up, the same gate the Go Live
+      // sender puts on its sink: during a reconnect the cipher and the socket
+      // are gone, a picture pushed through then throws, and the transport
+      // treats that throw as a dead socket and stops for good. Held (0), the
+      // camera keeps its state and resumes when the connection answers.
+      //
+      // The encryptor has no hold answer, so not-ready answers an empty
+      // picture: nothing packetises and nothing leaves, and no clear bytes
+      // exist to be sent by accident.
+      sink: (frame) => _isVoiceReady() ? sink(frame) : 0,
+      groupEncryptor: encryptor == null
+          ? null
+          : (frame) => _isVoiceReady() ? encryptor(frame) : Uint8List(0),
+    )..attach(_capture.frames);
   }
 
   Future<void> _tearDown(VoiceVideoTransport? transport) async {

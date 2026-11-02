@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'flucord_dialog.dart';
 
 class GuildScheduledEventsDialog extends StatelessWidget {
   const GuildScheduledEventsDialog({
@@ -46,27 +49,23 @@ class GuildScheduledEventsDialog extends StatelessWidget {
   final void Function(GuildScheduledEvent)? onShowAttendees;
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('guild-events-dialog'),
-    insetPadding: const EdgeInsets.all(24),
-    backgroundColor: context.surfaces.surface,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 680, maxHeight: 680),
-      child: SizedBox(
-        width: 680,
-        height: MediaQuery.sizeOf(context).height * 0.78,
-        child: Column(
-          children: [
-            _EventsHeader(
-              spaceName: space.name,
-              onRefresh: onRefresh,
-              onCreate: onCreate,
-            ),
-            Divider(height: 1, color: context.surfaces.border),
-            Expanded(child: _buildBody(context)),
-          ],
-        ),
+    maxWidth: 680,
+    maxHeight: 680,
+    child: SizedBox(
+      width: 680,
+      height: MediaQuery.sizeOf(context).height * 0.78,
+      child: Column(
+        children: [
+          _EventsHeader(
+            spaceName: space.name,
+            onRefresh: onRefresh,
+            onCreate: onCreate,
+          ),
+          Divider(height: 1, color: context.surfaces.border),
+          Expanded(child: _buildBody(context)),
+        ],
       ),
     ),
   );
@@ -140,12 +139,18 @@ class _EventsHeader extends StatelessWidget {
             children: [
               const Text(
                 'Events',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.body,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 spaceName,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ],
           ),
@@ -221,7 +226,7 @@ class _ScheduledEventRow extends StatelessWidget {
         child: InkWell(
           key: ValueKey('guild-event-${event.id}'),
           onTap: !canOpen ? null : () => Navigator.of(context).pop(channel!.id),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             child: Row(
@@ -239,7 +244,7 @@ class _ScheduledEventRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: FlucordType.label,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -249,7 +254,7 @@ class _ScheduledEventRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: FlucordType.caption,
                           color: context.surfaces.muted,
                         ),
                       ),
@@ -265,7 +270,7 @@ class _ScheduledEventRow extends StatelessWidget {
                                     '${event.exceptions.length} changed',
                           key: ValueKey('guild-event-repeats-${event.id}'),
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: FlucordType.caption,
                             color: context.surfaces.muted,
                           ),
                         ),
@@ -278,7 +283,7 @@ class _ScheduledEventRow extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: FlucordType.caption,
                             color: context.surfaces.muted,
                           ),
                         ),
@@ -289,7 +294,10 @@ class _ScheduledEventRow extends StatelessWidget {
                           event.description!.trim(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, height: 1.3),
+                          style: const TextStyle(
+                            fontSize: FlucordType.caption,
+                            height: 1.3,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 7),
@@ -299,7 +307,7 @@ class _ScheduledEventRow extends StatelessWidget {
                             Text(
                               '${event.interestedCount} interested',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: FlucordType.caption,
                                 color: context.surfaces.muted,
                               ),
                             )
@@ -312,7 +320,9 @@ class _ScheduledEventRow extends StatelessWidget {
                                 padding: EdgeInsets.zero,
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                textStyle: const TextStyle(fontSize: 11),
+                                textStyle: const TextStyle(
+                                  fontSize: FlucordType.caption,
+                                ),
                               ),
                               onPressed: () => onShowAttendees!(event),
                               child: Text(
@@ -407,7 +417,7 @@ class _EventDate extends StatelessWidget {
     decoration: BoxDecoration(
       color: context.surfaces.inset,
       border: Border.all(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -415,15 +425,18 @@ class _EventDate extends StatelessWidget {
         Text(
           active ? 'NOW' : _months[start.month - 1],
           style: TextStyle(
-            color: active ? FlucordColors.success : FlucordColors.mention,
-            fontSize: 10,
+            color: active ? context.surfaces.success : context.surfaces.mention,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           '${start.day}',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: FlucordType.title,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     ),
@@ -434,13 +447,13 @@ class _LiveLabel extends StatelessWidget {
   const _LiveLabel();
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.only(bottom: 4),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
     child: Text(
       'LIVE NOW',
       style: TextStyle(
-        color: FlucordColors.success,
-        fontSize: 10,
+        color: context.surfaces.success,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
       ),
     ),
@@ -459,7 +472,7 @@ class _EventSectionLabel extends StatelessWidget {
       label.toUpperCase(),
       style: TextStyle(
         color: context.surfaces.muted,
-        fontSize: 10,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
       ),
     ),
@@ -548,7 +561,7 @@ class _InterestButtonState extends State<_InterestButton> {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       minimumSize: Size.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      textStyle: const TextStyle(fontSize: 11),
+      textStyle: const TextStyle(fontSize: FlucordType.caption),
     ),
     onPressed: _busy ? null : _toggle,
     child: Text(_interested ? 'Not interested' : 'Interested'),

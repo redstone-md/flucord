@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
+import 'package:flutter/material.dart'
+    show AppLifecycleListener, GlobalKey, ScaffoldMessengerState, ThemeMode;
 import 'package:flutter/services.dart';
 
 import 'app_bootstrap.dart';
@@ -60,6 +62,7 @@ import 'application/stream_quality_controller.dart';
 import 'application/stream_router.dart';
 import 'application/stream_suspension.dart';
 import 'application/accessibility_controller.dart';
+import 'application/navigation_memory_store.dart';
 import 'application/streamer_mode_controller.dart';
 import 'application/theme_controller.dart';
 import 'application/text_to_speech_playback_controller.dart';
@@ -77,6 +80,8 @@ import 'data/video/system_audio_capture.dart';
 import 'data/audio/isolate_noise_suppressor.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
+import 'data/chat_image_cache.dart';
+import 'presentation/clipboard_attachments.dart';
 import 'data/disconnected_chat_repository.dart';
 import 'data/file_voice_processing_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
@@ -96,6 +101,7 @@ import 'data/file_keybind_repository.dart';
 import 'data/file_stream_quality_repository.dart';
 import 'data/file_streamer_mode_repository.dart';
 import 'data/file_accessibility_repository.dart';
+import 'data/file_navigation_memory_repository.dart';
 import 'data/spell_check/word_list_spell_check_service.dart';
 import 'data/noop_voice_media_service.dart';
 import 'data/secure_credential_vault.dart';
@@ -175,6 +181,7 @@ final class AppComposition {
   late final DiscordSocialDmNavigationController socialDmNavigation;
   late final OAuthGuildMembershipController oauthGuildMembership;
   late final OAuthGuildDirectoryController oauthGuildDirectory;
+  late final NavigationMemoryStore navigationMemory;
   late final WorkspaceController workspace;
   late final GuildMemberListController memberList;
   late final UserSettingsController userSettings;
@@ -254,10 +261,17 @@ final class AppComposition {
   }
 
   void _buildSessionPlane() {
+    navigationMemory = NavigationMemoryStore(
+      bootstrap.navigationMemoryRepository ?? FileNavigationMemoryRepository(),
+    );
+    _teardown.add(navigationMemory.dispose);
     chat = _register(
       ChatController(
         bootstrap.initialRepository ??
             (_demo ? MockChatRepository() : const DisconnectedChatRepository()),
+        landingChannelIn: (workspace) =>
+            this.workspace.landingChannelIn(workspace),
+        readingPositions: navigationMemory,
       ),
     );
     connection = _register(
@@ -267,6 +281,9 @@ final class AppComposition {
         bootstrap.chatRepositoryFactory ?? const DiscordRepositoryFactory(),
         initialMode: bootstrap.initialSessionMode,
         botTransportEnabled: bootstrap.enableBotTransport,
+        navigationMemory: navigationMemory,
+        clearChatImages: bootstrap.clearChatImages ?? ChatImageCache.clear,
+        clearPastedPictures: ClipboardAttachments.clear,
       ),
     );
     desktopLogin = _register(
@@ -329,7 +346,7 @@ final class AppComposition {
   }
 
   void _buildWorkspacePlane() {
-    workspace = _register(WorkspaceController());
+    workspace = _register(WorkspaceController(memory: navigationMemory));
     // Everything below resolves its plane off the live session through a
     // provider rather than capturing it: the transport is swapped when the
     // account changes, and a controller holding the old one would talk to a
@@ -794,11 +811,37 @@ final class AppComposition {
     gameDetection.startScanning();
     ServicesBinding.instance.keyboard.addHandler(keybinds.handleKeyEvent);
     bootstrap.desktopIntegration?.attach(desktopSurface);
+    _teardown.add(
+      AppLifecycleListener(onExitRequested: _closeBeforeExit).dispose,
+    );
     connection.initialize(
       restoreSavedSession: bootstrap.restoreSavedSession && !_demo,
     );
     oauth.initialize();
     socialSdk.initialize();
+  }
+
+  /// Light or dark, as the app draws it.
+  ///
+  /// The account's theme wins whenever it names one Flucord can draw. The
+  /// session's own choice covers sessions with no account behind them, and a
+  /// stored theme Flucord does not ship.
+  ThemeMode get themeMode => userSettings.themeMode ?? workspace.themeMode;
+
+  /// Flips [themeMode] where it is kept: in the account when the account
+  /// names a theme, so the stored value cannot win it back, and in the
+  /// session otherwise.
+  void toggleTheme() {
+    final stored = userSettings.themeMode;
+    if (stored == null) {
+      workspace.toggleTheme();
+      return;
+    }
+    unawaited(
+      userSettings.applyThemeMode(
+        stored == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
+      ),
+    );
   }
 
   /// Tears the graph down in reverse construction order: whatever reads
@@ -813,6 +856,14 @@ final class AppComposition {
       dispose();
     }
     unawaited(bootstrap.voiceMessageRecorder?.dispose());
+  }
+
+  /// The system closes a window with no help from the widgets, which stay
+  /// mounted until the process ends. So this is the last chance to save.
+  Future<AppExitResponse> _closeBeforeExit() async {
+    await navigationMemory.flush();
+    await chat.closeForExit();
+    return AppExitResponse.exit;
   }
 
   bool _markActiveOnKey(KeyEvent event) {

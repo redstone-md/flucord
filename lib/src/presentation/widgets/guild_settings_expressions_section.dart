@@ -6,8 +6,10 @@ import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_expression_errors.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../expression_file_picker.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The expressions page: the server's emoji, stickers and soundboard sounds,
 /// each with an upload and a delete.
@@ -228,7 +230,7 @@ class _ExpressionGroup extends StatelessWidget {
       Text(
         heading.toUpperCase(),
         style: TextStyle(
-          fontSize: 11,
+          fontSize: FlucordType.caption,
           letterSpacing: 0.5,
           fontWeight: FontWeight.w700,
           color: context.surfaces.muted,
@@ -241,7 +243,10 @@ class _ExpressionGroup extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
             emptyMessage,
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         )
       else
@@ -299,7 +304,7 @@ class _NameDialogState extends State<_NameDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: Text(widget.title),
     content: TextField(
       key: const ValueKey('guild-expression-name-field'),
@@ -347,7 +352,7 @@ class _SoundDialogState extends State<_SoundDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: const Text('Name this sound'),
     content: Column(
       mainAxisSize: MainAxisSize.min,

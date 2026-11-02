@@ -9,26 +9,14 @@ extension ChatControllerVoiceMessages on ChatController {
     final repository = _repository is VoiceMessageRepository
         ? _repository as VoiceMessageRepository
         : null;
-    if (workspace == null || repository == null || _isSending) return false;
-    _isSending = true;
-    _notify();
-    try {
+    if (workspace == null || repository == null) return false;
+    return _sendingIn(channelId, () async {
       final message = await repository.sendVoiceMessage(
         channelId: channelId,
         authorId: workspace.currentMemberId,
         voiceMessage: voiceMessage,
       );
-      _workspace = _workspace?.upsertMessage(message);
-      _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+      _applySentMessage(message);
+    });
   }
 }

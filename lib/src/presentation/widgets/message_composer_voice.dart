@@ -13,12 +13,14 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   int _voiceGeneration = 0;
 
   bool get _hasRegularMessageContent;
+  bool get _isHeldBySlowmode;
   bool get _hasVoiceSession =>
       _isRecordingVoice || _pendingVoiceMessage != null || _isUploadingVoice;
   bool get _canRecordVoice =>
       widget.voiceMessageRecorder != null &&
       widget.onSendVoiceMessage != null &&
       !_hasRegularMessageContent &&
+      !_isHeldBySlowmode &&
       widget.replyTo == null &&
       !widget.isSending;
 
@@ -248,7 +250,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -277,7 +279,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               key: const ValueKey('voice-recording-waveform'),
               samples: progress.samples,
               progress: isRecording ? 1 : 0,
-              activeColor: isRecording ? errorColor : FlucordColors.brand,
+              activeColor: isRecording ? errorColor : context.surfaces.brand,
               semanticsLabel: isRecording
                   ? 'Live voice recording waveform'
                   : 'Recorded voice message waveform',
@@ -289,7 +291,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
             key: const ValueKey('voice-recording-time'),
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
@@ -326,7 +328,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               icon: Icon(
                 isRecording ? Icons.send_rounded : Icons.refresh_rounded,
                 size: 20,
-                color: FlucordColors.brand,
+                color: context.surfaces.accentIcon,
               ),
             ),
         ],

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'message_attachment_gallery.dart';
 import 'message_content_view.dart';
 import 'message_embed_view.dart';
@@ -71,7 +73,10 @@ class ForwardedMessageView extends StatelessWidget {
               child: Text(
                 'Interactive components are unavailable in this snapshot.',
                 key: const ValueKey('forwarded-components-unavailable'),
-                style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ),
         ],
@@ -117,7 +122,7 @@ class _SourceLine extends StatelessWidget {
     onTap: source.channelId == null
         ? null
         : () => onSelectChannel(source.channelId!),
-    borderRadius: BorderRadius.circular(3),
+    borderRadius: FlucordRadius.small,
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
@@ -132,7 +137,7 @@ class _SourceLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: context.surfaces.muted,
-                fontSize: 10,
+                fontSize: FlucordType.caption,
                 fontWeight: FontWeight.w600,
               ),
             ),

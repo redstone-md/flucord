@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/stage_controller.dart';
 import '../../domain/stage_channel.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'flucord_dialog.dart';
 
 /// The strip a stage channel shows above its participants.
 ///
@@ -29,7 +32,7 @@ class StageControls extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         border: Border.all(color: context.surfaces.border),
       ),
       child: Row(
@@ -38,7 +41,7 @@ class StageControls extends StatelessWidget {
             controller.isLive ? Icons.campaign : Icons.campaign_outlined,
             size: 17,
             color: controller.isLive
-                ? FlucordColors.brand
+                ? context.surfaces.accentIcon
                 : context.surfaces.muted,
           ),
           const SizedBox(width: 10),
@@ -57,14 +60,17 @@ class StageControls extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: FlucordType.label,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
                   _roleLabel(role),
                   key: const ValueKey('stage-role'),
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ],
             ),
@@ -257,7 +263,7 @@ class _StageTopicDialogState extends State<StageTopicDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('stage-topic-dialog'),
     title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
     content: TextField(

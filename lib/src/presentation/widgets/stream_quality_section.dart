@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/stream_quality_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The step both sliders commit on: fine enough to mean what the label says,
 /// coarse enough that the stored number stays readable.
@@ -30,7 +31,10 @@ class StreamQualitySection extends StatelessWidget {
         Text(
           'What this machine sends its pictures at. Applies the next time a '
           'share or a camera starts.',
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         const SizedBox(height: 16),
         _BitrateSlider(
@@ -67,7 +71,7 @@ class StreamQualitySection extends StatelessWidget {
               'Could not save the change: it applies now, but the next '
               'restart forgets it.',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: FlucordType.caption,
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
@@ -130,11 +134,14 @@ class _BitrateSliderState extends State<_BitrateSlider> {
         Row(
           children: [
             Expanded(
-              child: Text(widget.label, style: const TextStyle(fontSize: 13)),
+              child: Text(
+                widget.label,
+                style: const TextStyle(fontSize: FlucordType.label),
+              ),
             ),
             Text(
               _inMegabits((_dragging ?? widget.bitrate).toDouble()),
-              style: const TextStyle(fontSize: 13),
+              style: const TextStyle(fontSize: FlucordType.label),
             ),
           ],
         ),
@@ -163,7 +170,10 @@ class _BitrateSliderState extends State<_BitrateSlider> {
         ),
         Text(
           widget.subtitle,
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ],
     );

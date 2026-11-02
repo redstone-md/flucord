@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../application/guild_member_admin_controller.dart';
 import '../../domain/guild_management.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'destructive_confirmation.dart';
 
 /// The moderation block of a member popover: roles, nickname, timeout, kick
 /// and ban.
@@ -78,7 +80,7 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
                 Expanded(
                   child: Text(
                     'That change was not saved.',
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: FlucordType.caption),
                   ),
                 ),
               ],
@@ -193,7 +195,10 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
         if (timedOut) ...[
           Text(
             'Timed out until ${_format(controller.profile!.timeoutUntil!)}',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
           OutlinedButton(
             key: const ValueKey('member-timeout-lift'),
@@ -272,49 +277,27 @@ class _MemberModerationSectionState extends State<MemberModerationSection> {
   }
 
   Future<void> _confirmKick(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('member-kick-dialog'),
-        title: const Text('Kick this member?'),
-        content: const Text('They can rejoin with a new invite.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('member-kick-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Kick'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Kick this member?',
+      message: 'They can rejoin with a new invite.',
+      confirmLabel: 'Kick',
+      dialogKey: const ValueKey('member-kick-dialog'),
+      confirmKey: const ValueKey('member-kick-confirm'),
     );
-    if (confirmed ?? false) await widget.controller.kickMember();
+    if (confirmed) await widget.controller.kickMember();
   }
 
   Future<void> _confirmBan(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('member-ban-dialog'),
-        title: const Text('Ban this member?'),
-        content: const Text('They cannot rejoin until somebody lifts the ban.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('member-ban-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Ban'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Ban this member?',
+      message: 'They cannot rejoin until somebody lifts the ban.',
+      confirmLabel: 'Ban',
+      dialogKey: const ValueKey('member-ban-dialog'),
+      confirmKey: const ValueKey('member-ban-confirm'),
     );
-    if (confirmed ?? false) await widget.controller.banMember();
+    if (confirmed) await widget.controller.banMember();
   }
 
   static String _format(DateTime until) {
@@ -334,7 +317,7 @@ class _BlockLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     label,
     style: TextStyle(
-      fontSize: 11,
+      fontSize: FlucordType.caption,
       letterSpacing: 0.5,
       fontWeight: FontWeight.w700,
       color: context.surfaces.muted,

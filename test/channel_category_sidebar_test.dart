@@ -46,7 +46,10 @@ void main() {
     final mention = tester.widget<Container>(
       find.byKey(const ValueKey('channel-mention-alerts')),
     );
-    expect((mention.decoration! as BoxDecoration).color, FlucordColors.mention);
+    expect(
+      (mention.decoration! as BoxDecoration).color,
+      const Color(0xfff23f42),
+    );
 
     await tester.tap(find.byKey(const ValueKey('category-category-1')));
     await tester.pump();

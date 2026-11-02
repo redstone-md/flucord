@@ -166,6 +166,10 @@ paths, tracked text, and image metadata. It blocks known credential formats,
 private keys, personal email addresses, public IP addresses, local user paths,
 and non-fixture Discord snowflakes without printing matched secret values.
 
+To measure what the core workspace folds cost, or the frame times of the whole
+app on Windows, and to compare with an earlier result, see
+[`tool/bench/README.md`](tool/bench/README.md).
+
 Live network checks are opt-in:
 
 ```powershell
@@ -187,6 +191,7 @@ validated interactively because those steps require a person.
 - [Feature parity](docs/FEATURE_PARITY.md)
 - [Desktop protocol notes](docs/DISCORD_DESKTOP_PROTOCOL.md)
 - [Session and transport boundaries](docs/SESSION_TRANSPORT.md)
+- [Live gateway capture](docs/LIVE_CAPTURE.md)
 - [Desktop integration](docs/DESKTOP_INTEGRATION.md)
 - [Native media](docs/NATIVE_MEDIA.md)
 - [Roadmap](roadmap.md)

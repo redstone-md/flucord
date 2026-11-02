@@ -3,8 +3,9 @@ part of 'flucord_shell.dart';
 extension _FlucordShellNavigation on FlucordShell {
   /// What stands in for the workspace when there are no spaces to show: the
   /// OAuth account's guild directory when one is signed in, and otherwise the
-  /// prompt to connect a transport.
+  /// sign-in screen.
   Widget _buildEmptyWorkspace(BuildContext context) {
+    if (connectionController.isBusy) return const LoadingWorkspaceView();
     if (connectionController.mode != SessionMode.disconnected) {
       return EmptyWorkspaceView(
         onOpenConnections: () => _openConnections(context),
@@ -13,6 +14,8 @@ extension _FlucordShellNavigation on FlucordShell {
     final account = discordOAuthController.account;
     if (account == null) {
       return DisconnectedWorkspaceView(
+        connection: connectionController,
+        login: DiscordDesktopLoginScope.of(context),
         onOpenConnections: () => _openConnections(context),
       );
     }
@@ -28,11 +31,27 @@ extension _FlucordShellNavigation on FlucordShell {
         onSelectGuild: (guildId) =>
             oauthGuildDirectoryController.selectGuild(account, guildId),
         onOpenConnections: () => _openConnections(context),
-        onToggleTheme: workspaceController.toggleTheme,
-        isDark: workspaceController.themeMode == ThemeMode.dark,
+        onToggleTheme: onToggleTheme,
+        isDark: themeMode == ThemeMode.dark,
       ),
     );
   }
+
+  /// Puts the connection banner above [body] and the incoming-call card over it.
+  ///
+  /// A demo has no connection to report, so it gets no banner.
+  Widget _withWorkspaceChrome(ChatWorkspace workspace, Widget body) => Column(
+    children: [
+      if (connectionController.mode == SessionMode.discord)
+        ConnectionBanner(
+          status: chatController.connectionStatus,
+          onRetry: connectionController.hasSavedCredential
+              ? () => unawaited(connectionController.connectSavedCredential())
+              : null,
+        ),
+      Expanded(child: _withIncomingCall(workspace, body)),
+    ],
+  );
 
   /// Floats the incoming-call card over [body].
   ///
@@ -120,7 +139,6 @@ extension _FlucordShellNavigation on FlucordShell {
     chatController.acknowledgeNotificationCentre();
     final target = await showDialog<InboxTarget>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.58),
       // The inbox is a snapshot of what was waiting when it was opened, not a
       // live feed. Following the chat controller here rebuilt the whole
       // catalogue on every gateway event — on a busy account that is every
@@ -162,7 +180,6 @@ extension _FlucordShellNavigation on FlucordShell {
     ).administrationOf(space.id).canManageEvents;
     final channelId = await showDialog<String>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.58),
       builder: (_) => ListenableBuilder(
         listenable: chatController,
         builder: (dialogContext, _) => GuildScheduledEventsDialog(
@@ -225,26 +242,89 @@ extension _FlucordShellNavigation on FlucordShell {
     BuildContext context,
     GuildScheduledEvent event,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('guild-event-delete-confirm'),
-        title: const Text('Delete this event?'),
-        content: Text('${event.name} will be removed for everybody.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('guild-event-delete-accept'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete this event?',
+      message: '${event.name} will be removed for everybody.',
+      confirmLabel: 'Delete',
+      dialogKey: const ValueKey('guild-event-delete-confirm'),
+      confirmKey: const ValueKey('guild-event-delete-accept'),
     );
-    if (confirmed ?? false) await chatController.deleteScheduledEvent(event);
+    if (confirmed) await chatController.deleteScheduledEvent(event);
+  }
+
+  /// Whether the settings window has anything to show this account.
+  bool _canOpenSettings(GuildAdminCapabilities administration) =>
+      administration.hasAnySurface && chatController.guildManagement != null;
+
+  /// The menu of a server on the rail, which may not be the one on screen. It
+  /// holds what the server's header offers, and Mark as read up front.
+  Future<void> _openSpaceMenu(
+    BuildContext context,
+    String spaceId,
+    Offset position,
+  ) async {
+    final workspace = chatController.workspace;
+    final space = workspace?.spaceOrNull(spaceId);
+    if (workspace == null || space == null) return;
+    final administration = WorkspacePermissions(
+      workspace,
+    ).administrationOf(spaceId);
+    final items = serverMenuItems({
+      if (chatController.readStateRepository != null) ...{
+        ServerMenuAction.markRead,
+        ServerMenuAction.notifications,
+      },
+      if (_canOpenSettings(administration)) ServerMenuAction.settings,
+      if (chatController.moderation != null) ServerMenuAction.report,
+      if (chatController.guildManagement != null) ServerMenuAction.leave,
+    });
+    // A transport with none of these, like the demo, has no menu to show.
+    if (items.isEmpty) return;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final at = RelativeRect.fromRect(
+      overlay.globalToLocal(position) & Size.zero,
+      Offset.zero & overlay.size,
+    );
+    final action = await showMenu<ServerMenuAction>(
+      context: context,
+      position: at,
+      items: items,
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case ServerMenuAction.markRead:
+        await chatController.markSpaceRead(space.id);
+      case ServerMenuAction.settings:
+        await _openGuildSettings(context, space, administration);
+      case ServerMenuAction.notifications:
+        await _openSpaceNotificationMenu(context, space, at);
+      case ServerMenuAction.report:
+        await _reportSpace(context, space);
+      case ServerMenuAction.leave:
+        await _leaveServer(context, space);
+    }
+  }
+
+  Future<void> _openSpaceNotificationMenu(
+    BuildContext context,
+    CommunitySpace space,
+    RelativeRect at,
+  ) async {
+    final readState = chatController.readState;
+    final settings = readState.settingsFor(space.id);
+    final request = await showNotificationSettingsMenu(
+      context: context,
+      position: at,
+      muted: readState.isSpaceMuted(space.id),
+      level: settings.messageNotifications,
+      isSpaceScope: true,
+      suppressEveryone: settings.suppressEveryone,
+      mobilePush: settings.mobilePush,
+    );
+    if (request == null) return;
+    _applyNotificationRequest(request, space: space, channel: null);
   }
 
   /// Opens the server-settings window for [space].
@@ -378,28 +458,16 @@ extension _FlucordShellNavigation on FlucordShell {
   Future<void> _blockMember(BuildContext context, Member member) async {
     final repository = chatController.moderation;
     if (repository == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('block-member-dialog'),
-        title: Text('Block ${member.displayName}?'),
-        content: const Text(
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Block ${member.displayName}?',
+      message:
           'You will stop seeing their messages and they cannot message you.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('block-member-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Block'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Block',
+      dialogKey: const ValueKey('block-member-dialog'),
+      confirmKey: const ValueKey('block-member-confirm'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       await repository.blockUser(member.id);
     } on Object {
@@ -419,9 +487,104 @@ extension _FlucordShellNavigation on FlucordShell {
         channelId: destination.channelId,
       );
 
+  /// Takes one step through the channels or the servers, from the keyboard.
+  void _takeStep(ShellStep step) {
+    switch (step) {
+      case ShellStep.previousChannel:
+        _stepChannel(-1, (_) => true);
+      case ShellStep.nextChannel:
+        _stepChannel(1, (_) => true);
+      case ShellStep.previousUnreadChannel:
+        _stepChannel(-1, chatController.readState.showsUnread);
+      case ShellStep.nextUnreadChannel:
+        _stepChannel(1, chatController.readState.showsUnread);
+      case ShellStep.previousMentionChannel:
+        _stepChannel(-1, (channel) => channel.mentionCount > 0);
+      case ShellStep.nextMentionChannel:
+        _stepChannel(1, (channel) => channel.mentionCount > 0);
+      case ShellStep.previousServer:
+        _stepServer(-1);
+      case ShellStep.nextServer:
+        _stepServer(1);
+    }
+  }
+
+  /// Goes to the nearest channel [wanted] accepts in the [direction], walking
+  /// the rows of the sidebar and wrapping at the ends. It passes voice channels,
+  /// because opening a room unasked would reach for the microphone.
+  void _stepChannel(
+    int direction,
+    bool Function(ConversationChannel channel) wanted,
+  ) {
+    final workspace = chatController.workspace;
+    final spaceId = workspaceController.selectedSpaceId;
+    if (workspace == null || spaceId == null) return;
+    final selectedId = workspaceController.selectedChannelId;
+    final rows = ChannelSidebarOrder(
+      space: workspace.spaceById(spaceId),
+      channels: WorkspacePermissions(workspace).visibleChannelsFor(spaceId),
+      categories: workspace.categoriesFor(spaceId),
+      collapsedCategoryIds: workspaceController.collapsedCategoryIds,
+      selectedChannelId: selectedId,
+      readState: chatController.readState,
+      channelOf: _channelOf,
+    ).rows.where((channel) => channel.kind != ChannelKind.voice).toList();
+    final selected = rows.indexWhere((channel) => channel.id == selectedId);
+    // With no selected row, the walk starts just outside the end it moves from.
+    final start = selected >= 0 || direction > 0 ? selected : rows.length;
+    for (var moved = 1; moved <= rows.length; moved++) {
+      final channel = rows[(start + direction * moved) % rows.length];
+      if (wanted(channel)) {
+        _selectChannel(channel.id);
+        return;
+      }
+    }
+  }
+
+  /// Goes to the next server in the order of the rail, where the direct
+  /// messages stand first.
+  void _stepServer(int direction) {
+    final spaces = chatController.workspace?.spaces;
+    if (spaces == null) return;
+    final rail = [
+      ...spaces.where((space) => space.isDirectMessages),
+      ...spaces.where((space) => !space.isDirectMessages),
+    ];
+    final selected = rail.indexWhere(
+      (space) => space.id == workspaceController.selectedSpaceId,
+    );
+    _selectSpace(rail[(selected + direction) % rail.length].id);
+  }
+
+  /// Opens a channel the back or forward key went to. It may be gone by now.
+  void _openChannelFromHistory(String channelId) {
+    final channel = _channelOf(channelId);
+    if (channel == null) return;
+    _openDestination(spaceId: channel.spaceId, channelId: channelId);
+  }
+
   void _selectChannel(String channelId, {VoiceChannelSurface? voiceSurface}) {
     workspaceController.selectChannel(channelId, surface: voiceSurface);
     unawaited(chatController.openChannel(channelId));
+  }
+
+  /// Walks back to the Room the account is connected to, from any server and
+  /// from the channel's chat.
+  void _openVoiceRoom(String channelId) {
+    final channel = _channelOf(channelId);
+    if (channel == null) return;
+    _openDestination(
+      spaceId: channel.spaceId,
+      channelId: channelId,
+      voiceSurface: VoiceChannelSurface.room,
+    );
+  }
+
+  /// The name of the server [channelId] is in, or null for a call.
+  String? _serverNameOf(String channelId) {
+    final guildId = _channelOf(channelId)?.guildId;
+    if (guildId == null) return null;
+    return chatController.workspace?.spaceOrNull(guildId)?.name;
   }
 
   /// Looks a member up in the workspace as it stands.
@@ -499,9 +662,18 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   Future<void> _openDirectMessage(BuildContext context) async {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
     final recipientId = await showDialog<String>(
       context: context,
-      builder: (_) => const DirectMessageDialog(),
+      builder: (_) => DirectMessageDialog(
+        people: DirectMessageCandidate.from(
+          members: workspace.members,
+          currentMemberId: workspace.currentMemberId,
+          relationships:
+              chatController.relationships?.relationships ?? const [],
+        ),
+      ),
     );
     if (recipientId == null || !context.mounted) return;
     await _openDirectConversation(context, recipientId);

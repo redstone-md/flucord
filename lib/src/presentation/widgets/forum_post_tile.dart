@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class ForumPostTile extends StatelessWidget {
   const ForumPostTile({
@@ -30,7 +32,7 @@ class ForumPostTile extends StatelessWidget {
         .toList(growable: false);
     return Material(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: FlucordRadius.small,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: ValueKey('forum-post-${post.id}'),
@@ -38,7 +40,7 @@ class ForumPostTile extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border.all(color: context.surfaces.border),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: FlucordRadius.small,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -188,7 +190,10 @@ class _MediaPlaceholder extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
@@ -231,7 +236,10 @@ class _ForumPostDetails extends StatelessWidget {
               post.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: FlucordType.label,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (post.isLocked)
@@ -246,7 +254,7 @@ class _ForumPostDetails extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             height: 1.3,
           ),
         ),
@@ -261,7 +269,10 @@ class _ForumPostDetails extends StatelessWidget {
             if (tags.length > 2)
               Text(
                 '+${tags.length - 2}',
-                style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
           ],
         ),
@@ -287,13 +298,16 @@ class _PostTag extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(
       color: context.surfaces.inset,
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: FlucordRadius.small,
     ),
     child: Text(
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600),
+      style: const TextStyle(
+        fontSize: FlucordType.caption,
+        fontWeight: FontWeight.w600,
+      ),
     ),
   );
 }

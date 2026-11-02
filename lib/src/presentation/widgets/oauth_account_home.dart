@@ -6,7 +6,9 @@ import '../../application/discord_social_dm_controller.dart';
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_relationship.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_add_friend_dialog.dart';
 import 'discord_activity_invite_strip.dart';
 import 'discord_friend_directory.dart';
@@ -51,7 +53,10 @@ class OAuthAccountSidebar extends StatelessWidget {
             ),
             child: const Text(
               'Direct Messages',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: FlucordType.body,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
@@ -75,7 +80,7 @@ class OAuthAccountSidebar extends StatelessWidget {
                     'DIRECT MESSAGES',
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -99,7 +104,7 @@ class OAuthAccountSidebar extends StatelessWidget {
                       'No recent conversations',
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 10,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   )
@@ -170,7 +175,10 @@ class OAuthAccountHomeView extends StatelessWidget {
               const Expanded(
                 child: Text(
                   'Friends',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: FlucordType.label,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               if (socialAvailable && friendsController != null) ...[
@@ -183,9 +191,9 @@ class OAuthAccountHomeView extends StatelessWidget {
                         )
                       : null,
                   style: TextButton.styleFrom(
-                    foregroundColor: FlucordColors.success,
+                    foregroundColor: context.surfaces.success,
                     textStyle: const TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -197,13 +205,16 @@ class OAuthAccountHomeView extends StatelessWidget {
                 socialReady ? Icons.people_outline : Icons.lock_outline,
                 size: 16,
                 color: socialReady
-                    ? FlucordColors.success
+                    ? context.surfaces.success
                     : context.surfaces.muted,
               ),
               const SizedBox(width: 6),
               Text(
                 socialAvailable ? 'Social SDK' : 'OAuth account',
-                style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ],
           ),
@@ -263,7 +274,7 @@ class _AccountProfileCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -293,18 +304,18 @@ class _AccountProfileCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 16,
+                              fontSize: FlucordType.body,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
                         if (account.isVerified)
-                          const Tooltip(
+                          Tooltip(
                             message: 'Verified Discord account',
                             child: Icon(
                               Icons.verified_outlined,
                               size: 17,
-                              color: FlucordColors.success,
+                              color: context.surfaces.success,
                             ),
                           ),
                       ],
@@ -313,7 +324,7 @@ class _AccountProfileCard extends StatelessWidget {
                       account.usernameLabel,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                     if (metadata.isNotEmpty) ...[
@@ -323,7 +334,7 @@ class _AccountProfileCard extends StatelessWidget {
                         key: const ValueKey('oauth-account-profile-metadata'),
                         style: TextStyle(
                           color: context.surfaces.muted,
-                          fontSize: 10,
+                          fontSize: FlucordType.caption,
                         ),
                       ),
                     ],
@@ -332,7 +343,7 @@ class _AccountProfileCard extends StatelessWidget {
                       '${account.guildCount} servers · ${account.connectionCount} connected accounts',
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 10,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],
@@ -388,9 +399,9 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? context.surfaces.raised : Colors.transparent,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: InkWell(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
@@ -406,7 +417,7 @@ class _SidebarItem extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11),
+                      style: const TextStyle(fontSize: FlucordType.caption),
                     ),
                     Text(
                       detail,
@@ -414,7 +425,7 @@ class _SidebarItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 9,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],

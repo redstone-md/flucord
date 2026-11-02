@@ -1,5 +1,8 @@
 import 'dart:collection';
 
+import 'package:collection/collection.dart'
+    show ListEquality, MapEquality, SetEquality;
+
 import 'discord_snowflake.dart';
 import 'go_live_stream.dart';
 import 'message_component.dart';
@@ -21,8 +24,10 @@ part 'guild_scheduled_event_attendee.dart';
 part 'guild_scheduled_event_exception.dart';
 part 'guild_scheduled_event_recurrence.dart';
 part 'guild_scheduled_event_editing.dart';
+part 'held_messages.dart';
 part 'user_activity.dart';
 part 'user_presence.dart';
+part 'workspace_diff.dart';
 part 'workspace_member.dart';
 
 enum ChannelKind { text, voice, forum, media }
@@ -59,21 +64,86 @@ final class PendingAttachment {
   }
 }
 
+final class PendingAttachmentSelection {
+  final List<PendingAttachment> _items = [];
+
+  List<PendingAttachment> get items => List.unmodifiable(_items);
+  bool get isEmpty => _items.isEmpty;
+  bool get isNotEmpty => _items.isNotEmpty;
+
+  bool merge(Iterable<PendingAttachment> attachments) {
+    var reachedLimit = false;
+    for (final attachment in attachments) {
+      if (_items.any((item) => item.path == attachment.path)) continue;
+      if (_items.length == PendingAttachment.maxCount) {
+        reachedLimit = true;
+        continue;
+      }
+      _items.add(attachment);
+    }
+    return reachedLimit;
+  }
+
+  void removeAt(int index) => _items.removeAt(index);
+
+  /// Puts [attachment] in one slot's place, which is how the spoiler tag is
+  /// applied without changing the order the files were picked in.
+  ///
+  /// The slot's own path still matches, because tagging a file renames it
+  /// rather than replacing it; only the other slots need to stay distinct.
+  void replaceAt(int index, PendingAttachment attachment) {
+    if (index < 0 || index >= _items.length) return;
+    for (var other = 0; other < _items.length; other++) {
+      if (other != index && _items[other].path == attachment.path) return;
+    }
+    _items[index] = attachment;
+  }
+
+  void clear() => _items.clear();
+}
+
 final class ChatWorkspace {
+  /// The most messages a channel keeps while it is not open: two pages of
+  /// history. So a channel read once can take a page of new messages and still
+  /// open at once.
+  static const notOpenChannelCap = 200;
+
   ChatWorkspace({
     required List<CommunitySpace> spaces,
     required List<ConversationChannel> channels,
     required List<Member> members,
     required List<ChatMessage> messages,
-    required this.currentMemberId,
+    required String currentMemberId,
     List<CommunityRole> roles = const [],
     List<ChannelCategory> categories = const [],
     List<GuildEmoji> emojis = const [],
     List<GuildSticker> stickers = const [],
+  }) : this._(
+         spaces: spaces,
+         channels: channels,
+         members: members,
+         held: _HeldMessages.of(messages),
+         currentMemberId: currentMemberId,
+         roles: roles,
+         categories: categories,
+         emojis: emojis,
+         stickers: stickers,
+       );
+
+  ChatWorkspace._({
+    required List<CommunitySpace> spaces,
+    required List<ConversationChannel> channels,
+    required List<Member> members,
+    required _HeldMessages held,
+    required this.currentMemberId,
+    required List<CommunityRole> roles,
+    required List<ChannelCategory> categories,
+    required List<GuildEmoji> emojis,
+    required List<GuildSticker> stickers,
   }) : spaces = _sealed(spaces),
        channels = _sealed(channels),
        members = _sealed(members),
-       messages = _sealed(messages),
+       _held = held,
        roles = _sealed(roles),
        categories = _sealed(categories),
        emojis = _sealed(emojis),
@@ -95,12 +165,17 @@ final class ChatWorkspace {
   final List<CommunitySpace> spaces;
   final List<ConversationChannel> channels;
   final List<Member> members;
-  final List<ChatMessage> messages;
+  final _HeldMessages _held;
   final List<CommunityRole> roles;
   final List<ChannelCategory> categories;
   final List<GuildEmoji> emojis;
   final List<GuildSticker> stickers;
   final String currentMemberId;
+
+  /// Every message the workspace holds, oldest first. The first read after a
+  /// change builds it from all channels, so code on the chat path reads
+  /// [messagesFor] instead.
+  List<ChatMessage> get messages => _held.flat;
 
   /// Lookup tables over the lists above.
   ///
@@ -112,7 +187,7 @@ final class ChatWorkspace {
   /// the workspace, so workspaces that share a list share its table. That is
   /// the usual case: a change rebuilds the workspace but leaves the lists it
   /// did not touch as they were, and a presence arriving from one of a couple
-  /// of hundred spaces leaves every channel, category and message where it was.
+  /// of hundred spaces leaves every channel and category where it was.
   static final _spaceTables = Expando<Map<String, CommunitySpace>>();
   static final _channelTables = Expando<Map<String, ConversationChannel>>();
   static final _memberTables = Expando<Map<String, Member>>();
@@ -120,10 +195,11 @@ final class ChatWorkspace {
   static final _categoryTables = Expando<Map<String, ChannelCategory>>();
   static final _channelsBySpaceTables =
       Expando<Map<String, List<ConversationChannel>>>();
-  static final _messagesByChannelTables =
-      Expando<Map<String, List<ChatMessage>>>();
   static final _categoriesBySpaceTables =
       Expando<Map<String, List<ChannelCategory>>>();
+  static final _emojisBySpaceTables = Expando<Map<String, List<GuildEmoji>>>();
+  static final _stickersBySpaceTables =
+      Expando<Map<String, List<GuildSticker>>>();
 
   Map<String, CommunitySpace> get _spaceById =>
       _spaceTables[spaces] ??= _byId(spaces, (space) => space.id);
@@ -143,22 +219,29 @@ final class ChatWorkspace {
         channels,
         (channel) => channel.spaceId,
       );
-  Map<String, List<ChatMessage>> get _messagesByChannelId =>
-      _messagesByChannelTables[messages] ??= _groupBy(
-        messages,
-        (message) => message.channelId,
-      );
   Map<String, List<ChannelCategory>> get _categoriesBySpaceId =>
       _categoriesBySpaceTables[categories] ??= _groupBy(
         categories,
         (category) => category.spaceId,
       );
 
+  /// Only what can be used today: Discord withholds an unavailable one.
+  Map<String, List<GuildEmoji>> get _emojisBySpaceId =>
+      _emojisBySpaceTables[emojis] ??= _groupBy(
+        emojis.where((emoji) => emoji.available),
+        (emoji) => emoji.spaceId,
+      );
+  Map<String, List<GuildSticker>> get _stickersBySpaceId =>
+      _stickersBySpaceTables[stickers] ??= _groupBy(
+        stickers.where((sticker) => sticker.available),
+        (sticker) => sticker.spaceId,
+      );
+
   static Map<String, T> _byId<T>(List<T> items, String Function(T item) idOf) =>
       {for (final item in items) idOf(item): item};
 
   static Map<String, List<T>> _groupBy<T>(
-    List<T> items,
+    Iterable<T> items,
     String Function(T item) keyOf,
   ) {
     final grouped = <String, List<T>>{};
@@ -183,8 +266,7 @@ final class ChatWorkspace {
   List<ConversationChannel> channelsFor(String spaceId) =>
       _group(_channelsBySpaceId, spaceId);
 
-  List<ChatMessage> messagesFor(String channelId) =>
-      _group(_messagesByChannelId, channelId);
+  List<ChatMessage> messagesFor(String channelId) => _held.of(channelId);
 
   List<ChannelCategory> categoriesFor(String spaceId) =>
       _group(_categoriesBySpaceId, spaceId);
@@ -203,6 +285,18 @@ final class ChatWorkspace {
 
   CommunitySpace? spaceOrNull(String id) => _spaceById[id];
 
+  /// The colour [member]'s name has in [spaceId]: that of their highest role
+  /// with a colour. Null when no role gives one, and in a space with no roles.
+  int? nameColorOf(Member member, String spaceId) {
+    CommunityRole? top;
+    for (final roleId in member.membershipIn(spaceId)?.roleIds ?? const []) {
+      final role = roleOrNull(roleId);
+      if (role?.colorValue == null) continue;
+      if (top == null || role!.position > top.position) top = role;
+    }
+    return top?.colorValue;
+  }
+
   ChannelCategory? categoryOrNull(String id) => _categoryById[id];
 
   ChatWorkspace copyWith({
@@ -215,11 +309,35 @@ final class ChatWorkspace {
     List<GuildEmoji>? emojis,
     List<GuildSticker>? stickers,
     String? currentMemberId,
-  }) => ChatWorkspace(
+  }) => _copy(
+    spaces: spaces,
+    channels: channels,
+    members: members,
+    held: messages == null ? null : _HeldMessages.of(messages),
+    roles: roles,
+    categories: categories,
+    emojis: emojis,
+    stickers: stickers,
+    currentMemberId: currentMemberId,
+  );
+
+  /// [copyWith] for the folds in this file. It takes the stored messages as they
+  /// are, where [copyWith] takes a flat list and has to group it.
+  ChatWorkspace _copy({
+    List<CommunitySpace>? spaces,
+    List<ConversationChannel>? channels,
+    List<Member>? members,
+    _HeldMessages? held,
+    List<CommunityRole>? roles,
+    List<ChannelCategory>? categories,
+    List<GuildEmoji>? emojis,
+    List<GuildSticker>? stickers,
+    String? currentMemberId,
+  }) => ChatWorkspace._(
     spaces: spaces ?? this.spaces,
     channels: channels ?? this.channels,
     members: members ?? this.members,
-    messages: messages ?? this.messages,
+    held: held ?? _held,
     roles: roles ?? this.roles,
     categories: categories ?? this.categories,
     emojis: emojis ?? this.emojis,
@@ -241,13 +359,11 @@ final class ChatWorkspace {
     final directChannelIds = directChannels
         .map((channel) => channel.id)
         .toSet();
-    final directMessages = cached.messages
-        .where((message) => directChannelIds.contains(message.channelId))
-        .toList();
     final directMemberIds = <String>{
       currentMemberId,
       for (final channel in directChannels) ?channel.recipientId,
-      for (final message in directMessages) message.authorId,
+      for (final channelId in directChannelIds)
+        for (final message in cached.messagesFor(channelId)) message.authorId,
     };
     final memberMap = {for (final member in members) member.id: member};
     for (final member in cached.members) {
@@ -258,7 +374,7 @@ final class ChatWorkspace {
         );
       }
     }
-    return copyWith(
+    return _copy(
       spaces:
           [
                 ...spaces.where((space) => space.isDirectMessages),
@@ -276,12 +392,7 @@ final class ChatWorkspace {
         ...channels.where((channel) => !directChannelIds.contains(channel.id)),
       ],
       members: memberMap.values.toList(),
-      messages: [
-        ...directMessages,
-        ...messages.where(
-          (message) => !directChannelIds.contains(message.channelId),
-        ),
-      ],
+      held: _held.withChannelsOf(cached._held, directChannelIds),
     );
   }
 
@@ -308,18 +419,14 @@ final class ChatWorkspace {
     for (final member in history.members) {
       memberMap[member.id] = _mergeMember(memberMap[member.id], member);
     }
-    final channelMessages = <String, ChatMessage>{
-      if (!replaceChannel)
-        for (final message in messages)
-          if (message.channelId == history.channelId) message.id: message,
-      for (final message in history.messages) message.id: message,
-    };
-    final nextMessages = [
-      ...messages.where((message) => message.channelId != history.channelId),
-      ...channelMessages.values,
-    ];
-    nextMessages.sort((left, right) => left.sentAt.compareTo(right.sentAt));
-    return copyWith(members: memberMap.values.toList(), messages: nextMessages);
+    return _copy(
+      members: memberMap.values.toList(),
+      held: _held.merge(
+        history.channelId,
+        history.messages,
+        replace: replaceChannel,
+      ),
+    );
   }
 
   ChatWorkspace mergeInitialHistory(
@@ -329,50 +436,89 @@ final class ChatWorkspace {
     history,
     replaceChannel:
         !retainExisting &&
-        channelById(history.channelId).firstUnreadMessageId == null,
+        (channelById(history.channelId).firstUnreadMessageId == null ||
+            !_reachesHeldMessages(history)),
   );
 
+  /// Folds in the newest page of a channel that may have missed messages.
+  ///
+  /// A page that shares a message with what the channel holds has no hole
+  /// behind it, so older messages stay and a reader scrolled up keeps their
+  /// place. A page that does not reach them replaces them, because keeping both
+  /// would leave a hole nothing marks. Inside the page's own span the page is
+  /// the truth, so a message deleted during the gap goes. Anything newer came
+  /// live while the page was on its way, and stays. So does each message named
+  /// in [arrived], which came live after the page was asked for: the page may
+  /// have been built before it reached Discord, and may even be empty.
+  ChatWorkspace catchUpHistory(
+    ChannelHistory page, {
+    Set<String> arrived = const {},
+  }) {
+    final held = messagesFor(page.channelId);
+    final oldest = page.messages.firstOrNull;
+    final newest = page.messages.lastOrNull?.sentAt;
+    bool cameLive(ChatMessage message) =>
+        arrived.contains(message.id) ||
+        (newest != null && message.sentAt.isAfter(newest));
+    // Two messages can share an instant, and then the id tells which is older.
+    bool isOlderThanPage(ChatMessage message, ChatMessage first) =>
+        message.sentAt.isBefore(first.sentAt) ||
+        (message.sentAt.isAtSameMomentAs(first.sentAt) &&
+            DiscordSnowflake.compare(message.id, first.id) < 0);
+    return mergeHistory(
+      ChannelHistory(
+        channelId: page.channelId,
+        members: page.members,
+        messages: [
+          if (oldest != null && _reachesHeldMessages(page))
+            ...held.where((message) => isOlderThanPage(message, oldest)),
+          ...held.where(cameLive),
+          // After the live ones, so the page's copy of a message wins.
+          ...page.messages,
+        ],
+      ),
+    );
+  }
+
+  bool _reachesHeldMessages(ChannelHistory page) {
+    final pageIds = {for (final message in page.messages) message.id};
+    return messagesFor(
+      page.channelId,
+    ).any((message) => pageIds.contains(message.id));
+  }
+
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
-    final nextMessages = _withMessage(message);
     final nextMembers = member == null
         ? members
         : _mergeMemberInto(members, member);
     // Unread is decided by comparing this pointer against the read state's ack
     // cursor, so a message that arrives without advancing it would be invisible
     // to every unread surface until the next gateway channel update.
-    return copyWith(
-      messages: nextMessages,
+    return _copy(
+      held: _held.upsert(message),
       members: nextMembers,
     ).recordLatestMessage(message.channelId, message.id);
   }
 
-  /// [messages] with [message] put in its channel's timeline, replacing any
-  /// earlier copy of it.
+  /// Keeps only the newest [notOpenChannelCap] messages of [channelId]. Answers
+  /// this same workspace when the channel holds no more than that, so a caller
+  /// can tell whether the channel lost anything.
   ///
-  /// Only the order within a channel is ever read — every caller slices the
-  /// list by channel — so the message is placed ahead of the first message of
-  /// its own channel that was sent later, and appended when there is none.
-  /// Re-sorting the whole corpus per arriving message, which is what this
-  /// replaced, made one message on any of a couple of hundred spaces cost a
-  /// sort of every message the client had cached.
-  List<ChatMessage> _withMessage(ChatMessage message) {
-    final next = <ChatMessage>[];
-    var insertAt = -1;
-    for (final existing in messages) {
-      if (existing.id == message.id) continue;
-      if (insertAt < 0 &&
-          existing.channelId == message.channelId &&
-          existing.sentAt.isAfter(message.sentAt)) {
-        insertAt = next.length;
-      }
-      next.add(existing);
+  /// An unread boundary on a dropped message moves to the oldest message kept,
+  /// so the channel still opens on its NEW line.
+  ChatWorkspace capChannel(String channelId) {
+    final held = _held.capped(channelId, notOpenChannelCap);
+    if (identical(held, _held)) return this;
+    final capped = _copy(held: held);
+    final kept = held.of(channelId);
+    final boundary = channelOrNull(channelId)?.firstUnreadMessageId;
+    if (boundary == null || kept.any((message) => message.id == boundary)) {
+      return capped;
     }
-    if (insertAt < 0) {
-      next.add(message);
-    } else {
-      next.insert(insertAt, message);
-    }
-    return next;
+    return capped.updateChannel(
+      channelId,
+      (channel) => channel.copyWith(firstUnreadMessageId: kept.first.id),
+    );
   }
 
   /// Records [messageId] as the newest message in [channelId].
@@ -382,8 +528,11 @@ final class ChatWorkspace {
         (channel) => channel.withLatestMessage(messageId),
       );
 
-  ChatWorkspace upsertMember(Member member) =>
-      copyWith(members: _mergeMemberInto(members, member));
+  /// Answers this same workspace when [member] says nothing new.
+  ChatWorkspace upsertMember(Member member) {
+    final next = _mergeMemberInto(members, member);
+    return identical(next, members) ? this : _copy(members: next);
+  }
 
   /// Folds a batch of members in with one pass over the member table.
   ///
@@ -401,9 +550,18 @@ final class ChatWorkspace {
     return copyWith(members: merged.values.toList(growable: false));
   }
 
-  ChatWorkspace upsertSpace(CommunitySpace space) => copyWith(
-    spaces: [...spaces.where((existing) => existing.id != space.id), space],
-  );
+  ChatWorkspace upsertSpace(CommunitySpace space) =>
+      copyWith(spaces: _withSpace(space));
+
+  /// [spaces] with [space] in place of its earlier copy, so a server keeps its
+  /// place on the rail when it changes. A new one goes last.
+  List<CommunitySpace> _withSpace(CommunitySpace space) =>
+      spaceOrNull(space.id) == null
+      ? [...spaces, space]
+      : [
+          for (final existing in spaces)
+            existing.id == space.id ? space : existing,
+        ];
 
   ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(
     categories: [
@@ -419,15 +577,14 @@ final class ChatWorkspace {
   /// this is the one fold that touches every collection at once. Each piece
   /// replaces anything the workspace already held under the same id, so a
   /// hydration answer that arrives twice lands the same as one that arrives
-  /// once.
+  /// once. A channel it already held keeps its unread state, because
+  /// `GUILD_CREATE` also arrives for a server the account is already in.
   ChatWorkspace mergeGuild(JoinedGuild guild) => copyWith(
-    spaces: [
-      ...spaces.where((space) => space.id != guild.space.id),
-      guild.space,
-    ],
+    spaces: _withSpace(guild.space),
     channels: [
       ...channels.where((channel) => channel.spaceId != guild.space.id),
-      ...guild.channels,
+      for (final channel in guild.channels)
+        channel.withActivityOf(channelOrNull(channel.id) ?? channel),
     ],
     categories: [
       ...categories.where((category) => category.spaceId != guild.space.id),
@@ -465,7 +622,7 @@ final class ChatWorkspace {
       for (final channel in channels)
         if (channel.spaceId == spaceId) channel.id,
     };
-    return copyWith(
+    return _copy(
       spaces: spaces.where((space) => space.id != spaceId).toList(),
       channels: channels
           .where((channel) => channel.spaceId != spaceId)
@@ -475,10 +632,7 @@ final class ChatWorkspace {
           .toList(),
       roles: roles.where((role) => role.spaceId != spaceId).toList(),
       members: [for (final member in members) ?member.withoutSpace(spaceId)],
-      messages: [
-        for (final message in messages)
-          if (!channelIds.contains(message.channelId)) message,
-      ],
+      held: _held.withoutChannels(channelIds),
     );
   }
 
@@ -488,38 +642,114 @@ final class ChatWorkspace {
         .toList(),
   );
 
+  /// Folds one [diff] in, with one pass over each list.
+  ///
+  /// Servers and channels end where [removeGuild], [removeChannel],
+  /// [upsertSpace] and [upsertChannel] would put them, one item at a time. Those
+  /// copy the whole list for each item, which stalls the screen on a reconnect
+  /// that changes thousands of channels. A changed category keeps its place in
+  /// the list, and the channel sidebar sorts categories by position anyway.
+  ChatWorkspace applyDiff(WorkspaceDiff diff) {
+    if (diff.isEmpty) return this;
+    final removedSpaces = diff.removedSpaceIds;
+    final changedChannels = {
+      for (final channel in diff.channels) channel.id: channel,
+    };
+    final gainedChannels = diff.channels.where(
+      (channel) => channelOrNull(channel.id) == null,
+    );
+    return _copy(
+      spaces: _withChanged(
+        spaces.where((space) => !removedSpaces.contains(space.id)),
+        diff.spaces,
+        (space) => space.id,
+      ),
+      channels: [
+        // Each new DM goes on top in turn, as with [upsertChannel].
+        ...gainedChannels
+            .where((channel) => channel.isDirectMessage)
+            .toList()
+            .reversed,
+        for (final channel in channels)
+          if (!diff.removes(channel))
+            changedChannels[channel.id]?.withActivityOf(channel) ?? channel,
+        ...gainedChannels.where((channel) => !channel.isDirectMessage),
+      ],
+      categories: _withChanged(
+        categories.where(
+          (category) =>
+              !removedSpaces.contains(category.spaceId) &&
+              !diff.removedCategoryIds.contains(category.id),
+        ),
+        diff.categories,
+        (category) => category.id,
+      ),
+      roles: removedSpaces.isEmpty
+          ? null
+          : roles
+                .where((role) => !removedSpaces.contains(role.spaceId))
+                .toList(),
+      members: removedSpaces.isEmpty
+          ? null
+          : [
+              for (final member in members)
+                ?removedSpaces.fold<Member?>(
+                  member,
+                  (left, spaceId) => left?.withoutSpace(spaceId),
+                ),
+            ],
+      held: _held.withoutChannels({
+        for (final channel in channels)
+          if (diff.removes(channel)) channel.id,
+      }),
+    ).upsertMembers(diff.members);
+  }
+
+  /// [kept] with each item of [changed] in place of its earlier copy, so an
+  /// item keeps its place in the list. A new one goes last.
+  static List<T> _withChanged<T>(
+    Iterable<T> kept,
+    List<T> changed,
+    String Function(T item) idOf,
+  ) {
+    final items = {for (final item in kept) idOf(item): item};
+    for (final item in changed) {
+      items[idOf(item)] = item;
+    }
+    return items.values.toList(growable: false);
+  }
+
   /// Applies a gateway presence to the member it names.
   ///
   /// A presence for somebody the member table has never heard of is dropped
   /// rather than turned into a nameless row: Discord streams presence for
   /// friends and for every subscribed guild, so an unmatched id is routine.
   ChatWorkspace applyPresence(String memberId, UserPresence presence) =>
-      copyWith(
-        members: [
-          for (final member in members)
-            member.id == memberId ? member.withPresence(presence) : member,
-        ],
-      );
+      applyPresences({memberId: presence});
 
   /// Applies a batch of presences with one pass over the member table.
   ///
   /// `READY_SUPPLEMENTAL` alone carries a presence for every online friend and
   /// every subscribed guild member, and folding them in one at a time would
   /// rebuild the table once per presence.
+  ///
+  /// Answers this same workspace, at no cost, when no member's presence moves.
+  /// Discord repeats itself, because it reports a user once per shared guild.
   ChatWorkspace applyPresences(Map<String, UserPresence> presences) {
-    if (presences.isEmpty) return this;
-    var touched = false;
-    final next = <Member>[];
-    for (final member in members) {
-      final presence = presences[member.id];
-      if (presence == null) {
-        next.add(member);
-        continue;
-      }
-      touched = true;
-      next.add(member.withPresence(presence));
-    }
-    return touched ? copyWith(members: next) : this;
+    final moved = {
+      for (final MapEntry(key: id, value: presence) in presences.entries)
+        if (_memberById[id]?.hasPresence(presence) == false) id: presence,
+    };
+    if (moved.isEmpty) return this;
+    return _copy(
+      members: [
+        for (final member in members)
+          switch (moved[member.id]) {
+            final presence? => member.withPresence(presence),
+            null => member,
+          },
+      ],
+    );
   }
 
   ChatWorkspace removeMemberFromSpace(String memberId, String spaceId) {
@@ -560,23 +790,55 @@ final class ChatWorkspace {
     ],
   );
 
-  ChatWorkspace removeMessage(String messageId) => copyWith(
-    messages: messages.where((message) => message.id != messageId).toList(),
-    channels: [
-      for (final channel in channels)
-        channel.firstUnreadMessageId == messageId
-            ? channel.clearUnreadBoundary()
-            : channel,
-    ],
-  );
+  /// Replaces a held message with [update]'s answer. It stays where it is in its
+  /// channel, and a message that is not held is left out.
+  ChatWorkspace updateMessage(
+    String messageId,
+    ChatMessage Function(ChatMessage message) update,
+  ) {
+    final held = _held.update(messageId, update);
+    return identical(held, _held) ? this : _copy(held: held);
+  }
 
+  ChatWorkspace removeMessage(String messageId) => removeMessages({messageId});
+
+  /// Answers this same workspace when no id names a message it holds or an
+  /// unread boundary. Discord deletes messages this client never loaded.
+  ChatWorkspace removeMessages(Set<String> messageIds) {
+    final held = _held.without(messageIds);
+    final movesBoundary = channels.any(
+      (channel) => messageIds.contains(channel.firstUnreadMessageId),
+    );
+    if (identical(held, _held) && !movesBoundary) return this;
+    return _copy(
+      held: held,
+      channels: !movesBoundary
+          ? channels
+          : [
+              for (final channel in channels)
+                messageIds.contains(channel.firstUnreadMessageId)
+                    ? channel.clearUnreadBoundary()
+                    : channel,
+            ],
+    );
+  }
+
+  /// A channel the workspace holds keeps its place and its unread state. A new
+  /// DM is the newest conversation, so it goes first in the list.
   ChatWorkspace upsertChannel(ConversationChannel channel) {
     final previous = channelOrNull(channel.id);
-    final next = previous == null ? channel : channel.withActivityOf(previous);
+    if (previous == null) {
+      return copyWith(
+        channels: channel.isDirectMessage
+            ? [channel, ...channels]
+            : [...channels, channel],
+      );
+    }
+    final next = channel.withActivityOf(previous);
     return copyWith(
       channels: [
-        ...channels.where((existing) => existing.id != channel.id),
-        next,
+        for (final existing in channels)
+          existing.id == channel.id ? next : existing,
       ],
     );
   }
@@ -585,26 +847,17 @@ final class ChatWorkspace {
     final nextChannels = channels
         .where((channel) => channel.id != channelId)
         .toList();
-    return copyWith(
+    return _copy(
       channels: nextChannels,
-      messages: messages
-          .where((message) => message.channelId != channelId)
-          .toList(),
+      held: _held.withoutChannels({channelId}),
     );
   }
-
-  /// Takes a server row off the rail.
-  ///
-  /// The server's channels and messages stay until their own deletion events
-  /// arrive; a server that leaves while its channels remain renders as an
-  /// empty row for a moment rather than as a vanished conversation.
-  ChatWorkspace removeSpace(String spaceId) =>
-      copyWith(spaces: spaces.where((space) => space.id != spaceId).toList());
 
   static List<Member> _mergeMemberInto(List<Member> current, Member incoming) {
     final existing = current.where((member) => member.id == incoming.id);
     if (existing.isEmpty) return [...current, incoming];
     final merged = _mergeMember(existing.first, incoming);
+    if (merged == existing.first) return current;
     return [...current.where((member) => member.id != incoming.id), merged];
   }
 
@@ -647,10 +900,21 @@ final class ChannelHistory {
 }
 
 final class ChannelHistoryPage {
-  const ChannelHistoryPage({required this.history, required this.hasMore});
+  const ChannelHistoryPage({
+    required this.history,
+    required this.hasMore,
+    this.fromCache = false,
+  });
 
   final ChannelHistory history;
   final bool hasMore;
+
+  /// True when Discord could not be asked and this is the local copy. It says
+  /// nothing about messages sent since that copy was written.
+  final bool fromCache;
+
+  bool holds(String messageId) =>
+      history.messages.any((message) => message.id == messageId);
 }
 
 /// One gained guild, hydrated the way a user reads it on the rail.

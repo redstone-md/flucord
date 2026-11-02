@@ -12,6 +12,9 @@ final class DiscordDesktopWorkspaceSnapshot {
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
     Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
+    Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
+    Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
+    required this.privateChannelsComplete,
   }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
        guilds = List<Map<String, Object?>>.unmodifiable(
          guilds.map(Map<String, Object?>.unmodifiable),
@@ -21,7 +24,9 @@ final class DiscordDesktopWorkspaceSnapshot {
        ),
        channelsByGuild = _byGuild(channelsByGuild),
        rolesByGuild = _byGuild(rolesByGuild),
-       membersByGuild = _byGuild(membersByGuild);
+       membersByGuild = _byGuild(membersByGuild),
+       emojisByGuild = _byGuild(emojisByGuild),
+       stickersByGuild = _byGuild(stickersByGuild);
 
   final Map<String, Object?> currentUser;
   final List<Map<String, Object?>> guilds;
@@ -40,6 +45,22 @@ final class DiscordDesktopWorkspaceSnapshot {
   /// transport that is normally just the account's own membership per guild,
   /// which is exactly what a permission check needs.
   final Map<String, List<Map<String, Object?>>> membersByGuild;
+
+  /// The servers' own emoji and stickers. On this transport they arrive only
+  /// inside READY's guild entries, and the composer's pickers draw from them.
+  final Map<String, List<Map<String, Object?>>> emojisByGuild;
+  final Map<String, List<Map<String, Object?>>> stickersByGuild;
+
+  /// False from READY until READY_SUPPLEMENTAL. Until then a private channel
+  /// missing from [directChannels] may still be on its way as a lazy one.
+  final bool privateChannelsComplete;
+
+  /// Guilds READY marks as in an outage on Discord's side. The account is still
+  /// in them, but the entry carries nothing else.
+  Set<String> get unavailableGuildIds => {
+    for (final guild in guilds)
+      if (guild['unavailable'] == true) guild['id']! as String,
+  };
 
   static Map<String, List<Map<String, Object?>>> _byGuild(
     Map<String, List<Map<String, Object?>>> source,
@@ -69,7 +90,10 @@ final class DiscordDesktopBootstrap {
   final Map<String, List<Map<String, Object?>>> _channelsByGuild = {};
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   final Map<String, List<Map<String, Object?>>> _membersByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _emojisByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _stickersByGuild = {};
   Map<String, Object?>? _currentUser;
+  bool _privateChannelsComplete = false;
 
   void acceptReady(Map<String, Object?> ready) {
     final user = ready['user'];
@@ -85,6 +109,9 @@ final class DiscordDesktopBootstrap {
     _channelsByGuild.clear();
     _rolesByGuild.clear();
     _membersByGuild.clear();
+    _emojisByGuild.clear();
+    _stickersByGuild.clear();
+    _privateChannelsComplete = false;
     _privateChannels
       ..useReadStateCursors(_readStateCursors(ready['read_state']))
       ..applyReady(_expand(_objects(ready['private_channels'])));
@@ -107,6 +134,7 @@ final class DiscordDesktopBootstrap {
     _privateChannels.applySupplemental(
       _expand(_objects(supplemental['lazy_private_channels'])),
     );
+    _privateChannelsComplete = true;
     // Discord drops the user table at exactly this point; every section that
     // needs it has been hydrated by now.
     users.clear();
@@ -133,6 +161,19 @@ final class DiscordDesktopBootstrap {
       ..._objects(guild['members']).map(users.expandMember),
     ].where((member) => member['user'] is Map).toList(growable: false);
     if (resolved.isNotEmpty) _membersByGuild[id] = resolved;
+    _emojisByGuild[id] = _named(guild['emojis']);
+    _stickersByGuild[id] = _named(guild['stickers']);
+  }
+
+  /// Forgets a guild the account left. A later pass over the snapshot must not
+  /// bring it back.
+  void removeGuild(String id) {
+    _guilds.remove(id);
+    _channelsByGuild.remove(id);
+    _rolesByGuild.remove(id);
+    _membersByGuild.remove(id);
+    _emojisByGuild.remove(id);
+    _stickersByGuild.remove(id);
   }
 
   /// The snapshot so far, or null while the current user is still unknown.
@@ -146,18 +187,30 @@ final class DiscordDesktopBootstrap {
       channelsByGuild: _channelsByGuild,
       rolesByGuild: _rolesByGuild,
       membersByGuild: _membersByGuild,
+      emojisByGuild: _emojisByGuild,
+      stickersByGuild: _stickersByGuild,
+      privateChannelsComplete: _privateChannelsComplete,
     );
   }
 
   void reset() {
     _currentUser = null;
+    _privateChannelsComplete = false;
     _guilds.clear();
     _channelsByGuild.clear();
     _rolesByGuild.clear();
     _membersByGuild.clear();
+    _emojisByGuild.clear();
+    _stickersByGuild.clear();
     _privateChannels.clear();
     users.clear();
   }
+
+  /// The emoji or stickers that have what the mapper requires. One broken entry
+  /// must not stop the whole workspace from being built.
+  static List<Map<String, Object?>> _named(Object? entries) => _objects(
+    entries,
+  ).where((entry) => entry['id'] is String && entry['name'] is String).toList();
 
   /// The channel read states' ack cursors, keyed by channel id.
   static Map<String, String> _readStateCursors(Object? block) {

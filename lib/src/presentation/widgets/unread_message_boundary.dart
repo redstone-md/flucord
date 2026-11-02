@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class UnreadMessageBoundary extends StatelessWidget {
   const UnreadMessageBoundary({super.key});
@@ -15,13 +17,13 @@ class UnreadMessageBoundary extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 8),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: FlucordColors.mention)),
+          Expanded(child: Divider(color: context.surfaces.mention)),
           const SizedBox(width: 8),
           Text(
             'NEW',
             style: TextStyle(
-              color: FlucordColors.mention,
-              fontSize: 10,
+              color: context.surfaces.mention,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -46,12 +48,12 @@ class JumpToPresentButton extends StatelessWidget {
     color: context.surfaces.canvas,
     shape: RoundedRectangleBorder(
       side: BorderSide(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: InkWell(
       key: const ValueKey('jump-to-present'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox(
         height: 30,
         child: Padding(
@@ -67,7 +69,10 @@ class JumpToPresentButton extends StatelessWidget {
               const SizedBox(width: 5),
               const Text(
                 'Jump to present',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -86,25 +91,32 @@ class JumpToUnreadButton extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: context.surfaces.canvas,
     shape: RoundedRectangleBorder(
-      side: const BorderSide(color: FlucordColors.mention),
-      borderRadius: BorderRadius.circular(4),
+      side: BorderSide(color: context.surfaces.mention),
+      borderRadius: FlucordRadius.small,
     ),
     child: InkWell(
       key: const ValueKey('jump-to-unread'),
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(4),
-      child: const SizedBox(
+      borderRadius: FlucordRadius.small,
+      child: SizedBox(
         height: 30,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.arrow_upward, size: 15, color: FlucordColors.mention),
-              SizedBox(width: 5),
+              Icon(
+                Icons.arrow_upward,
+                size: 15,
+                color: context.surfaces.mention,
+              ),
+              const SizedBox(width: 5),
               Text(
                 'Jump to unread',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),

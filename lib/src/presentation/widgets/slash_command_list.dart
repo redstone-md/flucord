@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'flucord_dialog.dart';
 
 /// The command list Discord shows above the composer after a slash.
 class SlashCommandList extends StatelessWidget {
@@ -19,6 +22,23 @@ class SlashCommandList extends StatelessWidget {
   /// Called once a command has been run, so the composer can clear itself.
   final VoidCallback onPicked;
 
+  /// Runs [command], asking first for any options it requires.
+  static Future<void> run(
+    BuildContext context, {
+    required SlashCommandController controller,
+    required ApplicationCommand command,
+    required VoidCallback onPicked,
+  }) async {
+    var values = const <String, Object?>{};
+    if (command.hasRequiredInputs) {
+      final filled = await SlashCommandOptionsDialog.show(context, command);
+      // Backing out of the form is not running the command with nothing in it.
+      if (filled == null) return;
+      values = filled;
+    }
+    if (await controller.invoke(command, values: values)) onPicked();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!controller.isSupported || !controller.isOpen) {
@@ -30,7 +50,7 @@ class SlashCommandList extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         border: Border.all(color: context.surfaces.border),
       ),
       child: _body(context),
@@ -58,7 +78,10 @@ class SlashCommandList extends StatelessWidget {
               ? 'No command matches that.'
               : 'Discord did not return any commands.',
           key: const ValueKey('slash-command-empty'),
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       );
     }
@@ -70,33 +93,33 @@ class SlashCommandList extends StatelessWidget {
         final command = controller.commands[index];
         return _CommandRow(
           command: command,
+          // Enter runs the first row, so it is the one that looks chosen.
+          isFirst: index == 0,
           isBusy: controller.isSending,
-          onPressed: () => unawaited(_run(context, command)),
+          onPressed: () => unawaited(
+            run(
+              context,
+              controller: controller,
+              command: command,
+              onPicked: onPicked,
+            ),
+          ),
         );
       },
     );
-  }
-
-  Future<void> _run(BuildContext context, ApplicationCommand command) async {
-    var values = const <String, Object?>{};
-    if (command.hasRequiredInputs) {
-      final filled = await SlashCommandOptionsDialog.show(context, command);
-      // Backing out of the form is not running the command with nothing in it.
-      if (filled == null) return;
-      values = filled;
-    }
-    if (await controller.invoke(command, values: values)) onPicked();
   }
 }
 
 class _CommandRow extends StatelessWidget {
   const _CommandRow({
     required this.command,
+    required this.isFirst,
     required this.isBusy,
     required this.onPressed,
   });
 
   final ApplicationCommand command;
+  final bool isFirst;
   final bool isBusy;
   final VoidCallback onPressed;
 
@@ -104,13 +127,24 @@ class _CommandRow extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
     key: ValueKey('slash-command-${command.id}'),
     onTap: isBusy ? null : onPressed,
-    child: Padding(
+    child: Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            width: 2,
+            color: isFirst ? context.surfaces.brand : Colors.transparent,
+          ),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
           Text(
             '/${command.name}',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (command.description.isNotEmpty) ...[
             const SizedBox(width: 10),
@@ -119,7 +153,10 @@ class _CommandRow extends StatelessWidget {
                 command.description,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ),
           ] else
@@ -187,7 +224,7 @@ class _SlashCommandOptionsDialogState extends State<SlashCommandOptionsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('slash-command-options'),
     title: Text('/${widget.command.name}'),
     content: SingleChildScrollView(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/direct_call_controller.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 
 /// The surface an incoming DM or group-DM call raises.
@@ -83,13 +85,13 @@ class IncomingCallCard extends StatelessWidget {
         key: const ValueKey('incoming-call-card'),
         color: context.surfaces.raised,
         elevation: 8,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             border: Border.all(color: context.surfaces.border),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: FlucordRadius.medium,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -109,7 +111,7 @@ class IncomingCallCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: FlucordType.label,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -119,7 +121,7 @@ class IncomingCallCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],
@@ -131,7 +133,7 @@ class IncomingCallCard extends StatelessWidget {
                 onPressed: isBusy ? null : onDecline,
                 tooltip: 'Decline',
                 style: IconButton.styleFrom(
-                  backgroundColor: FlucordColors.danger,
+                  backgroundColor: context.surfaces.danger,
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.call_end),
@@ -142,7 +144,7 @@ class IncomingCallCard extends StatelessWidget {
                 onPressed: isBusy ? null : onAccept,
                 tooltip: 'Accept',
                 style: IconButton.styleFrom(
-                  backgroundColor: FlucordColors.success,
+                  backgroundColor: context.surfaces.success,
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.call),

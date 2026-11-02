@@ -21,7 +21,9 @@ import '../../application/user_profile_controller.dart';
 import '../../application/user_settings_controller.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_profile_controls.dart';
 import 'account_credentials_section.dart';
 import 'user_profile_section.dart';
@@ -42,6 +44,7 @@ import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
+import 'flucord_dialog.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -181,7 +184,6 @@ class UserSettingsDialog extends StatefulWidget {
     VoiceController? voiceController,
   }) => showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.58),
     builder: (_) => UserSettingsDialog(
       controller: controller,
       profileController: profileController,
@@ -213,66 +215,67 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.controller.load());
+    // Loading notifies at once, and the screen behind this dialog listens. It
+    // has to wait for the frame that is building now.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(widget.controller.load());
+    });
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('user-settings-dialog'),
-    insetPadding: const EdgeInsets.all(24),
-    backgroundColor: context.surfaces.canvas,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 940, maxHeight: 720),
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
-            final navigation = _Navigation(
-              selected: _category,
-              horizontal: !wide,
-              onSelected: (category) => setState(() => _category = category),
-            );
-            final body = _Body(
-              controller: widget.controller,
-              profileController: widget.profileController,
-              standingController: widget.standingController,
-              familyController: widget.familyController,
-              sessionController: widget.sessionController,
-              connectionsController: widget.connectionsController,
-              entitlementsController: widget.entitlementsController,
-              dataPackageController: widget.dataPackageController,
-              appAuthorisationController: widget.appAuthorisationController,
-              mfaController: widget.mfaController,
-              ageController: widget.ageController,
-              keybindController: widget.keybindController,
-              streamerModeController: widget.streamerModeController,
-              accessibilityController: widget.accessibilityController,
-              streamQualityController: widget.streamQualityController,
-              themeController: widget.themeController,
-              voiceController: widget.voiceController,
-              category: _category,
-            );
-            return wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: 232, child: navigation),
-                      VerticalDivider(width: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      navigation,
-                      Divider(height: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  );
-          },
-        ),
+    maxWidth: 940,
+    maxHeight: 720,
+    child: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final wide =
+              constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
+          final navigation = _Navigation(
+            selected: _category,
+            horizontal: !wide,
+            onSelected: (category) => setState(() => _category = category),
+          );
+          final body = _Body(
+            controller: widget.controller,
+            profileController: widget.profileController,
+            standingController: widget.standingController,
+            familyController: widget.familyController,
+            sessionController: widget.sessionController,
+            connectionsController: widget.connectionsController,
+            entitlementsController: widget.entitlementsController,
+            dataPackageController: widget.dataPackageController,
+            appAuthorisationController: widget.appAuthorisationController,
+            mfaController: widget.mfaController,
+            ageController: widget.ageController,
+            keybindController: widget.keybindController,
+            streamerModeController: widget.streamerModeController,
+            accessibilityController: widget.accessibilityController,
+            streamQualityController: widget.streamQualityController,
+            themeController: widget.themeController,
+            voiceController: widget.voiceController,
+            category: _category,
+          );
+          return wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 232, child: navigation),
+                    VerticalDivider(width: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    navigation,
+                    Divider(height: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                );
+        },
       ),
     ),
   );
@@ -312,7 +315,7 @@ class _Navigation extends StatelessWidget {
                 'User settings',
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 10,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                 ),
@@ -366,7 +369,7 @@ class _NavigationTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: foreground,
-        fontSize: 12,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -374,10 +377,10 @@ class _NavigationTile extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: compact ? 0 : 1),
       child: Material(
         color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           key: ValueKey('settings-nav-${category.name}'),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           onTap: onPressed,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -455,7 +458,7 @@ class _Body extends StatelessWidget {
                 category.label,
                 style: TextStyle(
                   color: context.surfaces.muted,
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -477,7 +480,7 @@ class _Body extends StatelessWidget {
             'Discord did not accept the last change.',
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
-              fontSize: 11,
+              fontSize: FlucordType.caption,
             ),
           ),
         ),
@@ -496,12 +499,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.profile) {
       final profile = profileController;
       if (profile == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-profile-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to edit its profile. The demo and '
-              'bot transports have no profile behind them.',
+          toDo: 'edit its profile',
         );
       }
       return ListenableBuilder(
@@ -594,12 +594,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.standing) {
       final standing = standingController;
       if (standing == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-standing-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see what is on its record. The '
-              'demo and bot transports have none.',
+          toDo: 'see what is on its record',
         );
       }
       return AccountStandingSection(controller: standing);
@@ -608,12 +605,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.family) {
       final family = familyController;
       if (family == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-family-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see its family centre. The demo '
-              'and bot transports have none.',
+          toDo: 'see its family centre',
         );
       }
       return FamilyCentreSection(controller: family);
@@ -621,13 +615,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.devices) {
       final sessions = sessionController;
       if (sessions == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-devices-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see where it is signed in. The '
-              'demo and bot transports have one session and no route to list '
-              'it.',
+          toDo: 'see where it is signed in',
         );
       }
       return DevicesSettingsSection(controller: sessions);
@@ -639,12 +629,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.connections) {
       final connections = connectionsController;
       if (connections == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-connections-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to link third-party accounts to '
-              'it. The demo and bot transports have no account to link.',
+          toDo: 'link third-party accounts to it',
         );
       }
       return ConnectionsSettingsSection(controller: connections);
@@ -652,12 +639,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.entitlements) {
       final entitlements = entitlementsController;
       if (entitlements == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-entitlements-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see what it holds. The demo '
-              'and bot transports have no account behind them.',
+          toDo: 'see what it holds',
         );
       }
       return EntitlementsSettingsSection(controller: entitlements);
@@ -665,13 +649,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.apps) {
       final apps = appAuthorisationController;
       if (apps == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-apps-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to authorise apps into servers '
-              'it manages. The demo and bot transports have no account to '
-              'consent with.',
+          toDo: 'authorise apps into servers it manages',
         );
       }
       return AppAuthorisationSection(controller: apps);
@@ -680,12 +660,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.dataPackage) {
       final dataPackage = dataPackageController;
       if (dataPackage == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-data-package-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to request its data. The demo '
-              'and bot transports have no account to collect from.',
+          toDo: 'request its data',
         );
       }
       return DataPackageSettingsSection(controller: dataPackage);
@@ -693,12 +670,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.security) {
       final mfa = mfaController;
       if (mfa == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-mfa-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to manage two-factor authentication. '
-              'The demo and bot transports have no account to secure.',
+          toDo: 'manage two-factor authentication',
         );
       }
       return MfaSettingsSection(controller: mfa);
@@ -706,23 +680,17 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.age) {
       final age = ageController;
       if (age == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-age-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see how it can prove its age. '
-              'The demo and bot transports have no account to verify.',
+          toDo: 'see how it can prove its age',
         );
       }
       return AgeVerificationSection(controller: age);
     }
     if (!controller.isAvailable) {
-      return _Notice(
-        key: const ValueKey('user-settings-unavailable'),
-        icon: Icons.cloud_off_outlined,
-        message:
-            'Connect a Discord account to read and change its settings. '
-            'The demo and bot transports have no account behind them.',
+      return const _NeedsAccountNotice(
+        key: ValueKey('user-settings-unavailable'),
+        toDo: 'read and change its settings',
       );
     }
     final settings = controller.settings;
@@ -740,7 +708,7 @@ class _Body extends StatelessWidget {
         key: const ValueKey('user-settings-error'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _Notice(
+          const ProfileNotice(
             icon: Icons.error_outline,
             message: 'Discord did not return your settings.',
           ),
@@ -801,24 +769,20 @@ class _Body extends StatelessWidget {
   void _edit(UserSettingsPatch patch) => unawaited(controller.apply(patch));
 }
 
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.message, super.key});
+/// What a pane that needs a Discord account shows in demo mode and on a bot
+/// account: what connecting one would let the person do, and why it is not
+/// here now.
+class _NeedsAccountNotice extends StatelessWidget {
+  const _NeedsAccountNotice({required this.toDo, super.key});
 
-  final IconData icon;
-  final String message;
+  /// What the person could do with an account, as in "edit its profile".
+  final String toDo;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, size: 18, color: context.surfaces.muted),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          message,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => ProfileNotice(
+    icon: Icons.cloud_off_outlined,
+    message:
+        'Connect a Discord account to $toDo. Demo mode and bot accounts have '
+        'no account behind them.',
   );
 }

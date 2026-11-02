@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,96 +5,31 @@ import 'package:flutter/services.dart';
 
 import '../../application/quick_switcher_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'mention_badge.dart';
+import 'flucord_dialog.dart';
 
 part 'quick_switcher_destination_row.dart';
 
-extension QuickSwitcherWidget on Widget {
-  Widget withQuickSwitcher({
-    required ChatWorkspace workspace,
-    required ValueChanged<QuickSwitcherDestination> onSelected,
-  }) => _QuickSwitcherLauncher(
-    workspace: workspace,
-    onSelected: onSelected,
-    child: this,
-  );
-}
-
-class _QuickSwitcherLauncher extends StatefulWidget {
-  const _QuickSwitcherLauncher({
-    required this.workspace,
-    required this.onSelected,
-    required this.child,
-  });
-
-  final ChatWorkspace workspace;
-  final ValueChanged<QuickSwitcherDestination> onSelected;
-  final Widget child;
-
-  @override
-  State<_QuickSwitcherLauncher> createState() => _QuickSwitcherLauncherState();
-}
-
-class _QuickSwitcherLauncherState extends State<_QuickSwitcherLauncher> {
-  final FocusNode _shortcutFocusNode = FocusNode(
-    debugLabel: 'Quick switcher shortcut scope',
-  );
-  bool _dialogOpen = false;
-
-  @override
-  void dispose() {
-    _shortcutFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Shortcuts(
-    shortcuts: const {
-      SingleActivator(LogicalKeyboardKey.keyK, control: true):
-          _OpenQuickSwitcherIntent(),
-    },
-    child: Actions(
-      actions: {
-        _OpenQuickSwitcherIntent: CallbackAction<_OpenQuickSwitcherIntent>(
-          onInvoke: (_) {
-            unawaited(_open());
-            return null;
-          },
-        ),
-      },
-      child: Focus(
-        focusNode: _shortcutFocusNode,
-        autofocus: true,
-        child: widget.child,
-      ),
+/// Asks where to go, and answers with the destination, or null when the user
+/// backs out. Backing out gives the focus back to where it was.
+Future<QuickSwitcherDestination?> showQuickSwitcher(
+  BuildContext context,
+  ChatWorkspace workspace,
+) async {
+  final previousFocus = FocusManager.instance.primaryFocus;
+  final selected = await showDialog<QuickSwitcherDestination>(
+    context: context,
+    builder: (context) => _QuickSwitcherDialog(
+      catalog: QuickSwitcherCatalog.fromWorkspace(workspace),
     ),
   );
-
-  Future<void> _open() async {
-    if (_dialogOpen) return;
-    _dialogOpen = true;
-    final previousFocus = FocusManager.instance.primaryFocus;
-    final selected = await showDialog<QuickSwitcherDestination>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.68),
-      builder: (context) => _QuickSwitcherDialog(
-        catalog: QuickSwitcherCatalog.fromWorkspace(widget.workspace),
-      ),
-    );
-    _dialogOpen = false;
-    if (!mounted) return;
-    if (selected != null) {
-      widget.onSelected(selected);
-      _shortcutFocusNode.requestFocus();
-    } else if (previousFocus?.canRequestFocus ?? false) {
-      previousFocus!.requestFocus();
-    }
+  if (selected == null && (previousFocus?.canRequestFocus ?? false)) {
+    previousFocus!.requestFocus();
   }
-}
-
-class _OpenQuickSwitcherIntent extends Intent {
-  const _OpenQuickSwitcherIntent();
+  return selected;
 }
 
 class _QuickSwitcherDialog extends StatefulWidget {
@@ -135,15 +69,10 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
       namesRoute: true,
       label: 'Quick Switcher',
       explicitChildNodes: true,
-      child: Dialog(
+      child: FlucordDialog.frame(
         key: const ValueKey('quick-switcher'),
         alignment: const Alignment(0, -0.48),
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        elevation: 18,
-        shadowColor: Colors.black.withValues(alpha: 0.42),
-        backgroundColor: context.surfaces.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: SizedBox(
           width: 640,
           height: math.min(520, availableHeight),
@@ -180,7 +109,10 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
             const SizedBox(height: 2),
             Text(
               'Try a server, channel, thread, or person',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
@@ -298,7 +230,10 @@ class _SearchField extends StatelessWidget {
       autocorrect: false,
       enableSuggestions: false,
       onChanged: onChanged,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        fontSize: FlucordType.body,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: 'Where would you like to go?',
         semanticCounterText: '$resultCount destinations',
@@ -310,13 +245,16 @@ class _SearchField extends StatelessWidget {
             child: Text(
               '$resultCount',
               key: const ValueKey('quick-switcher-result-count'),
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(color: context.surfaces.border, width: 1.5),
+          borderRadius: FlucordRadius.medium,
+          borderSide: BorderSide(color: context.surfaces.focusRing, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
       ),
@@ -336,7 +274,7 @@ class _GroupLabel extends StatelessWidget {
       _groupName(kind).toUpperCase(),
       style: TextStyle(
         color: context.surfaces.muted,
-        fontSize: 10,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.55,
       ),

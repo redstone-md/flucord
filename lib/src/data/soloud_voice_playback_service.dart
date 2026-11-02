@@ -18,15 +18,21 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
   /// the frames after each one, each of them a crackle.
   static const double _bufferingSeconds = 0.1;
 
+  /// [player] replaces the machine's audio engine in a test.
+  SoLoudVoicePlaybackService({SoLoud? player}) : _givenPlayer = player;
+
+  final SoLoud? _givenPlayer;
+
   /// Resolved on first use, not on construction: touching the singleton loads
   /// the native library, and a service that is only ever asked to stay quiet
   /// (a build with no audio module, a test) should not need it present.
-  late final SoLoud _player = SoLoud.instance;
+  late final SoLoud _player = _givenPlayer ?? SoLoud.instance;
   final Map<String, _PlayingSource> _sources = {};
 
-  /// Levels asked for before their source existed, so a source's first frame
-  /// opens at the right volume instead of playing a moment at full level.
-  final Map<String, double> _pendingVolumes = {};
+  /// The level asked for each source. It outlives the source, so a person who
+  /// leaves and returns, or a room that starts over, opens at the chosen level
+  /// and does not play a moment at full level. A new level replaces it.
+  final Map<String, double> _sourceVolumes = {};
   bool _initialized = false;
   bool _enabled = false;
 
@@ -144,7 +150,6 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
 
   @override
   Future<void> removeSource(String sourceId) async {
-    _pendingVolumes.remove(sourceId);
     final playing = _sources.remove(sourceId);
     if (playing != null) await _player.disposeSource(playing.source);
   }
@@ -154,11 +159,11 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
     if (!_initialized || !_enabled) {
       // Asked for before playback is on: kept rather than thrown at, because
       // a level can be chosen from a tile while the room is still joining.
-      _pendingVolumes[sourceId] = volume.clamp(0.0, 1.0);
+      _sourceVolumes[sourceId] = volume.clamp(0.0, 1.0);
       return Future<void>.value();
     }
     final level = volume.clamp(0.0, 1.0);
-    _pendingVolumes[sourceId] = level;
+    _sourceVolumes[sourceId] = level;
     final playing = _sources[sourceId];
     if (playing == null) return Future<void>.value();
     _player.setVolume(playing.handle, level);
@@ -183,7 +188,7 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
       ),
     );
     final playing = _PlayingSource(source, _player.play(source));
-    final level = _pendingVolumes[sourceId];
+    final level = _sourceVolumes[sourceId];
     if (level != null) _player.setVolume(playing.handle, level);
     return playing;
   }
@@ -197,7 +202,6 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
   Future<void> _disposeSources() async {
     final playing = _sources.values.toList(growable: false);
     _sources.clear();
-    _pendingVolumes.clear();
     for (final each in playing) {
       await _player.disposeSource(each.source);
     }

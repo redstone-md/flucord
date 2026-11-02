@@ -185,4 +185,36 @@ final class Member {
     membershipsBySpace: membershipsBySpace,
     presenceDetail: presence,
   );
+
+  /// Whether [withPresence] would change nothing.
+  bool hasPresence(UserPresence presence) =>
+      this.presence == presence.status && presenceDetail == presence;
+
+  @override
+  bool operator ==(Object other) =>
+      other is Member &&
+      other.id == id &&
+      other.displayName == displayName &&
+      other.initials == initials &&
+      other.role == role &&
+      other.presence == presence &&
+      other.colorValue == colorValue &&
+      other.avatarUrl == avatarUrl &&
+      other.presenceDetail == presenceDetail &&
+      const SetEquality<String>().equals(other.spaceIds, spaceIds) &&
+      const MapEquality<String, String>().equals(
+        other.rolesBySpace,
+        rolesBySpace,
+      ) &&
+      const MapEquality<String, String>().equals(
+        other.avatarUrlsBySpace,
+        avatarUrlsBySpace,
+      ) &&
+      const MapEquality<String, GuildMembership>().equals(
+        other.membershipsBySpace,
+        membershipsBySpace,
+      );
+
+  @override
+  int get hashCode => Object.hash(id, displayName, presence, avatarUrl);
 }

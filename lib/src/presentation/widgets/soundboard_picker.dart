@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/soundboard_controller.dart';
 import '../../domain/soundboard.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The soundboard button a voice room carries, and the sheet behind it.
 class SoundboardButton extends StatelessWidget {
@@ -76,7 +78,10 @@ class SoundboardSheet extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Soundboard',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: FlucordType.body,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (controller.isSending)
@@ -111,7 +116,10 @@ class SoundboardSheet extends StatelessWidget {
             controller.error == null
                 ? 'This server has no sounds yet.'
                 : 'Discord did not return the soundboard.',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
           const SizedBox(height: 10),
           FilledButton(
@@ -133,7 +141,7 @@ class SoundboardSheet extends StatelessWidget {
               key: const ValueKey('soundboard-error'),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 11,
+                fontSize: FlucordType.caption,
               ),
             ),
           ),
@@ -175,10 +183,10 @@ class _SoundTile extends StatelessWidget {
                 'that unlocked it.',
       child: Material(
         color: context.surfaces.raised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: FlucordRadius.medium,
         child: InkWell(
           key: ValueKey('soundboard-sound-${sound.id}'),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: FlucordRadius.medium,
           onTap: sound.isAvailable ? onPressed : null,
           child: Opacity(
             opacity: sound.isAvailable ? 1 : 0.45,
@@ -190,7 +198,7 @@ class _SoundTile extends StatelessWidget {
                 children: [
                   Text(
                     sound.emojiName ?? '🔊',
-                    style: const TextStyle(fontSize: 18),
+                    style: const TextStyle(fontSize: FlucordType.title),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -198,7 +206,7 @@ class _SoundTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11),
+                    style: const TextStyle(fontSize: FlucordType.caption),
                   ),
                 ],
               ),

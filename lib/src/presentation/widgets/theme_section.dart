@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 
 import '../../application/theme_controller.dart';
 import '../../domain/flucord_palette.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Choosing a theme, and being told where to put one.
 class ThemeSection extends StatefulWidget {
@@ -48,7 +50,10 @@ class _ThemeSectionState extends State<ThemeSection> {
             'Drop a theme into the folder below. Flucord themes are JSON; a '
             'BetterDiscord .theme.css works too, but only its colours are '
             'read — the rest of it describes a web page Flucord does not have.',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -58,7 +63,10 @@ class _ThemeSectionState extends State<ThemeSection> {
                   _folder ?? 'Reading…',
                   key: const ValueKey('theme-folder'),
                   maxLines: 1,
-                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
               ),
               IconButton(
@@ -110,7 +118,10 @@ class _ThemeSectionState extends State<ThemeSection> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'No themes installed yet.',
-                style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ),
         ],
@@ -142,7 +153,7 @@ class _ThemeTile extends StatelessWidget {
     child: InkWell(
       key: tileKey,
       onTap: onSelected,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -152,7 +163,7 @@ class _ThemeTile extends StatelessWidget {
                 : context.surfaces.border,
             width: selected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
         ),
         child: Row(
           children: [
@@ -165,14 +176,17 @@ class _ThemeTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(name, style: const TextStyle(fontSize: 13)),
+                  Text(
+                    name,
+                    style: const TextStyle(fontSize: FlucordType.label),
+                  ),
                   if (subtitle.isNotEmpty)
                     Text(
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         color: context.surfaces.muted,
                       ),
                     ),
@@ -202,7 +216,7 @@ class _Swatch extends StatelessWidget {
     width: 52,
     height: 34,
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: Row(
         children: [
           Expanded(child: ColoredBox(color: Color(palette.rail))),

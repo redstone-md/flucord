@@ -10,9 +10,13 @@ import 'package:flucord/src/domain/discord_oauth.dart';
 import 'package:flucord/src/domain/discord_relationship.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/discord_social_sdk.dart';
+import 'package:flucord/src/presentation/widgets/connection_dialog.dart';
+import 'package:flucord/src/presentation/widgets/discord_desktop_login_section.dart';
+
+import 'support/session_harness.dart' show FakeRemoteAuth;
 
 void main() {
-  testWidgets('production bootstrap renders an honest disconnected state', (
+  testWidgets('production bootstrap opens on the sign-in screen', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1000, 760));
@@ -24,13 +28,14 @@ void main() {
           credentialVault: _EmptyCredentialVault(),
           chatRepositoryFactory: _UnusedRepositoryFactory(),
           discordOAuthAccountGateway: _OAuthGateway(),
+          discordRemoteAuthGatewayFactory: FakeRemoteAuth(),
         ),
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('No chat transport connected'), findsOneWidget);
+    expect(find.text('Sign in to Discord'), findsOneWidget);
     expect(find.text('The Forge'), findsNothing);
     expect(
       find.byKey(const ValueKey('open-disconnected-connections')),
@@ -57,7 +62,7 @@ void main() {
 
     expect(find.text('The Forge'), findsOneWidget);
     expect(find.text('Demo workspace'), findsOneWidget);
-    expect(find.text('No chat transport connected'), findsNothing);
+    expect(find.text('Sign in to Discord'), findsNothing);
   });
 
   testWidgets(
@@ -213,6 +218,7 @@ void main() {
         bootstrap: AppBootstrap(
           credentialVault: _EmptyCredentialVault(),
           chatRepositoryFactory: _UnusedRepositoryFactory(),
+          discordRemoteAuthGatewayFactory: FakeRemoteAuth(),
         ),
       ),
     );
@@ -221,9 +227,17 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('open-disconnected-connections')),
     );
-    await tester.pumpAndSettle();
+    // The sign-in spinner turns behind the dialog, so this cannot pumpAndSettle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Sign in with QR code'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ConnectionDialog),
+        matching: find.byType(DiscordDesktopLoginSection),
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('link-discord-account')), findsNothing);
     expect(find.text('Connect Discord'), findsNothing);
   });
@@ -245,6 +259,9 @@ final class _UnusedRepositoryFactory implements ChatRepositoryFactory {
   Future<ChatRepository> create(DiscordAccountSession session) {
     throw StateError('No saved session should reach the repository factory.');
   }
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/account_standing_controller.dart';
 import '../../domain/account_standing.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// What Discord has on record against the account, and the one thing that can
@@ -109,7 +111,10 @@ class _AccountStandingSectionState extends State<AccountStandingSection> {
         child: Text(
           'This account may appeal under the Digital Services Act.',
           key: const ValueKey('standing-dsa'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ),
     Padding(
@@ -151,7 +156,7 @@ class _RecordGroup extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: context.surfaces.raised,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,7 +178,7 @@ class _RecordGroup extends StatelessWidget {
                         child: Text(
                           record.subtitle,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: FlucordType.caption,
                             color: context.surfaces.muted,
                           ),
                         ),
@@ -202,7 +207,10 @@ class _ReviewButton extends StatelessWidget {
       return Text(
         'Review requested',
         key: ValueKey('standing-requested-${record.id}'),
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       );
     }
     if (controller.wasReviewRefused(record.id)) {
@@ -211,7 +219,10 @@ class _ReviewButton extends StatelessWidget {
       return Text(
         'Cannot be reviewed again',
         key: ValueKey('standing-refused-${record.id}'),
-        style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+        style: TextStyle(
+          fontSize: FlucordType.caption,
+          color: context.surfaces.muted,
+        ),
       );
     }
     return TextButton(
@@ -268,34 +279,46 @@ class _SuspensionNotice extends StatelessWidget {
     margin: const EdgeInsets.only(top: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(6),
+      color: context.surfaces.danger.withValues(alpha: 0.12),
+      borderRadius: FlucordRadius.medium,
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'This account is suspended',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         if (suspension.reason.isNotEmpty) ...[
           const SizedBox(height: 4),
           // Verbatim: the wording is the only thing an appeal can be written
           // against, and paraphrasing it would change what is being answered.
-          Text(suspension.reason, style: const TextStyle(fontSize: 12)),
+          Text(
+            suspension.reason,
+            style: const TextStyle(fontSize: FlucordType.caption),
+          ),
         ],
         if (suspension.endsAt case final DateTime ends) ...[
           const SizedBox(height: 4),
           Text(
             'Until ${ends.toLocal()}',
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ] else ...[
           const SizedBox(height: 4),
           Text(
             // Said rather than left blank: an absent end is not "today".
             'Discord has not said when it ends.',
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ],
         if (suspension.canRequestReview) ...[

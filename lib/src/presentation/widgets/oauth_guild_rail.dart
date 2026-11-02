@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 
 class OAuthGuildRail extends StatelessWidget {
@@ -65,7 +66,7 @@ class OAuthGuildRail extends StatelessWidget {
           IconButton(
             key: const ValueKey('open-oauth-workspace-connections'),
             onPressed: onOpenConnections,
-            icon: const Icon(Icons.link, color: FlucordColors.brand),
+            icon: Icon(Icons.link, color: context.surfaces.accentIcon),
             tooltip: 'Connections',
           ),
           IconButton(
@@ -216,7 +217,7 @@ class _OAuthGuildRailButtonState extends State<_OAuthGuildRailButton> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: active
-                            ? FlucordColors.brand
+                            ? context.surfaces.brand
                             : context.surfaces.raised,
                         borderRadius: radius,
                       ),
@@ -228,7 +229,7 @@ class _OAuthGuildRailButtonState extends State<_OAuthGuildRailButton> {
                             _guildMonogram(widget.guild.name),
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 12,
+                              fontSize: FlucordType.caption,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

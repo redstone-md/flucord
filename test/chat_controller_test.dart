@@ -43,6 +43,9 @@ import 'package:flucord/src/domain/expression_favorites.dart';
 
 part 'chat_controller_event_repository.dart';
 
+/// Long enough for a held presence to fold in.
+const _presenceWindow = Duration(milliseconds: 300);
+
 void main() {
   group('ChatController', () {
     test('loads workspace and appends a sent message', () async {
@@ -490,7 +493,7 @@ void main() {
       repository.emit(
         const TypingStartedEvent(channelId: 'forge-general', memberId: 'lena'),
       );
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(_presenceWindow);
 
       expect((await incomingMessage).message.id, 'incoming-1');
 
@@ -529,6 +532,61 @@ void main() {
         isNull,
       );
     });
+
+    test('a single presence notifies only for a member it knows', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      // The channel the load opened finishes first, and that notifies.
+      await pumpEventQueue();
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      repository.emit(
+        const PresenceChangedEvent(
+          memberId: 'nobody-the-app-knows',
+          presence: UserPresence(status: Presence.online),
+        ),
+      );
+      await Future<void>.delayed(_presenceWindow);
+      expect(notifications, 0);
+
+      repository.emit(
+        const PresenceChangedEvent(
+          memberId: 'lena',
+          presence: UserPresence(status: Presence.online),
+        ),
+      );
+      await Future<void>.delayed(_presenceWindow);
+      expect(notifications, 1);
+    });
+
+    test(
+      'a presence held for the last account does not reach the next',
+      () async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+        await pumpEventQueue();
+
+        repository.emit(
+          const PresenceChangedEvent(
+            memberId: 'lena',
+            presence: UserPresence(status: Presence.online),
+          ),
+        );
+        await pumpEventQueue();
+        final next = _EventRepository();
+        await controller.useRepository(next);
+        final before = controller.workspace!.memberById('lena').presence;
+        await Future<void>.delayed(_presenceWindow);
+
+        expect(before, isNot(Presence.online));
+        expect(controller.workspace!.memberById('lena').presence, before);
+      },
+    );
 
     test(
       'marks every active channel read and clears unread boundaries',
@@ -608,10 +666,31 @@ void main() {
         controller.workspace!.channelById('forge-general').firstUnreadMessageId,
         'background-1',
       );
+      // Leaving the window changes nothing on screen. The next message to
+      // arrive while away is what moves the boundary.
       controller.setApplicationActive(false);
       expect(
         controller.workspace!.channelById('forge-general').firstUnreadMessageId,
-        isNull,
+        'background-1',
+      );
+
+      repository.emit(
+        MessageUpsertedEvent(
+          message: ChatMessage(
+            id: 'background-2',
+            channelId: 'forge-general',
+            authorId: 'lena',
+            body: 'Arrived on the next time away',
+            sentAt: DateTime.now(),
+          ),
+          isNew: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller.workspace!.channelById('forge-general').firstUnreadMessageId,
+        'background-2',
       );
     });
 

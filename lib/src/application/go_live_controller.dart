@@ -602,12 +602,25 @@ final class GoLiveController extends ChangeNotifier {
 
   void _acceptStream(GoLiveStream stream) {
     if (stream.key != _key) return;
+    if (_repository?.streams.containsKey(stream.key.value) != true) {
+      _streamDeleted();
+      return;
+    }
     _viewerIds = stream.viewerIds;
     if (_status == GoLiveStatus.creating) _status = GoLiveStatus.connecting;
     if (isStreaming) {
       _status = stream.isPaused ? GoLiveStatus.paused : GoLiveStatus.live;
     }
     _notify();
+  }
+
+  /// The repository's last word about a stream is an update for one it no
+  /// longer holds. Discord has already forgotten it, so the key goes first:
+  /// the stop that follows has no delete frame to send back.
+  void _streamDeleted() {
+    _diagnose('stream deleted');
+    _key = null;
+    unawaited(stop());
   }
 
   void _acceptServer(GoLiveServer server) {

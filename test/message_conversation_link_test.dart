@@ -24,11 +24,9 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.text(
-        'https://discord.com/channels/forge/forge-design/m5',
-        findRichText: true,
-      ),
+    await _tapLink(
+      tester,
+      'https://discord.com/channels/forge/forge-design/m5',
     );
     await tester.pumpAndSettle();
 
@@ -62,11 +60,9 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.text(
-        'https://discord.com/channels/night/forge-design/m5',
-        findRichText: true,
-      ),
+    await _tapLink(
+      tester,
+      'https://discord.com/channels/night/forge-design/m5',
     );
     await tester.pumpAndSettle();
 
@@ -90,12 +86,7 @@ void main() {
         ),
       );
 
-      await tester.tap(
-        find.text(
-          'https://discord.com/channels/guild-9/chan-9/m1',
-          findRichText: true,
-        ),
-      );
+      await _tapLink(tester, 'https://discord.com/channels/guild-9/chan-9/m1');
       await tester.pumpAndSettle();
 
       expect(launcher.opened.single.toString(), contains('guild-9'));
@@ -121,11 +112,9 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.text(
-        'https://discord.com/channels/forge/forge-design/m5',
-        findRichText: true,
-      ),
+    await _tapLink(
+      tester,
+      'https://discord.com/channels/forge/forge-design/m5',
     );
     await tester.pumpAndSettle();
 
@@ -148,11 +137,9 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.text(
-        'https://discord.com/channels/forge/forge-design/m5',
-        findRichText: true,
-      ),
+    await _tapLink(
+      tester,
+      'https://discord.com/channels/forge/forge-design/m5',
     );
     await tester.pumpAndSettle();
 
@@ -162,6 +149,12 @@ void main() {
     );
   });
 }
+
+/// Taps the start of a link. A long link wraps, and the middle of its box can
+/// fall past the end of its last line.
+Future<void> _tapLink(WidgetTester tester, String link) => tester.tapAt(
+  tester.getTopLeft(find.text(link, findRichText: true)) + const Offset(4, 4),
+);
 
 Widget _harness({
   required void Function(BuildContext, DiscordMessageLink)? onOpenMessageLink,

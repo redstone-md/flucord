@@ -46,16 +46,20 @@ import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_detectable_game_service.dart';
+import 'discord_direct_messages.dart';
+import 'discord_repository_events.dart';
 import 'discord_user_settings_repository.dart';
 import 'discord_desktop_gateway_client.dart';
 import 'discord_direct_call_service.dart';
 import 'discord_gateway_client.dart';
+import 'discord_guild_admin_mapper.dart';
 import 'discord_mapper.dart';
 import 'discord_member_list_handler.dart';
 import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
+import 'discord_shared_dispatches.dart';
 import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
@@ -73,6 +77,7 @@ import 'discord_voice_signaling_service.dart';
 import 'discord_voice_socket_factory.dart';
 import '../../app_log.dart';
 
+import 'discord_account_cache.dart';
 import 'discord_restored_history.dart';
 
 part 'discord_desktop_chat_events.dart';
@@ -87,10 +92,14 @@ final class DiscordDesktopChatRepository
     this._api,
     this._gateway,
     this._cache, {
+    String? accountId,
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? nonceFactory,
     VoiceDaveService? daveService,
-  }) : _mapper = mapper ?? DiscordMapper(),
+    Future<void> Function()? clearChatImages,
+  }) : _accountId = accountId,
+       _clearChatImages = clearChatImages,
+       _mapper = mapper ?? DiscordMapper(),
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
        _userSettings = DiscordUserSettingsRepository(_api),
        _readState = DiscordReadStateRepository(_api),
@@ -189,6 +198,32 @@ final class DiscordDesktopChatRepository
   late final DiscordDirectCallService _directCalls;
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
+  late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
+    _api.createDirectMessageChannel,
+    _cache,
+    _mapper,
+    _events.publish,
+    onChannelAdded: _readState.addPrivateChannel,
+  );
+  late final DiscordSharedDispatches _sharedDispatches =
+      DiscordSharedDispatches(
+        cache: _cache,
+        mapper: _mapper,
+        directMessages: _directMessages,
+        currentMemberId: () => _currentMemberId,
+        rolesOf: _memberLists.rolesOf,
+        updatedMessage: (payload, held) =>
+            _messageFrom(payload, fallback: held),
+        events: _events,
+      );
+
+  /// Who the session's credential says it is, before Discord has confirmed it.
+  /// The offline fallback compares this with the account of the cache.
+  final String? _accountId;
+
+  /// Removes the pictures of the chats from disk, when another account's
+  /// cache is found. Null where the app keeps no pictures on disk.
+  final Future<void> Function()? _clearChatImages;
 
   /// Whether a workspace is being shown, live or from the cache.
   ///
@@ -385,10 +420,14 @@ final class DiscordDesktopChatRepository
         'gateway-session',
         () => _gateway.connectAndReadWorkspace(gatewayUrl),
       );
-      final cached = await _bootstrapStage(
-        'cache-read',
-        _cache.readWorkspaceShell,
-      );
+      final cached = await _bootstrapStage('cache-read', () async {
+        await clearCacheOfOtherAccount(
+          _cache,
+          snapshot.currentUser['id']! as String,
+          clearChatImages: _clearChatImages,
+        );
+        return _cache.readWorkspaceShell();
+      });
       final workspace = await _bootstrapStage(
         'workspace-mapping',
         () async => _mapper
@@ -398,6 +437,8 @@ final class DiscordDesktopChatRepository
               channelsByGuild: snapshot.channelsByGuild,
               rolesByGuild: snapshot.rolesByGuild,
               membersByGuild: snapshot.membersByGuild,
+              emojisByGuild: snapshot.emojisByGuild,
+              stickersByGuild: snapshot.stickersByGuild,
               directChannels: snapshot.directChannels,
               includeDirectMessagesSpace: true,
               currentUserRole: 'Discord user',
@@ -414,7 +455,7 @@ final class DiscordDesktopChatRepository
       return workspace;
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readWorkspace();
+      final cached = await readOfflineWorkspace(_cache, _accountId);
       if (cached != null) {
         _adoptCurrentMember(cached.currentMemberId);
         _adoptPrivateChannels(cached);
@@ -463,6 +504,7 @@ final class DiscordDesktopChatRepository
         return ChannelHistoryPage(
           history: restored.history,
           hasMore: restored.hasMore,
+          fromCache: true,
         );
       }
       final cached = await _cache.readChannelHistory(
@@ -474,6 +516,7 @@ final class DiscordDesktopChatRepository
       return ChannelHistoryPage(
         history: cached,
         hasMore: cached.messages.length >= _pageSize,
+        fromCache: true,
       );
     }
   }
@@ -499,26 +542,7 @@ final class DiscordDesktopChatRepository
   Future<DirectConversation> openDirectConversation(String recipientId) async {
     final currentUserId = _currentMemberId;
     if (currentUserId == null) throw StateError('Workspace is not loaded');
-    final mapped = _mapper.directMessage(
-      await _api.createDirectMessageChannel(recipientId),
-      currentUserId,
-    );
-    if (mapped == null) {
-      throw const DiscordApiException(
-        statusCode: 502,
-        message: 'Discord returned an invalid direct message channel',
-      );
-    }
-    await _cache.writeSpace(_mapper.directMessagesSpace);
-    await _cache.writeChannel(mapped.channel);
-    await _cache.writeMember(mapped.recipient);
-    _events.add(SpaceUpsertedEvent(_mapper.directMessagesSpace));
-    _events.add(ChannelUpsertedEvent(mapped.channel));
-    _events.add(MemberUpsertedEvent(mapped.recipient));
-    return DirectConversation(
-      channel: mapped.channel,
-      recipient: mapped.recipient,
-    );
+    return _directMessages.open(recipientId, currentUserId);
   }
 
   @override
@@ -554,16 +578,28 @@ final class DiscordDesktopChatRepository
     bool suppressNotifications = false,
     bool textToSpeech = false,
   }) async {
-    final payload = await _api.createMessage(
+    final payload = await _nonceFactory.sendDraft(
       channelId: channelId,
-      content: body,
-      nonce: _nonceFactory.next(),
+      body: body,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
+      send: (nonce) => _api.createMessage(
+        channelId: channelId,
+        content: body,
+        nonce: nonce,
+        attachments: attachments,
+        replyToMessageId: replyToMessageId,
+        suppressNotifications: suppressNotifications,
+        textToSpeech: textToSpeech,
+      ),
     );
-    return _storeMessage(payload);
+    final message = await _storeMessage(payload);
+    // The gateway's copy may come later, and the channel must read as read
+    // from the moment the send returns.
+    _readState.acceptNewMessage(payload);
+    return message;
   }
 
   @override
@@ -602,6 +638,12 @@ final class DiscordDesktopChatRepository
     query: query,
     limit: limit,
   );
+
+  @override
+  void requestGuildMembers({
+    required String guildId,
+    required List<String> userIds,
+  }) => _gateway.requestGuildMembersByIds(guildId: guildId, userIds: userIds);
 
   @override
   Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
@@ -793,13 +835,15 @@ final class DiscordDesktopChatRepository
   /// owns what a restart restores and the socket subscription Discord needs
   /// before it will push anything for the guild. The read state the account
   /// already carries for the guild's channels is folded here too: a join must
-  /// show the unreads it had, not a fresh sheet where every channel reads.
+  /// show the unreads it had, not a fresh sheet where every channel reads. A
+  /// guild this session already subscribed has it from READY or the first ask.
   Future<void> _persistGainedGuild(JoinedGuild guild) async {
     await _cache.writeGuild(guild);
-    unawaited(
-      _readState.hydrateReadState(guild.space.id).catchError((Object _) {}),
-    );
-    _gateway.subscribeGuildEvents(guild.space.id);
+    if (_gateway.subscribeGuildEvents(guild.space.id)) {
+      unawaited(
+        _readState.hydrateReadState(guild.space.id).catchError((Object _) {}),
+      );
+    }
   }
 
   /// Removes one left guild from the cache and drops its subscription.
@@ -817,7 +861,7 @@ final class DiscordDesktopChatRepository
 
   @override
   Future<void> close() async {
-    await _gatewaySubscription.cancel();
+    await _sharedDispatches.stop(_gatewaySubscription);
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

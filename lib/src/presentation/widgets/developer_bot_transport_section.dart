@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 final class DeveloperBotTransportSection extends StatefulWidget {
   const DeveloperBotTransportSection({
@@ -57,13 +58,16 @@ final class _DeveloperBotTransportSectionState
       childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       title: const Text(
         'Developer bot transport',
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: FlucordType.label,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       subtitle: Text(
         'Optional application-bot workspace. This is not your Discord account.',
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 10,
+          fontSize: FlucordType.caption,
           height: 1.3,
         ),
       ),
@@ -100,7 +104,7 @@ final class _DeveloperBotTransportSectionState
           controlAffinity: ListTileControlAffinity.leading,
           title: const Text(
             'Remember in the system credential vault',
-            style: TextStyle(fontSize: 12),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         if (widget.controller.errorMessage case final error?) ...[
@@ -108,18 +112,18 @@ final class _DeveloperBotTransportSectionState
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline,
                 size: 16,
-                color: FlucordColors.danger,
+                color: context.surfaces.errorText,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   error,
-                  style: const TextStyle(
-                    color: FlucordColors.danger,
-                    fontSize: 11,
+                  style: TextStyle(
+                    color: context.surfaces.errorText,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ),
@@ -195,7 +199,7 @@ final class _TransportStatus extends StatelessWidget {
       ),
       SessionMode.discord => (
         '${controller.activeSession?.displayName ?? 'Discord bot'} connected',
-        FlucordColors.success,
+        context.surfaces.success,
       ),
     };
     return Row(
@@ -206,7 +210,12 @@ final class _TransportStatus extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 10),
-        Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: FlucordType.caption),
+          ),
+        ),
       ],
     );
   }

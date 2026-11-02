@@ -9,6 +9,7 @@ import '../application/direct_call_controller.dart';
 import '../application/go_live_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
+import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
@@ -40,6 +41,7 @@ import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/self_video_scope.dart';
 import 'widgets/slash_command_scope.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/soundboard_scope.dart';
@@ -52,6 +54,7 @@ import 'widgets/stream_viewer_scope.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/thread_membership_button.dart';
 import 'widgets/thread_membership_scope.dart';
+import 'widgets/timeline_dependencies.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
 import 'widgets/voice_participant_grid.dart' show VoiceListeningControls;
@@ -88,6 +91,7 @@ class ConversationPane extends StatefulWidget {
     required this.onSelectChannel,
     this.onSubmitQuery,
     required this.onOpenInbox,
+    this.onOpenMemberProfile,
     super.key,
   });
 
@@ -129,16 +133,31 @@ class ConversationPane extends StatefulWidget {
   /// open channel.
   final VoidCallback onOpenInbox;
 
+  /// Opens the profile of a message's author, by user id.
+  final ValueChanged<String>? onOpenMemberProfile;
+
   @override
-  State<ConversationPane> createState() => _ConversationPaneState();
+  State<ConversationPane> createState() => ConversationPaneState();
 }
 
-class _ConversationPaneState extends State<ConversationPane> {
-  ChatMessage? _replyTo;
+/// Public so the shell's keyboard map can reach the open conversation through a
+/// global key, as a form reaches its `FormState`.
+class ConversationPaneState extends State<ConversationPane> {
+  /// Holds a send failure's note clear of the composer, even with four lines
+  /// of text in it. A note at the window's edge would cover the restored text
+  /// and the Send button the user needs to try again.
+  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
 
-  /// When this account last sent in the channel, for the composer's slowmode
-  /// countdown. Null on a channel without slowmode, where nothing needs it.
-  DateTime? _lastSentAt;
+  final _composerKey = GlobalKey<MessageComposerState>();
+  final _timelineKey = GlobalKey<MessageListState>();
+
+  static String _composerHintPrefix(ConversationChannel channel) {
+    if (channel.isDirectMessage) return '@';
+    final hasNoHash =
+        channel.kind == ChannelKind.voice ||
+        channel.spaceId == CommunitySpace.directMessagesId;
+    return hasNoHash ? '' : '#';
+  }
 
   @override
   void initState() {
@@ -151,19 +170,60 @@ class _ConversationPaneState extends State<ConversationPane> {
   void didUpdateWidget(covariant ConversationPane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id == widget.channel.id) return;
-    _replyTo = null;
-    _lastSentAt = null;
     _watchCall();
     _pointControllersAtChannel();
+  }
+
+  /// Puts the cursor in the composer, if this channel has one.
+  void focusComposer() => _composerKey.currentState?.focus();
+
+  /// Types [text] into the composer and focuses it. Answers false when this
+  /// channel has no composer to type in.
+  bool typeInComposer(String text) =>
+      _composerKey.currentState?.typeText(text) ?? false;
+
+  /// Esc takes one step back: a reply being written goes first. With none, the
+  /// reader is done here, so the channel is read and the list goes to the end.
+  /// A room has no timeline to be done with.
+  void handleEscape() {
+    final chat = ChatScope.read(context);
+    final channelId = widget.channel.id;
+    if (chat.drafts.read(channelId).replyTo != null) {
+      _setReply(chat, null);
+      return;
+    }
+    final timeline = _timelineKey.currentState;
+    if (timeline == null) return;
+    chat.markChannelRead(channelId);
+    timeline.jumpToPresent();
+  }
+
+  /// Moves the timeline by most of a screen, if this channel has one.
+  void scrollTimelinePage(int direction) =>
+      _timelineKey.currentState?.scrollPage(direction);
+
+  /// Sets who the open channel's draft answers.
+  void _setReply(ChatController chat, ChatMessage? message) {
+    final channelId = widget.channel.id;
+    setState(() {
+      chat.drafts.write(
+        channelId,
+        chat.drafts.read(channelId).withReply(message),
+      );
+    });
   }
 
   /// When slowmode releases this account's next send, or null while nothing
   /// is holding it back. Slowmode binds the sender, not the channel: the
   /// clock starts at this account's own last send.
-  DateTime? get _slowmodeUntil {
+  DateTime? _slowmodeUntil(ChatController chat) {
     final seconds = widget.channel.rateLimitPerUser;
-    final lastSentAt = _lastSentAt;
-    if (seconds == 0 || lastSentAt == null) return null;
+    final lastSentAt = chat.lastSentAt(widget.channel.id);
+    if (seconds == 0 ||
+        lastSentAt == null ||
+        widget.capabilities.bypassesSlowmode) {
+      return null;
+    }
     final until = lastSentAt.add(Duration(seconds: seconds));
     return until.isBefore(DateTime.now()) ? null : until;
   }
@@ -284,6 +344,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     final chat = ChatScope.of(context);
     final workspaceController = WorkspaceScope.of(context);
     final channel = widget.channel;
+    final replyTo = chat.drafts.read(channel.id).replyTo;
     final inCall = callController?.activeCallChannelId == channel.id;
     final voiceSurface = workspaceController.voiceSurfaceOf(channel.id);
     final showsMessages = showsMessageTimeline(
@@ -300,6 +361,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     final cameras = RemoteCameraScope.of(context);
     final voice = VoiceScope.read(context);
     final goLive = GoLiveScope.read(context);
+    final camera = SelfVideoScope.read(context);
     final soundboard = SoundboardScope.read(context);
     final stage = StageScope.read(context);
     final threadMembership = ThreadMembershipScope.read(context);
@@ -359,6 +421,8 @@ class _ConversationPaneState extends State<ConversationPane> {
     // four arguments because the mark is asked of each tile now.
     VoiceStreamControls streamControls() => VoiceStreamControls(
       isOpen: (userId) => viewer.isOpen(widget.channel.streamKeyFor(userId)),
+      hasFailed: (userId) =>
+          viewer.errorFor(widget.channel.streamKeyFor(userId)) != null,
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
       selfPreview: selfPreview(),
@@ -391,6 +455,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             onTapParticipant: focus.toggle,
             onClearFocus: focus.clear,
             goLive: goLiveControl(),
+            camera: camera,
             channelId: channel.id,
             channelName: channel.name,
             controller: voice,
@@ -408,6 +473,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               onTapParticipant: focus.toggle,
               onClearFocus: focus.clear,
               goLive: goLiveControl(),
+              camera: camera,
               soundboard: ListenableBuilder(
                 listenable: soundboard,
                 builder: (_, _) => SoundboardButton(
@@ -524,33 +590,48 @@ class _ConversationPaneState extends State<ConversationPane> {
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
-          TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ListenableBuilder(
+            listenable: chat.activeChannelTyping,
+            builder: (_, _) =>
+                TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
         else if (showsMessages && !widget.capabilities.sendMessages)
           const ReadOnlyChannelNotice()
         else if (showsMessages)
           MessageComposer(
+            key: _composerKey,
             gifPicker: GifPickerScope.read(context),
+            canAttachFiles: widget.capabilities.attachFiles,
+            slashCommands: SlashCommandScope.read(context),
+            expressionFavorites: ExpressionFavoritesScope.read(context),
             channelId: channel.id,
             channelName: channel.name,
-            replyTo: _replyTo,
-            replyAuthor: _replyTo == null
+            drafts: chat.drafts,
+            replyTo: replyTo,
+            replyAuthor: replyTo == null
                 ? null
-                : widget.workspace.memberOrNull(_replyTo!.authorId),
-            onCancelReply: () => setState(() => _replyTo = null),
+                : widget.workspace.memberOrNull(replyTo.authorId),
+            onCancelReply: () => _setReply(chat, null),
+            onEditLastMessage: () =>
+                _timelineKey.currentState?.editLastOwnMessage() ?? false,
             slowmode: Duration(seconds: channel.rateLimitPerUser),
-            slowmodeUntil: _slowmodeUntil,
+            slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
             attachmentSizeLimitBytes: _attachmentSizeLimit(channel),
-            channelIsVoice: channel.kind == ChannelKind.voice,
+            channelHintPrefix: _composerHintPrefix(channel),
             spaceName: widget.workspace.spaceById(channel.spaceId).name,
             autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
               widget.workspace,
               channel,
             ),
-            onSearchMembers: (query) =>
-                chat.searchGuildMembers(spaceId: channel.spaceId, query: query),
+            onSearchMembers: channel.isDirectMessage
+                ? null
+                : (query) => chat.searchGuildMembers(
+                    spaceId: channel.spaceId,
+                    query: query,
+                  ),
             emojiSections: emojiSectionsFromWorkspace(
               widget.workspace,
               channel.spaceId,
@@ -559,7 +640,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               widget.workspace,
               channel.spaceId,
             ),
-            isSending: chat.isSending,
+            isSending: chat.isSendingIn(channel.id),
             onTyping: () => chat.startTyping(channel.id),
             onCreatePoll: (poll) =>
                 chat.createPoll(channelId: channel.id, poll: poll),
@@ -579,6 +660,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                   replyToMessageId,
                   suppressNotifications,
                 ) async {
+                  final messenger = ScaffoldMessenger.maybeOf(context);
                   final sent = await chat.sendMessage(
                     channelId: channel.id,
                     body: body,
@@ -586,13 +668,27 @@ class _ConversationPaneState extends State<ConversationPane> {
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!mounted || !sent) return false;
-                  setState(() {
-                    _replyTo = null;
-                    if (channel.rateLimitPerUser > 0) {
-                      _lastSentAt = DateTime.now();
-                    }
-                  });
+                  if (!sent) {
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        margin: _aboveComposer,
+                        content: Text(
+                          'Your message to ${_composerHintPrefix(channel)}'
+                          '${channel.name} did not send. '
+                          '${sendFailureReason(chat.error)}',
+                        ),
+                      ),
+                    );
+                    return false;
+                  }
+                  // A reply picked while this send ran is not this send's.
+                  // The user may be in another channel by now.
+                  final draft = chat.drafts.read(channel.id);
+                  if (draft.replyTo?.id == replyToMessageId) {
+                    chat.drafts.write(channel.id, draft.withReply(null));
+                    if (mounted) setState(() {});
+                  }
                   return true;
                 },
           ),
@@ -687,48 +783,63 @@ class _ConversationPaneState extends State<ConversationPane> {
         // voice seat filling and a call ringing all redraw the pane without
         // changing a message.
         //
-        // Listed below is every workspace value it draws from. The
-        // controllers it also reads out of the scopes above are not listed,
-        // because a scope hands out the same instance for the life of the
-        // session; were one to be swapped, the timeline would keep the old
-        // one.
+        // Listed below is everything it draws from, and of the workspace only
+        // what its rows show. The controllers it also reads out of the scopes
+        // above are not listed, because a scope hands out the same instance
+        // for the life of the session; were one to be swapped, the timeline
+        // would keep the old one.
         Expanded(
           child: CachedSubtree(
             dependencies: [
-              widget.workspace.messagesFor(channel.id),
-              widget.workspace.members,
-              widget.workspace.roles,
-              widget.workspace.channels,
-              widget.workspace.emojis,
-              widget.workspace.currentMemberId,
+              ...timelineDependencies(widget.workspace, channel),
               channel,
               widget.capabilities,
               workspaceController.query,
               workspaceController.targetMessageId,
+              workspaceController.targetRequest,
+              chat.hasNewerMessages(channel.id),
+              chat.historyWindowError(channel.id),
+              chat.lastSentMessageIdIn(channel.id),
               chat.canLoadOlderMessages(channel.id),
               chat.isLoadingOlderMessages(channel.id),
               chat.olderMessagesError(channel.id),
             ],
-            builder: (_) => _timeline(chat, workspaceController),
+            // One group, so Tab walks the rows in order. Without it, the order
+            // goes by height on screen and mixes in the rail and the sidebar.
+            builder: (_) => FocusTraversalGroup(
+              child: _timeline(chat, workspaceController),
+            ),
           ),
         ),
       ],
     );
   }
 
-  /// Takes the reader to the message a summary starts at, by the same route
-  /// the inbox and search results take: the selection points at the message
-  /// and the channel opens built around it.
+  /// Takes the reader to a message, by the same route the inbox and search
+  /// results take: the selection points at the message and the channel opens
+  /// built around it.
+  void _jumpToMessage(
+    ChatController chat,
+    WorkspaceController workspaceController,
+    String channelId,
+    String messageId,
+  ) {
+    workspaceController.selectMessage(channelId, messageId);
+    unawaited(chat.openChannel(channelId, anchorMessageId: messageId));
+  }
+
   void _jumpToSummary(
     ChatController chat,
     WorkspaceController workspaceController,
     ConversationSummary summary,
   ) {
-    final channelId = summary.channelId;
-    final messageId = summary.startMessageId;
-    if (messageId.isEmpty) return;
-    workspaceController.selectMessage(channelId, messageId);
-    unawaited(chat.openChannel(channelId, anchorMessageId: messageId));
+    if (summary.startMessageId.isEmpty) return;
+    _jumpToMessage(
+      chat,
+      workspaceController,
+      summary.channelId,
+      summary.startMessageId,
+    );
   }
 
   Widget _timeline(
@@ -737,6 +848,7 @@ class _ConversationPaneState extends State<ConversationPane> {
   ) {
     final channel = widget.channel;
     return MessageList(
+      key: _timelineKey,
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
       applicationCommands: SlashCommandScope.read(context),
@@ -747,12 +859,24 @@ class _ConversationPaneState extends State<ConversationPane> {
       channel: channel,
       query: workspaceController.query,
       targetMessageId: workspaceController.targetMessageId,
-      onReply: (message) => setState(() => _replyTo = message),
+      targetRequest: workspaceController.targetRequest,
+      lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      hasNewerMessages: chat.hasNewerMessages(channel.id),
+      windowError: chat.historyWindowError(channel.id),
+      readingPositions: workspaceController.readingPositions,
+      onOpenMessage: (messageId) =>
+          _jumpToMessage(chat, workspaceController, channel.id, messageId),
+      onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
+      onReply: (message) => _setReply(chat, message),
       onEdit: chat.editMessage,
+      onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.loadReactionUsers,
       onAddReaction: chat.addReaction,
+      onMarkUnread: chat.readStateRepository == null
+          ? null
+          : chat.markChannelUnreadFrom,
       onCreateThread: (message, name, duration) async {
         final thread = await chat.createThreadFromMessage(
           message,
@@ -779,6 +903,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       olderLoadError: chat.olderMessagesError(channel.id),
       onLoadOlder: () => unawaited(chat.loadOlderMessages(channel.id)),
       onSelectChannel: widget.onSelectChannel,
+      onOpenMemberProfile: widget.onOpenMemberProfile,
     );
   }
 
@@ -816,10 +941,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     if (channel == null || channel.spaceId != CommunitySpace.directMessagesId) {
       return false;
     }
-    final inChannel = [
-      for (final candidate in workspace.messages)
-        if (candidate.channelId == message.channelId) candidate,
-    ];
+    final inChannel = workspace.messagesFor(message.channelId);
     return inChannel.length == 1 &&
         inChannel.single.id == message.id &&
         message.authorId != workspace.currentMemberId;

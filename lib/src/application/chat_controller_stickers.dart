@@ -20,30 +20,16 @@ extension ChatControllerStickers on ChatController {
           (id) => !workspace
               .stickersFor(channel!.spaceId)
               .any((sticker) => sticker.id == id),
-        ) ||
-        _isSending) {
+        )) {
       return false;
     }
-    _isSending = true;
-    _notify();
-    try {
+    return _sendingIn(channelId, () async {
       final message = await repository.sendStickers(
         channelId: channelId,
         authorId: workspace.currentMemberId,
         stickerIds: ids,
       );
-      _workspace = _workspace
-          ?.upsertMessage(message)
-          .clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+      _applySentMessage(message);
+    });
   }
 }

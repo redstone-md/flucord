@@ -16,6 +16,7 @@ import 'package:flucord/src/domain/channel_capabilities.dart';
 import 'package:flucord/src/domain/account_entitlements.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/guild_management_repository.dart';
 import 'package:flucord/src/domain/guild_expression_repository.dart';
@@ -34,6 +35,7 @@ import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _guild = 'guild-1';
@@ -78,7 +80,7 @@ void main() {
   });
 
   testWidgets('the read-only notice fits a compact window', (tester) async {
-    await _pumpShell(tester, size: const Size(700, 620));
+    await _pumpShell(tester, size: const Size(620, 620));
     await tester.tap(find.byTooltip('Choose channel'));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('announcements').last);
@@ -150,9 +152,15 @@ void main() {
     tester,
   ) async {
     await _pumpComposer(tester, canAttachFiles: true);
+    await tester.tap(find.byKey(const ValueKey('composer-menu')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('add-attachment')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
 
     await _pumpComposer(tester, canAttachFiles: false);
+    await tester.tap(find.byKey(const ValueKey('composer-menu')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('add-attachment')), findsNothing);
     expect(find.byKey(const ValueKey('message-composer')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -223,6 +231,7 @@ Future<void> _pumpComposer(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: MessageComposer(
+          drafts: MemoryComposerDraftStore(),
           channelId: 'general',
           channelName: 'general',
           spaceName: 'The Forge',

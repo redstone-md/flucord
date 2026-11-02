@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/message_embed.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
@@ -24,6 +25,7 @@ void main() {
           body: Align(
             alignment: Alignment.bottomCenter,
             child: MessageComposer(
+              drafts: MemoryComposerDraftStore(),
               channelId: 'channel-1',
               channelName: 'native',
               spaceName: 'Forge',
@@ -44,7 +46,10 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const ValueKey('composer-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('send-silently')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('message-composer')),
       'Quiet release',
@@ -61,7 +66,7 @@ void main() {
           ?.text,
       isEmpty,
     );
-    expect(find.byTooltip('Send silently'), findsOneWidget);
+    expect(find.byKey(const ValueKey('composer-silent-notice')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

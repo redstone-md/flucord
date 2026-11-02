@@ -127,15 +127,14 @@ final class DiscordReadStateAckQueue {
       _serialize(() => _attempt(request));
 
   /// Sends one built request and answers its decoded body, for the routes
-  /// whose answer is folded back in rather than thrown away.
+  /// whose answer is folded back in rather than thrown away. The request holds
+  /// its place in the queue until it is answered, and a failure throws here.
   Future<Map<String, Object?>?> sendForPayload(
     DiscordDesktopRestRequest request,
-  ) {
-    late final Future<Map<String, Object?>?> payload;
-    final sent = _serialize(() async {
-      payload = _attempt(request);
-    });
-    return sent.then((_) => payload);
+  ) async {
+    Map<String, Object?>? payload;
+    await _serialize(() async => payload = await _attempt(request));
+    return payload;
   }
 
   /// Queues bulk-ack entries and starts the pump if it is not already running.

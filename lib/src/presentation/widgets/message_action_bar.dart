@@ -4,6 +4,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'emoji_picker.dart';
 
@@ -35,6 +36,9 @@ class MessageActionBar extends StatelessWidget {
     this.apps,
     super.key,
   });
+
+  /// As tall as the shortest message row, so the bar fits inside any row.
+  static const height = 24.0;
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
@@ -69,12 +73,17 @@ class MessageActionBar extends StatelessWidget {
       message,
       currentMemberId: workspace.currentMemberId,
     );
+    final corners = FlucordRadius.small;
     return Container(
-      height: 36,
+      height: height,
       decoration: BoxDecoration(
         color: context.surfaces.surface,
+        borderRadius: corners,
+      ),
+      // In the foreground, so the border takes no height from the buttons.
+      foregroundDecoration: BoxDecoration(
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: corners,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -232,6 +241,9 @@ class _ActionButton extends StatelessWidget {
     ),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
-    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+    constraints: const BoxConstraints.tightFor(
+      width: 36,
+      height: MessageActionBar.height,
+    ),
   );
 }

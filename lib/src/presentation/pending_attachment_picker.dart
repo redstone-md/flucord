@@ -1,47 +1,12 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 
 import '../domain/chat_models.dart';
 
 abstract interface class PendingAttachmentPicker {
   Future<List<PendingAttachment>> pick();
-}
-
-final class PendingAttachmentSelection {
-  final List<PendingAttachment> _items = [];
-
-  List<PendingAttachment> get items => List.unmodifiable(_items);
-  bool get isEmpty => _items.isEmpty;
-  bool get isNotEmpty => _items.isNotEmpty;
-
-  bool merge(Iterable<PendingAttachment> attachments) {
-    var reachedLimit = false;
-    for (final attachment in attachments) {
-      if (_items.any((item) => item.path == attachment.path)) continue;
-      if (_items.length == PendingAttachment.maxCount) {
-        reachedLimit = true;
-        continue;
-      }
-      _items.add(attachment);
-    }
-    return reachedLimit;
-  }
-
-  void removeAt(int index) => _items.removeAt(index);
-
-  /// Puts [attachment] in one slot's place, which is how the spoiler tag is
-  /// applied without changing the order the files were picked in.
-  ///
-  /// The slot's own path still matches, because tagging a file renames it
-  /// rather than replacing it; only the other slots need to stay distinct.
-  void replaceAt(int index, PendingAttachment attachment) {
-    if (index < 0 || index >= _items.length) return;
-    for (var other = 0; other < _items.length; other++) {
-      if (other != index && _items[other].path == attachment.path) return;
-    }
-    _items[index] = attachment;
-  }
-
-  void clear() => _items.clear();
 }
 
 final class NativePendingAttachmentPicker implements PendingAttachmentPicker {
@@ -67,3 +32,14 @@ final class NativePendingAttachmentPicker implements PendingAttachmentPicker {
         .toList(growable: false);
   }
 }
+
+/// The files at [paths], as attachments. A folder cannot be uploaded, and a
+/// path that has gone away has nothing to upload, so both are left out.
+Future<List<PendingAttachment>> pendingAttachmentsAt(
+  Iterable<String> paths,
+) async => [
+  for (final path in paths)
+    if (await FileStat.stat(path) case final stat
+        when stat.type == FileSystemEntityType.file)
+      PendingAttachment(name: p.basename(path), path: path, size: stat.size),
+];

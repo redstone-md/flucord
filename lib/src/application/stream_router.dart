@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import '../data/discord/discord_stream_rtc_session.dart';
 import '../domain/go_live_stream.dart';
 import '../domain/voice_connection.dart';
@@ -57,6 +55,11 @@ final class StreamRouter {
         }
         if (event is VoiceSignalingStatusEvent &&
             event.status == VoiceConnectionStatus.failure) {
+          // Reported here, so the close that follows has nothing left to end.
+          // A stop on that close would also wipe the error for the tile.
+          if (identical(_receiving[session.key], session)) {
+            _receiving.remove(session.key);
+          }
           _viewer.reportError(
             session.key,
             event.error ?? StateError('Discord refused the stream connection'),
@@ -91,7 +94,7 @@ final class StreamRouter {
         session.key,
         packets: session.video.map(
           (packet) => IncomingVideoPacket(
-            payload: Uint8List.fromList(packet.$2.payload),
+            payload: packet.$2.payload,
             marker: packet.$2.header.marker,
             rtpTimestamp: packet.$2.header.timestamp,
           ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import 'discord_desktop_voice_frames.dart';
 import 'discord_desktop_websocket.dart';
 import 'discord_gateway_client.dart';
 import 'discord_gateway_rules.dart';
+import 'discord_gateway_socket_queue.dart';
 import 'discord_gateway_transport_codec.dart';
 import 'discord_go_live_service.dart';
 import 'discord_guild_subscriptions.dart';
@@ -25,7 +27,9 @@ final class DiscordDesktopGatewayClient
     required String authorization,
     required Map<String, Object?> properties,
     this.profile = DiscordDesktopProtocolProfile.installedStable20260725,
-    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(),
+    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(
+      decodeJsonInWorker: true,
+    ),
   }) : _protocol = DiscordDesktopGatewayProtocol(
          token: authorization,
          properties: properties,
@@ -47,7 +51,11 @@ final class DiscordDesktopGatewayClient
   final DiscordDesktopVoiceFrames _voiceFrames = DiscordDesktopVoiceFrames();
   final DiscordDesktopBootstrap _bootstrap = DiscordDesktopBootstrap();
 
+  /// The one socket this client reads from and writes to. A socket stops being
+  /// this the moment a reconnect or a close gives up on it, so what it still
+  /// reports from then on means nothing.
   DiscordDesktopWebSocket? _socket;
+  bool _dialing = false;
   Timer? _heartbeatTimer;
   Timer? _initialHeartbeatTimer;
   Timer? _reconnectTimer;
@@ -116,7 +124,7 @@ final class DiscordDesktopGatewayClient
   }
 
   Future<void> _open() async {
-    if (_closing) return;
+    if (_closing || _dialing) return;
     _emitStatus(
       _protocol.canResume
           ? DiscordGatewayStatus.reconnecting
@@ -128,61 +136,119 @@ final class DiscordDesktopGatewayClient
     // Transport compression is per connection. Carrying a decompressor across a
     // reconnect would resolve matches against the previous session's bytes.
     _codec.reset();
+    _dialing = true;
     try {
-      _socket = await _socketConnector.connect(uri);
-      _socket!.messages.listen(
-        _accept,
-        onDone: _onDone,
-        onError: _onSocketError,
-        cancelOnError: true,
-      );
+      final socket = await _socketConnector.connect(uri);
+      if (_closing) {
+        await socket.close();
+        return;
+      }
+      _listenTo(socket);
     } on Object catch (error, stackTrace) {
       _lastBootstrapError = error;
       _logBootstrapFailure('websocket-upgrade', error, stackTrace);
       _scheduleReconnect(reason: 'websocket upgrade failed: $error');
+    } finally {
+      _dialing = false;
     }
   }
 
-  void _accept(Object? raw) {
+  /// Makes [socket] the current one. Its callbacks work only while it stays
+  /// current: a close handshake can end long after a new socket took over, and
+  /// the old socket's done event must not take the new one down with it.
+  ///
+  /// The stream stays subscribed after that, because the platform needs it read
+  /// to finish the close handshake.
+  void _listenTo(DiscordDesktopWebSocket socket) {
+    _socket = socket;
+    bool isCurrent() => identical(socket, _socket);
+    final queue = DiscordGatewaySocketQueue();
+    void inOrder(FutureOr<void> Function() step) =>
+        queue.add(() => isCurrent() ? step() : null);
+    socket.messages.listen(
+      (raw) => inOrder(() => _accept(raw, isCurrent)),
+      onDone: () => inOrder(() => _onDone(socket)),
+      onError: (Object error, StackTrace stackTrace) =>
+          inOrder(() => _onSocketError(error, stackTrace)),
+      cancelOnError: true,
+    );
+  }
+
+  /// Handles one frame, at once or, for a large one, after a worker decoded it.
+  FutureOr<void> _accept(Object? raw, bool Function() isCurrent) {
     try {
-      final payloads = _codec.decode(raw);
-      if (payloads.isEmpty) {
-        if (_bootstrapCompleter?.isCompleted == false) {
-          AppLog.warning(
-            'discord.gateway',
-            'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
-          );
-        }
-        return;
+      final decoded = _codec.decode(raw);
+      if (decoded is Future<List<Map<String, Object?>>>) {
+        return _acceptDecoding(raw, decoded, isCurrent);
       }
-      for (final payload in payloads) {
-        _acceptPayload(payload);
+      _acceptPayloads(raw, decoded);
+    } on Object catch (error, stackTrace) {
+      _onFrameFailed(error, stackTrace);
+    }
+  }
+
+  /// A socket can stop being current during the decoding, and then the frame
+  /// means nothing, whether or not it was good.
+  Future<void> _acceptDecoding(
+    Object? raw,
+    Future<List<Map<String, Object?>>> decoding,
+    bool Function() isCurrent,
+  ) async {
+    try {
+      final payloads = await decoding;
+      if (isCurrent()) _acceptPayloads(raw, payloads);
+    } on Object catch (error, stackTrace) {
+      if (isCurrent()) _onFrameFailed(error, stackTrace);
+    }
+  }
+
+  void _acceptPayloads(Object? raw, List<Map<String, Object?>> payloads) {
+    if (payloads.isEmpty) {
+      if (_bootstrapCompleter?.isCompleted == false) {
+        AppLog.warning(
+          'discord.gateway',
+          'Discord Gateway bootstrap ignored a ${raw.runtimeType} frame.',
+        );
       }
-    } on ZstdException catch (error, stackTrace) {
-      // A decompression failure is not recoverable in place. The stream is one
-      // continuous context, so once it desynchronises every later frame is
-      // garbage decoded against poisoned history — and logging and returning
-      // would leave the socket looking healthy while delivering nothing.
-      // Reconnecting is the only correct response; _open resets the decoder.
-      _lastBootstrapError = error;
-      _logBootstrapFailure('transport-compression', error, stackTrace);
-      _scheduleReconnect(
-        immediate: true,
-        reason: 'transport compression failed: $error',
-      );
       return;
-    } on FormatException catch (error, stackTrace) {
-      _lastBootstrapError = error;
-      _logBootstrapFailure(
-        'frame-${_codec.framing.encoding}',
-        error,
-        stackTrace,
-      );
-      return;
-    } on TypeError catch (error, stackTrace) {
-      _lastBootstrapError = error;
-      _logBootstrapFailure('frame-shape', error, stackTrace);
-      return;
+    }
+    for (final payload in payloads) {
+      _acceptPayload(payload);
+    }
+  }
+
+  void _onFrameFailed(Object error, StackTrace stackTrace) {
+    switch (error) {
+      case ZstdException():
+        // A decompression failure is not recoverable in place. The stream is one
+        // continuous context, so once it desynchronises every later frame is
+        // garbage decoded against poisoned history, and logging and returning
+        // would leave the socket looking healthy while delivering nothing.
+        // Reconnecting is the only correct response; _open resets the decoder.
+        _lastBootstrapError = error;
+        _logBootstrapFailure('transport-compression', error, stackTrace);
+        _scheduleReconnect(
+          immediate: true,
+          reason: 'transport compression failed: $error',
+        );
+      case FormatException():
+        _lastBootstrapError = error;
+        _logBootstrapFailure(
+          'frame-${_codec.framing.encoding}',
+          error,
+          stackTrace,
+        );
+      case TypeError():
+        _lastBootstrapError = error;
+        _logBootstrapFailure('frame-shape', error, stackTrace);
+      case IsolateSpawnException() || RemoteError():
+        // The worker itself failed, so the frame was never read. Its sequence
+        // number was not counted either, so a resume brings it back.
+        _lastBootstrapError = error;
+        _logBootstrapFailure('frame-worker', error, stackTrace);
+        _scheduleReconnect(reason: 'frame worker failed: $error');
+      default:
+        Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -286,9 +352,9 @@ final class DiscordDesktopGatewayClient
         _captureBootstrap(action);
         if (action.name == 'READY' || action.name == 'RESUMED') {
           _diagnose(action.name.toLowerCase());
+          _emitStatus(DiscordGatewayStatus.connected);
         }
         if (action.name == 'READY') {
-          _emitStatus(DiscordGatewayStatus.connected);
           _subscribeReadyGuilds(action.data);
           for (final frame in _voiceFrames.replay) {
             _send(frame);
@@ -320,6 +386,14 @@ final class DiscordDesktopGatewayClient
       'READY_SUPPLEMENTAL' => () {
         _bootstrap.acceptSupplemental(dispatch.data);
         return const Duration(milliseconds: 350);
+      }(),
+      // A guild in an outage is still the account's, so it keeps its entry.
+      'GUILD_DELETE' => () {
+        final id = dispatch.data['id'];
+        if (id is String && dispatch.data['unavailable'] != true) {
+          _bootstrap.removeGuild(id);
+        }
+        return null;
       }(),
       _ => null,
     };
@@ -357,6 +431,15 @@ final class DiscordDesktopGatewayClient
     );
   }
 
+  /// Opcode 8 by id: asks the guild for exactly these members.
+  void requestGuildMembersByIds({
+    required String guildId,
+    required List<String> userIds,
+  }) {
+    if (guildId.isEmpty || userIds.isEmpty) return;
+    _send(_protocol.requestGuildMembersByIds(guildId, userIds));
+  }
+
   /// Subscribes a channel's member-list row ranges.
   ///
   /// Discord answers with `GUILD_MEMBER_LIST_UPDATE` for the channel's
@@ -385,10 +468,12 @@ final class DiscordDesktopGatewayClient
   /// Discord pushes live events for a guild only once it is subscribed, and
   /// the subscriptions map is a replace: without this, typing, thread and
   /// member events for a joined server never arrive, because READY named the
-  /// guilds it listed and nothing else.
-  void subscribeGuildEvents(String guildId) {
-    if (!_subscriptions.setFlags(guildId)) return;
+  /// guilds it listed and nothing else. Answers whether this is news, which is
+  /// false for a guild that was already subscribed.
+  bool subscribeGuildEvents(String guildId) {
+    if (!_subscriptions.setFlags(guildId)) return false;
     _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+    return true;
   }
 
   /// Forgets a guild the account left, so a reconnect does not resubscribe
@@ -457,14 +542,12 @@ final class DiscordDesktopGatewayClient
         'discord.gateway',
         'Gateway send failed, reconnecting: ${_diagnosticFor(error)}',
       );
-      unawaited(socket.close());
-      _socket = null;
       _scheduleReconnect(immediate: true, reason: 'send failed');
     }
   }
 
-  void _onDone() {
-    final code = _socket?.closeCode;
+  void _onDone(DiscordDesktopWebSocket socket) {
+    final code = socket.closeCode;
     _lastBootstrapCloseCode = code;
     if (_bootstrapCompleter?.isCompleted == false) {
       AppLog.warning(
@@ -485,9 +568,8 @@ final class DiscordDesktopGatewayClient
       }
       return;
     }
-    // The code the *closing* socket carried, read before anything replaces
-    // it, and how long since a heartbeat went out — a socket that dies a
-    // moment after one usually died because of it.
+    // How long since a heartbeat went out: a socket that dies a moment after
+    // one usually died because of it.
     _scheduleReconnect(
       reason:
           'socket closed (code ${code ?? 'none'}, '
@@ -539,7 +621,9 @@ final class DiscordDesktopGatewayClient
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     _emitStatus(DiscordGatewayStatus.reconnecting);
-    unawaited(_socket?.close());
+    final socket = _socket;
+    _socket = null;
+    unawaited(socket?.close());
     _reconnectTimer = Timer(
       immediate ? Duration.zero : const Duration(seconds: 2),
       _open,
@@ -607,7 +691,9 @@ final class DiscordDesktopGatewayClient
     _bootstrapTimer?.cancel();
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
-    await _socket?.close();
+    final socket = _socket;
+    _socket = null;
+    await socket?.close();
     _voiceFrames.clear();
     _subscriptions.clear();
     _emitStatus(DiscordGatewayStatus.offline);

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/chat_model_json.dart';
 import 'package:flucord/src/data/discord/discord_api_client.dart';
@@ -11,6 +9,7 @@ import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'support/fake_chat_gateway.dart';
 
 void main() {
   setUpAll(sqfliteFfiInit);
@@ -31,7 +30,7 @@ void main() {
     );
     final repository = DiscordChatRepository(
       DiscordApiClient(botToken: 'token', transport: transport),
-      _FakeGateway(),
+      FakeChatGateway(),
       cache,
     );
     addTearDown(repository.close);
@@ -106,12 +105,13 @@ void main() {
           reactions: const [MessageReaction(emojiName: '🔥', count: 1)],
         ),
       );
-      final handler = DiscordReactionHandler(cache, () => 'user-1');
+      final handler = DiscordReactionHandler(cache, () => 'user-1', (_) {});
 
-      final added = await handler.apply(
+      await handler.apply(
         const DiscordGatewayDispatch(
           name: 'MESSAGE_REACTION_ADD',
           data: {
+            'channel_id': 'channel-1',
             'message_id': 'message-1',
             'user_id': 'user-1',
             'type': 1,
@@ -120,17 +120,18 @@ void main() {
           },
         ),
       );
-      final afterAdd = added!.message.reactions.single;
+      final afterAdd = (await cache.readMessage('message-1'))!.reactions.single;
       expect(afterAdd.count, 2);
       expect(afterAdd.normalCount, 1);
       expect(afterAdd.burstCount, 1);
       expect(afterAdd.burstByCurrentUser, isTrue);
       expect(afterAdd.burstColorValues, [0xffff3366]);
 
-      final removed = await handler.apply(
+      await handler.apply(
         const DiscordGatewayDispatch(
           name: 'MESSAGE_REACTION_REMOVE',
           data: {
+            'channel_id': 'channel-1',
             'message_id': 'message-1',
             'user_id': 'user-1',
             'type': 1,
@@ -138,7 +139,9 @@ void main() {
           },
         ),
       );
-      final afterRemove = removed!.message.reactions.single;
+      final afterRemove = (await cache.readMessage(
+        'message-1',
+      ))!.reactions.single;
       expect(afterRemove.count, 1);
       expect(afterRemove.normalCount, 1);
       expect(afterRemove.burstCount, 0);
@@ -167,33 +170,4 @@ final class _RecordingTransport implements DiscordHttpTransport {
 
   @override
   void close() {}
-}
-
-final class _FakeGateway implements DiscordChatGateway {
-  final StreamController<DiscordGatewayEvent> _events =
-      StreamController.broadcast();
-
-  @override
-  Stream<DiscordGatewayEvent> get events => _events.stream;
-
-  @override
-  String? get sessionId => 'session-1';
-
-  @override
-  Future<void> connect(String gatewayUrl) async {}
-
-  @override
-  void updateVoiceState({
-    required String guildId,
-    required String? channelId,
-    bool selfMute = false,
-    bool selfDeaf = false,
-    bool selfVideo = false,
-  }) {}
-
-  @override
-  void pingVoiceServer() {}
-
-  @override
-  Future<void> close() => _events.close();
 }

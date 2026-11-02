@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/channel_capabilities.dart';
@@ -11,11 +13,14 @@ import '../../domain/chat_models.dart';
 /// half the actions are only discoverable by hovering the exact right pixels,
 /// and copying an id or a link had nowhere to live at all.
 enum MessageMenuAction {
+  addReaction,
   reply,
   edit,
   pin,
   forward,
   createThread,
+  markUnread,
+  copySelection,
   copyText,
   copyLink,
   copyId,
@@ -23,29 +28,40 @@ enum MessageMenuAction {
 }
 
 /// Opens the menu at [position], answering what was chosen, or null.
+///
+/// A non-empty [selectedText] adds a Copy item for that text. [canMarkUnread]
+/// says whether this transport keeps read state at all.
 Future<MessageMenuAction?> showMessageContextMenu({
   required BuildContext context,
   required Offset position,
   required ChatMessage message,
   required ChannelCapabilities capabilities,
   required bool isCurrentUser,
+  bool canMarkUnread = false,
+  String selectedText = '',
 }) {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final canDelete = isCurrentUser || capabilities.manageMessages;
   return showMenu<MessageMenuAction>(
     context: context,
     position: RelativeRect.fromRect(
-      position & Size.zero,
+      overlay.globalToLocal(position) & Size.zero,
       Offset.zero & overlay.size,
     ),
     items: [
+      if (capabilities.addReactions)
+        const PopupMenuItem(
+          key: ValueKey('message-menu-add-reaction'),
+          value: MessageMenuAction.addReaction,
+          child: Text('Add reaction'),
+        ),
       if (capabilities.sendMessages)
         const PopupMenuItem(
           key: ValueKey('message-menu-reply'),
           value: MessageMenuAction.reply,
           child: Text('Reply'),
         ),
-      if (isCurrentUser)
+      if (isCurrentUser && message.canEdit)
         const PopupMenuItem(
           key: ValueKey('message-menu-edit'),
           value: MessageMenuAction.edit,
@@ -69,7 +85,19 @@ Future<MessageMenuAction?> showMessageContextMenu({
           value: MessageMenuAction.createThread,
           child: Text('Create thread'),
         ),
+      if (canMarkUnread)
+        const PopupMenuItem(
+          key: ValueKey('message-menu-mark-unread'),
+          value: MessageMenuAction.markUnread,
+          child: Text('Mark unread'),
+        ),
       const PopupMenuDivider(),
+      if (selectedText.isNotEmpty)
+        const PopupMenuItem(
+          key: ValueKey('message-menu-copy-selection'),
+          value: MessageMenuAction.copySelection,
+          child: Text('Copy'),
+        ),
       const PopupMenuItem(
         key: ValueKey('message-menu-copy-text'),
         value: MessageMenuAction.copyText,
@@ -94,6 +122,73 @@ Future<MessageMenuAction?> showMessageContextMenu({
         ),
       ],
     ],
+  );
+}
+
+/// Connects the selectable text inside a message row to that row's menu.
+///
+/// The text can sit deep in the row, in a forwarded message or an embed. A view
+/// outside a row, such as a search result, finds no scope and keeps the normal
+/// selection menu.
+class MessageMenuScope extends InheritedWidget {
+  const MessageMenuScope({
+    required this.onOpen,
+    required this.onSelectionChanged,
+    required super.child,
+    super.key,
+  });
+
+  /// Opens the row's menu at a global position.
+  final ValueChanged<Offset> onOpen;
+
+  /// Tells the row what text is selected now.
+  final ValueChanged<SelectedContent?> onSelectionChanged;
+
+  static MessageMenuScope? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<MessageMenuScope>();
+
+  @override
+  bool updateShouldNotify(MessageMenuScope oldWidget) => false;
+}
+
+/// Takes the right mouse button before anything inside [child] can use it.
+///
+/// A [SelectionArea] uses that button to move the selection and open its own
+/// menu. It would still do both if it only lost the gesture later, because it
+/// acts after 100 ms even with the gesture undecided. So this claims the press
+/// as soon as it lands, and the selection stays as it was.
+class RightClickClaim extends StatelessWidget {
+  const RightClickClaim({
+    required this.onPressed,
+    required this.child,
+    super.key,
+  });
+
+  /// Called with the global position of the press.
+  final ValueChanged<Offset> onPressed;
+  final Widget child;
+
+  static bool _isRightButton(int buttons) => buttons == kSecondaryMouseButton;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (event) {
+      if (_isRightButton(event.buttons)) onPressed(event.position);
+    },
+    child: RawGestureDetector(
+      behavior: HitTestBehavior.translucent,
+      excludeFromSemantics: true,
+      gestures: {
+        EagerGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+              () =>
+                  EagerGestureRecognizer(allowedButtonsFilter: _isRightButton),
+              (_) {},
+            ),
+      },
+      child: child,
+    ),
   );
 }
 

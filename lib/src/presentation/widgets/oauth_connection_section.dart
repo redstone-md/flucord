@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_account_connection_controller.dart';
 import '../../domain/discord_oauth.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'oauth_connected_account_directory.dart';
 import 'remote_identity_image.dart';
 
@@ -22,14 +24,17 @@ class OAuthConnectionSection extends StatelessWidget {
         children: [
           const Text(
             'Discord account',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
-            'One account action coordinates your normal OAuth identity and the native Social SDK grant for approved friends and Direct Messages. Their credentials remain separate.',
+            'Connect your Discord account once to bring in your profile, servers, friends and direct messages.',
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 11,
+              fontSize: FlucordType.caption,
               height: 1.35,
             ),
           ),
@@ -57,9 +62,9 @@ class _OAuthIdentityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final failed = controller.state == DiscordAccountConnectionState.failure;
     final statusColor = failed
-        ? FlucordColors.danger
+        ? context.surfaces.danger
         : controller.isConnected
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.muted;
     final status = _connectionStatus(controller, account);
     return Container(
@@ -67,7 +72,7 @@ class _OAuthIdentityTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Row(
         children: [
@@ -78,8 +83,8 @@ class _OAuthIdentityTile extends StatelessWidget {
               status,
               key: const ValueKey('discord-oauth-status'),
               style: TextStyle(
-                color: failed ? FlucordColors.danger : null,
-                fontSize: 12,
+                color: failed ? context.surfaces.errorText : null,
+                fontSize: FlucordType.caption,
               ),
             ),
           ),
@@ -137,8 +142,8 @@ String _connectionStatus(
     controller.errorMessage ?? 'Discord account connection failed.',
   DiscordAccountConnectionState.partiallyConnected =>
     controller.needsSocial
-        ? '${account?.displayName ?? 'Discord account'} · Complete native social authorization'
-        : 'Native social access connected · Complete profile authorization',
+        ? '${account?.displayName ?? 'Discord account'} · Finish connecting friends and direct messages'
+        : 'Friends and direct messages connected · Finish connecting your profile',
   DiscordAccountConnectionState.connected =>
     controller.socialConnected
         ? '${account?.displayName ?? 'Discord account'} · ${account?.guildCount ?? 0} servers · Friends and DMs connected'
@@ -189,7 +194,7 @@ class _OAuthGuildDirectory extends StatelessWidget {
           'AUTHORIZED SERVERS · ${guilds.length}',
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 10,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
@@ -197,15 +202,18 @@ class _OAuthGuildDirectory extends StatelessWidget {
         const SizedBox(height: 8),
         if (guilds.isEmpty)
           Text(
-            'No servers were returned by the guilds scope.',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+            'Discord listed no servers for this account.',
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           )
         else
           Container(
             decoration: BoxDecoration(
               color: context.surfaces.inset,
               border: Border.all(color: context.surfaces.border),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: FlucordRadius.medium,
             ),
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
@@ -237,14 +245,14 @@ class _OAuthGuildRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final metadata = _metadata(guild);
     return Semantics(
-      label: '${guild.name}, $metadata, messages unavailable through OAuth',
+      label: '${guild.name}, $metadata, messages not available here',
       child: Padding(
         key: ValueKey('discord-oauth-guild-${guild.id}'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: FlucordRadius.medium,
               child: SizedBox.square(
                 dimension: 32,
                 child: RemoteIdentityImage(
@@ -255,7 +263,7 @@ class _OAuthGuildRow extends StatelessWidget {
                       child: Text(
                         _initial(guild.name),
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: FlucordType.caption,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -274,7 +282,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -285,7 +293,7 @@ class _OAuthGuildRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],
@@ -293,7 +301,7 @@ class _OAuthGuildRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Tooltip(
-              message: 'OAuth does not grant message access',
+              message: 'Messages from this server are not available here',
               child: Icon(
                 Icons.lock_outline,
                 size: 15,

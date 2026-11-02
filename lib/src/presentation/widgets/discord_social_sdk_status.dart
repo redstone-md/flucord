@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/discord_social_sdk_controller.dart';
 import '../../domain/discord_social_sdk.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_social_sdk_scope.dart';
 
@@ -13,14 +15,14 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = DiscordSocialSdkScope.of(context);
     final accountController = DiscordAccountConnectionScope.maybeOf(context);
-    final presentation = _presentation(controller);
+    final presentation = _presentation(controller, context.surfaces);
     return Container(
       key: const ValueKey('discord-social-sdk-status'),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,7 +42,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                 Text(
                   presentation.title,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -49,7 +51,7 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
                   presentation.detail,
                   style: TextStyle(
                     color: context.surfaces.muted,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     height: 1.35,
                   ),
                 ),
@@ -94,59 +96,61 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
 
   static _StatusPresentation _presentation(
     DiscordSocialSdkController controller,
+    FlucordSurfaceTheme surfaces,
   ) => switch (controller.state) {
     DiscordSocialSdkControllerState.idle ||
-    DiscordSocialSdkControllerState.checking => const _StatusPresentation(
+    DiscordSocialSdkControllerState.checking => _StatusPresentation(
       icon: Icons.sync,
-      color: FlucordColors.brand,
+      color: surfaces.accentIcon,
       title: 'Checking native social access',
       detail: 'Inspecting the Discord Social SDK bridge.',
     ),
-    DiscordSocialSdkControllerState.restoring => const _StatusPresentation(
+    DiscordSocialSdkControllerState.restoring => _StatusPresentation(
       icon: Icons.sync,
-      color: FlucordColors.brand,
+      color: surfaces.accentIcon,
       title: 'Restoring native social session',
       detail:
           'Rotating the saved Social SDK grant and reconnecting to Discord.',
     ),
-    DiscordSocialSdkControllerState.signedOut => const _StatusPresentation(
+    DiscordSocialSdkControllerState.signedOut => _StatusPresentation(
       icon: Icons.key_outlined,
-      color: FlucordColors.warning,
+      color: surfaces.warning,
       title: 'Native social account is disconnected',
       detail: 'The SDK is bundled. Connect Discord to enable live friends.',
     ),
-    DiscordSocialSdkControllerState.authorizing => const _StatusPresentation(
+    DiscordSocialSdkControllerState.authorizing => _StatusPresentation(
       icon: Icons.key_outlined,
-      color: FlucordColors.brand,
+      color: surfaces.accentIcon,
       title: 'Waiting for Discord authorization',
       detail: 'Complete the native Discord authorization prompt.',
     ),
-    DiscordSocialSdkControllerState.ready => const _StatusPresentation(
+    DiscordSocialSdkControllerState.ready => _StatusPresentation(
       icon: Icons.people_outline,
-      color: FlucordColors.success,
+      color: surfaces.success,
       title: 'Native social access is linked',
       detail:
           'The Social SDK session is authenticated and ready for live friend synchronization.',
     ),
-    DiscordSocialSdkControllerState.unconfigured => const _StatusPresentation(
+    DiscordSocialSdkControllerState.unconfigured => _StatusPresentation(
       icon: Icons.settings_outlined,
-      color: FlucordColors.warning,
+      color: surfaces.warning,
       title: 'Discord application ID is missing',
       detail:
           'Build with FLUCORD_DISCORD_CLIENT_ID to enable Social SDK authorization.',
     ),
-    DiscordSocialSdkControllerState.disconnecting => const _StatusPresentation(
+    DiscordSocialSdkControllerState.disconnecting => _StatusPresentation(
       icon: Icons.sync,
-      color: FlucordColors.brand,
+      color: surfaces.accentIcon,
       title: 'Disconnecting native social session',
       detail: 'Closing the SDK connection and clearing its saved grant.',
     ),
     DiscordSocialSdkControllerState.unavailable => _unavailablePresentation(
       controller.availability,
+      surfaces,
     ),
-    DiscordSocialSdkControllerState.failure => const _StatusPresentation(
+    DiscordSocialSdkControllerState.failure => _StatusPresentation(
       icon: Icons.error_outline,
-      color: FlucordColors.danger,
+      color: surfaces.errorText,
       title: 'Native social access check failed',
       detail:
           'Flucord could not inspect the platform bridge. No Bot API fallback is used for friends.',
@@ -163,20 +167,21 @@ class DiscordSocialSdkStatusPanel extends StatelessWidget {
 
   static _StatusPresentation _unavailablePresentation(
     DiscordSocialSdkAvailability? availability,
+    FlucordSurfaceTheme surfaces,
   ) {
     if (availability?.status ==
         DiscordSocialSdkAvailabilityStatus.unsupportedPlatform) {
-      return const _StatusPresentation(
+      return _StatusPresentation(
         icon: Icons.desktop_windows_outlined,
-        color: FlucordColors.warning,
+        color: surfaces.warning,
         title: 'Native social bridge is unavailable',
         detail:
             'This platform build has no Discord Social SDK bridge. Friends are not routed through Bot API.',
       );
     }
-    return const _StatusPresentation(
+    return _StatusPresentation(
       icon: Icons.extension_off_outlined,
-      color: FlucordColors.warning,
+      color: surfaces.warning,
       title: 'Discord Social SDK is not bundled',
       detail:
           'Link the approved Developer Portal SDK package to enable native relationship access. Friends are not routed through Bot API.',

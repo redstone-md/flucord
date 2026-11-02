@@ -1,6 +1,30 @@
 part of 'discord_mapper.dart';
 
 extension DiscordMessageMapper on DiscordMapper {
+  /// Who wrote the message in [payload]. Null for an update that does not name
+  /// its author.
+  Member? messageAuthor(Map<String, Object?> payload) {
+    final author = payload['author'];
+    if (author is! Map) return null;
+    final mapped = member(
+      author.cast<String, Object?>(),
+      spaceIds: {
+        if (payload['guild_id'] case final String guildId) guildId,
+        if (payload['guild_id'] == null) DiscordMapper.directMessagesSpaceId,
+      },
+    );
+    // A gateway message says who the author is in this guild. A history page
+    // does not, so there the roles come from a member request.
+    return switch ((payload['guild_id'], payload['member'])) {
+      (final String guildId, final Map guildMember) => _withGuildStanding(
+        mapped,
+        guildMember.cast<String, Object?>(),
+        guildId,
+      ),
+      _ => mapped,
+    };
+  }
+
   ChatMessage message(
     Map<String, Object?> payload, {
     ChatMessage? fallback,

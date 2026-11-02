@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../application/self_video_controller.dart';
 import '../../application/voice_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import '../../domain/video_decoder.dart';
+import '../../theme/flucord_type.dart';
+import 'voice_control.dart';
 import 'voice_participant_grid.dart';
 import 'voice_room_status.dart';
 import 'voice_stream_controls.dart';
@@ -24,6 +27,7 @@ class VoiceRoomView extends StatefulWidget {
     this.stageControls,
     this.soundboard,
     this.goLive,
+    this.camera,
     this.streamViewer,
     this.streams,
     this.listening,
@@ -62,6 +66,9 @@ class VoiceRoomView extends StatefulWidget {
 
   /// The Go Live control, or null outside a server voice channel.
   final Widget? goLive;
+
+  /// The account's own camera, when this build can send one.
+  final SelfVideoController? camera;
 
   /// Somebody else's stream, drawn on the stage above the participant grid
   /// while it is being watched, or null when there is none.
@@ -160,7 +167,11 @@ class _VoiceRoomViewState extends State<VoiceRoomView> {
                 cameraFramesFor: widget.cameraFramesFor,
               ),
             ),
-            _VoiceToolbar(controller: widget.controller, goLive: widget.goLive),
+            _VoiceToolbar(
+              controller: widget.controller,
+              camera: widget.camera,
+              goLive: widget.goLive,
+            ),
           ],
         );
       },
@@ -202,14 +213,20 @@ class _VoiceChannelPreview extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             channelName,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.body,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             seated.isEmpty
                 ? 'No one is in the voice channel right now'
                 : '${seated.length} in the channel',
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           if (seated.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -363,20 +380,26 @@ class _VoiceStage extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: FlucordType.body,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               ?soundboard,
               const SizedBox(width: 12),
-              Text(
-                voiceRoomStatusLabel(controller),
-                style: TextStyle(
-                  color: controller.isTransportReady
-                      ? FlucordColors.success
-                      : context.surfaces.muted,
-                  fontSize: 11,
+              // Shares the row with the name on a narrow window, rather than
+              // pushing past its edge.
+              Flexible(
+                child: Text(
+                  voiceRoomStatusLabel(controller),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: controller.isTransportReady
+                        ? context.surfaces.success
+                        : context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ),
             ],
@@ -387,29 +410,36 @@ class _VoiceStage extends StatelessWidget {
         if (voiceRoomWarning(controller) case final warning?)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    warning,
-                    key: const ValueKey('voice-room-warning'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 11,
+            // A long warning scrolls on a short window, so the tiles keep their
+            // place.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 64),
+              child: SingleChildScrollView(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        warning,
+                        key: const ValueKey('voice-room-warning'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: FlucordType.caption,
+                        ),
+                      ),
                     ),
-                  ),
+                    // Offered here because the alternative was leaving the
+                    // channel and coming back, which is not an obvious way to
+                    // ask a client to look for a headset again.
+                    if (voiceRoomOffersDeviceRetry(controller))
+                      TextButton(
+                        key: const ValueKey('voice-room-retry-devices'),
+                        onPressed: () => unawaited(controller.retryDevices()),
+                        child: const Text('Try devices again'),
+                      ),
+                  ],
                 ),
-                // Offered here because the alternative was leaving the channel
-                // and coming back, which is not an obvious way to ask a client
-                // to look for a headset again.
-                if (voiceRoomOffersDeviceRetry(controller))
-                  TextButton(
-                    key: const ValueKey('voice-room-retry-devices'),
-                    onPressed: () => unawaited(controller.retryDevices()),
-                    child: const Text('Try devices again'),
-                  ),
-              ],
+              ),
             ),
           ),
         ?stageControls,
@@ -449,9 +479,10 @@ class _VoiceStage extends StatelessWidget {
 }
 
 class _VoiceToolbar extends StatelessWidget {
-  const _VoiceToolbar({required this.controller, this.goLive});
+  const _VoiceToolbar({required this.controller, this.camera, this.goLive});
 
   final VoiceController controller;
+  final SelfVideoController? camera;
 
   /// The Go Live control, which is the room's only share button.
   final Widget? goLive;
@@ -467,18 +498,30 @@ class _VoiceToolbar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          IconButton(
-            key: const ValueKey('voice-mute'),
-            onPressed: controller.isConnected && !controller.isBusy
-                ? controller.toggleMute
-                : null,
-            tooltip: controller.isMuted ? 'Unmute' : 'Mute',
-            style: _controlStyle(
-              context,
-              foreground: controller.isMuted ? FlucordColors.danger : null,
-            ),
-            icon: Icon(controller.isMuted ? Icons.mic_off : Icons.mic),
+          _controlButton(
+            context,
+            const ValueKey('voice-mute'),
+            VoiceControl.mute(controller),
           ),
+          const SizedBox(width: 12),
+          _controlButton(
+            context,
+            const ValueKey('voice-deafen'),
+            VoiceControl.deafen(controller),
+          ),
+          if (camera case final camera? when camera.isSupported) ...[
+            const SizedBox(width: 12),
+            // Its own listener: the Room rebuilds with the voice controller,
+            // and the camera finishes turning on after that has announced it.
+            ListenableBuilder(
+              listenable: camera,
+              builder: (context, _) => _controlButton(
+                context,
+                const ValueKey('voice-camera'),
+                VoiceControl.camera(camera),
+              ),
+            ),
+          ],
           // One share control, not two. The room used to carry a local
           // capture button here and a Go Live button in the header, which
           // looked like a choice and was not one: only Go Live puts a picture
@@ -490,12 +533,10 @@ class _VoiceToolbar extends StatelessWidget {
           const SizedBox(width: 12),
           IconButton.filled(
             key: const ValueKey('voice-disconnect'),
-            onPressed: controller.isConnected && !controller.isBusy
-                ? controller.disconnect
-                : null,
+            onPressed: controller.isConnected ? controller.disconnect : null,
             tooltip: 'Disconnect',
             style: IconButton.styleFrom(
-              backgroundColor: FlucordColors.danger,
+              backgroundColor: context.surfaces.danger,
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.call_end),
@@ -505,10 +546,18 @@ class _VoiceToolbar extends StatelessWidget {
     );
   }
 
-  ButtonStyle _controlStyle(BuildContext context, {Color? foreground}) =>
-      IconButton.styleFrom(
-        backgroundColor: context.surfaces.raised,
-        foregroundColor: foreground ?? Theme.of(context).colorScheme.onSurface,
-        side: BorderSide(color: context.surfaces.border),
+  Widget _controlButton(BuildContext context, Key key, VoiceControl control) =>
+      IconButton(
+        key: key,
+        onPressed: control.onPressed,
+        tooltip: control.tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: context.surfaces.raised,
+          foregroundColor: control.danger
+              ? context.surfaces.danger
+              : Theme.of(context).colorScheme.onSurface,
+          side: BorderSide(color: context.surfaces.border),
+        ),
+        icon: Icon(control.icon),
       );
 }

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'message_timestamp.dart';
 
 class SystemMessageItem extends StatelessWidget {
   const SystemMessageItem({
@@ -24,12 +27,9 @@ class SystemMessageItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final descriptor = _SystemMessageDescriptor.from(message, member);
     final action = _action();
-    final time = MaterialLocalizations.of(context).formatTimeOfDay(
-      TimeOfDay.fromDateTime(message.sentAt),
-      alwaysUse24HourFormat: MediaQuery.of(context).alwaysUse24HourFormat,
-    );
     return Semantics(
-      label: '${descriptor.text}, $time',
+      label:
+          '${descriptor.text}, ${MessageTimestamp.of(context, message.sentAt)}',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
@@ -42,7 +42,7 @@ class SystemMessageItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: context.surfaces.inset,
                 border: Border.all(color: context.surfaces.border),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: FlucordRadius.full,
               ),
               child: Icon(descriptor.icon, size: 16),
             ),
@@ -55,7 +55,10 @@ class SystemMessageItem extends StatelessWidget {
                 children: [
                   Text(
                     descriptor.text,
-                    style: const TextStyle(fontSize: 13, height: 1.3),
+                    style: const TextStyle(
+                      fontSize: FlucordType.body,
+                      height: 1.3,
+                    ),
                   ),
                   if (action != null)
                     TextButton(
@@ -66,7 +69,7 @@ class SystemMessageItem extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         textStyle: const TextStyle(
-                          fontSize: 12,
+                          fontSize: FlucordType.caption,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -76,11 +79,11 @@ class SystemMessageItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Tooltip(
-              message: time,
-              child: Text(
-                time,
-                style: TextStyle(fontSize: 10, color: context.surfaces.muted),
+            MessageTimeLabel(
+              message.sentAt,
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
               ),
             ),
           ],

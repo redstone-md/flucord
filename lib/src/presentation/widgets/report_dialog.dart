@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../application/report_flow_controller.dart';
 import '../../domain/moderation_report.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'report_element_views.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's in-app report modal.
 ///
@@ -47,16 +49,13 @@ class _ReportDialogState extends State<ReportDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('report-dialog'),
-    backgroundColor: context.surfaces.surface,
-    insetPadding: const EdgeInsets.all(24),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => _body(context),
-      ),
+    maxWidth: 480,
+    maxHeight: 560,
+    child: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => _body(context),
     ),
   );
 
@@ -123,7 +122,10 @@ class _ReportDialogState extends State<ReportDialog> {
           Text(
             'Discord will review it. Nothing you do here is shown to them.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 18),
           if (target is UserReportTarget)
@@ -174,7 +176,7 @@ class _ReportDialogState extends State<ReportDialog> {
                   child: Text(
                     node.info!,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -208,7 +210,7 @@ class _ReportDialogState extends State<ReportDialog> {
                     'That report could not be sent. Try again.',
                     key: const ValueKey('report-submit-error'),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
@@ -238,7 +240,10 @@ class _ReportDialogState extends State<ReportDialog> {
         Expanded(
           child: Text(
             node.header ?? 'Report',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.body,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         IconButton(

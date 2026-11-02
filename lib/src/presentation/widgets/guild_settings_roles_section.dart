@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import '../../application/guild_settings_controller.dart';
 import '../../domain/discord_permissions.dart';
 import '../../domain/guild_management.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../profile_image_picker.dart';
+import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
 
 /// The roles page: the list, its order, and one role's editor.
@@ -121,12 +123,22 @@ class _GuildSettingsRolesSectionState extends State<GuildSettingsRolesSection> {
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.delete_outline),
             onPressed: controller.canDeleteRole(role) && !controller.isBusy
-                ? () => unawaited(controller.deleteRole(role))
+                ? () => unawaited(_confirmDelete(role))
                 : null,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDelete(GuildRole role) async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete ${role.name}?',
+      message: 'Everybody with this role loses it and what it allows.',
+      confirmLabel: 'Delete',
+    );
+    if (confirmed) await widget.controller.deleteRole(role);
   }
 
   String _describe(GuildRole role) {
@@ -536,7 +548,7 @@ class _ColorSwatch extends StatelessWidget {
       label: colorValue == 0 ? 'Default colour' : '#${_hexLabel(colorValue)}',
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: FlucordRadius.full,
         child: Container(
           width: 24,
           height: 24,

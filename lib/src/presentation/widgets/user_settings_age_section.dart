@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/age_verification_controller.dart';
 import '../../domain/age_verification.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 
 /// The ways Discord will let this account prove its age.
@@ -47,7 +49,10 @@ class _AgeVerificationSectionState extends State<AgeVerificationSection> {
             'Each check is run by the company Discord names, on their own '
             'page. Nothing you submit passes through Flucord.',
             key: const ValueKey('age-disclaimer'),
-            style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
           const SizedBox(height: 12),
           if (controller.isLoading && controller.methods.isEmpty)
@@ -66,7 +71,7 @@ class _AgeVerificationSectionState extends State<AgeVerificationSection> {
                 child: Text(
                   'Discord will not start ${refused.label} for this account.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -79,7 +84,7 @@ class _AgeVerificationSectionState extends State<AgeVerificationSection> {
                   '${blocked.label} finishes inside the vendor\'s own app, '
                   'which Flucord does not carry. Use Discord for this one.',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -112,7 +117,7 @@ class _MethodRow extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -130,7 +135,7 @@ class _MethodRow extends StatelessWidget {
                   child: Text(
                     method.description,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -142,7 +147,7 @@ class _MethodRow extends StatelessWidget {
                     'Run by $_provider',
                     key: ValueKey('age-provider-${method.method}'),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),

@@ -1,0 +1,99 @@
+# FLUCORD-25: messages stored per channel. Both sides ran in turn, five rounds each, on one machine.
+# Median of the five p50 values, in ms:
+#   held messages                            1,000   10,000  100,000  300,000
+#   upsertMessage + messagesFor, before       0.44     3.26    44.63   121.46
+#   upsertMessage + messagesFor, after        0.17     0.17     0.17     0.20
+#   mergeHistory (50-message page), before    9.75    10.06    55.48   131.19
+#   mergeHistory (50-message page), after     6.12     4.99     8.07     8.46
+# mergeHistory still copies the 20000 members on each page. That does not depend on held messages.
+# The tables below are the last round of each side.
+
+# Commit c609f4d, after FLUCORD-25. Linux x64, AMD EPYC 7713, 16 threads, Dart 3.12.2, shared machine under load (load average about 25).
+channels=5000 members=20000 messages=1000
+  upsertMessage                                p50      0.12 ms   max      0.23 ms
+  upsertMessage + member merge                 p50      1.69 ms   max     14.33 ms
+  applyReadState                               p50      2.68 ms   max     13.93 ms
+  applyPresences (one user)                    p50      9.48 ms   max     29.98 ms
+  mergeHistory (50-message page)               p50      6.82 ms   max     18.59 ms
+  upsertMessage + messagesFor (regroup)        p50      0.18 ms   max      0.29 ms
+channels=5000 members=20000 messages=10000
+  upsertMessage                                p50      0.19 ms   max     13.97 ms
+  upsertMessage + member merge                 p50      1.58 ms   max     14.85 ms
+  applyReadState                               p50      2.01 ms   max      5.59 ms
+  applyPresences (one user)                    p50      4.82 ms   max      6.48 ms
+  mergeHistory (50-message page)               p50      9.42 ms   max     17.05 ms
+  upsertMessage + messagesFor (regroup)        p50      0.23 ms   max      2.41 ms
+channels=5000 members=20000 messages=100000
+  upsertMessage                                p50      0.23 ms   max      1.39 ms
+  upsertMessage + member merge                 p50      4.09 ms   max     24.67 ms
+  applyReadState                               p50      5.40 ms   max     12.82 ms
+  applyPresences (one user)                    p50     13.33 ms   max     57.44 ms
+  mergeHistory (50-message page)               p50      9.37 ms   max     20.02 ms
+  upsertMessage + messagesFor (regroup)        p50      2.04 ms   max      4.14 ms
+channels=5000 members=20000 messages=300000
+  upsertMessage                                p50      0.28 ms   max     25.23 ms
+  upsertMessage + member merge                 p50      6.41 ms   max     30.83 ms
+  applyReadState                               p50      4.67 ms   max      7.84 ms
+  applyPresences (one user)                    p50     11.46 ms   max     32.76 ms
+  mergeHistory (50-message page)               p50      6.89 ms   max     18.12 ms
+  upsertMessage + messagesFor (regroup)        p50      0.18 ms   max      0.32 ms
+
+# Commit fe5ac63, before FLUCORD-25. Linux x64, AMD EPYC 7713, 16 threads, Dart 3.12.2, shared machine under load (load average about 25).
+channels=5000 members=20000 messages=1000
+  upsertMessage                                p50      0.17 ms   max     31.59 ms
+  upsertMessage + member merge                 p50      4.32 ms   max     27.00 ms
+  applyReadState                               p50      2.49 ms   max     10.30 ms
+  applyPresences (one user)                    p50      9.79 ms   max     24.59 ms
+  mergeHistory (50-message page)               p50     11.69 ms   max     29.43 ms
+  upsertMessage + messagesFor (regroup)        p50      0.42 ms   max      2.72 ms
+channels=5000 members=20000 messages=10000
+  upsertMessage                                p50      0.47 ms   max     12.12 ms
+  upsertMessage + member merge                 p50      1.41 ms   max     14.51 ms
+  applyReadState                               p50      2.35 ms   max      5.69 ms
+  applyPresences (one user)                    p50      7.17 ms   max     47.90 ms
+  mergeHistory (50-message page)               p50      9.41 ms   max     32.80 ms
+  upsertMessage + messagesFor (regroup)        p50      2.83 ms   max     14.66 ms
+channels=5000 members=20000 messages=100000
+  upsertMessage                                p50     16.66 ms   max     66.59 ms
+  upsertMessage + member merge                 p50     24.91 ms   max     41.13 ms
+  applyReadState                               p50     13.23 ms   max     15.86 ms
+  applyPresences (one user)                    p50     17.65 ms   max     43.15 ms
+  mergeHistory (50-message page)               p50     85.92 ms   max    177.79 ms
+  upsertMessage + messagesFor (regroup)        p50    135.17 ms   max    260.37 ms
+channels=5000 members=20000 messages=300000
+  upsertMessage                                p50     69.66 ms   max    200.25 ms
+  upsertMessage + member merge                 p50     51.01 ms   max     96.24 ms
+  applyReadState                               p50     20.11 ms   max     40.98 ms
+  applyPresences (one user)                    p50      3.86 ms   max     29.97 ms
+  mergeHistory (50-message page)               p50    131.19 ms   max    232.31 ms
+  upsertMessage + messagesFor (regroup)        p50    122.19 ms   max    223.95 ms
+
+# Commit 6612529. Linux x64, AMD EPYC 7713, 16 threads, Dart 3.12.2, shared machine under load.
+channels=5000 members=20000 messages=1000
+  upsertMessage                                p50      0.16 ms   max      4.68 ms
+  upsertMessage + member merge                 p50      1.59 ms   max      8.11 ms
+  applyReadState                               p50      1.30 ms   max      4.81 ms
+  applyPresences (one user)                    p50      5.66 ms   max     12.55 ms
+  mergeHistory (50-message page)               p50      5.13 ms   max     11.84 ms
+  upsertMessage + messagesFor (regroup)        p50      0.41 ms   max      0.69 ms
+channels=5000 members=20000 messages=10000
+  upsertMessage                                p50      0.44 ms   max     11.96 ms
+  upsertMessage + member merge                 p50      1.79 ms   max     13.43 ms
+  applyReadState                               p50      2.19 ms   max      7.69 ms
+  applyPresences (one user)                    p50      6.24 ms   max     11.48 ms
+  mergeHistory (50-message page)               p50      7.02 ms   max     13.26 ms
+  upsertMessage + messagesFor (regroup)        p50      2.44 ms   max      3.19 ms
+channels=5000 members=20000 messages=100000
+  upsertMessage                                p50     10.84 ms   max     32.76 ms
+  upsertMessage + member merge                 p50     10.17 ms   max     16.29 ms
+  applyReadState                               p50      4.89 ms   max      6.33 ms
+  applyPresences (one user)                    p50      4.82 ms   max     10.01 ms
+  mergeHistory (50-message page)               p50     34.68 ms   max     42.26 ms
+  upsertMessage + messagesFor (regroup)        p50     16.41 ms   max     33.59 ms
+channels=5000 members=20000 messages=300000
+  upsertMessage                                p50     26.39 ms   max     38.96 ms
+  upsertMessage + member merge                 p50     29.16 ms   max     53.70 ms
+  applyReadState                               p50     10.66 ms   max     21.26 ms
+  applyPresences (one user)                    p50      3.69 ms   max      8.12 ms
+  mergeHistory (50-message page)               p50     96.06 ms   max    106.21 ms
+  upsertMessage + messagesFor (regroup)        p50     53.02 ms   max     90.44 ms

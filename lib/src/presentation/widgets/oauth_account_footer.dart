@@ -6,6 +6,7 @@ import '../../application/discord_social_presence_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../domain/discord_social_presence.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_social_presence_scope.dart';
 import 'remote_identity_image.dart';
 
@@ -71,7 +72,7 @@ class OAuthAccountFooter extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -85,9 +86,9 @@ class OAuthAccountFooter extends StatelessWidget {
                     color:
                         activePresence?.state ==
                             DiscordSocialPresenceState.failure
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],
@@ -102,7 +103,7 @@ class OAuthAccountFooter extends StatelessWidget {
             size: 18,
             color: hasNativePresence
                 ? context.surfaces.muted
-                : FlucordColors.success,
+                : context.surfaces.success,
           ),
         ],
       ),
@@ -152,11 +153,14 @@ class _StatusMenuItem extends StatelessWidget {
         Expanded(
           child: Text(
             _statusLabel(status),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         if (selected)
-          const Icon(Icons.check, size: 17, color: FlucordColors.brand),
+          Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
       ],
     );
   }
@@ -190,8 +194,8 @@ String _statusLabel(DiscordOnlineStatus status) => switch (status) {
 
 Color _statusColor(BuildContext context, DiscordOnlineStatus status) =>
     switch (status) {
-      DiscordOnlineStatus.online => FlucordColors.success,
-      DiscordOnlineStatus.idle => FlucordColors.warning,
-      DiscordOnlineStatus.doNotDisturb => FlucordColors.danger,
+      DiscordOnlineStatus.online => context.surfaces.success,
+      DiscordOnlineStatus.idle => context.surfaces.warning,
+      DiscordOnlineStatus.doNotDisturb => context.surfaces.danger,
       DiscordOnlineStatus.invisible => context.surfaces.muted,
     };

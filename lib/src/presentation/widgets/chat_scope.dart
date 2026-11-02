@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../application/chat_controller.dart';
+import '../../domain/chat_models.dart';
 
 /// Publishes the conversation controller to the conversation pane.
 ///
@@ -27,4 +28,13 @@ final class ChatScope extends InheritedNotifier<ChatController> {
   /// for imperative calls, and for widgets that listen on their own.
   static ChatController read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ChatScope>()!.notifier!;
+
+  /// The workspace as it is now, for an action a timeline row takes.
+  ///
+  /// A row builds again only when something it draws changes, so the workspace
+  /// it [held] since then can be out of date for anything else. A host with no
+  /// scope above it keeps [held], because nothing else can be newer.
+  static ChatWorkspace workspaceNow(BuildContext context, ChatWorkspace held) =>
+      context.getInheritedWidgetOfExactType<ChatScope>()?.notifier?.workspace ??
+      held;
 }

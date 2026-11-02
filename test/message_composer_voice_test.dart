@@ -1,10 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/fake_voice_message_recorder.dart';
 
 void main() {
   testWidgets('records and uploads a voice message from an empty composer', (
@@ -12,7 +13,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 500));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final recorder = _FakeVoiceMessageRecorder();
+    final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
     PendingVoiceMessage? sent;
 
@@ -64,7 +65,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(280, 420));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final recorder = _FakeVoiceMessageRecorder();
+    final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
     var attempts = 0;
 
@@ -105,7 +106,7 @@ void main() {
   testWidgets('channel change cancels an active voice recording', (
     tester,
   ) async {
-    final recorder = _FakeVoiceMessageRecorder();
+    final recorder = FakeVoiceMessageRecorder();
     addTearDown(recorder.dispose);
     final channelId = ValueNotifier('channel-1');
     addTearDown(channelId.dispose);
@@ -134,7 +135,7 @@ void main() {
   testWidgets('cleanup failure cannot turn a successful upload into a retry', (
     tester,
   ) async {
-    final recorder = _FakeVoiceMessageRecorder(
+    final recorder = FakeVoiceMessageRecorder(
       deleteError: StateError('temporary file is busy'),
     );
     addTearDown(recorder.dispose);
@@ -164,7 +165,7 @@ void main() {
 
 Widget _composerApp({
   String channelId = 'channel-1',
-  required _FakeVoiceMessageRecorder recorder,
+  required FakeVoiceMessageRecorder recorder,
   required SendVoiceMessageCallback onSendVoiceMessage,
 }) => MaterialApp(
   theme: FlucordTheme.dark,
@@ -172,6 +173,7 @@ Widget _composerApp({
     body: Align(
       alignment: Alignment.bottomCenter,
       child: MessageComposer(
+        drafts: MemoryComposerDraftStore(),
         channelId: channelId,
         channelName: 'native',
         spaceName: 'Forge',
@@ -189,61 +191,3 @@ Widget _composerApp({
     ),
   ),
 );
-
-final class _FakeVoiceMessageRecorder implements VoiceMessageRecorder {
-  _FakeVoiceMessageRecorder({this.deleteError});
-
-  final StreamController<VoiceMessageRecordingProgress> _progress =
-      StreamController.broadcast();
-  final PendingVoiceMessage pending = PendingVoiceMessage(
-    name: 'voice.ogg',
-    path: 'C:\\temp\\voice.ogg',
-    size: 128,
-    durationSecs: 2,
-    waveform: 'AQID',
-  );
-  final List<PendingVoiceMessage> deleted = [];
-  final Object? deleteError;
-
-  int startCount = 0;
-  int cancelCount = 0;
-  int deleteCount = 0;
-
-  @override
-  bool isRecording = false;
-
-  @override
-  Stream<VoiceMessageRecordingProgress> get progress => _progress.stream;
-
-  void emit(VoiceMessageRecordingProgress value) => _progress.add(value);
-
-  @override
-  Future<void> start() async {
-    startCount++;
-    isRecording = true;
-  }
-
-  @override
-  Future<PendingVoiceMessage> stop() async {
-    isRecording = false;
-    return pending;
-  }
-
-  @override
-  Future<void> cancel() async {
-    cancelCount++;
-    isRecording = false;
-  }
-
-  @override
-  Future<void> delete(PendingVoiceMessage message) async {
-    deleteCount++;
-    if (deleteError case final error?) throw error;
-    deleted.add(message);
-  }
-
-  @override
-  Future<void> dispose() async {
-    if (!_progress.isClosed) await _progress.close();
-  }
-}

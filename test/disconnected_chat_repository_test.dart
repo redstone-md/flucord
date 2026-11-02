@@ -21,7 +21,7 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          'No Discord chat transport is connected.',
+          'Not connected to Discord.',
         ),
       ),
     );

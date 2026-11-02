@@ -4,12 +4,30 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
   final OverlayPortalController _autocompleteOverlayController =
       OverlayPortalController();
   final LayerLink _autocompleteLayerLink = LayerLink();
+  final ScrollController _autocompleteScroll = ScrollController();
   List<ComposerAutocompleteSuggestion> _autocompleteSuggestions = const [];
-  ComposerAutocompleteQuery? _autocompleteQuery;
   int _autocompleteSelection = 0;
+
+  /// The query being typed, also while nothing loaded matches it. Null once
+  /// the user closed the list, so nothing opens it again until they type.
+  ComposerAutocompleteQuery? _autocompleteQuery;
+
+  /// The catalog queries read. It moves only to a catalog with different data,
+  /// so the suggestions it built survive a rebuild of the pane.
+  late ComposerAutocompleteCatalog _autocompleteCatalog =
+      widget.autocompleteCatalog;
+
+  /// The last text asked about in this channel. Updates that arrive while the
+  /// query stays the same must not ask again: each one is a gateway frame, and
+  /// the gateway limits them.
+  String? _requestedMemberQuery;
 
   TextEditingController get _autocompleteTextController;
   FocusNode get _autocompleteFocusNode;
+
+  /// Answers the keys pressed in the box. It offers each key to
+  /// [_handleComposerAutocompleteKey] first.
+  FocusOnKeyEventCallback get _composerKeyHandler;
 
   void _initializeComposerAutocomplete() {
     _autocompleteTextController.addListener(_refreshComposerAutocomplete);
@@ -22,10 +40,35 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     if (_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.hide();
     }
+    _autocompleteScroll.dispose();
   }
 
   void _handleAutocompleteFocus() {
     if (!_autocompleteFocusNode.hasFocus) _dismissComposerAutocomplete();
+  }
+
+  /// Takes the catalog of a rebuilt pane. A closed list stays closed, and the
+  /// new catalog builds nothing until a query needs it.
+  void _updateAutocompleteCatalog({required bool channelChanged}) {
+    if (channelChanged) _requestedMemberQuery = null;
+    if (_autocompleteCatalog == widget.autocompleteCatalog) return;
+    _autocompleteCatalog = widget.autocompleteCatalog;
+    if (channelChanged || _autocompleteQuery == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshComposerAutocomplete();
+    });
+  }
+
+  /// A large guild sends only a fraction of its members at login, so the names
+  /// already loaded are not the names that can be mentioned. The answer arrives
+  /// as ordinary member updates, which is what refreshes the list.
+  void _requestMembersFor(ComposerAutocompleteQuery query) {
+    if (query.trigger != ComposerAutocompleteTrigger.mention ||
+        query.text == _requestedMemberQuery) {
+      return;
+    }
+    _requestedMemberQuery = query.text;
+    widget.onSearchMembers?.call(query.text);
   }
 
   void _refreshComposerAutocomplete() {
@@ -48,9 +91,11 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _dismissComposerAutocomplete();
       return;
     }
-    final suggestions = widget.autocompleteCatalog.suggestionsFor(query);
+    _requestMembersFor(query);
+    final suggestions = _autocompleteCatalog.suggestionsFor(query);
     if (suggestions.isEmpty) {
       _dismissComposerAutocomplete();
+      _autocompleteQuery = query;
       return;
     }
     final selectedId = _autocompleteSuggestions.isEmpty
@@ -68,13 +113,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _autocompleteSuggestions = suggestions;
       _autocompleteSelection = retainedIndex < 0 ? 0 : retainedIndex;
     });
-    // A large guild sends only a fraction of its members at login, so the
-    // names already loaded are not the names that can be mentioned. Asking
-    // costs one gateway frame and the answer arrives as ordinary member
-    // updates, which is what refreshes this list.
-    if (query.trigger == ComposerAutocompleteTrigger.mention) {
-      widget.onSearchMembers?.call(query.text);
-    }
+    _revealAutocompleteSelection();
     if (!_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.show();
     }
@@ -87,6 +126,21 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     _autocompleteSuggestions = const [];
     _autocompleteQuery = null;
     _autocompleteSelection = 0;
+  }
+
+  /// Runs [change] and leaves the list closed. Text put in the box from code,
+  /// such as a draft coming back, is not the user asking for suggestions.
+  void _withAutocompleteClosed(VoidCallback change) {
+    _autocompleteTextController.removeListener(_refreshComposerAutocomplete);
+    change();
+    _autocompleteTextController.addListener(_refreshComposerAutocomplete);
+    _autocompleteSuggestions = const [];
+    // This runs during a build, where the portal cannot be hidden.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _autocompleteSuggestions.isEmpty) {
+        _resetComposerAutocomplete();
+      }
+    });
   }
 
   void _dismissComposerAutocomplete() {
@@ -108,6 +162,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
         event.logicalKey == LogicalKeyboardKey.tab) {
       _selectComposerAutocomplete(_autocompleteSelection);
       return KeyEventResult.handled;
@@ -124,6 +179,24 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     setState(() {
       _autocompleteSelection =
           (_autocompleteSelection + delta) % _autocompleteSuggestions.length;
+    });
+    _revealAutocompleteSelection();
+  }
+
+  /// Scrolls the list just far enough to show the selected row. Called only
+  /// when the selection moves by key or by a new query: a row under the mouse
+  /// is on screen already, and the list must not move under the pointer.
+  void _revealAutocompleteSelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_autocompleteScroll.hasClients) return;
+      final position = _autocompleteScroll.position;
+      final top = _autocompleteSelection * _ComposerAutocompleteMenu.rowHeight;
+      final bottom = top + _ComposerAutocompleteMenu.rowHeight;
+      if (top < position.pixels) {
+        position.jumpTo(top);
+      } else if (bottom > position.pixels + position.viewportDimension) {
+        position.jumpTo(bottom - position.viewportDimension);
+      }
     });
   }
 
@@ -169,6 +242,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
                     suggestions: _autocompleteSuggestions,
                     selectedIndex: _autocompleteSelection,
                     trigger: _autocompleteQuery?.trigger,
+                    scrollController: _autocompleteScroll,
                     onHover: _hoverComposerAutocomplete,
                     onSelected: _selectComposerAutocomplete,
                   ),
@@ -178,10 +252,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
           ),
           child: CompositedTransformTarget(
             link: _autocompleteLayerLink,
-            child: Focus(
-              onKeyEvent: _handleComposerAutocompleteKey,
-              child: child,
-            ),
+            child: Focus(onKeyEvent: _composerKeyHandler, child: child),
           ),
         ),
       );
@@ -192,13 +263,17 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
     required this.suggestions,
     required this.selectedIndex,
     required this.trigger,
+    required this.scrollController,
     required this.onHover,
     required this.onSelected,
   });
 
+  static const rowHeight = 44.0;
+
   final List<ComposerAutocompleteSuggestion> suggestions;
   final int selectedIndex;
   final ComposerAutocompleteTrigger? trigger;
+  final ScrollController scrollController;
   final ValueChanged<int> onHover;
   final ValueChanged<int> onSelected;
 
@@ -210,11 +285,11 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
       color: context.surfaces.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
-        height: 32.0 + visibleCount * 44.0,
+        height: 32.0 + visibleCount * rowHeight,
         child: Column(
           children: [
             SizedBox(
@@ -231,7 +306,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
                     },
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.5,
                     ),
@@ -241,9 +316,10 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
             ),
             Expanded(
               child: ListView.builder(
+                controller: scrollController,
                 padding: EdgeInsets.zero,
                 itemCount: suggestions.length,
-                itemExtent: 44,
+                itemExtent: rowHeight,
                 itemBuilder: (context, index) => _ComposerAutocompleteRow(
                   suggestion: suggestions[index],
                   selected: index == selectedIndex,
@@ -297,7 +373,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
               border: Border(
                 left: BorderSide(
                   width: 2,
-                  color: selected ? FlucordColors.brand : Colors.transparent,
+                  color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
               ),
             ),
@@ -316,7 +392,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                               : '$prefix${suggestion.label}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: FlucordType.caption,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -328,7 +404,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 10,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ),
@@ -359,14 +435,17 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
         return SizedBox.square(
           dimension: 28,
           child: Center(
-            child: Text(glyph, style: const TextStyle(fontSize: 20)),
+            child: Text(
+              glyph,
+              style: const TextStyle(fontSize: FlucordType.title),
+            ),
           ),
         );
       }
       return SizedBox.square(
         dimension: 28,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: RemoteIdentityImage(
             url: suggestion.emojiUrl,
             fallback: Container(
@@ -374,7 +453,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 suggestion.label.substring(0, 1).toUpperCase(),
-                style: TextStyle(fontSize: 11, color: color),
+                style: TextStyle(fontSize: FlucordType.caption, color: color),
               ),
             ),
           ),
@@ -394,7 +473,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
                   suggestion.initials ?? '?',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -409,7 +488,7 @@ class _ComposerAutocompleteGlyph extends StatelessWidget {
       height: 28,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Icon(
         suggestion.kind == ComposerAutocompleteKind.role

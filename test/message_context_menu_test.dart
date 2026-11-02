@@ -75,6 +75,7 @@ void main() {
           attachFiles: false,
           embedLinks: false,
           moderateStage: false,
+          bypassesSlowmode: false,
         ),
         isCurrentUser: false,
       );
@@ -84,10 +85,25 @@ void main() {
       expect(find.byKey(const ValueKey('message-menu-reply')), findsNothing);
       expect(find.byKey(const ValueKey('message-menu-delete')), findsNothing);
       expect(find.byKey(const ValueKey('message-menu-edit')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('message-menu-add-reaction')),
+        findsNothing,
+      );
       // Copying is always on: it asks nothing of the server.
       expect(
         find.byKey(const ValueKey('message-menu-copy-id')),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('no Mark unread on a transport with no read state', (
+      tester,
+    ) async {
+      await _pumpMenu(tester, isCurrentUser: false);
+
+      expect(
+        find.byKey(const ValueKey('message-menu-mark-unread')),
+        findsNothing,
       );
     });
 
@@ -97,6 +113,21 @@ void main() {
       expect(find.byKey(const ValueKey('message-menu-edit')), findsOneWidget);
       expect(find.byKey(const ValueKey('message-menu-delete')), findsOneWidget);
       expect(find.byKey(const ValueKey('message-menu-reply')), findsOneWidget);
+    });
+
+    // Discord refuses an edit to a voice message, so the menu does not offer
+    // an editor that could never save.
+    testWidgets('its own voice message can be deleted, not edited', (
+      tester,
+    ) async {
+      await _pumpMenu(
+        tester,
+        message: _message.copyWith(flags: DiscordMessageFlag.voiceMessage.bit),
+        isCurrentUser: true,
+      );
+
+      expect(find.byKey(const ValueKey('message-menu-edit')), findsNothing);
+      expect(find.byKey(const ValueKey('message-menu-delete')), findsOneWidget);
     });
 
     testWidgets('a moderator deletes what is not theirs', (tester) async {
@@ -112,6 +143,7 @@ void main() {
           attachFiles: true,
           embedLinks: true,
           moderateStage: false,
+          bypassesSlowmode: false,
         ),
         isCurrentUser: false,
       );
@@ -134,7 +166,9 @@ Future<void> _pumpMenu(
     attachFiles: true,
     embedLinks: true,
     moderateStage: false,
+    bypassesSlowmode: false,
   ),
+  ChatMessage? message,
   required bool isCurrentUser,
 }) async {
   await tester.pumpWidget(
@@ -146,7 +180,7 @@ Future<void> _pumpMenu(
             onPressed: () => showMessageContextMenu(
               context: context,
               position: const Offset(20, 20),
-              message: _message,
+              message: message ?? _message,
               capabilities: capabilities,
               isCurrentUser: isCurrentUser,
             ),

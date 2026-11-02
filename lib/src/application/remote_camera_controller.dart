@@ -117,7 +117,7 @@ final class RemoteCameraController extends ChangeNotifier {
     camera.ssrc = frame.header.ssrc;
     camera.pipeline.accept(
       IncomingVideoPacket(
-        payload: Uint8List.fromList(frame.payload),
+        payload: frame.payload,
         marker: frame.header.marker,
         rtpTimestamp: frame.header.timestamp,
       ),

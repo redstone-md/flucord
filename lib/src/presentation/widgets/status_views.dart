@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 class LoadingWorkspaceView extends StatelessWidget {
   const LoadingWorkspaceView({super.key});
@@ -19,7 +20,10 @@ class LoadingWorkspaceView extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Opening workspace',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
         ),
@@ -40,9 +44,9 @@ class FailedWorkspaceView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.warning_amber,
-              color: FlucordColors.warning,
+              color: context.surfaces.warning,
               size: 30,
             ),
             const SizedBox(height: 12),
@@ -52,8 +56,11 @@ class FailedWorkspaceView extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'The transport returned an error.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              'Your servers and messages could not be loaded.',
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
@@ -93,7 +100,7 @@ class ChannelFailureView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off, color: FlucordColors.warning, size: 28),
+          Icon(Icons.cloud_off, color: context.surfaces.warning, size: 28),
           const SizedBox(height: 10),
           const Text(
             'Message history unavailable',
@@ -132,47 +139,13 @@ class EmptyWorkspaceView extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               'Install the bot in a server with channel access.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: onOpenConnections,
-              icon: const Icon(Icons.link, size: 16),
-              label: const Text('Connections'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class DisconnectedWorkspaceView extends StatelessWidget {
-  const DisconnectedWorkspaceView({required this.onOpenConnections, super.key});
-
-  final VoidCallback onOpenConnections;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.link_off, size: 30, color: context.surfaces.muted),
-            const SizedBox(height: 12),
-            const Text(
-              'No chat transport connected',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'A linked Discord identity alone cannot open messages.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              key: const ValueKey('open-disconnected-connections'),
               onPressed: onOpenConnections,
               icon: const Icon(Icons.link, size: 16),
               label: const Text('Connections'),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/channel_sidebar_order.dart';
 import '../../application/connection_controller.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
@@ -7,8 +8,12 @@ import '../../domain/chat_repository.dart';
 import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'server_menu.dart';
 import 'account_panel.dart';
+import 'activity_label.dart';
 import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
 import 'member_avatar.dart';
@@ -128,8 +133,8 @@ class ChannelSidebar extends StatelessWidget {
   final VoidCallback? onOpenEvents;
 
   /// Opens the server-settings window. Null when the account may administer
-  /// nothing here, or when the transport has no admin plane at all — the header
-  /// then simply has no gear, which is what Discord does too.
+  /// nothing here, or when the transport has no admin plane at all. The header
+  /// menu then has no settings entry, which is what Discord does too.
   final VoidCallback? onOpenServerSettings;
 
   /// Leaves the server. Null on a transport that cannot leave anything and
@@ -147,15 +152,15 @@ class ChannelSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDirect = space.isDirectMessages;
-    final regularChannels = channels
-        .where((channel) => !channel.isThread)
-        .toList(growable: false);
-    final threads = channels
-        .where(
-          (channel) =>
-              channel.isThread && !channel.isArchived && !_isForumPost(channel),
-        )
-        .toList(growable: false);
+    final order = ChannelSidebarOrder(
+      space: space,
+      channels: channels,
+      categories: categories,
+      collapsedCategoryIds: collapsedCategoryIds,
+      selectedChannelId: selectedChannelId,
+      readState: _readState,
+      channelOf: channelOf,
+    );
     // The account's dark-sidebar answer, read here so the flag from any
     // device repaints the rail. It only applies to the built-in light
     // palette: an installed theme is never overridden, its author picked
@@ -183,89 +188,17 @@ class ChannelSidebar extends StatelessWidget {
                 bottom: BorderSide(color: context.surfaces.border),
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    space.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _spaceMuted
-                          ? context.surfaces.muted
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
+            child: isDirect
+                ? _directMessagesHeader(context)
+                : _ServerHeader(
+                    title: _spaceTitle(context),
+                    onOpenSettings: onOpenServerSettings,
+                    onLeave: onLeaveServer,
+                    onReport: onReportServer,
+                    onOpenNotifications: onNotificationRequest == null
+                        ? null
+                        : _openSpaceNotifications,
                   ),
-                ),
-                if (_spaceMuted)
-                  Padding(
-                    key: const ValueKey('space-muted'),
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.notifications_off_outlined,
-                      size: 15,
-                      color: context.surfaces.muted,
-                    ),
-                  ),
-                if (isDirect && friends != null)
-                  IconButton(
-                    key: const ValueKey('toggle-friends'),
-                    onPressed: friends!.togglePanel,
-                    icon: Icon(
-                      friends!.isPanelOpen
-                          ? Icons.forum_outlined
-                          : Icons.people_alt_outlined,
-                      size: 18,
-                    ),
-                    tooltip: friends!.isPanelOpen ? 'Conversations' : 'Friends',
-                  ),
-                if (isDirect)
-                  IconButton(
-                    key: const ValueKey('new-direct-message'),
-                    onPressed: onNewDirectMessage,
-                    icon: const Icon(Icons.edit_square),
-                    tooltip: 'New message',
-                  ),
-                if (!isDirect && onOpenServerSettings != null)
-                  IconButton(
-                    key: const ValueKey('open-server-settings'),
-                    onPressed: onOpenServerSettings,
-                    icon: const Icon(Icons.settings_outlined, size: 18),
-                    tooltip: 'Server settings',
-                  ),
-                if (!isDirect && onLeaveServer != null)
-                  IconButton(
-                    key: const ValueKey('leave-server'),
-                    onPressed: onLeaveServer,
-                    icon: const Icon(Icons.logout_outlined, size: 18),
-                    tooltip: 'Leave server',
-                  ),
-                if (!isDirect && onReportServer != null)
-                  IconButton(
-                    key: const ValueKey('report-server'),
-                    onPressed: onReportServer,
-                    icon: const Icon(Icons.flag_outlined, size: 18),
-                    tooltip: 'Report server',
-                  ),
-                if (onNotificationRequest != null)
-                  PopupMenuButton<NotificationMenuRequest>(
-                    key: const ValueKey('space-notification-menu'),
-                    tooltip: 'Notification settings',
-                    icon: const Icon(Icons.more_vert, size: 18),
-                    padding: EdgeInsets.zero,
-                    onSelected: (request) =>
-                        onNotificationRequest!(request, null),
-                    itemBuilder: (context) => notificationMenuItems(
-                      muted: _spaceMuted,
-                      level: _spaceSettings.messageNotifications,
-                      isSpaceScope: true,
-                      suppressEveryone: _spaceSettings.suppressEveryone,
-                      mobilePush: _spaceSettings.mobilePush,
-                    ),
-                  ),
-              ],
-            ),
           ),
           Expanded(
             child: isDirect && (friends?.isPanelOpen ?? false)
@@ -281,14 +214,18 @@ class ChannelSidebar extends StatelessWidget {
                   )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-                    children: _navigationEntries(
-                      isDirect: isDirect,
-                      regularChannels: regularChannels,
-                      threads: threads,
-                    ),
+                    children: _navigationEntries(order),
                   ),
           ),
-          ?voiceConnectionBar,
+          // On a short window a tall bar scrolls, so the channels and the
+          // account panel keep their place.
+          if (voiceConnectionBar case final bar?)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height / 2,
+              ),
+              child: SingleChildScrollView(child: bar),
+            ),
           AccountPanel(
             member: currentMember,
             sessionMode: sessionMode,
@@ -306,6 +243,93 @@ class ChannelSidebar extends StatelessWidget {
     );
   }
 
+  /// The space's name, with a mark when the whole space is muted. Takes all
+  /// the width its row has left.
+  Widget _spaceTitle(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          space.name,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w600,
+            color: _spaceMuted
+                ? context.surfaces.muted
+                : Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ),
+      if (_spaceMuted)
+        Padding(
+          key: const ValueKey('space-muted'),
+          padding: const EdgeInsets.only(right: 4),
+          child: Icon(
+            Icons.notifications_off_outlined,
+            size: 15,
+            color: context.surfaces.muted,
+          ),
+        ),
+    ],
+  );
+
+  /// Direct messages have no server menu: their actions start a conversation
+  /// or swap the list, so they stay one click away.
+  Widget _directMessagesHeader(BuildContext context) => Row(
+    children: [
+      Expanded(child: _spaceTitle(context)),
+      if (friends case final friends?)
+        IconButton(
+          key: const ValueKey('toggle-friends'),
+          onPressed: friends.togglePanel,
+          icon: Icon(
+            friends.isPanelOpen
+                ? Icons.forum_outlined
+                : Icons.people_alt_outlined,
+            size: 18,
+          ),
+          tooltip: friends.isPanelOpen ? 'Conversations' : 'Friends',
+        ),
+      IconButton(
+        key: const ValueKey('new-direct-message'),
+        onPressed: onNewDirectMessage,
+        icon: const Icon(Icons.edit_square),
+        tooltip: 'New message',
+      ),
+      if (onNotificationRequest case final onRequest?)
+        PopupMenuButton<NotificationMenuRequest>(
+          key: const ValueKey('space-notification-menu'),
+          tooltip: 'Notification settings',
+          icon: const Icon(Icons.more_vert, size: 18),
+          padding: EdgeInsets.zero,
+          onSelected: (request) => onRequest(request, null),
+          itemBuilder: (context) => _spaceNotificationItems,
+        ),
+    ],
+  );
+
+  List<PopupMenuEntry<NotificationMenuRequest>> get _spaceNotificationItems =>
+      notificationMenuItems(
+        muted: _spaceMuted,
+        level: _spaceSettings.messageNotifications,
+        isSpaceScope: true,
+        suppressEveryone: _spaceSettings.suppressEveryone,
+        mobilePush: _spaceSettings.mobilePush,
+      );
+
+  /// Raises the notification menu for the whole space at [position].
+  Future<void> _openSpaceNotifications(
+    BuildContext context,
+    RelativeRect position,
+  ) async {
+    final request = await showMenu<NotificationMenuRequest>(
+      context: context,
+      position: position,
+      items: _spaceNotificationItems,
+    );
+    if (request != null) onNotificationRequest?.call(request, null);
+  }
+
   ReadStateSnapshot get _readState => readState ?? ReadStateSnapshot.empty;
 
   GuildNotificationSettings get _spaceSettings =>
@@ -317,60 +341,15 @@ class ChannelSidebar extends StatelessWidget {
       _readState.isChannelMuted(channel);
 
   /// Whether the row should read as unread.
-  ///
-  /// A mention always shows. Otherwise R04's resolved unread badge decides: a
-  /// channel set to "only mentions" stays quiet in the sidebar even though the
-  /// server does consider it unread.
-  bool _showsUnread(ConversationChannel channel) {
-    if (channel.mentionCount > 0) return true;
-    if (!channel.unread) return false;
-    return _readState.unreadBadgeFor(channel) == UnreadBadge.allMessages;
-  }
+  bool _showsUnread(ConversationChannel channel) =>
+      _readState.showsUnread(channel);
 
-  /// R04's `hide_muted_channels`: a muted channel is dropped from the list
-  /// unless it is the one on screen or it is shouting at the account anyway.
-  List<ConversationChannel> _withoutHiddenMuted(
-    List<ConversationChannel> source,
-  ) {
-    if (!_spaceSettings.hideMutedChannels) return source;
-    return [
-      for (final channel in source)
-        if (channel.id == selectedChannelId ||
-            channel.mentionCount > 0 ||
-            !_isMuted(channel))
-          channel,
-    ];
-  }
-
-  bool _isForumPost(ConversationChannel channel) {
-    final parentId = channel.parentId;
-    if (parentId == null) return false;
-    final parent = channelOf(parentId);
-    return parent?.kind == ChannelKind.forum ||
-        parent?.kind == ChannelKind.media;
-  }
-
-  List<Widget> _navigationEntries({
-    required bool isDirect,
-    required List<ConversationChannel> regularChannels,
-    required List<ConversationChannel> threads,
-  }) {
-    if (isDirect) return _directMessageEntries(regularChannels);
-    final sortedCategories = [...categories]
-      ..sort((left, right) => left.position.compareTo(right.position));
-    if (sortedCategories.isEmpty) {
-      return [
-        ..._eventEntries(),
-        ..._uncategorizedEntries(regularChannels, threads),
-      ];
+  List<Widget> _navigationEntries(ChannelSidebarOrder order) {
+    if (space.isDirectMessages) return _directMessageEntries(order);
+    if (order.categories.isEmpty) {
+      return [..._eventEntries(), ..._uncategorizedEntries(order)];
     }
-    final categoryIds = sortedCategories.map((category) => category.id).toSet();
-    final uncategorized = _ordered(
-      regularChannels.where(
-        (channel) =>
-            channel.parentId == null || !categoryIds.contains(channel.parentId),
-      ),
-    );
+    final uncategorized = order.uncategorized;
     return [
       ..._eventEntries(),
       if (uncategorized.isNotEmpty) ...[
@@ -378,12 +357,12 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in uncategorized) _rowFor(channel),
         const SizedBox(height: 10),
       ],
-      for (final category in sortedCategories)
+      for (final category in order.categories)
         // A category whose every channel was filtered out is dropped whole.
         // Collapsing hides rows without emptying this list, so a collapsed
         // category still keeps its header — only a category the account
         // cannot see into loses one.
-        if (regularChannels.any((channel) => channel.parentId == category.id))
+        if (order.hasChannelsIn(category))
           _CategorySection(
             category: category,
             collapsed: collapsedCategoryIds.contains(category.id),
@@ -392,21 +371,17 @@ class ChannelSidebar extends StatelessWidget {
               // Voice channels carry their occupants here too. They only did
               // outside categories, which is where almost no server puts
               // them, so every seat was invisible in practice.
-              for (final channel in _visibleCategoryChannels(
-                category,
-                regularChannels,
-              ))
+              for (final channel in order.rowsIn(category))
                 if (channel.kind == ChannelKind.voice)
                   ..._voiceEntry(channel)
                 else
                   _rowFor(channel),
             ],
           ),
-      if (threads.isNotEmpty) ...[
+      if (order.threads.isNotEmpty) ...[
         const SizedBox(height: 10),
         const _SectionLabel(label: 'Active threads'),
-        for (final channel in _ordered(threads))
-          _rowFor(channel, indented: true),
+        for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
     ];
   }
@@ -417,18 +392,13 @@ class ChannelSidebar extends StatelessWidget {
   /// A request never sits in the main list. Discord hides it there until the
   /// account answers it, which is the whole point of the folder, so the split
   /// happens here rather than in whatever built the channel list.
-  List<Widget> _directMessageEntries(List<ConversationChannel> channels) {
-    final requests = channels
-        .where((channel) => channel.isMessageRequest)
-        .toList(growable: false);
-    final conversations = channels
-        .where((channel) => !channel.isMessageRequest)
-        .toList(growable: false);
+  List<Widget> _directMessageEntries(ChannelSidebarOrder order) {
+    final requests = order.messageRequests;
     return [
       _DirectMessagesFolder(
         requests: requests,
         conversationRows: [
-          for (final channel in conversations) _rowFor(channel),
+          for (final channel in order.conversations) _rowFor(channel),
         ],
         requestRows: [for (final channel in requests) _requestRowFor(channel)],
       ),
@@ -467,33 +437,19 @@ class ChannelSidebar extends StatelessWidget {
     ];
   }
 
-  List<Widget> _uncategorizedEntries(
-    List<ConversationChannel> channels,
-    List<ConversationChannel> threads,
-  ) {
-    final text = _ordered(
-      channels.where((channel) => channel.kind == ChannelKind.text),
-    );
-    final voice = _ordered(
-      channels.where((channel) => channel.kind == ChannelKind.voice),
-    );
-    final forums = _ordered(
-      channels.where(
-        (channel) =>
-            channel.kind == ChannelKind.forum ||
-            channel.kind == ChannelKind.media,
-      ),
-    );
+  List<Widget> _uncategorizedEntries(ChannelSidebarOrder order) {
+    final text = order.ofKinds(const {ChannelKind.text});
+    final voice = order.ofKinds(const {ChannelKind.voice});
+    final forums = order.ofKinds(const {ChannelKind.forum, ChannelKind.media});
     return [
       if (text.isNotEmpty) ...[
         const _SectionLabel(label: 'Text channels'),
         for (final channel in text) _rowFor(channel),
       ],
-      if (threads.isNotEmpty) ...[
+      if (order.threads.isNotEmpty) ...[
         const SizedBox(height: 18),
         const _SectionLabel(label: 'Active threads'),
-        for (final channel in _ordered(threads))
-          _rowFor(channel, indented: true),
+        for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
       if (forums.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -507,30 +463,6 @@ class ChannelSidebar extends StatelessWidget {
       ],
     ];
   }
-
-  List<ConversationChannel> _visibleCategoryChannels(
-    ChannelCategory category,
-    List<ConversationChannel> channels,
-  ) {
-    final collapsed = collapsedCategoryIds.contains(category.id);
-    return _ordered(
-      channels.where(
-        (channel) =>
-            channel.parentId == category.id &&
-            (!collapsed ||
-                channel.id == selectedChannelId ||
-                _showsUnread(channel)),
-      ),
-    );
-  }
-
-  List<ConversationChannel> _ordered(Iterable<ConversationChannel> source) =>
-      _withoutHiddenMuted(
-        source.toList(growable: false)..sort((left, right) {
-          final position = left.position.compareTo(right.position);
-          return position == 0 ? left.name.compareTo(right.name) : position;
-        }),
-      );
 
   /// A voice channel row followed by whoever is seated in it.
   List<Widget> _voiceEntry(

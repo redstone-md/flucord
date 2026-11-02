@@ -104,7 +104,7 @@ void main() {
 
     final frames = <Map<String, Object?>>[];
     final subscription = socket.messages.listen(
-      (raw) => frames.addAll(codec.decode(raw)),
+      (raw) async => frames.addAll(await codec.decode(raw)),
     );
     addTearDown(subscription.cancel);
 

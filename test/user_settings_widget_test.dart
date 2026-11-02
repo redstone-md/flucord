@@ -15,6 +15,7 @@ import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/developer_terms.dart';
 import 'support/fake_video_encoder.dart';
 
 void main() {
@@ -55,10 +56,27 @@ void main() {
     expect(darker.onSelected, isNull);
     expect(developerMode.onChanged, isNull);
     expect(
-      find.text('Flucord has no surface for this setting yet.'),
+      find.text('Flucord has no screen for this setting yet.'),
       findsWidgets,
     );
     expect(repository.applied, isEmpty);
+  });
+
+  testWidgets('no settings page uses a developer term', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpDialog(tester, _Repository());
+    // Opening a section scrolls the rail, so go back to its first tile.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 300));
+    await tester.pumpAndSettle();
+
+    final found = <String>{};
+    for (final category in UserSettingsCategory.values) {
+      await _openSection(tester, category.name);
+      found.addAll(developerTermsOnScreen(tester));
+    }
+
+    expect(found, isEmpty);
   });
 
   testWidgets('walks the rail and edits chat, notifications and privacy', (

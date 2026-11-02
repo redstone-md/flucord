@@ -2,75 +2,105 @@ part of 'chat_controller.dart';
 
 extension _ChatControllerEvents on ChatController {
   void _listenToRepository() {
-    _eventSubscription = _repository.events.listen((event) {
-      switch (event) {
-        case MessageUpsertedEvent():
-          _handleMessageUpsert(event);
-        case MessageDeletedEvent():
-          _workspace = _workspace?.removeMessage(event.messageId);
-        case ChannelUpsertedEvent():
-          _workspace = _workspace?.upsertChannel(event.channel);
-        case CategoryUpsertedEvent():
-          _workspace = _workspace?.upsertCategory(event.category);
-        case SpaceUpsertedEvent():
-          _workspace = _workspace?.upsertSpace(event.space);
-        case SpaceRemovedEvent():
-          _workspace = _workspace?.removeSpace(event.spaceId);
-        case GuildEmojisReplacedEvent():
-          _workspace = _workspace?.replaceGuildEmojis(
-            event.spaceId,
-            event.emojis,
-          );
-        case GuildStickersReplacedEvent():
-          _workspace = _workspace?.replaceGuildStickers(
-            event.spaceId,
-            event.stickers,
-          );
-        case GuildScheduledEventUpsertedEvent():
-          _upsertScheduledEvent(event.event);
-        case GuildScheduledEventDeletedEvent():
-          _deleteScheduledEvent(event.spaceId, event.eventId);
-        case ChannelDeletedEvent():
-          _workspace = _workspace?.removeChannel(event.channelId);
-        case CategoryDeletedEvent():
-          _workspace = _workspace?.removeCategory(event.categoryId);
-        case MemberUpsertedEvent():
-          _workspace = _workspace?.upsertMember(event.member);
-        case MembersUpsertedEvent():
-          _workspace = _workspace?.upsertMembers(event.members);
-        case MemberRemovedEvent():
-          _workspace = _workspace?.removeMemberFromSpace(
-            event.memberId,
-            event.spaceId,
-          );
-        case PresenceChangedEvent():
-          _workspace = _workspace?.applyPresence(
-            event.memberId,
-            event.presence,
-          );
-        case PresencesChangedEvent():
-          _workspace = _workspace?.applyPresences(event.presences);
-        case TypingStartedEvent():
-          _handleTyping(event);
-        case PinsChangedEvent():
-          if (_pinnedMessages.containsKey(event.channelId)) {
-            unawaited(loadPinnedMessages(event.channelId, refresh: true));
-          }
-        case ChannelLastMessageEvent():
-          _workspace = _workspace?.recordLatestMessage(
-            event.channelId,
-            event.messageId,
-          );
-          _applyReadState();
-        case ChannelHistoryRestoredEvent():
-          _restoreChannelHistory(event);
-        case RepositoryStatusChangedEvent():
-          _connectionStatus = event.status;
-      }
-      _notify();
-    });
+    _eventSubscription = _repository.events.listen(_handleEvent);
     _listenToConversationSummaries();
     _listenToReadState();
+  }
+
+  /// Folds [event] in, and notifies only if that changed something.
+  ///
+  /// A fold that changes nothing hands back the same workspace, so comparing the
+  /// instance answers for the workspace. [changedElsewhere] answers for the state
+  /// the controller holds outside it.
+  void _handleEvent(ChatRepositoryEvent event) {
+    final workspaceBefore = _workspace;
+    var changedElsewhere = false;
+    switch (event) {
+      case MessageUpsertedEvent():
+        _handleMessageUpsert(event);
+      case MessageUpdatedEvent(:final messageId, :final applyTo, :final member):
+        _workspace = _workspace?.updateMessage(messageId, applyTo);
+        if (member != null) _workspace = _workspace?.upsertMember(member);
+      case MessageReactionChangedEvent(:final change):
+        _workspace = _workspace?.updateMessage(
+          change.messageId,
+          change.applyTo,
+        );
+      case MessageDeletedEvent():
+        _workspace = _workspace?.removeMessage(event.messageId);
+      case MessagesDeletedEvent():
+        _workspace = _workspace?.removeMessages(event.messageIds);
+      case ChannelUpsertedEvent():
+        _workspace = _workspace?.upsertChannel(event.channel);
+      case CategoryUpsertedEvent():
+        _workspace = _workspace?.upsertCategory(event.category);
+      case SpaceUpsertedEvent():
+        _workspace = _workspace?.upsertSpace(event.space);
+      case GuildGainedEvent():
+        _workspace = _workspace?.mergeGuild(event.guild);
+        _applyReadState();
+        // A fetch that failed during the guild's outage can work now.
+        final activeId = _activeChannelId;
+        if (activeId != null) unawaited(_catchUpChannel(activeId));
+      case SpaceRemovedEvent():
+        _removeGuild(event.spaceId);
+      case GuildEmojisReplacedEvent():
+        _workspace = _workspace?.replaceGuildEmojis(
+          event.spaceId,
+          event.emojis,
+        );
+      case GuildStickersReplacedEvent():
+        _workspace = _workspace?.replaceGuildStickers(
+          event.spaceId,
+          event.stickers,
+        );
+      case GuildScheduledEventUpsertedEvent():
+        _upsertScheduledEvent(event.event);
+        changedElsewhere = true;
+      case GuildScheduledEventDeletedEvent():
+        _deleteScheduledEvent(event.spaceId, event.eventId);
+        changedElsewhere = true;
+      case ChannelDeletedEvent():
+        _removeChannel(event.channelId);
+      case CategoryDeletedEvent():
+        _workspace = _workspace?.removeCategory(event.categoryId);
+      case WorkspaceDiffEvent(:final diff):
+        _applyWorkspaceDiff(diff);
+      case MemberUpsertedEvent():
+        _workspace = _workspace?.upsertMember(event.member);
+      case MembersUpsertedEvent():
+        _workspace = _workspace?.upsertMembers(event.members);
+      case MemberRemovedEvent():
+        _workspace = _workspace?.removeMemberFromSpace(
+          event.memberId,
+          event.spaceId,
+        );
+      case PresenceChangedEvent():
+        _holdPresences({event.memberId: event.presence});
+      case PresencesChangedEvent():
+        _holdPresences(event.presences);
+      case TypingStartedEvent():
+        _handleTyping(event);
+      case PinsChangedEvent():
+        if (_pinnedMessages.containsKey(event.channelId)) {
+          unawaited(loadPinnedMessages(event.channelId, refresh: true));
+        }
+      case ChannelLastMessageEvent():
+        _workspace = _workspace?.recordLatestMessage(
+          event.channelId,
+          event.messageId,
+        );
+        _applyReadState();
+      case ChannelHistoryRestoredEvent():
+        changedElsewhere = _restoreChannelHistory(event);
+      case HistoryGapEvent():
+        _acceptHistoryGap();
+        changedElsewhere = true;
+      case RepositoryStatusChangedEvent():
+        changedElsewhere = _connectionStatus != event.status;
+        _connectionStatus = event.status;
+    }
+    if (changedElsewhere || !identical(_workspace, workspaceBefore)) _notify();
   }
 
   /// Announces the summaries store moving, so the strip above the timeline
@@ -93,19 +123,28 @@ extension _ChatControllerEvents on ChatController {
   /// unread fields, so this is the single point where the server replaces what
   /// the client guessed — and the only one, which is what keeps the two from
   /// disagreeing.
+  ///
+  /// An update that moves no channel and no setting notifies nobody. The server
+  /// echoes each ack this client sends, so this is common.
   void _listenToReadState() {
     final repository = _repository.readState;
     if (repository == null) return;
-    _readStateSubscription = repository.updates.listen((_) {
+    var previous = repository.current;
+    _readStateSubscription = repository.updates.listen((snapshot) {
+      final settingsChanged = !snapshot.sameSettingsAs(previous);
+      previous = snapshot;
+      final workspaceBefore = _workspace;
       _applyReadState();
-      _notify();
+      if (settingsChanged || !identical(_workspace, workspaceBefore)) _notify();
     });
   }
 
   void _applyReadState() {
     final snapshot = _repository.readState?.current;
     if (snapshot == null) return;
-    _workspace = _workspace?.applyReadState(snapshot);
+    _workspace = _workspace
+        ?.applyReadState(snapshot)
+        .clearReadBoundaries(activeChannelId: _activeChannelId);
   }
 
   void _handleMessageUpsert(MessageUpsertedEvent event) {
@@ -113,7 +152,11 @@ extension _ChatControllerEvents on ChatController {
         ? event.message.copyWith(mentionsCurrentMember: true)
         : event.message;
     final isOwn = message.authorId == _workspace?.currentMemberId;
-    _workspace = _workspace?.upsertMessage(message, member: event.member);
+    if (!event.isNew || !_keepOutOfOldWindow(message, member: event.member)) {
+      _workspace = _workspace?.upsertMessage(message, member: event.member);
+      if (event.isNew) _catchingUpChannels[message.channelId]?.add(message.id);
+    }
+    _capChannelIfNotOpen(message.channelId);
     if (isOwn) {
       // Sending a message reads the channel. Advancing the latest-message
       // pointer without advancing the ack cursor would leave the sender
@@ -127,6 +170,10 @@ extension _ChatControllerEvents on ChatController {
       // the user is looking at is read the moment it arrives.
       acknowledgeChannel(message.channelId);
       return;
+    }
+    if (_boundaryAwaitsNewMessage && message.channelId == _activeChannelId) {
+      _boundaryAwaitsNewMessage = false;
+      _workspace = _workspace?.clearChannelUnreadBoundary(message.channelId);
     }
     // The local mark stays: it is the whole unread model on a transport with no
     // read state, and on one that has read state the projection below simply

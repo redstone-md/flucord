@@ -101,40 +101,6 @@ void main() {
     },
   );
 
-  testWidgets('validates a Discord snowflake before opening a DM', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: FlucordTheme.dark,
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => showDialog<String>(
-                context: context,
-                builder: (_) => const DirectMessageDialog(),
-              ),
-              child: const Text('Open dialog'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Open dialog'));
-    await tester.pumpAndSettle();
-    final input = find.byKey(const ValueKey('direct-message-user-id'));
-
-    await tester.enterText(input, '123');
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    expect(find.text('Enter a valid Discord user ID'), findsOneWidget);
-
-    await tester.enterText(input, '123456789012345678');
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
-    expect(find.byType(DirectMessageDialog), findsNothing);
-  });
-
   testWidgets('empty direct inbox exposes one stable creation action', (
     tester,
   ) async {

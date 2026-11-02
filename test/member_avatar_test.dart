@@ -24,8 +24,9 @@ void main() {
       avatarUrlsBySpace: {'guild-1': 'https://cdn.example/guild.webp'},
     );
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: const Scaffold(
           body: MemberAvatar(member: member, spaceId: 'guild-1'),
         ),
       ),
@@ -40,8 +41,9 @@ void main() {
 
   testWidgets('renders initials without a remote identity', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: const Scaffold(
           body: MemberAvatar(
             member: Member(
               id: 'local',

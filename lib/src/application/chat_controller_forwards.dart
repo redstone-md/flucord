@@ -13,35 +13,20 @@ extension ChatControllerForwards on ChatController {
     if (workspace == null ||
         repository == null ||
         !source.canForward ||
-        !workspace.messages.any(
-          (message) =>
-              message.id == source.id && message.channelId == source.channelId,
-        ) ||
+        !workspace
+            .messagesFor(source.channelId)
+            .any((message) => message.id == source.id) ||
         target == null ||
-        !target.canAcceptMessageForward ||
-        _isSending) {
+        !target.canAcceptMessageForward) {
       return false;
     }
-    _isSending = true;
-    _notify();
-    try {
+    return _sendingIn(targetChannelId, () async {
       final forwarded = await repository.forwardMessage(
         sourceChannelId: source.channelId,
         sourceMessageId: source.id,
         targetChannelId: targetChannelId,
       );
-      _workspace = _workspace
-          ?.upsertMessage(forwarded)
-          .clearChannelUnreadBoundary(targetChannelId);
-      _persistChannelActivity(targetChannelId);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+      _applySentMessage(forwarded);
+    });
   }
 }

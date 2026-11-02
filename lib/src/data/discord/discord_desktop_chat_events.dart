@@ -65,19 +65,72 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // current. There is no route to re-read it, so missing one means
         // showing a friend list that is quietly wrong.
         _relationships.accept(event.name, event.data);
-        if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
-          unawaited(_acceptMessage(event));
-        } else if (event.name == 'MESSAGE_DELETE') {
-          unawaited(_acceptDelete(event.data));
+        _sharedDispatches.route(event);
+        if (event.name == 'MESSAGE_CREATE') {
+          _sharedDispatches.acceptNewMessage(
+            event.data,
+            read: _messageFrom,
+            // Nothing may wait between the fold and the announce. A frame drawn
+            // in between would show a badge on the channel on screen, because
+            // the message that clears it has not arrived yet.
+            beforeAnnounce: () => _readState.acceptNewMessage(event.data),
+          );
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
           _acceptPassiveUpdate(event.data);
-        } else if (event.name == 'READY' ||
-            event.name == 'READY_SUPPLEMENTAL') {
-          unawaited(_rehydrateWorkspace());
+        } else if (event.name == 'GUILD_CREATE') {
+          unawaited(_acceptGuild(event.data));
+        } else if (event.name == 'GUILD_UPDATE') {
+          unawaited(_acceptGuildUpdate(event.data));
+        } else if (event.name == 'GUILD_DELETE') {
+          unawaited(_acceptGuildRemoval(event.data));
+        } else if (event.name == 'READY') {
+          _sharedDispatches.inOrder(_acceptNewSession);
+        } else if (event.name == 'READY_SUPPLEMENTAL') {
+          _sharedDispatches.inOrder(_rehydrateWorkspace);
         }
     }
+  }
+
+  /// A guild the account gained, or got back, once a workspace is on screen.
+  /// Before that, the opening dispatches build the workspace.
+  Future<void> _acceptGuild(Map<String, Object?> data) async {
+    if (!_workspaceShown) return;
+    final guild = DiscordGuildAdminMapper.joinedGuildFromDispatch(
+      data,
+      _mapper,
+    );
+    if (guild == null) return;
+    _events.publish(GuildGainedEvent(guild));
+    await _persistGainedGuild(guild);
+  }
+
+  Future<void> _acceptGuildUpdate(Map<String, Object?> data) async {
+    if (!_workspaceShown || data['id'] is! String) return;
+    final space = _mapper.spaceFromGuildPayload(data);
+    _events.publish(SpaceUpsertedEvent(space));
+    await _cache.writeSpace(space);
+  }
+
+  /// `unavailable` marks an outage on Discord's side. The account is still in
+  /// that guild, so it stays on the rail.
+  Future<void> _acceptGuildRemoval(Map<String, Object?> data) async {
+    final guildId = data['id'];
+    if (!_workspaceShown || guildId is! String || data['unavailable'] == true) {
+      return;
+    }
+    _events.publish(SpaceRemovedEvent(guildId));
+    await _persistLeftGuild(guildId);
+  }
+
+  /// A READY with a workspace on screen ends a stretch with no live events. The
+  /// gap goes out after the pass, so the history is asked for only in channels
+  /// that are still there.
+  Future<void> _acceptNewSession() async {
+    if (!_workspaceShown) return;
+    await _rehydrateWorkspace();
+    _events.publish(const HistoryGapEvent());
   }
 
   /// Applies a post-load READY to the workspace in place.
@@ -85,10 +138,14 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   /// A reconnect that could not resume identifies again, and the READY that
   /// comes back is the authoritative guild and channel list. Rebuilding the
   /// workspace around it wholesale would drop every held history and unread
-  /// boundary, so the change is computed against the cached shell and
-  /// announced as ordinary upserts and deletions instead. The same READY also
+  /// boundary, so the change is computed against the cached shell and goes out
+  /// as one diff, which the cache writes in one transaction. The same READY also
   /// re-arms `READY_SUPPLEMENTAL`, whose lazy private channels land through
   /// the second pass; a pass that changes nothing announces nothing.
+  ///
+  /// A pass goes on the message queue. Two passes then cannot act on a shell the
+  /// other one is changing, and a message right behind READY lands after the
+  /// channel READY brought, so it can still mark that channel unread.
   Future<void> _rehydrateWorkspace() async {
     try {
       await _rehydrateWorkspaceNow();
@@ -106,78 +163,122 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _rehydrateWorkspaceNow() async {
     if (!_workspaceShown || _events.isClosed) return;
-    final snapshot = _gateway.workspaceSnapshot;
-    if (snapshot == null) return;
     final cached = await _cache.readWorkspaceShell();
     if (cached == null) return;
-    final fresh = _mapper
-        .workspace(
-          currentUser: snapshot.currentUser,
-          guilds: snapshot.guilds,
-          channelsByGuild: snapshot.channelsByGuild,
-          rolesByGuild: snapshot.rolesByGuild,
-          membersByGuild: snapshot.membersByGuild,
-          directChannels: snapshot.directChannels,
-          includeDirectMessagesSpace: true,
-          currentUserRole: 'Discord user',
-        )
-        // The activity is restored so the comparison below sees only what
-        // Discord changed, and an unchanged channel announces nothing.
-        .restoreChannelActivityFrom(cached);
-    if (_events.isClosed) return;
-
-    for (final space in cached.spaces) {
-      if (fresh.spaceOrNull(space.id) == null) {
-        // The cached copy goes at the next wholesale load; the rail goes now.
-        _events.add(SpaceRemovedEvent(space.id));
-      }
-    }
-    for (final channel in cached.channels) {
-      if (fresh.channelOrNull(channel.id) == null) {
-        _events.add(ChannelDeletedEvent(channel.id));
-        await _cache.deleteChannel(channel.id);
-      }
-    }
-    for (final category in cached.categories) {
-      if (fresh.categoryOrNull(category.id) == null) {
-        _events.add(CategoryDeletedEvent(category.id));
-        await _cache.deleteCategory(category.id);
-      }
-    }
-    for (final space in fresh.spaces) {
-      final existing = cached.spaceOrNull(space.id);
-      if (existing == null || _spaceChanged(space, existing)) {
-        _events.add(SpaceUpsertedEvent(space));
-        await _cache.writeSpace(space);
-      }
-    }
-    for (final category in fresh.categories) {
-      final existing = cached.categoryOrNull(category.id);
-      if (existing == null || _categoryChanged(category, existing)) {
-        _events.add(CategoryUpsertedEvent(category));
-        await _cache.writeCategory(category);
-      }
-    }
-    for (final channel in fresh.channels) {
-      final existing = cached.channelOrNull(channel.id);
-      if (existing == null || _channelChanged(channel, existing)) {
-        _events.add(ChannelUpsertedEvent(channel));
-        await _cache.writeChannel(channel);
-      }
-      // A direct message the account has never seen here needs its recipient
-      // row. A recipient who only changed their name keeps the cached row
-      // until the next full load: the shell carries no members to diff
-      // against, and decoding the whole cache per dispatch would cost more
-      // than the staleness does.
-      final recipientId = channel.recipientId;
-      if (recipientId != null && existing == null) {
-        final recipient = fresh.memberOrNull(recipientId);
-        if (recipient != null) _events.add(MemberUpsertedEvent(recipient));
-      }
+    // Read after the wait, so a guild that arrived during it is in both sides.
+    final snapshot = _gateway.workspaceSnapshot;
+    if (snapshot == null) return;
+    final fresh = _withWhatSnapshotCannotDecide(
+      _mapper
+          .workspace(
+            currentUser: snapshot.currentUser,
+            guilds: snapshot.guilds,
+            channelsByGuild: snapshot.channelsByGuild,
+            rolesByGuild: snapshot.rolesByGuild,
+            membersByGuild: snapshot.membersByGuild,
+            directChannels: snapshot.directChannels,
+            includeDirectMessagesSpace: true,
+            currentUserRole: 'Discord user',
+          )
+          // The activity is restored so the comparison below sees only what
+          // Discord changed, and an unchanged channel announces nothing.
+          .restoreChannelActivityFrom(cached),
+      cached: cached,
+      snapshot: snapshot,
+    );
+    final diff = _workspaceDiff(cached: cached, fresh: fresh);
+    if (!diff.isEmpty) {
+      _events.publish(WorkspaceDiffEvent(diff));
+      await _cache.applyWorkspaceDiff(diff);
+      diff.removedSpaceIds.forEach(_gateway.forgetGuild);
     }
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
     _adoptPrivateChannels(fresh);
+  }
+
+  /// What changed from [cached] to [fresh].
+  static WorkspaceDiff _workspaceDiff({
+    required ChatWorkspace cached,
+    required ChatWorkspace fresh,
+  }) => WorkspaceDiff(
+    removedSpaceIds: {
+      for (final space in cached.spaces)
+        if (fresh.spaceOrNull(space.id) == null) space.id,
+    },
+    removedCategoryIds: {
+      for (final category in cached.categories)
+        if (fresh.categoryOrNull(category.id) == null) category.id,
+    },
+    removedChannelIds: {
+      for (final channel in cached.channels)
+        if (fresh.channelOrNull(channel.id) == null) channel.id,
+    },
+    spaces: [
+      for (final space in fresh.spaces)
+        if (cached.spaceOrNull(space.id) case final existing
+            when existing == null || _spaceChanged(space, existing))
+          space,
+    ],
+    categories: [
+      for (final category in fresh.categories)
+        if (cached.categoryOrNull(category.id) case final existing
+            when existing == null || _categoryChanged(category, existing))
+          category,
+    ],
+    channels: [
+      for (final channel in fresh.channels)
+        if (cached.channelOrNull(channel.id) case final existing
+            when existing == null || _channelChanged(channel, existing))
+          channel,
+    ],
+    // A direct message the account has never seen here needs its recipient
+    // row. A recipient who only changed their name keeps the cached row until
+    // the next full load: the shell carries no members to diff against, and
+    // decoding the whole cache per dispatch would cost more than the staleness
+    // does.
+    members: [
+      for (final channel in fresh.channels)
+        if (channel.recipientId case final recipientId?
+            when cached.channelOrNull(channel.id) == null)
+          ?fresh.memberOrNull(recipientId),
+    ],
+  );
+
+  /// [fresh] with the cached items this snapshot says nothing about, so the
+  /// pass neither removes nor changes them.
+  ///
+  /// A guild in an outage is listed with no content, and it comes back through
+  /// `GUILD_CREATE`. A private channel missing before `READY_SUPPLEMENTAL` may
+  /// still be on its way as a lazy one.
+  static ChatWorkspace _withWhatSnapshotCannotDecide(
+    ChatWorkspace fresh, {
+    required ChatWorkspace cached,
+    required DiscordDesktopWorkspaceSnapshot snapshot,
+  }) {
+    final unavailable = snapshot.unavailableGuildIds;
+    final keepPrivate = !snapshot.privateChannelsComplete;
+    return fresh.copyWith(
+      spaces: [
+        ...fresh.spaces,
+        ...cached.spaces.where((space) => unavailable.contains(space.id)),
+      ],
+      categories: [
+        ...fresh.categories,
+        ...cached.categories.where(
+          (category) => unavailable.contains(category.spaceId),
+        ),
+      ],
+      channels: [
+        ...fresh.channels,
+        ...cached.channels.where(
+          (channel) =>
+              fresh.channelOrNull(channel.id) == null &&
+              (unavailable.contains(channel.spaceId) ||
+                  (keepPrivate && channel.isDirectMessage)),
+        ),
+      ],
+    );
   }
 
   static bool _spaceChanged(CommunitySpace next, CommunitySpace cached) =>
@@ -258,57 +359,29 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
   }
 
-  Future<void> _acceptMessage(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'];
-    if (messageId is! String) return;
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = await _storeMessage(event.data, fallback: fallback);
-    final rawAuthor = event.data['author'];
-    final member = rawAuthor is Map
-        ? _mapper.member(
-            rawAuthor.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
-    if (member != null) await _cache.writeMember(member);
-    _events.add(
-      MessageUpsertedEvent(
-        message: message,
-        member: member,
-        isNew: event.name == 'MESSAGE_CREATE',
-        mentionsCurrentMember: message.mentionsCurrentMember,
-      ),
-    );
-  }
-
   Future<ChatMessage> _storeMessage(
     Map<String, Object?> payload, {
     ChatMessage? fallback,
   }) async {
+    final message = _messageFrom(payload, fallback: fallback);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  ChatMessage _messageFrom(
+    Map<String, Object?> payload, {
+    ChatMessage? fallback,
+  }) {
     final message = _mapper.message(
       payload,
       fallback: fallback,
       currentMemberId: _currentMemberId,
     );
-    await _cache.writeMessage(message);
-    return message;
-  }
-
-  Future<void> _acceptDelete(Map<String, Object?> data) async {
-    final messageId = data['id'];
-    final channelId = data['channel_id'];
-    if (messageId is! String || channelId is! String) return;
-    await _cache.deleteMessage(messageId);
-    _events.add(
-      MessageDeletedEvent(messageId: messageId, channelId: channelId),
-    );
+    // The mapper knows the account's id but not its roles. The flag decides the
+    // inbox and the desktop notification, so a role mention has to set it too.
+    return _readState.mentionsAccountRole(payload)
+        ? message.copyWith(mentionsCurrentMember: true)
+        : message;
   }
 
   void _acceptTyping(Map<String, Object?> data) {

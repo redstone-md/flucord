@@ -1,32 +1,17 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../domain/flucord_palette.dart';
-
-abstract final class FlucordColors {
-  static const brand = Color(0xff5865f2);
-  static const brandPressed = Color(0xff4752c4);
-  static const success = Color(0xff23a55a);
-  static const warning = Color(0xfff0b232);
-  static const mention = Color(0xfff23f42);
-  static const danger = Color(0xffda373c);
-  static const offline = Color(0xff80848e);
-
-  static const darkRail = Color(0xff1e1f22);
-  static const darkCanvas = Color(0xff313338);
-  static const darkSurface = Color(0xff2b2d31);
-  static const darkRaised = Color(0xff3f4147);
-  static const darkInset = Color(0xff232428);
-  static const darkControl = Color(0xff383a40);
-
-  static const lightRail = Color(0xffe3e5e8);
-  static const lightCanvas = Color(0xffffffff);
-  static const lightSurface = Color(0xfff2f3f5);
-  static const lightRaised = Color(0xffdfe3e8);
-  static const lightInset = Color(0xffebedef);
-  static const lightControl = Color(0xffebedef);
-}
+import 'flucord_radius.dart';
+import 'flucord_type.dart';
 
 abstract final class FlucordTheme {
+  // WCAG AA: 4.5:1 for text, 3:1 for icons and focus rings.
+  static const _textContrast = 4.5;
+  static const _nonTextContrast = 3.0;
+  static const _focusRingWidth = 2.0;
+
   static ThemeData get dark => fromPalette(FlucordPalette.dark);
 
   static ThemeData get light => fromPalette(FlucordPalette.light);
@@ -48,9 +33,47 @@ abstract final class FlucordTheme {
     muted: Color(palette.muted),
     border: Color(palette.border),
     brand: Color(palette.brand),
+    brandPressed: Color(palette.brandPressed),
     success: Color(palette.success),
+    warning: Color(palette.warning),
+    mention: Color(palette.mention),
     danger: Color(palette.danger),
+    offline: Color(palette.offline),
   );
+
+  /// The smallest move from [base] toward the theme's own [text] colour that
+  /// reads at [ratio] on every one of [backgrounds].
+  ///
+  /// Computed rather than stored, so a theme file that never heard of these
+  /// tokens still gets a link people can read, in its own hue. A colour that
+  /// already reads stays as written. When even [text] cannot reach the ratio,
+  /// [text] is the best the theme offers.
+  static Color _readable(
+    Color base, {
+    required Color text,
+    required List<Color> backgrounds,
+    required double ratio,
+  }) {
+    for (var step = 0; step <= _readableSteps; step++) {
+      final candidate = Color.lerp(base, text, step / _readableSteps)!;
+      if (backgrounds.every((b) => _contrast(candidate, b) >= ratio)) {
+        return candidate;
+      }
+    }
+    return text;
+  }
+
+  static const _readableSteps = 100;
+
+  /// The WCAG 2 contrast ratio of [foreground] drawn on [background].
+  ///
+  /// A theme file may give a colour alpha, so [foreground] is measured as it
+  /// shows: mixed with [background].
+  static double _contrast(Color foreground, Color background) {
+    final shown = Color.alphaBlend(foreground, background).computeLuminance();
+    final under = background.computeLuminance();
+    return (max(shown, under) + 0.05) / (min(shown, under) + 0.05);
+  }
 
   static ThemeData _build({
     required Brightness brightness,
@@ -64,16 +87,40 @@ abstract final class FlucordTheme {
     required Color muted,
     required Color border,
     required Color brand,
+    required Color brandPressed,
     required Color success,
+    required Color warning,
+    required Color mention,
     required Color danger,
+    required Color offline,
   }) {
+    final backgrounds = [rail, canvas, surface, raised, inset, control];
+    final focusRing = _readable(
+      brand,
+      text: text,
+      backgrounds: backgrounds,
+      ratio: _nonTextContrast,
+    );
+    final errorText = _readable(
+      danger,
+      text: text,
+      backgrounds: backgrounds,
+      ratio: _textContrast,
+    );
+    final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
+      (states) => states.contains(WidgetState.focused)
+          ? BorderSide(color: focusRing, width: _focusRingWidth)
+          : null,
+    );
     final scheme = ColorScheme(
       brightness: brightness,
       primary: brand,
       onPrimary: Colors.white,
       secondary: success,
       onSecondary: const Color(0xff051b10),
-      error: danger,
+      // Widgets and Material's own fields draw error text in this, so it is the
+      // readable error text. A danger fill takes `surfaces.danger` instead.
+      error: errorText,
       onError: Colors.white,
       surface: surface,
       onSurface: text,
@@ -84,14 +131,17 @@ abstract final class FlucordTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
       dividerColor: border,
-      fontFamily: 'Bahnschrift',
+      fontFamily: FlucordType.family,
     );
+    final textTheme = FlucordType.textTheme(
+      base.textTheme,
+    ).apply(bodyColor: text, displayColor: text);
     return base.copyWith(
       canvasColor: canvas,
       cardColor: raised,
       hoverColor: text.withValues(alpha: 0.05),
       focusColor: brand.withValues(alpha: 0.24),
-      textTheme: base.textTheme.apply(bodyColor: text, displayColor: text),
+      textTheme: textTheme,
       iconTheme: IconThemeData(color: muted, size: 19),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
@@ -108,7 +158,7 @@ abstract final class FlucordTheme {
           }),
           overlayColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.focused)) {
-              return FlucordColors.brand.withValues(alpha: 0.2);
+              return brand.withValues(alpha: 0.2);
             }
             if (states.contains(WidgetState.hovered) ||
                 states.contains(WidgetState.pressed)) {
@@ -116,8 +166,9 @@ abstract final class FlucordTheme {
             }
             return null;
           }),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          side: focusSide,
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
           ),
         ),
       ),
@@ -125,45 +176,55 @@ abstract final class FlucordTheme {
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
-              return FlucordColors.brand.withValues(alpha: 0.38);
+              return brand.withValues(alpha: 0.38);
             }
-            return states.contains(WidgetState.pressed)
-                ? FlucordColors.brandPressed
-                : FlucordColors.brand;
+            return states.contains(WidgetState.pressed) ? brandPressed : brand;
           }),
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          side: focusSide,
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
           ),
         ),
       ),
-      // AlertDialogs get the same 8px corners as the hand-built Dialogs;
-      // Material 3 would otherwise round them to 28.
+      textButtonTheme: TextButtonThemeData(style: ButtonStyle(side: focusSide)),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(side: focusSide),
+      ),
+      // Every dialog is a FlucordDialog, which takes its frame from here:
+      // one barrier, one background and one corner, in every theme.
       dialogTheme: DialogThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        barrierColor: Colors.black.withValues(alpha: 0.58),
+        backgroundColor: surface,
+        insetPadding: const EdgeInsets.all(24),
+        shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.medium),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: textTheme.bodyMedium,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: rail,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
-        textStyle: TextStyle(color: text, fontSize: 12),
+        textStyle: TextStyle(color: text, fontSize: FlucordType.caption),
         waitDuration: const Duration(milliseconds: 450),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: control,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: FlucordRadius.medium,
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide: BorderSide(color: brand),
+          borderRadius: FlucordRadius.medium,
+          borderSide: BorderSide(color: focusRing, width: _focusRingWidth),
         ),
       ),
       extensions: [
@@ -174,8 +235,25 @@ abstract final class FlucordTheme {
           raised: raised,
           inset: inset,
           control: control,
+          text: text,
           muted: muted,
           border: border,
+          brand: brand,
+          brandPressed: brandPressed,
+          success: success,
+          warning: warning,
+          mention: mention,
+          danger: danger,
+          offline: offline,
+          link: _readable(
+            brand,
+            text: text,
+            backgrounds: backgrounds,
+            ratio: _textContrast,
+          ),
+          errorText: errorText,
+          accentIcon: focusRing,
+          focusRing: focusRing,
         ),
       ],
     );
@@ -191,8 +269,20 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     required this.raised,
     required this.inset,
     required this.control,
+    required this.text,
     required this.muted,
     required this.border,
+    required this.brand,
+    required this.brandPressed,
+    required this.success,
+    required this.warning,
+    required this.mention,
+    required this.danger,
+    required this.offline,
+    required this.link,
+    required this.errorText,
+    required this.accentIcon,
+    required this.focusRing,
   });
 
   final Color rail;
@@ -201,8 +291,28 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
   final Color raised;
   final Color inset;
   final Color control;
+  final Color text;
   final Color muted;
   final Color border;
+  final Color brand;
+  final Color brandPressed;
+  final Color success;
+  final Color warning;
+  final Color mention;
+  final Color danger;
+  final Color offline;
+
+  /// Link text. Reaches 4.5:1 on every background of the theme.
+  final Color link;
+
+  /// Error text. Reaches 4.5:1 on every background of the theme.
+  final Color errorText;
+
+  /// An icon in the accent colour, such as Send. Reaches 3:1.
+  final Color accentIcon;
+
+  /// The ring on a focused control. Reaches 3:1.
+  final Color focusRing;
 
   @override
   FlucordSurfaceTheme copyWith({
@@ -212,8 +322,20 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     Color? raised,
     Color? inset,
     Color? control,
+    Color? text,
     Color? muted,
     Color? border,
+    Color? brand,
+    Color? brandPressed,
+    Color? success,
+    Color? warning,
+    Color? mention,
+    Color? danger,
+    Color? offline,
+    Color? link,
+    Color? errorText,
+    Color? accentIcon,
+    Color? focusRing,
   }) => FlucordSurfaceTheme(
     rail: rail ?? this.rail,
     canvas: canvas ?? this.canvas,
@@ -221,8 +343,20 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
     raised: raised ?? this.raised,
     inset: inset ?? this.inset,
     control: control ?? this.control,
+    text: text ?? this.text,
     muted: muted ?? this.muted,
     border: border ?? this.border,
+    brand: brand ?? this.brand,
+    brandPressed: brandPressed ?? this.brandPressed,
+    success: success ?? this.success,
+    warning: warning ?? this.warning,
+    mention: mention ?? this.mention,
+    danger: danger ?? this.danger,
+    offline: offline ?? this.offline,
+    link: link ?? this.link,
+    errorText: errorText ?? this.errorText,
+    accentIcon: accentIcon ?? this.accentIcon,
+    focusRing: focusRing ?? this.focusRing,
   );
 
   @override
@@ -238,8 +372,20 @@ final class FlucordSurfaceTheme extends ThemeExtension<FlucordSurfaceTheme> {
       raised: Color.lerp(raised, other.raised, t)!,
       inset: Color.lerp(inset, other.inset, t)!,
       control: Color.lerp(control, other.control, t)!,
+      text: Color.lerp(text, other.text, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
       border: Color.lerp(border, other.border, t)!,
+      brand: Color.lerp(brand, other.brand, t)!,
+      brandPressed: Color.lerp(brandPressed, other.brandPressed, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      mention: Color.lerp(mention, other.mention, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      offline: Color.lerp(offline, other.offline, t)!,
+      link: Color.lerp(link, other.link, t)!,
+      errorText: Color.lerp(errorText, other.errorText, t)!,
+      accentIcon: Color.lerp(accentIcon, other.accentIcon, t)!,
+      focusRing: Color.lerp(focusRing, other.focusRing, t)!,
     );
   }
 }

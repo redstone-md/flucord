@@ -6,7 +6,10 @@ import '../../application/self_video_controller.dart';
 
 import '../../application/voice_controller.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'voice_control.dart';
 import 'voice_room_status.dart';
 
 /// The strip that says you are still in a voice channel.
@@ -16,10 +19,14 @@ import 'voice_room_status.dart';
 /// live only inside the room view. Without this, walking away from the voice
 /// channel left the connection running with no way to leave it, which is the
 /// single thing a user reaches for most.
+///
+/// It listens for itself, so it redraws when voice or the camera changes,
+/// even inside a sidebar that is kept across rebuilds.
 class VoiceConnectionBar extends StatelessWidget {
   const VoiceConnectionBar({
     required this.controller,
     required this.channelNameFor,
+    this.serverNameFor,
     this.onOpenChannel,
     this.camera,
     super.key,
@@ -27,9 +34,13 @@ class VoiceConnectionBar extends StatelessWidget {
 
   final VoiceController controller;
 
-  /// Resolves the connected channel's display name, or null when this space
-  /// does not know it — the connection may be in another server entirely.
+  /// Resolves the connected channel's display name, or null when the workspace
+  /// does not know the channel.
   final String? Function(String channelId) channelNameFor;
+
+  /// Resolves the name of the server the channel is in. Null for a call, which
+  /// has no server.
+  final String? Function(String channelId)? serverNameFor;
 
   /// Returns to the connected room. Null when it cannot be navigated to.
   final void Function(String channelId)? onOpenChannel;
@@ -38,10 +49,16 @@ class VoiceConnectionBar extends StatelessWidget {
   final SelfVideoController? camera;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([controller, camera]),
+    builder: (context, _) => _buildBar(context),
+  );
+
+  Widget _buildBar(BuildContext context) {
     final channelId = controller.connectedChannelId;
     if (channelId == null) return const SizedBox.shrink();
     final name = channelNameFor(channelId);
+    final server = serverNameFor?.call(channelId);
     final ready = controller.connectionStatus == VoiceConnectionStatus.ready;
     final failed =
         controller.connectionStatus == VoiceConnectionStatus.failure ||
@@ -49,7 +66,7 @@ class VoiceConnectionBar extends StatelessWidget {
     final accent = failed
         ? Theme.of(context).colorScheme.error
         : ready
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.muted;
     return Container(
       key: const ValueKey('voice-connection-bar'),
@@ -80,17 +97,21 @@ class VoiceConnectionBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: accent,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      name ?? 'Voice channel',
+                      switch ((name, server)) {
+                        (final name?, final server?) => '$name / $server',
+                        (final name?, null) => name,
+                        (null, _) => 'Voice channel',
+                      },
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],
@@ -103,33 +124,6 @@ class VoiceConnectionBar extends StatelessWidget {
                   icon: Icons.open_in_full,
                   onPressed: () => onOpenChannel!(channelId),
                 ),
-              if (camera case final SelfVideoController camera)
-                if (camera.isSupported)
-                  _BarButton(
-                    buttonKey: const ValueKey('voice-bar-camera'),
-                    tooltip: camera.cameras.isEmpty
-                        ? 'No camera attached'
-                        : camera.isOn
-                        ? 'Turn camera off'
-                        : 'Turn camera on',
-                    icon: camera.isOn
-                        ? Icons.videocam
-                        : Icons.videocam_off_outlined,
-                    active: camera.isOn,
-                    // A build with no camera keeps the button visible and
-                    // dead: hiding it would leave somebody who unplugged a
-                    // webcam wondering where the control went.
-                    onPressed: camera.cameras.isEmpty || camera.isBusy
-                        ? null
-                        : () => unawaited(camera.toggle()),
-                  ),
-              _BarButton(
-                buttonKey: const ValueKey('voice-bar-mute'),
-                tooltip: controller.isMuted ? 'Unmute' : 'Mute',
-                icon: controller.isMuted ? Icons.mic_off : Icons.mic_none,
-                active: controller.isMuted,
-                onPressed: () => unawaited(controller.toggleMute()),
-              ),
               _BarButton(
                 buttonKey: const ValueKey('voice-bar-disconnect'),
                 tooltip: 'Disconnect',
@@ -137,6 +131,26 @@ class VoiceConnectionBar extends StatelessWidget {
                 danger: true,
                 onPressed: () => unawaited(controller.disconnect()),
               ),
+            ],
+          ),
+          // A row of their own: the sidebar is too narrow to draw these beside
+          // the names and still leave the names readable.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _BarButton.control(
+                buttonKey: const ValueKey('voice-bar-mute'),
+                control: VoiceControl.mute(controller),
+              ),
+              _BarButton.control(
+                buttonKey: const ValueKey('voice-bar-deafen'),
+                control: VoiceControl.deafen(controller),
+              ),
+              if (camera case final camera? when camera.isSupported)
+                _BarButton.control(
+                  buttonKey: const ValueKey('voice-bar-camera'),
+                  control: VoiceControl.camera(camera),
+                ),
             ],
           ),
           if (voiceRoomWarning(controller) case final warning?)
@@ -147,7 +161,7 @@ class VoiceConnectionBar extends StatelessWidget {
                 key: const ValueKey('voice-bar-warning'),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
-                  fontSize: 10,
+                  fontSize: FlucordType.caption,
                   height: 1.35,
                 ),
               ),
@@ -167,6 +181,16 @@ class _BarButton extends StatelessWidget {
     this.active = false,
     this.danger = false,
   });
+
+  _BarButton.control({required Key buttonKey, required VoiceControl control})
+    : this(
+        buttonKey: buttonKey,
+        tooltip: control.tooltip,
+        icon: control.icon,
+        onPressed: control.onPressed,
+        active: control.active,
+        danger: control.danger,
+      );
 
   final Key buttonKey;
   final String tooltip;
@@ -189,7 +213,7 @@ class _BarButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         key: buttonKey,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
         onTap: onPressed,
         child: SizedBox(
           width: 36,

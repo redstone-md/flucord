@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../domain/message_embed.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'chat_image.dart';
 import 'message_content_view.dart';
 import 'native_inline_video_player.dart';
 import 'user_settings_scope.dart';
@@ -37,7 +40,7 @@ class MessageEmbedView extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.surfaces.inset,
           border: Border.all(color: context.surfaces.border),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
         ),
         child: Stack(
           children: [
@@ -170,19 +173,25 @@ class _EmbedTextContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sourceName = embed.author?.name ?? embed.provider?.name;
-    final sourceIcon = embed.author?.proxyIconUrl ?? embed.author?.iconUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (sourceName != null) ...[
-          _EmbedSource(name: sourceName, iconUrl: sourceIcon),
+          _EmbedSource(
+            name: sourceName,
+            iconUrl: embed.author?.iconUrl,
+            proxyIconUrl: embed.author?.proxyIconUrl,
+          ),
           const SizedBox(height: 7),
         ],
         if (embed.title case final title?) ...[
           Text(
             title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: FlucordType.label,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 5),
         ],
@@ -192,7 +201,10 @@ class _EmbedTextContent extends StatelessWidget {
             workspace: workspace,
             linkLauncher: linkLauncher,
             onSelectChannel: onSelectChannel,
-            textStyle: const TextStyle(fontSize: 12, height: 1.35),
+            textStyle: const TextStyle(
+              fontSize: FlucordType.label,
+              height: 1.35,
+            ),
           ),
         if (embed.fields.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -209,33 +221,33 @@ class _EmbedTextContent extends StatelessWidget {
 }
 
 class _EmbedSource extends StatelessWidget {
-  const _EmbedSource({required this.name, required this.iconUrl});
+  const _EmbedSource({
+    required this.name,
+    required this.iconUrl,
+    required this.proxyIconUrl,
+  });
 
   final String name;
   final String? iconUrl;
+  final String? proxyIconUrl;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (iconUrl != null) ...[
-          ClipOval(
-            child: Image.network(
-              iconUrl!,
-              width: 20,
-              height: 20,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
-          ),
+        if (proxyIconUrl != null || iconUrl != null) ...[
+          _EmbedIcon(url: iconUrl, proxyUrl: proxyIconUrl, size: 20),
           const SizedBox(width: 7),
         ],
         Flexible(
           child: Text(
             name,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -313,7 +325,10 @@ class _EmbedFieldView extends StatelessWidget {
       children: [
         Text(
           field.name,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 3),
         MessageContentView(
@@ -323,7 +338,7 @@ class _EmbedFieldView extends StatelessWidget {
           onSelectChannel: onSelectChannel,
           textStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 11,
+            fontSize: FlucordType.label,
             height: 1.3,
           ),
         ),
@@ -340,10 +355,10 @@ class _EmbedThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox.square(
         dimension: 80,
-        child: _RemoteEmbedImage(media: media),
+        child: _RemoteEmbedImage(media: media, box: const Size.square(80)),
       ),
     );
   }
@@ -352,17 +367,23 @@ class _EmbedThumbnail extends StatelessWidget {
 class _EmbedMediaView extends StatelessWidget {
   const _EmbedMediaView({required this.media});
 
+  static const _bounds = Size(420, 300);
+
   final MessageEmbedMedia media;
 
   @override
   Widget build(BuildContext context) {
+    final ratio = media.aspectRatio.clamp(0.65, 2.2);
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420, maxHeight: 300),
+      constraints: BoxConstraints.loose(_bounds),
       child: AspectRatio(
-        aspectRatio: media.aspectRatio.clamp(0.65, 2.2),
+        aspectRatio: ratio,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: _RemoteEmbedImage(media: media),
+          borderRadius: FlucordRadius.small,
+          child: _RemoteEmbedImage(
+            media: media,
+            box: boxFitting(_bounds, ratio),
+          ),
         ),
       ),
     );
@@ -370,9 +391,12 @@ class _EmbedMediaView extends StatelessWidget {
 }
 
 class _RemoteEmbedImage extends StatelessWidget {
-  const _RemoteEmbedImage({required this.media});
+  const _RemoteEmbedImage({required this.media, required this.box});
 
   final MessageEmbedMedia media;
+
+  /// The box the picture covers.
+  final Size box;
 
   @override
   Widget build(BuildContext context) {
@@ -381,9 +405,14 @@ class _RemoteEmbedImage extends StatelessWidget {
     // or the cdn's webp form where there is no proxy.
     final plays = UserSettingsScope.displayOf(context).playsGifs;
     final url = media.proxyUrl ?? media.url;
-    return Image.network(
+    return Image(
       key: const ValueKey('embed-image'),
-      plays || !_isGif(media) ? url : _stillFrameOf(url),
+      image: _embedImage(
+        context,
+        address: plays || !_isGif(media) ? url : _stillFrameOf(media),
+        isProxied: media.proxyUrl != null,
+        size: _covering(box, media.aspectRatio),
+      ),
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => ColoredBox(
         color: context.surfaces.surface,
@@ -397,27 +426,84 @@ class _RemoteEmbedImage extends StatelessWidget {
   }
 }
 
+/// The small round picture of an embed's author or footer.
+class _EmbedIcon extends StatelessWidget {
+  const _EmbedIcon({
+    required this.url,
+    required this.proxyUrl,
+    required this.size,
+  });
+
+  final String? url;
+  final String? proxyUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: Image(
+        key: const ValueKey('embed-icon'),
+        image: _embedImage(
+          context,
+          address: proxyUrl ?? url!,
+          isProxied: proxyUrl != null,
+          size: Size.square(size),
+        ),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+/// An embed's picture at [address], which asks for [size] when [isProxied],
+/// because only a media proxy resizes on request.
+ImageProvider _embedImage(
+  BuildContext context, {
+  required String address,
+  required bool isProxied,
+  required Size size,
+}) => chatImage(
+  context,
+  size: size,
+  addressAt: (width, height) {
+    final proxy = isProxied ? Uri.tryParse(address) : null;
+    if (proxy == null || !proxy.hasAuthority) return address;
+    return proxyAddressAtSize(proxy, width: width, height: height);
+  },
+);
+
+/// The size a picture of this [ratio] is drawn at to cover [box].
+///
+/// [BoxFit.cover] crops the longer side, so the shorter side sets the size. A
+/// very long picture is treated as less long, so it never asks for a huge file.
+Size _covering(Size box, double ratio) {
+  final shape = ratio.clamp(0.25, 4.0);
+  return shape > box.aspectRatio
+      ? Size(box.height * shape, box.height)
+      : Size(box.width, box.width / shape);
+}
+
 /// Whether the embed's picture is a moving one, judged from the address it
 /// is drawn from.
 bool _isGif(MessageEmbedMedia media) =>
     (media.proxyUrl ?? media.url).toLowerCase().endsWith('.gif');
 
-/// The first frame of a GIF the account keeps still: the proxy serves a png
-/// when asked, and the cdn the webp form of the same path.
-String _stillFrameOf(String url) {
-  final parsed = Uri.tryParse(url);
-  if (parsed == null) return url;
-  if (parsed.host == 'media.discordapp.net') {
-    return parsed
-        .replace(queryParameters: {...parsed.queryParameters, 'format': 'png'})
+/// The first frame of a GIF the account keeps still. Any media proxy serves a
+/// png when asked, and Discord's cdn serves the webp form of the same path.
+/// Another host has no still form, so its picture is drawn as it is.
+String _stillFrameOf(MessageEmbedMedia media) {
+  final proxy = Uri.tryParse(media.proxyUrl ?? '');
+  if (proxy != null && proxy.hasAuthority) {
+    return proxy
+        .replace(queryParameters: {...proxy.queryParameters, 'format': 'png'})
         .toString();
   }
-  if (!parsed.path.endsWith('.gif')) return url;
-  return parsed
-      .replace(
-        path: parsed.path.replaceRange(parsed.path.length - 4, null, '.webp'),
-      )
-      .toString();
+  return Uri.tryParse(media.url)?.host == 'cdn.discordapp.com'
+      ? cdnStillFrameOf(media.url)
+      : media.url;
 }
 
 class _EmbedFooterRow extends StatelessWidget {
@@ -428,27 +514,23 @@ class _EmbedFooterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconUrl = footer?.proxyIconUrl ?? footer?.iconUrl;
+    final iconUrl = footer?.iconUrl;
+    final proxyIconUrl = footer?.proxyIconUrl;
     final timestampLabel = timestamp == null ? null : _formatTime(timestamp!);
     return Row(
       children: [
-        if (iconUrl != null) ...[
-          ClipOval(
-            child: Image.network(
-              iconUrl,
-              width: 18,
-              height: 18,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
-          ),
+        if (proxyIconUrl != null || iconUrl != null) ...[
+          _EmbedIcon(url: iconUrl, proxyUrl: proxyIconUrl, size: 18),
           const SizedBox(width: 6),
         ],
         Flexible(
           child: Text(
             [?footer?.text, ?timestampLabel].join(' • '),
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
       ],

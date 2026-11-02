@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../application/discord_friends_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_friend_actions.dart';
 import 'discord_friend_profile_popover.dart';
 import 'discord_account_connection_scope.dart';
@@ -146,7 +147,7 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
               '${section.label.toUpperCase()} — ${section.count}',
               style: TextStyle(
                 color: context.surfaces.muted,
-                fontSize: 10,
+                fontSize: FlucordType.caption,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.25,
               ),
@@ -222,7 +223,12 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     LayerLink link,
   ) {
     final box = context.findRenderObject() as RenderBox?;
-    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final origin =
+        box?.localToGlobal(
+          Offset.zero,
+          ancestor: Overlay.of(context).context.findRenderObject(),
+        ) ??
+        Offset.zero;
     final centerY = origin.dy + (box?.size.height ?? 0) / 2;
     final viewport = MediaQuery.sizeOf(context);
     final maxProfileLeft = viewport.width <= 316 ? 8.0 : viewport.width - 308;
@@ -337,7 +343,7 @@ class _FriendRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: FlucordType.label,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -350,9 +356,9 @@ class _FriendRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: mutationFailed
-                                ? FlucordColors.danger
+                                ? context.surfaces.errorText
                                 : context.surfaces.muted,
-                            fontSize: 11,
+                            fontSize: FlucordType.caption,
                           ),
                         ),
                       ],
@@ -412,7 +418,7 @@ class _FriendsState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: context.surfaces.muted,
-                fontSize: 12,
+                fontSize: FlucordType.caption,
                 height: 1.4,
               ),
             ),

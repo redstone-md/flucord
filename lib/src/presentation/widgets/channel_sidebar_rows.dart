@@ -1,5 +1,89 @@
 part of 'channel_sidebar.dart';
 
+/// A server's sidebar header: its name, and every action on the server in the
+/// one menu the name opens, the way Discord's own header works.
+///
+/// An action that is null is left out of the menu. With none at all the name
+/// is plain text, because a menu with nothing in it is a dead control.
+class _ServerHeader extends StatelessWidget {
+  const _ServerHeader({
+    required this.title,
+    required this.onOpenSettings,
+    required this.onLeave,
+    required this.onReport,
+    required this.onOpenNotifications,
+  });
+
+  final Widget title;
+  final VoidCallback? onOpenSettings;
+  final VoidCallback? onLeave;
+  final VoidCallback? onReport;
+
+  /// Raises the notification menu from the given context, at the position.
+  final void Function(BuildContext context, RelativeRect position)?
+  onOpenNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = serverMenuItems({
+      if (onOpenSettings != null) ServerMenuAction.settings,
+      if (onOpenNotifications != null) ServerMenuAction.notifications,
+      if (onReport != null) ServerMenuAction.report,
+      if (onLeave != null) ServerMenuAction.leave,
+    });
+    if (entries.isEmpty) return title;
+    return PopupMenuButton<ServerMenuAction>(
+      key: const ValueKey('space-menu'),
+      tooltip: 'Server menu',
+      position: PopupMenuPosition.under,
+      onSelected: (action) => _perform(context, action),
+      itemBuilder: (_) => entries,
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            Expanded(child: title),
+            const Icon(Icons.expand_more, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _perform(BuildContext context, ServerMenuAction action) {
+    switch (action) {
+      case ServerMenuAction.settings:
+        onOpenSettings?.call();
+      case ServerMenuAction.notifications:
+        if (_belowHeader(context) case final position?) {
+          onOpenNotifications?.call(context, position);
+        }
+      case ServerMenuAction.report:
+        onReport?.call();
+      case ServerMenuAction.leave:
+        onLeave?.call();
+      // The header's notification menu has this row already.
+      case ServerMenuAction.markRead:
+        break;
+    }
+  }
+
+  /// Where a follow-up menu opens: under the header, where this one was.
+  RelativeRect? _belowHeader(BuildContext context) {
+    final header = context.findRenderObject();
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (header is! RenderBox || overlay is! RenderBox) return null;
+    final corner = header.localToGlobal(
+      header.size.bottomLeft(Offset.zero),
+      ancestor: overlay,
+    );
+    return RelativeRect.fromRect(
+      corner & Size.zero,
+      Offset.zero & overlay.size,
+    );
+  }
+}
+
 /// The direct-messages block, with its message-request folder.
 ///
 /// The folder is the one piece of state the sidebar keeps: a request row is a
@@ -70,10 +154,10 @@ class _FolderRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: SizedBox(
             height: 34,
             child: Row(
@@ -91,7 +175,7 @@ class _FolderRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 13,
+                      fontSize: FlucordType.label,
                     ),
                   ),
                 ),
@@ -131,11 +215,11 @@ class _MessageRequestRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           key: ValueKey('request-${channel.id}'),
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: SizedBox(
             height: 34,
             child: Row(
@@ -154,7 +238,7 @@ class _MessageRequestRow extends StatelessWidget {
                   child: Text(
                     recipient?.displayName ?? channel.name,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: FlucordType.label),
                   ),
                 ),
                 if (onAccept != null)
@@ -204,34 +288,44 @@ class _CategorySection extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey('category-${category.id}'),
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 28,
-              child: Row(
-                children: [
-                  Icon(
-                    collapsed ? Icons.chevron_right : Icons.expand_more,
-                    size: 16,
-                    color: context.surfaces.muted,
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      category.name.toUpperCase(),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+        Semantics(
+          container: true,
+          // The name as written. Capitals are only how it is drawn, and some
+          // screen readers would spell them out.
+          label: category.name,
+          button: true,
+          expanded: !collapsed,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('category-${category.id}'),
+              onTap: onToggle,
+              borderRadius: FlucordRadius.small,
+              child: ExcludeSemantics(
+                child: SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      Icon(
+                        collapsed ? Icons.chevron_right : Icons.expand_more,
+                        size: 16,
                         color: context.surfaces.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
                       ),
-                    ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          category.name.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.surfaces.muted,
+                            fontSize: FlucordType.caption,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -255,7 +349,7 @@ class _SectionLabel extends StatelessWidget {
         label,
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 12,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -299,69 +393,84 @@ class _ChannelRow extends StatelessWidget {
         : context.surfaces.muted;
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          key: ValueKey('channel-${channel.id}'),
-          onTap: onPressed,
-          onSecondaryTapDown: onNotificationRequest == null
-              ? null
-              : (details) => _openMenu(context, details.globalPosition),
-          borderRadius: BorderRadius.circular(5),
-          child: SizedBox(
-            height: 34,
-            child: Row(
-              children: [
-                SizedBox(width: indented ? 18 : 10),
-                if (recipient != null)
-                  MemberAvatar(member: recipient!, size: 24)
-                else
-                  Icon(
-                    channel.isDirectMessage
-                        ? Icons.person_outline
-                        : channel.isThread
-                        ? Icons.forum_outlined
-                        : switch (channel.kind) {
-                            ChannelKind.text => Icons.tag,
-                            ChannelKind.voice => Icons.volume_up_outlined,
-                            ChannelKind.forum => Icons.forum_outlined,
-                            ChannelKind.media => Icons.perm_media_outlined,
-                          },
-                    size: 17,
-                    color: foreground,
-                  ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    channel.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 13,
-                      fontWeight: showsUnread || selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+      child: Semantics(
+        container: true,
+        label: activityLabel(
+          channel.name,
+          mentionCount: channel.mentionCount,
+          muted: muted,
+          unread: showsUnread,
+        ),
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? context.surfaces.raised : Colors.transparent,
+          borderRadius: FlucordRadius.small,
+          child: InkWell(
+            key: ValueKey('channel-${channel.id}'),
+            onTap: onPressed,
+            onSecondaryTapDown: onNotificationRequest == null
+                ? null
+                : (details) => _openMenu(context, details.globalPosition),
+            borderRadius: FlucordRadius.small,
+            // The label above already says all of this. The badge alone would
+            // read as a bare number.
+            child: ExcludeSemantics(
+              child: SizedBox(
+                height: 34,
+                child: Row(
+                  children: [
+                    SizedBox(width: indented ? 18 : 10),
+                    if (recipient != null)
+                      MemberAvatar(member: recipient!, size: 24)
+                    else
+                      Icon(
+                        channel.isDirectMessage
+                            ? Icons.person_outline
+                            : channel.isThread
+                            ? Icons.forum_outlined
+                            : switch (channel.kind) {
+                                ChannelKind.text => Icons.tag,
+                                ChannelKind.voice => Icons.volume_up_outlined,
+                                ChannelKind.forum => Icons.forum_outlined,
+                                ChannelKind.media => Icons.perm_media_outlined,
+                              },
+                        size: 17,
+                        color: foreground,
+                      ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        channel.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: FlucordType.label,
+                          fontWeight: showsUnread || selected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (muted)
+                      Padding(
+                        key: ValueKey('channel-muted-${channel.id}'),
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          Icons.notifications_off_outlined,
+                          size: 14,
+                          color: foreground,
+                        ),
+                      ),
+                    if (channel.mentionCount > 0)
+                      MentionBadge(
+                        key: ValueKey('channel-mention-${channel.id}'),
+                        count: channel.mentionCount,
+                      ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
-                if (muted)
-                  Padding(
-                    key: ValueKey('channel-muted-${channel.id}'),
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.notifications_off_outlined,
-                      size: 14,
-                      color: foreground,
-                    ),
-                  ),
-                if (channel.mentionCount > 0)
-                  MentionBadge(
-                    key: ValueKey('channel-mention-${channel.id}'),
-                    count: channel.mentionCount,
-                  ),
-                const SizedBox(width: 8),
-              ],
+              ),
             ),
           ),
         ),
@@ -375,7 +484,7 @@ class _ChannelRow extends StatelessWidget {
     final request = await showNotificationSettingsMenu(
       context: context,
       position: RelativeRect.fromRect(
-        position & Size.zero,
+        overlay.globalToLocal(position) & Size.zero,
         Offset.zero & overlay.size,
       ),
       muted: muted,
@@ -432,7 +541,7 @@ class VoiceSeatRow extends StatelessWidget {
               name,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: FlucordType.caption,
                 color: silenced || deafened
                     ? surfaces.muted
                     : Theme.of(context).colorScheme.onSurface,

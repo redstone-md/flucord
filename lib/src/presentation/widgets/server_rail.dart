@@ -6,6 +6,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/workspace_activity.dart';
 import '../../application/connection_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'account_connections_scope.dart';
 import 'account_entitlements_scope.dart';
 import 'account_data_package_scope.dart';
@@ -15,6 +16,7 @@ import 'account_standing_scope.dart';
 import 'remote_identity_image.dart';
 
 import 'accessibility_scope.dart';
+import 'activity_label.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
 import 'mention_badge.dart';
@@ -39,6 +41,7 @@ class ServerRail extends StatelessWidget {
     required this.sessionMode,
     required this.isDark,
     this.onAddServer,
+    this.onOpenSpaceMenu,
     super.key,
   });
 
@@ -61,6 +64,9 @@ class ServerRail extends StatelessWidget {
   /// create or leave anything. The button is hidden rather than disabled:
   /// a plus that can do nothing is a lie about what the app offers.
   final VoidCallback? onAddServer;
+
+  /// Opens the menu of a server at a global position, on a right click.
+  final void Function(String spaceId, Offset position)? onOpenSpaceMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +110,9 @@ class ServerRail extends StatelessWidget {
                   selected: space.id == selectedSpaceId,
                   activity: activity[space.id] ?? SpaceActivity.none,
                   onPressed: () => onSelectSpace(space.id),
+                  onOpenMenu: onOpenSpaceMenu == null
+                      ? null
+                      : (position) => onOpenSpaceMenu!(space.id, position),
                 );
               },
             ),
@@ -121,7 +130,7 @@ class ServerRail extends StatelessWidget {
                   ? Icons.link
                   : Icons.link_outlined,
               color: sessionMode == SessionMode.discord
-                  ? FlucordColors.brand
+                  ? context.surfaces.accentIcon
                   : null,
             ),
             tooltip: 'Connections',
@@ -215,8 +224,8 @@ class _AddServerButtonState extends State<_AddServerButton> {
             height: 44,
             decoration: BoxDecoration(
               color: active
-                  ? FlucordColors.success
-                  : FlucordColors.success.withValues(alpha: 0.62),
+                  ? context.surfaces.success
+                  : context.surfaces.success.withValues(alpha: 0.62),
               borderRadius: radius,
             ),
             child: Icon(
@@ -251,7 +260,7 @@ class _HomeButton extends StatelessWidget {
     onPressed: onPressed,
     tooltip: onPressed == null ? 'Flucord' : 'Direct Messages',
     idleColor: context.surfaces.raised,
-    activeColor: FlucordColors.brand,
+    activeColor: context.surfaces.brand,
     builder: (context, active) => Icon(
       Icons.forum_rounded,
       size: 21,
@@ -266,12 +275,14 @@ class _SpaceButton extends StatelessWidget {
     required this.selected,
     required this.activity,
     required this.onPressed,
+    required this.onOpenMenu,
   });
 
   final CommunitySpace space;
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback onPressed;
+  final ValueChanged<Offset>? onOpenMenu;
 
   @override
   Widget build(BuildContext context) => _RailButton(
@@ -280,6 +291,7 @@ class _SpaceButton extends StatelessWidget {
     selected: selected,
     activity: activity,
     onPressed: onPressed,
+    onOpenMenu: onOpenMenu,
     tooltip: space.name,
     idleColor: Color(space.colorValue).withValues(alpha: 0.62),
     activeColor: Color(space.colorValue),
@@ -292,7 +304,7 @@ class _SpaceButton extends StatelessWidget {
           space.monogram,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -314,6 +326,7 @@ class _RailButton extends StatefulWidget {
     required this.idleColor,
     required this.activeColor,
     required this.builder,
+    this.onOpenMenu,
   });
 
   final String spaceId;
@@ -321,6 +334,7 @@ class _RailButton extends StatefulWidget {
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback? onPressed;
+  final ValueChanged<Offset>? onOpenMenu;
   final String tooltip;
   final Color idleColor;
   final Color activeColor;
@@ -337,7 +351,12 @@ class _RailButtonState extends State<_RailButton> {
   Widget build(BuildContext context) {
     final active = widget.selected || _hovered;
     final radius = BorderRadius.circular(active ? 14 : 22);
-    final semanticsLabel = _activityLabel(widget.tooltip, widget.activity);
+    final semanticsLabel = activityLabel(
+      widget.tooltip,
+      mentionCount: widget.activity.mentionCount,
+      muted: widget.activity.muted,
+      unread: widget.activity.hasUnread,
+    );
     return Semantics(
       key: ValueKey('space-semantics-${widget.spaceId}'),
       label: semanticsLabel,
@@ -381,6 +400,10 @@ class _RailButtonState extends State<_RailButton> {
                   child: InkWell(
                     key: widget.buttonKey,
                     onTap: widget.onPressed,
+                    onSecondaryTapDown: widget.onOpenMenu == null
+                        ? null
+                        : (details) =>
+                              widget.onOpenMenu!(details.globalPosition),
                     borderRadius: radius,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 140),
@@ -420,14 +443,5 @@ class _RailButtonState extends State<_RailButton> {
         ),
       ),
     );
-  }
-
-  static String _activityLabel(String name, SpaceActivity activity) {
-    if (activity.mentionCount == 1) return '$name, 1 mention';
-    if (activity.mentionCount > 1) {
-      return '$name, ${activity.mentionCount} mentions';
-    }
-    if (activity.muted) return '$name, muted';
-    return activity.hasUnread ? '$name, unread' : name;
   }
 }

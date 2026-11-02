@@ -131,6 +131,9 @@ final class DiscordVoiceGatewayClient
         )
         .listen(_recovery.accept);
     _feedbackIntake = _recovery.feedback.listen(_sendFeedback);
+    _udpFailureIntake = _udpTransport.socketFailures.listen(
+      _onUdpSocketFailure,
+    );
   }
 
   final DiscordVoiceGatewayProtocol _protocol;
@@ -200,6 +203,7 @@ final class DiscordVoiceGatewayClient
   );
   StreamSubscription<DiscordRtpFrame>? _videoIntake;
   late final StreamSubscription<DiscordFeedbackRequest> _feedbackIntake;
+  late final StreamSubscription<Object> _udpFailureIntake;
 
   /// The clock the connection measures time on: the round trip, the
   /// recovery and the sender-side keyframe gate all read it.
@@ -440,8 +444,24 @@ final class DiscordVoiceGatewayClient
         _apply(next);
       }
     } on Object catch (error) {
+      // A newer connection replaced this discovery, and closing the old socket
+      // is what failed it. The newer connection is not affected.
+      if (generation != _generation) return;
       _fail(error);
     }
+  }
+
+  /// The media socket died, so sound has stopped in both directions while the
+  /// voice socket still looks healthy.
+  ///
+  /// A resume would continue on the dead path, because a RESUMED brings no new
+  /// discovery. Only an identify runs discovery and builds a new socket.
+  void _onUdpSocketFailure(Object error) {
+    // No voice socket means this client waits for new credentials. Its old
+    // token is dead, and the client built from the new ones has its own socket.
+    if (_socket == null) return;
+    _protocol.revokeResume();
+    _scheduleReconnect(error: error);
   }
 
   /// Builds the media plane for a negotiated session: the cipher, the DAVE
@@ -629,8 +649,9 @@ final class DiscordVoiceGatewayClient
   }) {
     final controller = _daveController;
     if (controller == null) return picture;
-    return Uint8List.fromList(
-      controller.decryptVideoFrame(userId: userId, encryptedFrame: picture),
+    return controller.decryptVideoFrame(
+      userId: userId,
+      encryptedFrame: picture,
     );
   }
 
@@ -795,11 +816,9 @@ final class DiscordVoiceGatewayClient
   }) {
     final controller = _daveController;
     if (controller == null) throw StateError('DAVE is unavailable');
-    return Uint8List.fromList(
-      controller.decryptAudioFrame(
-        userId: userId,
-        encryptedFrame: encryptedFrame,
-      ),
+    return controller.decryptAudioFrame(
+      userId: userId,
+      encryptedFrame: encryptedFrame,
     );
   }
 
@@ -957,6 +976,7 @@ final class DiscordVoiceGatewayClient
     _reconnectTimer?.cancel();
     await _videoIntake?.cancel();
     await _feedbackIntake.cancel();
+    await _udpFailureIntake.cancel();
     await _socketSubscription?.cancel();
     await _socket?.close();
     await _udpTransport.close();

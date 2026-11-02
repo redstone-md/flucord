@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/go_live_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 /// Which screen to share.
 ///
@@ -15,7 +16,7 @@ class GoLiveDisplayDialog extends StatelessWidget {
   final List<GoLiveDisplay> displays;
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('go-live-display-dialog'),
     title: const Text('Share a screen'),
     content: SizedBox(

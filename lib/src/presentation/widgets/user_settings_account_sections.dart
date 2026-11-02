@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/user_settings.dart';
 import '../../domain/user_settings_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'user_settings_controls.dart';
 import 'user_settings_sections.dart';
 
@@ -102,7 +103,7 @@ class PrivacySettingsSection extends StatelessWidget {
         SettingRow(
           title: 'New servers can see my activity',
           support: UserSettingSupport.unavailable,
-          note: 'Read-only: Discord splits this across several stored fields.',
+          note: 'Read-only here. Change it in Discord.',
           child: SettingSwitch.readOnly(
             value: !privacy.defaultGuildsRestricted,
           ),
@@ -128,12 +129,12 @@ class LanguageSettingsSection extends StatelessWidget {
       children: [
         const SettingsSectionHeader(
           title: 'Language',
-          subtitle: 'The locale your account is set to.',
+          subtitle: 'The language your account is set to.',
         ),
         SettingRow(
           title: 'Language',
           support: UserSettingSupport.unavailable,
-          note: 'Flucord ships English strings only.',
+          note: 'Flucord is available in English only.',
           child: SettingValue(_orUnset(localization.locale)),
         ),
         SettingRow(
@@ -203,12 +204,12 @@ class _StatusSettingsSectionState extends State<StatusSettingsSection> {
       children: [
         const SettingsSectionHeader(
           title: 'Status',
-          subtitle: 'The presence your account carries between clients.',
+          subtitle: 'The status your account shows on every device.',
         ),
         SettingRow(
           title: 'Online status',
           support: UserSettingSupport.unavailable,
-          note: 'Flucord does not broadcast presence yet.',
+          note: 'Flucord does not share your status yet.',
           child: SettingValue(
             status.status == null || status.status!.isEmpty
                 ? 'Not set'
@@ -284,10 +285,13 @@ class _CustomStatusField extends StatelessWidget {
           key: const ValueKey('setting-custom-status-field'),
           controller: controller,
           maxLength: 128,
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: FlucordType.caption),
           decoration: InputDecoration(
             isDense: true,
-            counterStyle: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            counterStyle: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
             hintText: "What's happening?",
           ),
           onSubmitted: onSave,

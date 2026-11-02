@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/pending_attachment_picker.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/contrast.dart';
 
 /// The composer's honesty checks: the character count near the limit, the
 /// upload limit stated before a file is sent, and the spoiler tag that
@@ -110,7 +115,7 @@ void main() {
       picker: picker,
     );
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -137,7 +142,7 @@ void main() {
     ]);
     await _pump(tester, attachmentSizeLimitBytes: null, picker: picker);
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -161,7 +166,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-spoiler-/tmp/cat.png')));
     await tester.pumpAndSettle();
@@ -192,7 +197,7 @@ void main() {
     ]);
     await _pump(tester, picker: picker);
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-spoiler-/tmp/cat.png')));
     await tester.pumpAndSettle();
@@ -203,6 +208,131 @@ void main() {
       reason: 'the strip shows the name the receiver will store',
     );
   });
+
+  testWidgets('a failed send brings its files back and can go out again', (
+    tester,
+  ) async {
+    final answers = [Completer<bool>(), Completer<bool>()];
+    final sent = <List<PendingAttachment>>[];
+    await _pump(
+      tester,
+      picker: _FixedPicker([
+        PendingAttachment(name: 'cat.png', path: '/tmp/cat.png', size: 12),
+      ]),
+      onSend: (_, attachments, _, _) {
+        sent.add(attachments);
+        return answers[sent.length - 1].future;
+      },
+    );
+    final strip = find.byKey(const ValueKey('pending-attachment-/tmp/cat.png'));
+
+    await _openAttachmentPicker(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pump();
+    expect(strip, findsNothing, reason: 'the composer clears on the press');
+
+    answers.first.complete(false);
+    await tester.pumpAndSettle();
+    expect(strip, findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pump();
+    expect(sent.last.single.path, '/tmp/cat.png');
+  });
+
+  testWidgets('files come back even when text was typed during the send', (
+    tester,
+  ) async {
+    final answer = Completer<bool>();
+    await _pump(
+      tester,
+      picker: _FixedPicker([
+        PendingAttachment(name: 'cat.png', path: '/tmp/cat.png', size: 12),
+      ]),
+      onSend: (_, _, _, _) => answer.future,
+    );
+
+    await _openAttachmentPicker(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('message-composer')),
+      'typed later',
+    );
+    answer.complete(false);
+    await tester.pumpAndSettle();
+
+    expect(find.text('typed later'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('pending-attachment-/tmp/cat.png')),
+      findsOneWidget,
+    );
+  });
+
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('the send icon reads at 3:1 in $name', (tester) async {
+      await _pump(tester, theme: theme);
+      await tester.enterText(
+        find.byKey(const ValueKey('message-composer')),
+        'hello',
+      );
+      await tester.pump();
+
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('send-message')),
+          matching: find.byIcon(Icons.send),
+        ),
+      );
+      expectReadable(theme, icon.color, 3);
+    });
+
+    testWidgets('the open emoji picker icon reads at 3:1 in $name', (
+      tester,
+    ) async {
+      await _pump(tester, theme: theme);
+      await tester.tap(find.byKey(const ValueKey('open-emoji-picker')));
+      await tester.pumpAndSettle();
+
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('open-emoji-picker')),
+          matching: find.byType(Icon),
+        ),
+      );
+      expectReadable(theme, icon.color, 3);
+    });
+
+    testWidgets('a reply keeps the 2 px focus ring in $name', (tester) async {
+      await _pump(
+        tester,
+        theme: theme,
+        replyTo: ChatMessage(
+          id: 'message-1',
+          channelId: 'general',
+          authorId: 'friend',
+          body: 'earlier',
+          sentAt: DateTime.utc(2026, 7, 24, 8),
+        ),
+      );
+
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('message-composer')),
+      );
+      expect(
+        field.decoration!.focusedBorder!.borderSide,
+        BorderSide(
+          color: theme.extension<FlucordSurfaceTheme>()!.focusRing,
+          width: 2,
+        ),
+      );
+    });
+  }
 }
 
 Future<void> _pump(
@@ -211,14 +341,18 @@ Future<void> _pump(
   int? attachmentSizeLimitBytes,
   PendingAttachmentPicker? picker,
   SendMessageCallback? onSend,
+  ThemeData? theme,
+  ChatMessage? replyTo,
 }) async {
   await tester.binding.setSurfaceSize(const Size(900, 640));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
-      theme: FlucordTheme.dark,
+      theme: theme ?? FlucordTheme.dark,
       home: Scaffold(
         body: MessageComposer(
+          drafts: MemoryComposerDraftStore(),
+          replyTo: replyTo,
           channelId: 'general',
           channelName: 'general',
           spaceName: 'The Forge',
@@ -248,4 +382,10 @@ final class _FixedPicker implements PendingAttachmentPicker {
 
   @override
   Future<List<PendingAttachment>> pick() async => files;
+}
+
+Future<void> _openAttachmentPicker(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('composer-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('add-attachment')));
 }

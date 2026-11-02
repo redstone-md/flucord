@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -25,11 +26,25 @@ void main() {
 
     final note = find.byKey(const ValueKey('composer-slowmode-countdown'));
     expect(note, findsOneWidget);
-    expect(find.textContaining('Wait '), findsOneWidget);
+    expect(find.textContaining('Try again in '), findsOneWidget);
     // The countdown ticks: a second later the note still names a wait.
     await tester.pump(const Duration(seconds: 2));
     expect(note, findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a wait over a minute reads as minutes and two-digit seconds', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      slowmode: const Duration(minutes: 2),
+      slowmodeUntil: DateTime.now().add(
+        const Duration(minutes: 1, seconds: 4, milliseconds: 500),
+      ),
+    );
+
+    expect(find.textContaining('Try again in 1:05.'), findsOneWidget);
   });
 
   testWidgets('a slowmode that already elapsed shows nothing', (tester) async {
@@ -59,6 +74,7 @@ Future<void> _pump(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: MessageComposer(
+          drafts: MemoryComposerDraftStore(),
           channelId: 'general',
           channelName: 'general',
           spaceName: 'The Forge',

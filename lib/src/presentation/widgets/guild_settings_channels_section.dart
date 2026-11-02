@@ -8,7 +8,10 @@ import '../../domain/discord_permissions.dart';
 import '../../domain/guild_management.dart';
 import '../../domain/permission_overwrite.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
+import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The channels page: create, rename, reorder, delete.
 ///
@@ -134,12 +137,22 @@ class _GuildSettingsChannelsSectionState
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.delete_outline),
             onPressed: manageable && !controller.isBusy
-                ? () => unawaited(controller.deleteChannel(channel.id))
+                ? () => unawaited(_confirmDelete(channel))
                 : null,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDelete(ConversationChannel channel) async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete ${channel.name}?',
+      message: 'The channel and its messages are removed for everybody.',
+      confirmLabel: 'Delete',
+    );
+    if (confirmed) await widget.controller.deleteChannel(channel.id);
   }
 
   /// Swaps two rows and sends the whole reorder as one batch.
@@ -621,7 +634,7 @@ class _OverwriteEditor extends StatelessWidget {
         Text(
           'PERMISSION OVERRIDES',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             letterSpacing: 0.5,
             fontWeight: FontWeight.w700,
             color: context.surfaces.muted,
@@ -631,7 +644,10 @@ class _OverwriteEditor extends StatelessWidget {
         Text(
           'Private channels are made by denying View channel to @everyone '
           'and granting it to the roles and members who belong.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
         const SizedBox(height: 10),
         for (final overwrite in entries)
@@ -746,16 +762,23 @@ class _OverwriteTargetDialog extends StatelessWidget {
   final List<({String id, String label})> entries;
 
   @override
-  Widget build(BuildContext context) => SimpleDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: Text(title),
-    children: [
-      for (final (id: id, label: label) in entries)
-        SimpleDialogOption(
-          key: ValueKey('overwrite-target-$id'),
-          onPressed: () => Navigator.of(context).pop(id),
-          child: Text(label),
-        ),
-    ],
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (id: id, label: label) in entries)
+            SimpleDialogOption(
+              key: ValueKey('overwrite-target-$id'),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              onPressed: () => Navigator.of(context).pop(id),
+              child: Text(label),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -771,7 +794,7 @@ class _OverwriteBitsDialog extends StatelessWidget {
     final name = overwrite.kind == PermissionOverwriteKind.member
         ? 'member'
         : 'role';
-    return AlertDialog(
+    return FlucordDialog(
       key: const ValueKey('overwrite-bits-dialog'),
       title: Text('Overwrite for this $name'),
       content: SizedBox(
@@ -847,7 +870,7 @@ class _CreateChannelDialogState extends State<_CreateChannelDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('create-channel-dialog'),
     title: const Text('Create channel'),
     content: SizedBox(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../application/voice_channel_surface.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Segmented control that swaps a voice channel between its room and its
 /// message timeline.
@@ -29,7 +31,7 @@ class VoiceSurfaceSwitch extends StatelessWidget {
       key: const ValueKey('voice-surface-switch'),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: FlucordRadius.medium,
       ),
       child: Padding(
         padding: const EdgeInsets.all(2),
@@ -94,11 +96,11 @@ class _SurfaceSegment extends StatelessWidget {
         message: tooltip,
         child: Material(
           color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: InkWell(
             key: ValueKey('voice-surface-${value.name}'),
             onTap: () => onPressed(value),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: FlucordRadius.small,
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: showLabel ? 10 : 8,
@@ -117,7 +119,7 @@ class _SurfaceSegment extends StatelessWidget {
                         label,
                         style: TextStyle(
                           color: foreground,
-                          fontSize: 12,
+                          fontSize: FlucordType.caption,
                           fontWeight: selected
                               ? FontWeight.w600
                               : FontWeight.w500,

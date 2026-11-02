@@ -70,6 +70,155 @@ void main() {
     expect(_idsIn(next, 'beta'), ['b-1', 'b-2']);
     expect(_idsIn(next, 'alpha'), ['a-2', 'a-1']);
   });
+
+  test('a new message does not build the list of another channel again', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('b-1', 'beta', 2),
+    ]);
+    final beta = workspace.messagesFor('beta');
+
+    final next = workspace.upsertMessage(_message('a-2', 'alpha', 3));
+
+    expect(identical(next.messagesFor('beta'), beta), isTrue);
+  });
+
+  test('a history page does not build the list of another channel again', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('b-1', 'beta', 2),
+    ]);
+    final beta = workspace.messagesFor('beta');
+
+    final next = workspace.mergeHistory(
+      ChannelHistory(
+        channelId: 'alpha',
+        messages: [_message('a-2', 'alpha', 3)],
+        members: const [],
+      ),
+    );
+
+    expect(identical(next.messagesFor('beta'), beta), isTrue);
+  });
+
+  test('an older page goes in front of what the channel held', () {
+    final workspace = _workspaceWith([
+      _message('a-3', 'alpha', 5),
+      _message('b-1', 'beta', 2),
+    ]);
+
+    final next = workspace.mergeHistory(
+      ChannelHistory(
+        channelId: 'alpha',
+        messages: [_message('a-2', 'alpha', 3), _message('a-1', 'alpha', 1)],
+        members: const [],
+      ),
+      replaceChannel: false,
+    );
+
+    expect(_idsIn(next, 'alpha'), ['a-1', 'a-2', 'a-3']);
+    expect(_idsIn(next, 'beta'), ['b-1']);
+  });
+
+  test('a replacing page drops only what its own channel held', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('b-1', 'beta', 2),
+    ]);
+
+    final next = workspace.mergeHistory(
+      ChannelHistory(
+        channelId: 'alpha',
+        messages: [_message('a-9', 'alpha', 9)],
+        members: const [],
+      ),
+    );
+
+    expect(_idsIn(next, 'alpha'), ['a-9']);
+    expect(_idsIn(next, 'beta'), ['b-1']);
+  });
+
+  test('messages with the same time keep their order through a merge', () {
+    final page = [for (var i = 0; i < 64; i++) _message('a-$i', 'alpha', 1)];
+    final workspace = _workspaceWith(const []);
+
+    final next = workspace.mergeHistory(
+      ChannelHistory(channelId: 'alpha', messages: page, members: const []),
+    );
+
+    expect(_idsIn(next, 'alpha'), [for (final m in page) m.id]);
+  });
+
+  test('a catch-up keeps an older message sent in the same instant', () {
+    // 101 and 102 share a minute. The page starts at 102, so 101 is older
+    // than the page and stays.
+    final workspace = _workspaceWith([
+      _message('100', 'alpha', 1),
+      _message('101', 'alpha', 2),
+      _message('102', 'alpha', 2),
+      _message('103', 'alpha', 3),
+    ]);
+
+    final next = workspace.catchUpHistory(
+      ChannelHistory(
+        channelId: 'alpha',
+        messages: [_message('102', 'alpha', 2), _message('103', 'alpha', 3)],
+        members: const [],
+      ),
+    );
+
+    expect(_idsIn(next, 'alpha'), ['100', '101', '102', '103']);
+  });
+
+  test('the flat view lists every channel, oldest first, after a change', () {
+    final workspace = _workspaceWith([
+      _message('b-1', 'beta', 2),
+      _message('a-1', 'alpha', 4),
+    ]);
+
+    final next = workspace
+        .upsertMessage(_message('b-2', 'beta', 6))
+        .upsertMessage(_message('a-0', 'alpha', 1));
+
+    expect(
+      [for (final message in next.messages) message.id],
+      ['a-0', 'b-1', 'a-1', 'b-2'],
+    );
+  });
+
+  test('an update and a removal reach a message in any channel', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('b-1', 'beta', 2),
+      _message('b-2', 'beta', 3),
+    ]);
+
+    final updated = workspace.updateMessage(
+      'b-1',
+      (message) => message.copyWith(body: 'edited'),
+    );
+    final removed = updated.removeMessages({'a-1', 'b-2'});
+
+    expect(updated.messagesFor('beta').first.body, 'edited');
+    expect(_idsIn(updated, 'beta'), ['b-1', 'b-2']);
+    expect(_idsIn(removed, 'alpha'), isEmpty);
+    expect(_idsIn(removed, 'beta'), ['b-1']);
+    expect(
+      identical(workspace.updateMessage('nope', (m) => m), workspace),
+      isTrue,
+    );
+  });
+
+  test('removing a channel removes only its messages', () {
+    final workspace = _workspaceWith([
+      _message('a-1', 'alpha', 1),
+      _message('b-1', 'beta', 2),
+    ]);
+
+    final next = workspace.removeChannel('alpha');
+
+    expect([for (final message in next.messages) message.id], ['b-1']);
+  });
 }
 
 List<String> _idsIn(ChatWorkspace workspace, String channelId) => [

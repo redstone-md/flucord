@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/keybind_controller.dart';
 import '../../domain/keybind.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Assigning the keyboard shortcuts.
 ///
@@ -39,7 +40,10 @@ class KeybindSection extends StatelessWidget {
                     'behind another window needs a system-wide hook, which '
                     'this build has no module for.',
           key: const ValueKey('keybind-scope-note'),
-          style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
         const SizedBox(height: 12),
         for (final action in KeybindAction.values)
@@ -83,11 +87,17 @@ class _KeybindRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(action.label, style: const TextStyle(fontSize: 13)),
+              Text(
+                action.label,
+                style: const TextStyle(fontSize: FlucordType.label),
+              ),
               if (action.holdToUse)
                 Text(
                   'Held, not toggled',
-                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
             ],
           ),

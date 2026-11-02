@@ -5,6 +5,7 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_activity.dart';
 import '../../domain/discord_social_call.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_activity_voice_participants_dialog.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
@@ -81,7 +82,7 @@ class _IncomingInvite extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -96,9 +97,9 @@ class _IncomingInvite extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: failed
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],
@@ -147,7 +148,11 @@ class _JoinedSession extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.headset_mic_outlined, size: 18, color: _statusColor(call)),
+          Icon(
+            Icons.headset_mic_outlined,
+            size: 18,
+            color: _statusColor(context, call),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -158,7 +163,7 @@ class _JoinedSession extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -170,8 +175,8 @@ class _JoinedSession extends StatelessWidget {
                   style: TextStyle(
                     color: controller.callError == null
                         ? context.surfaces.muted
-                        : FlucordColors.danger,
-                    fontSize: 10,
+                        : context.surfaces.errorText,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],
@@ -230,7 +235,7 @@ class _JoinedSession extends StatelessWidget {
               key: const ValueKey('leave-activity-voice'),
               tooltip: 'Leave activity voice',
               icon: Icons.call_end,
-              color: FlucordColors.danger,
+              color: context.surfaces.danger,
               onPressed: controller.leaveVoice,
             ),
           ],
@@ -247,12 +252,13 @@ class _JoinedSession extends StatelessWidget {
     );
   }
 
-  Color? _statusColor(DiscordSocialCallState? call) => switch (call?.status) {
-    DiscordSocialCallStatus.connected => FlucordColors.success,
-    DiscordSocialCallStatus.reconnecting => FlucordColors.warning,
-    DiscordSocialCallStatus.disconnected => FlucordColors.danger,
-    _ => null,
-  };
+  Color? _statusColor(BuildContext context, DiscordSocialCallState? call) =>
+      switch (call?.status) {
+        DiscordSocialCallStatus.connected => context.surfaces.success,
+        DiscordSocialCallStatus.reconnecting => context.surfaces.warning,
+        DiscordSocialCallStatus.disconnected => context.surfaces.danger,
+        _ => null,
+      };
 
   String _title(DiscordSocialCallState? call) => switch (call?.status) {
     DiscordSocialCallStatus.connected => 'Activity voice connected',
@@ -292,7 +298,7 @@ class _CallButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     tooltip: tooltip,
     visualDensity: VisualDensity.compact,
-    color: color ?? (active ? FlucordColors.brand : null),
+    color: color ?? (active ? context.surfaces.accentIcon : null),
     onPressed: onPressed,
     icon: Icon(icon, size: 18),
   );

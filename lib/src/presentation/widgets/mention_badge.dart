@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The one mention pill, shared by the rail, the channel sidebar and the
 /// inbox so their size, radius and text weight cannot drift apart again.
@@ -29,8 +31,8 @@ class MentionBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 4),
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      color: FlucordColors.mention,
-      borderRadius: BorderRadius.circular(9),
+      color: context.surfaces.mention,
+      borderRadius: FlucordRadius.full,
       border: borderColor == null
           ? null
           : Border.all(color: borderColor!, width: 2),
@@ -39,7 +41,7 @@ class MentionBadge extends StatelessWidget {
       count > 99 ? '99+' : '$count',
       style: const TextStyle(
         color: Colors.white,
-        fontSize: 10,
+        fontSize: FlucordType.caption,
         fontWeight: FontWeight.w700,
         fontFeatures: [FontFeature.tabularFigures()],
       ),

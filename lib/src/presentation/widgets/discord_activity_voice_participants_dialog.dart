@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import '../../application/discord_social_activity_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
+import 'flucord_dialog.dart';
 
 Future<void> showDiscordActivityVoiceParticipantsDialog(
   BuildContext context,
@@ -33,52 +35,50 @@ class _ParticipantsDialog extends StatelessWidget {
   final List<DiscordRelationship> relationships;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380, maxHeight: 460),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          final call = controller.call;
-          final participants = call?.participantUserIds ?? const <String>[];
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _Header(
-                count: participants.length,
-                connected: call?.isConnected == true,
-              ),
-              Divider(height: 1, color: context.surfaces.border),
-              if (participants.isEmpty)
-                const _EmptyParticipants()
-              else
-                Flexible(
-                  child: ListView.separated(
-                    key: const ValueKey('activity-voice-participant-list'),
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: participants.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 2),
-                    itemBuilder: (context, index) {
-                      final userId = participants[index];
-                      return _ParticipantRow(
-                        user: _userFor(userId),
-                        speaking: call?.isSpeaking(userId) == true,
-                        currentUser: userId == call?.currentUserId,
-                        locallyMuted: call?.isLocallyMuted(userId) == true,
-                        pending: controller.isParticipantMutePending(userId),
-                        error: controller.participantMuteErrorFor(userId),
-                        onToggleMuted: () => unawaited(
-                          controller.toggleParticipantMuted(userId),
-                        ),
-                      );
-                    },
-                  ),
+  Widget build(BuildContext context) => FlucordDialog.frame(
+    maxWidth: 380,
+    maxHeight: 460,
+    child: AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final call = controller.call;
+        final participants = call?.participantUserIds ?? const <String>[];
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Header(
+              count: participants.length,
+              connected: call?.isConnected == true,
+            ),
+            Divider(height: 1, color: context.surfaces.border),
+            if (participants.isEmpty)
+              const _EmptyParticipants()
+            else
+              Flexible(
+                child: ListView.separated(
+                  key: const ValueKey('activity-voice-participant-list'),
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: participants.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 2),
+                  itemBuilder: (context, index) {
+                    final userId = participants[index];
+                    return _ParticipantRow(
+                      user: _userFor(userId),
+                      speaking: call?.isSpeaking(userId) == true,
+                      currentUser: userId == call?.currentUserId,
+                      locallyMuted: call?.isLocallyMuted(userId) == true,
+                      pending: controller.isParticipantMutePending(userId),
+                      error: controller.participantMuteErrorFor(userId),
+                      onToggleMuted: () =>
+                          unawaited(controller.toggleParticipantMuted(userId)),
+                    );
+                  },
                 ),
-            ],
-          );
-        },
-      ),
+              ),
+          ],
+        );
+      },
     ),
   );
 
@@ -107,7 +107,7 @@ class _Header extends StatelessWidget {
         Icon(
           Icons.headset_mic_outlined,
           size: 20,
-          color: connected ? FlucordColors.success : context.surfaces.muted,
+          color: connected ? context.surfaces.success : context.surfaces.muted,
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -116,12 +116,18 @@ class _Header extends StatelessWidget {
             children: [
               const Text(
                 'Activity voice',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontSize: FlucordType.label,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 '$count participant${count == 1 ? '' : 's'}',
-                style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ],
           ),
@@ -173,7 +179,7 @@ class _ParticipantRow extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: speaking ? FlucordColors.success : Colors.transparent,
+                color: speaking ? context.surfaces.success : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -192,7 +198,7 @@ class _ParticipantRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: FlucordType.label,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -201,28 +207,27 @@ class _ParticipantRow extends StatelessWidget {
                   _connectionLabel,
                   style: TextStyle(
                     color: speaking
-                        ? FlucordColors.success
+                        ? context.surfaces.success
                         : context.surfaces.muted,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'Could not update local volume',
-                    key: ValueKey('activity-participant-mute-error'),
-                    style: TextStyle(color: FlucordColors.danger, fontSize: 10),
+                    key: const ValueKey('activity-participant-mute-error'),
+                    style: TextStyle(
+                      color: context.surfaces.errorText,
+                      fontSize: FlucordType.caption,
+                    ),
                   ),
                 ],
               ],
             ),
           ),
           if (speaking)
-            const Icon(
-              Icons.graphic_eq,
-              color: FlucordColors.success,
-              size: 20,
-            ),
+            Icon(Icons.graphic_eq, color: context.surfaces.success, size: 20),
           if (!currentUser) ...[
             const SizedBox(width: 4),
             if (pending)
@@ -252,7 +257,7 @@ class _ParticipantRow extends StatelessWidget {
                       : Icons.volume_up_outlined,
                   size: 19,
                   color: locallyMuted
-                      ? FlucordColors.brand
+                      ? context.surfaces.accentIcon
                       : context.surfaces.muted,
                 ),
               ),
@@ -277,7 +282,10 @@ class _EmptyParticipants extends StatelessWidget {
     child: Text(
       'Waiting for voice participants…',
       textAlign: TextAlign.center,
-      style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+      style: TextStyle(
+        color: context.surfaces.muted,
+        fontSize: FlucordType.caption,
+      ),
     ),
   );
 }

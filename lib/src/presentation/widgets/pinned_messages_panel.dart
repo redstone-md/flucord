@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 import 'message_attachment_view.dart';
 import 'message_embed_view.dart';
@@ -55,7 +56,10 @@ class PinnedMessagesPanel extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Pinned messages',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: FlucordType.label,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -161,7 +165,7 @@ class _PinnedMessageRow extends StatelessWidget {
                 Text(
                   member?.displayName ?? 'Unknown user',
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -175,7 +179,10 @@ class _PinnedMessageRow extends StatelessWidget {
                         workspace: workspace,
                         linkLauncher: linkLauncher,
                         onSelectChannel: onSelectChannel,
-                        textStyle: const TextStyle(fontSize: 11, height: 1.35),
+                        textStyle: const TextStyle(
+                          fontSize: FlucordType.label,
+                          height: 1.35,
+                        ),
                       ),
                     ),
                   ),
@@ -236,7 +243,7 @@ class _PanelState extends StatelessWidget {
       children: [
         Icon(icon, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontSize: 12)),
+        Text(title, style: const TextStyle(fontSize: FlucordType.caption)),
         ?action,
       ],
     ),
