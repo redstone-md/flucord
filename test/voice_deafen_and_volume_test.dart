@@ -65,6 +65,20 @@ Future<void> _receive(
   await tester.pump(VoiceController.speakingHangover);
 }
 
+/// The friend walks out of the room and comes back, speaking.
+Future<void> _leaveAndReturn(
+  WidgetTester tester,
+  StreamRoomHarness harness,
+) async {
+  harness.signaling.emit(const VoiceUserDisconnectedEvent(_friend));
+  await tester.pump();
+  expect(harness.audio.playing, isEmpty);
+  await _receive(tester, harness, _friend);
+}
+
+double _heardAt(StreamRoomHarness harness) =>
+    harness.audio.playing.single.volume;
+
 void main() {
   group('deafen through a reconnect', () {
     testWidgets('a deafened participant hears nothing after it', (
@@ -105,6 +119,63 @@ void main() {
       await _receive(tester, harness, _friend);
 
       expect(harness.audio.playing, hasLength(1));
+    });
+  });
+
+  group('a saved volume', () {
+    testWidgets('still applies after the person leaves and returns', (
+      tester,
+    ) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 0.2);
+      await _receive(tester, harness, _friend);
+      expect(_heardAt(harness), 0.2);
+
+      await _leaveAndReturn(tester, harness);
+
+      expect(_heardAt(harness), 0.2);
+    });
+
+    testWidgets('survives deafen and undeafen', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 0.2);
+      await _receive(tester, harness, _friend);
+
+      await harness.voice.toggleDeafen();
+      await tester.pump();
+      await harness.voice.toggleDeafen();
+      await tester.pump();
+      await _receive(tester, harness, _friend);
+
+      expect(_heardAt(harness), 0.2);
+    });
+
+    testWidgets('survives a change of room', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 0.2);
+      await _receive(tester, harness, _friend);
+
+      await harness.voice.connect(guildId: 'guild-1', channelId: 'voice-2');
+      await tester.pump();
+      await _transportReady(tester, harness);
+      await _receive(tester, harness, _friend);
+
+      expect(_heardAt(harness), 0.2);
+    });
+
+    testWidgets('is gone once it is reset', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.setParticipantVolume(_friend, 0.2);
+      await _leaveAndReturn(tester, harness);
+      expect(_heardAt(harness), 0.2);
+
+      await harness.voice.setParticipantVolume(_friend, 1);
+      expect(_heardAt(harness), 1);
+
+      await _leaveAndReturn(tester, harness);
+
+      expect(_heardAt(harness), 1);
+      expect(harness.voice.volumeFor(_friend), 1);
     });
   });
 }
