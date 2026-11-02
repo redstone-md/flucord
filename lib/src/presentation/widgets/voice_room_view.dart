@@ -469,9 +469,7 @@ class _VoiceToolbar extends StatelessWidget {
         children: [
           IconButton(
             key: const ValueKey('voice-mute'),
-            onPressed: controller.isConnected && !controller.isBusy
-                ? controller.toggleMute
-                : null,
+            onPressed: controller.isConnected ? controller.toggleMute : null,
             tooltip: controller.isMuted ? 'Unmute' : 'Mute',
             style: _controlStyle(
               context,
@@ -490,9 +488,7 @@ class _VoiceToolbar extends StatelessWidget {
           const SizedBox(width: 12),
           IconButton.filled(
             key: const ValueKey('voice-disconnect'),
-            onPressed: controller.isConnected && !controller.isBusy
-                ? controller.disconnect
-                : null,
+            onPressed: controller.isConnected ? controller.disconnect : null,
             tooltip: 'Disconnect',
             style: IconButton.styleFrom(
               backgroundColor: FlucordColors.danger,
