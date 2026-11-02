@@ -453,6 +453,29 @@ void main() {
     expect(find.text('These settings are not available.'), findsOneWidget);
   });
 
+  testWidgets('the ban button is in the danger colour of every confirm', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('guild-settings-rail-bans')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('guild-ban-open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ban-candidate-$lowMemberId')));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('ban-confirm')),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(button.color, FlucordTheme.dark.colorScheme.error);
+    harness.dispose();
+  });
+
   testWidgets('bans a member and unbans another', (tester) async {
     final harness = await _pump(tester);
     await tester.tap(find.byKey(const ValueKey('guild-settings-rail-bans')));

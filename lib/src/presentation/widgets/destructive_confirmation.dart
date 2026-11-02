@@ -21,7 +21,6 @@ Future<bool> confirmDestructiveAction(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) {
-      final colors = Theme.of(dialogContext).colorScheme;
       return FlucordDialog(
         key: dialogKey,
         title: Text(title),
@@ -32,18 +31,36 @@ Future<bool> confirmDestructiveAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          DangerButton(
             key: confirmKey,
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.error,
-              foregroundColor: colors.onError,
-            ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(confirmLabel),
+            label: confirmLabel,
           ),
         ],
       );
     },
   );
   return confirmed ?? false;
+}
+
+/// The button that does something that cannot be undone, in the theme's
+/// danger colour. Every dialog that ends in such an action uses it.
+class DangerButton extends StatelessWidget {
+  const DangerButton({required this.onPressed, required this.label, super.key});
+
+  final VoidCallback? onPressed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        backgroundColor: colors.error,
+        foregroundColor: colors.onError,
+      ),
+      onPressed: onPressed,
+      child: Text(label),
+    );
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
+import 'destructive_confirmation.dart';
 import 'flucord_dialog.dart';
 
 /// Picks who to ban, for how much history, and why.
@@ -116,7 +117,7 @@ class _GuildBanDialogState extends State<GuildBanDialog> {
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('Cancel'),
       ),
-      FilledButton(
+      DangerButton(
         key: const ValueKey('ban-confirm'),
         onPressed: _selected.isEmpty
             ? null
@@ -129,7 +130,7 @@ class _GuildBanDialogState extends State<GuildBanDialog> {
                       : _reason.text.trim(),
                 ),
               ),
-        child: const Text('Ban'),
+        label: 'Ban',
       ),
     ],
   );
