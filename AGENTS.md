@@ -10,11 +10,11 @@ No em dashes. Use a comma, colon, semicolon, parentheses, or a separate sentence
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (redstone-md/flucord) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues are tracked in itsaplan, project key `FLUCORD`, via the `mcp__itsaplan__*` tools. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five canonical triage labels are used as-is: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+The project has one triage label, `ready-for-agent`. The other four canonical roles have no label. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

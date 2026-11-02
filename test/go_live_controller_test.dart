@@ -905,12 +905,15 @@ final class _FakeRepository implements GoLiveRepository {
   final List<GoLiveStreamKey> ended = [];
   final List<bool> pauses = [];
 
-  void announce(GoLiveStream stream) => _updates.add(stream);
+  void announce(GoLiveStream stream) {
+    streams[stream.key.value] = stream;
+    _updates.add(stream);
+  }
 
   void assign(GoLiveServer server) => _servers.add(server);
 
   @override
-  Map<String, GoLiveStream> get streams => const {};
+  final Map<String, GoLiveStream> streams = {};
 
   @override
   Stream<GoLiveStream> get updates => _updates.stream;
