@@ -10,29 +10,28 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'support/guild_settings_fixtures.dart';
 
 void main() {
-  testWidgets('the sidebar shows a settings gear only when it opens', (
-    tester,
-  ) async {
+  testWidgets('the server menu opens settings', (tester) async {
     var opened = 0;
     await _pumpSidebar(tester, onOpenServerSettings: () => opened++);
+    await tester.tap(find.byKey(const ValueKey('space-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('open-server-settings')));
+    await tester.pumpAndSettle();
     expect(opened, 1);
   });
 
-  testWidgets('the gear is absent when nothing can be administered', (
-    tester,
-  ) async {
+  testWidgets('there is no server menu when it would be empty', (tester) async {
     await _pumpSidebar(tester);
-    expect(find.byKey(const ValueKey('open-server-settings')), findsNothing);
+    expect(find.byKey(const ValueKey('space-menu')), findsNothing);
   });
 
-  testWidgets('the gear never appears on direct messages', (tester) async {
+  testWidgets('direct messages have no server menu', (tester) async {
     await _pumpSidebar(
       tester,
       space: const CommunitySpace.directMessages(),
       onOpenServerSettings: () {},
     );
-    expect(find.byKey(const ValueKey('open-server-settings')), findsNothing);
+    expect(find.byKey(const ValueKey('space-menu')), findsNothing);
     expect(find.byKey(const ValueKey('new-direct-message')), findsOneWidget);
   });
 

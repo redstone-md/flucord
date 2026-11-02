@@ -500,8 +500,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-profile-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to edit its profile. The demo and '
-              'bot transports have no profile behind them.',
+              'Connect a Discord account to edit its profile. Demo mode and '
+              'bot accounts have no profile behind them.',
         );
       }
       return ListenableBuilder(
@@ -598,8 +598,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-standing-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to see what is on its record. The '
-              'demo and bot transports have none.',
+              'Connect a Discord account to see what is on its record. Demo '
+              'mode and bot accounts have none.',
         );
       }
       return AccountStandingSection(controller: standing);
@@ -612,8 +612,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-family-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to see its family centre. The demo '
-              'and bot transports have none.',
+              'Connect a Discord account to see its family centre. Demo mode '
+              'and bot accounts have none.',
         );
       }
       return FamilyCentreSection(controller: family);
@@ -625,8 +625,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-devices-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to see where it is signed in. The '
-              'demo and bot transports have one session and no route to list '
+              'Connect a Discord account to see where it is signed in. Demo '
+              'mode and bot accounts have one session and no way to list '
               'it.',
         );
       }
@@ -644,7 +644,7 @@ class _Body extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           message:
               'Connect a Discord account to link third-party accounts to '
-              'it. The demo and bot transports have no account to link.',
+              'it. Demo mode and bot accounts have no account to link.',
         );
       }
       return ConnectionsSettingsSection(controller: connections);
@@ -656,8 +656,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-entitlements-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to see what it holds. The demo '
-              'and bot transports have no account behind them.',
+              'Connect a Discord account to see what it holds. Demo mode '
+              'and bot accounts have no account behind them.',
         );
       }
       return EntitlementsSettingsSection(controller: entitlements);
@@ -670,7 +670,7 @@ class _Body extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           message:
               'Connect a Discord account to authorise apps into servers '
-              'it manages. The demo and bot transports have no account to '
+              'it manages. Demo mode and bot accounts have no account to '
               'consent with.',
         );
       }
@@ -684,8 +684,8 @@ class _Body extends StatelessWidget {
           key: ValueKey('user-data-package-unavailable'),
           icon: Icons.cloud_off_outlined,
           message:
-              'Connect a Discord account to request its data. The demo '
-              'and bot transports have no account to collect from.',
+              'Connect a Discord account to request its data. Demo mode '
+              'and bot accounts have no account to collect from.',
         );
       }
       return DataPackageSettingsSection(controller: dataPackage);
@@ -698,7 +698,7 @@ class _Body extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           message:
               'Connect a Discord account to manage two-factor authentication. '
-              'The demo and bot transports have no account to secure.',
+              'Demo mode and bot accounts have no account to secure.',
         );
       }
       return MfaSettingsSection(controller: mfa);
@@ -711,7 +711,7 @@ class _Body extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           message:
               'Connect a Discord account to see how it can prove its age. '
-              'The demo and bot transports have no account to verify.',
+              'Demo mode and bot accounts have no account to verify.',
         );
       }
       return AgeVerificationSection(controller: age);
@@ -722,7 +722,7 @@ class _Body extends StatelessWidget {
         icon: Icons.cloud_off_outlined,
         message:
             'Connect a Discord account to read and change its settings. '
-            'The demo and bot transports have no account behind them.',
+            'Demo mode and bot accounts have no account behind them.',
       );
     }
     final settings = controller.settings;
