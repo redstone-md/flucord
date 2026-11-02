@@ -80,7 +80,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           unawaited(_acceptGuildRemoval(event.data));
         } else if (event.name == 'READY' ||
             event.name == 'READY_SUPPLEMENTAL') {
-          unawaited(_rehydrateWorkspace());
+          _sharedDispatches.inOrder(_rehydrateWorkspace);
         }
     }
   }
@@ -125,6 +125,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   /// announced as ordinary upserts and deletions instead. The same READY also
   /// re-arms `READY_SUPPLEMENTAL`, whose lazy private channels land through
   /// the second pass; a pass that changes nothing announces nothing.
+  ///
+  /// A pass goes on the message queue. Two passes then cannot act on a shell the
+  /// other one is changing, and a message right behind READY lands after the
+  /// channel READY brought, so it can still mark that channel unread.
   Future<void> _rehydrateWorkspace() async {
     try {
       await _rehydrateWorkspaceNow();
@@ -142,30 +146,35 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _rehydrateWorkspaceNow() async {
     if (!_workspaceShown || _events.isClosed) return;
-    final snapshot = _gateway.workspaceSnapshot;
-    if (snapshot == null) return;
     final cached = await _cache.readWorkspaceShell();
     if (cached == null) return;
-    final fresh = _mapper
-        .workspace(
-          currentUser: snapshot.currentUser,
-          guilds: snapshot.guilds,
-          channelsByGuild: snapshot.channelsByGuild,
-          rolesByGuild: snapshot.rolesByGuild,
-          membersByGuild: snapshot.membersByGuild,
-          directChannels: snapshot.directChannels,
-          includeDirectMessagesSpace: true,
-          currentUserRole: 'Discord user',
-        )
-        // The activity is restored so the comparison below sees only what
-        // Discord changed, and an unchanged channel announces nothing.
-        .restoreChannelActivityFrom(cached);
+    // Read after the wait, so a guild that arrived during it is in both sides.
+    final snapshot = _gateway.workspaceSnapshot;
+    if (snapshot == null) return;
+    final fresh = _withWhatSnapshotCannotDecide(
+      _mapper
+          .workspace(
+            currentUser: snapshot.currentUser,
+            guilds: snapshot.guilds,
+            channelsByGuild: snapshot.channelsByGuild,
+            rolesByGuild: snapshot.rolesByGuild,
+            membersByGuild: snapshot.membersByGuild,
+            directChannels: snapshot.directChannels,
+            includeDirectMessagesSpace: true,
+            currentUserRole: 'Discord user',
+          )
+          // The activity is restored so the comparison below sees only what
+          // Discord changed, and an unchanged channel announces nothing.
+          .restoreChannelActivityFrom(cached),
+      cached: cached,
+      snapshot: snapshot,
+    );
     if (_events.isClosed) return;
 
     for (final space in cached.spaces) {
       if (fresh.spaceOrNull(space.id) == null) {
-        // The cached copy goes at the next wholesale load; the rail goes now.
         _events.add(SpaceRemovedEvent(space.id));
+        await _persistLeftGuild(space.id);
       }
     }
     for (final channel in cached.channels) {
@@ -214,6 +223,42 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
     _adoptPrivateChannels(fresh);
+  }
+
+  /// [fresh] with the cached items this snapshot says nothing about, so the
+  /// pass neither removes nor changes them.
+  ///
+  /// A guild in an outage is listed with no content, and it comes back through
+  /// `GUILD_CREATE`. A private channel missing before `READY_SUPPLEMENTAL` may
+  /// still be on its way as a lazy one.
+  static ChatWorkspace _withWhatSnapshotCannotDecide(
+    ChatWorkspace fresh, {
+    required ChatWorkspace cached,
+    required DiscordDesktopWorkspaceSnapshot snapshot,
+  }) {
+    final unavailable = snapshot.unavailableGuildIds;
+    final keepPrivate = !snapshot.privateChannelsComplete;
+    return fresh.copyWith(
+      spaces: [
+        ...fresh.spaces,
+        ...cached.spaces.where((space) => unavailable.contains(space.id)),
+      ],
+      categories: [
+        ...fresh.categories,
+        ...cached.categories.where(
+          (category) => unavailable.contains(category.spaceId),
+        ),
+      ],
+      channels: [
+        ...fresh.channels,
+        ...cached.channels.where(
+          (channel) =>
+              fresh.channelOrNull(channel.id) == null &&
+              (unavailable.contains(channel.spaceId) ||
+                  (keepPrivate && channel.isDirectMessage)),
+        ),
+      ],
+    );
   }
 
   static bool _spaceChanged(CommunitySpace next, CommunitySpace cached) =>
