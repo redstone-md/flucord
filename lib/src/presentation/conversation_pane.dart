@@ -150,10 +150,6 @@ class _ConversationPaneState extends State<ConversationPane> {
     return hasNoHash ? '' : '#';
   }
 
-  /// When this account last sent in the channel, for the composer's slowmode
-  /// countdown. Null on a channel without slowmode, where nothing needs it.
-  DateTime? _lastSentAt;
-
   @override
   void initState() {
     super.initState();
@@ -166,7 +162,6 @@ class _ConversationPaneState extends State<ConversationPane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id == widget.channel.id) return;
     _replyTo = null;
-    _lastSentAt = null;
     _watchCall();
     _pointControllersAtChannel();
   }
@@ -174,10 +169,14 @@ class _ConversationPaneState extends State<ConversationPane> {
   /// When slowmode releases this account's next send, or null while nothing
   /// is holding it back. Slowmode binds the sender, not the channel: the
   /// clock starts at this account's own last send.
-  DateTime? get _slowmodeUntil {
+  DateTime? _slowmodeUntil(ChatController chat) {
     final seconds = widget.channel.rateLimitPerUser;
-    final lastSentAt = _lastSentAt;
-    if (seconds == 0 || lastSentAt == null) return null;
+    final lastSentAt = chat.lastSentAt(widget.channel.id);
+    if (seconds == 0 ||
+        lastSentAt == null ||
+        widget.capabilities.bypassesSlowmode) {
+      return null;
+    }
     final until = lastSentAt.add(Duration(seconds: seconds));
     return until.isBefore(DateTime.now()) ? null : until;
   }
@@ -559,7 +558,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                 : widget.workspace.memberOrNull(_replyTo!.authorId),
             onCancelReply: () => setState(() => _replyTo = null),
             slowmode: Duration(seconds: channel.rateLimitPerUser),
-            slowmodeUntil: _slowmodeUntil,
+            slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
             attachmentSizeLimitBytes: _attachmentSizeLimit(channel),
             channelHintPrefix: _composerHintPrefix(channel),
@@ -620,14 +619,10 @@ class _ConversationPaneState extends State<ConversationPane> {
                     );
                     return false;
                   }
-                  if (!mounted) return true;
-                  setState(() {
-                    // A reply picked while this send ran is not this send's.
-                    if (_replyTo?.id == replyToMessageId) _replyTo = null;
-                    if (channel.rateLimitPerUser > 0) {
-                      _lastSentAt = DateTime.now();
-                    }
-                  });
+                  // A reply picked while this send ran is not this send's.
+                  if (mounted && _replyTo?.id == replyToMessageId) {
+                    setState(() => _replyTo = null);
+                  }
                   return true;
                 },
           ),

@@ -115,8 +115,8 @@ class MessageComposer extends StatefulWidget {
   final Duration slowmode;
 
   /// When slowmode lets this account send again, or null while it does not
-  /// hold them. Fed by the surface that owns the last-send time, which is the
-  /// channel model plus the composer's own successful sends.
+  /// hold them. Until then nothing goes out from here: the server would only
+  /// refuse it.
   final DateTime? slowmodeUntil;
 
   /// The longest message this account may type here, in characters. Fed from
@@ -141,10 +141,15 @@ class _MessageComposerState extends State<MessageComposer>
   bool _suppressNotifications = false;
   int _charactersUsed = 0;
   bool get _canSend =>
-      (_hasContent || _attachments.isNotEmpty) && !_isOverCharacterLimit;
+      (_hasContent || _attachments.isNotEmpty) &&
+      !_isOverCharacterLimit &&
+      !_isHeldBySlowmode;
 
   @override
   bool get _hasRegularMessageContent => _canSend;
+
+  @override
+  bool get _isHeldBySlowmode => _slowmodeRemaining != null;
 
   /// How many characters the typed message still has room for. Counted by
   /// characters rather than the string's code units, because Discord counts
@@ -433,7 +438,7 @@ class _MessageComposerState extends State<MessageComposer>
   /// Sends the GIF straight away, as Discord's own client does: the picker is
   /// a send action, not a way to paste a link into a half-written message.
   Future<void> _sendGif(String url) async {
-    if (widget.isSending) return;
+    if (widget.isSending || _isHeldBySlowmode) return;
     await widget.onSend(
       url,
       const [],
@@ -608,7 +613,7 @@ class _MessageComposerState extends State<MessageComposer>
                           ),
                         StickerPickerButton(
                           sections: widget.stickerSections,
-                          isSending: widget.isSending,
+                          isSending: widget.isSending || _isHeldBySlowmode,
                           onSend: widget.onSendStickers,
                           favorites: widget.expressionFavorites,
                         ),

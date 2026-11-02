@@ -1,11 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/data/discord/discord_frecency_proto.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/data/proto/proto_message.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 
 import 'support/fake_discord_wire.dart';
+import 'support/fake_voice_message_recorder.dart';
 import 'support/session_harness.dart';
 
 const _sendPath = '/api/v9/channels/${SessionHarness.channelId}/messages';
@@ -113,6 +121,288 @@ void main() {
     expect(_boxText(tester), 'second');
     expect(find.textContaining('did not send'), findsOneWidget);
   });
+
+  group('a send that finishes after a channel switch', () {
+    Future<Completer<DiscordHttpResponse>> sendThenSwitch(
+      WidgetTester tester,
+      SessionHarness session,
+    ) async {
+      final answer = _holdSend(session, _sendPath);
+      await session.openChannel(SessionHarness.channelId);
+      await _typeAndSend(tester, session, 'first');
+      await session.openChannel(SessionHarness.otherChannelId);
+      await tester.enterText(find.byKey(_composer), 'draft here');
+      await session.settle();
+      return answer;
+    }
+
+    testSession('leaves the new box alone when it succeeds', (
+      tester,
+      session,
+    ) async {
+      final answer = await sendThenSwitch(tester, session);
+
+      answer.complete(_sentMessage('first'));
+      await session.settle();
+
+      expect(_boxText(tester), 'draft here');
+    });
+
+    testSession(
+      'leaves the new box alone when it fails, and names the channel',
+      (tester, session) async {
+        final answer = await sendThenSwitch(tester, session);
+
+        answer.complete(_refusal('Missing Permissions'));
+        await session.settle();
+
+        expect(_boxText(tester), 'draft here');
+        expect(
+          find.text(
+            'Your message to #general did not send. Missing Permissions',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testSession('keeps a reply started in the new channel', (
+      tester,
+      session,
+    ) async {
+      final answer = await sendThenSwitch(tester, session);
+      await session.dispatch(
+        'MESSAGE_CREATE',
+        rawMessage(
+          id: '900000000000000002',
+          channelId: SessionHarness.otherChannelId,
+          guildId: SessionHarness.guildId,
+          authorId: SessionHarness.friendId,
+          content: 'answer me',
+        ),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(
+        tester.getCenter(session.messageRow('900000000000000002')),
+      );
+      await session.settle();
+      await tester.tap(find.byTooltip('Reply'));
+      await session.settle();
+      expect(find.textContaining('Replying to'), findsOneWidget);
+
+      answer.complete(_sentMessage('first'));
+      await session.settle();
+
+      expect(find.textContaining('Replying to'), findsOneWidget);
+    });
+  });
+
+  group('slowmode', () {
+    Finder sendButton() => find.byKey(const ValueKey('send-message'));
+    bool sendEnabled(WidgetTester tester) =>
+        tester.widget<IconButton>(sendButton()).onPressed != null;
+
+    testSession('blocks the button and Enter until the time ends', (
+      tester,
+      session,
+    ) async {
+      session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+      await session.openChannel(SessionHarness.channelId);
+
+      await _typeAndSend(tester, session, 'first');
+      await tester.enterText(find.byKey(_composer), 'second');
+      await session.settle();
+
+      expect(sendEnabled(tester), isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await session.settle();
+      expect(_posted(session, _sendPath), hasLength(1));
+      expect(_boxText(tester), 'second');
+    }, ready: _slowmodeReady());
+
+    testSession(
+      'lets the next send go once the time has ended',
+      (tester, session) async {
+        session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+        await session.openChannel(SessionHarness.channelId);
+
+        await _typeAndSend(tester, session, 'first');
+        await tester.enterText(find.byKey(_composer), 'second');
+        await session.settle();
+        expect(sendEnabled(tester), isFalse);
+
+        // The composer reads the wall clock, so real time has to pass here. The
+        // fake pump then fires its one second tick.
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+        );
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(sendEnabled(tester), isTrue);
+        expect(
+          find.byKey(const ValueKey('composer-slowmode-countdown')),
+          findsNothing,
+        );
+      },
+      ready: _slowmodeReady(seconds: 1),
+    );
+
+    testSession('still holds after switching away and back', (
+      tester,
+      session,
+    ) async {
+      session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+      await session.openChannel(SessionHarness.channelId);
+      await _typeAndSend(tester, session, 'first');
+
+      await session.openChannel(SessionHarness.otherChannelId);
+      await session.openChannel(SessionHarness.channelId);
+      await tester.enterText(find.byKey(_composer), 'second');
+      await session.settle();
+
+      expect(sendEnabled(tester), isFalse);
+      expect(
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+        findsOneWidget,
+      );
+    }, ready: _slowmodeReady());
+
+    testSession('starts only in the channel the send went to', (
+      tester,
+      session,
+    ) async {
+      final answer = _holdSend(session, _sendPath);
+      await session.openChannel(SessionHarness.channelId);
+      await _typeAndSend(tester, session, 'first');
+      await session.openChannel(SessionHarness.otherChannelId);
+
+      answer.complete(_sentMessage('first'));
+      await session.settle();
+      await tester.enterText(find.byKey(_composer), 'second');
+      await session.settle();
+
+      expect(sendEnabled(tester), isTrue);
+    }, ready: _slowmodeReady());
+
+    testSession('does not start when the send failed', (tester, session) async {
+      _refuseSend(session, 'Missing Permissions');
+      await session.openChannel(SessionHarness.channelId);
+
+      await _typeAndSend(tester, session, 'first');
+
+      expect(sendEnabled(tester), isTrue);
+    }, ready: _slowmodeReady());
+
+    testSession(
+      'does not hold a member who may manage messages',
+      (tester, session) async {
+        session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+        await session.openChannel(SessionHarness.channelId);
+
+        await _typeAndSend(tester, session, 'first');
+        await tester.enterText(find.byKey(_composer), 'second');
+        await session.settle();
+
+        expect(sendEnabled(tester), isTrue);
+        expect(
+          find.byKey(const ValueKey('composer-slowmode-countdown')),
+          findsNothing,
+        );
+      },
+      ready: _slowmodeReady(
+        extraPermissions: DiscordPermissions.manageMessages,
+      ),
+    );
+
+    testSession(
+      'blocks a voice message too',
+      (tester, session) async {
+        session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+        await session.openChannel(SessionHarness.channelId);
+        await _typeAndSend(tester, session, 'first');
+
+        final record = tester.widget<IconButton>(
+          find.byKey(const ValueKey('record-voice-message')),
+        );
+        expect(record.onPressed, isNull);
+      },
+      ready: _slowmodeReady(),
+      voiceMessageRecorder: FakeVoiceMessageRecorder(),
+    );
+
+    const gifUrl = 'https://tenor.example/starred';
+    testSession(
+      'blocks a GIF too',
+      (tester, session) async {
+        session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+        await session.openChannel(SessionHarness.channelId);
+        await _typeAndSend(tester, session, 'first');
+
+        await tester.tap(find.byKey(const ValueKey('gif-picker-open')));
+        await session.settle();
+        await tester.tap(find.byKey(const ValueKey('gif-favorite-$gifUrl')));
+        await session.settle();
+
+        expect(_posted(session, _sendPath), hasLength(1));
+      },
+      ready: _slowmodeReady(),
+      routes: (transport) => transport.on(
+        'GET',
+        '/api/v9/users/@me/settings-proto/2',
+        (_) => jsonResponse({
+          'settings': base64.encode(
+            DiscordFrecencyProtoCodec.apply(
+              ProtoMessage(),
+              const ExpressionFavorites(
+                gifs: [FavoriteGif(url: gifUrl, src: gifUrl)],
+              ),
+            ).encode(),
+          ),
+        }),
+      ),
+    );
+  });
+}
+
+/// A server whose two channels both have slowmode. The account's member record
+/// is there because without one the client cannot judge permissions and allows
+/// everything, slowmode included.
+Map<String, Object?> _slowmodeReady({
+  int seconds = 30,
+  BigInt? extraPermissions,
+}) {
+  Map<String, Object?> slow(String id, String name) => {
+    ...rawChannel(id: id, name: name),
+    'rate_limit_per_user': seconds,
+  };
+  final everyone =
+      DiscordPermissions.viewChannel |
+      DiscordPermissions.sendMessages |
+      DiscordPermissions.readMessageHistory |
+      (extraPermissions ?? BigInt.zero);
+  return SessionHarness.defaultReady()
+    ..['users'] = [
+      {'id': SessionHarness.currentUserId, 'username': 'me'},
+    ]
+    ..['private_channels'] = <Object?>[]
+    ..['merged_members'] = [
+      [
+        {'user_id': SessionHarness.currentUserId, 'roles': <String>[]},
+      ],
+    ]
+    ..['guilds'] = [
+      rawGuild(
+        id: SessionHarness.guildId,
+        name: 'The Forge',
+        channels: [
+          slow(SessionHarness.channelId, 'general'),
+          slow(SessionHarness.otherChannelId, 'random'),
+        ],
+        everyonePermissions: '$everyone',
+      ),
+    ];
 }
 
 void _refuseSend(SessionHarness session, String reason) =>

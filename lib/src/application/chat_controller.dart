@@ -108,6 +108,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadingEventAttendees = {};
   final Set<String> _loadingScheduledEventSpaces = {};
   final Map<String, Object> _scheduledEventErrors = {};
+  final Map<String, DateTime> _lastSentAt = {};
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
@@ -197,6 +198,10 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.contains(channelId);
 
   Object? channelError(String channelId) => _channelErrors[channelId];
+
+  /// When this account's last message in the channel went out. Slowmode's
+  /// clock starts here, per channel, so moving between channels cannot reset it.
+  DateTime? lastSentAt(String channelId) => _lastSentAt[channelId];
   bool canLoadOlderMessages(String channelId) =>
       _loadedChannels.contains(channelId) &&
       !_exhaustedChannels.contains(channelId);
@@ -231,6 +236,7 @@ final class ChatController extends ChangeNotifier {
     _loadingEventAttendees.clear();
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
+    _lastSentAt.clear();
     _archivedThreadState.clear();
     _clearTyping();
     _activeChannelId = null;
@@ -473,6 +479,7 @@ final class ChatController extends ChangeNotifier {
       _workspace = _workspace?.upsertMessage(message);
       _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
       _persistChannelActivity(channelId);
+      _lastSentAt[channelId] = DateTime.now();
       return true;
     } catch (error) {
       _error = error;
