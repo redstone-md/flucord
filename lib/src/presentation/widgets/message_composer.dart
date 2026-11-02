@@ -207,12 +207,7 @@ class _MessageComposerState extends State<MessageComposer>
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
     }
-    if (oldWidget.autocompleteCatalog != widget.autocompleteCatalog &&
-        !channelChanged) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _refreshComposerAutocomplete();
-      });
-    }
+    _updateAutocompleteCatalog(channelChanged: channelChanged);
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
       _focusNode.requestFocus();
     }
