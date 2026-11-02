@@ -397,29 +397,36 @@ class _VoiceStage extends StatelessWidget {
         if (voiceRoomWarning(controller) case final warning?)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    warning,
-                    key: const ValueKey('voice-room-warning'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 11,
+            // A long warning scrolls on a short window, so the tiles keep their
+            // place.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 64),
+              child: SingleChildScrollView(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        warning,
+                        key: const ValueKey('voice-room-warning'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
-                  ),
+                    // Offered here because the alternative was leaving the
+                    // channel and coming back, which is not an obvious way to
+                    // ask a client to look for a headset again.
+                    if (voiceRoomOffersDeviceRetry(controller))
+                      TextButton(
+                        key: const ValueKey('voice-room-retry-devices'),
+                        onPressed: () => unawaited(controller.retryDevices()),
+                        child: const Text('Try devices again'),
+                      ),
+                  ],
                 ),
-                // Offered here because the alternative was leaving the channel
-                // and coming back, which is not an obvious way to ask a client
-                // to look for a headset again.
-                if (voiceRoomOffersDeviceRetry(controller))
-                  TextButton(
-                    key: const ValueKey('voice-room-retry-devices'),
-                    onPressed: () => unawaited(controller.retryDevices()),
-                    child: const Text('Try devices again'),
-                  ),
-              ],
+              ),
             ),
           ),
         ?stageControls,

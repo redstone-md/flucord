@@ -497,6 +497,7 @@ final class DiscordDesktopChatRepository
         return ChannelHistoryPage(
           history: restored.history,
           hasMore: restored.hasMore,
+          fromCache: true,
         );
       }
       final cached = await _cache.readChannelHistory(
@@ -508,6 +509,7 @@ final class DiscordDesktopChatRepository
       return ChannelHistoryPage(
         history: cached,
         hasMore: cached.messages.length >= _pageSize,
+        fromCache: true,
       );
     }
   }

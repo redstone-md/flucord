@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'accessibility_dials.dart';
 import 'expression_favorite_star.dart';
 import 'message_sticker_view.dart';
 
@@ -135,7 +136,9 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
     consumeOutsideTap: false,
     crossAxisUnconstrained: false,
     style: MenuStyle(
-      fixedSize: const WidgetStatePropertyAll(Size(336, 380)),
+      fixedSize: WidgetStatePropertyAll(
+        Size(336, heightWithinWindow(context, 380)),
+      ),
       backgroundColor: WidgetStatePropertyAll(context.surfaces.surface),
       side: WidgetStatePropertyAll(BorderSide(color: context.surfaces.border)),
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
@@ -148,7 +151,7 @@ class _StickerPickerButtonState extends State<StickerPickerButton> {
       SizedBox(
         key: const ValueKey('sticker-picker'),
         width: 336,
-        height: 380,
+        height: heightWithinWindow(context, 380),
         child: ListenableBuilder(
           listenable: Listenable.merge([widget.favorites]),
           builder: (context, _) => _StickerPickerPanel(

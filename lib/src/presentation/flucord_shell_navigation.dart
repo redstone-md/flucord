@@ -275,7 +275,7 @@ extension _FlucordShellNavigation on FlucordShell {
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
     final at = RelativeRect.fromRect(
-      position & Size.zero,
+      overlay.globalToLocal(position) & Size.zero,
       Offset.zero & overlay.size,
     );
     final action = await showMenu<ServerMenuAction>(

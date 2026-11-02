@@ -45,7 +45,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
   return showMenu<MessageMenuAction>(
     context: context,
     position: RelativeRect.fromRect(
-      position & Size.zero,
+      overlay.globalToLocal(position) & Size.zero,
       Offset.zero & overlay.size,
     ),
     items: [

@@ -459,7 +459,7 @@ class _ChannelRow extends StatelessWidget {
     final request = await showNotificationSettingsMenu(
       context: context,
       position: RelativeRect.fromRect(
-        position & Size.zero,
+        overlay.globalToLocal(position) & Size.zero,
         Offset.zero & overlay.size,
       ),
       muted: muted,

@@ -45,6 +45,7 @@ extension ChatControllerHistoryWindow on ChatController {
       }
       _applyWindow(channelId, page, aroundMessageId: aroundMessageId);
       _foldArrivals(channelId);
+      if (loadsPresent && !page.fromCache) _channelsWithGap.remove(channelId);
     } catch (error) {
       if (isCurrent()) _windowErrors[channelId] = error;
     } finally {
@@ -151,7 +152,9 @@ extension ChatControllerHistoryWindow on ChatController {
     ].nonNulls;
     return known.isEmpty
         ? null
-        : known.reduce((left, right) => _isOlderThan(left, right) ? right : left);
+        : known.reduce(
+            (left, right) => _isOlderThan(left, right) ? right : left,
+          );
   }
 
   /// Ids that carry no order, as in demo mode, count as older unless equal, so

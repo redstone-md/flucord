@@ -217,7 +217,15 @@ class ChannelSidebar extends StatelessWidget {
                     ),
                   ),
           ),
-          ?voiceConnectionBar,
+          // On a short window a tall bar scrolls, so the channels and the
+          // account panel keep their place.
+          if (voiceConnectionBar case final bar?)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height / 2,
+              ),
+              child: SingleChildScrollView(child: bar),
+            ),
           AccountPanel(
             member: currentMember,
             sessionMode: sessionMode,

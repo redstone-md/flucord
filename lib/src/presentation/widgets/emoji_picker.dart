@@ -7,6 +7,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/unicode_emoji.dart';
 import '../../theme/flucord_theme.dart';
+import 'accessibility_dials.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
@@ -88,6 +89,10 @@ Future<String?> showEmojiPickerAt({
   ExpressionFavoritesController? favorites,
 }) {
   unawaited(favorites?.load());
+  // Zoom scales everything under the overlay, and the position is in window
+  // pixels.
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final local = overlay.globalToLocal(position);
   return showDialog<String>(
     context: context,
     barrierColor: Colors.transparent,
@@ -97,8 +102,8 @@ Future<String?> showEmojiPickerAt({
       return Stack(
         children: [
           Positioned(
-            left: _insideWindow(position.dx, size.width, window.width),
-            top: _insideWindow(position.dy, size.height, window.height),
+            left: _insideWindow(local.dx, size.width, window.width),
+            top: _insideWindow(local.dy, size.height, window.height),
             child: Material(
               color: dialogContext.surfaces.surface,
               elevation: _panelElevation,
@@ -326,9 +331,10 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
         frequent.isEmpty &&
         customSections.isEmpty &&
         unicode.isEmpty;
-    return SizedBox.fromSize(
+    return SizedBox(
       key: const ValueKey('emoji-picker'),
-      size: EmojiPickerPanel.size,
+      width: EmojiPickerPanel.size.width,
+      height: heightWithinWindow(context, EmojiPickerPanel.size.height),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

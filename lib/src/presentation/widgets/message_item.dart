@@ -359,14 +359,18 @@ class _MessageItemState extends State<MessageItem> {
     padding: const EdgeInsets.only(bottom: 3),
     child: Row(
       children: [
-        _opensAuthorProfile(
-          key: const ValueKey('message-author-name'),
-          child: Text(
-            widget.member.displayName,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _nameColor(widget.member),
+        Flexible(
+          child: _opensAuthorProfile(
+            key: const ValueKey('message-author-name'),
+            child: Text(
+              widget.member.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _nameColor(widget.member),
+              ),
             ),
           ),
         ),
