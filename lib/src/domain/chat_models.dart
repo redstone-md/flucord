@@ -386,9 +386,22 @@ final class ChatWorkspace {
   /// Keeps only the newest [notOpenChannelCap] messages of [channelId]. Answers
   /// this same workspace when the channel holds no more than that, so a caller
   /// can tell whether the channel lost anything.
+  ///
+  /// An unread boundary on a dropped message moves to the oldest message kept,
+  /// so the channel still opens on its NEW line.
   ChatWorkspace capChannel(String channelId) {
     final held = _held.capped(channelId, notOpenChannelCap);
-    return identical(held, _held) ? this : _copy(held: held);
+    if (identical(held, _held)) return this;
+    final capped = _copy(held: held);
+    final kept = held.of(channelId);
+    final boundary = channelOrNull(channelId)?.firstUnreadMessageId;
+    if (boundary == null || kept.any((message) => message.id == boundary)) {
+      return capped;
+    }
+    return capped.updateChannel(
+      channelId,
+      (channel) => channel.copyWith(firstUnreadMessageId: kept.first.id),
+    );
   }
 
   /// Records [messageId] as the newest message in [channelId].

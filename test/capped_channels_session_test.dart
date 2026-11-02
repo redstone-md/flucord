@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flucord/src/application/chat_controller.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
+import 'package:flucord/src/presentation/widgets/status_views.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_discord_wire.dart';
@@ -154,6 +157,81 @@ void main() {
       _openChannelPath,
       (_) => jsonResponse(_page(0, _pageSize)),
     ),
+  );
+
+  testSession(
+    'a channel capped while unread opens with its NEW line on a held message',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await session.openChannel(SessionHarness.otherChannelId);
+      await _arrive(session, 0, _cap + 50);
+
+      session.transport.on(
+        'GET',
+        _openChannelPath,
+        (_) => jsonResponse(_page(_cap + 50 - _pageSize, _pageSize)),
+      );
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(find.byType(ChannelLoadingView), findsNothing);
+      expect(_firstPageRequests(session), 2);
+      expect(
+        find.byKey(const ValueKey('unread-message-boundary')),
+        findsOneWidget,
+      );
+    },
+    routes: (transport) =>
+        transport.on('GET', _openChannelPath, (_) => jsonResponse(const [])),
+  );
+
+  testSession(
+    'a channel with a read cursor, capped while unread, opens on its NEW line',
+    (tester, session) async {
+      await session.openChannel(SessionHarness.otherChannelId);
+      await _arrive(session, 1, _cap + 50);
+      expect(_heldIds(tester, SessionHarness.channelId), hasLength(_cap));
+
+      session.transport.on(
+        'GET',
+        _openChannelPath,
+        (_) => jsonResponse(_page(_cap + 50 - _pageSize, _pageSize)),
+      );
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(find.byType(ChannelLoadingView), findsNothing);
+      expect(_firstPageRequests(session), 2);
+      expect(
+        find.byKey(const ValueKey('unread-message-boundary')),
+        findsOneWidget,
+      );
+    },
+    routes: (transport) =>
+        transport.on('GET', _openChannelPath, (_) => jsonResponse(const [])),
+    ready: {
+      ...SessionHarness.defaultReady(),
+      'guilds': [
+        rawGuild(
+          id: SessionHarness.guildId,
+          name: 'The Forge',
+          channels: [
+            rawChannel(
+              id: SessionHarness.channelId,
+              name: 'general',
+              lastMessageId: _idOf(0),
+            ),
+            rawChannel(id: SessionHarness.otherChannelId, name: 'random'),
+          ],
+          everyonePermissions: '${DiscordPermissions.viewChannel}',
+        ),
+      ],
+      'read_state': {
+        'version': 1,
+        'partial': false,
+        'entries': [
+          {'id': SessionHarness.channelId, 'last_message_id': _idOf(0)},
+        ],
+      },
+    },
   );
 
   final olderPage = Completer<void>();
