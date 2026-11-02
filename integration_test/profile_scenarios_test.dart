@@ -258,8 +258,8 @@ void main() {
         () => session.socket.frames.any((frame) => frame['op'] == 2),
         'IDENTIFY',
       );
-      session.socket.receiveEncoded(readyFrame);
-      session.socket.receiveEncoded(supplementalFrame);
+      session.socket.receiveRaw(readyFrame);
+      session.socket.receiveRaw(supplementalFrame);
       await _until(
         tester,
         () => find.text(renamed).evaluate().isNotEmpty,

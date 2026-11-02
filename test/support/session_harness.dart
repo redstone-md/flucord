@@ -69,7 +69,8 @@ final class SessionHarness {
     Directory? diskDirectory,
     this._voiceMessageRecorder,
     this._accessibility,
-    this._linkAtLaunch, {
+    this._linkAtLaunch,
+    this._chatImagesOnDisk, {
     required bool measured,
   }) : _diskDirectory = diskDirectory,
        _factory = _FakeWireRepositoryFactory(
@@ -107,6 +108,7 @@ final class SessionHarness {
   final VoiceMessageRecorder? _voiceMessageRecorder;
   final AccessibilitySettings _accessibility;
   final ChannelLink? _linkAtLaunch;
+  final bool _chatImagesOnDisk;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
@@ -168,6 +170,7 @@ final class SessionHarness {
         accessibilityRepository: FixedDials(_accessibility),
         desktopIntegration: _window,
         chatRepositoryFactory: _factory,
+        clearChatImages: _chatImagesOnDisk ? null : _noChatImagesToClear,
         discordRemoteAuthGatewayFactory: remoteAuth,
       ),
     ),
@@ -274,7 +277,7 @@ final class SessionHarness {
     await _tester.tap(find.text('Sign out'));
     await settle();
     await _tester.tap(find.byKey(destructiveConfirmKey));
-    await settle();
+    await _settleUntil(() => !_vault.hasSession, 'the end of the sign-out');
   }
 
   /// Every byte the cache has on disk, as text, with its side files.
@@ -397,7 +400,7 @@ final class SessionHarness {
     if (settle) await this.settle();
   }
 
-  /// One dispatch as a JSON frame, for `socket.receiveEncoded`. It takes its
+  /// One dispatch as a JSON frame, for `socket.receiveRaw`. It takes its
   /// sequence number now, so encode frames in the order they will be sent.
   String encodeDispatch(String event, Map<String, Object?> data) =>
       jsonEncode({'op': 0, 's': ++_sequence, 't': event, 'd': data});
@@ -427,6 +430,18 @@ final class SessionHarness {
       await _tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await _tester.pump(const Duration(milliseconds: 25));
     }
+  }
+
+  /// Settles until [condition] holds, for a large frame on its worker isolate.
+  /// That takes real time, which [settle] alone does not wait for.
+  Future<void> settleUntilDecoded(bool Function() condition) async {
+    for (var attempt = 0; attempt < 200 && !condition(); attempt++) {
+      await _tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await settle();
+    }
+    expect(condition(), isTrue, reason: 'The large frame never landed.');
   }
 
   Future<void> _settleUntil(bool Function() condition, String what) async {
@@ -464,6 +479,8 @@ enum SessionLaunch {
 /// Pass [measured] for a run on a real clock that records frame times. The app
 /// then does what it does for a user: it builds no semantics tree, since no
 /// screen reader is on, and the cache works on its own isolate.
+/// [chatImagesOnDisk] makes a sign-out clear the real chat image cache, which
+/// needs a `ChatImageDisk` declared in the test file.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -477,6 +494,7 @@ void testSession(
   ChannelLink? linkAtLaunch,
   TargetPlatform? platform,
   bool measured = false,
+  bool chatImagesOnDisk = false,
 }) {
   testWidgets(description, semanticsEnabled: !measured, (tester) async {
     // Outside debug builds, this setter throws even for null.
@@ -497,6 +515,7 @@ void testSession(
       voiceMessageRecorder,
       accessibility,
       linkAtLaunch,
+      chatImagesOnDisk,
       measured: measured,
     );
     try {
@@ -508,6 +527,9 @@ void testSession(
     }
   });
 }
+
+/// A test with no folder for the chat image cache has nothing in it to clear.
+Future<void> _noChatImagesToClear() async {}
 
 final _channelHistoryPath = RegExp(r'^/api/v9/channels/\d+/messages$');
 
@@ -653,6 +675,8 @@ final class _MemoryCredentialVault implements CredentialVault {
       DiscordDesktopUserSession(SessionHarness.tokenOf(accountId));
 
   void saveAccount(String accountId) => _session = _sessionOf(accountId);
+
+  bool get hasSession => _session != null;
 
   @override
   Future<DiscordAccountSession?> readDiscordSession() async => _session;

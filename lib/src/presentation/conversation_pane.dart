@@ -556,7 +556,11 @@ class _ConversationPaneState extends State<ConversationPane> {
         ),
         Expanded(child: conversation),
         if (showsMessages && !locked)
-          TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ListenableBuilder(
+            listenable: chat.activeChannelTyping,
+            builder: (_, _) =>
+                TypingIndicator(members: chat.typingMembersFor(channel.id)),
+          ),
         if (showsMessages && locked)
           const LockedThreadComposerNotice()
         else if (showsMessages && !widget.capabilities.sendMessages)
@@ -768,7 +772,11 @@ class _ConversationPaneState extends State<ConversationPane> {
               chat.isLoadingOlderMessages(channel.id),
               chat.olderMessagesError(channel.id),
             ],
-            builder: (_) => _timeline(chat, workspaceController),
+            // One group, so Tab walks the rows in order. Without it, the order
+            // goes by height on screen and mixes in the rail and the sidebar.
+            builder: (_) => FocusTraversalGroup(
+              child: _timeline(chat, workspaceController),
+            ),
           ),
         ),
       ],

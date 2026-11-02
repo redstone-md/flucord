@@ -47,6 +47,7 @@ class AppBootstrap {
     this.restoreSavedSession = true,
     this.credentialVault,
     this.chatRepositoryFactory,
+    this.clearChatImages,
     this.desktopIntegration,
     this.voiceMediaService,
     this.voiceOpusCodecFactory,
@@ -95,6 +96,9 @@ class AppBootstrap {
   final bool restoreSavedSession;
   final CredentialVault? credentialVault;
   final ChatRepositoryFactory? chatRepositoryFactory;
+
+  /// Removes the pictures of chats from the disk at a sign-out.
+  final Future<void> Function()? clearChatImages;
   final DesktopIntegration? desktopIntegration;
   final VoiceMediaService? voiceMediaService;
   final VoiceOpusCodecFactory? voiceOpusCodecFactory;

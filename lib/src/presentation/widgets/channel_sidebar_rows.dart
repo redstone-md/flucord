@@ -288,34 +288,44 @@ class _CategorySection extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey('category-${category.id}'),
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 28,
-              child: Row(
-                children: [
-                  Icon(
-                    collapsed ? Icons.chevron_right : Icons.expand_more,
-                    size: 16,
-                    color: context.surfaces.muted,
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      category.name.toUpperCase(),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+        Semantics(
+          container: true,
+          // The name as written. Capitals are only how it is drawn, and some
+          // screen readers would spell them out.
+          label: category.name,
+          button: true,
+          expanded: !collapsed,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('category-${category.id}'),
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(4),
+              child: ExcludeSemantics(
+                child: SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      Icon(
+                        collapsed ? Icons.chevron_right : Icons.expand_more,
+                        size: 16,
                         color: context.surfaces.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
                       ),
-                    ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          category.name.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.surfaces.muted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -383,69 +393,84 @@ class _ChannelRow extends StatelessWidget {
         : context.surfaces.muted;
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        color: selected ? context.surfaces.raised : Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          key: ValueKey('channel-${channel.id}'),
-          onTap: onPressed,
-          onSecondaryTapDown: onNotificationRequest == null
-              ? null
-              : (details) => _openMenu(context, details.globalPosition),
+      child: Semantics(
+        container: true,
+        label: activityLabel(
+          channel.name,
+          mentionCount: channel.mentionCount,
+          muted: muted,
+          unread: showsUnread,
+        ),
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? context.surfaces.raised : Colors.transparent,
           borderRadius: BorderRadius.circular(5),
-          child: SizedBox(
-            height: 34,
-            child: Row(
-              children: [
-                SizedBox(width: indented ? 18 : 10),
-                if (recipient != null)
-                  MemberAvatar(member: recipient!, size: 24)
-                else
-                  Icon(
-                    channel.isDirectMessage
-                        ? Icons.person_outline
-                        : channel.isThread
-                        ? Icons.forum_outlined
-                        : switch (channel.kind) {
-                            ChannelKind.text => Icons.tag,
-                            ChannelKind.voice => Icons.volume_up_outlined,
-                            ChannelKind.forum => Icons.forum_outlined,
-                            ChannelKind.media => Icons.perm_media_outlined,
-                          },
-                    size: 17,
-                    color: foreground,
-                  ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    channel.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 13,
-                      fontWeight: showsUnread || selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+          child: InkWell(
+            key: ValueKey('channel-${channel.id}'),
+            onTap: onPressed,
+            onSecondaryTapDown: onNotificationRequest == null
+                ? null
+                : (details) => _openMenu(context, details.globalPosition),
+            borderRadius: BorderRadius.circular(5),
+            // The label above already says all of this. The badge alone would
+            // read as a bare number.
+            child: ExcludeSemantics(
+              child: SizedBox(
+                height: 34,
+                child: Row(
+                  children: [
+                    SizedBox(width: indented ? 18 : 10),
+                    if (recipient != null)
+                      MemberAvatar(member: recipient!, size: 24)
+                    else
+                      Icon(
+                        channel.isDirectMessage
+                            ? Icons.person_outline
+                            : channel.isThread
+                            ? Icons.forum_outlined
+                            : switch (channel.kind) {
+                                ChannelKind.text => Icons.tag,
+                                ChannelKind.voice => Icons.volume_up_outlined,
+                                ChannelKind.forum => Icons.forum_outlined,
+                                ChannelKind.media => Icons.perm_media_outlined,
+                              },
+                        size: 17,
+                        color: foreground,
+                      ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        channel.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 13,
+                          fontWeight: showsUnread || selected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (muted)
+                      Padding(
+                        key: ValueKey('channel-muted-${channel.id}'),
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          Icons.notifications_off_outlined,
+                          size: 14,
+                          color: foreground,
+                        ),
+                      ),
+                    if (channel.mentionCount > 0)
+                      MentionBadge(
+                        key: ValueKey('channel-mention-${channel.id}'),
+                        count: channel.mentionCount,
+                      ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
-                if (muted)
-                  Padding(
-                    key: ValueKey('channel-muted-${channel.id}'),
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.notifications_off_outlined,
-                      size: 14,
-                      color: foreground,
-                    ),
-                  ),
-                if (channel.mentionCount > 0)
-                  MentionBadge(
-                    key: ValueKey('channel-mention-${channel.id}'),
-                    count: channel.mentionCount,
-                  ),
-                const SizedBox(width: 8),
-              ],
+              ),
             ),
           ),
         ),
