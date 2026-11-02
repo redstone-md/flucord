@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,6 +20,7 @@ import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
@@ -80,6 +82,7 @@ final class SessionHarness {
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final _MemoryCredentialVault _vault = _MemoryCredentialVault();
+  final _ToastRecorder _toastRecorder = _ToastRecorder();
 
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
@@ -139,6 +142,7 @@ final class SessionHarness {
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
+        desktopIntegration: _toastRecorder,
         chatRepositoryFactory: _FakeWireRepositoryFactory(
           transport,
           _connector,
@@ -219,6 +223,12 @@ final class SessionHarness {
       latin1.decode(file.readAsBytesSync()),
   ].join();
 
+  /// The app's message toasts so far, oldest first.
+  List<DesktopMessageNotification> get toasts => _toastRecorder.toasts;
+
+  /// The dialling side of the fake gateway, to hold a dial in flight.
+  MemoryDesktopWebSocketConnector get connector => _connector;
+
   /// The socket the client dialled last.
   MemoryDesktopWebSocket get socket => _connector.sockets.last;
 
@@ -247,6 +257,9 @@ final class SessionHarness {
     socket.receive({'op': 0, 's': ++_sequence, 't': event, 'd': data});
     if (settle) await this.settle();
   }
+
+  /// The sequence number of the last dispatch [dispatch] sent.
+  int get sequence => _sequence;
 
   /// Opens a channel of [space] by tapping the server and the channel, as the
   /// user does.
@@ -380,6 +393,24 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     await cache.clear();
     await cache.close();
   }
+}
+
+/// Keeps each message the app asks the desktop to show as a toast. Whether the
+/// window has focus does not matter here, so the desktop's own filter is left
+/// out.
+final class _ToastRecorder implements DesktopIntegration {
+  final List<DesktopMessageNotification> toasts = [];
+  StreamSubscription<DesktopMessageNotification>? _subscription;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  void attach(DesktopAppSurface surface) =>
+      _subscription = surface.messageNotifications.listen(toasts.add);
+
+  @override
+  Future<void> dispose() async => _subscription?.cancel();
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
