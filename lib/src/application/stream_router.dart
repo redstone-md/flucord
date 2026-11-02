@@ -57,6 +57,11 @@ final class StreamRouter {
         }
         if (event is VoiceSignalingStatusEvent &&
             event.status == VoiceConnectionStatus.failure) {
+          // Reported here, so the close that follows has nothing left to end.
+          // A stop on that close would also wipe the error for the tile.
+          if (identical(_receiving[session.key], session)) {
+            _receiving.remove(session.key);
+          }
           _viewer.reportError(
             session.key,
             event.error ?? StateError('Discord refused the stream connection'),

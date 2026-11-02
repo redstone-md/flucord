@@ -28,6 +28,7 @@ final class VoiceSelfPreview {
 final class VoiceStreamControls {
   const VoiceStreamControls({
     required this.isOpen,
+    this.hasFailed,
     this.onWatch,
     this.onStopShare,
     this.selfPreview,
@@ -37,6 +38,10 @@ final class VoiceStreamControls {
   /// counts: the ask and the pictures are a second apart, and the ask is the
   /// only half the grid is on screen for.
   final bool Function(String userId) isOpen;
+
+  /// Whether the last watch of [userId]'s stream failed. A failed watch is no
+  /// longer open, so the tile is the one place left to say so.
+  final bool Function(String userId)? hasFailed;
 
   /// Opens somebody's stream, or closes the one already open. Null on a build
   /// that cannot watch, which is one with no decoder: a call is a room like

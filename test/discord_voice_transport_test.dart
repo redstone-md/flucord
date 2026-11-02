@@ -783,6 +783,41 @@ void main() {
       expect(statuses.last.error.toString(), contains('4017'));
     });
 
+    test('a client that failed lets go of its UDP socket on close', () async {
+      final socket = _FakeVoiceWebSocket();
+      final udp = _FakeVoiceUdpTransport()..failDiscovery = true;
+      final client = DiscordVoiceGatewayClient(
+        credentials: _credentials,
+        maxDaveProtocolVersion: 0,
+        socketConnector: _FakeVoiceSocketConnector(socket),
+        udpTransport: udp,
+      );
+      final statuses = <VoiceSignalingStatusEvent>[];
+      final subscription = client.events.listen((event) {
+        if (event is VoiceSignalingStatusEvent) statuses.add(event);
+      });
+      addTearDown(subscription.cancel);
+
+      await client.connect();
+      socket.addJson({
+        'op': 2,
+        'seq': 1,
+        'd': {
+          'ssrc': 42,
+          'ip': '198.51.100.4',
+          'port': 50001,
+          'modes': ['aead_aes256_gcm_rtpsize'],
+        },
+      });
+      await _flushEvents();
+      expect(statuses.last.status, VoiceConnectionStatus.failure);
+      expect(udp.closed, isFalse);
+
+      await client.close();
+
+      expect(udp.closed, isTrue);
+    });
+
     test('one unanswered heartbeat does not end the call', () async {
       final socket = _FakeVoiceWebSocket();
       final client = DiscordVoiceGatewayClient(
@@ -1230,7 +1265,8 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
   final List<Uint8List> sentPackets = [];
   String? discoveredHost;
   int? discoveredPort;
-  bool _closed = false;
+  bool failDiscovery = false;
+  bool closed = false;
 
   @override
   Stream<Uint8List> get packets => _packets.stream;
@@ -1243,6 +1279,7 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
   }) async {
     discoveredHost = host;
     discoveredPort = port;
+    if (failDiscovery) throw StateError('no route');
     return const DiscordVoiceIpDiscovery(address: '203.0.113.7', port: 50000);
   }
 
@@ -1256,8 +1293,8 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
 
   @override
   Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
+    if (closed) return;
+    closed = true;
     await _packets.close();
   }
 }
