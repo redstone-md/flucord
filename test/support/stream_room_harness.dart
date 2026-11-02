@@ -10,11 +10,15 @@ import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/self_video_controller.dart';
+import 'package:flucord/src/application/stream_router.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/application/voice_room_coordination.dart';
 import 'package:flucord/src/data/discord/discord_go_live_service.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/data/discord/discord_stream_rtc_service.dart';
+import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
@@ -28,6 +32,7 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'pane_harness.dart';
 
+import 'fake_stream_client.dart';
 import 'fake_video_encoder.dart';
 
 /// A room with streams in it: the pane the app builds, over controllers that
@@ -57,7 +62,15 @@ final class StreamRoomHarness {
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: StreamRoomDecoder.new,
+      onWatchStopped: (key) => unawaited(streamRtc.stop(key)),
     );
+    streamRtc = DiscordStreamRtcService(
+      repositoryProvider: () => repository,
+      identityProvider: () => (sessionId: 'session-1', userId: 'me'),
+      socketFactoryProvider: () => _StreamRoomSockets(streamClients),
+      isWatched: viewer.isOpen,
+    )..reconcile();
+    router = StreamRouter(opened: streamRtc.opened, viewer: viewer);
     final capture = VideoCaptureHub(encoder: encoder);
     camera = SelfVideoController(
       capture: capture,
@@ -120,12 +133,18 @@ final class StreamRoomHarness {
   final StreamRoomCallService callService = StreamRoomCallService();
   final StreamRoomStreamRepository repository = StreamRoomStreamRepository();
 
+  /// Each connection a watched stream was dialled on, oldest first. A test
+  /// speaks for the far end through these.
+  final List<FakeStreamClient> streamClients = [];
+
   /// The machine's one capture, shared by the share and the camera.
   final FakeVideoEncoder encoder = FakeVideoEncoder();
   final StreamRoomCameraTransport cameraTransport = StreamRoomCameraTransport();
   late final VoiceController voice;
   late final DirectCallController calls;
   late final StreamViewerController viewer;
+  late final DiscordStreamRtcService streamRtc;
+  late final StreamRouter router;
   late final GoLiveController goLive;
   late final SelfVideoController camera;
   late final AppComposition composition;
@@ -163,7 +182,8 @@ final class StreamRoomHarness {
     viewer.dispose();
     calls.dispose();
     voice.dispose();
-    unawaited(repository.close());
+    router.dispose();
+    unawaited(streamRtc.close().then((_) => repository.close()));
   }
 }
 
@@ -402,13 +422,16 @@ final class StreamRoomCallService implements DirectCallService {
 /// Records what the room asked for, over the real fold of Discord's stream
 /// dispatches, so a test sends in what Discord sends.
 final class StreamRoomStreamRepository implements GoLiveRepository {
-  final DiscordGoLiveService _service = DiscordGoLiveService(
-    const _StreamRoomGateway(),
-  );
+  final _StreamRoomGateway _gateway = _StreamRoomGateway();
+  late final DiscordGoLiveService _service = DiscordGoLiveService(_gateway);
   final List<GoLiveStreamKey> watched = [];
   final List<GoLiveStreamKey> ended = [];
   final List<String> startedChannels = [];
   final List<String?> startedGuildIds = [];
+
+  /// The asks and withdrawals that went out to Discord, in order, by the
+  /// opcode's name and the stream's key.
+  List<String> get watchFrames => _gateway.watchFrames;
 
   /// A raw gateway dispatch, as Discord would send it.
   void dispatch(String eventName, Map<String, Object?> data) =>
@@ -440,7 +463,10 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
   }
 
   @override
-  Future<void> watchStream(GoLiveStreamKey key) async => watched.add(key);
+  Future<void> watchStream(GoLiveStreamKey key) async {
+    watched.add(key);
+    await _service.watchStream(key);
+  }
 
   @override
   Future<void> pingStream(GoLiveStreamKey key) async {}
@@ -455,13 +481,13 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
   }
 
   @override
-  Future<void> stopWatching(GoLiveStreamKey key) async {}
+  Future<void> stopWatching(GoLiveStreamKey key) => _service.stopWatching(key);
 }
 
-/// The frames the repository sends. [StreamRoomStreamRepository] records what
-/// was asked for one level up, so nothing here needs to.
+/// The frames the repository sends. [watchFrames] is the part a watch puts on
+/// the wire; what a share asks for is recorded one level up.
 final class _StreamRoomGateway implements DiscordGoLiveGateway {
-  const _StreamRoomGateway();
+  final List<String> watchFrames = [];
 
   @override
   String? get currentUserId => 'me';
@@ -475,16 +501,42 @@ final class _StreamRoomGateway implements DiscordGoLiveGateway {
   }) {}
 
   @override
-  void sendStreamDelete(String streamKey) {}
+  void sendStreamDelete(String streamKey) =>
+      watchFrames.add('STREAM_DELETE $streamKey');
 
   @override
-  void sendStreamWatch(String streamKey) {}
+  void sendStreamWatch(String streamKey) =>
+      watchFrames.add('STREAM_WATCH $streamKey');
 
   @override
   void sendStreamPing(String streamKey) {}
 
   @override
   void sendStreamSetPaused(String streamKey, {required bool paused}) {}
+}
+
+/// Dials a fake connection for each watched stream, and keeps it for the test.
+final class _StreamRoomSockets implements DiscordVoiceSocketFactory {
+  const _StreamRoomSockets(this._clients);
+
+  final List<FakeStreamClient> _clients;
+
+  @override
+  int get maxDaveProtocolVersion => 0;
+
+  @override
+  DiscordVoiceClient callSocket(VoiceServerCredentials credentials) =>
+      throw UnsupportedError('the stream plane dials no call sockets');
+
+  @override
+  DiscordVoiceClient streamSocket({
+    required VoiceServerCredentials credentials,
+    required GoLiveStreamKey streamKey,
+  }) {
+    final client = FakeStreamClient();
+    _clients.add(client);
+    return client;
+  }
 }
 
 /// The voice side of the camera: declares SSRCs, takes pictures.
