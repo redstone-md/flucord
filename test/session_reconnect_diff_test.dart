@@ -13,6 +13,7 @@ const _dmChannelId = SessionHarness.dmChannelId;
 const _leftGuildId = '200000000000000077';
 const _leftChannelId = '300000000000000077';
 const _categoryId = '300000000000000010';
+const _goneCategoryId = '300000000000000020';
 const _firstId = '300000000000000011';
 const _secondId = '300000000000000012';
 const _goneId = '300000000000000013';
@@ -49,6 +50,17 @@ Map<String, Object?> _channel(String id, String name, int position) => {
   'position': position,
 };
 
+Map<String, Object?> _category(String id, String name, int position) => {
+  ..._channel(id, name, position),
+  'type': 4,
+};
+
+/// Keeps its category on screen: the sidebar drops one with no channels.
+final _inCategory = {
+  ..._channel('300000000000000016', 'in-category', 7),
+  'parent_id': _categoryId,
+};
+
 Map<String, Object?> _dm(String id, String friendId, {String? lastMessageId}) =>
     {
       'id': id,
@@ -68,6 +80,9 @@ Map<String, Object?> _user(String id) => {
 Map<String, Object?> _readyBefore() {
   final ready = SessionHarness.defaultReady();
   _guildOf(ready)['channels'] = [
+    _category(_categoryId, 'old-category', 0),
+    _category(_goneCategoryId, 'gone-category', 6),
+    _inCategory,
     _channel(_firstId, 'first', 1),
     _channel(_secondId, 'second', 2),
     _channel(_goneId, 'gone', 3),
@@ -84,11 +99,14 @@ Map<String, Object?> _readyBefore() {
   return ready;
 }
 
-/// [_readyBefore], after a stretch offline: `second` was renamed, `gone` was
-/// deleted, a channel and two DMs were gained, and the other guild was left.
+/// [_readyBefore], after a stretch offline: `second` and a category were renamed,
+/// `gone` and the other category were deleted, a channel and two DMs were gained,
+/// and the other guild was left.
 Map<String, Object?> _readyAfter() {
   final ready = SessionHarness.defaultReady();
   _guildOf(ready)['channels'] = [
+    _category(_categoryId, 'new-category', 0),
+    _inCategory,
     _channel(_firstId, 'first', 1),
     _channel(_secondId, 'renamed', 2),
     _channel(_thirdId, 'third', 4),
@@ -199,6 +217,28 @@ void main() {
             matching: find.text('renamed'),
           ),
           findsOneWidget,
+        );
+      },
+      ready: _readyBefore(),
+    );
+
+    testSession(
+      'a renamed category shows its new name, and a deleted one goes',
+      (tester, session) async {
+        await _identifyAgain(session, _readyAfter());
+        await _showSpace(tester, session, _guildId);
+
+        expect(
+          find.textContaining(RegExp('new-category', caseSensitive: false)),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(RegExp('old-category', caseSensitive: false)),
+          findsNothing,
+        );
+        expect(
+          find.textContaining(RegExp('gone-category', caseSensitive: false)),
+          findsNothing,
         );
       },
       ready: _readyBefore(),
