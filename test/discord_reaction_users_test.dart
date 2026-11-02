@@ -106,7 +106,7 @@ void main() {
           reactions: const [MessageReaction(emojiName: '🔥', count: 1)],
         ),
       );
-      final handler = DiscordReactionHandler(cache, () => 'user-1');
+      final handler = DiscordReactionHandler(cache, () => 'user-1', (_) {});
 
       await handler.apply(
         const DiscordGatewayDispatch(

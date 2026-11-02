@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
+import 'package:flutter/material.dart'
+    show AppLifecycleListener, GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart';
 
 import 'app_bootstrap.dart';
@@ -796,6 +798,9 @@ final class AppComposition {
     gameDetection.startScanning();
     ServicesBinding.instance.keyboard.addHandler(keybinds.handleKeyEvent);
     bootstrap.desktopIntegration?.attach(desktopSurface);
+    _teardown.add(
+      AppLifecycleListener(onExitRequested: _closeBeforeExit).dispose,
+    );
     connection.initialize(
       restoreSavedSession: bootstrap.restoreSavedSession && !_demo,
     );
@@ -815,6 +820,13 @@ final class AppComposition {
       dispose();
     }
     unawaited(bootstrap.voiceMessageRecorder?.dispose());
+  }
+
+  /// The system closes a window with no help from the widgets, which stay
+  /// mounted until the process ends. So this is the last chance to save.
+  Future<AppExitResponse> _closeBeforeExit() async {
+    await chat.closeForExit();
+    return AppExitResponse.exit;
   }
 
   bool _markActiveOnKey(KeyEvent event) {
