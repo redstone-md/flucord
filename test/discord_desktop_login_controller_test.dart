@@ -214,6 +214,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        theme: FlucordTheme.dark,
         home: Scaffold(
           body: DiscordDesktopLoginSection(
             controller: controller,
