@@ -27,7 +27,9 @@ final class DiscordDesktopGatewayClient
     required String authorization,
     required Map<String, Object?> properties,
     this.profile = DiscordDesktopProtocolProfile.installedStable20260725,
-    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(),
+    this._socketConnector = const PlatformDiscordDesktopWebSocketConnector(
+      decodeJsonInWorker: true,
+    ),
   }) : _protocol = DiscordDesktopGatewayProtocol(
          token: authorization,
          properties: properties,
