@@ -134,6 +134,7 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
+  final _typingSignal = _TypingSignal();
   final _archivedThreadState = _ArchivedThreadState();
 
   /// Per space, the authors a member request has already asked about.
@@ -575,9 +576,10 @@ final class ChatController extends ChangeNotifier {
   ///
   /// The channel counts as loaded from here: it has messages to read, so the
   /// loading view would only hide them. The one exception is below.
-  void _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
+  /// Answers whether the channel took the restored page.
+  bool _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
     final channelId = event.history.channelId;
-    if (_workspace == null || _loadedChannels.contains(channelId)) return;
+    if (_workspace == null || _loadedChannels.contains(channelId)) return false;
     _workspace = _workspace?.mergeInitialHistory(event.history);
     _loadedChannels.add(channelId);
     _restoredChannels.add(channelId);
@@ -587,6 +589,7 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.remove(channelId);
     }
     _setHistoryExhausted(channelId, !event.hasMore);
+    return true;
   }
 
   /// Answers a stretch with no live events.
@@ -899,6 +902,7 @@ final class ChatController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _clearTyping();
+    _typingSignal.dispose();
     unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
     unawaited(_conversationSummarySubscription?.cancel());
