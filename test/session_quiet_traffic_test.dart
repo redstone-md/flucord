@@ -39,9 +39,34 @@ Future<void> _presence(SessionHarness session, String userId) =>
 /// Builds of the shell. Everything the shell shows hangs from a
 /// [ListenableBuilder] on a controller, so a notification always counts here.
 ///
-/// A test does not ask for no builds at all. The composer's text field rebuilds
-/// itself when a platform answer arrives, at a time that depends on machine load.
+/// A test does not ask for no builds at all, because the composer's text field
+/// can rebuild itself at a time that depends on machine load.
 int _shellBuilds(WidgetBuilds builds) => builds.of<ListenableBuilder>();
+
+/// Opens the channel, then waits for the app to come to rest, so a test counts
+/// only what its own event causes.
+///
+/// A channel opened earlier in the launch can still be loading its history, and
+/// under load it finishes late and notifies. So this waits for real time as well
+/// as on the fake clock, until two rounds in a row build nothing in the shell.
+Future<void> _openAndRest(
+  WidgetTester tester,
+  SessionHarness session,
+  String channelId,
+) async {
+  await session.openChannel(channelId);
+  var quietRounds = 0;
+  for (var round = 0; round < 40 && quietRounds < 2; round++) {
+    final builds = await countBuilds(() async {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await session.settle();
+    });
+    quietRounds = _shellBuilds(builds) == 0 ? quietRounds + 1 : 0;
+  }
+  expect(quietRounds, 2, reason: 'The app never came to rest.');
+}
 
 /// An id for a moment [age] ago. Read cursors must be recent, because the app
 /// deletes a read state older than 30 days at launch.
@@ -85,7 +110,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
 
       final builds = await countBuilds(
         () => _presence(session, '100000000000000099'),
@@ -98,7 +123,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
 
       final builds = await countBuilds(() => _presence(session, _friendId));
 
@@ -110,7 +135,7 @@ void main() {
     testSession(
       'an ack that repeats the cursor does not build the shell',
       (tester, session) async {
-        await session.openChannel(_channelId);
+        await _openAndRest(tester, session, _channelId);
 
         final builds = await countBuilds(
           () => session.dispatch('MESSAGE_ACK', {
@@ -129,7 +154,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
 
       final builds = await countBuilds(
         () => session.dispatch(
@@ -150,7 +175,7 @@ void main() {
     testSession(
       'a cursor moving in another server keeps the channel list',
       (tester, session) async {
-        await session.openChannel(_channelId);
+        await _openAndRest(tester, session, _channelId);
 
         final builds = await countBuilds(
           () => session.dispatch('MESSAGE_ACK', {
@@ -172,7 +197,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
       expect(find.byKey(const ValueKey('space-muted')), findsNothing);
 
       await session.dispatch('USER_GUILD_SETTINGS_UPDATE', {
@@ -190,7 +215,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
 
       final builds = await countBuilds(() async {
         for (var i = 0; i < 1000; i++) {
@@ -209,7 +234,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
 
       final builds = await countBuilds(
         () => _typing(session, channelId: _channelId),
@@ -227,7 +252,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
       await _typing(session, channelId: _channelId);
 
       final builds = await countBuilds(
@@ -241,7 +266,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
       await _typing(session, channelId: _channelId);
 
       await tester.pump(const Duration(seconds: 8));
@@ -256,7 +281,7 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(_channelId);
+      await _openAndRest(tester, session, _channelId);
       await _typing(session, channelId: _otherChannelId);
       expect(find.text('Friend is typing...'), findsNothing);
 
