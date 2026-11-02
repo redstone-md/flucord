@@ -61,7 +61,7 @@ Future<MessageMenuAction?> showMessageContextMenu({
           value: MessageMenuAction.reply,
           child: Text('Reply'),
         ),
-      if (isCurrentUser)
+      if (isCurrentUser && message.canEdit)
         const PopupMenuItem(
           key: ValueKey('message-menu-edit'),
           value: MessageMenuAction.edit,
