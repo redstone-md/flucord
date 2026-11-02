@@ -2,10 +2,11 @@ import 'chat_models.dart';
 
 /// What the app keeps of an account between launches.
 ///
-/// [writeMessage], [updateMessage], [writeMember], [writeChannelActivity] and
-/// [deleteMessage] only queue their work and finish at once, so nobody waits for
-/// the disk on them. The queue applies in order, and flushes within a moment, on
-/// [flush] and on [close]. Every read finds the writes asked for before it.
+/// [writeMessage], [updateMessage], [writeMember], [writeSpace], [writeChannel],
+/// [writeChannelActivity] and [deleteMessage] only queue their work and finish
+/// at once, so nobody waits for the disk on them. The queue applies in order,
+/// and flushes within a moment, on [flush] and on [close]. Every read finds the
+/// writes asked for before it.
 abstract interface class ChatCache {
   Future<ChatWorkspace?> readWorkspace();
 

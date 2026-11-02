@@ -95,7 +95,7 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
     final currentUserId = _currentMemberId;
     final message = _mapper.message(payload, currentMemberId: currentUserId);
     final member = _mapper.messageAuthor(payload);
-    // This announces a new channel at once, and its write finishes later.
+    // A new channel is announced and queued here, ahead of the message.
     final channelAdopted = currentUserId == null
         ? null
         : _directMessages.acceptMessage(payload, currentUserId);

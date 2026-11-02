@@ -369,18 +369,23 @@ final class SqliteChatCache
 
   @override
   Future<void> writeSpace(CommunitySpace space) async {
-    final existing = await _database.query(
+    _writes.add((transaction) => _putSpace(transaction, space));
+  }
+
+  /// Writes [space], keeping its place in the list if it has one already.
+  Future<void> _putSpace(Transaction transaction, CommunitySpace space) async {
+    final existing = await transaction.query(
       'spaces',
       columns: ['sort_index'],
       where: 'id = ?',
       whereArgs: [space.id],
       limit: 1,
     );
-    final countRows = await _database.rawQuery(
+    final countRows = await transaction.rawQuery(
       'SELECT COUNT(*) AS space_count FROM spaces',
     );
     final count = countRows.single['space_count']! as int;
-    await _database.insert(
+    await transaction.insert(
       'spaces',
       _spaceToRow(
         space,
@@ -393,25 +398,7 @@ final class SqliteChatCache
   @override
   Future<void> writeGuild(JoinedGuild guild) => _writes.inTurn(() {
     return _database.transaction((transaction) async {
-      final existing = await transaction.query(
-        'spaces',
-        columns: ['sort_index'],
-        where: 'id = ?',
-        whereArgs: [guild.space.id],
-        limit: 1,
-      );
-      final countRows = await transaction.rawQuery(
-        'SELECT COUNT(*) AS space_count FROM spaces',
-      );
-      final count = countRows.single['space_count']! as int;
-      await transaction.insert(
-        'spaces',
-        _spaceToRow(
-          guild.space,
-          existing.isEmpty ? count : existing.single['sort_index']! as int,
-        ),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await _putSpace(transaction, guild.space);
       final batch = transaction.batch();
       for (var index = 0; index < guild.channels.length; index++) {
         batch.insert(
@@ -536,18 +523,19 @@ final class SqliteChatCache
   }
 
   @override
-  Future<void> writeChannel(ConversationChannel channel) =>
-      _writes.inTurn(() async {
-        final countRows = await _database.rawQuery(
-          'SELECT COUNT(*) AS channel_count FROM channels',
-        );
-        final count = countRows.single['channel_count'] as int?;
-        await _database.insert(
-          'channels',
-          _channelToRow(channel, count ?? 0),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      });
+  Future<void> writeChannel(ConversationChannel channel) async {
+    _writes.add((transaction) async {
+      final countRows = await transaction.rawQuery(
+        'SELECT COUNT(*) AS channel_count FROM channels',
+      );
+      final count = countRows.single['channel_count'] as int?;
+      await transaction.insert(
+        'channels',
+        _channelToRow(channel, count ?? 0),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
 
   @override
   Future<void> writeChannelActivity(ConversationChannel channel) async {

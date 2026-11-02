@@ -94,7 +94,7 @@ final class DiscordSharedDispatches {
   /// Runs [step] after every step added before it.
   ///
   /// Each dispatch about a message goes through here, so that nothing overtakes
-  /// a step that has to wait, such as a first DM writing its new channel. A step
+  /// a step that has to wait, such as a poll vote reading its message. A step
   /// announces first and writes after, and the cache applies its writes in the
   /// order they came, so a delete has the last word. A step that fails is logged,
   /// and the next one still runs.

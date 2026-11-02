@@ -299,7 +299,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     final message = _messageFrom(payload);
     final member = _mapper.messageAuthor(payload);
     final currentUserId = _currentMemberId;
-    // This announces a new channel at once, and its write finishes later.
+    // A new channel is announced and queued here, ahead of the message.
     final channelAdopted = currentUserId == null
         ? null
         : _directMessages.acceptMessage(payload, currentUserId);
