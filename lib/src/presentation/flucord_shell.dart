@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../application/channel_sidebar_order.dart';
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
@@ -555,7 +556,10 @@ class FlucordShell extends StatelessWidget {
               ),
             ).withShellKeyboard(
               workspace: workspace,
+              channelId: channelId,
               onOpenDestination: _openQuickSwitcherDestination,
+              onStep: _takeStep,
+              onOpenChannel: _openChannelFromHistory,
             );
           },
         );

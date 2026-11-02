@@ -98,6 +98,51 @@ Future<void> _pressUp(WidgetTester tester, SessionHarness session) async {
   await session.settle();
 }
 
+const _third = '300000000000000004';
+const _fourth = '300000000000000005';
+const _category = '300000000000000006';
+const _voice = '300000000000000007';
+
+const _alt = LogicalKeyboardKey.altLeft;
+const _shift = LogicalKeyboardKey.shiftLeft;
+const _control = LogicalKeyboardKey.controlLeft;
+const _command = LogicalKeyboardKey.metaLeft;
+const _up = LogicalKeyboardKey.arrowUp;
+const _down = LogicalKeyboardKey.arrowDown;
+
+/// The default READY with other channels, and with read state [entries].
+Map<String, Object?> _readyWith(
+  List<Object?> channels, {
+  List<Object?> entries = const [],
+}) {
+  final ready = SessionHarness.defaultReady();
+  final guild = (ready['guilds']! as List).single as Map<String, Object?>;
+  return ready
+    ..['guilds'] = [
+      {...guild, 'channels': channels},
+    ]
+    ..['read_state'] = {'version': 1, 'partial': false, 'entries': entries};
+}
+
+Map<String, Object?> _channel(String id, String name, {int position = 0}) => {
+  ...rawChannel(id: id, name: name),
+  'position': position,
+};
+
+/// A channel with a newer message than the read state's cursor [_unreadEntry].
+Map<String, Object?> _unreadChannel(String id, String name) =>
+    rawChannel(id: id, name: name, lastMessageId: _idOf(5));
+
+Map<String, Object?> _unreadEntry(String id, {int mentions = 0}) => {
+  'id': id,
+  'last_message_id': _idOf(1),
+  'mention_count': mentions,
+};
+
+/// The channel on screen, as the composer's hint names it.
+void _expectOpen(String channelName) =>
+    expect(find.text('Message #$channelName'), findsOneWidget);
+
 Future<void> _scrollUp(WidgetTester tester, SessionHarness session) async {
   final list = find
       .ancestor(
@@ -600,5 +645,207 @@ void main() {
       },
       routes: _historyWithOwn(const {}),
     );
+  });
+
+  group('navigation shortcuts', () {
+    testSession('Alt+Up and Alt+Down walk the channels and wrap around', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await _chord(tester, const [_alt], _down);
+      await session.settle();
+      _expectOpen('random');
+      await _typeInFocusedField(tester, 'hello');
+      expect(_boxText(tester), 'hello');
+
+      await _chord(tester, const [_alt], _down);
+      await session.settle();
+      _expectOpen('general');
+
+      await _chord(tester, const [_alt], _up);
+      await session.settle();
+      _expectOpen('random');
+    });
+
+    testSession(
+      'Alt+Down walks in the order of the sidebar and passes voice channels',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await _chord(tester, const [_alt], _down);
+        await session.settle();
+        _expectOpen('in-category-first');
+
+        await _chord(tester, const [_alt], _down);
+        await session.settle();
+        _expectOpen('in-category-last');
+
+        await _chord(tester, const [_alt], _down);
+        await session.settle();
+        _expectOpen('general');
+      },
+      ready: _readyWith([
+        {
+          'id': _category,
+          'type': 4,
+          'name': 'Rooms',
+          'position': 0,
+          'permission_overwrites': <Object?>[],
+        },
+        _channel(SessionHarness.channelId, 'general'),
+        {
+          ..._channel(_third, 'in-category-last', position: 2),
+          'parent_id': _category,
+        },
+        {
+          ..._channel(_fourth, 'in-category-first', position: 1),
+          'parent_id': _category,
+        },
+        {..._channel(_voice, 'lounge'), 'type': 2, 'parent_id': _category},
+      ]),
+    );
+
+    testSession(
+      'Alt+Shift+Down goes to the next unread channel',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await _chord(tester, const [_alt, _shift], _down);
+        await session.settle();
+
+        _expectOpen('loud');
+      },
+      ready: _readyWith(
+        [
+          _channel(SessionHarness.channelId, 'general'),
+          _channel(SessionHarness.otherChannelId, 'quiet', position: 1),
+          {..._unreadChannel(_third, 'loud'), 'position': 2},
+        ],
+        entries: [_unreadEntry(_third)],
+      ),
+    );
+
+    testSession(
+      'Ctrl+Alt+Shift+Down goes to the next channel with a mention',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await _chord(tester, const [_control, _alt, _shift], _down);
+        await session.settle();
+
+        _expectOpen('pinged');
+      },
+      ready: _readyWith(
+        [
+          _channel(SessionHarness.channelId, 'general'),
+          {..._unreadChannel(_third, 'loud'), 'position': 1},
+          {..._unreadChannel(_fourth, 'pinged'), 'position': 2},
+        ],
+        entries: [_unreadEntry(_third), _unreadEntry(_fourth, mentions: 1)],
+      ),
+    );
+
+    testSession('Ctrl+Alt+Up and Down walk the servers', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await _chord(tester, const [_control, _alt], _up);
+      await session.settle();
+      expect(find.text('Message #general'), findsNothing);
+
+      await _chord(tester, const [_control, _alt], _down);
+      await session.settle();
+      _expectOpen('general');
+    });
+
+    testSession('Alt+Left and Alt+Right walk the history of channels', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _chord(tester, const [_alt], _down);
+      await session.settle();
+      _expectOpen('random');
+
+      await _chord(tester, const [_alt], LogicalKeyboardKey.arrowLeft);
+      await session.settle();
+      _expectOpen('general');
+
+      await _chord(tester, const [_alt], LogicalKeyboardKey.arrowRight);
+      await session.settle();
+      _expectOpen('random');
+    });
+
+    testSession(
+      'Page Up and Page Down scroll the timeline with the focus in the box',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        expect(_jumpToPresent, findsNothing);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+        await session.settle();
+        expect(_jumpToPresent, findsOneWidget);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+        await session.settle();
+        expect(_jumpToPresent, findsNothing);
+      },
+      routes: _routeHistory,
+    );
+
+    group('on macOS', () {
+      testSession(
+        'Cmd takes the place of Ctrl',
+        platform: TargetPlatform.macOS,
+        (tester, session) async {
+          await session.openChannel(SessionHarness.channelId);
+
+          await _chord(tester, const [_control], LogicalKeyboardKey.keyK);
+          await tester.pumpAndSettle();
+          expect(find.byKey(const ValueKey('quick-switcher')), findsNothing);
+
+          await _chord(tester, const [_command], LogicalKeyboardKey.keyK);
+          await tester.pumpAndSettle();
+          expect(find.byKey(const ValueKey('quick-switcher')), findsOneWidget);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+
+          await _chord(tester, const [_command, _alt], _up);
+          await session.settle();
+          expect(find.text('Message #general'), findsNothing);
+          await _chord(tester, const [_command, _alt], _down);
+          await session.settle();
+          _expectOpen('general');
+        },
+      );
+
+      testSession(
+        'Option walks the channels, and Cmd with a bracket walks the history',
+        platform: TargetPlatform.macOS,
+        (tester, session) async {
+          await session.openChannel(SessionHarness.channelId);
+
+          await _chord(tester, const [_alt], _down);
+          await session.settle();
+          _expectOpen('random');
+
+          await _chord(tester, const [
+            _command,
+          ], LogicalKeyboardKey.bracketLeft);
+          await session.settle();
+          _expectOpen('general');
+
+          await _chord(tester, const [
+            _command,
+          ], LogicalKeyboardKey.bracketRight);
+          await session.settle();
+          _expectOpen('random');
+        },
+      );
+    });
   });
 }

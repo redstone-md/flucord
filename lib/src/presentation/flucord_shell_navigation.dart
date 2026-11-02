@@ -415,6 +415,82 @@ extension _FlucordShellNavigation on FlucordShell {
         channelId: destination.channelId,
       );
 
+  /// Takes one step through the channels or the servers, from the keyboard.
+  void _takeStep(ShellStep step) {
+    switch (step) {
+      case ShellStep.previousChannel:
+        _stepChannel(-1, (_) => true);
+      case ShellStep.nextChannel:
+        _stepChannel(1, (_) => true);
+      case ShellStep.previousUnreadChannel:
+        _stepChannel(-1, chatController.readState.showsUnread);
+      case ShellStep.nextUnreadChannel:
+        _stepChannel(1, chatController.readState.showsUnread);
+      case ShellStep.previousMentionChannel:
+        _stepChannel(-1, (channel) => channel.mentionCount > 0);
+      case ShellStep.nextMentionChannel:
+        _stepChannel(1, (channel) => channel.mentionCount > 0);
+      case ShellStep.previousServer:
+        _stepServer(-1);
+      case ShellStep.nextServer:
+        _stepServer(1);
+    }
+  }
+
+  /// Goes to the nearest channel [wanted] accepts in the [direction], walking
+  /// the rows of the sidebar and wrapping at the ends. It passes voice channels,
+  /// because opening a room unasked would reach for the microphone.
+  void _stepChannel(
+    int direction,
+    bool Function(ConversationChannel channel) wanted,
+  ) {
+    final workspace = chatController.workspace;
+    final spaceId = workspaceController.selectedSpaceId;
+    if (workspace == null || spaceId == null) return;
+    final selectedId = workspaceController.selectedChannelId;
+    final rows = ChannelSidebarOrder(
+      space: workspace.spaceById(spaceId),
+      channels: WorkspacePermissions(workspace).visibleChannelsFor(spaceId),
+      categories: workspace.categoriesFor(spaceId),
+      collapsedCategoryIds: workspaceController.collapsedCategoryIds,
+      selectedChannelId: selectedId,
+      readState: chatController.readState,
+      channelOf: _channelOf,
+    ).rows.where((channel) => channel.kind != ChannelKind.voice).toList();
+    final selected = rows.indexWhere((channel) => channel.id == selectedId);
+    // With no selected row, the walk starts just outside the end it moves from.
+    final start = selected >= 0 || direction > 0 ? selected : rows.length;
+    for (var moved = 1; moved <= rows.length; moved++) {
+      final channel = rows[(start + direction * moved) % rows.length];
+      if (wanted(channel)) {
+        _selectChannel(channel.id);
+        return;
+      }
+    }
+  }
+
+  /// Goes to the next server in the order of the rail, where the direct
+  /// messages stand first.
+  void _stepServer(int direction) {
+    final spaces = chatController.workspace?.spaces;
+    if (spaces == null) return;
+    final rail = [
+      ...spaces.where((space) => space.isDirectMessages),
+      ...spaces.where((space) => !space.isDirectMessages),
+    ];
+    final selected = rail.indexWhere(
+      (space) => space.id == workspaceController.selectedSpaceId,
+    );
+    _selectSpace(rail[(selected + direction) % rail.length].id);
+  }
+
+  /// Opens a channel the back or forward key went to. It may be gone by now.
+  void _openChannelFromHistory(String channelId) {
+    final channel = _channelOf(channelId);
+    if (channel == null) return;
+    _openDestination(spaceId: channel.spaceId, channelId: channelId);
+  }
+
   void _selectChannel(String channelId, {VoiceChannelSurface? voiceSurface}) {
     workspaceController.selectChannel(channelId, surface: voiceSurface);
     unawaited(chatController.openChannel(channelId));

@@ -355,6 +355,21 @@ class MessageListState extends State<MessageList>
     return true;
   }
 
+  /// Moves the timeline by most of a screen. A negative [direction] goes toward
+  /// older messages.
+  void scrollPage(int direction) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // A reader who moved has chosen a place, and a late page must not take it.
+    _awaitedMessageId = null;
+    position.jumpTo(
+      (position.pixels + direction * position.viewportDimension * 0.9).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
+  }
+
   /// Drops the centre, so the next build captures a new one in a new
   /// scrollable. With nothing to wait for, that is the end of the conversation.
   void _recentre({String? awaiting}) {

@@ -193,6 +193,10 @@ class ConversationPaneState extends State<ConversationPane> {
     timeline.jumpToPresent();
   }
 
+  /// Moves the timeline by most of a screen, if this channel has one.
+  void scrollTimelinePage(int direction) =>
+      _timelineKey.currentState?.scrollPage(direction);
+
   /// Sets who the open channel's draft answers.
   void _setReply(ChatController chat, ChatMessage? message) {
     final channelId = widget.channel.id;

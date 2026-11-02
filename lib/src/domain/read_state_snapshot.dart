@@ -112,6 +112,15 @@ final class ReadStateSnapshot {
         : UnreadBadge.onlyMentions;
   }
 
+  /// Whether [channel] should read as unread in a list. A mention always
+  /// shows. Otherwise the resolved unread badge decides: a channel set to "only
+  /// mentions" stays quiet even though the server considers it unread.
+  bool showsUnread(ConversationChannel channel) {
+    if (channel.mentionCount > 0) return true;
+    if (!channel.unread) return false;
+    return unreadBadgeFor(channel) == UnreadBadge.allMessages;
+  }
+
   /// Whether a desktop notification is allowed for a message in [channel].
   ///
   /// [mentionsEveryone] is passed separately from [mentionsCurrentMember]
