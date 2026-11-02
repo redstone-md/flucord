@@ -391,7 +391,9 @@ final class DiscordHttpExecutor {
 
   static Duration _retryAfter(Object? payload, Map<String, String> headers) {
     final inBody = payload is Map ? payload['retry_after'] : null;
-    final seconds = inBody is num
+    // The body is more exact than the header, but a zero there must not
+    // undercut a wait the header asks for.
+    final seconds = inBody is num && inBody > 0
         ? inBody
         : num.tryParse(headers['retry-after'] ?? '');
     return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());

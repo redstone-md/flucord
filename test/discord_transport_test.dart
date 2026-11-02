@@ -133,6 +133,34 @@ void main() {
         expect(transport.requests, hasLength(3));
       });
 
+      test(
+        'with a zero retry_after waits for the Retry-After header',
+        () async {
+          final transport = _RecordingTransport([
+            const DiscordHttpResponse(
+              statusCode: 429,
+              headers: {'retry-after': '2'},
+              body: '{"retry_after":0}',
+            ),
+            const DiscordHttpResponse(
+              statusCode: 200,
+              headers: {},
+              body: '{"id":"bot-1"}',
+            ),
+          ]);
+          final delays = <Duration>[];
+          final client = DiscordApiClient(
+            botToken: 'token',
+            transport: transport,
+            delay: (duration) async => delays.add(duration),
+          );
+
+          await client.getCurrentUser();
+
+          expect(delays, [const Duration(seconds: 2)]);
+        },
+      );
+
       test('as an HTML server error page is repeated for a GET', () async {
         final transport = _RecordingTransport([
           const DiscordHttpResponse(
