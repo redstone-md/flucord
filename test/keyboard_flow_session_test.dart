@@ -848,4 +848,57 @@ void main() {
       );
     });
   });
+
+  group('the reaction picker', () {
+    /// Opens the picker of the newest message with the mouse. The focus is in
+    /// the composer until then.
+    Future<void> openPicker(WidgetTester tester, SessionHarness session) async {
+      final row = session.messageRow(_idOf(_newest));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(row));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      final button = tester.getCenter(
+        find.byKey(ValueKey('add-reaction-${_idOf(_newest)}')),
+      );
+      await mouse.moveTo(button);
+      await tester.pump();
+      await mouse.down(button);
+      await tester.pump();
+      await mouse.up();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Close reaction picker'), findsOneWidget);
+    }
+
+    testSession(
+      'takes the typing from the composer',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await openPicker(tester, session);
+
+        await _typeInFocusedField(tester, 'smile');
+
+        expect(_boxText(tester), isEmpty);
+      },
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'closes on Esc, and the reply stays',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _startReply(tester, session, _newest);
+        await openPicker(tester, session);
+
+        await _pressEscape(tester, session);
+        await tester.pumpAndSettle();
+
+        expect(find.byTooltip('Close reaction picker'), findsNothing);
+        expect(_replyBar, findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
+  });
 }
