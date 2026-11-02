@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_type.dart';
 import '../profile_image_picker.dart';
 import 'flucord_dialog.dart';
 
@@ -203,7 +204,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
                   child: Text(
                     _coverLabel,
                     key: const ValueKey('event-cover-label'),
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: FlucordType.caption),
                   ),
                 ),
                 TextButton(

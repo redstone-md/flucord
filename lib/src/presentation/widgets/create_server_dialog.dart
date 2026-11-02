@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/chat_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 
 /// Discord's create-a-server dialog: a name in, a server out, owned by this
@@ -70,7 +71,10 @@ class _CreateServerDialogState extends State<CreateServerDialog> {
           Text(
             'Your server is where you and your friends hang out. Name it now; '
             'everything else can be changed later.',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 13),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.label,
+            ),
           ),
           const SizedBox(height: 14),
           TextField(

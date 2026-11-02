@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_desktop_login_section.dart';
 
 /// The screen with no session open. It is the sign-in screen, and after a
@@ -115,7 +116,10 @@ final class _ConnectionFailure extends StatelessWidget {
             SelectableText(
               detail,
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
           ],
           if (onRetry != null) ...[

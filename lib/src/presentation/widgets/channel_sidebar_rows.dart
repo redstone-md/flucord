@@ -154,10 +154,10 @@ class _FolderRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: SizedBox(
             height: 34,
             child: Row(
@@ -175,7 +175,7 @@ class _FolderRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 13,
+                      fontSize: FlucordType.label,
                     ),
                   ),
                 ),
@@ -215,11 +215,11 @@ class _MessageRequestRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: FlucordRadius.small,
         child: InkWell(
           key: ValueKey('request-${channel.id}'),
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: SizedBox(
             height: 34,
             child: Row(
@@ -238,7 +238,7 @@ class _MessageRequestRow extends StatelessWidget {
                   child: Text(
                     recipient?.displayName ?? channel.name,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: FlucordType.label),
                   ),
                 ),
                 if (onAccept != null)
@@ -300,7 +300,7 @@ class _CategorySection extends StatelessWidget {
             child: InkWell(
               key: ValueKey('category-${category.id}'),
               onTap: onToggle,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: FlucordRadius.small,
               child: ExcludeSemantics(
                 child: SizedBox(
                   height: 28,
@@ -318,7 +318,7 @@ class _CategorySection extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: context.surfaces.muted,
-                            fontSize: 11,
+                            fontSize: FlucordType.caption,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -349,7 +349,7 @@ class _SectionLabel extends StatelessWidget {
         label,
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 12,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -405,14 +405,14 @@ class _ChannelRow extends StatelessWidget {
         selected: selected,
         child: Material(
           color: selected ? context.surfaces.raised : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: FlucordRadius.small,
           child: InkWell(
             key: ValueKey('channel-${channel.id}'),
             onTap: onPressed,
             onSecondaryTapDown: onNotificationRequest == null
                 ? null
                 : (details) => _openMenu(context, details.globalPosition),
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: FlucordRadius.small,
             // The label above already says all of this. The badge alone would
             // read as a bare number.
             child: ExcludeSemantics(
@@ -445,7 +445,7 @@ class _ChannelRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: foreground,
-                          fontSize: 13,
+                          fontSize: FlucordType.label,
                           fontWeight: showsUnread || selected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -541,7 +541,7 @@ class VoiceSeatRow extends StatelessWidget {
               name,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: FlucordType.caption,
                 color: silenced || deafened
                     ? surfaces.muted
                     : Theme.of(context).colorScheme.onSurface,

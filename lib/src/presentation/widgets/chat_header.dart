@@ -4,6 +4,7 @@ import '../../application/inbox_catalog.dart';
 import '../../application/voice_channel_surface.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'inbox_dialog.dart';
 import 'voice_surface_switch.dart';
 
@@ -154,7 +155,10 @@ class ChatHeader extends StatelessWidget {
         child: Text(
           channel.name,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       if (showTopic) ...[
@@ -165,7 +169,10 @@ class ChatHeader extends StatelessWidget {
           child: Text(
             channel.topic,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
       ],
@@ -340,7 +347,7 @@ class _SearchFieldState extends State<_SearchField> {
       onChanged: widget.onChanged,
       onSubmitted: widget.onSubmitted,
       textInputAction: TextInputAction.search,
-      style: const TextStyle(fontSize: 12),
+      style: const TextStyle(fontSize: FlucordType.caption),
       decoration: InputDecoration(
         hintText: 'Search',
         isDense: true,

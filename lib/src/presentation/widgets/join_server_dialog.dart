@@ -6,7 +6,9 @@ import '../../application/chat_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/channel_link.dart';
 import '../../domain/guild_management.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 import 'flucord_dialog.dart';
 
@@ -210,7 +212,7 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: context.surfaces.raised,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: FlucordRadius.medium,
       border: Border.all(color: context.surfaces.border),
     ),
     child: Row(
@@ -234,20 +236,26 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
                 key: const ValueKey('join-server-preview-name'),
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: FlucordType.body,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               if (_preview?.approximateMemberCount case final count?)
                 Text(
                   '$count members',
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               if (_alreadyInServer)
                 Text(
                   'You are already in this server.',
                   key: const ValueKey('join-server-already-joined'),
-                  style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
             ],
           ),

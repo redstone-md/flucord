@@ -40,11 +40,11 @@ class _DestinationRow extends StatelessWidget {
         onEnter: (_) => onHover(),
         child: Material(
           color: selected ? context.surfaces.brand : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: InkWell(
             key: ValueKey('quick-switcher-${destination.key}'),
             onTap: onPressed,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: FlucordRadius.small,
             child: SizedBox(
               height: 48,
               child: Row(
@@ -63,14 +63,17 @@ class _DestinationRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 13,
+                            fontSize: FlucordType.label,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           _kindName(destination.kind),
-                          style: TextStyle(color: metadata, fontSize: 10),
+                          style: TextStyle(
+                            color: metadata,
+                            fontSize: FlucordType.caption,
+                          ),
                         ),
                       ],
                     ),
@@ -135,18 +138,24 @@ class _KeyboardHint extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
           decoration: BoxDecoration(
             color: context.surfaces.inset,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: FlucordRadius.small,
           ),
           child: Text(
             keyLabel,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
         const SizedBox(width: 3),
       ],
       Text(
         label,
-        style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
     ],
   );

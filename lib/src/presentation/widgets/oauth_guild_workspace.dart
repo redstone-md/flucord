@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/oauth_guild_membership_controller.dart';
 import '../../domain/discord_oauth.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'oauth_account_footer.dart';
 import 'oauth_account_home.dart';
 import 'oauth_guild_membership_panel.dart';
@@ -125,7 +126,10 @@ class _OAuthGuildSidebar extends StatelessWidget {
               guild?.name ?? 'Discord servers',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: FlucordType.body,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
@@ -136,7 +140,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
                   'CHANNELS',
                   style: TextStyle(
                     color: context.surfaces.muted,
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -157,7 +161,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
                             : 'Channel directory unavailable through OAuth',
                         style: TextStyle(
                           color: context.surfaces.muted,
-                          fontSize: 11,
+                          fontSize: FlucordType.caption,
                           height: 1.35,
                         ),
                       ),
@@ -170,7 +174,7 @@ class _OAuthGuildSidebar extends StatelessWidget {
                     'YOUR SERVER PROFILE',
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -221,14 +225,17 @@ class _OAuthMessageBoundary extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: FlucordType.label,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Text(
                 'OAuth directory',
-                style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ],
           ),
@@ -261,7 +268,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       height: 1.4,
                     ),
                   ),
@@ -272,7 +279,7 @@ class _OAuthMessageBoundary extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.surfaces.muted,
-                        fontSize: 11,
+                        fontSize: FlucordType.caption,
                       ),
                     ),
                   ],

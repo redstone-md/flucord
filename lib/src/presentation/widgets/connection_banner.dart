@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The thin bar across the top of the workspace that says why nothing is
 /// arriving. It takes no space while the session is connected.
@@ -81,7 +82,10 @@ final class _Bar extends StatelessWidget {
                   message,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: foreground, fontSize: 12),
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ),
               if (onRetry != null) ...[
@@ -95,7 +99,7 @@ final class _Bar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: const TextStyle(
-                      fontSize: 12,
+                      fontSize: FlucordType.caption,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

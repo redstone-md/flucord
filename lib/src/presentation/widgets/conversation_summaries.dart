@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../domain/conversation_summary.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The summaries Discord has written about this channel, above its timeline.
 ///
@@ -74,13 +76,13 @@ class _SummaryCard extends StatelessWidget {
       child: Material(
         color: context.surfaces.raised,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           side: BorderSide(color: context.surfaces.border),
         ),
         child: InkWell(
           key: ValueKey('conversation-summary-${summary.id}'),
           onTap: canJump ? () => onSelect(summary) : null,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
@@ -102,7 +104,7 @@ class _SummaryCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: FlucordType.caption,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -122,7 +124,10 @@ class _SummaryCard extends StatelessWidget {
                   summary.summary,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
                 if (participantNames.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -131,7 +136,7 @@ class _SummaryCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),

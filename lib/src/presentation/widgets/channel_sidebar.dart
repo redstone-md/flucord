@@ -8,7 +8,9 @@ import '../../domain/chat_repository.dart';
 import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'server_menu.dart';
 import 'account_panel.dart';
 import 'activity_label.dart';
@@ -250,7 +252,7 @@ class ChannelSidebar extends StatelessWidget {
           space.name,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontSize: 15,
+            fontSize: FlucordType.body,
             fontWeight: FontWeight.w600,
             color: _spaceMuted
                 ? context.surfaces.muted
