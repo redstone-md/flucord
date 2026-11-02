@@ -749,6 +749,9 @@ final class ChannelHistoryPage {
 
   final ChannelHistory history;
   final bool hasMore;
+
+  bool holds(String messageId) =>
+      history.messages.any((message) => message.id == messageId);
 }
 
 /// One gained guild, hydrated the way a user reads it on the rail.

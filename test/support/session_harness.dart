@@ -174,10 +174,13 @@ final class SessionHarness {
     if (launch == SessionLaunch.signedOut) await _vault.clearDiscordSession();
     final dialled = sockets.length;
     await _launch();
-    if (launch == SessionLaunch.signedIn) {
-      await _walkToReady(ready, dialled);
-    } else {
-      await settle();
+    switch (launch) {
+      case SessionLaunch.signedIn:
+        await _walkToReady(ready, dialled);
+      case SessionLaunch.unreachable:
+        await settleServerErrorRepeats();
+      case SessionLaunch.signedOut:
+        await settle();
     }
   }
 
@@ -242,6 +245,16 @@ final class SessionHarness {
     _vault.saveAccount(accountId);
     discordUnreachable();
     await _launch();
+    await settleServerErrorRepeats();
+  }
+
+  /// Lets a GET that keeps answering a server error use up its repeats, which
+  /// wait one and then two seconds on the REST client's clock.
+  Future<void> settleServerErrorRepeats() async {
+    await settle();
+    await _tester.pump(const Duration(seconds: 1));
+    await settle();
+    await _tester.pump(const Duration(seconds: 2));
     await settle();
   }
 
