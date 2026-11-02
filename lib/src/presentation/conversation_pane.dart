@@ -601,6 +601,8 @@ class ConversationPaneState extends State<ConversationPane> {
                 ? null
                 : widget.workspace.memberOrNull(replyTo.authorId),
             onCancelReply: () => _setReply(chat, null),
+            onEditLastMessage: () =>
+                _timelineKey.currentState?.editLastOwnMessage() ?? false,
             slowmode: Duration(seconds: channel.rateLimitPerUser),
             slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
@@ -850,6 +852,7 @@ class ConversationPaneState extends State<ConversationPane> {
       onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
       onReply: (message) => _setReply(chat, message),
       onEdit: chat.editMessage,
+      onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.loadReactionUsers,

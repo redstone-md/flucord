@@ -36,6 +36,7 @@ class MessageList extends StatefulWidget {
     required this.onLoadPresent,
     required this.onReply,
     required this.onEdit,
+    this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
@@ -94,6 +95,10 @@ class MessageList extends StatefulWidget {
   final String? lastSentMessageId;
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
+
+  /// An edit field closed, saved or not, so the keyboard can go back to where
+  /// the next message is written.
+  final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
@@ -200,6 +205,9 @@ class MessageListState extends State<MessageList>
   late final AnimationController _highlight;
   late final Animation<double> _highlightFade;
 
+  /// The one row showing its edit field.
+  String? _editingMessageId;
+
   bool _didReachUnread = false;
 
   /// Whether the reader is at the newest message. While true, the list follows
@@ -226,6 +234,7 @@ class MessageListState extends State<MessageList>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
+      _editingMessageId = null;
       _didReachUnread = false;
       _recentre(awaiting: _openingMessageId);
       return;
@@ -310,6 +319,40 @@ class MessageListState extends State<MessageList>
               );
         })
         .toList(growable: false);
+  }
+
+  void _setEditing(String messageId, {required bool editing}) {
+    if (!mounted) return;
+    if (editing) {
+      setState(() => _editingMessageId = messageId);
+      return;
+    }
+    if (_editingMessageId == messageId) {
+      setState(() => _editingMessageId = null);
+    }
+    widget.onEditClosed?.call();
+  }
+
+  /// Opens the account's newest message that can be edited, and answers whether
+  /// there is one. A row that is not built yet is reached by a jump. One that
+  /// is built brings itself into view when its field takes the focus.
+  bool editLastOwnMessage() {
+    final own = _visibleMessages
+        .where(
+          (message) =>
+              message.authorId == widget.workspace.currentMemberId &&
+              message.canEdit &&
+              !message.isSystem,
+        )
+        .lastOrNull;
+    if (own == null) return false;
+    setState(() {
+      _editingMessageId = own.id;
+      if (_messageKeys[own.id]?.currentContext == null) {
+        _awaitedMessageId = own.id;
+      }
+    });
+    return true;
   }
 
   /// Drops the centre, so the next build captures a new one in a new
@@ -600,6 +643,9 @@ class MessageListState extends State<MessageList>
                     message.authorId == widget.workspace.currentMemberId,
                 onReply: widget.onReply,
                 onEdit: widget.onEdit,
+                isEditing: message.id == _editingMessageId,
+                onEditingChanged: (editing) =>
+                    _setEditing(message.id, editing: editing),
                 onDelete: widget.onDelete,
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,

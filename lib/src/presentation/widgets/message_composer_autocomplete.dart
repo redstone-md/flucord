@@ -12,6 +12,10 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
   TextEditingController get _autocompleteTextController;
   FocusNode get _autocompleteFocusNode;
 
+  /// Answers the keys pressed in the box. It offers each key to
+  /// [_handleComposerAutocompleteKey] first.
+  FocusOnKeyEventCallback get _composerKeyHandler;
+
   void _initializeComposerAutocomplete() {
     _autocompleteTextController.addListener(_refreshComposerAutocomplete);
     _autocompleteFocusNode.addListener(_handleAutocompleteFocus);
@@ -216,10 +220,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
           ),
           child: CompositedTransformTarget(
             link: _autocompleteLayerLink,
-            child: Focus(
-              onKeyEvent: _handleComposerAutocompleteKey,
-              child: child,
-            ),
+            child: Focus(onKeyEvent: _composerKeyHandler, child: child),
           ),
         ),
       );

@@ -51,6 +51,7 @@ class MessageComposer extends StatefulWidget {
     required this.onSendStickers,
     required this.onCancelReply,
     required this.onTyping,
+    this.onEditLastMessage,
     this.gifPicker,
     this.expressionFavorites,
     this.slashCommands,
@@ -98,6 +99,10 @@ class MessageComposer extends StatefulWidget {
   final Member? replyAuthor;
   final VoidCallback onCancelReply;
   final VoidCallback onTyping;
+
+  /// Opens the account's last message for editing, and answers whether there
+  /// was one. Up on an empty box asks for it.
+  final bool Function()? onEditLastMessage;
 
   /// The GIF picker, or null on a transport that has no provider proxy.
   final GifPickerController? gifPicker;
@@ -179,6 +184,9 @@ class MessageComposerState extends State<MessageComposer>
 
   @override
   FocusNode get _autocompleteFocusNode => _focusNode;
+
+  @override
+  FocusOnKeyEventCallback get _composerKeyHandler => _handleComposerKey;
 
   @override
   void initState() {
@@ -263,6 +271,22 @@ class MessageComposerState extends State<MessageComposer>
     FocusManager.instance.applyFocusChangesIfNeeded();
     _insertText(text);
     return true;
+  }
+
+  /// Up on an empty box edits the last message, as in Discord. Suggestions see
+  /// the key first, and any other Up moves the caret.
+  KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
+    final suggestions = _handleComposerAutocompleteKey(node, event);
+    if (suggestions != KeyEventResult.ignored) return suggestions;
+    if (_controller.text.isNotEmpty ||
+        !const SingleActivator(
+          LogicalKeyboardKey.arrowUp,
+        ).accepts(event, HardwareKeyboard.instance)) {
+      return KeyEventResult.ignored;
+    }
+    return (widget.onEditLastMessage?.call() ?? false)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
   }
 
   /// What the box holds now. The reply target is the pane's to set, so it is

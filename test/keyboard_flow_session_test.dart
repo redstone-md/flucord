@@ -49,6 +49,55 @@ void _routeHistory(FakeDiscordTransport transport) {
   });
 }
 
+/// A channel of 100 messages from a friend, except those in [mine], which this
+/// account wrote. [extra] changes the raw message of an index.
+void Function(FakeDiscordTransport) _historyWithOwn(
+  Set<int> mine, {
+  Map<int, Map<String, Object?>> extra = const {},
+}) =>
+    (transport) => transport.on(
+      'GET',
+      ChannelHistoryFixture.messagesPath,
+      (_) => jsonResponse([
+        for (var index = _newest; index >= 0; index--)
+          {
+            ...ChannelHistoryFixture.message(
+              index,
+              authorId: mine.contains(index)
+                  ? SessionHarness.currentUserId
+                  : SessionHarness.friendId,
+            ),
+            ...?extra[index],
+          },
+      ]),
+    );
+
+Finder _editField(int index) => find.byKey(ValueKey('edit-${_idOf(index)}'));
+
+/// Answers an edit of the message at [index], and returns the edits sent.
+List<Object?> _acceptEdits(SessionHarness session, int index) {
+  final path = '${ChannelHistoryFixture.messagesPath}/${_idOf(index)}';
+  final sent = <Object?>[];
+  session.transport.on('PATCH', path, (request) {
+    final body = request.json as Map<String, Object?>;
+    sent.add(body['content']);
+    return jsonResponse({
+      ...ChannelHistoryFixture.message(
+        index,
+        authorId: SessionHarness.currentUserId,
+        content: body['content']! as String,
+      ),
+      'edited_timestamp': '2026-07-21T00:00:00Z',
+    });
+  });
+  return sent;
+}
+
+Future<void> _pressUp(WidgetTester tester, SessionHarness session) async {
+  await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+  await session.settle();
+}
+
 Future<void> _scrollUp(WidgetTester tester, SessionHarness session) async {
   final list = find
       .ancestor(
@@ -434,6 +483,122 @@ void main() {
         expect(_replyBar, findsOneWidget);
       },
       routes: _routeHistory,
+    );
+  });
+
+  group('Up on an empty box', () {
+    const own = _newest - 3;
+
+    testSession(
+      'opens the last own message, and the edit gives the focus back',
+      (tester, session) async {
+        final edits = _acceptEdits(session, own);
+        await session.openChannel(SessionHarness.channelId);
+
+        await _pressUp(tester, session);
+        expect(_editField(own), findsOneWidget);
+
+        await _typeInFocusedField(tester, 'changed');
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await session.settle();
+
+        expect(edits, ['changed']);
+        expect(_editField(own), findsNothing);
+        await _typeInFocusedField(tester, 'next');
+        expect(_boxText(tester), 'next');
+      },
+      routes: _historyWithOwn({own - 10, own}),
+    );
+
+    testSession(
+      'gives the focus back when Esc cancels the edit',
+      (tester, session) async {
+        final edits = _acceptEdits(session, own);
+        await session.openChannel(SessionHarness.channelId);
+        await _pressUp(tester, session);
+        expect(_editField(own), findsOneWidget);
+
+        await _typeInFocusedField(tester, 'changed');
+        await _pressEscape(tester, session);
+
+        expect(edits, isEmpty);
+        expect(_editField(own), findsNothing);
+        await _typeInFocusedField(tester, 'next');
+        expect(_boxText(tester), 'next');
+      },
+      routes: _historyWithOwn({own}),
+    );
+
+    testSession('saves on Numpad Enter too', (tester, session) async {
+      final edits = _acceptEdits(session, own);
+      await session.openChannel(SessionHarness.channelId);
+      await _pressUp(tester, session);
+
+      await _typeInFocusedField(tester, 'changed');
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+      await session.settle();
+
+      expect(edits, ['changed']);
+    }, routes: _historyWithOwn({own}));
+
+    // The first is too far up to be built. The second is built, but off screen.
+    for (final index in [5, _newest - 15]) {
+      testSession(
+        'brings the message at $index of 100 into view',
+        (tester, session) async {
+          await session.openChannel(SessionHarness.channelId);
+
+          await _pressUp(tester, session);
+          await tester.pumpAndSettle();
+
+          expect(_editField(index), findsOneWidget);
+          final top = tester.getTopLeft(_editField(index)).dy;
+          expect(top, inInclusiveRange(0, tester.getTopLeft(_composer).dy));
+        },
+        routes: _historyWithOwn({index}),
+      );
+    }
+
+    testSession(
+      'passes over what cannot be edited',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await _pressUp(tester, session);
+
+        expect(_editField(own), findsOneWidget);
+      },
+      routes: _historyWithOwn(
+        {own, own + 1, own + 2},
+        extra: {
+          // A voice message, and the notice that this account pinned something.
+          own + 1: {'flags': 8192},
+          own + 2: {'type': 6},
+        },
+      ),
+    );
+
+    testSession('does nothing with text in the box', (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await tester.enterText(_composer, 'words');
+      await session.settle();
+
+      await _pressUp(tester, session);
+
+      expect(_editField(own), findsNothing);
+    }, routes: _historyWithOwn({own}));
+
+    testSession(
+      'leaves the box alone when the account has written nothing here',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await _pressUp(tester, session);
+        await _typeInFocusedField(tester, 'still here');
+
+        expect(_boxText(tester), 'still here');
+      },
+      routes: _historyWithOwn(const {}),
     );
   });
 }

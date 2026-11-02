@@ -61,12 +61,21 @@ class MessageItem extends StatefulWidget {
     this.applicationCommands,
     this.expressionFavorites,
     this.attachmentDownloadService,
+    this.isEditing = false,
+    this.onEditingChanged,
     super.key,
   });
 
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
   final ChatMessage message;
+
+  /// Whether this row shows its edit field. The list decides, because the list
+  /// is what the keyboard reaches and only one row edits at a time.
+  final bool isEditing;
+
+  /// Asks to open or close the edit field. Null where no list holds the row.
+  final ValueChanged<bool>? onEditingChanged;
 
   /// Presses the buttons and selects an application hung off this message.
   /// Null on a transport that cannot send interactions.
@@ -109,7 +118,6 @@ class MessageItem extends StatefulWidget {
 
 class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
-  bool _editing = false;
   bool _reactionPickerOpen = false;
 
   /// The text selected in this row now. Opening the menu takes focus, and that
@@ -121,11 +129,29 @@ class _MessageItemState extends State<MessageItem> {
   final FocusNode _editFocus = FocusNode();
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) _focusEditField();
+  }
+
+  @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_editing && oldWidget.message.body != widget.message.body) {
+    if (widget.isEditing && !oldWidget.isEditing) {
+      // Words given up last time do not come back.
+      _editController.text = widget.message.body;
+      _focusEditField();
+    } else if (!widget.isEditing &&
+        oldWidget.message.body != widget.message.body) {
       _editController.text = widget.message.body;
     }
+  }
+
+  /// The field joins the tree in this build, so it can take the focus after.
+  void _focusEditField() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _editFocus.requestFocus();
+    });
   }
 
   @override
@@ -138,8 +164,10 @@ class _MessageItemState extends State<MessageItem> {
   Future<void> _saveEdit() async {
     final content = _editController.text.trim();
     if (content.isEmpty) return;
+    // Read first: the row may scroll away while the request runs.
+    final onEditingChanged = widget.onEditingChanged;
     final saved = await widget.onEdit(widget.message, content);
-    if (mounted && saved) setState(() => _editing = false);
+    if (saved) onEditingChanged?.call(false);
   }
 
   Future<void> _confirmDelete() async {
@@ -224,7 +252,7 @@ class _MessageItemState extends State<MessageItem> {
                 ],
               ),
             ),
-            if ((_hovered || _reactionPickerOpen) && !_editing)
+            if ((_hovered || _reactionPickerOpen) && !widget.isEditing)
               Positioned(right: 18, top: 0, child: _actionBar(context)),
           ],
         ),
@@ -240,7 +268,7 @@ class _MessageItemState extends State<MessageItem> {
       children: [
         if (!widget.grouped) _authorLine(context),
         if (message.reply case final reply?) _replyLine(context, reply),
-        if (_editing)
+        if (widget.isEditing)
           _editField(context)
         else if (message.body.isNotEmpty)
           MessageContentView(
@@ -263,7 +291,7 @@ class _MessageItemState extends State<MessageItem> {
               onSelectChannel: widget.onSelectChannel,
             ),
           ),
-        if (message.isEdited && !_editing)
+        if (message.isEdited && !widget.isEditing)
           Text(
             '(edited)',
             style: TextStyle(color: context.surfaces.muted, fontSize: 9),
@@ -415,15 +443,14 @@ class _MessageItemState extends State<MessageItem> {
       CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.enter): _saveEdit,
-          const SingleActivator(LogicalKeyboardKey.escape): () {
-            setState(() => _editing = false);
-          },
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): _saveEdit,
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              widget.onEditingChanged?.call(false),
         },
         child: TextField(
           key: ValueKey('edit-${widget.message.id}'),
           controller: _editController,
           focusNode: _editFocus,
-          autofocus: true,
           maxLines: 4,
         ),
       ),
@@ -450,8 +477,7 @@ class _MessageItemState extends State<MessageItem> {
       case MessageMenuAction.reply:
         widget.onReply(widget.message);
       case MessageMenuAction.edit:
-        setState(() => _editing = true);
-        _editFocus.requestFocus();
+        widget.onEditingChanged?.call(true);
       case MessageMenuAction.pin:
         await widget.onTogglePin(widget.message);
       case MessageMenuAction.forward:
@@ -505,10 +531,7 @@ class _MessageItemState extends State<MessageItem> {
     onForward: _showForwardDialog,
     onToggleSuppressEmbeds: () =>
         unawaited(widget.onToggleSuppressEmbeds(widget.message)),
-    onEdit: () {
-      setState(() => _editing = true);
-      _editFocus.requestFocus();
-    },
+    onEdit: () => widget.onEditingChanged?.call(true),
     onTogglePin: () => widget.onTogglePin(widget.message),
     onResolveAlert: widget.onResolveAlert == null
         ? null
