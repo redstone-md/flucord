@@ -17,8 +17,8 @@
 #include <windows.h>
 
 #include <codecapi.h>
-#include <d3d10.h>
 #include <d3d11.h>
+#include <d3d11_4.h>
 #include <dxgi1_2.h>
 #include <mfapi.h>
 #include <mferror.h>
@@ -2020,7 +2020,7 @@ HRESULT UseGpu(FlucordVideoDecoder* decoder) {
   if (FAILED(hr)) return hr;
   // The transform reaches the device from its own calls while the decode
   // thread runs the video processor on it.
-  ComPtr<ID3D10Multithread> multithread;
+  ComPtr<ID3D11Multithread> multithread;
   hr = device.As(&multithread);
   if (FAILED(hr)) return hr;
   multithread->SetMultithreadProtected(TRUE);
