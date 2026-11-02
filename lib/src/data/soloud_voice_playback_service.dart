@@ -18,10 +18,15 @@ final class SoLoudVoicePlaybackService implements VoiceAudioPlaybackService {
   /// the frames after each one, each of them a crackle.
   static const double _bufferingSeconds = 0.1;
 
+  /// [player] replaces the machine's audio engine in a test.
+  SoLoudVoicePlaybackService({SoLoud? player}) : _givenPlayer = player;
+
+  final SoLoud? _givenPlayer;
+
   /// Resolved on first use, not on construction: touching the singleton loads
   /// the native library, and a service that is only ever asked to stay quiet
   /// (a build with no audio module, a test) should not need it present.
-  late final SoLoud _player = SoLoud.instance;
+  late final SoLoud _player = _givenPlayer ?? SoLoud.instance;
   final Map<String, _PlayingSource> _sources = {};
 
   /// Levels asked for before their source existed, so a source's first frame

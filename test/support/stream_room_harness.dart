@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/app_bootstrap.dart';
@@ -16,6 +18,7 @@ import 'package:flucord/src/application/voice_room_coordination.dart';
 import 'package:flucord/src/data/discord/discord_go_live_service.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/noop_voice_media_service.dart';
+import 'package:flucord/src/data/soloud_voice_playback_service.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
@@ -49,6 +52,8 @@ final class StreamRoomHarness {
       const NoopVoiceMediaService(),
       signalingServiceProvider: () => signaling,
       callServiceProvider: () => callService,
+      playbackService: SoLoudVoicePlaybackService(player: audio),
+      streamAudio: receivedAudio.stream,
     );
     calls = DirectCallController(
       serviceProvider: () => callService,
@@ -122,6 +127,14 @@ final class StreamRoomHarness {
   /// The machine's one capture, shared by the share and the camera.
   final FakeVideoEncoder encoder = FakeVideoEncoder();
   final StreamRoomCameraTransport cameraTransport = StreamRoomCameraTransport();
+
+  /// What this machine is playing: the real playback service runs over it.
+  final StreamRoomAudioEngine audio = StreamRoomAudioEngine();
+
+  /// Decoded sound reaching the room: voice under the person's id, a watched
+  /// stream under its key.
+  final StreamController<VoiceRemotePcmFrame> receivedAudio =
+      StreamController.broadcast();
   late final VoiceController voice;
   late final DirectCallController calls;
   late final StreamViewerController viewer;
@@ -163,6 +176,7 @@ final class StreamRoomHarness {
     calls.dispose();
     voice.dispose();
     unawaited(repository.close());
+    unawaited(receivedAudio.close());
   }
 }
 
@@ -420,6 +434,90 @@ final class _StreamRoomGateway implements DiscordGoLiveGateway {
   @override
   void sendStreamSetPaused(String streamKey, {required bool paused}) {}
 }
+
+/// One sound the machine is playing, at the level it is heard.
+final class StreamRoomPlayingSound {
+  StreamRoomPlayingSound(this.source, this.handle);
+
+  final AudioSource source;
+  final SoundHandle handle;
+  double volume = 1;
+}
+
+/// The audio engine with no sound card: it keeps what is playing and how loud.
+final class StreamRoomAudioEngine extends Fake implements SoLoud {
+  final List<StreamRoomPlayingSound> playing = [];
+  int _nextHandle = 1;
+
+  @override
+  Future<void> init({
+    PlaybackDevice? device,
+    bool automaticCleanup = false,
+    int sampleRate = 44100,
+    int bufferSize = 2048,
+    Channels channels = Channels.stereo,
+    bool lowLatency = true,
+    AndroidAAudioAttributes androidAAudioAttributes =
+        AndroidAAudioAttributes.mediaMusic,
+  }) async {}
+
+  @override
+  List<PlaybackDevice> listPlaybackDevices() => const [];
+
+  @override
+  AudioSource setBufferStream({
+    int? maxBufferSizeBytes,
+    Duration? maxBufferSizeDuration,
+    BufferingType bufferingType = BufferingType.preserved,
+    double bufferingTimeNeeds = 2,
+    int sampleRate = 24000,
+    Channels channels = Channels.mono,
+    BufferType format = BufferType.s16le,
+    void Function(bool isBuffering, int handle, double time)? onBuffering,
+    void Function(AudioMetadata)? onMetadata,
+  }) => _StreamRoomAudioSource();
+
+  @override
+  SoundHandle play(
+    AudioSource sound, {
+    int busId = 0,
+    double volume = 1,
+    double pan = 0,
+    bool paused = false,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+  }) {
+    final handle = SoundHandle(_nextHandle++);
+    playing.add(StreamRoomPlayingSound(sound, handle));
+    return handle;
+  }
+
+  @override
+  Duration getStreamTimeConsumed(AudioSource sound) => Duration.zero;
+
+  @override
+  void addAudioDataStream(AudioSource source, Uint8List audioChunk) {}
+
+  @override
+  void setPause(SoundHandle handle, bool pause) {}
+
+  @override
+  void setInaudibleBehavior(SoundHandle handle, bool mustTick, bool kill) {}
+
+  @override
+  void setVolume(SoundHandle handle, double volume) =>
+      playing.firstWhere((sound) => sound.handle == handle).volume = volume;
+
+  @override
+  Future<void> disposeSource(AudioSource source) async =>
+      playing.removeWhere((sound) => identical(sound.source, source));
+
+  @override
+  void deinit() => playing.clear();
+}
+
+/// A sound the engine knows by identity alone.
+final class _StreamRoomAudioSource extends Fake implements AudioSource {}
 
 /// The voice side of the camera: declares SSRCs, takes pictures.
 final class StreamRoomCameraTransport implements VoiceVideoTransport {
