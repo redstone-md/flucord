@@ -32,13 +32,13 @@ void _routeHistory(FakeDiscordTransport transport, {int newest = _newest}) {
     final around = request.uri.queryParameters['around'];
     final before = request.uri.queryParameters['before'];
     if (around != null) {
-      final anchor = int.parse(around.substring(1));
+      final anchor = ChannelHistoryFixture.indexOf(around);
       final first = anchor < 50 ? 0 : anchor - 50;
       final last = anchor + 49 > newest ? newest : anchor + 49;
       return jsonResponse(_page(first, last - first + 1));
     }
     if (before != null) {
-      final end = int.parse(before.substring(1));
+      final end = ChannelHistoryFixture.indexOf(before);
       final first = end < 100 ? 0 : end - 100;
       return jsonResponse(_page(first, end - first));
     }

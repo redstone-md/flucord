@@ -1,3 +1,5 @@
+import 'package:flucord/src/domain/discord_snowflake.dart';
+
 import 'fake_discord_wire.dart';
 import 'session_harness.dart';
 
@@ -7,7 +9,20 @@ abstract final class ChannelHistoryFixture {
   static const messagesPath =
       '/api/v9/channels/${SessionHarness.channelId}/messages';
 
-  static String idOf(int index) => '9${index.toString().padLeft(17, '0')}';
+  static final _idsStartAt = DateTime.now()
+      .subtract(const Duration(days: 2))
+      .millisecondsSinceEpoch;
+
+  /// An id from recent days, because the app deletes a read cursor older than
+  /// 30.
+  static String idOf(int index) => DiscordSnowflake.fromTimestampMillis(
+    _idsStartAt + index * Duration.millisecondsPerMinute,
+  );
+
+  /// The index [idOf] made this id from.
+  static int indexOf(String id) =>
+      (DiscordSnowflake.timestampMillis(id) - _idsStartAt) ~/
+      Duration.millisecondsPerMinute;
 
   static Map<String, Object?> message(
     int index, {
