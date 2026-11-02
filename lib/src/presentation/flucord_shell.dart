@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../application/channel_sidebar_order.dart';
 import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
@@ -33,6 +34,7 @@ import '../domain/workspace_activity.dart';
 import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
 import 'conversation_pane.dart';
+import 'shell_keyboard.dart';
 import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
@@ -53,7 +55,6 @@ import 'widgets/message_search_panel.dart';
 import 'widgets/notification_settings_menu.dart';
 import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
-import 'widgets/quick_switcher.dart';
 import 'widgets/leave_server_dialog.dart';
 import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
@@ -597,9 +598,12 @@ class FlucordShell extends StatelessWidget {
                   },
                 ),
               ),
-            ).withQuickSwitcher(
+            ).withShellKeyboard(
               workspace: workspace,
-              onSelected: _openQuickSwitcherDestination,
+              channelId: channelId,
+              onOpenDestination: _openQuickSwitcherDestination,
+              onStep: _takeStep,
+              onOpenChannel: _openChannelFromHistory,
             );
           },
         );

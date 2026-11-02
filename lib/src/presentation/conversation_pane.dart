@@ -136,14 +136,19 @@ class ConversationPane extends StatefulWidget {
   final ValueChanged<String>? onOpenMemberProfile;
 
   @override
-  State<ConversationPane> createState() => _ConversationPaneState();
+  State<ConversationPane> createState() => ConversationPaneState();
 }
 
-class _ConversationPaneState extends State<ConversationPane> {
+/// Public so the shell's keyboard map can reach the open conversation through a
+/// global key, as a form reaches its `FormState`.
+class ConversationPaneState extends State<ConversationPane> {
   /// Holds a send failure's note clear of the composer, even with four lines
   /// of text in it. A note at the window's edge would cover the restored text
   /// and the Send button the user needs to try again.
   static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
+
+  final _composerKey = GlobalKey<MessageComposerState>();
+  final _timelineKey = GlobalKey<MessageListState>();
 
   static String _composerHintPrefix(ConversationChannel channel) {
     if (channel.isDirectMessage) return '@';
@@ -167,6 +172,34 @@ class _ConversationPaneState extends State<ConversationPane> {
     _watchCall();
     _pointControllersAtChannel();
   }
+
+  /// Puts the cursor in the composer, if this channel has one.
+  void focusComposer() => _composerKey.currentState?.focus();
+
+  /// Types [text] into the composer and focuses it. Answers false when this
+  /// channel has no composer to type in.
+  bool typeInComposer(String text) =>
+      _composerKey.currentState?.typeText(text) ?? false;
+
+  /// Esc takes one step back: a reply being written goes first. With none, the
+  /// reader is done here, so the channel is read and the list goes to the end.
+  /// A room has no timeline to be done with.
+  void handleEscape() {
+    final chat = ChatScope.read(context);
+    final channelId = widget.channel.id;
+    if (chat.drafts.read(channelId).replyTo != null) {
+      _setReply(chat, null);
+      return;
+    }
+    final timeline = _timelineKey.currentState;
+    if (timeline == null) return;
+    chat.markChannelRead(channelId);
+    timeline.jumpToPresent();
+  }
+
+  /// Moves the timeline by most of a screen, if this channel has one.
+  void scrollTimelinePage(int direction) =>
+      _timelineKey.currentState?.scrollPage(direction);
 
   /// Sets who the open channel's draft answers.
   void _setReply(ChatController chat, ChatMessage? message) {
@@ -567,6 +600,7 @@ class _ConversationPaneState extends State<ConversationPane> {
           const ReadOnlyChannelNotice()
         else if (showsMessages)
           MessageComposer(
+            key: _composerKey,
             gifPicker: GifPickerScope.read(context),
             canAttachFiles: widget.capabilities.attachFiles,
             slashCommands: SlashCommandScope.read(context),
@@ -579,6 +613,8 @@ class _ConversationPaneState extends State<ConversationPane> {
                 ? null
                 : widget.workspace.memberOrNull(replyTo.authorId),
             onCancelReply: () => _setReply(chat, null),
+            onEditLastMessage: () =>
+                _timelineKey.currentState?.editLastOwnMessage() ?? false,
             slowmode: Duration(seconds: channel.rateLimitPerUser),
             slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
@@ -816,6 +852,7 @@ class _ConversationPaneState extends State<ConversationPane> {
   ) {
     final channel = widget.channel;
     return MessageList(
+      key: _timelineKey,
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
       applicationCommands: SlashCommandScope.read(context),
@@ -836,6 +873,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
       onReply: (message) => _setReply(chat, message),
       onEdit: chat.editMessage,
+      onEditClosed: focusComposer,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.loadReactionUsers,

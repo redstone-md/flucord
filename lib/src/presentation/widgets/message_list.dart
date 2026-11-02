@@ -38,6 +38,7 @@ class MessageList extends StatefulWidget {
     required this.onLoadPresent,
     required this.onReply,
     required this.onEdit,
+    this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
@@ -102,6 +103,10 @@ class MessageList extends StatefulWidget {
   final String? lastSentMessageId;
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
+
+  /// An edit field closed, saved or not, and it was not opened from its row, so
+  /// the keyboard can go back to where the next message is written.
+  final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
@@ -128,7 +133,7 @@ class MessageList extends StatefulWidget {
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
-  State<MessageList> createState() => _MessageListState();
+  State<MessageList> createState() => MessageListState();
 }
 
 /// Where the viewport's centre sits, named by a message so that rows added on
@@ -164,7 +169,9 @@ final class _MessageRowKey extends GlobalKey {
   final String messageId;
 }
 
-class _MessageListState extends State<MessageList>
+/// Public so the conversation pane can reach the list through a global key: the
+/// keyboard works from outside this widget.
+class MessageListState extends State<MessageList>
     with SingleTickerProviderStateMixin {
   /// Where the message the viewport is built around sits in it. Not flush
   /// against the top edge: a little of what came before it reads as context.
@@ -219,6 +226,9 @@ class _MessageListState extends State<MessageList>
   late final AnimationController _highlight;
   late final Animation<double> _highlightFade;
 
+  /// The one row showing its edit field.
+  String? _editingMessageId;
+
   bool _didReachUnread = false;
 
   /// Whether the reader is at the newest message. While true, the list follows
@@ -242,6 +252,7 @@ class _MessageListState extends State<MessageList>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
+      _editingMessageId = null;
       _didReachUnread = false;
       _openChannel();
       return;
@@ -344,6 +355,54 @@ class _MessageListState extends State<MessageList>
               );
         })
         .toList(growable: false);
+  }
+
+  void _setEditing(String messageId, {required bool editing}) {
+    if (!mounted) return;
+    if (editing) {
+      setState(() => _editingMessageId = messageId);
+      return;
+    }
+    if (_editingMessageId == messageId) {
+      setState(() => _editingMessageId = null);
+    }
+  }
+
+  /// Opens the account's newest message that can be edited, and answers whether
+  /// there is one. A row that is not built yet is reached by a jump. One that
+  /// is built brings itself into view when its field takes the focus.
+  bool editLastOwnMessage() {
+    final own = _visibleMessages
+        .where(
+          (message) =>
+              message.authorId == widget.workspace.currentMemberId &&
+              message.canEdit &&
+              !message.isSystem,
+        )
+        .lastOrNull;
+    if (own == null) return false;
+    setState(() {
+      _editingMessageId = own.id;
+      if (_messageKeys[own.id]?.currentContext == null) {
+        _awaitedMessageId = own.id;
+      }
+    });
+    return true;
+  }
+
+  /// Moves the timeline by most of a screen. A negative [direction] goes toward
+  /// older messages.
+  void scrollPage(int direction) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // A reader who moved has chosen a place, and a late page must not take it.
+    _awaitedMessageId = null;
+    position.jumpTo(
+      (position.pixels + direction * position.viewportDimension * 0.9).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
   }
 
   /// Drops the centre, so the next build captures a new one in a new
@@ -462,7 +521,7 @@ class _MessageListState extends State<MessageList>
 
   /// Takes the reader to the end of the conversation. From an old window that
   /// means loading it first, and the list recentres when the page is in.
-  void _jumpToPresent() {
+  void jumpToPresent() {
     if (widget.hasNewerMessages) {
       widget.onLoadPresent();
     } else {
@@ -492,6 +551,9 @@ class _MessageListState extends State<MessageList>
   /// the end without scrolling anything. A reader who was at the end stays
   /// there. Anybody else stays where they are, and may now be at the end.
   bool _handleMetricsChange(ScrollMetricsNotification notification) {
+    // A scrollable inside a row or its menu reports here too. Its numbers say
+    // nothing about this list.
+    if (notification.depth != 0) return false;
     final metrics = notification.metrics;
     if (!_isAtEnd) {
       _recordWhetherAtEnd();
@@ -635,7 +697,7 @@ class _MessageListState extends State<MessageList>
           Positioned(
             bottom: 10,
             right: 16,
-            child: JumpToPresentButton(onPressed: _jumpToPresent),
+            child: JumpToPresentButton(onPressed: jumpToPresent),
           ),
       ],
     );
@@ -725,6 +787,10 @@ class _MessageListState extends State<MessageList>
                     message.authorId == widget.workspace.currentMemberId,
                 onReply: widget.onReply,
                 onEdit: widget.onEdit,
+                isEditing: message.id == _editingMessageId,
+                onEditingChanged: (editing) =>
+                    _setEditing(message.id, editing: editing),
+                onEditClosed: widget.onEditClosed,
                 onDelete: widget.onDelete,
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
