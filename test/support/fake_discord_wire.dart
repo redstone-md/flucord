@@ -77,13 +77,19 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
 
   @override
   void send(String data) {
-    final failure = sendFailure;
-    if (failure != null) throw failure;
+    _throwIfFailing();
     _sent.add(data);
   }
 
   @override
-  void sendBinary(List<int> data) => _sent.add(Uint8List.fromList(data));
+  void sendBinary(List<int> data) {
+    _throwIfFailing();
+    _sent.add(Uint8List.fromList(data));
+  }
+
+  void _throwIfFailing() {
+    if (sendFailure case final failure?) throw failure;
+  }
 
   @override
   Future<void> close() async {
