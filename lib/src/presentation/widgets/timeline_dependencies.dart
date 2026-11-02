@@ -1,5 +1,6 @@
 import '../../domain/chat_models.dart';
 import '../../domain/message_embed.dart';
+import 'discord_message_syntax.dart';
 
 /// The ids a message body names with Discord's mention markers.
 final class BodyMentions {
@@ -12,15 +13,11 @@ final class BodyMentions {
   factory BodyMentions.of(String body) {
     if (!body.contains('<')) return const BodyMentions._();
     return BodyMentions._(
-      members: _ids(_memberMention, body),
-      roles: _ids(_roleMention, body),
-      channels: _ids(_channelMention, body),
+      members: _ids(DiscordMarkers.userMention, body),
+      roles: _ids(DiscordMarkers.roleMention, body),
+      channels: _ids(DiscordMarkers.channelMention, body),
     );
   }
-
-  static final _memberMention = RegExp(r'<@!?(\d+)>');
-  static final _roleMention = RegExp(r'<@&(\d+)>');
-  static final _channelMention = RegExp(r'<#(\d+)>');
 
   final Set<String> members;
   final Set<String> roles;

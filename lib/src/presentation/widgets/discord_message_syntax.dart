@@ -1,5 +1,28 @@
 import 'package:markdown/markdown.dart' as md;
 
+/// Discord's markers in a message body. The markdown syntaxes below, the
+/// preview text and the ids a timeline row depends on all read these, so they
+/// cannot drift apart.
+abstract final class DiscordMarkers {
+  /// Group 1 is `a` for an animated emoji, group 2 the name, group 3 the id.
+  static final emoji = RegExp(r'<(a?):([A-Za-z0-9_~]+):(\d+)>');
+
+  /// Group 1 is the role id.
+  static final roleMention = RegExp(r'<@&(\d+)>');
+
+  /// Group 1 is the user id.
+  static final userMention = RegExp(r'<@!?(\d+)>');
+
+  /// Group 1 is the channel id.
+  static final channelMention = RegExp(r'<#(\d+)>');
+
+  /// Group 1 is the time in seconds, group 2 the style letter, if any.
+  static final timestamp = RegExp(r'<t:(\d+)(?::([tTdDfFR]))?>');
+
+  /// Group 1 is the command name, group 2 its id.
+  static final command = RegExp(r'</([^:>]+):(\d+)>');
+}
+
 List<md.InlineSyntax> discordMessageInlineSyntaxes() => [
   _DiscordEmojiSyntax(),
   _DiscordRoleMentionSyntax(),
@@ -12,7 +35,7 @@ List<md.InlineSyntax> discordMessageInlineSyntaxes() => [
 ];
 
 final class _DiscordEmojiSyntax extends md.InlineSyntax {
-  _DiscordEmojiSyntax() : super(r'<(a?):([A-Za-z0-9_~]+):(\d+)>');
+  _DiscordEmojiSyntax() : super(DiscordMarkers.emoji.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -26,7 +49,7 @@ final class _DiscordEmojiSyntax extends md.InlineSyntax {
 }
 
 final class _DiscordRoleMentionSyntax extends md.InlineSyntax {
-  _DiscordRoleMentionSyntax() : super(r'<@&(\d+)>');
+  _DiscordRoleMentionSyntax() : super(DiscordMarkers.roleMention.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -38,7 +61,7 @@ final class _DiscordRoleMentionSyntax extends md.InlineSyntax {
 }
 
 final class _DiscordUserMentionSyntax extends md.InlineSyntax {
-  _DiscordUserMentionSyntax() : super(r'<@!?(\d+)>');
+  _DiscordUserMentionSyntax() : super(DiscordMarkers.userMention.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -50,7 +73,7 @@ final class _DiscordUserMentionSyntax extends md.InlineSyntax {
 }
 
 final class _DiscordChannelMentionSyntax extends md.InlineSyntax {
-  _DiscordChannelMentionSyntax() : super(r'<#(\d+)>');
+  _DiscordChannelMentionSyntax() : super(DiscordMarkers.channelMention.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -63,7 +86,7 @@ final class _DiscordChannelMentionSyntax extends md.InlineSyntax {
 }
 
 final class _DiscordTimestampSyntax extends md.InlineSyntax {
-  _DiscordTimestampSyntax() : super(r'<t:(\d+)(?::([tTdDfFR]))?>');
+  _DiscordTimestampSyntax() : super(DiscordMarkers.timestamp.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
@@ -77,7 +100,7 @@ final class _DiscordTimestampSyntax extends md.InlineSyntax {
 }
 
 final class _DiscordCommandSyntax extends md.InlineSyntax {
-  _DiscordCommandSyntax() : super(r'</([^:>]+):(\d+)>');
+  _DiscordCommandSyntax() : super(DiscordMarkers.command.pattern);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
