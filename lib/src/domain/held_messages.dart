@@ -80,11 +80,14 @@ final class _HeldMessages {
     return this;
   }
 
+  /// Answers this same object when it holds none of [messageIds].
   _HeldMessages without(Set<String> messageIds) {
     final next = {..._byChannel};
+    var removed = false;
     for (final MapEntry(key: channelId, value: messages)
         in _byChannel.entries) {
       if (!messages.any((message) => messageIds.contains(message.id))) continue;
+      removed = true;
       final kept = List<ChatMessage>.unmodifiable(
         messages.where((message) => !messageIds.contains(message.id)),
       );
@@ -94,7 +97,7 @@ final class _HeldMessages {
         next[channelId] = kept;
       }
     }
-    return _HeldMessages._(next);
+    return removed ? _HeldMessages._(next) : this;
   }
 
   _HeldMessages withoutChannels(Set<String> channelIds) => _HeldMessages._({

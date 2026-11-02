@@ -76,16 +76,9 @@ extension _ChatControllerEvents on ChatController {
           event.spaceId,
         );
       case PresenceChangedEvent():
-        // Discord streams presence for people the member table has never
-        // heard of, so this is a routine event that must cost nothing.
-        if (_workspace?.memberOrNull(event.memberId) != null) {
-          _workspace = _workspace?.applyPresence(
-            event.memberId,
-            event.presence,
-          );
-        }
+        _holdPresences({event.memberId: event.presence});
       case PresencesChangedEvent():
-        _workspace = _workspace?.applyPresences(event.presences);
+        _holdPresences(event.presences);
       case TypingStartedEvent():
         _handleTyping(event);
       case PinsChangedEvent():

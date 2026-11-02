@@ -43,6 +43,9 @@ import 'package:flucord/src/domain/expression_favorites.dart';
 
 part 'chat_controller_event_repository.dart';
 
+/// Long enough for a held presence to fold in.
+const _presenceWindow = Duration(milliseconds: 300);
+
 void main() {
   group('ChatController', () {
     test('loads workspace and appends a sent message', () async {
@@ -490,7 +493,7 @@ void main() {
       repository.emit(
         const TypingStartedEvent(channelId: 'forge-general', memberId: 'lena'),
       );
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(_presenceWindow);
 
       expect((await incomingMessage).message.id, 'incoming-1');
 
@@ -546,7 +549,7 @@ void main() {
           presence: UserPresence(status: Presence.online),
         ),
       );
-      await pumpEventQueue();
+      await Future<void>.delayed(_presenceWindow);
       expect(notifications, 0);
 
       repository.emit(
@@ -555,7 +558,7 @@ void main() {
           presence: UserPresence(status: Presence.online),
         ),
       );
-      await pumpEventQueue();
+      await Future<void>.delayed(_presenceWindow);
       expect(notifications, 1);
     });
 

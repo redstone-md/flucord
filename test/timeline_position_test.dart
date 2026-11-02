@@ -411,27 +411,56 @@ void main() {
   });
 
   group('markdown parses per appended message', () {
+    // Only a body with markup is parsed.
+    String marked(int index) => '**Message $index**';
+
+    void routeMarkedHistory(FakeDiscordTransport transport) => transport.on(
+      'GET',
+      _channelMessagesPath,
+      (_) => jsonResponse([
+        for (var index = _newestHeld; index >= _firstHeld; index--)
+          _rawMessage(index, content: marked(index)),
+      ]),
+    );
+
     testSession(
       'one for the new message and none for the rows on screen',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
         final before = _parsedMarkdown(tester);
+        expect(before, isNotEmpty);
 
-        await _arrive(session, _newestHeld + 1);
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          _rawMessage(_newestHeld + 1, content: marked(_newestHeld + 1)),
+        );
 
         expect(_parsesSince(before, _parsedMarkdown(tester)), 1);
       },
-      routes: _routeHistory,
+      routes: routeMarkedHistory,
     );
 
     testSession('none when a rebuild adds no message', (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       final before = _parsedMarkdown(tester);
+      expect(before, isNotEmpty);
 
       // An edit to a row that is not mounted rebuilds the list and adds no row.
-      await session.dispatch('MESSAGE_UPDATE', _rawMessage(_firstHeld));
+      await session.dispatch(
+        'MESSAGE_UPDATE',
+        _rawMessage(_firstHeld, content: marked(_firstHeld)),
+      );
 
       expect(_parsesSince(before, _parsedMarkdown(tester)), 0);
+    }, routes: routeMarkedHistory);
+
+    testSession('none for a body with no markup', (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await _arrive(session, _newestHeld + 1);
+
+      expect(session.messageRow(_idOf(_newestHeld + 1)), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsNothing);
     }, routes: _routeHistory);
   });
 

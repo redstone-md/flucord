@@ -117,6 +117,24 @@ final class UserPresence {
     activities: activities ?? this.activities,
     hiddenActivities: hiddenActivities ?? this.hiddenActivities,
   );
+
+  @override
+  bool operator ==(Object other) =>
+      other is UserPresence &&
+      other.status == status &&
+      const MapEquality<ClientPlatform, Presence>().equals(
+        other.clientStatus,
+        clientStatus,
+      ) &&
+      const ListEquality<UserActivity>().equals(other.activities, activities) &&
+      const ListEquality<UserActivity>().equals(
+        other.hiddenActivities,
+        hiddenActivities,
+      );
+
+  @override
+  int get hashCode =>
+      Object.hash(status, activities.length, hiddenActivities.length);
 }
 
 /// One of the account's other logged-in clients, from `SESSIONS_REPLACE`.
