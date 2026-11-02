@@ -129,7 +129,7 @@ class ServerRail extends StatelessWidget {
                   ? Icons.link
                   : Icons.link_outlined,
               color: sessionMode == SessionMode.discord
-                  ? FlucordColors.brand
+                  ? context.surfaces.accentIcon
                   : null,
             ),
             tooltip: 'Connections',

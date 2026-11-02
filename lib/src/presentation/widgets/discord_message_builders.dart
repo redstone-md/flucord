@@ -54,7 +54,7 @@ final class _MentionBuilder extends MarkdownElementBuilder {
         ? _workspace.roleOrNull(id)?.colorValue
         : null;
     final foreground = roleColor == null
-        ? FlucordColors.brand
+        ? context.surfaces.link
         : Color(roleColor);
     final channel = _kind == _MentionKind.channel
         ? _workspace.channelOrNull(id)
@@ -236,7 +236,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
       child: Text(
         '/${element.textContent}',
         style: (parentStyle ?? preferredStyle)?.copyWith(
-          color: FlucordColors.brand,
+          color: context.surfaces.link,
           fontWeight: FontWeight.w600,
         ),
       ),

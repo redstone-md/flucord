@@ -328,7 +328,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               icon: Icon(
                 isRecording ? Icons.send_rounded : Icons.refresh_rounded,
                 size: 20,
-                color: FlucordColors.brand,
+                color: context.surfaces.accentIcon,
               ),
             ),
         ],

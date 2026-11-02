@@ -156,7 +156,7 @@ class _StatusMenuItem extends StatelessWidget {
           ),
         ),
         if (selected)
-          const Icon(Icons.check, size: 17, color: FlucordColors.brand),
+          Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
       ],
     );
   }

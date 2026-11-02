@@ -118,7 +118,7 @@ class _SupportBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (support) {
       UserSettingSupport.applied => FlucordColors.success,
-      UserSettingSupport.accountOnly => FlucordColors.brand,
+      UserSettingSupport.accountOnly => context.surfaces.link,
       UserSettingSupport.unavailable => context.surfaces.muted,
     };
     return Row(

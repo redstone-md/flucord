@@ -292,6 +292,22 @@ void main() {
       expectReadable(theme, icon.color, 3);
     });
 
+    testWidgets('the open emoji picker icon reads at 3:1 in $name', (
+      tester,
+    ) async {
+      await _pump(tester, theme: theme);
+      await tester.tap(find.byKey(const ValueKey('open-emoji-picker')));
+      await tester.pumpAndSettle();
+
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('open-emoji-picker')),
+          matching: find.byType(Icon),
+        ),
+      );
+      expectReadable(theme, icon.color, 3);
+    });
+
     testWidgets('a reply keeps the 2 px focus ring in $name', (tester) async {
       await _pump(
         tester,

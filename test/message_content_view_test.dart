@@ -112,6 +112,24 @@ void main() {
     });
   }
 
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('mentions and commands read at 4.5:1 in $name', (tester) async {
+      await tester.pumpWidget(_host('<@100> </deploy:500>', theme: theme));
+      await tester.pump();
+
+      for (final label in ['@Mira', '/deploy']) {
+        expectReadable(
+          theme,
+          tester.widget<Text>(find.text(label)).style?.color,
+          4.5,
+        );
+      }
+    });
+  }
+
   test(
     'native launcher rejects non-web schemes before platform dispatch',
     () async {

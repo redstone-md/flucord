@@ -189,7 +189,7 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
             ? Icons.emoji_emotions
             : Icons.emoji_emotions_outlined,
         size: widget.iconSize,
-        color: controller.isOpen ? FlucordColors.brand : null,
+        color: controller.isOpen ? context.surfaces.accentIcon : null,
       ),
     ),
   );
@@ -465,7 +465,7 @@ class _CategoryBar extends StatelessWidget {
                     categories[index].$1,
                     size: 15,
                     color: index == selected
-                        ? FlucordColors.brand
+                        ? context.surfaces.accentIcon
                         : context.surfaces.muted,
                   ),
                 ),

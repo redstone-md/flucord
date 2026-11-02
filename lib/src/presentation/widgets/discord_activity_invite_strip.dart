@@ -292,7 +292,7 @@ class _CallButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     tooltip: tooltip,
     visualDensity: VisualDensity.compact,
-    color: color ?? (active ? FlucordColors.brand : null),
+    color: color ?? (active ? context.surfaces.accentIcon : null),
     onPressed: onPressed,
     icon: Icon(icon, size: 18),
   );

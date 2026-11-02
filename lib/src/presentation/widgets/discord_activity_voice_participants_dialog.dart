@@ -255,7 +255,7 @@ class _ParticipantRow extends StatelessWidget {
                       : Icons.volume_up_outlined,
                   size: 19,
                   color: locallyMuted
-                      ? FlucordColors.brand
+                      ? context.surfaces.accentIcon
                       : context.surfaces.muted,
                 ),
               ),

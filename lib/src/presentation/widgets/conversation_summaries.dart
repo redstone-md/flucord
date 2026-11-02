@@ -90,10 +90,10 @@ class _SummaryCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome,
                       size: 13,
-                      color: FlucordColors.brand,
+                      color: context.surfaces.accentIcon,
                     ),
                     const SizedBox(width: 6),
                     Flexible(
