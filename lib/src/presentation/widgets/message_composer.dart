@@ -13,6 +13,7 @@ import 'create_poll_dialog.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../application/slash_command_controller.dart';
+import 'accessibility_dials.dart';
 import 'accessibility_scope.dart';
 import 'emoji_picker.dart';
 import 'gif_picker.dart';
@@ -223,12 +224,7 @@ class MessageComposerState extends State<MessageComposer>
       unawaited(_voiceProgressSubscription?.cancel());
       _listenToVoiceProgress();
     }
-    if (oldWidget.autocompleteCatalog != widget.autocompleteCatalog &&
-        !channelChanged) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _refreshComposerAutocomplete();
-      });
-    }
+    _updateAutocompleteCatalog(channelChanged: channelChanged);
     if (oldWidget.replyTo?.id != widget.replyTo?.id && widget.replyTo != null) {
       _focusNode.requestFocus();
     }
@@ -634,6 +630,7 @@ class MessageComposerState extends State<MessageComposer>
                   // nowhere: a misspelling is information for whoever is
                   // typing, not something to attach to the message.
                   spellCheckConfiguration: _spellCheckConfiguration(context),
+                  contextMenuBuilder: zoomedTextFieldMenu,
                   onChanged: (value) {
                     final hasContent = value.trim().isNotEmpty;
                     if (hasContent) widget.onTyping();
@@ -652,6 +649,9 @@ class MessageComposerState extends State<MessageComposer>
                   decoration: InputDecoration(
                     hintText:
                         'Message ${widget.channelHintPrefix}${widget.channelName}',
+                    // In a narrow composer a wrapped hint is what makes the box
+                    // tall, and that takes the height from the timeline.
+                    hintMaxLines: 1,
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
                     // Square top corners under the reply bar, so the two read
                     // as one surface. Null elsewhere keeps the theme's rounded

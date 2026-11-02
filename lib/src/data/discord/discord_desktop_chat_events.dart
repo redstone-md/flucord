@@ -78,9 +78,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           unawaited(_acceptGuildUpdate(event.data));
         } else if (event.name == 'GUILD_DELETE') {
           unawaited(_acceptGuildRemoval(event.data));
-        } else if (event.name == 'READY' ||
-            event.name == 'READY_SUPPLEMENTAL') {
-          unawaited(_rehydrateWorkspace());
+        } else if (event.name == 'READY') {
+          _sharedDispatches.inOrder(_acceptNewSession);
+        } else if (event.name == 'READY_SUPPLEMENTAL') {
+          _sharedDispatches.inOrder(_rehydrateWorkspace);
         }
     }
   }
@@ -116,6 +117,15 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     await _persistLeftGuild(guildId);
   }
 
+  /// A READY with a workspace on screen ends a stretch with no live events. The
+  /// gap goes out after the pass, so the history is asked for only in channels
+  /// that are still there.
+  Future<void> _acceptNewSession() async {
+    if (!_workspaceShown) return;
+    await _rehydrateWorkspace();
+    _events.publish(const HistoryGapEvent());
+  }
+
   /// Applies a post-load READY to the workspace in place.
   ///
   /// A reconnect that could not resume identifies again, and the READY that
@@ -125,6 +135,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   /// announced as ordinary upserts and deletions instead. The same READY also
   /// re-arms `READY_SUPPLEMENTAL`, whose lazy private channels land through
   /// the second pass; a pass that changes nothing announces nothing.
+  ///
+  /// A pass goes on the message queue. Two passes then cannot act on a shell the
+  /// other one is changing, and a message right behind READY lands after the
+  /// channel READY brought, so it can still mark that channel unread.
   Future<void> _rehydrateWorkspace() async {
     try {
       await _rehydrateWorkspaceNow();
@@ -142,30 +156,35 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _rehydrateWorkspaceNow() async {
     if (!_workspaceShown || _events.isClosed) return;
-    final snapshot = _gateway.workspaceSnapshot;
-    if (snapshot == null) return;
     final cached = await _cache.readWorkspaceShell();
     if (cached == null) return;
-    final fresh = _mapper
-        .workspace(
-          currentUser: snapshot.currentUser,
-          guilds: snapshot.guilds,
-          channelsByGuild: snapshot.channelsByGuild,
-          rolesByGuild: snapshot.rolesByGuild,
-          membersByGuild: snapshot.membersByGuild,
-          directChannels: snapshot.directChannels,
-          includeDirectMessagesSpace: true,
-          currentUserRole: 'Discord user',
-        )
-        // The activity is restored so the comparison below sees only what
-        // Discord changed, and an unchanged channel announces nothing.
-        .restoreChannelActivityFrom(cached);
+    // Read after the wait, so a guild that arrived during it is in both sides.
+    final snapshot = _gateway.workspaceSnapshot;
+    if (snapshot == null) return;
+    final fresh = _withWhatSnapshotCannotDecide(
+      _mapper
+          .workspace(
+            currentUser: snapshot.currentUser,
+            guilds: snapshot.guilds,
+            channelsByGuild: snapshot.channelsByGuild,
+            rolesByGuild: snapshot.rolesByGuild,
+            membersByGuild: snapshot.membersByGuild,
+            directChannels: snapshot.directChannels,
+            includeDirectMessagesSpace: true,
+            currentUserRole: 'Discord user',
+          )
+          // The activity is restored so the comparison below sees only what
+          // Discord changed, and an unchanged channel announces nothing.
+          .restoreChannelActivityFrom(cached),
+      cached: cached,
+      snapshot: snapshot,
+    );
     if (_events.isClosed) return;
 
     for (final space in cached.spaces) {
       if (fresh.spaceOrNull(space.id) == null) {
-        // The cached copy goes at the next wholesale load; the rail goes now.
         _events.add(SpaceRemovedEvent(space.id));
+        await _persistLeftGuild(space.id);
       }
     }
     for (final channel in cached.channels) {
@@ -214,6 +233,42 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
     _adoptPrivateChannels(fresh);
+  }
+
+  /// [fresh] with the cached items this snapshot says nothing about, so the
+  /// pass neither removes nor changes them.
+  ///
+  /// A guild in an outage is listed with no content, and it comes back through
+  /// `GUILD_CREATE`. A private channel missing before `READY_SUPPLEMENTAL` may
+  /// still be on its way as a lazy one.
+  static ChatWorkspace _withWhatSnapshotCannotDecide(
+    ChatWorkspace fresh, {
+    required ChatWorkspace cached,
+    required DiscordDesktopWorkspaceSnapshot snapshot,
+  }) {
+    final unavailable = snapshot.unavailableGuildIds;
+    final keepPrivate = !snapshot.privateChannelsComplete;
+    return fresh.copyWith(
+      spaces: [
+        ...fresh.spaces,
+        ...cached.spaces.where((space) => unavailable.contains(space.id)),
+      ],
+      categories: [
+        ...fresh.categories,
+        ...cached.categories.where(
+          (category) => unavailable.contains(category.spaceId),
+        ),
+      ],
+      channels: [
+        ...fresh.channels,
+        ...cached.channels.where(
+          (channel) =>
+              fresh.channelOrNull(channel.id) == null &&
+              (unavailable.contains(channel.spaceId) ||
+                  (keepPrivate && channel.isDirectMessage)),
+        ),
+      ],
+    );
   }
 
   static bool _spaceChanged(CommunitySpace next, CommunitySpace cached) =>
@@ -296,13 +351,16 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
     if (payload['id'] is! String) return;
-    final currentUserId = _currentMemberId;
-    if (currentUserId != null) {
-      await _directMessages.acceptMessage(payload, currentUserId);
-    }
-    final message = await _storeMessage(payload);
+    final message = _messageFrom(payload);
     final member = _mapper.messageAuthor(payload);
-    if (member != null) await _cache.writeMember(member);
+    final currentUserId = _currentMemberId;
+    // A new channel is announced and queued here, ahead of the message.
+    final channelAdopted = currentUserId == null
+        ? null
+        : _directMessages.acceptMessage(payload, currentUserId);
+    // Nothing may wait between the fold and the announce. A frame drawn in
+    // between would show a badge on the channel on screen, because the message
+    // that clears it has not arrived yet.
     _readState.acceptNewMessage(payload);
     _events.add(
       MessageUpsertedEvent(
@@ -312,6 +370,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
+    await _cache.writeMessage(message, member: member);
+    await channelAdopted;
   }
 
   Future<ChatMessage> _storeMessage(

@@ -497,6 +497,7 @@ final class DiscordDesktopChatRepository
         return ChannelHistoryPage(
           history: restored.history,
           hasMore: restored.hasMore,
+          fromCache: true,
         );
       }
       final cached = await _cache.readChannelHistory(
@@ -508,6 +509,7 @@ final class DiscordDesktopChatRepository
       return ChannelHistoryPage(
         history: cached,
         hasMore: cached.messages.length >= _pageSize,
+        fromCache: true,
       );
     }
   }
@@ -848,6 +850,8 @@ final class DiscordDesktopChatRepository
   Future<void> close() async {
     await _gatewaySubscription.cancel();
     await _sharedDispatches.drained;
+    // First, so that a slow socket further down cannot cost what is waiting.
+    await _cache.flush();
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

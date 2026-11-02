@@ -59,6 +59,10 @@ abstract interface class DesktopAppSurface implements Listenable {
   /// windows are not, unfocused ones still are. Watched sessions suspend on
   /// it (ADR-0003).
   void setWindowVisible(bool value);
+
+  /// Finishes what the app still holds, before the process ends. A native exit
+  /// does not unmount the widgets, so nothing else closes the session then.
+  Future<void> prepareToExit();
 }
 
 abstract interface class DesktopIntegration {

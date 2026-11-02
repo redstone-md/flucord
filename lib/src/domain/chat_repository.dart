@@ -256,6 +256,15 @@ final class CategoryDeletedEvent extends ChatRepositoryEvent {
   final String categoryId;
 }
 
+/// The transport lost its live stream and could not replay what it missed.
+///
+/// Any held channel may lack messages from that stretch, and nothing on screen
+/// shows where. The first READY of a connection is not a gap. A later one is,
+/// because a resume would have replayed the events instead.
+final class HistoryGapEvent extends ChatRepositoryEvent {
+  const HistoryGapEvent();
+}
+
 /// A channel's locally held history, served before its refresh answers.
 ///
 /// A transport that keeps a copy of a conversation emits this as soon as it

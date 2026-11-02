@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -15,6 +16,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
@@ -28,6 +30,8 @@ import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
+import 'recording_database_factory.dart';
+import 'zoomed_app.dart';
 
 /// The whole app, in a real session, driven by raw gateway events (seam A).
 ///
@@ -64,6 +68,7 @@ final class SessionHarness {
     this._connector,
     Directory? diskDirectory,
     this._voiceMessageRecorder,
+    this._accessibility,
     this._linkAtLaunch,
   ) : _diskDirectory = diskDirectory,
       _factory = _FakeWireRepositoryFactory(
@@ -98,6 +103,7 @@ final class SessionHarness {
   final Directory? _diskDirectory;
   final _FakeWireRepositoryFactory _factory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
+  final AccessibilitySettings _accessibility;
   final ChannelLink? _linkAtLaunch;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
@@ -157,6 +163,7 @@ final class SessionHarness {
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
+        accessibilityRepository: FixedDials(_accessibility),
         desktopIntegration: _window,
         chatRepositoryFactory: _factory,
         discordRemoteAuthGatewayFactory: remoteAuth,
@@ -289,6 +296,66 @@ final class SessionHarness {
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
 
+  /// Whether the message with this [id] has reached the disk, as read by a
+  /// connection of its own. This is what a launch after a crash would find. The
+  /// test must use `onDisk`.
+  Future<bool> messageOnDisk(String id) async {
+    final found = await _tester.runAsync(() async {
+      final reader = await databaseFactoryFfiNoIsolate.openDatabase(
+        _factory.diskPath!,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      try {
+        return await reader.query(
+          'messages',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      } finally {
+        await reader.close();
+      }
+    });
+    return found!.isNotEmpty;
+  }
+
+  /// How many commits the cache has made in this session.
+  int get cacheCommits => _factory.databases.commits;
+
+  /// What the session's open database answers to `PRAGMA name`.
+  Future<Object?> cachePragma(String name) async {
+    final rows = await _tester.runAsync(
+      () => _factory.databases.opened!.rawQuery('PRAGMA $name'),
+    );
+    return rows!.single.values.single;
+  }
+
+  /// The system asks the app to exit, as it does when its window closes. This
+  /// lets the real event loop run while the fake clock stands still, so no timer
+  /// of the app can have done any work by the time it returns. Call [settle] to
+  /// let the app finish, then read [exitAnswer].
+  Future<void> systemAsksToExit() async {
+    // Not awaited: the answer needs time on the fake clock.
+    unawaited(
+      _tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        SystemChannels.platform.name,
+        SystemChannels.platform.codec.encodeMethodCall(
+          const MethodCall('System.requestAppExit'),
+        ),
+        (reply) => exitAnswer = reply == null
+            ? null
+            : SystemChannels.platform.codec.decodeEnvelope(reply),
+      ),
+    );
+    for (var round = 0; round < 12; round++) {
+      await _tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await _tester.pump();
+    }
+  }
+
+  /// What the app answered to [systemAsksToExit], once it has.
+  Object? exitAnswer;
+
   /// The message with this [id] in the running session's cache, which is what
   /// the next launch reads. A cache read needs the real event loop.
   Future<ChatMessage?> cachedMessage(String id) => _tester
@@ -386,6 +453,7 @@ enum SessionLaunch {
 /// as a link does that started the app.
 /// Pass a [platform] when a test depends on platform gestures, such as the right
 /// button on selectable text. Without one, Flutter tests run as Android.
+/// [accessibility] is what the zoom and font dials are set to at launch.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -395,6 +463,7 @@ void testSession(
   SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
+  AccessibilitySettings accessibility = AccessibilitySettings.off,
   ChannelLink? linkAtLaunch,
   TargetPlatform? platform,
 }) {
@@ -414,6 +483,7 @@ void testSession(
       MemoryDesktopWebSocketConnector(),
       disk,
       voiceMessageRecorder,
+      accessibility,
       linkAtLaunch,
     );
     try {
@@ -452,11 +522,17 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
 
   // No isolate: the widget tester's fake clock would never see an isolate's
   // answer, so the cache has to run on the test's own event loop.
+  final RecordingDatabaseFactory databases = RecordingDatabaseFactory(
+    databaseFactoryFfiNoIsolate,
+  );
+
+  /// The cache file, when the test asked for `onDisk`.
+  String? get diskPath =>
+      _diskDirectory == null ? null : '${_diskDirectory.path}/flucord.sqlite3';
+
   Future<SqliteChatCache> _openCache() => SqliteChatCache.openAt(
-    _diskDirectory == null
-        ? inMemoryDatabasePath
-        : '${_diskDirectory.path}/flucord.sqlite3',
-    factory: databaseFactoryFfiNoIsolate,
+    diskPath ?? inMemoryDatabasePath,
+    factory: databases,
   );
 
   @override

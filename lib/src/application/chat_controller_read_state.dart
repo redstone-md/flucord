@@ -133,7 +133,7 @@ extension ChatControllerReadState on ChatController {
     if (workspace == null || channel == null || !channel.isMessageRequest) {
       return;
     }
-    _workspace = workspace.removeChannel(channelId);
+    _removeChannel(channelId);
     await _acknowledgeMessageRequest(channelId);
     _notify();
   }

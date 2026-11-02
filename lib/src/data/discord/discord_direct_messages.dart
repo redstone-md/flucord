@@ -93,9 +93,13 @@ final class DiscordDirectMessages {
     _publish(SpaceUpsertedEvent(_space));
     _publish(MemberUpsertedEvent(conversation.recipient));
     _publish(ChannelUpsertedEvent(conversation.channel));
-    await _cache.writeSpace(_space);
-    await _cache.writeChannel(conversation.channel);
-    await _cache.writeMember(conversation.recipient);
+    // Asked for together, with no wait in between, so that these reach the cache
+    // ahead of the message that brought the channel, in the same flush.
+    await Future.wait([
+      _cache.writeSpace(_space),
+      _cache.writeChannel(conversation.channel),
+      _cache.writeMember(conversation.recipient),
+    ]);
     return conversation;
   }
 }

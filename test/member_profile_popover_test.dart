@@ -5,7 +5,28 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/member_sidebar.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/zoomed_app.dart';
+
 void main() {
+  testWidgets('under zoom a row above the middle opens its profile downward', (
+    tester,
+  ) async {
+    // 700 high at zoom 1.4 lays out 500 high, so the middle is at 250. The row
+    // is at 205 laid out and at 288 drawn, so it is above the middle unless the
+    // two are mixed up.
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_host(builder: await zoomedAppBuilder(1.4)));
+    final row = find.byKey(const ValueKey('member-row-222222222222222222'));
+    final rowTop = tester.getTopLeft(row).dy;
+
+    await tester.tap(row);
+    await tester.pump();
+
+    final popover = find.byKey(const ValueKey('member-profile-popover'));
+    expect(tester.getTopLeft(popover).dy, greaterThanOrEqualTo(rowTop - 1));
+  });
+
   testWidgets('opens a member profile and starts a direct message', (
     tester,
   ) async {
@@ -140,22 +161,24 @@ void main() {
   });
 }
 
-Widget _host({ValueChanged<Member>? onMessage}) => MaterialApp(
-  theme: FlucordTheme.dark,
-  home: Scaffold(
-    body: Row(
-      children: [
-        const Expanded(child: SizedBox()),
-        MemberSidebar(
-          members: const [_jack, _mira, _roman],
-          spaceId: 'guild-1',
-          currentMemberId: _jack.id,
-          onMessage: onMessage ?? (_) {},
+Widget _host({ValueChanged<Member>? onMessage, TransitionBuilder? builder}) =>
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      builder: builder,
+      home: Scaffold(
+        body: Row(
+          children: [
+            const Expanded(child: SizedBox()),
+            MemberSidebar(
+              members: const [_jack, _mira, _roman],
+              spaceId: 'guild-1',
+              currentMemberId: _jack.id,
+              onMessage: onMessage ?? (_) {},
+            ),
+          ],
         ),
-      ],
-    ),
-  ),
-);
+      ),
+    );
 
 const _jack = Member(
   id: '111111111111111111',

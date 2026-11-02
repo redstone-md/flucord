@@ -11,6 +11,7 @@ import 'package:flucord/src/presentation/widgets/user_settings_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'support/fake_user_settings_repository.dart';
+import 'support/zoomed_app.dart';
 
 void main() {
   testWidgets('shows load, progress, and retry history boundaries', (
@@ -284,6 +285,44 @@ void main() {
     expect(tester.getTopLeft(row).dy, top);
   });
 
+  testWidgets('under zoom a boundary below the viewport is not reached', (
+    tester,
+  ) async {
+    // The host is 700 by 500, so this window draws it at 0.8 and it ends at 400.
+    await tester.binding.setSurfaceSize(const Size(560, 400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final builder = await zoomedAppBuilder(0.8);
+    final held = List.generate(150, _message);
+    await tester.pumpWidget(_host(held, builder: builder));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 240));
+    await tester.pumpAndSettle();
+
+    // A row well under the visible part of the list, even with the NEW divider
+    // above it. Mixing drawn and laid out pixels would still call it visible,
+    // because that puts the bottom of the list at 500.
+    final below = held.firstWhere((message) {
+      final row = find.byKey(
+        ValueKey('message-${message.id}'),
+        skipOffstage: false,
+      );
+      if (row.evaluate().isEmpty) return false;
+      return tester.getTopLeft(row).dy > 440;
+    });
+    await tester.pumpWidget(
+      _host(
+        held,
+        builder: builder,
+        channel: _channel.copyWith(firstUnreadMessageId: below.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 30));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('jump-to-unread')), findsOneWidget);
+  });
+
   testWidgets('a reader at the end stays there when the newest is deleted', (
     tester,
   ) async {
@@ -475,6 +514,7 @@ Widget _host(
   String query = '',
   String? targetMessageId,
   UserSettingsController? settings,
+  TransitionBuilder? builder,
 }) {
   final list = MessageList(
     workspace: ChatWorkspace(
@@ -510,6 +550,7 @@ Widget _host(
   );
   return MaterialApp(
     theme: FlucordTheme.dark,
+    builder: builder,
     home: Scaffold(
       body: SizedBox(
         width: 700,

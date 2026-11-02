@@ -368,9 +368,13 @@ class _MessageItemState extends State<MessageItem> {
     padding: const EdgeInsets.only(bottom: 3),
     child: Row(
       children: [
-        Text(
-          widget.member.displayName,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            widget.member.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(width: 8),
         MessageTimeLabel(

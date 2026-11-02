@@ -109,180 +109,36 @@ final class ComposerAutocompleteSuggestion {
 }
 
 final class ComposerAutocompleteCatalog {
-  const ComposerAutocompleteCatalog.empty()
-    : _mentionSuggestions = const [],
-      _channelSuggestions = const [],
-      _emojiSuggestions = const [];
+  const ComposerAutocompleteCatalog.empty() : _sources = null;
 
-  ComposerAutocompleteCatalog._({
-    required List<ComposerAutocompleteSuggestion> mentionSuggestions,
-    required List<ComposerAutocompleteSuggestion> channelSuggestions,
-    required List<ComposerAutocompleteSuggestion> emojiSuggestions,
-  }) : _mentionSuggestions = List.unmodifiable(mentionSuggestions),
-       _channelSuggestions = List.unmodifiable(channelSuggestions),
-       _emojiSuggestions = List.unmodifiable(emojiSuggestions);
-
-  final List<ComposerAutocompleteSuggestion> _mentionSuggestions;
-  final List<ComposerAutocompleteSuggestion> _channelSuggestions;
-  final List<ComposerAutocompleteSuggestion> _emojiSuggestions;
-
-  factory ComposerAutocompleteCatalog.fromWorkspace(
+  /// Costs nothing to make, so the pane can make one on every build. Each list
+  /// of suggestions is built when the first query needs it.
+  ComposerAutocompleteCatalog.fromWorkspace(
     ChatWorkspace workspace,
     ConversationChannel activeChannel,
-  ) {
-    final members =
-        workspace.members
-            .where((member) {
-              if (activeChannel.isDirectMessage) {
-                return member.id == workspace.currentMemberId ||
-                    member.id == activeChannel.recipientId;
-              }
-              return member.spaceIds.isEmpty ||
-                  member.spaceIds.contains(activeChannel.spaceId);
-            })
-            .toList(growable: false)
-          ..sort((left, right) {
-            final presence = left.presence.index.compareTo(
-              right.presence.index,
-            );
-            return presence != 0
-                ? presence
-                : left.displayName.toLowerCase().compareTo(
-                    right.displayName.toLowerCase(),
-                  );
-          });
-    final mentionSuggestions = members
-        .map(
-          (member) => ComposerAutocompleteSuggestion(
-            id: member.id,
-            label: member.displayName,
-            description: activeChannel.isDirectMessage
-                ? 'Member'
-                : '${member.roleFor(activeChannel.spaceId)} · Member',
-            insertText: '<@${member.id}>',
-            kind: ComposerAutocompleteKind.member,
-            searchTerms: [
-              member.displayName,
-              member.roleFor(activeChannel.spaceId),
-              member.id,
-            ],
-            initials: member.initials,
-            colorValue: member.colorValue,
-            avatarUrl: member.avatarUrlFor(
-              activeChannel.isDirectMessage ? null : activeChannel.spaceId,
-            ),
-          ),
-        )
-        .toList(growable: true);
+  ) : _sources = _CatalogSources(workspace, activeChannel);
 
-    if (!activeChannel.isDirectMessage) {
-      final roles =
-          workspace.roles
-              .where((role) => role.spaceId == activeChannel.spaceId)
-              .toList(growable: false)
-            ..sort((left, right) {
-              final position = right.position.compareTo(left.position);
-              return position != 0
-                  ? position
-                  : left.name.toLowerCase().compareTo(right.name.toLowerCase());
-            });
-      mentionSuggestions.addAll(
-        roles.map(
-          (role) => ComposerAutocompleteSuggestion(
-            id: role.id,
-            label: role.name,
-            description: 'Role',
-            insertText: '<@&${role.id}>',
-            kind: ComposerAutocompleteKind.role,
-            searchTerms: [role.name, role.id],
-            colorValue: role.colorValue,
-          ),
-        ),
-      );
-    }
+  final _CatalogSources? _sources;
 
-    final channelSuggestions = activeChannel.isDirectMessage
-        ? const <ComposerAutocompleteSuggestion>[]
-        : ([...workspace.channelsFor(activeChannel.spaceId)]
-                ..sort((left, right) {
-                  final position = left.position.compareTo(right.position);
-                  return position != 0
-                      ? position
-                      : left.name.toLowerCase().compareTo(
-                          right.name.toLowerCase(),
-                        );
-                }))
-              .map(
-                (channel) => ComposerAutocompleteSuggestion(
-                  id: channel.id,
-                  label: channel.name,
-                  description: _channelDescription(channel),
-                  insertText: '<#${channel.id}>',
-                  kind: ComposerAutocompleteKind.channel,
-                  searchTerms: [channel.name, channel.topic, channel.id],
-                ),
-              )
-              .toList(growable: false);
+  /// Two catalogs are equal when they would offer the same suggestions. A new
+  /// message, for one, leaves the catalog equal to the one before it.
+  @override
+  bool operator ==(Object other) =>
+      other is ComposerAutocompleteCatalog && other._sources == _sources;
 
-    return ComposerAutocompleteCatalog._(
-      mentionSuggestions: mentionSuggestions,
-      channelSuggestions: channelSuggestions,
-      emojiSuggestions: _buildEmojiSuggestions(workspace),
-    );
-  }
-
-  /// Custom emoji from every server the account is in, each naming its
-  /// server, followed by the whole unicode set.
-  ///
-  /// The custom ones lead because a name typed after a colon is most often a
-  /// server's own; the unicode ones follow, ranked the way the catalogue
-  /// ranks them. Availability is what Discord enforces, not the client: an
-  /// unavailable emoji is left out here rather than sent and refused.
-  static List<ComposerAutocompleteSuggestion> _buildEmojiSuggestions(
-    ChatWorkspace workspace,
-  ) {
-    final spaceNames = {
-      for (final space in workspace.spaces) space.id: space.name,
-    };
-    return [
-      for (final emoji in workspace.emojis.where((emoji) => emoji.available))
-        ComposerAutocompleteSuggestion(
-          id: emoji.id,
-          label: emoji.name,
-          description: spaceNames[emoji.spaceId] ?? emoji.spaceId,
-          insertText: emoji.messageSyntax,
-          kind: ComposerAutocompleteKind.emoji,
-          searchTerms: [emoji.name, spaceNames[emoji.spaceId] ?? ''],
-          emojiUrl: emoji.imageUrl,
-        ),
-      ..._unicodeSuggestions,
-    ];
-  }
-
-  /// The unicode half, built once: it holds no workspace state, and the pane
-  /// rebuilds the catalog on every message that arrives.
-  static final List<ComposerAutocompleteSuggestion> _unicodeSuggestions = [
-    for (final emoji in UnicodeEmojiCatalog.all)
-      ComposerAutocompleteSuggestion(
-        id: 'unicode-${emoji.name}',
-        label: emoji.name,
-        description: 'Unicode',
-        insertText: emoji.glyph,
-        kind: ComposerAutocompleteKind.emoji,
-        searchTerms: [emoji.name, emoji.searchTerms],
-        unicodeGlyph: emoji.glyph,
-      ),
-  ];
+  @override
+  int get hashCode => _sources.hashCode;
 
   List<ComposerAutocompleteSuggestion> suggestionsFor(
     ComposerAutocompleteQuery query, {
     int limit = 8,
   }) {
-    if (limit <= 0) return const [];
+    final sources = _sources;
+    if (sources == null || limit <= 0) return const [];
     final source = switch (query.trigger) {
-      ComposerAutocompleteTrigger.mention => _mentionSuggestions,
-      ComposerAutocompleteTrigger.channel => _channelSuggestions,
-      ComposerAutocompleteTrigger.emoji => _emojiSuggestions,
+      ComposerAutocompleteTrigger.mention => sources.mentions,
+      ComposerAutocompleteTrigger.channel => sources.channels,
+      ComposerAutocompleteTrigger.emoji => sources.emojis,
     };
     final needle = query.text.toLowerCase();
     final matches =
@@ -321,6 +177,186 @@ final class ComposerAutocompleteCatalog {
     }
     return best;
   }
+}
+
+/// What a catalog is built from. It holds the workspace's lists and not the
+/// workspace, so a kept catalog does not keep old messages alive.
+///
+/// A workspace hands back the same list until that list changes, so comparing
+/// the lists by identity tells whether the suggestions could differ.
+final class _CatalogSources {
+  _CatalogSources(ChatWorkspace workspace, this._activeChannel)
+    : _members = workspace.members,
+      _roles = workspace.roles,
+      _spaceChannels = workspace.channelsFor(_activeChannel.spaceId),
+      _emojis = workspace.emojis,
+      _spaces = workspace.spaces,
+      _currentMemberId = workspace.currentMemberId;
+
+  final ConversationChannel _activeChannel;
+  final List<Member> _members;
+  final List<CommunityRole> _roles;
+  final List<ConversationChannel> _spaceChannels;
+  final List<GuildEmoji> _emojis;
+  final List<CommunitySpace> _spaces;
+  final String _currentMemberId;
+
+  late final List<ComposerAutocompleteSuggestion> mentions = List.unmodifiable(
+    _buildMentions(),
+  );
+  late final List<ComposerAutocompleteSuggestion> channels = List.unmodifiable(
+    _buildChannels(),
+  );
+  late final List<ComposerAutocompleteSuggestion> emojis = List.unmodifiable(
+    _buildEmojis(),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _CatalogSources &&
+      other._activeChannel.id == _activeChannel.id &&
+      other._currentMemberId == _currentMemberId &&
+      identical(other._members, _members) &&
+      identical(other._roles, _roles) &&
+      identical(other._spaceChannels, _spaceChannels) &&
+      identical(other._emojis, _emojis) &&
+      identical(other._spaces, _spaces);
+
+  @override
+  int get hashCode => _activeChannel.id.hashCode;
+
+  List<ComposerAutocompleteSuggestion> _buildMentions() {
+    final members =
+        _members
+            .where((member) {
+              if (_activeChannel.isDirectMessage) {
+                return member.id == _currentMemberId ||
+                    member.id == _activeChannel.recipientId;
+              }
+              return member.spaceIds.isEmpty ||
+                  member.spaceIds.contains(_activeChannel.spaceId);
+            })
+            .toList(growable: false)
+          ..sort((left, right) {
+            final presence = left.presence.index.compareTo(
+              right.presence.index,
+            );
+            return presence != 0
+                ? presence
+                : left.displayName.toLowerCase().compareTo(
+                    right.displayName.toLowerCase(),
+                  );
+          });
+    final suggestions = members
+        .map(
+          (member) => ComposerAutocompleteSuggestion(
+            id: member.id,
+            label: member.displayName,
+            description: _activeChannel.isDirectMessage
+                ? 'Member'
+                : '${member.roleFor(_activeChannel.spaceId)} · Member',
+            insertText: '<@${member.id}>',
+            kind: ComposerAutocompleteKind.member,
+            searchTerms: [
+              member.displayName,
+              member.roleFor(_activeChannel.spaceId),
+              member.id,
+            ],
+            initials: member.initials,
+            colorValue: member.colorValue,
+            avatarUrl: member.avatarUrlFor(
+              _activeChannel.isDirectMessage ? null : _activeChannel.spaceId,
+            ),
+          ),
+        )
+        .toList(growable: true);
+
+    if (!_activeChannel.isDirectMessage) {
+      final roles =
+          _roles
+              .where((role) => role.spaceId == _activeChannel.spaceId)
+              .toList(growable: false)
+            ..sort((left, right) {
+              final position = right.position.compareTo(left.position);
+              return position != 0
+                  ? position
+                  : left.name.toLowerCase().compareTo(right.name.toLowerCase());
+            });
+      suggestions.addAll(
+        roles.map(
+          (role) => ComposerAutocompleteSuggestion(
+            id: role.id,
+            label: role.name,
+            description: 'Role',
+            insertText: '<@&${role.id}>',
+            kind: ComposerAutocompleteKind.role,
+            searchTerms: [role.name, role.id],
+            colorValue: role.colorValue,
+          ),
+        ),
+      );
+    }
+    return suggestions;
+  }
+
+  List<ComposerAutocompleteSuggestion> _buildChannels() {
+    if (_activeChannel.isDirectMessage) return const [];
+    return ([..._spaceChannels]..sort((left, right) {
+          final position = left.position.compareTo(right.position);
+          return position != 0
+              ? position
+              : left.name.toLowerCase().compareTo(right.name.toLowerCase());
+        }))
+        .map(
+          (channel) => ComposerAutocompleteSuggestion(
+            id: channel.id,
+            label: channel.name,
+            description: _channelDescription(channel),
+            insertText: '<#${channel.id}>',
+            kind: ComposerAutocompleteKind.channel,
+            searchTerms: [channel.name, channel.topic, channel.id],
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  /// Custom emoji from every server the account is in, each naming its
+  /// server, followed by the whole unicode set.
+  ///
+  /// The custom ones lead because a name typed after a colon is most often a
+  /// server's own; the unicode ones follow, ranked the way the catalogue
+  /// ranks them. Availability is what Discord enforces, not the client: an
+  /// unavailable emoji is left out here rather than sent and refused.
+  List<ComposerAutocompleteSuggestion> _buildEmojis() {
+    final spaceNames = {for (final space in _spaces) space.id: space.name};
+    return [
+      for (final emoji in _emojis.where((emoji) => emoji.available))
+        ComposerAutocompleteSuggestion(
+          id: emoji.id,
+          label: emoji.name,
+          description: spaceNames[emoji.spaceId] ?? emoji.spaceId,
+          insertText: emoji.messageSyntax,
+          kind: ComposerAutocompleteKind.emoji,
+          searchTerms: [emoji.name, spaceNames[emoji.spaceId] ?? ''],
+          emojiUrl: emoji.imageUrl,
+        ),
+      ..._unicodeSuggestions,
+    ];
+  }
+
+  /// The unicode half, built once: it holds no workspace state.
+  static final List<ComposerAutocompleteSuggestion> _unicodeSuggestions = [
+    for (final emoji in UnicodeEmojiCatalog.all)
+      ComposerAutocompleteSuggestion(
+        id: 'unicode-${emoji.name}',
+        label: emoji.name,
+        description: 'Unicode',
+        insertText: emoji.glyph,
+        kind: ComposerAutocompleteKind.emoji,
+        searchTerms: [emoji.name, emoji.searchTerms],
+        unicodeGlyph: emoji.glyph,
+      ),
+  ];
 
   static String _channelDescription(ConversationChannel channel) =>
       switch (channel.kind) {

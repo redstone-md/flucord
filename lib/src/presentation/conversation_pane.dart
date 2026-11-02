@@ -617,8 +617,12 @@ class ConversationPaneState extends State<ConversationPane> {
               widget.workspace,
               channel,
             ),
-            onSearchMembers: (query) =>
-                chat.searchGuildMembers(spaceId: channel.spaceId, query: query),
+            onSearchMembers: channel.isDirectMessage
+                ? null
+                : (query) => chat.searchGuildMembers(
+                    spaceId: channel.spaceId,
+                    query: query,
+                  ),
             emojiSections: emojiSectionsFromWorkspace(
               widget.workspace,
               channel.spaceId,

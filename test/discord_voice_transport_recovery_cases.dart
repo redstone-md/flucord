@@ -120,6 +120,7 @@ void _recoveryCases() {
       await _until(() => rig.server.discoverySources.isNotEmpty);
       await rig.lastDial.closeFromServer(1006);
       await _until(() => rig.dials.length == 2);
+      await _until(() => _opcodes(rig.lastDial).isNotEmpty);
 
       // The newer connection's discovery closes the old socket, and that
       // fails the old discovery while this one is running.
@@ -271,6 +272,10 @@ final class _RecoveryRig implements DiscordVoiceSocketConnector {
 
   /// Runs READY through to the session description on [dial], as Discord
   /// would, and returns a cipher that holds the same key as the client.
+  ///
+  /// The client must be listening to [dial] already. A dial is in [dials]
+  /// before that, and the fake drops a frame that nobody listens to. Wait for
+  /// the client's first frame, the one Discord answers on the real socket.
   Future<DiscordVoiceTransportCipher> finishHandshake(
     _FakeVoiceWebSocket dial, {
     required int ssrc,

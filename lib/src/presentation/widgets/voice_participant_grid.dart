@@ -58,20 +58,23 @@ class VoiceParticipantGrid extends StatelessWidget {
     if (participants.isEmpty) {
       return Center(
         key: const ValueKey('voice-participants-empty'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.headset_mic_outlined,
-              size: 32,
-              color: context.surfaces.muted,
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Waiting for participants',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ],
+        // A short window at a large font has less height than this text needs.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.headset_mic_outlined,
+                size: 32,
+                color: context.surfaces.muted,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Waiting for participants',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
       );
     }
