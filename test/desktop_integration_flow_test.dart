@@ -228,4 +228,7 @@ final class _RecordingSurface extends ChangeNotifier
 
   @override
   void setWindowVisible(bool value) => visibilityCalls.add(value);
+
+  @override
+  Future<void> prepareToExit() async {}
 }
