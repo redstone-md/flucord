@@ -28,7 +28,12 @@ class MessageList extends StatefulWidget {
     required this.channel,
     required this.query,
     required this.targetMessageId,
+    this.targetRequest = 0,
     this.lastSentMessageId,
+    this.hasNewerMessages = false,
+    this.windowError,
+    required this.onOpenMessage,
+    required this.onLoadPresent,
     required this.onReply,
     required this.onEdit,
     required this.onDelete,
@@ -67,6 +72,22 @@ class MessageList extends StatefulWidget {
   final ChannelCapabilities capabilities;
   final String query;
   final String? targetMessageId;
+
+  /// Changes with each jump, so a second jump to the same message lands again.
+  final int targetRequest;
+
+  /// Whether the held messages stop short of the present, because a jump took
+  /// the reader to an older stretch of the channel.
+  final bool hasNewerMessages;
+
+  /// Why the last jump did not land. Each failure is a new object.
+  final Object? windowError;
+
+  /// Jumps to a message of this channel, which may not be held yet.
+  final ValueChanged<String> onOpenMessage;
+
+  /// Loads the newest page when [hasNewerMessages] is true.
+  final VoidCallback onLoadPresent;
 
   /// The message this client last sent in this channel. A new value takes a
   /// reader who has scrolled up to the end of the conversation.
@@ -131,7 +152,8 @@ final class _MessageRowKey extends GlobalKey {
   final String messageId;
 }
 
-class _MessageListState extends State<MessageList> {
+class _MessageListState extends State<MessageList>
+    with SingleTickerProviderStateMixin {
   /// Where the message the viewport is built around sits in it. Not flush
   /// against the top edge: a little of what came before it reads as context.
   static const double _anchorAlignment = 0.16;
@@ -141,6 +163,13 @@ class _MessageListState extends State<MessageList> {
 
   /// A reader this close to the end counts as being at the end.
   static const double _endTolerance = 8;
+
+  /// How strongly a jump's target is tinted when the reader lands on it.
+  static const double _highlightAlpha = 0.08;
+
+  /// The whole life of the highlight. It holds for the first half, so the eye
+  /// can find the row, and fades over the second.
+  static const Duration _highlightDuration = Duration(seconds: 2);
 
   static const _headKey = ValueKey('message-list-head');
 
@@ -164,6 +193,11 @@ class _MessageListState extends State<MessageList> {
   /// new one, whose first frame is already at the new centre.
   int _viewportGeneration = 0;
 
+  /// The row a jump last landed on, and how far its highlight has faded.
+  String? _highlightedMessageId;
+  late final AnimationController _highlight;
+  late final Animation<double> _highlightFade;
+
   bool _didReachUnread = false;
 
   /// Whether the reader is at the newest message. While true, the list follows
@@ -173,6 +207,14 @@ class _MessageListState extends State<MessageList> {
   @override
   void initState() {
     super.initState();
+    _highlight = AnimationController(
+      vsync: this,
+      duration: _highlightDuration,
+    );
+    _highlightFade = CurvedAnimation(
+      parent: _highlight,
+      curve: const Interval(0.5, 1, curve: Curves.easeOut),
+    );
     _scrollController.addListener(_handleScroll);
     _recentre(awaiting: _openingMessageId);
   }
@@ -198,9 +240,29 @@ class _MessageListState extends State<MessageList> {
         _awaitedMessageId = _unreadMessageId;
       }
     }
-    if (oldWidget.targetMessageId != widget.targetMessageId &&
+    // A window on the first unread message replaced the page this list opened
+    // on, which had no message that far back.
+    if (!oldWidget.hasNewerMessages &&
+        widget.hasNewerMessages &&
+        _targetMessageId == null) {
+      _awaitedMessageId = _unreadMessageId;
+    }
+    if ((oldWidget.targetMessageId != widget.targetMessageId ||
+            oldWidget.targetRequest != widget.targetRequest) &&
         widget.targetMessageId != null) {
       _awaitedMessageId = _targetMessageId;
+    }
+    if (widget.windowError != null &&
+        !identical(oldWidget.windowError, widget.windowError)) {
+      _awaitedMessageId = null;
+      _reportFailedJump();
+    }
+    // The newest page replaced an old window. A jump still on its way decides
+    // where the reader goes instead.
+    if (oldWidget.hasNewerMessages &&
+        !widget.hasNewerMessages &&
+        _awaitedMessageId == null) {
+      _recentre();
     }
     if (oldWidget.lastSentMessageId != widget.lastSentMessageId &&
         widget.lastSentMessageId != null &&
@@ -213,6 +275,7 @@ class _MessageListState extends State<MessageList> {
   void dispose() {
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
+    _highlight.dispose();
     super.dispose();
   }
 
@@ -267,16 +330,45 @@ class _MessageListState extends State<MessageList> {
       _awaitedMessageId = null;
       _isAtEnd = false;
       _viewportGeneration++;
+      if (awaited.id == _targetMessageId) {
+        _highlightedMessageId = awaited.id;
+        _highlight.forward(from: 0);
+      }
       return _centre = _TimelineCentre.above(awaited);
     }
     return _centre ??= _TimelineCentre.below(messages.last);
   }
 
-  void _jumpToMessage(String messageId) =>
+  /// Takes the reader to the unread boundary, which may be outside a window.
+  void _jumpToUnread(String messageId) {
+    if (_visibleMessages.any((message) => message.id == messageId)) {
       setState(() => _awaitedMessageId = messageId);
+    } else {
+      widget.onOpenMessage(messageId);
+    }
+  }
 
-  /// Takes the reader to the end of the conversation.
-  void _jumpToPresent() => setState(_recentre);
+  /// Takes the reader to the end of the conversation. From an old window that
+  /// means loading it first, and the list recentres when the page is in.
+  void _jumpToPresent() {
+    if (widget.hasNewerMessages) {
+      widget.onLoadPresent();
+    } else {
+      setState(_recentre);
+    }
+  }
+
+  void _reportFailedJump() =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.fromLTRB(16, 0, 16, 72),
+            content: Text("Couldn't load that part of the conversation."),
+          ),
+        );
+      });
 
   void _recordWhetherAtEnd() {
     if (!_scrollController.hasClients) return;
@@ -415,10 +507,10 @@ class _MessageListState extends State<MessageList> {
             top: 10,
             right: 16,
             child: JumpToUnreadButton(
-              onPressed: () => _jumpToMessage(_unreadMessageId!),
+              onPressed: () => _jumpToUnread(_unreadMessageId!),
             ),
           ),
-        if (!_isAtEnd)
+        if (!_isAtEnd || widget.hasNewerMessages)
           Positioned(
             bottom: 10,
             right: 16,
@@ -466,10 +558,16 @@ class _MessageListState extends State<MessageList> {
         message.id,
         () => _MessageRowKey(message.id),
       ),
-      child: ColoredBox(
-        color: message.id == _targetMessageId
-            ? FlucordColors.brand.withValues(alpha: 0.08)
-            : Colors.transparent,
+      child: AnimatedBuilder(
+        animation: _highlightFade,
+        builder: (context, row) => ColoredBox(
+          color: message.id == _highlightedMessageId
+              ? FlucordColors.brand.withValues(
+                  alpha: _highlightAlpha * (1 - _highlightFade.value),
+                )
+              : Colors.transparent,
+          child: row,
+        ),
         child: Column(
           children: [
             if (startsDay) MessageDayDivider(day: message.sentAt),
@@ -480,7 +578,7 @@ class _MessageListState extends State<MessageList> {
                 message: message,
                 member: widget.workspace.memberById(message.authorId),
                 workspace: widget.workspace,
-                onJumpToMessage: _jumpToMessage,
+                onJumpToMessage: widget.onOpenMessage,
                 onSelectChannel: widget.onSelectChannel,
               )
             else

@@ -220,7 +220,7 @@ void main() {
       }
 
       final broken = _Transport([
-        const DiscordHttpResponse(statusCode: 500, headers: {}, body: '{}'),
+        const DiscordHttpResponse(statusCode: 401, headers: {}, body: '{}'),
       ]);
       await expectLater(
         _repository(broken).loadTeenControls('teen-1'),

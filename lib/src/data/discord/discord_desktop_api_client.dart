@@ -533,6 +533,9 @@ final class DiscordDesktopApiClient
     final payload = <String, Object?>{
       'content': content,
       'nonce': nonce,
+      // Discord answers a repeat of this nonce with the first message, so a
+      // send that was retried cannot post twice.
+      'enforce_nonce': true,
       'tts': textToSpeech,
       'flags': suppressNotifications ? 4096 : 0,
       if (replyToMessageId != null)
@@ -548,6 +551,7 @@ final class DiscordDesktopApiClient
         'POST',
         '/channels/$channelId/messages',
         body: payload,
+        guardedByNonce: true,
       );
     }
     final multipart = await DiscordMultipartBody.build(payload, attachments);
@@ -556,6 +560,7 @@ final class DiscordDesktopApiClient
       '/channels/$channelId/messages',
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
+      guardedByNonce: true,
     );
     if (response is! Map) {
       throw const DiscordApiException(

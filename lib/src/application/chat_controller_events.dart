@@ -132,7 +132,10 @@ extension _ChatControllerEvents on ChatController {
         ? event.message.copyWith(mentionsCurrentMember: true)
         : event.message;
     final isOwn = message.authorId == _workspace?.currentMemberId;
-    _workspace = _workspace?.upsertMessage(message, member: event.member);
+    if (!event.isNew || !_keepOutOfOldWindow(message, member: event.member)) {
+      _workspace = _workspace?.upsertMessage(message, member: event.member);
+    }
+    _capChannelIfNotOpen(message.channelId);
     if (isOwn) {
       // Sending a message reads the channel. Advancing the latest-message
       // pointer without advancing the ack cursor would leave the sender

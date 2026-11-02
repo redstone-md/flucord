@@ -173,20 +173,25 @@ final class ReadStateSnapshot {
 extension ReadStateProjection on ChatWorkspace {
   ChatWorkspace applyReadState(ReadStateSnapshot snapshot) {
     if (snapshot.readStates.isEmpty) return this;
-    final firstUnread = <String, String>{};
-    for (final message in messages) {
-      final state = snapshot.forChannel(message.channelId);
-      if (state == null || firstUnread.containsKey(message.channelId)) continue;
-      if (state.isBehind(message.id)) {
-        firstUnread[message.channelId] = message.id;
-      }
-    }
     return copyWith(
       channels: [
         for (final channel in channels)
-          _projectedChannel(channel, snapshot, firstUnread[channel.id]),
+          _projectedChannel(
+            channel,
+            snapshot,
+            _firstUnreadIn(channel.id, snapshot.forChannel(channel.id)),
+          ),
       ],
     );
+  }
+
+  /// The id of the first held message of [channelId] newer than [state]'s
+  /// cursor. Null with no such message, or with no read state.
+  String? _firstUnreadIn(String channelId, ReadState? state) {
+    if (state == null) return null;
+    return messagesFor(
+      channelId,
+    ).where((message) => state.isBehind(message.id)).firstOrNull?.id;
   }
 
   /// Sets a channel's boundary to its first held message newer than [state]'s
@@ -195,13 +200,11 @@ extension ReadStateProjection on ChatWorkspace {
   ///
   /// With no such message held, the channel stays as it is.
   ChatWorkspace withUnreadBoundaryFrom(ReadState state) {
-    final first = messagesFor(
-      state.entityId,
-    ).where((message) => state.isBehind(message.id)).firstOrNull;
+    final first = _firstUnreadIn(state.entityId, state);
     if (first == null) return this;
     return updateChannel(
       state.entityId,
-      (channel) => channel.copyWith(firstUnreadMessageId: first.id),
+      (channel) => channel.copyWith(firstUnreadMessageId: first),
     );
   }
 

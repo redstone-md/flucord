@@ -41,12 +41,14 @@ extension DiscordApiClientMessages on DiscordApiClient {
         'POST',
         '/channels/$channelId/messages',
         body: payload,
+        guardedByNonce: enforceNonce,
       );
     }
     return _createMultipartObject(
       '/channels/$channelId/messages',
       payload,
       attachments,
+      guardedByNonce: enforceNonce,
     );
   }
 
@@ -79,6 +81,7 @@ extension DiscordApiClientMessages on DiscordApiClient {
           size: voiceMessage.size,
         ),
       ],
+      guardedByNonce: enforceNonce,
     );
   }
 
