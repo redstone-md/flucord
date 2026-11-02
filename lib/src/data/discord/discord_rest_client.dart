@@ -38,10 +38,25 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
 
   static const _defaultTimeout = Duration(seconds: 30);
 
-  /// One request's whole budget: connect, send, response headers and body.
+  /// The slowest upload that still finishes: about 256 kbit/s.
+  static const _slowestUploadBytesPerSecond = 32 * 1024;
+
+  /// One request's budget before its body: connect, response headers and body.
   /// Without it a server that accepts and never answers holds its caller
   /// forever, and a serialized caller holds every request behind it.
   final Duration requestTimeout;
+
+  /// The whole budget of a request that sends [bodyLength] bytes. A body takes
+  /// time to send in proportion to its size, so one fixed limit would fail every
+  /// large upload on a slow connection.
+  Duration _budgetFor(int bodyLength) =>
+      requestTimeout +
+      Duration(
+        microseconds:
+            bodyLength *
+            Duration.microsecondsPerSecond ~/
+            _slowestUploadBytesPerSecond,
+      );
 
   final HttpClient _client;
   final bool _ownsClient;
@@ -70,16 +85,17 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
       );
     }
 
+    final budget = _budgetFor(body?.length ?? 0);
     return attempt().timeout(
-      requestTimeout,
+      budget,
       onTimeout: () {
         // The socket is in an unknown state: aborting releases it instead of
         // leaving a half-read connection in the client's pool.
         request?.abort();
         throw TimeoutException(
           'Discord request to ${uri.host} timed out after '
-          '${requestTimeout.inSeconds}s',
-          requestTimeout,
+          '${budget.inSeconds}s',
+          budget,
         );
       },
     );
