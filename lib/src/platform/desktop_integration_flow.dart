@@ -13,7 +13,8 @@ import '../app_log.dart';
 /// The smallest the window can be made, on every desktop platform.
 ///
 /// The account panel, the voice bar and the composer all still fit here, even
-/// at the largest zoom. The shell's breakpoints rely on this size.
+/// at the largest zoom. The shell's breakpoints rely on this size. On Linux the
+/// runner has to set it as well: see `linux/runner/my_application.cc`.
 const minimumWindowSize = Size(940, 500);
 
 /// The app's update channel, when the platform has one. Windows wraps
