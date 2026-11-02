@@ -158,6 +158,53 @@ void main() {
     expect(events.whereType<ChannelDeletedEvent>(), isEmpty);
   });
 
+  group('a guild deleted between READY and READY_SUPPLEMENTAL', () {
+    Future<List<ChatRepositoryEvent>> deleteThenSupplement(
+      Map<String, Object?> deletion,
+    ) async {
+      final (_, socket, events) = await connect();
+      await reconnect(socket);
+      socket.receive(_readyDispatch(2, _firstReadyPayload));
+      await _waitFor(() => events.whereType<HistoryGapEvent>().isNotEmpty);
+      socket.receive({'op': 0, 's': 3, 't': 'GUILD_DELETE', 'd': deletion});
+      await _drain();
+      socket.receive(const {
+        'op': 0,
+        's': 4,
+        't': 'READY_SUPPLEMENTAL',
+        'd': {'lazy_private_channels': <Object?>[]},
+      });
+      await _drain();
+      return events;
+    }
+
+    test('stays gone after the supplemental pass', () async {
+      final events = await deleteThenSupplement(const {'id': _goneGuildId});
+
+      expect(
+        events.whereType<SpaceRemovedEvent>().map((event) => event.spaceId),
+        [_goneGuildId],
+      );
+      final readded = events.whereType<WorkspaceDiffEvent>().expand(
+        (event) => event.diff.spaces.map((space) => space.id),
+      );
+      expect(readded, isNot(contains(_goneGuildId)));
+    });
+
+    test('in an outage stays on the rail', () async {
+      final events = await deleteThenSupplement(const {
+        'id': _goneGuildId,
+        'unavailable': true,
+      });
+
+      expect(events.whereType<SpaceRemovedEvent>(), isEmpty);
+      final removed = events.whereType<WorkspaceDiffEvent>().expand(
+        (event) => event.diff.removedSpaceIds,
+      );
+      expect(removed, isNot(contains(_goneGuildId)));
+    });
+  });
+
   test('a reconnect keeps the history the workspace already held', () async {
     final (repository, socket, events) = await connect();
     final page = await repository.loadChannelHistory(_keptChannelId);
@@ -177,34 +224,33 @@ void main() {
   });
 }
 
-final Map<String, Object?> _firstReady = _readyDispatch(
-  1,
-  _readyPayload(
-    guilds: [
-      rawGuild(
-        id: _guildId,
-        name: 'Kept',
-        channels: [
-          rawChannel(
-            id: _keptChannelId,
-            name: 'general',
-            lastMessageId: _ackedMessage,
-          ),
-        ],
-      ),
-      rawGuild(
-        id: _goneGuildId,
-        name: 'Gone',
-        channels: [
-          rawChannel(
-            id: _deletedChannelId,
-            name: 'doomed',
-            lastMessageId: _ackedMessage,
-          ),
-        ],
-      ),
-    ],
-  ),
+final Map<String, Object?> _firstReady = _readyDispatch(1, _firstReadyPayload);
+
+final Map<String, Object?> _firstReadyPayload = _readyPayload(
+  guilds: [
+    rawGuild(
+      id: _guildId,
+      name: 'Kept',
+      channels: [
+        rawChannel(
+          id: _keptChannelId,
+          name: 'general',
+          lastMessageId: _ackedMessage,
+        ),
+      ],
+    ),
+    rawGuild(
+      id: _goneGuildId,
+      name: 'Gone',
+      channels: [
+        rawChannel(
+          id: _deletedChannelId,
+          name: 'doomed',
+          lastMessageId: _ackedMessage,
+        ),
+      ],
+    ),
+  ],
 );
 
 final Map<String, Object?> _secondReady = _readyDispatch(

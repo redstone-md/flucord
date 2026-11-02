@@ -387,6 +387,14 @@ final class DiscordDesktopGatewayClient
         _bootstrap.acceptSupplemental(dispatch.data);
         return const Duration(milliseconds: 350);
       }(),
+      // A guild in an outage is still the account's, so it keeps its entry.
+      'GUILD_DELETE' => () {
+        final id = dispatch.data['id'];
+        if (id is String && dispatch.data['unavailable'] != true) {
+          _bootstrap.removeGuild(id);
+        }
+        return null;
+      }(),
       _ => null,
     };
     if (delay == null || _bootstrapCompleter?.isCompleted != false) return;

@@ -165,6 +165,17 @@ final class DiscordDesktopBootstrap {
     _stickersByGuild[id] = _named(guild['stickers']);
   }
 
+  /// Forgets a guild the account left. A later pass over the snapshot must not
+  /// bring it back.
+  void removeGuild(String id) {
+    _guilds.remove(id);
+    _channelsByGuild.remove(id);
+    _rolesByGuild.remove(id);
+    _membersByGuild.remove(id);
+    _emojisByGuild.remove(id);
+    _stickersByGuild.remove(id);
+  }
+
   /// The snapshot so far, or null while the current user is still unknown.
   DiscordDesktopWorkspaceSnapshot? snapshot() {
     final user = _currentUser;
