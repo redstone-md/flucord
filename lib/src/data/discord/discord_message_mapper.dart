@@ -1,6 +1,20 @@
 part of 'discord_mapper.dart';
 
 extension DiscordMessageMapper on DiscordMapper {
+  /// Who wrote the message in [payload]. Null for an update that does not name
+  /// its author.
+  Member? messageAuthor(Map<String, Object?> payload) {
+    final author = payload['author'];
+    if (author is! Map) return null;
+    return member(
+      author.cast<String, Object?>(),
+      spaceIds: {
+        if (payload['guild_id'] case final String guildId) guildId,
+        if (payload['guild_id'] == null) DiscordMapper.directMessagesSpaceId,
+      },
+    );
+  }
+
   ChatMessage message(
     Map<String, Object?> payload, {
     ChatMessage? fallback,

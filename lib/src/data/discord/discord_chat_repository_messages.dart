@@ -98,40 +98,20 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
 }
 
 extension _DiscordChatRepositoryMessages on DiscordChatRepository {
-  Future<void> _handleMessageDispatch(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'] as String?;
-    if (messageId == null) return;
+  Future<void> _handleNewMessage(Map<String, Object?> payload) async {
+    if (payload['id'] is! String) return;
     final currentUserId = _currentMemberId;
-    if (event.name == 'MESSAGE_CREATE' && currentUserId != null) {
-      await _directMessages.acceptMessage(event.data, currentUserId);
+    if (currentUserId != null) {
+      await _directMessages.acceptMessage(payload, currentUserId);
     }
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = _mapper.message(
-      event.data,
-      fallback: fallback,
-      currentMemberId: _currentMemberId,
-    );
-    final authorPayload = event.data['author'];
-    final member = authorPayload is Map
-        ? _mapper.member(
-            authorPayload.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
+    final message = _mapper.message(payload, currentMemberId: currentUserId);
+    final member = _mapper.messageAuthor(payload);
     await _cache.writeMessage(message, member: member);
-    if (_events.isClosed) return;
     _events.add(
       MessageUpsertedEvent(
         message: message,
         member: member,
-        isNew: event.name == 'MESSAGE_CREATE',
+        isNew: true,
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );

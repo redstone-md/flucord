@@ -60,10 +60,11 @@ typedef WatchedSessionStats = ({
 /// session's audio receiver. It knows nothing about stream keys, rooms, or
 /// Discord: the caller hands it packets and reads frames.
 ///
-/// Decoding on or off is the suspension seam. Off lets go of the decoder, the
-/// receiver and the pacer and keeps counting packets; on makes them fresh, so
-/// half a picture from before the window went away is never decoded and the
-/// first picture back is a keyframe.
+/// Decoding on or off is the seam for whoever decides when pictures are worth
+/// making: suspension (ADR-0003), and whether a tile draws them. Off lets go of
+/// the decoder, the receiver and the pacer and keeps counting packets; on makes
+/// them fresh, so half a picture from before the window went away is never
+/// decoded and the first picture back is a keyframe.
 final class WatchedSessionPipeline {
   WatchedSessionPipeline({
     required VideoDecoderService Function() decoderFactory,
@@ -71,9 +72,16 @@ final class WatchedSessionPipeline {
     WatchedSessionAudio? audio,
     void Function()? requestKeyframe,
     void Function()? onFirstPicture,
+
+    /// Told when [isDrawn] changes.
+    void Function()? onDrawnChanged,
     Duration Function()? now,
     bool paced = true,
-  }) : _decoderFactory = decoderFactory,
+  }) : _frames = StreamController.broadcast(
+         onListen: onDrawnChanged,
+         onCancel: onDrawnChanged,
+       ),
+       _decoderFactory = decoderFactory,
        _groupDecryptor = groupDecryptor,
        _audio = audio,
        _requestKeyframe = requestKeyframe,
@@ -111,8 +119,7 @@ final class WatchedSessionPipeline {
   /// camera tiles, which are small, few, and expected to be live.
   final bool _paced;
 
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
+  final StreamController<DecodedVideoFrame> _frames;
   final StreamController<String> _audioEnded = StreamController.broadcast();
 
   VoiceAudioReceiver? _audioReceiver;
@@ -141,7 +148,13 @@ final class WatchedSessionPipeline {
   int _pacerOverflows = 0;
 
   /// Pictures, in decode order, whichever decoder is behind them.
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
+  ///
+  /// One object for the life of the session, so a tile that listens again when
+  /// its stream changes identity keeps its subscription across rebuilds.
+  late final Stream<DecodedVideoFrame> frames = _frames.stream;
+
+  /// Whether anything is listening on [frames].
+  bool get isDrawn => _frames.hasListener;
 
   /// Decoded screen-share audio, tagged with the session's source id.
   Stream<VoiceRemotePcmFrame> get pcm =>
