@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 
 import 'support/fake_discord_wire.dart';
@@ -105,6 +107,132 @@ void main() {
     );
   }
 
+  group('slash commands', () {
+    Future<void> type(WidgetTester tester, String text) =>
+        tester.enterText(find.byKey(const ValueKey('message-composer')), text);
+
+    // Past the debounce the controller waits for before it asks Discord.
+    Future<void> waitForList(
+      WidgetTester tester,
+      SessionHarness session,
+    ) async {
+      await tester.pump(const Duration(milliseconds: 250));
+      await session.settle();
+    }
+
+    Iterable<RecordedRequest> posted(SessionHarness session, String path) =>
+        session.transport.requests.where(
+          (request) => request.method == 'POST' && request.uri.path == path,
+        );
+
+    testSession('typing a slash lists commands, and a click runs one', (
+      tester,
+      session,
+    ) async {
+      _routeCommands(session);
+      await session.openChannel(SessionHarness.channelId);
+
+      await type(tester, '/');
+      await waitForList(tester, session);
+      expect(find.text('/ping'), findsOneWidget);
+
+      await tester.tap(find.text('/ping'));
+      await session.settle();
+
+      final interaction = posted(session, '/api/v9/interactions').single;
+      expect((interaction.json! as Map)['data'], containsPair('name', 'ping'));
+      expect(posted(session, _sendPath), isEmpty);
+      expect(find.byKey(const ValueKey('slash-command-list')), findsNothing);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('message-composer')))
+            .controller
+            ?.text,
+        isEmpty,
+      );
+    });
+
+    testSession('Enter runs the first command and posts no text', (
+      tester,
+      session,
+    ) async {
+      _routeCommands(session);
+      await session.openChannel(SessionHarness.channelId);
+
+      await type(tester, '/ping');
+      await session.settle();
+      // The answer has not come yet, and that is no reason to post the text.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await session.settle();
+      expect(posted(session, _sendPath), isEmpty);
+
+      await waitForList(tester, session);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await session.settle();
+
+      expect(posted(session, '/api/v9/interactions'), hasLength(1));
+      expect(posted(session, _sendPath), isEmpty);
+    });
+
+    testSession('a list from the last channel is not offered in the next', (
+      tester,
+      session,
+    ) async {
+      _routeCommands(session);
+      session.transport.on(
+        'GET',
+        '/api/v9/channels/${SessionHarness.otherChannelId}/application-commands/search',
+        (_) => jsonResponse({'application_commands': <Object?>[]}),
+      );
+      await session.openChannel(SessionHarness.channelId);
+      await type(tester, '/');
+      await waitForList(tester, session);
+      expect(find.text('/ping'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('channel-${SessionHarness.otherChannelId}')),
+      );
+      await session.settle();
+      await type(tester, '/');
+      await waitForList(tester, session);
+
+      expect(find.text('/ping'), findsNothing);
+    });
+
+    testSession('a slash no command matches still goes out as text', (
+      tester,
+      session,
+    ) async {
+      session.transport.on(
+        'GET',
+        _commandSearchPath,
+        (_) => jsonResponse({'application_commands': <Object?>[]}),
+      );
+      session.transport.on(
+        'POST',
+        _sendPath,
+        (_) => jsonResponse(
+          rawMessage(
+            id: '900000000000000001',
+            channelId: SessionHarness.channelId,
+            guildId: SessionHarness.guildId,
+            authorId: SessionHarness.currentUserId,
+            content: '/shrug',
+          ),
+        ),
+      );
+      await session.openChannel(SessionHarness.channelId);
+
+      await type(tester, '/shrug');
+      await waitForList(tester, session);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await session.settle();
+
+      expect(posted(session, _sendPath), hasLength(1));
+      expect(find.byKey(const ValueKey('slash-command-list')), findsNothing);
+    });
+  });
+
   testSession('a poll is created from the menu', (tester, session) async {
     await session.openChannel(SessionHarness.channelId);
 
@@ -204,5 +332,32 @@ void main() {
               '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.attachFiles}',
         ),
       ],
+  );
+}
+
+const _commandSearchPath =
+    '/api/v9/channels/${SessionHarness.channelId}/application-commands/search';
+
+void _routeCommands(SessionHarness session) {
+  session.transport.on(
+    'GET',
+    _commandSearchPath,
+    (_) => jsonResponse({
+      'application_commands': [
+        {
+          'id': '700000000000000001',
+          'application_id': '700000000000000002',
+          'version': '700000000000000003',
+          'name': 'ping',
+          'description': 'Checks the bot',
+          'type': 1,
+        },
+      ],
+    }),
+  );
+  session.transport.on(
+    'POST',
+    '/api/v9/interactions',
+    (_) => const DiscordHttpResponse(statusCode: 204, headers: {}, body: ''),
   );
 }

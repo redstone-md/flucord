@@ -533,6 +533,7 @@ class _ConversationPaneState extends State<ConversationPane> {
           MessageComposer(
             gifPicker: GifPickerScope.read(context),
             canAttachFiles: widget.capabilities.attachFiles,
+            slashCommands: SlashCommandScope.read(context),
             channelId: channel.id,
             channelName: channel.name,
             replyTo: _replyTo,

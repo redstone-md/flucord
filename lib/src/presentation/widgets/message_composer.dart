@@ -359,8 +359,32 @@ class _MessageComposerState extends State<MessageComposer>
     );
   });
 
+  /// Whether a slash in the box took the send, rather than the text going out.
+  ///
+  /// The text waits while the list is still looking, because `/ban` must not
+  /// post just because Enter beat the answer. A slash no command matches is
+  /// ordinary text, as it is in Discord.
+  bool _runTypedCommand() {
+    final commands = widget.slashCommands;
+    if (commands == null || !commands.isSupported || !commands.isOpen) {
+      return false;
+    }
+    if (commands.isLoading || commands.isSending) return true;
+    final command = commands.commands.firstOrNull;
+    if (command == null) return false;
+    unawaited(
+      SlashCommandList.run(
+        context,
+        controller: commands,
+        command: command,
+        onPicked: _clearComposer,
+      ),
+    );
+    return true;
+  }
+
   Future<void> _send() async {
-    if (!_canSend || widget.isSending) return;
+    if (!_canSend || widget.isSending || _runTypedCommand()) return;
     final sent = await widget.onSend(
       _controller.text,
       _attachments.items,
@@ -369,6 +393,8 @@ class _MessageComposerState extends State<MessageComposer>
     );
     if (!mounted || !sent) return;
     _controller.clear();
+    // Clearing from code does not reach the field's onChanged.
+    widget.slashCommands?.close();
     setState(() {
       _hasContent = false;
       _charactersUsed = 0;
