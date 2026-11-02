@@ -298,8 +298,11 @@ class RepositoryPrivacyAudit {
   }
 
   # RFC 2606 reserves .test and .invalid, so no real mailbox can use them.
+  # GitHub's own service mailboxes sign bot commits, such as Dependabot's
+  # Signed-off-by line. They belong to no person.
   hidden [bool] IsAllowedEmail([string] $email) {
-    return $email -match '(?i)@(?:example\.(?:com|org|net)|[^@]+\.(?:test|invalid)|users\.noreply\.github\.com)$'
+    return $email -match '(?i)@(?:example\.(?:com|org|net)|[^@]+\.(?:test|invalid)|users\.noreply\.github\.com)$' -or
+      $email -match '(?i)^(?:support|noreply)@github\.com$'
   }
 
   hidden [bool] IsAllowedIpAddress([string] $value) {
