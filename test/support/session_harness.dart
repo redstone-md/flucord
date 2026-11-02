@@ -422,6 +422,18 @@ final class SessionHarness {
     }
   }
 
+  /// Settles until [condition] holds, for a large frame on its worker isolate.
+  /// That takes real time, which [settle] alone does not wait for.
+  Future<void> settleUntilDecoded(bool Function() condition) async {
+    for (var attempt = 0; attempt < 200 && !condition(); attempt++) {
+      await _tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await settle();
+    }
+    expect(condition(), isTrue, reason: 'The large frame never landed.');
+  }
+
   Future<void> _settleUntil(bool Function() condition, String what) async {
     for (var attempt = 0; attempt < 10 && !condition(); attempt++) {
       await settle();

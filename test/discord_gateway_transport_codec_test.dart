@@ -50,7 +50,7 @@ void main() {
     );
   });
 
-  test('decodes zstd-stream frames flushed per dispatch', () {
+  test('decodes zstd-stream frames flushed per dispatch', () async {
     final codec = DiscordGatewayTransportCodec.forProfile(
       encoding: 'etf',
       compression: 'zstd-stream',
@@ -67,7 +67,7 @@ void main() {
       payloads.map(DiscordEtfCodec.encode).toList(growable: false),
     );
 
-    final decoded = chunks.expand(codec.decode).toList(growable: false);
+    final decoded = [for (final chunk in chunks) ...await codec.decode(chunk)];
 
     expect(decoded, payloads);
     expect(codec.isBinary, isTrue);
@@ -132,6 +132,37 @@ void main() {
 
     expect(codec.decode(frame), batch);
   });
+
+  test(
+    'a large compressed frame decodes behind a future, and the stream goes on',
+    () async {
+      final codec = DiscordGatewayTransportCodec.forProfile(
+        encoding: 'etf',
+        compression: 'zstd-stream',
+      );
+      final filler = 'x' * (100 * 1024);
+      final batch = [
+        {'op': 0, 's': 1, 't': 'READY', 'd': filler},
+        {'op': 0, 's': 2, 't': 'GUILD_CREATE', 'd': filler},
+      ];
+      final chunks = _compressPerMessage([
+        DiscordEtfCodec.encode(batch[0]),
+        DiscordEtfCodec.encode(batch[1]),
+        DiscordEtfCodec.encode(const {'op': 11}),
+      ]);
+      final large = BytesBuilder(copy: false)
+        ..add(chunks[0])
+        ..add(chunks[1]);
+
+      final decoding = codec.decode(large.takeBytes());
+
+      expect(decoding, isA<Future<Object?>>());
+      expect(await decoding, batch);
+      expect(codec.decode(chunks[2]), [
+        const {'op': 11},
+      ]);
+    },
+  );
 
   test('outgoing frames stay uncompressed', () {
     final codec = DiscordGatewayTransportCodec.forProfile(
