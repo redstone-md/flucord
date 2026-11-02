@@ -107,42 +107,55 @@ void main() {
 
     await reconnect(socket);
     socket.receive(_secondReady);
-    await _waitFor(
-      () =>
-          events.whereType<ChannelUpsertedEvent>().length == 2 &&
-          events.whereType<ChannelDeletedEvent>().isNotEmpty,
-    );
+    await _waitFor(() => events.whereType<WorkspaceDiffEvent>().isNotEmpty);
     await _drain();
 
     // The server the READY stopped naming is gone from the rail, and so is
     // its channel; the kept channel arrives renamed next to a new one.
+    final diff = events.whereType<WorkspaceDiffEvent>().single.diff;
+    expect(diff.removedSpaceIds, {_goneGuildId});
+    expect(diff.removedChannelIds, {_deletedChannelId});
     expect(
-      events.whereType<SpaceRemovedEvent>().map((event) => event.spaceId),
-      [_goneGuildId],
-    );
-    expect(
-      events.whereType<ChannelDeletedEvent>().map((event) => event.channelId),
-      [_deletedChannelId],
-    );
-    final upserts = events.whereType<ChannelUpsertedEvent>().toList();
-    expect(
-      upserts.map((event) => event.channel.id),
-      containsAll([_keptChannelId, _newChannelId]),
-    );
-    expect(
-      upserts
-          .firstWhere((event) => event.channel.id == _keptChannelId)
-          .channel
-          .name,
-      'renamed',
+      {for (final channel in diff.channels) channel.id: channel.name},
+      {_keptChannelId: 'renamed', _newChannelId: 'fresh'},
     );
     // The kept server itself is unchanged, so it announces nothing, and the
     // unchanged direct message neither.
-    expect(events.whereType<SpaceUpsertedEvent>(), isEmpty);
+    expect(diff.spaces, isEmpty);
 
     // Read state keeps folding on the reconnect: the fresh READY replaced the
     // baseline with the one it carried.
     expect(repository.readState!.current.readStateVersion, 22);
+  });
+
+  test('a READY that changes 5000 channels emits one event for them', () async {
+    final (_, socket, events) = await connect();
+
+    await reconnect(socket);
+    socket.receive(
+      _readyDispatch(
+        2,
+        _readyPayload(
+          guilds: [
+            rawGuild(
+              id: _guildId,
+              name: 'Kept',
+              channels: [
+                for (var index = 0; index < 5000; index++)
+                  rawChannel(id: '${6100000000000 + index}', name: 'c$index'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    await _waitFor(() => events.whereType<WorkspaceDiffEvent>().isNotEmpty);
+    await _drain();
+
+    final diff = events.whereType<WorkspaceDiffEvent>().single.diff;
+    expect(diff.channels, hasLength(5000));
+    expect(events.whereType<ChannelUpsertedEvent>(), isEmpty);
+    expect(events.whereType<ChannelDeletedEvent>(), isEmpty);
   });
 
   test('a reconnect keeps the history the workspace already held', () async {
@@ -153,7 +166,7 @@ void main() {
 
     await reconnect(socket);
     socket.receive(_secondReady);
-    await _waitFor(() => events.whereType<ChannelUpsertedEvent>().isNotEmpty);
+    await _waitFor(() => events.whereType<WorkspaceDiffEvent>().isNotEmpty);
     await _drain();
 
     // The renamed channel is still the account's channel, and the history

@@ -618,6 +618,17 @@ final class ChatController extends ChangeNotifier {
     _workspace = workspace.removeGuild(spaceId);
   }
 
+  /// Folds a whole READY's changes in. A channel that goes loses its history
+  /// state, as with [_removeChannel] and [_removeGuild].
+  void _applyWorkspaceDiff(WorkspaceDiff diff) {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    for (final channel in workspace.channels) {
+      if (diff.removes(channel)) _forgetChannelHistory(channel.id);
+    }
+    _workspace = workspace.applyDiff(diff);
+  }
+
   void _forgetChannelHistory(String channelId) {
     _loadedChannels.remove(channelId);
     _channelsWithGap.remove(channelId);

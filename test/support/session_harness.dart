@@ -29,6 +29,7 @@ import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
+import 'recording_database_factory.dart';
 import 'zoomed_app.dart';
 
 /// The whole app, in a real session, driven by raw gateway events (seam A).
@@ -294,6 +295,9 @@ final class SessionHarness {
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
 
+  /// How many commits the cache has made in this session.
+  int get cacheCommits => _factory.databases.commits;
+
   /// The message with this [id] in the running session's cache, which is what
   /// the next launch reads. A cache read needs the real event loop.
   Future<ChatMessage?> cachedMessage(String id) => _tester
@@ -460,11 +464,17 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
 
   // No isolate: the widget tester's fake clock would never see an isolate's
   // answer, so the cache has to run on the test's own event loop.
+  final RecordingDatabaseFactory databases = RecordingDatabaseFactory(
+    databaseFactoryFfiNoIsolate,
+  );
+
+  /// The cache file, when the test asked for `onDisk`.
+  String? get diskPath =>
+      _diskDirectory == null ? null : '${_diskDirectory.path}/flucord.sqlite3';
+
   Future<SqliteChatCache> _openCache() => SqliteChatCache.openAt(
-    _diskDirectory == null
-        ? inMemoryDatabasePath
-        : '${_diskDirectory.path}/flucord.sqlite3',
-    factory: databaseFactoryFfiNoIsolate,
+    diskPath ?? inMemoryDatabasePath,
+    factory: databases,
   );
 
   @override

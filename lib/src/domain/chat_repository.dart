@@ -242,8 +242,8 @@ final class ChannelDeletedEvent extends ChatRepositoryEvent {
 
 /// A server the account can no longer see, gone from the workspace whole.
 ///
-/// `GUILD_DELETE` says so while the socket is up. A `READY` that stops naming a
-/// guild says the account left it while the socket was down.
+/// `GUILD_DELETE` says so while the socket is up. A guild the account left while
+/// the socket was down goes with [WorkspaceDiffEvent] instead.
 final class SpaceRemovedEvent extends ChatRepositoryEvent {
   const SpaceRemovedEvent(this.spaceId);
 
@@ -254,6 +254,13 @@ final class CategoryDeletedEvent extends ChatRepositoryEvent {
   const CategoryDeletedEvent(this.categoryId);
 
   final String categoryId;
+}
+
+/// All that one READY changed in the account's servers and channels.
+final class WorkspaceDiffEvent extends ChatRepositoryEvent {
+  const WorkspaceDiffEvent(this.diff);
+
+  final WorkspaceDiff diff;
 }
 
 /// The transport lost its live stream and could not replay what it missed.

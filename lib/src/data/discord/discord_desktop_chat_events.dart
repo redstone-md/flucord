@@ -131,8 +131,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   /// A reconnect that could not resume identifies again, and the READY that
   /// comes back is the authoritative guild and channel list. Rebuilding the
   /// workspace around it wholesale would drop every held history and unread
-  /// boundary, so the change is computed against the cached shell and
-  /// announced as ordinary upserts and deletions instead. The same READY also
+  /// boundary, so the change is computed against the cached shell and goes out
+  /// as one diff, which the cache writes in one transaction. The same READY also
   /// re-arms `READY_SUPPLEMENTAL`, whose lazy private channels land through
   /// the second pass; a pass that changes nothing announces nothing.
   ///
@@ -179,61 +179,64 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       cached: cached,
       snapshot: snapshot,
     );
-    if (_events.isClosed) return;
-
-    for (final space in cached.spaces) {
-      if (fresh.spaceOrNull(space.id) == null) {
-        _events.add(SpaceRemovedEvent(space.id));
-        await _persistLeftGuild(space.id);
-      }
-    }
-    for (final channel in cached.channels) {
-      if (fresh.channelOrNull(channel.id) == null) {
-        _events.add(ChannelDeletedEvent(channel.id));
-        await _cache.deleteChannel(channel.id);
-      }
-    }
-    for (final category in cached.categories) {
-      if (fresh.categoryOrNull(category.id) == null) {
-        _events.add(CategoryDeletedEvent(category.id));
-        await _cache.deleteCategory(category.id);
-      }
-    }
-    for (final space in fresh.spaces) {
-      final existing = cached.spaceOrNull(space.id);
-      if (existing == null || _spaceChanged(space, existing)) {
-        _events.add(SpaceUpsertedEvent(space));
-        await _cache.writeSpace(space);
-      }
-    }
-    for (final category in fresh.categories) {
-      final existing = cached.categoryOrNull(category.id);
-      if (existing == null || _categoryChanged(category, existing)) {
-        _events.add(CategoryUpsertedEvent(category));
-        await _cache.writeCategory(category);
-      }
-    }
-    for (final channel in fresh.channels) {
-      final existing = cached.channelOrNull(channel.id);
-      if (existing == null || _channelChanged(channel, existing)) {
-        _events.add(ChannelUpsertedEvent(channel));
-        await _cache.writeChannel(channel);
-      }
-      // A direct message the account has never seen here needs its recipient
-      // row. A recipient who only changed their name keeps the cached row
-      // until the next full load: the shell carries no members to diff
-      // against, and decoding the whole cache per dispatch would cost more
-      // than the staleness does.
-      final recipientId = channel.recipientId;
-      if (recipientId != null && existing == null) {
-        final recipient = fresh.memberOrNull(recipientId);
-        if (recipient != null) _events.add(MemberUpsertedEvent(recipient));
-      }
+    final diff = _workspaceDiff(cached: cached, fresh: fresh);
+    if (!diff.isEmpty) {
+      _events.publish(WorkspaceDiffEvent(diff));
+      await _cache.applyWorkspaceDiff(diff);
+      diff.removedSpaceIds.forEach(_gateway.forgetGuild);
     }
     // R09 computes `private_channels_version` over the private channels, and
     // the rehydrated list is what the account holds now.
     _adoptPrivateChannels(fresh);
   }
+
+  /// What changed from [cached] to [fresh].
+  static WorkspaceDiff _workspaceDiff({
+    required ChatWorkspace cached,
+    required ChatWorkspace fresh,
+  }) => WorkspaceDiff(
+    removedSpaceIds: {
+      for (final space in cached.spaces)
+        if (fresh.spaceOrNull(space.id) == null) space.id,
+    },
+    removedCategoryIds: {
+      for (final category in cached.categories)
+        if (fresh.categoryOrNull(category.id) == null) category.id,
+    },
+    removedChannelIds: {
+      for (final channel in cached.channels)
+        if (fresh.channelOrNull(channel.id) == null) channel.id,
+    },
+    spaces: [
+      for (final space in fresh.spaces)
+        if (cached.spaceOrNull(space.id) case final existing
+            when existing == null || _spaceChanged(space, existing))
+          space,
+    ],
+    categories: [
+      for (final category in fresh.categories)
+        if (cached.categoryOrNull(category.id) case final existing
+            when existing == null || _categoryChanged(category, existing))
+          category,
+    ],
+    channels: [
+      for (final channel in fresh.channels)
+        if (cached.channelOrNull(channel.id) case final existing
+            when existing == null || _channelChanged(channel, existing))
+          channel,
+    ],
+    // A direct message the account has never seen here needs its recipient
+    // row. A recipient who only changed their name keeps the cached row until
+    // the next full load: the shell carries no members to diff against, and
+    // decoding the whole cache per dispatch would cost more than the staleness
+    // does.
+    members: [
+      for (final channel in fresh.channels)
+        if (channel.recipientId case final recipientId?
+            when cached.channelOrNull(channel.id) == null)
+          ?fresh.memberOrNull(recipientId),
+    ],
+  );
 
   /// [fresh] with the cached items this snapshot says nothing about, so the
   /// pass neither removes nor changes them.

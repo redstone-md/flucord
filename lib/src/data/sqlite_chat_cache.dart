@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -386,49 +387,99 @@ final class SqliteChatCache
   }
 
   @override
-  Future<void> deleteGuild(String spaceId) async {
-    await _database.transaction((transaction) async {
-      // Messages reference the channels by id, so they go before the channels
-      // the query reads from.
-      await transaction.rawDelete(
-        'DELETE FROM messages WHERE channel_id IN '
-        '(SELECT id FROM channels WHERE space_id = ?)',
-        [spaceId],
-      );
-      await transaction.delete(
-        'channels',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await transaction.delete(
-        'categories',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await transaction.delete(
-        'roles',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await transaction.delete('spaces', where: 'id = ?', whereArgs: [spaceId]);
-      await transaction.delete(
-        'emojis',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await transaction.delete(
-        'guild_stickers',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await transaction.delete(
-        'guild_scheduled_events',
-        where: 'space_id = ?',
-        whereArgs: [spaceId],
-      );
-      await _dropGuildFromMembers(transaction, spaceId);
-    });
+  Future<void> deleteGuild(String spaceId) => _database.transaction(
+    (transaction) => _deleteGuild(transaction, spaceId),
+  );
+
+  Future<void> _deleteGuild(Transaction transaction, String spaceId) async {
+    // Messages reference the channels by id, so they go before the channels
+    // the query reads from.
+    await transaction.rawDelete(
+      'DELETE FROM messages WHERE channel_id IN '
+      '(SELECT id FROM channels WHERE space_id = ?)',
+      [spaceId],
+    );
+    await transaction.delete(
+      'channels',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await transaction.delete(
+      'categories',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await transaction.delete(
+      'roles',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await transaction.delete('spaces', where: 'id = ?', whereArgs: [spaceId]);
+    await transaction.delete(
+      'emojis',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await transaction.delete(
+      'guild_stickers',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await transaction.delete(
+      'guild_scheduled_events',
+      where: 'space_id = ?',
+      whereArgs: [spaceId],
+    );
+    await _dropGuildFromMembers(transaction, spaceId);
   }
+
+  @override
+  Future<void> applyWorkspaceDiff(WorkspaceDiff diff) => _database.transaction((
+    transaction,
+  ) async {
+    for (final spaceId in diff.removedSpaceIds) {
+      await _deleteGuild(transaction, spaceId);
+    }
+    final removals = transaction.batch();
+    for (final channelId in diff.removedChannelIds) {
+      removals.delete(
+        'messages',
+        where: 'channel_id = ?',
+        whereArgs: [channelId],
+      );
+      removals.delete('channels', where: 'id = ?', whereArgs: [channelId]);
+    }
+    for (final categoryId in diff.removedCategoryIds) {
+      removals.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
+    }
+    await removals.commit(noResult: true);
+
+    final writes = transaction.batch();
+    final spacePlaces = await _RowPlaces.read(transaction, 'spaces');
+    for (final space in diff.spaces) {
+      writes.insert(
+        'spaces',
+        _spaceToRow(space, spacePlaces.of(space.id)),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    final channelPlaces = await _RowPlaces.read(transaction, 'channels');
+    for (final channel in diff.channels) {
+      writes.insert(
+        'channels',
+        _channelToRow(channel, channelPlaces.of(channel.id)),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    for (final category in diff.categories) {
+      writes.insert(
+        'categories',
+        _categoryToRow(category),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await writes.commit(noResult: true);
+  });
 
   /// Rewrites the members that named [spaceId] without it.
   ///
@@ -724,4 +775,23 @@ final class SqliteChatCache
 
   @override
   Future<void> close() => _database.close();
+}
+
+/// Where the rows of a table sit, by `sort_index`.
+final class _RowPlaces {
+  _RowPlaces._(this._places)
+    : _next = _places.values.fold(0, (next, place) => max(next, place + 1));
+
+  static Future<_RowPlaces> read(Transaction transaction, String table) async {
+    final rows = await transaction.query(table, columns: ['id', 'sort_index']);
+    return _RowPlaces._({
+      for (final row in rows) row['id']! as String: row['sort_index']! as int,
+    });
+  }
+
+  final Map<String, int> _places;
+  int _next;
+
+  /// The place of the row [id]: where it sits now, or else after all the others.
+  int of(String id) => _places[id] ?? _next++;
 }
