@@ -106,7 +106,10 @@ final class ChatController extends ChangeNotifier {
   ChatLoadState _state = ChatLoadState.idle;
   ChatWorkspace? _workspace;
   Object? _error;
-  bool _isSending = false;
+
+  /// Channels with a send on its way. Each channel takes one send at a time,
+  /// and a slow one does not hold the others.
+  final Set<String> _sendingChannels = {};
   RepositoryConnectionStatus _connectionStatus =
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
@@ -114,7 +117,10 @@ final class ChatController extends ChangeNotifier {
   /// Held channels that may lack messages since a [HistoryGapEvent]. A page from
   /// Discord clears a channel, and a page from the cache does not.
   final Set<String> _channelsWithGap = {};
-  final Set<String> _catchingUpChannels = {};
+
+  /// Per channel catching up, the messages that came live since its page was
+  /// asked for. The page may lack them, and they stay when it lands.
+  final Map<String, Set<String>> _catchingUpChannels = {};
 
   /// Channels showing a locally held page while their refresh is in flight.
   /// A refresh that then fails leaves what is on screen rather than an error.
@@ -125,16 +131,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _exhaustedChannels = {};
   final Map<String, Object> _olderChannelErrors = {};
 
-  /// Channels whose held messages stop short of the present, each with the
-  /// newest message known to exist when that became so.
-  final Map<String, String> _windowsBehind = {};
-
-  /// The newest load of a first page or a window, per channel.
-  final Map<String, Object> _windowLoads = {};
-  final Map<String, Object> _windowErrors = {};
-
-  /// Messages that arrive while the newest page of an old window is on its way.
-  final Map<String, List<ChatMessage>> _arrivalsDuringPresentLoad = {};
+  final _windows = _HistoryWindows();
   final Map<String, ChannelHistory> _pinnedMessages = {};
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
@@ -173,7 +170,7 @@ final class ChatController extends ChangeNotifier {
   ChatLoadState get state => _state;
   ChatWorkspace? get workspace => _workspace;
   Object? get error => _error;
-  bool get isSending => _isSending;
+  bool isSendingIn(String channelId) => _sendingChannels.contains(channelId);
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
   String? get activeChannelId => _activeChannelId;
 
@@ -330,10 +327,7 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.clear();
     _exhaustedChannels.clear();
     _olderChannelErrors.clear();
-    _windowsBehind.clear();
-    _windowLoads.clear();
-    _windowErrors.clear();
-    _arrivalsDuringPresentLoad.clear();
+    _windows.clear();
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
@@ -457,7 +451,7 @@ final class ChatController extends ChangeNotifier {
           .messagesFor(channelId)
           .any((message) => message.id == anchorMessageId)) {
         // A window still on its way would take the reader off this message.
-        _beginWindowLoad(channelId);
+        _windows.begin(channelId);
         notifyListeners();
       } else {
         await _moveWindow(channelId, aroundMessageId: anchorMessageId);
@@ -470,7 +464,7 @@ final class ChatController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final isCurrent = _beginWindowLoad(channelId);
+    final isCurrent = _windows.begin(channelId);
     _loadingChannels.add(channelId);
     _channelErrors.remove(channelId);
     _olderChannelErrors.remove(channelId);
@@ -575,14 +569,14 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.add(channelId);
     _olderChannelErrors.remove(channelId);
     notifyListeners();
-    final window = _windowLoads[channelId];
+    final isCurrent = _windows.current(channelId);
     try {
       final page = await _repository.loadChannelHistory(
         channelId,
         beforeMessageId: messages.first.id,
       );
       // This page sits next to a window that has since been replaced.
-      if (!identical(_windowLoads[channelId], window)) return;
+      if (!isCurrent()) return;
       _workspace = _workspace?.mergeHistory(
         page.history,
         replaceChannel: false,
@@ -643,18 +637,19 @@ final class ChatController extends ChangeNotifier {
   Future<void> _catchUpChannel(String channelId) async {
     if (!_channelsWithGap.contains(channelId) ||
         hasNewerMessages(channelId) ||
-        !_catchingUpChannels.add(channelId)) {
+        _catchingUpChannels.containsKey(channelId)) {
       return;
     }
-    final window = _windowLoads[channelId];
+    final arrived = _catchingUpChannels[channelId] = {};
+    final isCurrent = _windows.current(channelId);
     try {
       final page = await _repository.loadChannelHistory(channelId);
       if (page.fromCache ||
           _workspace?.channelOrNull(channelId) == null ||
-          !identical(_windowLoads[channelId], window)) {
+          !isCurrent()) {
         return;
       }
-      _workspace = _workspace?.catchUpHistory(page.history);
+      _workspace = _workspace?.catchUpHistory(page.history, arrived: arrived);
       _channelsWithGap.remove(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
       // The window may be away: then the missed messages stay unread.
@@ -756,15 +751,10 @@ final class ChatController extends ChangeNotifier {
     final workspace = _workspace;
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
-    if (workspace == null ||
-        (content.isEmpty && attachments.isEmpty) ||
-        _isSending) {
+    if (workspace == null || (content.isEmpty && attachments.isEmpty)) {
       return false;
     }
-
-    _isSending = true;
-    notifyListeners();
-    try {
+    return _sendingIn(channelId, () async {
       final message = await _repository.sendMessage(
         channelId: channelId,
         authorId: workspace.currentMemberId,
@@ -775,15 +765,7 @@ final class ChatController extends ChangeNotifier {
         textToSpeech: spoken.$1,
       );
       _applySentMessage(message);
-      _lastSentAt[channelId] = DateTime.now();
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      notifyListeners();
-    }
+    });
   }
 
   /// The spoken-aloud command: `/tts <message>` sends the message flagged to
@@ -801,24 +783,15 @@ final class ChatController extends ChangeNotifier {
 
   Future<bool> editMessage(ChatMessage message, String body) async {
     final content = body.trim();
-    if (!message.canEdit || content.isEmpty || _isSending) return false;
-    _isSending = true;
-    notifyListeners();
-    try {
+    if (!message.canEdit || content.isEmpty) return false;
+    return _sendingIn(message.channelId, () async {
       final updated = await _repository.editMessage(
         channelId: message.channelId,
         messageId: message.id,
         body: content,
       );
       _workspace = _workspace?.upsertMessage(updated);
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      notifyListeners();
-    }
+    });
   }
 
   Future<void> deleteMessage(ChatMessage message) async {
@@ -930,6 +903,31 @@ final class ChatController extends ChangeNotifier {
     _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
     _persistChannelActivity(channelId);
     _lastSentMessage = message;
+    _catchingUpChannels[channelId]?.add(message.id);
+    // Slowmode counts every kind of message, so every send starts its clock.
+    _lastSentAt[channelId] = DateTime.now();
+  }
+
+  /// Runs [send] as the one send of [channelId], with its composer busy until
+  /// it ends. Returns false when the channel already has a send on its way, or
+  /// when [send] throws, and then [error] holds why.
+  Future<bool> _sendingIn(
+    String channelId,
+    Future<void> Function() send,
+  ) async {
+    if (!_sendingChannels.add(channelId)) return false;
+    notifyListeners();
+    try {
+      await send();
+      _error = null;
+      return true;
+    } catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _sendingChannels.remove(channelId);
+      notifyListeners();
+    }
   }
 
   void _persistChannelActivity(String channelId) => unawaited(

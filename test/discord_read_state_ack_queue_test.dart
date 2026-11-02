@@ -249,6 +249,45 @@ void main() {
     expect(queue.hasPendingWork, isFalse);
   });
 
+  test('a request for an answer holds the queue until it has one', () async {
+    final gate = Completer<void>();
+    final transport = _RecordingTransport(
+      responses: [
+        {'read_state': <String, Object?>{}},
+      ],
+      gate: gate,
+    );
+    final queue = _queue(transport);
+    addTearDown(queue.close);
+
+    final answer = queue.sendForPayload(
+      const DiscordDesktopRestRequest(method: 'GET', path: '/read-state'),
+    );
+    final next = queue.sendNow(
+      DiscordDesktopReadStateRequests.ackPins(_channelId),
+    );
+    await _settle();
+    expect(transport.requests, hasLength(1));
+
+    gate.complete();
+    expect(await answer, {'read_state': <String, Object?>{}});
+    await next;
+    expect(transport.requests, hasLength(2));
+  });
+
+  test('a request for an answer that fails throws to its caller', () async {
+    final transport = _RecordingTransport(failures: 9, failureStatus: 403);
+    final queue = _queue(transport);
+    addTearDown(queue.close);
+
+    await expectLater(
+      queue.sendForPayload(
+        const DiscordDesktopRestRequest(method: 'GET', path: '/read-state'),
+      ),
+      throwsA(isA<DiscordApiException>()),
+    );
+  });
+
   test('retries a rate limit and a transport-level failure', () async {
     final rateLimited = _RecordingTransport(failures: 1, failureStatus: 429);
     final queue = _queue(rateLimited);

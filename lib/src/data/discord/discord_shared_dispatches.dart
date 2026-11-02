@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../app_log.dart';
 import '../../domain/chat_cache.dart';
+import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import 'discord_channel_handler.dart';
 import 'discord_direct_messages.dart';
@@ -58,9 +59,44 @@ final class DiscordSharedDispatches {
   /// The step added last. See [inOrder].
   Future<void> _lastStep = Future.value();
 
-  /// Finishes when every step added so far has run. A repository closes its
-  /// cache only after this, so no step is cut off halfway.
-  Future<void> get drained => _lastStep;
+  /// The start of a repository's close. No dispatch comes in after it, every
+  /// step queued so far runs to its end, so none meets a closed cache, and the
+  /// cache writes what is waiting, before a slow socket further down the close
+  /// can cost it.
+  Future<void> stop(StreamSubscription<DiscordGatewayEvent> gateway) async {
+    await gateway.cancel();
+    await _lastStep;
+    await _cache.flush();
+  }
+
+  /// A `MESSAGE_CREATE`, on the message queue. Each transport reads the message
+  /// its own way with [read]. [beforeAnnounce] runs right before the message is
+  /// announced, with nothing awaited between them.
+  void acceptNewMessage(
+    Map<String, Object?> payload, {
+    required ChatMessage Function(Map<String, Object?> payload) read,
+    void Function()? beforeAnnounce,
+  }) => inOrder(() async {
+    if (payload['id'] is! String) return;
+    final message = read(payload);
+    final member = _mapper.messageAuthor(payload);
+    final currentUserId = _currentMemberId();
+    // A new channel is announced and queued here, ahead of the message.
+    final channelAdopted = currentUserId == null
+        ? null
+        : _directMessages.acceptMessage(payload, currentUserId);
+    beforeAnnounce?.call();
+    _events.publish(
+      MessageUpsertedEvent(
+        message: message,
+        member: member,
+        isNew: true,
+        mentionsCurrentMember: message.mentionsCurrentMember,
+      ),
+    );
+    await _cache.writeMessage(message, member: member);
+    await channelAdopted;
+  });
 
   void route(DiscordGatewayDispatch event) {
     switch (event.name) {

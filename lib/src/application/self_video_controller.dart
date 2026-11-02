@@ -24,7 +24,7 @@ typedef _VoiceConnection = ({
 /// The account's own camera in the voice channel it is sitting in.
 ///
 /// Deliberately apart from Go Live: a screen share is its own connection with
-/// its own stream key and its own viewers, while a camera rides the voice
+/// its own stream key and its own watchers, while a camera rides the voice
 /// connection that is already open. The two share the capture module and the
 /// packetiser and nothing above them.
 ///
@@ -150,13 +150,13 @@ final class SelfVideoController extends ChangeNotifier {
       return;
     }
     _startSending(voice, lease);
-    // A viewer of the new numbering decodes nothing until a keyframe.
+    // A participant on the new numbering decodes nothing until a keyframe.
     unawaited(lease.requestKeyframe());
   }
 
   /// Answers the media server about the camera's pictures: a keyframe for a
-  /// viewer who cannot decode, or lost packets again from the history. With no
-  /// camera running, there is nothing to answer with.
+  /// participant who cannot decode, or lost packets again from the history.
+  /// With no camera running, there is nothing to answer with.
   void answer(VoicePictureAsk ask) {
     switch (ask) {
       case VoiceKeyframeRequestedEvent():
@@ -170,7 +170,7 @@ final class SelfVideoController extends ChangeNotifier {
     if (!_isOn) return;
     _isBusy = true;
     notifyListeners();
-    // Told first this time: a viewer still drawing the last picture of a
+    // Told first this time: a participant still drawing the last picture of a
     // camera that already stopped is worse than one told a moment early.
     await _announce(enabled: false);
     await _tearDown(_transportProvider());

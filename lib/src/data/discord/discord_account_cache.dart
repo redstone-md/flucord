@@ -16,13 +16,21 @@ Future<ChatWorkspace?> readOfflineWorkspace(
   return cached?.currentMemberId == accountId ? cached : null;
 }
 
-/// Empties the cache when another account filled it.
+/// Empties the cache, and the pictures of its chats, when another account
+/// filled it.
 ///
 /// Call this once Discord has said who [accountId] is, and before the live
 /// workspace is written. That write replaces the navigation only: without this,
 /// the first account's messages and members would stay, and would show in any
-/// channel the two accounts share.
-Future<void> clearCacheOfOtherAccount(ChatCache cache, String accountId) async {
+/// channel the two accounts share. The pictures are on disk apart from the
+/// cache, so [clearChatImages] removes them too.
+Future<void> clearCacheOfOtherAccount(
+  ChatCache cache,
+  String accountId, {
+  required Future<void> Function()? clearChatImages,
+}) async {
   final held = await cache.readWorkspaceShell();
-  if (held != null && held.currentMemberId != accountId) await cache.clear();
+  if (held == null || held.currentMemberId == accountId) return;
+  await cache.clear();
+  await clearChatImages?.call();
 }

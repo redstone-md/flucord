@@ -10,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
+import 'package:flucord/src/data/chat_image_cache.dart';
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
@@ -22,7 +23,6 @@ import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
-import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
@@ -34,6 +34,7 @@ import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 import 'fake_discord_wire.dart';
 import 'recording_database_factory.dart';
 import 'zoomed_app.dart';
+import 'memory_credential_vault.dart';
 
 /// The whole app, in a real session, driven by raw gateway events (seam A).
 ///
@@ -87,6 +88,7 @@ final class SessionHarness {
          _connector,
          diskDirectory,
          cacheOnIsolate: measured,
+         clearChatImages: _chatImagesOnDisk ? ChatImageCache.clear : null,
        );
 
   /// The account the default READY signs in.
@@ -108,7 +110,9 @@ final class SessionHarness {
 
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
-  final _MemoryCredentialVault _vault = _MemoryCredentialVault();
+  final MemoryCredentialVault _vault = MemoryCredentialVault(
+    session: _sessionOf(currentUserId),
+  );
   late _FakeDesktopWindow _window = _FakeDesktopWindow(_linkAtLaunch);
 
   /// Where the cache lives when the test asked for `onDisk`.
@@ -133,6 +137,9 @@ final class SessionHarness {
   /// part is the account's id.
   static String tokenOf(String accountId) =>
       '${base64Url.encode(utf8.encode(accountId))}.harness.token';
+
+  static DiscordAccountSession _sessionOf(String accountId) =>
+      DiscordDesktopUserSession(tokenOf(accountId));
 
   /// The READY a session starts from. A new map each call, so a test can change
   /// its copy and pass it to [testSession].
@@ -258,7 +265,7 @@ final class SessionHarness {
     required Map<String, Object?> ready,
   }) async {
     await _end();
-    _vault.saveAccount(accountId);
+    _vault.session = _sessionOf(accountId);
     await _start(ready);
   }
 
@@ -277,7 +284,7 @@ final class SessionHarness {
   /// 503 to the first call a launch makes. Nothing is on the wire after this.
   Future<void> relaunchUnreachable({String accountId = currentUserId}) async {
     await _end();
-    _vault.saveAccount(accountId);
+    _vault.session = _sessionOf(accountId);
     discordUnreachable();
     await _launch();
     await settleServerErrorRepeats();
@@ -300,7 +307,7 @@ final class SessionHarness {
     await _tester.tap(find.text('Sign out'));
     await settle();
     await _tester.tap(find.byKey(destructiveConfirmKey));
-    await _settleUntil(() => !_vault.hasSession, 'the end of the sign-out');
+    await _settleUntil(() => _vault.session == null, 'the end of the sign-out');
   }
 
   /// Every byte the cache has on disk, as text, with its side files.
@@ -574,12 +581,15 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     this._connector,
     this._diskDirectory, {
     required bool cacheOnIsolate,
-  }) : _cacheOnIsolate = cacheOnIsolate;
+    required Future<void> Function()? clearChatImages,
+  }) : _cacheOnIsolate = cacheOnIsolate,
+       _clearChatImages = clearChatImages;
 
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
   final Directory? _diskDirectory;
   final bool _cacheOnIsolate;
+  final Future<void> Function()? _clearChatImages;
 
   /// The cache of the repository built last.
   SqliteChatCache? openedCache;
@@ -623,6 +633,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
       ),
       cache,
       accountId: session.accountId,
+      clearChatImages: _clearChatImages,
     );
   }
 
@@ -728,23 +739,3 @@ final class _WatchedNavigationMemory implements NavigationMemoryRepository {
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
-final class _MemoryCredentialVault implements CredentialVault {
-  DiscordAccountSession? _session = _sessionOf(SessionHarness.currentUserId);
-
-  static DiscordAccountSession _sessionOf(String accountId) =>
-      DiscordDesktopUserSession(SessionHarness.tokenOf(accountId));
-
-  void saveAccount(String accountId) => _session = _sessionOf(accountId);
-
-  bool get hasSession => _session != null;
-
-  @override
-  Future<DiscordAccountSession?> readDiscordSession() async => _session;
-
-  @override
-  Future<void> writeDiscordSession(DiscordAccountSession session) async =>
-      _session = session;
-
-  @override
-  Future<void> clearDiscordSession() async => _session = null;
-}

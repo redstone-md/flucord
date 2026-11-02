@@ -17,7 +17,7 @@ void main() {
     );
     expect(
       button.style?.backgroundColor?.resolve(const {}),
-      FlucordTheme.dark.colorScheme.error,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger,
     );
   });
 

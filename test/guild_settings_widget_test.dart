@@ -472,7 +472,10 @@ void main() {
           )
           .first,
     );
-    expect(button.color, FlucordTheme.dark.colorScheme.error);
+    expect(
+      button.color,
+      FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger,
+    );
     harness.dispose();
   });
 

@@ -1,17 +1,14 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
-import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
-import 'package:flucord/src/data/discord/discord_etf_codec.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'support/fake_discord_wire.dart';
 
 const _guildId = '111111111111111111';
 const _channelId = '222222222222222222';
@@ -22,18 +19,18 @@ const _newerMessage = '234567890123456789';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  Future<(DiscordDesktopChatRepository, _MemoryDesktopWebSocket)>
+  Future<(DiscordDesktopChatRepository, MemoryDesktopWebSocket)>
   connect() async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final socket = _MemoryDesktopWebSocket();
+    final socket = MemoryDesktopWebSocket.etf();
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
       profile: _uncompressed,
-      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      socketConnector: MemoryDesktopWebSocketConnector.answering(socket),
     );
     final repository = DiscordDesktopChatRepository(
       DiscordDesktopApiClient(
@@ -53,7 +50,7 @@ void main() {
     final (repository, socket) = await connect();
     final readState = repository.readState!;
 
-    socket.receiveTerm(_ready);
+    socket.receive(_ready);
     await _waitFor(() => readState.current.forChannel(_channelId) != null);
 
     expect(readState.current.forChannel(_channelId)!.mentionCount, 3);
@@ -70,8 +67,8 @@ void main() {
     final readState = repository.readState!;
 
     socket
-      ..receiveTerm(_ready)
-      ..receiveTerm(const {
+      ..receive(_ready)
+      ..receive(const {
         'op': 0,
         's': 2,
         't': 'MESSAGE_ACK',
@@ -99,8 +96,8 @@ void main() {
       final readState = repository.readState!;
 
       socket
-        ..receiveTerm(_ready)
-        ..receiveTerm(const {
+        ..receive(_ready)
+        ..receive(const {
           'op': 0,
           's': 2,
           't': 'STATE_UPDATE',
@@ -135,7 +132,7 @@ void main() {
       expect(readState.current.readStateVersion, 22);
       expect(readState.current.userGuildSettingsVersion, 5);
 
-      socket.receiveTerm(const {
+      socket.receive(const {
         'op': 0,
         's': 3,
         't': 'DELETED_ENTITY_IDS',
@@ -158,8 +155,8 @@ void main() {
     repository.events.listen(events.add);
 
     socket
-      ..receiveTerm(_ready)
-      ..receiveTerm(const {
+      ..receive(_ready)
+      ..receive(const {
         'op': 0,
         's': 2,
         't': 'PASSIVE_UPDATE_V2',
@@ -187,8 +184,8 @@ void main() {
     repository.events.listen(events.add);
 
     socket
-      ..receiveTerm(_ready)
-      ..receiveTerm(const {
+      ..receive(_ready)
+      ..receive(const {
         'op': 0,
         's': 2,
         't': 'PASSIVE_UPDATE_V2',
@@ -274,49 +271,4 @@ final class _UnusedTransport implements DiscordHttpTransport {
 
   @override
   void close() {}
-}
-
-final class _MemoryDesktopWebSocketConnector
-    implements DiscordDesktopWebSocketConnector {
-  _MemoryDesktopWebSocketConnector(this.socket);
-
-  final DiscordDesktopWebSocket socket;
-
-  @override
-  Future<DiscordDesktopWebSocket> connect(Uri uri) async => socket;
-}
-
-final class _MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
-  final StreamController<Object?> _messages = StreamController();
-  final List<Object> sent = [];
-  bool _open = true;
-
-  List<Map<String, Object?>> get terms => sent
-      .whereType<Uint8List>()
-      .map((bytes) => DiscordEtfCodec.decode(bytes)! as Map<String, Object?>)
-      .toList(growable: false);
-
-  @override
-  int? get closeCode => null;
-
-  @override
-  bool get isOpen => _open;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void receiveTerm(Map<String, Object?> payload) =>
-      _messages.add(DiscordEtfCodec.encode(payload));
-
-  @override
-  void send(String data) => sent.add(data);
-
-  @override
-  void sendBinary(List<int> data) => sent.add(Uint8List.fromList(data));
-
-  @override
-  Future<void> close() async {
-    _open = false;
-    if (!_messages.isClosed) await _messages.close();
-  }
 }

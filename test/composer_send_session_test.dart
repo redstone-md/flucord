@@ -166,6 +166,31 @@ void main() {
       },
     );
 
+    testSession('lets the new channel send while the first is held', (
+      tester,
+      session,
+    ) async {
+      const otherPath =
+          '/api/v9/channels/${SessionHarness.otherChannelId}/messages';
+      final answer = await sendThenSwitch(tester, session);
+      session.transport.on(
+        'POST',
+        otherPath,
+        (_) => _sentMessage('here', channelId: SessionHarness.otherChannelId),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('send-message')));
+      await session.settle();
+
+      expect(
+        _posted(session, otherPath).single.json,
+        containsPair('content', 'draft here'),
+      );
+      expect(_boxText(tester), isEmpty);
+      answer.complete(_sentMessage('first'));
+      await session.settle();
+    });
+
     testSession('keeps a reply started in the new channel', (
       tester,
       session,
@@ -331,6 +356,19 @@ void main() {
       ready: _slowmodeReady(),
       voiceMessageRecorder: FakeVoiceMessageRecorder(),
     );
+
+    testSession('blocks a poll too', (tester, session) async {
+      session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+      await session.openChannel(SessionHarness.channelId);
+      await _typeAndSend(tester, session, 'first');
+
+      await tester.tap(find.byKey(const ValueKey('composer-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('create-poll')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create a poll'), findsNothing);
+    }, ready: _slowmodeReady());
 
     const gifUrl = 'https://tenor.example/starred';
     testSession(

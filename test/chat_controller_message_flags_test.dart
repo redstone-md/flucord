@@ -123,7 +123,7 @@ void main() {
     );
 
     expect(await controller.editMessage(voiceMessage, 'Not allowed'), isFalse);
-    expect(controller.isSending, isFalse);
+    expect(controller.isSendingIn('forge-general'), isFalse);
   });
 }
 

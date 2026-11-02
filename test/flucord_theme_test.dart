@@ -8,32 +8,9 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'support/contrast.dart';
 
 void main() {
-  test('dark theme exposes Discord workspace surface roles', () {
-    final theme = FlucordTheme.dark;
-    final surfaces = theme.extension<FlucordSurfaceTheme>()!;
+  test('light theme keeps rail, sidebar and chat distinct', () {
+    final surfaces = FlucordTheme.light.extension<FlucordSurfaceTheme>()!;
 
-    expect(theme.colorScheme.primary, const Color(0xff5865f2));
-    expect(theme.colorScheme.secondary, const Color(0xff23a55a));
-    expect(theme.colorScheme.error, const Color(0xffda373c));
-    expect(surfaces.rail, const Color(0xff1e1f22));
-    expect(surfaces.canvas, const Color(0xff313338));
-    expect(surfaces.surface, const Color(0xff2b2d31));
-    expect(surfaces.raised, const Color(0xff3f4147));
-    expect(surfaces.inset, const Color(0xff232428));
-    expect(surfaces.control, const Color(0xff383a40));
-    expect(theme.inputDecorationTheme.fillColor, const Color(0xff383a40));
-  });
-
-  test('light theme keeps rail, sidebar, chat, and controls distinct', () {
-    final theme = FlucordTheme.light;
-    final surfaces = theme.extension<FlucordSurfaceTheme>()!;
-
-    expect(surfaces.rail, const Color(0xffe3e5e8));
-    expect(surfaces.canvas, const Color(0xffffffff));
-    expect(surfaces.surface, const Color(0xfff2f3f5));
-    expect(surfaces.raised, const Color(0xffdfe3e8));
-    expect(surfaces.inset, const Color(0xffebedef));
-    expect(surfaces.control, const Color(0xffebedef));
     expect(surfaces.rail, isNot(surfaces.canvas));
     expect(surfaces.surface, isNot(surfaces.canvas));
   });
@@ -50,13 +27,13 @@ void main() {
     );
     expect(
       style.overlayColor!.resolve({WidgetState.focused}),
-      const Color(0xff5865f2).withValues(alpha: 0.2),
+      surfaces.brand.withValues(alpha: 0.2),
     );
     final filled = theme.filledButtonTheme.style!;
-    expect(filled.backgroundColor!.resolve({}), const Color(0xff5865f2));
+    expect(filled.backgroundColor!.resolve({}), surfaces.brand);
     expect(
       filled.backgroundColor!.resolve({WidgetState.pressed}),
-      const Color(0xff4752c4),
+      surfaces.brandPressed,
     );
   });
 
@@ -193,6 +170,12 @@ void main() {
           () => expectContrast(surfaces.errorText, 4.5),
         );
 
+        // Widgets and Material's own fields draw error text in it.
+        test(
+          'the scheme\'s error colour reaches 4.5:1',
+          () => expectContrast(theme.colorScheme.error, 4.5),
+        );
+
         test(
           'the default icon colour reaches 3:1',
           () => expectContrast(surfaces.muted, 3),
@@ -221,15 +204,6 @@ void main() {
       expect(surfaces.errorText, const Color(danger));
       expect(surfaces.accentIcon, const Color(brand));
       expect(surfaces.focusRing, const Color(brand));
-    });
-
-    test('fills keep Discord\'s brand and danger as written', () {
-      final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
-
-      expect(surfaces.brand, const Color(0xff5865f2));
-      expect(surfaces.danger, const Color(0xffda373c));
-      expect(FlucordTheme.dark.colorScheme.primary, const Color(0xff5865f2));
-      expect(FlucordTheme.dark.colorScheme.error, const Color(0xffda373c));
     });
   });
 

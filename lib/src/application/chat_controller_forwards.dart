@@ -17,27 +17,16 @@ extension ChatControllerForwards on ChatController {
             .messagesFor(source.channelId)
             .any((message) => message.id == source.id) ||
         target == null ||
-        !target.canAcceptMessageForward ||
-        _isSending) {
+        !target.canAcceptMessageForward) {
       return false;
     }
-    _isSending = true;
-    _notify();
-    try {
+    return _sendingIn(targetChannelId, () async {
       final forwarded = await repository.forwardMessage(
         sourceChannelId: source.channelId,
         sourceMessageId: source.id,
         targetChannelId: targetChannelId,
       );
       _applySentMessage(forwarded);
-      _error = null;
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      _notify();
-    }
+    });
   }
 }

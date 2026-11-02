@@ -1,12 +1,7 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
-import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
-import 'package:flucord/src/data/discord/discord_etf_codec.dart';
 import 'package:flucord/src/data/discord/discord_member_list_ranges.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
@@ -16,21 +11,23 @@ import 'package:flucord/src/domain/guild_member_list.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/fake_discord_wire.dart';
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  Future<(DiscordDesktopChatRepository, _MemoryDesktopWebSocket)>
+  Future<(DiscordDesktopChatRepository, MemoryDesktopWebSocket)>
   connect() async {
     final cache = await SqliteChatCache.openAt(
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final socket = _MemoryDesktopWebSocket();
+    final socket = MemoryDesktopWebSocket.etf();
     final gateway = DiscordDesktopGatewayClient(
       authorization: 'account-session',
       properties: const {'os': 'Windows'},
       profile: _uncompressed,
-      socketConnector: _MemoryDesktopWebSocketConnector(socket),
+      socketConnector: MemoryDesktopWebSocketConnector.answering(socket),
     );
     final repository = DiscordDesktopChatRepository(
       DiscordDesktopApiClient(
@@ -111,8 +108,8 @@ void main() {
       repository.memberListUpdates.listen(lists.add);
 
       socket
-        ..receiveTerm(ready)
-        ..receiveTerm(memberListUpdate);
+        ..receive(ready)
+        ..receive(memberListUpdate);
       await _waitFor(() => lists.isNotEmpty);
 
       expect(
@@ -137,15 +134,15 @@ void main() {
 
   test('subscribes and releases a channel range over opcode 37', () async {
     final (repository, socket) = await connect();
-    socket.receiveTerm(ready);
-    await _waitFor(() => socket.terms.any((frame) => frame['op'] == 37));
+    socket.receive(ready);
+    await _waitFor(() => socket.frames.any((frame) => frame['op'] == 37));
 
     repository.subscribeMemberRanges(
       guildId: 'guild',
       channelId: 'channel',
       ranges: DiscordMemberListRanges.initial,
     );
-    final subscribed = _channelsOf(socket.terms.last);
+    final subscribed = _channelsOf(socket.frames.last);
     repository.unsubscribeMemberRanges(guildId: 'guild', channelId: 'channel');
 
     expect(subscribed, {
@@ -153,21 +150,21 @@ void main() {
         [0, 99],
       ],
     });
-    expect(_channelsOf(socket.terms.last), isEmpty);
+    expect(_channelsOf(socket.frames.last), isEmpty);
   });
 
   test('a replayed READY drops the rosters of the previous session', () async {
     final (repository, socket) = await connect();
     socket
-      ..receiveTerm(ready)
-      ..receiveTerm(memberListUpdate);
+      ..receive(ready)
+      ..receive(memberListUpdate);
     await _waitFor(
       () =>
           repository.memberListFor(guildId: 'guild', listId: 'everyone') !=
           null,
     );
 
-    socket.receiveTerm(ready);
+    socket.receive(ready);
     await _waitFor(
       () =>
           repository.memberListFor(guildId: 'guild', listId: 'everyone') ==
@@ -212,49 +209,4 @@ final class _UnusedTransport implements DiscordHttpTransport {
 
   @override
   void close() {}
-}
-
-final class _MemoryDesktopWebSocketConnector
-    implements DiscordDesktopWebSocketConnector {
-  _MemoryDesktopWebSocketConnector(this.socket);
-
-  final DiscordDesktopWebSocket socket;
-
-  @override
-  Future<DiscordDesktopWebSocket> connect(Uri uri) async => socket;
-}
-
-final class _MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
-  final StreamController<Object?> _messages = StreamController();
-  final List<Object> sent = [];
-  bool _open = true;
-
-  List<Map<String, Object?>> get terms => sent
-      .whereType<Uint8List>()
-      .map((bytes) => DiscordEtfCodec.decode(bytes)! as Map<String, Object?>)
-      .toList(growable: false);
-
-  @override
-  int? get closeCode => null;
-
-  @override
-  bool get isOpen => _open;
-
-  @override
-  Stream<Object?> get messages => _messages.stream;
-
-  void receiveTerm(Map<String, Object?> payload) =>
-      _messages.add(DiscordEtfCodec.encode(payload));
-
-  @override
-  void send(String data) => sent.add(data);
-
-  @override
-  void sendBinary(List<int> data) => sent.add(Uint8List.fromList(data));
-
-  @override
-  Future<void> close() async {
-    _open = false;
-    if (!_messages.isClosed) await _messages.close();
-  }
 }

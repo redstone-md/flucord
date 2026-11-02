@@ -19,11 +19,7 @@ final class NavigationMemoryStore implements ReadingPositions {
 
   final NavigationMemoryRepository? _repository;
 
-  String? _accountId;
-  String? _lastSpaceId;
-  Map<String, String> _lastChannels = {};
-  Set<String> _collapsedCategoryIds = {};
-  Map<String, ReadingPosition> _positions = {};
+  NavigationMemory _memory = const NavigationMemory(accountId: null);
   int _generation = 0;
   Timer? _pendingSave;
   Future<void> _lastWrite = Future.value();
@@ -32,20 +28,24 @@ final class NavigationMemoryStore implements ReadingPositions {
   /// A selection made under an older generation does not carry over.
   int get generation => _generation;
 
-  String? get lastSpaceId => _lastSpaceId;
-  Set<String> get collapsedCategoryIds => _collapsedCategoryIds;
+  String? get lastSpaceId => _memory.lastSpaceId;
+  Set<String> get collapsedCategoryIds => _memory.collapsedCategoryIds;
 
-  String? lastChannelOf(String spaceId) => _lastChannels[spaceId];
+  String? lastChannelOf(String spaceId) => _memory.lastChannels[spaceId];
 
   /// Replaces the memory with what [accountId] saved. The same account again,
   /// as on a retry, keeps what is here. An account that cannot be named has
   /// nothing saved and saves nothing.
   Future<void> openAccount(String? accountId) async {
-    if (accountId == _accountId) return;
+    if (accountId == _memory.accountId) return;
     _writePending();
     await _lastWrite;
     final saved = accountId == null ? null : await _load();
-    _replaceWith(accountId, saved?.accountId == accountId ? saved : null);
+    _replaceWith(
+      saved != null && saved.accountId == accountId
+          ? saved
+          : NavigationMemory(accountId: accountId),
+    );
   }
 
   /// Empties the memory, here and on disk. The disk is emptied with no account
@@ -53,7 +53,7 @@ final class NavigationMemoryStore implements ReadingPositions {
   Future<void> forget() async {
     _pendingSave?.cancel();
     _pendingSave = null;
-    _replaceWith(null, null);
+    _replaceWith(const NavigationMemory(accountId: null));
     _enqueueWrite((repository) => repository.clear());
     await _lastWrite;
   }
@@ -61,33 +61,35 @@ final class NavigationMemoryStore implements ReadingPositions {
   /// Notes the space open now and, when it has one worth landing on again, its
   /// channel.
   void rememberLocation(String spaceId, String? channelId) {
-    _lastSpaceId = spaceId;
-    if (channelId != null) _lastChannels[spaceId] = channelId;
+    _memory = _memory.copyWith(
+      lastSpaceId: spaceId,
+      lastChannels: channelId == null
+          ? null
+          : {..._memory.lastChannels, spaceId: channelId},
+    );
     _scheduleSave();
   }
 
   void toggleCategory(String categoryId) {
-    if (!_collapsedCategoryIds.add(categoryId)) {
-      _collapsedCategoryIds.remove(categoryId);
-    }
+    final collapsed = {..._memory.collapsedCategoryIds};
+    if (!collapsed.add(categoryId)) collapsed.remove(categoryId);
+    _memory = _memory.copyWith(collapsedCategoryIds: collapsed);
     _scheduleSave();
   }
 
   @override
-  ReadingPosition? of(String channelId) => _positions[channelId];
+  ReadingPosition? of(String channelId) => _memory.positions[channelId];
 
   @override
   void keep(String channelId, ReadingPosition? position) {
-    if (position == null) {
-      if (_positions.remove(channelId) != null) _scheduleSave();
-      return;
-    }
+    if (position == null && !_memory.positions.containsKey(channelId)) return;
     // Added again, so the map's order runs from least to most recently read.
-    _positions.remove(channelId);
-    _positions[channelId] = position;
-    if (_positions.length > positionLimit) {
-      _positions.remove(_positions.keys.first);
+    final positions = {..._memory.positions}..remove(channelId);
+    if (position != null) positions[channelId] = position;
+    if (positions.length > positionLimit) {
+      positions.remove(positions.keys.first);
     }
+    _memory = _memory.copyWith(positions: positions);
     _scheduleSave();
   }
 
@@ -113,17 +115,13 @@ final class NavigationMemoryStore implements ReadingPositions {
     }
   }
 
-  void _replaceWith(String? accountId, NavigationMemory? saved) {
-    _accountId = accountId;
-    _lastSpaceId = saved?.lastSpaceId;
-    _lastChannels = {...?saved?.lastChannels};
-    _collapsedCategoryIds = {...?saved?.collapsedCategoryIds};
-    _positions = {...?saved?.positions};
+  void _replaceWith(NavigationMemory memory) {
+    _memory = memory;
     _generation++;
   }
 
   void _scheduleSave() {
-    if (_accountId == null || _repository == null) return;
+    if (_memory.accountId == null || _repository == null) return;
     _pendingSave?.cancel();
     _pendingSave = Timer(_saveDelay, _writePending);
   }
@@ -132,13 +130,7 @@ final class NavigationMemoryStore implements ReadingPositions {
     if (_pendingSave == null) return;
     _pendingSave?.cancel();
     _pendingSave = null;
-    final memory = NavigationMemory(
-      accountId: _accountId!,
-      lastSpaceId: _lastSpaceId,
-      lastChannels: {..._lastChannels},
-      collapsedCategoryIds: {..._collapsedCategoryIds},
-      positions: {..._positions},
-    );
+    final memory = _memory;
     _enqueueWrite((repository) => repository.save(memory));
   }
 

@@ -8,7 +8,6 @@ import 'package:flucord/src/application/discord_desktop_login_controller.dart';
 import 'package:flucord/src/data/mock_chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
-import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
@@ -17,11 +16,12 @@ import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'support/contrast.dart';
+import 'support/memory_credential_vault.dart';
 
 void main() {
   test('connects and persists the session emitted by QR remote auth', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    final vault = _MemoryVault();
+    final vault = MemoryCredentialVault();
     final connection = ConnectionController(chat, vault, _RepositoryFactory());
     final gateway = _RemoteAuthGateway();
     final controller = DiscordDesktopLoginController(
@@ -78,7 +78,7 @@ void main() {
     'a sign-out with a locked cache forgets the account and says so',
     () async {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      final vault = _MemoryVault();
+      final vault = MemoryCredentialVault();
       final connection = ConnectionController(
         chat,
         vault,
@@ -112,7 +112,7 @@ void main() {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
       final connection = ConnectionController(
         chat,
-        _MemoryVault(),
+        MemoryCredentialVault(),
         _RepositoryFactory(),
       );
       final gateway = _RemoteAuthGateway();
@@ -152,7 +152,7 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final connection = ConnectionController(
       chat,
-      _MemoryVault(),
+      MemoryCredentialVault(),
       _RepositoryFactory(),
     );
     final gateway = _RemoteAuthGateway();
@@ -191,7 +191,7 @@ void main() {
     tester,
   ) async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    final vault = _MemoryVault();
+    final vault = MemoryCredentialVault();
     final connection = ConnectionController(chat, vault, _RepositoryFactory());
     final gateway = _RemoteAuthGateway();
     final controller = DiscordDesktopLoginController(
@@ -214,6 +214,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        theme: FlucordTheme.dark,
         home: Scaffold(
           body: DiscordDesktopLoginSection(
             controller: controller,
@@ -288,21 +289,6 @@ final class _RemoteAuthGateway implements DiscordRemoteAuthGateway {
   @override
   Future<void> close() async {
     if (!_events.isClosed) await _events.close();
-  }
-}
-
-final class _MemoryVault implements CredentialVault {
-  DiscordAccountSession? session;
-
-  @override
-  Future<void> clearDiscordSession() async => session = null;
-
-  @override
-  Future<DiscordAccountSession?> readDiscordSession() async => session;
-
-  @override
-  Future<void> writeDiscordSession(DiscordAccountSession session) async {
-    this.session = session;
   }
 }
 

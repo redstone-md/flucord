@@ -96,7 +96,9 @@ final class DiscordDesktopChatRepository
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? nonceFactory,
     VoiceDaveService? daveService,
+    Future<void> Function()? clearChatImages,
   }) : _accountId = accountId,
+       _clearChatImages = clearChatImages,
        _mapper = mapper ?? DiscordMapper(),
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
        _userSettings = DiscordUserSettingsRepository(_api),
@@ -218,6 +220,10 @@ final class DiscordDesktopChatRepository
   /// Who the session's credential says it is, before Discord has confirmed it.
   /// The offline fallback compares this with the account of the cache.
   final String? _accountId;
+
+  /// Removes the pictures of the chats from disk, when another account's
+  /// cache is found. Null where the app keeps no pictures on disk.
+  final Future<void> Function()? _clearChatImages;
 
   /// Whether a workspace is being shown, live or from the cache.
   ///
@@ -418,6 +424,7 @@ final class DiscordDesktopChatRepository
         await clearCacheOfOtherAccount(
           _cache,
           snapshot.currentUser['id']! as String,
+          clearChatImages: _clearChatImages,
         );
         return _cache.readWorkspaceShell();
       });
@@ -854,10 +861,7 @@ final class DiscordDesktopChatRepository
 
   @override
   Future<void> close() async {
-    await _gatewaySubscription.cancel();
-    await _sharedDispatches.drained;
-    // First, so that a slow socket further down cannot cost what is waiting.
-    await _cache.flush();
+    await _sharedDispatches.stop(_gatewaySubscription);
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

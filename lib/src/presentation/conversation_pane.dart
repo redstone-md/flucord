@@ -640,7 +640,7 @@ class ConversationPaneState extends State<ConversationPane> {
               widget.workspace,
               channel.spaceId,
             ),
-            isSending: chat.isSending,
+            isSending: chat.isSendingIn(channel.id),
             onTyping: () => chat.startTyping(channel.id),
             onCreatePoll: (poll) =>
                 chat.createPoll(channelId: channel.id, poll: poll),

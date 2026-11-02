@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/guild_settings_controller.dart';
 import '../../domain/automod_rule.dart';
+import '../../domain/duration_in_words.dart';
 import '../../domain/chat_models.dart';
 import 'guild_automod_rule_dialog.dart';
 import 'guild_automod_rule_fields.dart';
@@ -191,7 +192,7 @@ String describeAutoModRule(AutoModRule rule, {ChatWorkspace? workspace}) {
     if (rule.alertChannelId.isNotEmpty)
       'alerts ${_channelName(rule.alertChannelId, workspace)}',
     if (rule.timeout > Duration.zero)
-      'times out for ${_describeTimeout(rule.timeout)}',
+      'times out for ${durationInWords(rule.timeout)}',
   ];
   if (consequences.isEmpty) return '$watches — no action';
   return '$watches — ${consequences.join(', ')}';
@@ -213,16 +214,6 @@ String _channelName(String channelId, ChatWorkspace? workspace) {
     if (channel.id == channelId) return '#${channel.name}';
   }
   return 'a channel';
-}
-
-String _describeTimeout(Duration timeout) {
-  if (timeout.inDays > 0) {
-    return '${timeout.inDays} day${timeout.inDays == 1 ? '' : 's'}';
-  }
-  if (timeout.inHours > 0) {
-    return '${timeout.inHours} hour${timeout.inHours == 1 ? '' : 's'}';
-  }
-  return '${timeout.inMinutes} minute${timeout.inMinutes == 1 ? '' : 's'}';
 }
 
 /// The two controls that only mean anything while a raid is in progress.

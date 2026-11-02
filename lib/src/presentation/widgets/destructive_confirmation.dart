@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'flucord_dialog.dart';
+import '../../theme/flucord_theme.dart';
 
 /// The key of the confirm button when a caller does not name its own.
 const destructiveConfirmKey = ValueKey('destructive-confirm');
@@ -53,11 +54,10 @@ class DangerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor: colors.error,
-        foregroundColor: colors.onError,
+        backgroundColor: context.surfaces.danger,
+        foregroundColor: Theme.of(context).colorScheme.onError,
       ),
       onPressed: onPressed,
       child: Text(label),

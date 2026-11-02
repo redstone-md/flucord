@@ -9,13 +9,14 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'support/memory_credential_vault.dart';
 
 void main() {
   test(
     'connects through factory and stores only remembered credentials',
     () async {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      final vault = _MemoryCredentialVault();
+      final vault = MemoryCredentialVault();
       final controller = ConnectionController(
         chat,
         vault,
@@ -52,7 +53,7 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final controller = ConnectionController(
       chat,
-      _MemoryCredentialVault(),
+      MemoryCredentialVault(),
       _RejectingRepositoryFactory(),
       botTransportEnabled: true,
     );
@@ -76,7 +77,7 @@ void main() {
     final factory = _CountingRepositoryFactory();
     final controller = ConnectionController(
       chat,
-      _MemoryCredentialVault(),
+      MemoryCredentialVault(),
       factory,
       botTransportEnabled: true,
     );
@@ -116,7 +117,7 @@ void main() {
     'forgetting the credential of a live session ends the session',
     () async {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      final vault = _MemoryCredentialVault();
+      final vault = MemoryCredentialVault();
       final controller = ConnectionController(
         chat,
         vault,
@@ -136,11 +137,41 @@ void main() {
     },
   );
 
+  test(
+    'disconnecting the bot clears its cached messages and pictures',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = MemoryCredentialVault();
+      final factory = _StaticRepositoryFactory(
+        MockChatRepository(latency: Duration.zero),
+      );
+      var imageClears = 0;
+      final controller = ConnectionController(
+        chat,
+        vault,
+        factory,
+        botTransportEnabled: true,
+        clearChatImages: () async => imageClears++,
+      );
+      addTearDown(chat.dispose);
+      await chat.load();
+      await controller.connectWithBotToken(token: 'bot-token', remember: true);
+
+      await controller.disconnect();
+
+      expect(controller.mode, SessionMode.disconnected);
+      expect(factory.cacheClears, 1);
+      expect(imageClears, 1);
+      // The saved token stays, so "Use saved token" can sign back in.
+      expect(vault.token, 'bot-token');
+    },
+  );
+
   group('forgetting the account', () {
     ConnectionController controllerWith(
       Future<void> Function() clearChatImages, {
       ChatRepositoryFactory? factory,
-      required _MemoryCredentialVault vault,
+      required MemoryCredentialVault vault,
     }) {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
       addTearDown(chat.dispose);
@@ -159,7 +190,7 @@ void main() {
       var clears = 0;
       final controller = controllerWith(
         () async => clears++,
-        vault: _MemoryCredentialVault(),
+        vault: MemoryCredentialVault(),
       );
 
       await controller.forgetSavedCredential();
@@ -171,7 +202,7 @@ void main() {
     test(
       'drops the credential when the pictures cannot go, and says so',
       () async {
-        final vault = _MemoryCredentialVault()
+        final vault = MemoryCredentialVault()
           ..session = DiscordBotSession('saved-token');
         final controller = controllerWith(
           () async => throw const FileSystemException('locked'),
@@ -190,7 +221,7 @@ void main() {
       final controller = controllerWith(
         () async => clears++,
         factory: _CacheLockedRepositoryFactory(),
-        vault: _MemoryCredentialVault(),
+        vault: MemoryCredentialVault(),
       );
 
       await controller.forgetSavedCredential();
@@ -202,7 +233,7 @@ void main() {
 
   test('automatically restores a typed session from the vault', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    final vault = _MemoryCredentialVault()
+    final vault = MemoryCredentialVault()
       ..session = DiscordBotSession('saved-token');
     final factory = _StaticRepositoryFactory(
       MockChatRepository(latency: Duration.zero),
@@ -231,7 +262,7 @@ void main() {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
       final controller = ConnectionController(
         chat,
-        _MemoryCredentialVault(),
+        MemoryCredentialVault(),
         _CountingRepositoryFactory(),
       );
       addTearDown(chat.dispose);
@@ -247,7 +278,7 @@ void main() {
 
   test('a rejected saved session never reveals demo servers', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    final vault = _MemoryCredentialVault()
+    final vault = MemoryCredentialVault()
       ..session = DiscordBotSession('rejected-token');
     final controller = ConnectionController(
       chat,
@@ -273,7 +304,7 @@ void main() {
     'explicit demo initialization does not restore a saved session',
     () async {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      final vault = _MemoryCredentialVault()
+      final vault = MemoryCredentialVault()
         ..session = DiscordBotSession('saved-token');
       final factory = _CountingRepositoryFactory();
       final controller = ConnectionController(
@@ -296,7 +327,7 @@ void main() {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final controller = ConnectionController(
       chat,
-      _MemoryCredentialVault(),
+      MemoryCredentialVault(),
       _UnsupportedRepositoryFactory(),
     );
     addTearDown(chat.dispose);
@@ -324,7 +355,7 @@ void main() {
     'keeps saved bot credentials dormant in a normal client build',
     () async {
       final chat = ChatController(MockChatRepository(latency: Duration.zero));
-      final vault = _MemoryCredentialVault()
+      final vault = MemoryCredentialVault()
         ..session = DiscordBotSession('saved-token');
       final factory = _CountingRepositoryFactory();
       final controller = ConnectionController(chat, vault, factory);
@@ -346,7 +377,7 @@ void main() {
 
   test('restores a desktop user session in a normal client build', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
-    final vault = _MemoryCredentialVault()
+    final vault = MemoryCredentialVault()
       ..session = DiscordDesktopUserSession('desktop-authorization');
     final factory = _StaticRepositoryFactory(
       MockChatRepository(latency: Duration.zero),
@@ -367,7 +398,7 @@ void main() {
     final factory = _CountingRepositoryFactory();
     final controller = ConnectionController(
       chat,
-      _MemoryCredentialVault(),
+      MemoryCredentialVault(),
       factory,
     );
     addTearDown(chat.dispose);
@@ -387,29 +418,6 @@ void main() {
   });
 }
 
-final class _MemoryCredentialVault implements CredentialVault {
-  DiscordAccountSession? session;
-  int readCalls = 0;
-  int writeCalls = 0;
-
-  String? get token => session?.transportCredential;
-
-  @override
-  Future<void> clearDiscordSession() async => session = null;
-
-  @override
-  Future<DiscordAccountSession?> readDiscordSession() async {
-    readCalls++;
-    return session;
-  }
-
-  @override
-  Future<void> writeDiscordSession(DiscordAccountSession session) async {
-    writeCalls++;
-    this.session = session;
-  }
-}
-
 final class _FailingCredentialVault implements CredentialVault {
   @override
   Future<void> clearDiscordSession() async => throw StateError('vault');
@@ -427,6 +435,7 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
 
   final ChatRepository repository;
   DiscordAccountSession? receivedSession;
+  int cacheClears = 0;
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -435,7 +444,7 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
   }
 
   @override
-  Future<void> clearCache() async {}
+  Future<void> clearCache() async => cacheClears++;
 }
 
 final class _CacheLockedRepositoryFactory implements ChatRepositoryFactory {

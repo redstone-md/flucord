@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +9,7 @@ import 'package:flucord/src/data/discord/discord_message_nonce_factory.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'support/fake_chat_gateway.dart';
 
 void main() {
   setUpAll(sqfliteFfiInit);
@@ -48,7 +48,7 @@ void main() {
     final transport = _QueueTransport([_response(_messageJson)]);
     final repository = DiscordChatRepository(
       DiscordApiClient(botToken: 'token', transport: transport),
-      _FakeGateway(),
+      FakeChatGateway(),
       cache,
       messageNonceFactory: DiscordMessageNonceFactory(clock: () => fixedClock),
     );
@@ -71,7 +71,7 @@ void main() {
       inMemoryDatabasePath,
       factory: databaseFactoryFfi,
     );
-    final gateway = _FakeGateway();
+    final gateway = FakeChatGateway();
     final transport = _QueueTransport([
       _response('{"id":"bot-1","username":"Flucord Bot"}'),
       _response('[{"id":"guild-1","name":"Forge","icon":null}]'),
@@ -126,37 +126,6 @@ const _messageJson =
 
 DiscordHttpResponse _response(String body) =>
     DiscordHttpResponse(statusCode: 200, headers: const {}, body: body);
-
-final class _FakeGateway implements DiscordChatGateway {
-  final StreamController<DiscordGatewayEvent> _events =
-      StreamController.broadcast();
-
-  void emit(DiscordGatewayEvent event) => _events.add(event);
-
-  @override
-  Stream<DiscordGatewayEvent> get events => _events.stream;
-
-  @override
-  String? get sessionId => 'session-1';
-
-  @override
-  Future<void> connect(String gatewayUrl) async {}
-
-  @override
-  void updateVoiceState({
-    required String guildId,
-    required String? channelId,
-    bool selfMute = false,
-    bool selfDeaf = false,
-    bool selfVideo = false,
-  }) {}
-
-  @override
-  void pingVoiceServer() {}
-
-  @override
-  Future<void> close() => _events.close();
-}
 
 final class _QueueTransport implements DiscordHttpTransport {
   _QueueTransport(this._responses);

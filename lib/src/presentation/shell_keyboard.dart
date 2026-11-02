@@ -21,23 +21,6 @@ enum ShellStep {
   nextServer,
 }
 
-extension ShellKeyboardWidget on Widget {
-  Widget withShellKeyboard({
-    required ChatWorkspace workspace,
-    required String? channelId,
-    required ValueChanged<QuickSwitcherDestination> onOpenDestination,
-    required ValueChanged<ShellStep> onStep,
-    required ValueChanged<String> onOpenChannel,
-  }) => ShellKeyboard(
-    workspace: workspace,
-    channelId: channelId,
-    onOpenDestination: onOpenDestination,
-    onStep: onStep,
-    onOpenChannel: onOpenChannel,
-    child: this,
-  );
-}
-
 /// The app's keyboard, for keys that work wherever the focus is in the shell.
 ///
 /// Holds the one [Shortcuts] map, and sends a printable key pressed outside a
