@@ -15,6 +15,7 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/voice_message_recorder.dart';
 
 import 'fake_discord_wire.dart';
 
@@ -42,6 +43,8 @@ import 'fake_discord_wire.dart';
 /// anything that reaches the repository. The widget tester runs on a fake
 /// clock, and an `await` on a cancelled stream subscription only finishes on
 /// the real event loop, which [settle] lets run.
+///
+/// A layout overflow fails the test, like any other Flutter error.
 ///
 /// To count widget builds, use `countBuilds` from `build_counter.dart`.
 final class SessionHarness {
@@ -71,18 +74,7 @@ final class SessionHarness {
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
 
-  /// Layout overflows drawn so far, with their messages.
-  ///
-  /// They are collected here and do not fail the test, because the composer
-  /// overflows in a real session today (the bug in FLUCORD-4) and that would
-  /// fail every test. Any other Flutter error still fails the test.
-  final List<String> layoutOverflows = [];
-
   int _sequence = 0;
-
-  bool _isLayoutOverflow(FlutterErrorDetails details) =>
-      details.library == 'rendering library' &&
-      details.exceptionAsString().contains('overflowed');
 
   /// The READY a session starts from. A new map each call, so a test can change
   /// its copy and pass it to [testSession].
@@ -122,10 +114,14 @@ final class SessionHarness {
   };
 
   /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
-  Future<void> _start(Map<String, Object?> ready) async {
+  Future<void> _start(
+    Map<String, Object?> ready,
+    VoiceMessageRecorder? voiceMessageRecorder,
+  ) async {
     await _tester.pumpWidget(
       FlucordApp(
         bootstrap: AppBootstrap(
+          voiceMessageRecorder: voiceMessageRecorder,
           credentialVault: _MemoryCredentialVault(),
           chatRepositoryFactory: _FakeWireRepositoryFactory(
             transport,
@@ -218,13 +214,16 @@ final class SessionHarness {
 /// Defines a widget test that runs inside a started [SessionHarness].
 ///
 /// [ready] replaces [SessionHarness.defaultReady]. [routes] adds HTTP routes
-/// before the first request; after that, use `session.transport.on`.
+/// before the first request; after that, use `session.transport.on`. Pass a
+/// [voiceMessageRecorder] for the composer's voice message button, which only
+/// shows with one.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
   Map<String, Object?>? ready,
   void Function(FakeDiscordTransport transport)? routes,
   Size size = const Size(1440, 900),
+  VoiceMessageRecorder? voiceMessageRecorder,
 }) {
   testWidgets(description, (tester) async {
     await tester.binding.setSurfaceSize(size);
@@ -236,17 +235,14 @@ void testSession(
       transport,
       MemoryDesktopWebSocketConnector(),
     );
-    // Restored in the finally: the framework fails a test that leaves this set.
-    final report = FlutterError.onError;
-    FlutterError.onError = (details) => session._isLayoutOverflow(details)
-        ? session.layoutOverflows.add(details.exceptionAsString())
-        : report?.call(details);
     try {
-      await session._start(ready ?? SessionHarness.defaultReady());
+      await session._start(
+        ready ?? SessionHarness.defaultReady(),
+        voiceMessageRecorder,
+      );
       await body(tester, session);
     } finally {
       await session._end();
-      FlutterError.onError = report;
     }
   });
 }
