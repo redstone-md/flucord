@@ -387,13 +387,19 @@ class _VoiceStage extends StatelessWidget {
               ),
               ?soundboard,
               const SizedBox(width: 12),
-              Text(
-                voiceRoomStatusLabel(controller),
-                style: TextStyle(
-                  color: controller.isTransportReady
-                      ? context.surfaces.success
-                      : context.surfaces.muted,
-                  fontSize: FlucordType.caption,
+              // Shares the row with the name on a narrow window, rather than
+              // pushing past its edge.
+              Flexible(
+                child: Text(
+                  voiceRoomStatusLabel(controller),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: controller.isTransportReady
+                        ? context.surfaces.success
+                        : context.surfaces.muted,
+                    fontSize: FlucordType.caption,
+                  ),
                 ),
               ),
             ],
