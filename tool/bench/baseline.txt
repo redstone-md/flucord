@@ -1,0 +1,29 @@
+# Commit 6612529. Linux x64, AMD EPYC 7713, 16 threads, Dart 3.12.2, shared machine under load.
+channels=5000 members=20000 messages=1000
+  upsertMessage                                p50      0.16 ms   max      4.68 ms
+  upsertMessage + member merge                 p50      1.59 ms   max      8.11 ms
+  applyReadState                               p50      1.30 ms   max      4.81 ms
+  applyPresences (one user)                    p50      5.66 ms   max     12.55 ms
+  mergeHistory (50-message page)               p50      5.13 ms   max     11.84 ms
+  upsertMessage + messagesFor (regroup)        p50      0.41 ms   max      0.69 ms
+channels=5000 members=20000 messages=10000
+  upsertMessage                                p50      0.44 ms   max     11.96 ms
+  upsertMessage + member merge                 p50      1.79 ms   max     13.43 ms
+  applyReadState                               p50      2.19 ms   max      7.69 ms
+  applyPresences (one user)                    p50      6.24 ms   max     11.48 ms
+  mergeHistory (50-message page)               p50      7.02 ms   max     13.26 ms
+  upsertMessage + messagesFor (regroup)        p50      2.44 ms   max      3.19 ms
+channels=5000 members=20000 messages=100000
+  upsertMessage                                p50     10.84 ms   max     32.76 ms
+  upsertMessage + member merge                 p50     10.17 ms   max     16.29 ms
+  applyReadState                               p50      4.89 ms   max      6.33 ms
+  applyPresences (one user)                    p50      4.82 ms   max     10.01 ms
+  mergeHistory (50-message page)               p50     34.68 ms   max     42.26 ms
+  upsertMessage + messagesFor (regroup)        p50     16.41 ms   max     33.59 ms
+channels=5000 members=20000 messages=300000
+  upsertMessage                                p50     26.39 ms   max     38.96 ms
+  upsertMessage + member merge                 p50     29.16 ms   max     53.70 ms
+  applyReadState                               p50     10.66 ms   max     21.26 ms
+  applyPresences (one user)                    p50      3.69 ms   max      8.12 ms
+  mergeHistory (50-message page)               p50     96.06 ms   max    106.21 ms
+  upsertMessage + messagesFor (regroup)        p50     53.02 ms   max     90.44 ms
