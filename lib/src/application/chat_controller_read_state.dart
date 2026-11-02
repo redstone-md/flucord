@@ -55,6 +55,17 @@ extension ChatControllerReadState on ChatController {
     );
   }
 
+  /// The reader is done with [channelId]: its pip and its NEW line go now, and
+  /// the server hears at once.
+  void markChannelRead(String channelId) {
+    _workspace = _workspace
+        ?.markChannelRead(channelId)
+        .clearChannelUnreadBoundary(channelId);
+    _persistChannelActivity(channelId);
+    acknowledgeChannel(channelId, immediate: true);
+    _notify();
+  }
+
   /// Rewinds [message]'s channel so everything from it onward is unread again.
   Future<void> markChannelUnreadFrom(ChatMessage message) async {
     final repository = _repository.readState;

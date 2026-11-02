@@ -116,7 +116,7 @@ class MessageList extends StatefulWidget {
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
-  State<MessageList> createState() => _MessageListState();
+  State<MessageList> createState() => MessageListState();
 }
 
 /// Where the viewport's centre sits, named by a message so that rows added on
@@ -152,7 +152,9 @@ final class _MessageRowKey extends GlobalKey {
   final String messageId;
 }
 
-class _MessageListState extends State<MessageList>
+/// Public so the conversation pane can reach the list through a global key: the
+/// keyboard works from outside this widget.
+class MessageListState extends State<MessageList>
     with SingleTickerProviderStateMixin {
   /// Where the message the viewport is built around sits in it. Not flush
   /// against the top edge: a little of what came before it reads as context.
@@ -350,7 +352,7 @@ class _MessageListState extends State<MessageList>
 
   /// Takes the reader to the end of the conversation. From an old window that
   /// means loading it first, and the list recentres when the page is in.
-  void _jumpToPresent() {
+  void jumpToPresent() {
     if (widget.hasNewerMessages) {
       widget.onLoadPresent();
     } else {
@@ -516,7 +518,7 @@ class _MessageListState extends State<MessageList>
           Positioned(
             bottom: 10,
             right: 16,
-            child: JumpToPresentButton(onPressed: _jumpToPresent),
+            child: JumpToPresentButton(onPressed: jumpToPresent),
           ),
       ],
     );

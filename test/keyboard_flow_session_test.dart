@@ -1,7 +1,10 @@
+import 'package:flucord/src/presentation/widgets/message_item.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -24,6 +27,88 @@ Future<void> _receive(
     content: body,
   ),
 );
+
+const _idOf = ChannelHistoryFixture.idOf;
+const _page = ChannelHistoryFixture.page;
+
+/// The channel holds messages 0 to 99, all on one page.
+const _newest = 99;
+
+/// How long a plain ack waits before it goes out.
+const _ackDebounce = Duration(seconds: 3);
+
+final _jumpToPresent = find.byKey(const ValueKey('jump-to-present'));
+final _newLine = find.byKey(const ValueKey('unread-message-boundary'));
+final _replyBar = find.textContaining('Replying to');
+
+void _routeHistory(FakeDiscordTransport transport) {
+  transport.on('GET', ChannelHistoryFixture.messagesPath, (request) {
+    final around = request.uri.queryParameters['around'];
+    if (around == null) return jsonResponse(_page(0, _newest + 1));
+    return jsonResponse(_page(ChannelHistoryFixture.indexOf(around) - 5, 10));
+  });
+}
+
+Future<void> _scrollUp(WidgetTester tester, SessionHarness session) async {
+  final list = find
+      .ancestor(
+        of: find.byType(MessageItem),
+        matching: find.byType(CustomScrollView),
+      )
+      .first;
+  await tester.drag(list, const Offset(0, 900));
+  await session.settle();
+}
+
+/// The newest message whose row sits in the middle of the screen.
+int _indexOnScreen(WidgetTester tester, SessionHarness session) {
+  for (var index = _newest; index >= 0; index--) {
+    final row = session.messageRow(_idOf(index));
+    if (row.evaluate().isEmpty) continue;
+    final top = tester.getTopLeft(row).dy;
+    if (top > 200 && top < 500) return index;
+  }
+  throw StateError('No message row is on screen.');
+}
+
+/// Starts a reply from the message menu of [index], as the mouse does.
+Future<void> _startReply(
+  WidgetTester tester,
+  SessionHarness session,
+  int index,
+) async {
+  final mouse = await tester.createGesture(
+    kind: PointerDeviceKind.mouse,
+    buttons: kSecondaryMouseButton,
+  );
+  await mouse.down(tester.getCenter(session.messageRow(_idOf(index))));
+  await tester.pump();
+  await mouse.up();
+  await tester.pump();
+  await mouse.removePointer();
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('message-menu-reply')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pressEscape(WidgetTester tester, SessionHarness session) async {
+  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+  await session.settle();
+}
+
+/// Every message acked so far, after the wait a plain ack takes.
+Future<List<String>> _ackedMessages(
+  WidgetTester tester,
+  SessionHarness session,
+) async {
+  await tester.pump(_ackDebounce);
+  await session.settle();
+  return [
+    for (final request in session.transport.requests)
+      if (request.method == 'POST' && request.uri.path.endsWith('/ack'))
+        request.uri.pathSegments[5],
+  ];
+}
 
 String _boxText(WidgetTester tester) =>
     tester.widget<TextField>(_composer).controller!.text;
@@ -244,4 +329,111 @@ void main() {
       expect(find.byKey(const ValueKey('quick-switcher')), findsOneWidget);
     },
   );
+
+  group('Esc', () {
+    testSession(
+      'cancels a reply first, then the next press scrolls to the end',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _scrollUp(tester, session);
+        expect(_jumpToPresent, findsOneWidget);
+        final index = _indexOnScreen(tester, session);
+        final onScreen = session.messageRow(_idOf(index));
+        await _startReply(tester, session, index);
+        expect(_replyBar, findsOneWidget);
+
+        await _pressEscape(tester, session);
+
+        expect(_replyBar, findsNothing);
+        expect(_jumpToPresent, findsOneWidget);
+        expect(onScreen, findsOneWidget);
+
+        await _pressEscape(tester, session);
+
+        expect(_jumpToPresent, findsNothing);
+        expect(session.messageRow(_idOf(_newest)), findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'marks the channel read: the NEW line goes and the ack goes out',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await tester.pumpAndSettle();
+        expect(_newLine, findsOneWidget);
+
+        await _pressEscape(tester, session);
+
+        expect(_newLine, findsNothing);
+        expect(await _ackedMessages(tester, session), [_idOf(_newest)]);
+      },
+      routes: _routeHistory,
+      ready: ChannelHistoryFixture.readyWithUnread(
+        firstUnread: _newest - 4,
+        newest: _newest,
+      ),
+    );
+
+    testSession(
+      'works with the focus out of the composer',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _scrollUp(tester, session);
+        await _clickEmptySpace(tester, session);
+
+        await _pressEscape(tester, session);
+
+        expect(_jumpToPresent, findsNothing);
+      },
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'closes open suggestions and goes no further',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _startReply(tester, session, _newest);
+        await tester.enterText(_composer, '#');
+        await session.settle();
+        expect(
+          find.byKey(const ValueKey('composer-autocomplete')),
+          findsOneWidget,
+        );
+
+        await _pressEscape(tester, session);
+
+        expect(
+          find.byKey(const ValueKey('composer-autocomplete')),
+          findsNothing,
+        );
+        expect(_replyBar, findsOneWidget);
+        expect(_boxText(tester), '#');
+      },
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'closes a dialog and leaves the reply alone',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _startReply(tester, session, _newest);
+        await _chord(tester, const [
+          LogicalKeyboardKey.controlLeft,
+        ], LogicalKeyboardKey.keyK);
+        await tester.pumpAndSettle();
+
+        await _pressEscape(tester, session);
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('quick-switcher')), findsNothing);
+        expect(_replyBar, findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
+  });
 }

@@ -62,6 +62,9 @@ class _ShellKeyboardState extends State<ShellKeyboard> {
       command(LogicalKeyboardKey.keyK): VoidCallbackIntent(
         () => unawaited(_openQuickSwitcher()),
       ),
+      // Held down, Esc must not run through the reply and on to the next step.
+      const SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false):
+          VoidCallbackIntent(() => _pane?.handleEscape()),
     };
   }
 

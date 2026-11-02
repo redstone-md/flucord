@@ -144,6 +144,7 @@ class ConversationPaneState extends State<ConversationPane> {
   static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
 
   final _composerKey = GlobalKey<MessageComposerState>();
+  final _timelineKey = GlobalKey<MessageListState>();
 
   static String _composerHintPrefix(ConversationChannel channel) {
     if (channel.isDirectMessage) return '@';
@@ -175,6 +176,22 @@ class ConversationPaneState extends State<ConversationPane> {
   /// channel has no composer to type in.
   bool typeInComposer(String text) =>
       _composerKey.currentState?.typeText(text) ?? false;
+
+  /// Esc takes one step back: a reply being written goes first. With none, the
+  /// reader is done here, so the channel is read and the list goes to the end.
+  /// A room has no timeline to be done with.
+  void handleEscape() {
+    final chat = ChatScope.read(context);
+    final channelId = widget.channel.id;
+    if (chat.drafts.read(channelId).replyTo != null) {
+      _setReply(chat, null);
+      return;
+    }
+    final timeline = _timelineKey.currentState;
+    if (timeline == null) return;
+    chat.markChannelRead(channelId);
+    timeline.jumpToPresent();
+  }
 
   /// Sets who the open channel's draft answers.
   void _setReply(ChatController chat, ChatMessage? message) {
@@ -813,6 +830,7 @@ class ConversationPaneState extends State<ConversationPane> {
   ) {
     final channel = widget.channel;
     return MessageList(
+      key: _timelineKey,
       expressionFavorites: ExpressionFavoritesScope.read(context),
       componentController: MessageComponentScope.read(context),
       applicationCommands: SlashCommandScope.read(context),
