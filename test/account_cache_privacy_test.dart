@@ -1,4 +1,11 @@
+import 'package:flucord/src/data/discord/discord_api_client.dart';
+import 'package:flucord/src/data/discord/discord_chat_repository.dart';
+import 'package:flucord/src/data/discord/discord_gateway_client.dart';
+import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
@@ -8,6 +15,16 @@ const _friendName = 'Private Friend Name';
 const _channelName = 'private-channel-name';
 const _dmMessageId = '900000000000000001';
 const _guildMessageId = '900000000000000002';
+const _secondAccountId = '100000000000000009';
+
+final _unavailable = jsonResponse({'message': 'Unavailable'}, statusCode: 503);
+final _firstAccountName = find.text('first-account');
+final _guildIcon = find.byKey(
+  const ValueKey('space-${SessionHarness.guildId}'),
+);
+final _dmRow = find.byKey(
+  const ValueKey('channel-${SessionHarness.dmChannelId}'),
+);
 
 /// READY for an account in [SessionHarness.guildId], with one DM to a friend.
 Map<String, Object?> _readyOf(
@@ -74,4 +91,126 @@ void main() {
     onDisk: true,
     ready: _readyOf(SessionHarness.currentUserId),
   );
+
+  testSession(
+    'an offline launch of the same account still shows its cache',
+    (tester, session) async {
+      await _receivePrivateMessages(session);
+
+      session.transport.on(
+        'GET',
+        '/api/v9/channels/${SessionHarness.dmChannelId}/messages',
+        (_) => _unavailable,
+      );
+      await session.relaunchUnreachable();
+
+      expect(_firstAccountName, findsOneWidget);
+      expect(_guildIcon, findsOneWidget);
+      await tester.tap(_dmRow);
+      await session.settle();
+      expect(session.messageRow(_dmMessageId), findsOneWidget);
+    },
+    onDisk: true,
+    ready: _readyOf(SessionHarness.currentUserId),
+  );
+
+  testSession(
+    'a second account whose launch fails sees nothing of the first',
+    (tester, session) async {
+      await _receivePrivateMessages(session);
+
+      await session.relaunchUnreachable(accountId: _secondAccountId);
+
+      expect(_firstAccountName, findsNothing);
+      expect(_guildIcon, findsNothing);
+      expect(_dmRow, findsNothing);
+      expect(find.textContaining(_privateText), findsNothing);
+    },
+    onDisk: true,
+    ready: _readyOf(SessionHarness.currentUserId),
+  );
+
+  testSession(
+    'a second account that connects finds no message of the first',
+    (tester, session) async {
+      await _receivePrivateMessages(session);
+
+      await session.relaunch(
+        accountId: _secondAccountId,
+        ready: _readyOf(_secondAccountId, username: 'second-account'),
+      );
+      // Discord does not answer, so only the cache can fill the channel.
+      session.transport.on(
+        'GET',
+        '/api/v9/channels/${SessionHarness.channelId}/messages',
+        (_) => _unavailable,
+      );
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('account-panel-name')))
+            .data,
+        'second-account',
+      );
+      expect(_firstAccountName, findsNothing);
+      expect(session.messageRow(_guildMessageId), findsNothing);
+      expect(session.cacheBytesOnDisk, isNot(contains(_privateText)));
+    },
+    onDisk: true,
+    ready: _readyOf(SessionHarness.currentUserId),
+  );
+
+  group('the bot transport', () {
+    setUpAll(sqfliteFfiInit);
+
+    /// A launch of [accountId] with Discord unreachable, on a cache that the
+    /// first account filled.
+    Future<ChatWorkspace> launchOfflineAs(String accountId) async {
+      final cache = await SqliteChatCache.openAt(
+        inMemoryDatabasePath,
+        factory: databaseFactoryFfi,
+      );
+      await cache.writeWorkspace(
+        ChatWorkspace(
+          spaces: const [
+            CommunitySpace(
+              id: SessionHarness.guildId,
+              name: 'The Forge',
+              monogram: 'TF',
+              colorValue: 0,
+            ),
+          ],
+          channels: [],
+          members: [],
+          messages: [],
+          currentMemberId: SessionHarness.currentUserId,
+        ),
+      );
+      final repository = DiscordChatRepository(
+        DiscordApiClient(
+          botToken: 'unused',
+          transport: FakeDiscordTransport(fallback: (_) => _unavailable),
+        ),
+        DiscordGatewayClient(botToken: 'unused'),
+        cache,
+        accountId: accountId,
+      );
+      addTearDown(repository.close);
+      return repository.loadWorkspace();
+    }
+
+    test('an offline launch of the same account shows its cache', () async {
+      final workspace = await launchOfflineAs(SessionHarness.currentUserId);
+
+      expect(workspace.currentMemberId, SessionHarness.currentUserId);
+    });
+
+    test('an offline launch of a second account is refused', () {
+      expect(
+        launchOfflineAs(_secondAccountId),
+        throwsA(isA<DiscordApiException>()),
+      );
+    });
+  });
 }

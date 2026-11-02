@@ -62,6 +62,7 @@ final class DiscordRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
       ),
       cache,
+      accountId: session.accountId,
       daveService: _resolveDaveService(),
     );
   }
@@ -93,6 +94,7 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
       DiscordApiClient(botToken: botToken),
       DiscordGatewayClient(botToken: botToken),
       cache,
+      accountId: session.accountId,
       daveService:
           daveService ?? (Platform.isWindows ? NativeDaveService.open() : null),
     );

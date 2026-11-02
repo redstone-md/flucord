@@ -51,6 +51,7 @@ import 'discord_channel_handler.dart';
 import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
+import 'discord_account_cache.dart';
 import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
@@ -98,10 +99,12 @@ final class DiscordChatRepository
     this._api,
     this._gateway,
     this._cache, {
+    String? accountId,
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? messageNonceFactory,
     VoiceDaveService? daveService,
-  }) : _mapper = mapper ?? DiscordMapper(),
+  }) : _accountId = accountId,
+       _mapper = mapper ?? DiscordMapper(),
        _messageNonceFactory =
            messageNonceFactory ?? DiscordMessageNonceFactory(),
        _voiceSignaling = DiscordVoiceSignalingService(
@@ -118,6 +121,10 @@ final class DiscordChatRepository
   final DiscordChatGateway _gateway;
   @override
   final ChatCache _cache;
+
+  /// Who the session's credential says it is, before Discord has confirmed it.
+  /// The offline fallback compares this with the account of the cache.
+  final String? _accountId;
   @override
   final DiscordMapper _mapper;
   @override
@@ -176,6 +183,7 @@ final class DiscordChatRepository
         emojisByGuild[guildId] = await _api.getGuildEmojis(guildId);
         stickersByGuild[guildId] = await _api.getGuildStickers(guildId);
       }
+      await clearCacheOfOtherAccount(_cache, user['id']! as String);
       final cached = await _cache.readWorkspace();
       final workspace = _mapper
           .workspace(
@@ -200,7 +208,7 @@ final class DiscordChatRepository
       return workspace;
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readWorkspace();
+      final cached = await readOfflineWorkspace(_cache, _accountId);
       if (cached != null) {
         _events.addStatus(RepositoryConnectionStatus.offline);
         return cached;

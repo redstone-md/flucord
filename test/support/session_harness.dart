@@ -375,6 +375,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
         socketConnector: _connector,
       ),
       await _openCache(),
+      accountId: session.accountId,
     );
   }
 
