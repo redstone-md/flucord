@@ -35,10 +35,12 @@ import 'conversation_pane.dart';
 import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
+import 'widgets/connection_banner.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
+import 'widgets/disconnected_workspace_view.dart';
 import 'widgets/guild_event_form_dialog.dart';
 import 'widgets/guild_scheduled_events_dialog.dart';
 import 'widgets/guild_settings_dialog.dart';
@@ -144,6 +146,10 @@ class FlucordShell extends StatelessWidget {
           builder: (context, _) => switch (chatController.state) {
             ChatLoadState.idle ||
             ChatLoadState.loading => const LoadingWorkspaceView(),
+            // A connection attempt that failed is still cleaning up, and it
+            // ends on the disconnected view, which says why.
+            ChatLoadState.failure when connectionController.isBusy =>
+              const LoadingWorkspaceView(),
             ChatLoadState.failure => FailedWorkspaceView(
               onRetry: chatController.load,
             ),
@@ -207,7 +213,7 @@ class FlucordShell extends StatelessWidget {
                 ? null
                 : workspace.channelById(channelId);
             return Scaffold(
-              body: _withIncomingCall(
+              body: _withWorkspaceChrome(
                 workspace,
                 LayoutBuilder(
                   builder: (context, constraints) {

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -14,12 +16,16 @@ import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/accessibility.dart';
+import 'package:flucord/src/domain/channel_link.dart';
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
@@ -58,10 +64,16 @@ final class SessionHarness {
     this._tester,
     this.transport,
     this._connector,
-    this._diskDirectory,
+    Directory? diskDirectory,
     this._voiceMessageRecorder,
     this._accessibility,
-  );
+    this._linkAtLaunch,
+  ) : _diskDirectory = diskDirectory,
+      _factory = _FakeWireRepositoryFactory(
+        transport,
+        _connector,
+        diskDirectory,
+      );
 
   /// The account the default READY signs in.
   static const currentUserId = '100000000000000001';
@@ -83,15 +95,21 @@ final class SessionHarness {
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final _MemoryCredentialVault _vault = _MemoryCredentialVault();
+  late final _FakeDesktopWindow _window = _FakeDesktopWindow(_linkAtLaunch);
 
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
+  final _FakeWireRepositoryFactory _factory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
   final AccessibilitySettings _accessibility;
+  final ChannelLink? _linkAtLaunch;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
+
+  /// The QR sign-in. Feed it what the phone and Discord would cause.
+  final FakeRemoteAuth remoteAuth = FakeRemoteAuth();
 
   int _sequence = 0;
 
@@ -144,19 +162,50 @@ final class SessionHarness {
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
         accessibilityRepository: FixedDials(_accessibility),
-        chatRepositoryFactory: _FakeWireRepositoryFactory(
-          transport,
-          _connector,
-          _diskDirectory,
-        ),
+        desktopIntegration: _window,
+        chatRepositoryFactory: _factory,
+        discordRemoteAuthGatewayFactory: remoteAuth,
       ),
     ),
   );
 
-  /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
-  Future<void> _start(Map<String, Object?> ready) async {
+  /// Launches the app. A signed-in launch that can reach Discord goes on to
+  /// READY. Any other launch stops at whatever the app shows on its own.
+  Future<void> _start(
+    Map<String, Object?> ready, [
+    SessionLaunch launch = SessionLaunch.signedIn,
+  ]) async {
+    if (launch == SessionLaunch.unreachable) discordUnreachable();
+    if (launch == SessionLaunch.signedOut) await _vault.clearDiscordSession();
     final dialled = sockets.length;
     await _launch();
+    if (launch == SessionLaunch.signedIn) {
+      await _walkToReady(ready, dialled);
+    } else {
+      await settle();
+    }
+  }
+
+  /// Makes the first call of a connection answer 503, so no socket is dialled.
+  void discordUnreachable() => transport.on(
+    'GET',
+    '/api/v9/gateway',
+    (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
+  );
+
+  /// Undoes [discordUnreachable].
+  void discordReachable() => transport.on(
+    'GET',
+    '/api/v9/gateway',
+    (_) => jsonResponse({'url': 'wss://gateway.discord.gg'}),
+  );
+
+  /// Walks a connection the app is about to start through HELLO, IDENTIFY and
+  /// READY, up to the first workspace.
+  Future<void> connectToReady(Map<String, Object?> ready) =>
+      _walkToReady(ready, sockets.length);
+
+  Future<void> _walkToReady(Map<String, Object?> ready, int dialled) async {
     await _settleUntil(() => sockets.length > dialled, 'a socket');
     await hello();
     await _settleUntil(
@@ -196,11 +245,7 @@ final class SessionHarness {
   Future<void> relaunchUnreachable({String accountId = currentUserId}) async {
     await _end();
     _vault.saveAccount(accountId);
-    transport.on(
-      'GET',
-      '/api/v9/gateway',
-      (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
-    );
+    discordUnreachable();
     await _launch();
     await settle();
   }
@@ -223,6 +268,28 @@ final class SessionHarness {
     for (final file in _diskDirectory!.listSync().whereType<File>())
       latin1.decode(file.readAsBytesSync()),
   ].join();
+
+  /// The app's message toasts so far, oldest first.
+  List<DesktopMessageNotification> get toasts => _window.toasts;
+
+  /// Takes the focus from the window, as the platform layer reports it.
+  void blurWindow() => _window.setFocused(false);
+
+  /// Gives the window the focus back, as the platform layer reports it.
+  void focusWindow() => _window.setFocused(true);
+
+  /// The dialling side of the fake gateway, to hold a dial in flight.
+  MemoryDesktopWebSocketConnector get connector => _connector;
+
+  /// The message with this [id] in the running session's cache, which is what
+  /// the next launch reads. A cache read needs the real event loop.
+  Future<ChatMessage?> cachedMessage(String id) => _tester
+      .runAsync<ChatMessage?>(() => _factory.openedCache!.readMessage(id));
+
+  /// Removes a row behind the app's back, for a state the wire cannot reach,
+  /// such as a cache write that failed earlier.
+  Future<void> dropCachedMessage(String id) async =>
+      _tester.runAsync(() => _factory.openedCache!.deleteMessage(id));
 
   /// The socket the client dialled last.
   MemoryDesktopWebSocket get socket => _connector.sockets.last;
@@ -252,6 +319,9 @@ final class SessionHarness {
     socket.receive({'op': 0, 's': ++_sequence, 't': event, 'd': data});
     if (settle) await this.settle();
   }
+
+  /// The sequence number of the last dispatch [dispatch] sent.
+  int get sequence => _sequence;
 
   /// Opens a channel of [space] by tapping the server and the channel, as the
   /// user does.
@@ -285,13 +355,29 @@ final class SessionHarness {
   }
 }
 
+/// How a [testSession] opens the app.
+enum SessionLaunch {
+  /// A saved session that reaches READY.
+  signedIn,
+
+  /// A saved session, with Discord out of reach.
+  unreachable,
+
+  /// Nothing saved: a new user.
+  signedOut,
+}
+
 /// Defines a widget test that runs inside a started [SessionHarness].
 ///
 /// [ready] replaces [SessionHarness.defaultReady]. [routes] adds HTTP routes
 /// before the first request; after that, use `session.transport.on`. Pass a
 /// [voiceMessageRecorder] for the composer's voice message button, which only
 /// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
-/// memory, which a test of a relaunch or of the cache file needs.
+/// memory, which a test of a relaunch or of the cache file needs. [linkAtLaunch]
+/// reaches the app when it attaches to the desktop, before any workspace exists,
+/// as a link does that started the app.
+/// Pass a [platform] when a test depends on platform gestures, such as the right
+/// button on selectable text. Without one, Flutter tests run as Android.
 /// [accessibility] is what the zoom and font dials are set to at launch.
 void testSession(
   String description,
@@ -299,11 +385,15 @@ void testSession(
   Map<String, Object?>? ready,
   void Function(FakeDiscordTransport transport)? routes,
   Size size = const Size(1440, 900),
+  SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
   AccessibilitySettings accessibility = AccessibilitySettings.off,
+  ChannelLink? linkAtLaunch,
+  TargetPlatform? platform,
 }) {
   testWidgets(description, (tester) async {
+    debugDefaultTargetPlatformOverride = platform;
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final transport = FakeDiscordTransport(fallback: _emptyHistoryOrNotFound);
@@ -319,12 +409,14 @@ void testSession(
       disk,
       voiceMessageRecorder,
       accessibility,
+      linkAtLaunch,
     );
     try {
-      await session._start(ready ?? SessionHarness.defaultReady());
+      await session._start(ready ?? SessionHarness.defaultReady(), launch);
       await body(tester, session);
     } finally {
       await session._end();
+      debugDefaultTargetPlatformOverride = null;
     }
   });
 }
@@ -340,7 +432,7 @@ DiscordHttpResponse _emptyHistoryOrNotFound(RecordedRequest request) =>
 
 /// Builds the same repository as `DiscordRepositoryFactory`, on the fake wire.
 final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
-  const _FakeWireRepositoryFactory(
+  _FakeWireRepositoryFactory(
     this._transport,
     this._connector,
     this._diskDirectory,
@@ -349,6 +441,9 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
   final Directory? _diskDirectory;
+
+  /// The cache of the repository built last.
+  SqliteChatCache? openedCache;
 
   // No isolate: the widget tester's fake clock would never see an isolate's
   // answer, so the cache has to run on the test's own event loop.
@@ -364,6 +459,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     final desktop = session as DiscordDesktopUserSession;
     const profile = DiscordDesktopProtocolProfile.installedStable20260725;
     final context = DiscordDesktopClientContext.create(profile: profile);
+    final cache = openedCache = await _openCache();
     return DiscordDesktopChatRepository(
       DiscordDesktopApiClient(
         authorization: desktop.transportCredential,
@@ -377,7 +473,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
         socketConnector: _connector,
       ),
-      await _openCache(),
+      cache,
       accountId: session.accountId,
     );
   }
@@ -388,6 +484,66 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     await cache.clear();
     await cache.close();
   }
+}
+
+/// The desktop window as the app sees it, through the seam the platform layer
+/// uses. It keeps each message the app asks to show as a toast. Whether the
+/// window has focus does not matter for those, so the desktop's own filter is
+/// left out.
+final class _FakeDesktopWindow implements DesktopIntegration {
+  _FakeDesktopWindow(this._linkAtLaunch);
+
+  final ChannelLink? _linkAtLaunch;
+  final List<DesktopMessageNotification> toasts = [];
+  late DesktopAppSurface _surface;
+  StreamSubscription<DesktopMessageNotification>? _subscription;
+
+  void setFocused(bool value) => _surface.setApplicationActive(value);
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  void attach(DesktopAppSurface surface) {
+    _surface = surface;
+    _subscription = surface.messageNotifications.listen(toasts.add);
+    final link = _linkAtLaunch;
+    if (link != null) surface.openChannelLink(link);
+  }
+
+  @override
+  Future<void> dispose() async => _subscription?.cancel();
+}
+
+/// The QR sign-in, below the app's controller. It stands in for the phone and
+/// for Discord's remote-auth socket, which encrypts its frames per session.
+final class FakeRemoteAuth
+    implements DiscordRemoteAuthGatewayFactory, DiscordRemoteAuthGateway {
+  final StreamController<DiscordRemoteAuthEvent> _events =
+      StreamController.broadcast();
+
+  /// How many sign-ins the app started.
+  int starts = 0;
+
+  /// Delivers one event to the sign-in the app has open.
+  void add(DiscordRemoteAuthEvent event) => _events.add(event);
+
+  @override
+  DiscordRemoteAuthGateway create() => this;
+
+  @override
+  Stream<DiscordRemoteAuthEvent> get events => _events.stream;
+
+  @override
+  Future<void> start() async => starts++;
+
+  @override
+  Future<void> submitCaptcha(String response) async {}
+
+  // Stays open: the app closes a gateway before it starts the next one, and
+  // this one object plays every gateway of the session.
+  @override
+  Future<void> close() async {}
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.

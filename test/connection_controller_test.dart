@@ -250,7 +250,7 @@ void main() {
     expect(controller.activeSession, isNull);
     expect(
       controller.errorMessage,
-      'This authorized Discord session does not expose full chat and Gateway access.',
+      'This Discord session cannot open chat. Please sign in again.',
     );
   });
 

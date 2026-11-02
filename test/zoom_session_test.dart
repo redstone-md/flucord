@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -163,32 +162,28 @@ void main() {
       testSession(
         'the copy and paste menu of the composer, $where',
         (tester, session) async {
-          debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-          try {
-            await session.openChannel(SessionHarness.channelId);
-            await tester.enterText(_composerField, 'hello there');
-            await session.settle();
+          await session.openChannel(SessionHarness.channelId);
+          await tester.enterText(_composerField, 'hello there');
+          await session.settle();
 
-            final click = toward.withinRect(tester.getRect(_composerField));
-            await tester.tapAt(click, buttons: kSecondaryButton);
-            await session.settle();
+          final click = toward.withinRect(tester.getRect(_composerField));
+          await tester.tapAt(click, buttons: kSecondaryButton);
+          await session.settle();
 
-            final menu = tester.getRect(
-              find
-                  .descendant(
-                    of: find.byType(DesktopTextSelectionToolbar),
-                    matching: find.byType(Material),
-                  )
-                  .first,
-            );
-            _expectInside(menu, window);
-            expect(menu.inflate(20).contains(click), isTrue, reason: '$menu');
-          } finally {
-            debugDefaultTargetPlatformOverride = null;
-          }
+          final menu = tester.getRect(
+            find
+                .descendant(
+                  of: find.byType(DesktopTextSelectionToolbar),
+                  matching: find.byType(Material),
+                )
+                .first,
+          );
+          _expectInside(menu, window);
+          expect(menu.inflate(20).contains(click), isTrue, reason: '$menu');
         },
         size: window,
         accessibility: zoomed,
+        platform: TargetPlatform.linux,
       );
     }
   });
@@ -331,6 +326,45 @@ void main() {
           _smallestWindow,
         );
       });
+
+      testSession(
+        'the connection banner and account panel stay visible at $name',
+        (tester, session) async {
+          await session.openChannel(SessionHarness.channelId);
+
+          session.socket.dropConnection(code: 4000);
+          await session.settle();
+
+          _expectInside(
+            tester.getRect(find.textContaining('Reconnecting')),
+            _smallestWindow,
+          );
+          _expectInside(
+            tester.getRect(find.byKey(const ValueKey('account-panel'))),
+            _smallestWindow,
+          );
+          _expectInside(
+            tester.getRect(find.byType(MessageComposer)),
+            _smallestWindow,
+          );
+        },
+        size: _smallestWindow,
+        accessibility: dials,
+      );
+
+      testSession(
+        'the screen after a failed launch fits at $name',
+        (tester, session) async {
+          await session.relaunchUnreachable();
+
+          _expectInside(
+            tester.getRect(find.byKey(const ValueKey('disconnected-retry'))),
+            _smallestWindow,
+          );
+        },
+        size: _smallestWindow,
+        accessibility: dials,
+      );
 
       // At 0.8 the window is wide enough for the panel to sit beside it.
       if (dials.zoom < 1) continue;

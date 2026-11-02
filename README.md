@@ -190,6 +190,7 @@ validated interactively because those steps require a person.
 - [Feature parity](docs/FEATURE_PARITY.md)
 - [Desktop protocol notes](docs/DISCORD_DESKTOP_PROTOCOL.md)
 - [Session and transport boundaries](docs/SESSION_TRANSPORT.md)
+- [Live gateway capture](docs/LIVE_CAPTURE.md)
 - [Desktop integration](docs/DESKTOP_INTEGRATION.md)
 - [Native media](docs/NATIVE_MEDIA.md)
 - [Roadmap](roadmap.md)

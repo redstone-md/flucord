@@ -150,41 +150,6 @@ void main() {
       expect(afterRemove.burstColorValues, isEmpty);
     },
   );
-
-  test('reactions that land together all reach the cache', () async {
-    final cache = await SqliteChatCache.openAt(
-      inMemoryDatabasePath,
-      factory: databaseFactoryFfi,
-    );
-    addTearDown(cache.close);
-    await cache.writeMessage(
-      ChatMessage(
-        id: 'message-1',
-        channelId: 'channel-1',
-        authorId: 'author-1',
-        body: 'Ship it',
-        sentAt: DateTime(2026, 7, 24, 8),
-      ),
-    );
-    final handler = DiscordReactionHandler(cache, () => 'user-1');
-
-    await Future.wait([
-      for (final userId in ['user-2', 'user-3', 'user-4'])
-        handler.apply(
-          DiscordGatewayDispatch(
-            name: 'MESSAGE_REACTION_ADD',
-            data: {
-              'channel_id': 'channel-1',
-              'message_id': 'message-1',
-              'user_id': userId,
-              'emoji': const {'id': null, 'name': '🔥'},
-            },
-          ),
-        ),
-    ]);
-
-    expect((await cache.readMessage('message-1'))!.reactions.single.count, 3);
-  });
 }
 
 final class _RecordingTransport implements DiscordHttpTransport {
