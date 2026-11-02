@@ -14,6 +14,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
@@ -61,7 +62,7 @@ final class SessionHarness {
     this._connector,
     this._diskDirectory,
     this._voiceMessageRecorder,
-    this._desktop,
+    this._linkAtLaunch,
   );
 
   /// The account the default READY signs in.
@@ -84,12 +85,12 @@ final class SessionHarness {
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
   final _MemoryCredentialVault _vault = _MemoryCredentialVault();
-  final _ToastRecorder _toastRecorder = _ToastRecorder();
+  late final _FakeDesktopWindow _window = _FakeDesktopWindow(_linkAtLaunch);
 
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
-  final DesktopIntegration? _desktop;
+  final ChannelLink? _linkAtLaunch;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
@@ -147,9 +148,8 @@ final class SessionHarness {
     FlucordApp(
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
-        desktopIntegration: _desktop,
         credentialVault: _vault,
-        desktopIntegration: _toastRecorder,
+        desktopIntegration: _window,
         chatRepositoryFactory: _FakeWireRepositoryFactory(
           transport,
           _connector,
@@ -261,7 +261,13 @@ final class SessionHarness {
   ].join();
 
   /// The app's message toasts so far, oldest first.
-  List<DesktopMessageNotification> get toasts => _toastRecorder.toasts;
+  List<DesktopMessageNotification> get toasts => _window.toasts;
+
+  /// Takes the focus from the window, as the platform layer reports it.
+  void blurWindow() => _window.setFocused(false);
+
+  /// Gives the window the focus back, as the platform layer reports it.
+  void focusWindow() => _window.setFocused(true);
 
   /// The dialling side of the fake gateway, to hold a dial in flight.
   MemoryDesktopWebSocketConnector get connector => _connector;
@@ -348,8 +354,9 @@ enum SessionLaunch {
 /// before the first request; after that, use `session.transport.on`. Pass a
 /// [voiceMessageRecorder] for the composer's voice message button, which only
 /// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
-/// memory, which a test of a relaunch or of the cache file needs. Pass a
-/// [desktop], such as a `FakeDesktopWindow`, for window focus and links at launch.
+/// memory, which a test of a relaunch or of the cache file needs. [linkAtLaunch]
+/// reaches the app when it attaches to the desktop, before any workspace exists,
+/// as a link does that started the app.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -359,7 +366,7 @@ void testSession(
   SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
-  DesktopIntegration? desktop,
+  ChannelLink? linkAtLaunch,
 }) {
   testWidgets(description, (tester) async {
     await tester.binding.setSurfaceSize(size);
@@ -376,7 +383,7 @@ void testSession(
       MemoryDesktopWebSocketConnector(),
       disk,
       voiceMessageRecorder,
-      desktop,
+      linkAtLaunch,
     );
     try {
       await session._start(ready ?? SessionHarness.defaultReady(), launch);
@@ -448,19 +455,30 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
   }
 }
 
-/// Keeps each message the app asks the desktop to show as a toast. Whether the
-/// window has focus does not matter here, so the desktop's own filter is left
-/// out.
-final class _ToastRecorder implements DesktopIntegration {
+/// The desktop window as the app sees it, through the seam the platform layer
+/// uses. It keeps each message the app asks to show as a toast. Whether the
+/// window has focus does not matter for those, so the desktop's own filter is
+/// left out.
+final class _FakeDesktopWindow implements DesktopIntegration {
+  _FakeDesktopWindow(this._linkAtLaunch);
+
+  final ChannelLink? _linkAtLaunch;
   final List<DesktopMessageNotification> toasts = [];
+  late DesktopAppSurface _surface;
   StreamSubscription<DesktopMessageNotification>? _subscription;
+
+  void setFocused(bool value) => _surface.setApplicationActive(value);
 
   @override
   Future<void> initialize() async {}
 
   @override
-  void attach(DesktopAppSurface surface) =>
-      _subscription = surface.messageNotifications.listen(toasts.add);
+  void attach(DesktopAppSurface surface) {
+    _surface = surface;
+    _subscription = surface.messageNotifications.listen(toasts.add);
+    final link = _linkAtLaunch;
+    if (link != null) surface.openChannelLink(link);
+  }
 
   @override
   Future<void> dispose() async => _subscription?.cancel();

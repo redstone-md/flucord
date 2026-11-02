@@ -3,7 +3,6 @@ import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/fake_desktop_window.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -181,12 +180,7 @@ void main() {
         );
       },
       ready: unreadEverywhere(),
-      desktop: FakeDesktopWindow(
-        linkAtLaunch: const ChannelLink(
-          spaceId: _guildId,
-          channelId: _channelId,
-        ),
-      ),
+      linkAtLaunch: const ChannelLink(spaceId: _guildId, channelId: _channelId),
       routes: (transport) => transport.on(
         'GET',
         '/api/v9/channels/$_channelId/messages',

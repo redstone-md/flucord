@@ -10,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 
-import 'support/fake_desktop_window.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -324,26 +323,24 @@ void main() {
       routes: _routeHistory,
     );
 
-    final window = FakeDesktopWindow();
     testSession(
       'moves nothing when the window blurs and comes back over the boundary',
       (tester, session) async {
         await open(session);
         final watched = _rowOnScreen(tester, session);
 
-        window.blur();
+        session.blurWindow();
         await session.settle();
         expect(tester.getTopLeft(watched.row).dy, watched.top);
         _expectNewLineAbove(tester, session, _firstUnread);
 
-        window.focus();
+        session.focusWindow();
         await session.settle();
         expect(tester.getTopLeft(watched.row).dy, watched.top);
         _expectNewLineAbove(tester, session, _firstUnread);
       },
       ready: _readyWithUnread(),
       routes: _routeHistory,
-      desktop: window,
     );
   });
 
@@ -423,18 +420,17 @@ void main() {
   });
 
   group('a channel opened read', () {
-    final window = FakeDesktopWindow();
     testSession(
       'on refocus shows the NEW line at the first message that came while away',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
         expect(_newLine, findsNothing);
 
-        window.blur();
+        session.blurWindow();
         await session.settle();
         await _arrive(session, _newestHeld + 1);
         await _arrive(session, _newestHeld + 2);
-        window.focus();
+        session.focusWindow();
         await session.settle();
 
         _expectNewLineAbove(tester, session, _newestHeld + 1);
@@ -445,28 +441,24 @@ void main() {
         _expectNewLineAbove(tester, session, _newestHeld + 1);
       },
       routes: _routeHistory,
-      desktop: window,
     );
 
-    final scrolledUpWindow = FakeDesktopWindow();
-    testSession(
-      'on refocus holds still for a reader scrolled up',
-      (tester, session) async {
-        await session.openChannel(SessionHarness.channelId);
-        await _drag(tester, session, 800);
-        final watched = _rowOnScreen(tester, session);
+    testSession('on refocus holds still for a reader scrolled up', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _drag(tester, session, 800);
+      final watched = _rowOnScreen(tester, session);
 
-        scrolledUpWindow.blur();
-        await _arrive(session, _newestHeld + 1);
-        scrolledUpWindow.focus();
-        await session.settle();
+      session.blurWindow();
+      await _arrive(session, _newestHeld + 1);
+      session.focusWindow();
+      await session.settle();
 
-        expect(tester.getTopLeft(watched.row).dy, watched.top);
-        expect(find.byKey(const ValueKey('jump-to-unread')), findsOneWidget);
-      },
-      routes: _routeHistory,
-      desktop: scrolledUpWindow,
-    );
+      expect(tester.getTopLeft(watched.row).dy, watched.top);
+      expect(find.byKey(const ValueKey('jump-to-unread')), findsOneWidget);
+    }, routes: _routeHistory);
 
     testSession('after another device read it has no NEW line', (
       tester,
