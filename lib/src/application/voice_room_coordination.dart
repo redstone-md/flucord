@@ -41,6 +41,7 @@ final class VoiceRoomCoordination {
     _voice.addListener(_endWatchesWithRoom);
     _voice.addListener(_endShareWithRoom);
     _voice.addListener(_endCameraWithRoom);
+    _voice.addListener(_keepCameraOnConnection);
     _voice.addListener(_keepFocusInRoom);
     _voice.addListener(_refreshOverlay);
     _streamerMode.addListener(_refreshOverlay);
@@ -63,6 +64,7 @@ final class VoiceRoomCoordination {
     _voice.removeListener(_endWatchesWithRoom);
     _voice.removeListener(_endShareWithRoom);
     _voice.removeListener(_endCameraWithRoom);
+    _voice.removeListener(_keepCameraOnConnection);
     _voice.removeListener(_keepFocusInRoom);
     _voice.removeListener(_refreshOverlay);
     _streamerMode.removeListener(_refreshOverlay);
@@ -123,6 +125,13 @@ final class VoiceRoomCoordination {
   void _endCameraWithRoom() {
     if (_roomIsUp) return;
     unawaited(_selfVideo.forget());
+  }
+
+  /// A camera that outlived a reconnect follows the connection to its new
+  /// SSRC, once the connection is up again.
+  void _keepCameraOnConnection() {
+    if (_voice.connectionStatus != VoiceConnectionStatus.ready) return;
+    _selfVideo.followVoiceSession();
   }
 
   /// A connection that failed ends the room the same as one that was left:

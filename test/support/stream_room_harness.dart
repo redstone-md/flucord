@@ -64,7 +64,7 @@ final class StreamRoomHarness {
       transportProvider: () => cameraTransport,
       sinkProvider: () => cameraTransport.send,
       isVoiceReady: () => voice.connectionStatus == VoiceConnectionStatus.ready,
-      announceSelfVideo: ({required bool enabled}) async => true,
+      announceSelfVideo: voice.setCameraAnnounced,
     );
     goLive = GoLiveController(
       repositoryProvider: () => repository,
@@ -116,7 +116,10 @@ final class StreamRoomHarness {
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
   final StreamRoomMedia media = StreamRoomMedia();
-  final StreamRoomSignaling signaling = StreamRoomSignaling();
+
+  /// The voice connection's service. A test replaces it to play a new gateway
+  /// session, then asks the voice controller to refresh.
+  StreamRoomSignaling signaling = StreamRoomSignaling();
   final StreamRoomCallService callService = StreamRoomCallService();
   final StreamRoomStreamRepository repository = StreamRoomStreamRepository();
 
@@ -309,6 +312,9 @@ final class StreamRoomSignaling implements VoiceSignalingService {
   /// What the voice connection says next.
   void emit(VoiceSignalingEvent event) => _events.add(event);
 
+  /// Ends the event stream, as a service that closed does.
+  Future<void> closeEvents() => _events.close();
+
   /// Every voice state sent, in order.
   final List<StreamRoomVoiceFrame> frames = [];
 
@@ -363,6 +369,9 @@ final class StreamRoomSignaling implements VoiceSignalingService {
 final class StreamRoomCallService implements DirectCallService {
   final StreamController<VoiceCallEvent> _events = StreamController.broadcast();
 
+  /// Every voice state the call plane sent, in order.
+  final List<StreamRoomVoiceFrame> frames = [];
+
   @override
   Stream<VoiceCallEvent> get callEvents => _events.stream;
 
@@ -393,7 +402,12 @@ final class StreamRoomCallService implements DirectCallService {
     bool selfMute = false,
     bool selfDeaf = false,
     bool selfVideo = false,
-  }) async {}
+  }) async => frames.add((
+    channelId: channelId,
+    selfMute: selfMute,
+    selfDeaf: selfDeaf,
+    selfVideo: selfVideo,
+  ));
 
   @override
   Future<void> leaveCall(String channelId) async {}
@@ -491,10 +505,22 @@ final class _StreamRoomGateway implements DiscordGoLiveGateway {
 final class StreamRoomCameraTransport implements VoiceVideoTransport {
   final List<bool> announcements = [];
 
-  @override
-  int? get audioSsrc => 40;
+  /// The audio SSRC in force at each announcement, which is what opcode 12
+  /// derives the camera's numbers from.
+  final List<int?> announcedSsrcs = [];
 
-  int send(DiscordRtpFrame frame) => frame.payload.length;
+  /// Every packet handed to the wire, in order.
+  final List<DiscordRtpFrame> sent = [];
+
+  /// The SSRC this session holds. A test changes it to play a new session, and
+  /// null plays the gap before the voice `READY`.
+  @override
+  int? audioSsrc = 40;
+
+  int send(DiscordRtpFrame frame) {
+    sent.add(frame);
+    return frame.payload.length;
+  }
 
   @override
   bool announceVideo({
@@ -502,6 +528,7 @@ final class StreamRoomCameraTransport implements VoiceVideoTransport {
     required VideoEncoderSettings settings,
   }) {
     announcements.add(enabled);
+    announcedSsrcs.add(audioSsrc);
     return true;
   }
 }
