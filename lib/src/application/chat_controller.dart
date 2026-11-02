@@ -335,6 +335,7 @@ final class ChatController extends ChangeNotifier {
       _persistChannelActivity(previousChannelId);
     }
     _activeChannelId = channelId;
+    if (previousChannelId != null) _capChannelIfNotOpen(previousChannelId);
     // Read here, because the ack below moves the cursor.
     final stateAtOpen = readState.forChannel(channelId);
     _workspace = _workspace?.markChannelRead(channelId);
@@ -391,8 +392,19 @@ final class ChatController extends ChangeNotifier {
     } finally {
       _unreadOpenings.remove(channelId);
       _loadingChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Keeps a channel the reader is not in under the cap. A channel that lost
+  /// messages counts as not loaded, so opening it fetches its history again.
+  void _capChannelIfNotOpen(String channelId) {
+    if (channelId == _activeChannelId) return;
+    final capped = _workspace?.capChannel(channelId);
+    if (identical(capped, _workspace)) return;
+    _workspace = capped;
+    _loadedChannels.remove(channelId);
   }
 
   /// Sets the boundary of [channelId] if it opened unread. Answers whether the
@@ -456,6 +468,7 @@ final class ChatController extends ChangeNotifier {
       _olderChannelErrors[channelId] = error;
     } finally {
       _loadingOlderChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
       if (!_disposed) notifyListeners();
     }
   }
