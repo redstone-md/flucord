@@ -31,8 +31,11 @@ extension _ChatControllerEvents on ChatController {
         case GuildGainedEvent():
           _workspace = _workspace?.mergeGuild(event.guild);
           _applyReadState();
+          // A fetch that failed during the guild's outage can work now.
+          final activeId = _activeChannelId;
+          if (activeId != null) unawaited(_catchUpChannel(activeId));
         case SpaceRemovedEvent():
-          _workspace = _workspace?.removeGuild(event.spaceId);
+          _removeGuild(event.spaceId);
         case GuildEmojisReplacedEvent():
           _workspace = _workspace?.replaceGuildEmojis(
             event.spaceId,
@@ -48,7 +51,7 @@ extension _ChatControllerEvents on ChatController {
         case GuildScheduledEventDeletedEvent():
           _deleteScheduledEvent(event.spaceId, event.eventId);
         case ChannelDeletedEvent():
-          _workspace = _workspace?.removeChannel(event.channelId);
+          _removeChannel(event.channelId);
         case CategoryDeletedEvent():
           _workspace = _workspace?.removeCategory(event.categoryId);
         case MemberUpsertedEvent():
@@ -81,6 +84,8 @@ extension _ChatControllerEvents on ChatController {
           _applyReadState();
         case ChannelHistoryRestoredEvent():
           _restoreChannelHistory(event);
+        case HistoryGapEvent():
+          _acceptHistoryGap();
         case RepositoryStatusChangedEvent():
           _connectionStatus = event.status;
       }

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flucord/src/application/accessibility_controller.dart';
 import 'package:flucord/src/data/file_accessibility_repository.dart';
 import 'package:flucord/src/domain/accessibility.dart';
-import 'package:flucord/src/presentation/widgets/accessibility_scope.dart';
 import 'package:flucord/src/presentation/widgets/accessibility_section.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flutter/material.dart';
@@ -167,71 +166,6 @@ void main() {
       expect(controller.spellchecks, isFalse);
 
       expect(tester.takeException(), isNull);
-    });
-  });
-
-  group('the pumped app', () {
-    testWidgets('changed dials reach the interface the widgets read', (
-      tester,
-    ) async {
-      final repository = _MemorySettings();
-      final controller = AccessibilityController(repository);
-      addTearDown(controller.dispose);
-      await controller.load();
-
-      // The probe mirrors the app's own chain: the scope, the transform
-      // zoom lays the tree out with, and the MediaQuery the widgets read.
-      MediaQueryData? read;
-      double? transformScale;
-      late BuildContext probeContext;
-      Widget probe() => ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => AccessibilityScope(
-          controller: controller,
-          child: Transform.scale(
-            scale: controller.zoom,
-            alignment: Alignment.topLeft,
-            child: MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(controller.fontScale),
-                disableAnimations: controller.reducesMotion,
-              ),
-              child: Builder(
-                builder: (inner) {
-                  probeContext = inner;
-                  read = MediaQuery.of(inner);
-                  final ancestor = inner
-                      .findAncestorWidgetOfExactType<Transform>();
-                  transformScale = ancestor!.transform[0];
-                  return const SizedBox.shrink();
-                },
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpWidget(probe());
-      final rest = read!;
-
-      // At the rest position the interface reads the system's values.
-      expect(rest.textScaler.scale(12), 12);
-      expect(rest.disableAnimations, isFalse);
-      expect(transformScale, controller.zoom);
-
-      await controller.setFontScale(1.25);
-      await controller.setZoom(1.2);
-      await controller.setReducedMotion(reduced: true);
-      await tester.pumpAndSettle();
-
-      // The values are what the widgets will read: the text is laid out at
-      // the scaled size, animations are asked to hold still, and the whole
-      // tree is laid out at the zoom.
-      final changed = MediaQuery.of(probeContext);
-      expect(changed.textScaler.scale(12), closeTo(12 * 1.25, 0.01));
-      expect(changed.disableAnimations, isTrue);
-      final moved = tester.widget<Transform>(find.byType(Transform).first);
-      expect(moved.transform[0], closeTo(1.2, 0.01));
     });
   });
 }

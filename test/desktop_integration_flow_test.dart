@@ -65,6 +65,20 @@ void main() {
     );
   }
 
+  test('the window gets its minimum size at launch', () async {
+    final flow = DesktopIntegrationFlow(protocolIntake: _FakeIntake(const []));
+    addTearDown(flow.dispose);
+
+    await flow.initialize();
+
+    final call = windowCalls.singleWhere(
+      (call) => call.method == 'setMinimumSize',
+    );
+    final size = call.arguments as Map<Object?, Object?>;
+    expect(size['width'], 940);
+    expect(size['height'], 500);
+  });
+
   test('launch URLs route without raising the window', () async {
     final intake = _FakeIntake(const ['flucord://channels/guild-1/channel-9']);
     final flow = DesktopIntegrationFlow(protocolIntake: intake);
@@ -73,6 +87,7 @@ void main() {
     await flow.initialize();
     expect(windowCalls.map((call) => call.method), [
       'ensureInitialized',
+      'setMinimumSize',
       'setPreventClose',
     ]);
 

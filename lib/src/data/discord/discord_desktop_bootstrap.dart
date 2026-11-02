@@ -14,6 +14,7 @@ final class DiscordDesktopWorkspaceSnapshot {
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
     Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
     Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
+    required this.privateChannelsComplete,
   }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
        guilds = List<Map<String, Object?>>.unmodifiable(
          guilds.map(Map<String, Object?>.unmodifiable),
@@ -50,6 +51,17 @@ final class DiscordDesktopWorkspaceSnapshot {
   final Map<String, List<Map<String, Object?>>> emojisByGuild;
   final Map<String, List<Map<String, Object?>>> stickersByGuild;
 
+  /// False from READY until READY_SUPPLEMENTAL. Until then a private channel
+  /// missing from [directChannels] may still be on its way as a lazy one.
+  final bool privateChannelsComplete;
+
+  /// Guilds READY marks as in an outage on Discord's side. The account is still
+  /// in them, but the entry carries nothing else.
+  Set<String> get unavailableGuildIds => {
+    for (final guild in guilds)
+      if (guild['unavailable'] == true) guild['id']! as String,
+  };
+
   static Map<String, List<Map<String, Object?>>> _byGuild(
     Map<String, List<Map<String, Object?>>> source,
   ) => Map<String, List<Map<String, Object?>>>.unmodifiable({
@@ -81,6 +93,7 @@ final class DiscordDesktopBootstrap {
   final Map<String, List<Map<String, Object?>>> _emojisByGuild = {};
   final Map<String, List<Map<String, Object?>>> _stickersByGuild = {};
   Map<String, Object?>? _currentUser;
+  bool _privateChannelsComplete = false;
 
   void acceptReady(Map<String, Object?> ready) {
     final user = ready['user'];
@@ -98,6 +111,7 @@ final class DiscordDesktopBootstrap {
     _membersByGuild.clear();
     _emojisByGuild.clear();
     _stickersByGuild.clear();
+    _privateChannelsComplete = false;
     _privateChannels
       ..useReadStateCursors(_readStateCursors(ready['read_state']))
       ..applyReady(_expand(_objects(ready['private_channels'])));
@@ -120,6 +134,7 @@ final class DiscordDesktopBootstrap {
     _privateChannels.applySupplemental(
       _expand(_objects(supplemental['lazy_private_channels'])),
     );
+    _privateChannelsComplete = true;
     // Discord drops the user table at exactly this point; every section that
     // needs it has been hydrated by now.
     users.clear();
@@ -163,11 +178,13 @@ final class DiscordDesktopBootstrap {
       membersByGuild: _membersByGuild,
       emojisByGuild: _emojisByGuild,
       stickersByGuild: _stickersByGuild,
+      privateChannelsComplete: _privateChannelsComplete,
     );
   }
 
   void reset() {
     _currentUser = null;
+    _privateChannelsComplete = false;
     _guilds.clear();
     _channelsByGuild.clear();
     _rolesByGuild.clear();

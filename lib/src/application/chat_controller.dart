@@ -97,6 +97,11 @@ final class ChatController extends ChangeNotifier {
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
 
+  /// Held channels that may lack messages since a [HistoryGapEvent]. A page from
+  /// Discord clears a channel, and a page from the cache does not.
+  final Set<String> _channelsWithGap = {};
+  final Set<String> _catchingUpChannels = {};
+
   /// Channels showing a locally held page while their refresh is in flight.
   /// A refresh that then fails leaves what is on screen rather than an error.
   final Set<String> _restoredChannels = {};
@@ -274,6 +279,8 @@ final class ChatController extends ChangeNotifier {
     _repositoryClosed = null;
     _workspace = null;
     _loadedChannels.clear();
+    _channelsWithGap.clear();
+    _catchingUpChannels.clear();
     _restoredChannels.clear();
     _loadingChannels.clear();
     _channelErrors.clear();
@@ -389,6 +396,7 @@ final class ChatController extends ChangeNotifier {
         if (hasNewerMessages(channelId) && previousChannelId != channelId) {
           await jumpToPresent(channelId);
         } else {
+          unawaited(_catchUpChannel(channelId));
           notifyListeners();
         }
       } else if (workspace
@@ -434,6 +442,9 @@ final class ChatController extends ChangeNotifier {
       if (!isCurrent()) return;
       _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);
+      if (anchorMessageId == null && !page.fromCache) {
+        _channelsWithGap.remove(channelId);
+      }
       // The page may name a newer message than the channel record did, and the
       // channel is on screen either way, so the cursor is moved again here.
       acknowledgeChannel(channelId);
@@ -548,6 +559,85 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.remove(channelId);
     }
     _setHistoryExhausted(channelId, !event.hasMore);
+  }
+
+  /// Answers a stretch with no live events.
+  ///
+  /// The active channel fetches at once. Other held channels stop counting as
+  /// loaded, so opening one fetches, the same way a first open does. All of them
+  /// count as restored: what they hold stays readable if that fetch fails.
+  void _acceptHistoryGap() {
+    final activeId = _activeChannelId;
+    _channelsWithGap.addAll(_loadedChannels);
+    _restoredChannels.addAll(_loadedChannels);
+    _loadedChannels.removeWhere((id) => id != activeId);
+    if (activeId != null) unawaited(_catchUpChannel(activeId));
+  }
+
+  /// Fetches the newest page of a channel on screen that has a gap.
+  ///
+  /// It stays in view during the fetch, because a loading view would throw away
+  /// the reader's place in it. A failed fetch leaves the gap, and opening the
+  /// channel again retries. An old window keeps its gap too: leaving it loads the
+  /// newest page anyway, and a jump made during the fetch keeps its window.
+  Future<void> _catchUpChannel(String channelId) async {
+    if (!_channelsWithGap.contains(channelId) ||
+        hasNewerMessages(channelId) ||
+        !_catchingUpChannels.add(channelId)) {
+      return;
+    }
+    final window = _windowLoads[channelId];
+    try {
+      final page = await _repository.loadChannelHistory(channelId);
+      if (page.fromCache ||
+          _workspace?.channelOrNull(channelId) == null ||
+          !identical(_windowLoads[channelId], window)) {
+        return;
+      }
+      _workspace = _workspace?.catchUpHistory(page.history);
+      _channelsWithGap.remove(channelId);
+      _setHistoryExhausted(channelId, !page.hasMore);
+      // The window may be away: then the missed messages stay unread.
+      if (_isApplicationActive && channelId == _activeChannelId) {
+        acknowledgeChannel(channelId);
+      }
+    } catch (error) {
+      AppLog.warning(
+        'chat',
+        'Could not load messages missed in a reconnect: $error',
+        error: error,
+      );
+    } finally {
+      _catchingUpChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// Takes a channel out of the workspace, with what the controller knew about
+  /// its history. It holds no messages now, so if it comes back it has to load.
+  void _removeChannel(String channelId) {
+    _workspace = _workspace?.removeChannel(channelId);
+    _forgetChannelHistory(channelId);
+  }
+
+  /// The same as [_removeChannel] for a guild and all its channels.
+  void _removeGuild(String spaceId) {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    for (final channel in workspace.channels) {
+      if (channel.spaceId == spaceId) _forgetChannelHistory(channel.id);
+    }
+    _workspace = workspace.removeGuild(spaceId);
+  }
+
+  void _forgetChannelHistory(String channelId) {
+    _loadedChannels.remove(channelId);
+    _channelsWithGap.remove(channelId);
+    _restoredChannels.remove(channelId);
+    _exhaustedChannels.remove(channelId);
+    _channelErrors.remove(channelId);
+    _olderChannelErrors.remove(channelId);
   }
 
   void _setHistoryExhausted(String channelId, bool exhausted) {
