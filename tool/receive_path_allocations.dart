@@ -130,7 +130,7 @@ final class _ReceiveChain {
     for (final ordered in _reorder.add(_cipher.decryptPacket(packet))) {
       final frame = ordered.frame;
       final picture = _pictures.accept(
-        Uint8List.fromList(frame.payload),
+        frame.payload,
         marker: frame.header.marker,
         rtpTimestamp: frame.header.timestamp,
       );
@@ -143,7 +143,7 @@ final class _ReceiveChain {
 /// What group decryption costs around the native call itself.
 Uint8List _throughNativeMemory(Uint8List picture) => using((arena) {
   final input = NativeDaveBuffers.allocate(arena, picture);
-  return Uint8List.fromList(NativeDaveBuffers.copy(input, picture.length));
+  return NativeDaveBuffers.copy(input, picture.length);
 });
 
 List<List<Uint8List>> _encryptedPictures(List<int> secretKey) {
