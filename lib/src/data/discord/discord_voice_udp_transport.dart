@@ -151,7 +151,8 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
     if (event != RawSocketEvent.read) return;
     Datagram? datagram;
     while ((datagram = _socket?.receive()) != null) {
-      final packet = Uint8List.fromList(datagram!.data);
+      // `dart:io` gives each datagram bytes of its own, so no copy is needed.
+      final packet = datagram!.data;
       final pending = _discovery;
       if (pending != null && !pending.isCompleted) {
         final result = DiscordVoiceDiscoveryPacket.parse(packet);

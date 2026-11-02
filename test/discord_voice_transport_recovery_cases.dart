@@ -44,7 +44,7 @@ void _recoveryCases() {
         cipher.encryptFrame(
           DiscordRtpFrame(
             header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 77),
-            payload: const [6, 7, 8],
+            payload: Uint8List.fromList([6, 7, 8]),
           ),
         ),
       );

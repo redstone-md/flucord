@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/message_embed.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
@@ -24,6 +25,7 @@ void main() {
           body: Align(
             alignment: Alignment.bottomCenter,
             child: MessageComposer(
+              drafts: MemoryComposerDraftStore(),
               channelId: 'channel-1',
               channelName: 'native',
               spaceName: 'Forge',

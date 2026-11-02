@@ -79,6 +79,22 @@ close joins the decode thread, which used to run on the UI isolate and hitch
 the interface on every suspend, switch and leave. The main isolate hands
 access units over and receives pictures, and touches no native memory.
 
+The packets of a watched stream still arrive, decrypt and reassemble on the UI
+isolate, so what each packet allocates there is pressure on the interface. A
+payload stays a `Uint8List` from the socket to the decoder, and pieces of it are
+views. A picture is copied once, when it closes. `tool/receive_path_allocations.dart`
+counts this over loopback with 12.5 kB pictures, about 11 packets each:
+
+| Receive path | Bytes per packet | Objects per packet |
+| --- | --- | --- |
+| Before, at commit `69d92c8` | 65,826 | 72.4 |
+| After | 7,823 | 70.2 |
+
+The count is of the bytes the Dart heap allocates. It runs the group decryption
+as a copy in and out of native memory, because libdave is not loaded, and it does
+not time anything. Moving this work to a worker has not been decided, and these
+numbers are the input for that.
+
 The share's sound is captured from the machine's output (WASAPI loopback),
 framed into 20 ms stereo Opus on the main isolate, and handed to the share's
 connection, which sends it exactly as a call sends the microphone: encrypted

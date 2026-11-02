@@ -174,7 +174,7 @@ final class DiscordVoiceMediaTransport implements VoiceAudioTransport {
     DiscordOrderedRtpFrame ordered,
   ) {
     final frame = ordered.frame;
-    final encrypted = Uint8List.fromList(frame.payload);
+    final encrypted = frame.payload;
     if (encrypted.isEmpty) return const [];
     final Uint8List opus;
     if (_daveEnabled) {

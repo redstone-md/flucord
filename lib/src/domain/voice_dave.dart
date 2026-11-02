@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 enum DaveCommitStatus { applied, ignored, failed }
 
 enum DaveMediaType { audio, video }
@@ -86,9 +88,9 @@ abstract interface class VoiceDaveEncryptor {
 abstract interface class VoiceDaveDecryptor {
   void transitionToKeyRatchet(VoiceDaveKeyRatchet keyRatchet);
   void transitionToPassthrough(bool enabled);
-  List<int> decrypt({
+  Uint8List decrypt({
     required DaveMediaType mediaType,
-    required List<int> encryptedFrame,
+    required Uint8List encryptedFrame,
   });
   void dispose();
 }

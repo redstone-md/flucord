@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../../monotonic_clock.dart';
 import 'discord_rtp_packet.dart';
@@ -227,7 +228,7 @@ final class DiscordPictureLossRecovery {
         payloadType: DiscordRtpHeader.discordVideoPayloadType,
         marker: frame.header.marker,
       ),
-      payload: payload.sublist(2),
+      payload: Uint8List.sublistView(payload, 2),
     );
   }
 

@@ -338,7 +338,10 @@ final class DiscordVideoStreamTransport {
           payloadType: _rtxPayloadType,
           marker: held.header.marker,
         ),
-        payload: [sequence >> 8, sequence & 0xff, ...held.payload],
+        payload: Uint8List(held.payload.length + 2)
+          ..[0] = sequence >> 8
+          ..[1] = sequence & 0xff
+          ..setRange(2, held.payload.length + 2, held.payload),
       );
       final handed = _put(rtx);
       if (handed < 0) return sent;

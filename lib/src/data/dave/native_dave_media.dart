@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
@@ -158,9 +159,9 @@ final class NativeDaveDecryptor implements VoiceDaveDecryptor {
   }
 
   @override
-  List<int> decrypt({
+  Uint8List decrypt({
     required DaveMediaType mediaType,
-    required List<int> encryptedFrame,
+    required Uint8List encryptedFrame,
   }) {
     _checkActive();
     return using((arena) {

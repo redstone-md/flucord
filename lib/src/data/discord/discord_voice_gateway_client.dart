@@ -649,8 +649,9 @@ final class DiscordVoiceGatewayClient
   }) {
     final controller = _daveController;
     if (controller == null) return picture;
-    return Uint8List.fromList(
-      controller.decryptVideoFrame(userId: userId, encryptedFrame: picture),
+    return controller.decryptVideoFrame(
+      userId: userId,
+      encryptedFrame: picture,
     );
   }
 
@@ -815,11 +816,9 @@ final class DiscordVoiceGatewayClient
   }) {
     final controller = _daveController;
     if (controller == null) throw StateError('DAVE is unavailable');
-    return Uint8List.fromList(
-      controller.decryptAudioFrame(
-        userId: userId,
-        encryptedFrame: encryptedFrame,
-      ),
+    return controller.decryptAudioFrame(
+      userId: userId,
+      encryptedFrame: encryptedFrame,
     );
   }
 

@@ -89,6 +89,21 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     _autocompleteSelection = 0;
   }
 
+  /// Runs [change] and leaves the list closed. Text put in the box from code,
+  /// such as a draft coming back, is not the user asking for suggestions.
+  void _withAutocompleteClosed(VoidCallback change) {
+    _autocompleteTextController.removeListener(_refreshComposerAutocomplete);
+    change();
+    _autocompleteTextController.addListener(_refreshComposerAutocomplete);
+    _autocompleteSuggestions = const [];
+    // This runs during a build, where the portal cannot be hidden.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _autocompleteSuggestions.isEmpty) {
+        _resetComposerAutocomplete();
+      }
+    });
+  }
+
   void _dismissComposerAutocomplete() {
     final hadSuggestions = _autocompleteSuggestions.isNotEmpty;
     _resetComposerAutocomplete();
