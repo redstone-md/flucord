@@ -608,10 +608,31 @@ void main() {
         controller.workspace!.channelById('forge-general').firstUnreadMessageId,
         'background-1',
       );
+      // Leaving the window changes nothing on screen. The next message to
+      // arrive while away is what moves the boundary.
       controller.setApplicationActive(false);
       expect(
         controller.workspace!.channelById('forge-general').firstUnreadMessageId,
-        isNull,
+        'background-1',
+      );
+
+      repository.emit(
+        MessageUpsertedEvent(
+          message: ChatMessage(
+            id: 'background-2',
+            channelId: 'forge-general',
+            authorId: 'lena',
+            body: 'Arrived on the next time away',
+            sentAt: DateTime.now(),
+          ),
+          isNew: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller.workspace!.channelById('forge-general').firstUnreadMessageId,
+        'background-2',
       );
     });
 

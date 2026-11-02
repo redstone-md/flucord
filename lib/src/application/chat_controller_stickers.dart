@@ -32,10 +32,7 @@ extension ChatControllerStickers on ChatController {
         authorId: workspace.currentMemberId,
         stickerIds: ids,
       );
-      _workspace = _workspace
-          ?.upsertMessage(message)
-          .clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
+      _applySentMessage(message);
       _error = null;
       return true;
     } catch (error) {

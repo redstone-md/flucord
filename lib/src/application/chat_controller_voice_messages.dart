@@ -18,9 +18,7 @@ extension ChatControllerVoiceMessages on ChatController {
         authorId: workspace.currentMemberId,
         voiceMessage: voiceMessage,
       );
-      _workspace = _workspace?.upsertMessage(message);
-      _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
+      _applySentMessage(message);
       _error = null;
       return true;
     } catch (error) {

@@ -14,10 +14,23 @@ import 'discord_desktop_gateway_client.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_gateway_client.dart';
 
+/// Both transports share one cache file.
+Future<void> _clearDefaultCache() async {
+  final cache = await SqliteChatCache.openDefault();
+  try {
+    await cache.clear();
+  } finally {
+    await cache.close();
+  }
+}
+
 final class DiscordRepositoryFactory implements ChatRepositoryFactory {
   const DiscordRepositoryFactory({this.daveService});
 
   final VoiceDaveService? daveService;
+
+  @override
+  Future<void> clearCache() => _clearDefaultCache();
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -49,6 +62,7 @@ final class DiscordRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
       ),
       cache,
+      accountId: session.accountId,
       daveService: _resolveDaveService(),
     );
   }
@@ -67,6 +81,9 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
   final VoiceDaveService? daveService;
 
   @override
+  Future<void> clearCache() => _clearDefaultCache();
+
+  @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
     if (session is! DiscordBotSession) {
       throw UnsupportedDiscordSessionException(session.kind);
@@ -77,6 +94,7 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
       DiscordApiClient(botToken: botToken),
       DiscordGatewayClient(botToken: botToken),
       cache,
+      accountId: session.accountId,
       daveService:
           daveService ?? (Platform.isWindows ? NativeDaveService.open() : null),
     );
