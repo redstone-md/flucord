@@ -869,10 +869,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     if (channel == null || channel.spaceId != CommunitySpace.directMessagesId) {
       return false;
     }
-    final inChannel = [
-      for (final candidate in workspace.messages)
-        if (candidate.channelId == message.channelId) candidate,
-    ];
+    final inChannel = workspace.messagesFor(message.channelId);
     return inChannel.length == 1 &&
         inChannel.single.id == message.id &&
         message.authorId != workspace.currentMemberId;

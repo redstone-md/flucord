@@ -194,6 +194,12 @@ extension ReadStateProjection on ChatWorkspace {
     return changed ? copyWith(channels: projected) : this;
   }
 
+  /// The id of the first held message of [state]'s channel newer than its
+  /// cursor. Null with no such message.
+  String? _firstUnreadIn(ReadState state) => messagesFor(
+    state.entityId,
+  ).where((message) => state.isBehind(message.id)).firstOrNull?.id;
+
   /// Sets a channel's boundary to its first held message newer than [state]'s
   /// cursor. [state] is what the channel's read state was before it was read,
   /// so this is how a channel that an open acked still gets its NEW line.
@@ -201,7 +207,7 @@ extension ReadStateProjection on ChatWorkspace {
   /// With no such message held, or with the boundary already there, the
   /// workspace stays as it is.
   ChatWorkspace withUnreadBoundaryFrom(ReadState state) {
-    final first = _firstUnreadMessageId(state);
+    final first = _firstUnreadIn(state);
     if (first == null ||
         channelOrNull(state.entityId)?.firstUnreadMessageId == first) {
       return this;
@@ -229,11 +235,6 @@ extension ReadStateProjection on ChatWorkspace {
     );
   }
 
-  /// The first held message of [state]'s channel that is newer than its cursor.
-  String? _firstUnreadMessageId(ReadState state) => messagesFor(
-    state.entityId,
-  ).where((message) => state.isBehind(message.id)).firstOrNull?.id;
-
   /// A channel the server holds no read state for keeps whatever it already had.
   /// Silence is not disagreement: Discord garbage-collects read states it
   /// considers stale, and reading that as "everything is read" would wipe an
@@ -251,8 +252,7 @@ extension ReadStateProjection on ChatWorkspace {
     if (state == null) return channel;
     final unread = state.isBehind(channel.lastMessageId);
     final boundary =
-        (unread ? _firstUnreadMessageId(state) : null) ??
-        channel.firstUnreadMessageId;
+        (unread ? _firstUnreadIn(state) : null) ?? channel.firstUnreadMessageId;
     if (unread == channel.unread &&
         state.mentionCount == channel.mentionCount &&
         boundary == channel.firstUnreadMessageId) {

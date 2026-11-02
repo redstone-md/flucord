@@ -63,11 +63,11 @@ change, run both sides again and check that it stays.
 
 ## Baseline
 
-`baseline.txt` holds a result from a past commit, and its first line says which
-commit and which machine. Its times only compare directly with a run on that
-machine. On another machine, use it for the shape: how each fold grows with the
-held messages. Update it at release, and when a change moves the numbers on
-purpose. Keep the first line up to date.
+`baseline.txt` holds results from past commits, newest first. The line above each
+table says which commit and which machine. Its times only compare directly with
+a run on that machine. On another machine, use it for the shape: how each fold
+grows with the held messages. Add a table at release, and when a change moves
+the numbers on purpose. Keep the old tables, so the file shows what changed.
 
 ## Why it is a package of its own
 
