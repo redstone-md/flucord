@@ -62,6 +62,15 @@ final class ReadStateSnapshot {
         ),
       );
 
+  /// Whether [other] holds the same notification settings. A surface reads only
+  /// these from a snapshot: cursors reach it through the channels they fold into.
+  bool sameSettingsAs(ReadStateSnapshot other) =>
+      accountNotificationFlags == other.accountNotificationFlags &&
+      settings.length == other.settings.length &&
+      settings.entries.every(
+        (entry) => identical(other.settings[entry.key], entry.value),
+      );
+
   /// Whether [channel] is silenced, by its own override or by its space.
   bool isChannelMuted(ConversationChannel channel, {DateTime? now}) {
     final at = now ?? DateTime.now();
@@ -171,37 +180,35 @@ final class ReadStateSnapshot {
 /// authoritative is a matter of recomputing those three from the read state
 /// rather than of teaching each surface a second source of truth.
 extension ReadStateProjection on ChatWorkspace {
+  /// Answers with this same workspace when no channel changed, and a channel
+  /// that did not change keeps its instance, so caches keyed on them still hit.
   ChatWorkspace applyReadState(ReadStateSnapshot snapshot) {
     if (snapshot.readStates.isEmpty) return this;
-    final firstUnread = <String, String>{};
-    for (final message in messages) {
-      final state = snapshot.forChannel(message.channelId);
-      if (state == null || firstUnread.containsKey(message.channelId)) continue;
-      if (state.isBehind(message.id)) {
-        firstUnread[message.channelId] = message.id;
-      }
+    var changed = false;
+    final projected = <ConversationChannel>[];
+    for (final channel in channels) {
+      final next = _projectedChannel(channel, snapshot);
+      changed = changed || !identical(next, channel);
+      projected.add(next);
     }
-    return copyWith(
-      channels: [
-        for (final channel in channels)
-          _projectedChannel(channel, snapshot, firstUnread[channel.id]),
-      ],
-    );
+    return changed ? copyWith(channels: projected) : this;
   }
 
   /// Sets a channel's boundary to its first held message newer than [state]'s
   /// cursor. [state] is what the channel's read state was before it was read,
   /// so this is how a channel that an open acked still gets its NEW line.
   ///
-  /// With no such message held, the channel stays as it is.
+  /// With no such message held, or with the boundary already there, the
+  /// workspace stays as it is.
   ChatWorkspace withUnreadBoundaryFrom(ReadState state) {
-    final first = messagesFor(
-      state.entityId,
-    ).where((message) => state.isBehind(message.id)).firstOrNull;
-    if (first == null) return this;
+    final first = _firstUnreadMessageId(state);
+    if (first == null ||
+        channelOrNull(state.entityId)?.firstUnreadMessageId == first) {
+      return this;
+    }
     return updateChannel(
       state.entityId,
-      (channel) => channel.copyWith(firstUnreadMessageId: first.id),
+      (channel) => channel.copyWith(firstUnreadMessageId: first),
     );
   }
 
@@ -221,28 +228,40 @@ extension ReadStateProjection on ChatWorkspace {
       ],
     );
   }
-}
 
-/// A channel the server holds no read state for keeps whatever it already had.
-/// Silence is not disagreement: Discord garbage-collects read states it
-/// considers stale, and reading that as "everything is read" would wipe an
-/// unread marker the account can still see in the official client.
-///
-/// A channel that is read keeps its boundary: the NEW line outlives the ack that
-/// opening the channel sends. Clearing it is left to the explicit clear. An
-/// unread channel keeps its boundary too when no held message can replace it.
-ConversationChannel _projectedChannel(
-  ConversationChannel channel,
-  ReadStateSnapshot snapshot,
-  String? firstUnreadMessageId,
-) {
-  final state = snapshot.forChannel(channel.id);
-  if (state == null) return channel;
-  final unread = state.isBehind(channel.lastMessageId);
-  return channel.copyWith(
-    unread: unread,
-    mentionCount: state.mentionCount,
-    firstUnreadMessageId:
-        (unread ? firstUnreadMessageId : null) ?? channel.firstUnreadMessageId,
-  );
+  /// The first held message of [state]'s channel that is newer than its cursor.
+  String? _firstUnreadMessageId(ReadState state) => messagesFor(
+    state.entityId,
+  ).where((message) => state.isBehind(message.id)).firstOrNull?.id;
+
+  /// A channel the server holds no read state for keeps whatever it already had.
+  /// Silence is not disagreement: Discord garbage-collects read states it
+  /// considers stale, and reading that as "everything is read" would wipe an
+  /// unread marker the account can still see in the official client.
+  ///
+  /// A channel that is read keeps its boundary: the NEW line outlives the ack
+  /// that opening the channel sends. Clearing it is left to the explicit clear.
+  /// An unread channel keeps its boundary too when no held message can replace
+  /// it.
+  ConversationChannel _projectedChannel(
+    ConversationChannel channel,
+    ReadStateSnapshot snapshot,
+  ) {
+    final state = snapshot.forChannel(channel.id);
+    if (state == null) return channel;
+    final unread = state.isBehind(channel.lastMessageId);
+    final boundary =
+        (unread ? _firstUnreadMessageId(state) : null) ??
+        channel.firstUnreadMessageId;
+    if (unread == channel.unread &&
+        state.mentionCount == channel.mentionCount &&
+        boundary == channel.firstUnreadMessageId) {
+      return channel;
+    }
+    return channel.copyWith(
+      unread: unread,
+      mentionCount: state.mentionCount,
+      firstUnreadMessageId: boundary,
+    );
+  }
 }
