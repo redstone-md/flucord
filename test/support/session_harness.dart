@@ -19,6 +19,7 @@ import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
@@ -58,6 +59,7 @@ final class SessionHarness {
     this._connector,
     this._diskDirectory,
     this._voiceMessageRecorder,
+    this._desktop,
   );
 
   /// The account the default READY signs in.
@@ -84,6 +86,7 @@ final class SessionHarness {
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
+  final DesktopIntegration? _desktop;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
@@ -138,6 +141,7 @@ final class SessionHarness {
     FlucordApp(
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
+        desktopIntegration: _desktop,
         credentialVault: _vault,
         chatRepositoryFactory: _FakeWireRepositoryFactory(
           transport,
@@ -286,7 +290,8 @@ final class SessionHarness {
 /// before the first request; after that, use `session.transport.on`. Pass a
 /// [voiceMessageRecorder] for the composer's voice message button, which only
 /// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
-/// memory, which a test of a relaunch or of the cache file needs.
+/// memory, which a test of a relaunch or of the cache file needs. Pass a
+/// [desktop], such as a `FakeDesktopWindow`, for window focus and links at launch.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -295,6 +300,7 @@ void testSession(
   Size size = const Size(1440, 900),
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
+  DesktopIntegration? desktop,
 }) {
   testWidgets(description, (tester) async {
     await tester.binding.setSurfaceSize(size);
@@ -311,6 +317,7 @@ void testSession(
       MemoryDesktopWebSocketConnector(),
       disk,
       voiceMessageRecorder,
+      desktop,
     );
     try {
       await session._start(ready ?? SessionHarness.defaultReady());

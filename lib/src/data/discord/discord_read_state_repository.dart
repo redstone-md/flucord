@@ -304,11 +304,13 @@ final class DiscordReadStateRepository implements ReadStateRepository {
       _store.snapshot,
       now ?? _clock(),
     );
+    // The local pass goes first so the cache shrinks on the same stroke whether
+    // or not the requests land, and no surface draws a collected cursor. A failed
+    // delete is re-read from the next READY, which is how every other optimistic
+    // mutation behaves.
+    channelIds.forEach(_store.removeChannelState);
+    if (channelIds.isNotEmpty) _emit();
     for (final channelId in channelIds) {
-      // The local pass goes first so the cache shrinks on the same stroke
-      // whether or not the request lands; a failed delete is re-read from the
-      // next READY, which is how every other optimistic mutation behaves.
-      _store.removeChannelState(channelId);
       await _queue.sendNow(
         DiscordDesktopReadStateRequests.deleteReadState(
           channelId: channelId,
@@ -316,7 +318,6 @@ final class DiscordReadStateRepository implements ReadStateRepository {
         ),
       );
     }
-    if (channelIds.isNotEmpty) _emit();
   }
 
   @override

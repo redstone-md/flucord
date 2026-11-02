@@ -271,13 +271,22 @@ final class ChatController extends ChangeNotifier {
       _error = error;
       _state = ChatLoadState.failure;
     }
-    notifyListeners();
-    final workspace = _workspace;
-    if (_state == ChatLoadState.ready && workspace != null) {
+    if (_state == ChatLoadState.ready) {
       // The read state came back whole with the workspace, so this is the one
       // moment a session can judge which entries are older than the collector
       // keeps. A transport without read state has nothing to collect.
       unawaited(collectReadStateGarbage());
+      // READY's own update reached the controller before it had a workspace to
+      // fold it into, and the first screen must already show it.
+      _applyReadState();
+    }
+    notifyListeners();
+    final workspace = _workspace;
+    // A link held through the launch has opened its channel during the notify
+    // above. The user asked for that channel, so the app does not land elsewhere.
+    if (_state == ChatLoadState.ready &&
+        workspace != null &&
+        _activeChannelId == null) {
       // A voice channel does carry messages, but it is never the channel the
       // app lands on unasked, so warming its history here would be wasted work.
       // The same visibility filter the shell lands by is applied here, or the
