@@ -529,15 +529,16 @@ class _EmojiTile extends StatelessWidget {
     final star = store == null
         ? null
         : () => unawaited(store.toggleEmoji(choice.favoriteKey));
+    // The tap, the long press and the focus come from the InkWell, so a screen
+    // reader hears when the keyboard lands on a choice.
     return Semantics(
+      container: true,
       label: starred
           ? '${choice.semanticLabel}, favourite'
           : choice.semanticLabel,
       button: true,
-      onTap: () => onSelected(choice),
-      onLongPress: star,
-      excludeSemantics: true,
       child: Tooltip(
+        excludeFromSemantics: true,
         message: store == null
             ? choice.tooltip
             : '${choice.tooltip}\nRight-click to '
@@ -548,21 +549,23 @@ class _EmojiTile extends StatelessWidget {
           onTap: () => onSelected(choice),
           onSecondaryTap: star,
           onLongPress: star,
-          child: Stack(
-            children: [
-              Center(child: _EmojiGlyph(choice: choice)),
-              if (starred)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Icon(
-                    Icons.star,
-                    key: ValueKey('emoji-starred-${choice.key}'),
-                    size: 9,
-                    color: Colors.amber,
+          child: ExcludeSemantics(
+            child: Stack(
+              children: [
+                Center(child: _EmojiGlyph(choice: choice)),
+                if (starred)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Icon(
+                      Icons.star,
+                      key: ValueKey('emoji-starred-${choice.key}'),
+                      size: 9,
+                      color: Colors.amber,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

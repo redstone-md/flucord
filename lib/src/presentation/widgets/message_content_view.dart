@@ -42,6 +42,11 @@ class _MessageContentViewState extends State<MessageContentView> {
   Timer? _relativeTimestampTimer;
   int _relativeTimestampTick = 0;
 
+  /// A click on the text still takes this, so the selection can work.
+  final FocusNode _selectionFocus = FocusNode(
+    debugLabel: 'message text selection',
+  );
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +73,7 @@ class _MessageContentViewState extends State<MessageContentView> {
   @override
   void dispose() {
     _relativeTimestampTimer?.cancel();
+    _selectionFocus.dispose();
     super.dispose();
   }
 
@@ -78,7 +84,11 @@ class _MessageContentViewState extends State<MessageContentView> {
     // cache is the one that has to survive it being turned off again.
     final body = StreamerModeScope.redact(context, widget.body);
     final rowMenu = MessageMenuScope.maybeOf(context);
+    // In a row, the row is the stop for Tab. A second stop on the text would
+    // show nothing on screen and say nothing to a screen reader.
+    _selectionFocus.skipTraversal = rowMenu != null;
     final text = SelectionArea(
+      focusNode: _selectionFocus,
       onSelectionChanged: rowMenu?.onSelectionChanged,
       child: MarkdownBody(
         key: ValueKey(Object.hash(_resolutionSignature, body)),

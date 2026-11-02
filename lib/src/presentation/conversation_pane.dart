@@ -764,7 +764,11 @@ class _ConversationPaneState extends State<ConversationPane> {
               chat.isLoadingOlderMessages(channel.id),
               chat.olderMessagesError(channel.id),
             ],
-            builder: (_) => _timeline(chat, workspaceController),
+            // One group, so Tab walks the rows in order. Without it, the order
+            // goes by height on screen and mixes in the rail and the sidebar.
+            builder: (_) => FocusTraversalGroup(
+              child: _timeline(chat, workspaceController),
+            ),
           ),
         ),
       ],
