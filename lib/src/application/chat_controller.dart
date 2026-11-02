@@ -115,6 +115,7 @@ final class ChatController extends ChangeNotifier {
   String? _activeChannelId;
   String? _guildAccessError;
   bool _isApplicationActive = true;
+  ChatMessage? _lastSentMessage;
   bool _disposed = false;
 
   ChatLoadState get state => _state;
@@ -174,6 +175,10 @@ final class ChatController extends ChangeNotifier {
         ? repository as GuildMemberListRepository
         : null;
   }
+
+  /// The id of the message this client last sent, if it went to [channelId].
+  String? lastSentMessageIdIn(String channelId) =>
+      _lastSentMessage?.channelId == channelId ? _lastSentMessage?.id : null;
 
   void setApplicationActive(bool value) {
     if (_isApplicationActive == value) return;
@@ -468,9 +473,7 @@ final class ChatController extends ChangeNotifier {
         suppressNotifications: suppressNotifications,
         textToSpeech: spoken.$1,
       );
-      _workspace = _workspace?.upsertMessage(message);
-      _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
+      _applySentMessage(message);
       return true;
     } catch (error) {
       _error = error;
@@ -612,6 +615,16 @@ final class ChatController extends ChangeNotifier {
       _error = error;
     }
     notifyListeners();
+  }
+
+  /// Folds in a message this client just sent. It reads its channel, and the
+  /// timeline takes the reader to it.
+  void _applySentMessage(ChatMessage message) {
+    _workspace = _workspace
+        ?.upsertMessage(message)
+        .clearChannelUnreadBoundary(message.channelId);
+    _persistChannelActivity(message.channelId);
+    _lastSentMessage = message;
   }
 
   void _persistChannelActivity(String channelId) => unawaited(
