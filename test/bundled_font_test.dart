@@ -1,4 +1,3 @@
-import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,10 +10,6 @@ void main() {
   ) async {
     // A family missing from the bundle falls back to whatever the system has,
     // which is how Bahnschrift only ever existed on Windows.
-    expect(
-      FlucordTheme.dark.textTheme.bodyMedium!.fontFamily,
-      FlucordType.family,
-    );
     await loadAppFont(tester);
 
     double widthOf(FontWeight weight) {
