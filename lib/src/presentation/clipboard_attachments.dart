@@ -18,9 +18,12 @@ abstract final class ClipboardAttachments {
     p.join(Directory.systemTemp.path, 'flucord-pasted'),
   );
 
-  /// Removes what an earlier run left behind. Drafts live in memory, so nothing
-  /// can still send those files. It runs once, on the first paste.
-  static final Future<void> _earlierRunCleared = _delete(_folder);
+  /// Whether what an earlier run left behind is gone. Drafts live in memory, so
+  /// nothing can still send those files. It goes on the first paste, in one
+  /// synchronous step, so a second paste cannot start inside it. A held future
+  /// would not do: it keeps the zone it was made in, and a test's zone ends
+  /// with the test.
+  static bool _earlierRunCleared = false;
 
   /// The clipboard's files, or else its picture, or else nothing.
   static Future<List<PendingAttachment>> read() async {
@@ -40,6 +43,10 @@ abstract final class ClipboardAttachments {
     }
   }
 
+  /// Deletes every pasted picture, sent or not, for a sign-out. A draft that
+  /// still names one loses it, which is right: the account it was for is gone.
+  static Future<void> clear() => _delete(_folder);
+
   /// The clipboard's picture is a bitmap on Windows, and a full screen bitmap
   /// can be over the upload limit. A PNG of it is not.
   static Future<Uint8List> _asPng(Uint8List image) async {
@@ -53,7 +60,14 @@ abstract final class ClipboardAttachments {
   }
 
   static Future<PendingAttachment> _keep(Uint8List png) async {
-    await _earlierRunCleared;
+    if (!_earlierRunCleared) {
+      _earlierRunCleared = true;
+      try {
+        _folder.deleteSync(recursive: true);
+      } on FileSystemException {
+        // Missing, or held open by the system. The next run tries again.
+      }
+    }
     await _folder.create(recursive: true);
     final own = await _folder.createTemp();
     final file = File(p.join(own.path, 'image.png'));

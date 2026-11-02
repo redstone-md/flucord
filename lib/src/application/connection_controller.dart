@@ -20,20 +20,23 @@ final class ConnectionController extends ChangeNotifier {
     this._repositoryFactory, {
     SessionMode initialMode = SessionMode.disconnected,
     this.botTransportEnabled = false,
-    Future<void> Function() clearChatImages = _noChatImages,
+    Future<void> Function() clearChatImages = _noLocalFiles,
+    Future<void> Function() clearPastedPictures = _noLocalFiles,
     NavigationMemoryStore? navigationMemory,
   }) : _mode = initialMode,
        _clearChatImages = clearChatImages,
+       _clearPastedPictures = clearPastedPictures,
        _navigationMemory = navigationMemory;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
   final Future<void> Function() _clearChatImages;
+  final Future<void> Function() _clearPastedPictures;
   final bool botTransportEnabled;
   final NavigationMemoryStore? _navigationMemory;
 
-  static Future<void> _noChatImages() async {}
+  static Future<void> _noLocalFiles() async {}
 
   SessionMode _mode;
   ConnectionActionState _state = ConnectionActionState.idle;
@@ -194,7 +197,7 @@ final class ConnectionController extends ChangeNotifier {
   }
 
   /// Signs out of the live session and removes its cached messages and
-  /// pictures from disk. A saved credential stays, so it can sign back in.
+  /// pictures from disk, pasted ones too. A saved credential stays, so it can sign back in.
   Future<void> disconnect() async {
     await _endSession();
     await _clearCachedChats();
@@ -207,7 +210,7 @@ final class ConnectionController extends ChangeNotifier {
   }
 
   /// Forgets the account on this machine: its credential, its cached data and
-  /// the pictures of its chats.
+  /// the pictures of its chats, pasted ones too.
   ///
   /// A live session ends first, because it holds the cache open and would keep
   /// writing to it. A cache that cannot be cleared must not keep the credential
@@ -233,6 +236,7 @@ final class ConnectionController extends ChangeNotifier {
   Future<void> _clearCachedChats() async {
     await _clearFromDisk(_repositoryFactory.clearCache, 'messages');
     await _clearFromDisk(_clearChatImages, 'images');
+    await _clearFromDisk(_clearPastedPictures, 'pasted pictures');
   }
 
   /// Runs [clear], and reports a failure as the cached [what] left on disk.
