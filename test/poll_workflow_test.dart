@@ -12,6 +12,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const ValueKey('composer-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('create-poll')));
     await tester.pumpAndSettle();
     expect(find.text('Create a poll'), findsOneWidget);

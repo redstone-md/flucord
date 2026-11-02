@@ -13,6 +13,7 @@ const _unreachable = 'Could not reach Discord. Check your connection.';
 const _scanCaption = 'Scan this code with the Discord app on your phone.';
 const _confirmCaption = 'Now confirm the sign-in on your phone.';
 const _retry = ValueKey('disconnected-retry');
+final _savedToken = SessionHarness.tokenOf(SessionHarness.currentUserId);
 
 void main() {
   group('while a session runs', () {
@@ -78,7 +79,7 @@ void main() {
       final identify = session.socket.frames.firstWhere(
         (frame) => frame['op'] == 2,
       );
-      expect((identify['d'] as Map)['token'], 'harness-token');
+      expect((identify['d'] as Map)['token'], _savedToken);
       expect(find.text(_offline), findsNothing);
       expect(find.byTooltip('Connected to Discord'), findsOneWidget);
     });
@@ -105,7 +106,7 @@ void main() {
         final identify = session.socket.frames.firstWhere(
           (frame) => frame['op'] == 2,
         );
-        expect((identify['d'] as Map)['token'], 'harness-token');
+        expect((identify['d'] as Map)['token'], _savedToken);
         expect(find.text(_unreachable), findsNothing);
         expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
       },
@@ -129,6 +130,24 @@ void main() {
       launch: SessionLaunch.unreachable,
     );
   });
+
+  testSession(
+    'a launch with a cache but no connection shows it offline, and Retry connects',
+    (tester, session) async {
+      await session.relaunchUnreachable();
+
+      expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
+      expect(find.text(_offline), findsOneWidget);
+
+      session.discordReachable();
+      await tester.tap(find.byKey(const ValueKey('connection-banner-retry')));
+      await session.connectToReady(SessionHarness.defaultReady());
+
+      expect(find.text(_offline), findsNothing);
+      expect(find.byTooltip('Connected to Discord'), findsOneWidget);
+    },
+    onDisk: true,
+  );
 
   group('a new user', () {
     testSession(
@@ -157,14 +176,14 @@ void main() {
         expect(find.byType(QrImageView), findsNothing);
 
         session.remoteAuth.add(
-          DiscordRemoteAuthCompleted(DiscordDesktopUserSession('new-token')),
+          DiscordRemoteAuthCompleted(DiscordDesktopUserSession(_savedToken)),
         );
         await session.connectToReady(SessionHarness.defaultReady());
 
         final identify = session.socket.frames.firstWhere(
           (frame) => frame['op'] == 2,
         );
-        expect((identify['d'] as Map)['token'], 'new-token');
+        expect((identify['d'] as Map)['token'], _savedToken);
         expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
       },
       launch: SessionLaunch.signedOut,
@@ -176,8 +195,8 @@ void main() {
         session.remoteAuth.add(const DiscordRemoteAuthQrReady('fingerprint'));
         await session.settle();
 
+        // An overflow fails any session test, so showing the caption is enough.
         expect(find.text(_scanCaption), findsOneWidget);
-        expect(session.layoutOverflows, isEmpty);
       },
       launch: SessionLaunch.signedOut,
       size: const Size(940, 400),
@@ -188,7 +207,7 @@ void main() {
       (tester, session) async {
         session.discordUnreachable();
         session.remoteAuth.add(
-          DiscordRemoteAuthCompleted(DiscordDesktopUserSession('new-token')),
+          DiscordRemoteAuthCompleted(DiscordDesktopUserSession(_savedToken)),
         );
         await session.settle();
         await session.settle();

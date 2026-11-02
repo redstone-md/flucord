@@ -19,6 +19,23 @@ class SlashCommandList extends StatelessWidget {
   /// Called once a command has been run, so the composer can clear itself.
   final VoidCallback onPicked;
 
+  /// Runs [command], asking first for any options it requires.
+  static Future<void> run(
+    BuildContext context, {
+    required SlashCommandController controller,
+    required ApplicationCommand command,
+    required VoidCallback onPicked,
+  }) async {
+    var values = const <String, Object?>{};
+    if (command.hasRequiredInputs) {
+      final filled = await SlashCommandOptionsDialog.show(context, command);
+      // Backing out of the form is not running the command with nothing in it.
+      if (filled == null) return;
+      values = filled;
+    }
+    if (await controller.invoke(command, values: values)) onPicked();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!controller.isSupported || !controller.isOpen) {
@@ -70,33 +87,33 @@ class SlashCommandList extends StatelessWidget {
         final command = controller.commands[index];
         return _CommandRow(
           command: command,
+          // Enter runs the first row, so it is the one that looks chosen.
+          isFirst: index == 0,
           isBusy: controller.isSending,
-          onPressed: () => unawaited(_run(context, command)),
+          onPressed: () => unawaited(
+            run(
+              context,
+              controller: controller,
+              command: command,
+              onPicked: onPicked,
+            ),
+          ),
         );
       },
     );
-  }
-
-  Future<void> _run(BuildContext context, ApplicationCommand command) async {
-    var values = const <String, Object?>{};
-    if (command.hasRequiredInputs) {
-      final filled = await SlashCommandOptionsDialog.show(context, command);
-      // Backing out of the form is not running the command with nothing in it.
-      if (filled == null) return;
-      values = filled;
-    }
-    if (await controller.invoke(command, values: values)) onPicked();
   }
 }
 
 class _CommandRow extends StatelessWidget {
   const _CommandRow({
     required this.command,
+    required this.isFirst,
     required this.isBusy,
     required this.onPressed,
   });
 
   final ApplicationCommand command;
+  final bool isFirst;
   final bool isBusy;
   final VoidCallback onPressed;
 
@@ -104,7 +121,15 @@ class _CommandRow extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
     key: ValueKey('slash-command-${command.id}'),
     onTap: isBusy ? null : onPressed,
-    child: Padding(
+    child: Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            width: 2,
+            color: isFirst ? FlucordColors.brand : Colors.transparent,
+          ),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [

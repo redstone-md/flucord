@@ -259,6 +259,9 @@ final class _UnusedRepositoryFactory implements ChatRepositoryFactory {
   Future<ChatRepository> create(DiscordAccountSession session) {
     throw StateError('No saved session should reach the repository factory.');
   }
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _OAuthGateway implements DiscordOAuthAccountGateway {
