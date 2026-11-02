@@ -17,6 +17,7 @@
 #include <windows.h>
 
 #include <codecapi.h>
+#include <d3d10.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <mfapi.h>
@@ -1128,7 +1129,164 @@ void CameraLoop(FlucordVideoEncoder* state) {
   }
 }
 
-// Scales and colour-converts on the GPU with the Direct3D video processor.
+// One pass of the Direct3D video processor: a source texture in, a picture of
+// another size or pixel format out, read back for the CPU. The scaling and the
+// colour conversion run on the GPU, so the CPU only copies rows.
+//
+// The encoder scales the desktop into NV12 with it; the decoder turns the NV12
+// it decoded on the GPU into BGRA for a texture.
+struct GpuVideoPass {
+  struct Shape {
+    // The source texture's size.
+    int source_width = 0;
+    int source_height = 0;
+    // The part of the source that is picture. A decoded frame is padded to
+    // whole macroblocks (1080 rows arrive as 1088), and the padding was
+    // never part of what was sent.
+    RECT visible{};
+    // The picture that comes out.
+    int width = 0;
+    int height = 0;
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+    D3D11_VIDEO_PROCESSOR_COLOR_SPACE input{};
+    D3D11_VIDEO_PROCESSOR_COLOR_SPACE output{};
+  };
+
+  HRESULT Create(ID3D11Device* d3d,
+                 ID3D11DeviceContext* immediate,
+                 const Shape& shape) {
+    Reset();
+    // The video interfaces are their own, not bases of the plain ones, so
+    // both are held: the video context drives the processor, the immediate
+    // one does the copy and the readback map.
+    this->immediate = immediate;
+    HRESULT hr = d3d->QueryInterface(IID_PPV_ARGS(&device));
+    if (SUCCEEDED(hr)) hr = immediate->QueryInterface(IID_PPV_ARGS(&context));
+    if (FAILED(hr)) {
+      Reset();
+      return hr;
+    }
+
+    D3D11_VIDEO_PROCESSOR_CONTENT_DESC content{};
+    content.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+    content.InputWidth = static_cast<UINT>(shape.source_width);
+    content.InputHeight = static_cast<UINT>(shape.source_height);
+    content.OutputWidth = static_cast<UINT>(shape.width);
+    content.OutputHeight = static_cast<UINT>(shape.height);
+    content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+    hr = device->CreateVideoProcessorEnumerator(&content, &enumerator);
+    if (SUCCEEDED(hr)) {
+      hr = device->CreateVideoProcessor(enumerator.Get(), 0, &processor);
+    }
+    if (FAILED(hr)) {
+      Reset();
+      return hr;
+    }
+    context->VideoProcessorSetStreamFrameFormat(
+        processor.Get(), 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
+    RECT visible = shape.visible;
+    context->VideoProcessorSetStreamSourceRect(processor.Get(), 0, TRUE,
+                                               &visible);
+    D3D11_VIDEO_PROCESSOR_COLOR_SPACE input = shape.input;
+    context->VideoProcessorSetStreamColorSpace(processor.Get(), 0, &input);
+    D3D11_VIDEO_PROCESSOR_COLOR_SPACE output = shape.output;
+    context->VideoProcessorSetOutputColorSpace(processor.Get(), &output);
+
+    D3D11_TEXTURE2D_DESC picture{};
+    picture.Width = static_cast<UINT>(shape.width);
+    picture.Height = static_cast<UINT>(shape.height);
+    picture.MipLevels = 1;
+    picture.ArraySize = 1;
+    picture.Format = shape.format;
+    picture.SampleDesc.Count = 1;
+    picture.Usage = D3D11_USAGE_DEFAULT;
+    // What an output view is required to be created from.
+    picture.BindFlags = D3D11_BIND_RENDER_TARGET;
+    hr = d3d->CreateTexture2D(&picture, nullptr, &target);
+    if (SUCCEEDED(hr)) {
+      picture.Usage = D3D11_USAGE_STAGING;
+      picture.BindFlags = 0;
+      picture.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+      picture.MiscFlags = 0;
+      hr = d3d->CreateTexture2D(&picture, nullptr, &readback);
+    }
+    if (SUCCEEDED(hr)) {
+      D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC view{};
+      view.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+      hr = device->CreateVideoProcessorOutputView(target.Get(),
+                                                  enumerator.Get(), &view,
+                                                  &target_view);
+    }
+    if (FAILED(hr)) {
+      Reset();
+      return hr;
+    }
+    this->shape = shape;
+    return S_OK;
+  }
+
+  bool Matches(int source_width, int source_height, const RECT& visible) const {
+    return device != nullptr && shape.source_width == source_width &&
+           shape.source_height == source_height &&
+           shape.visible.left == visible.left &&
+           shape.visible.top == visible.top &&
+           shape.visible.right == visible.right &&
+           shape.visible.bottom == visible.bottom;
+  }
+
+  // Runs the pass on one slice of `source` and hands the mapped result to
+  // `read`, which copies out of it before the map is released. Blocking: the
+  // map waits for the GPU.
+  template <typename Read>
+  HRESULT Run(ID3D11Texture2D* source, UINT slice, Read&& read) {
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC input{};
+    input.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+    input.Texture2D.ArraySlice = slice;
+    ComPtr<ID3D11VideoProcessorInputView> source_view;
+    HRESULT hr = device->CreateVideoProcessorInputView(
+        source, enumerator.Get(), &input, &source_view);
+    if (FAILED(hr)) return hr;
+
+    D3D11_VIDEO_PROCESSOR_STREAM stream{};
+    stream.Enable = TRUE;
+    stream.pInputSurface = source_view.Get();
+    hr = context->VideoProcessorBlt(processor.Get(), target_view.Get(), 0, 1,
+                                    &stream);
+    if (FAILED(hr)) return hr;
+    immediate->CopyResource(readback.Get(), target.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = immediate->Map(readback.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) return hr;
+    read(mapped);
+    immediate->Unmap(readback.Get(), 0);
+    return S_OK;
+  }
+
+  void Reset() {
+    device.Reset();
+    context.Reset();
+    immediate.Reset();
+    enumerator.Reset();
+    processor.Reset();
+    target.Reset();
+    readback.Reset();
+    target_view.Reset();
+    shape = Shape{};
+  }
+
+  ComPtr<ID3D11VideoDevice> device;
+  ComPtr<ID3D11VideoContext> context;
+  ComPtr<ID3D11DeviceContext> immediate;
+  ComPtr<ID3D11VideoProcessorEnumerator> enumerator;
+  ComPtr<ID3D11VideoProcessor> processor;
+  ComPtr<ID3D11Texture2D> target;
+  ComPtr<ID3D11Texture2D> readback;
+  ComPtr<ID3D11VideoProcessorOutputView> target_view;
+  Shape shape;
+};
+
+// Scales and colour-converts the desktop on the GPU.
 //
 // The desktop arrives as a full-resolution BGRA texture; converting it on the
 // CPU meant reading every byte of it back (14 MB a frame at 1440p), scaling
@@ -1141,155 +1299,55 @@ struct GpuScaler {
               int source_height,
               int width,
               int height) {
-    Reset();
-    // The video interfaces are their own, not bases of the plain ones, so
-    // both are held: the video context drives the processor, the immediate
-    // one does the copy and the readback map.
-    this->immediate = immediate;
-    if (FAILED(d3d->QueryInterface(IID_PPV_ARGS(&device))) ||
-        FAILED(immediate->QueryInterface(IID_PPV_ARGS(&context)))) {
-      Reset();
-      return false;
-    }
-
-    D3D11_VIDEO_PROCESSOR_CONTENT_DESC content{};
-    content.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
-    content.InputWidth = static_cast<UINT>(source_width);
-    content.InputHeight = static_cast<UINT>(source_height);
-    content.OutputWidth = static_cast<UINT>(width);
-    content.OutputHeight = static_cast<UINT>(height);
-    content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
-    if (FAILED(device->CreateVideoProcessorEnumerator(&content, &enumerator)) ||
-        FAILED(device->CreateVideoProcessor(enumerator.Get(), 0, &processor))) {
-      Reset();
-      return false;
-    }
-    context->VideoProcessorSetStreamFrameFormat(
-        processor.Get(), 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
-
+    GpuVideoPass::Shape shape;
+    shape.source_width = source_width;
+    shape.source_height = source_height;
+    shape.visible = RECT{0, 0, source_width, source_height};
+    shape.width = width;
+    shape.height = height;
+    shape.format = DXGI_FORMAT_NV12;
     // Full-range RGB in (a desktop is 0-255), BT.601 studio out: the same
     // numbers the CPU converter produces, so the colours do not move between
     // the two paths.
-    D3D11_VIDEO_PROCESSOR_COLOR_SPACE input{};
-    input.Usage = 0;
-    input.RGB_Range = 0;
-    context->VideoProcessorSetStreamColorSpace(processor.Get(), 0, &input);
-    D3D11_VIDEO_PROCESSOR_COLOR_SPACE output{};
-    output.Usage = 0;
-    output.YCbCr_Matrix = 0;  // BT.601
-    output.Nominal_Range = D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
-    context->VideoProcessorSetOutputColorSpace(processor.Get(), &output);
-
-    D3D11_TEXTURE2D_DESC nv12{};
-    nv12.Width = static_cast<UINT>(width);
-    nv12.Height = static_cast<UINT>(height);
-    nv12.MipLevels = 1;
-    nv12.ArraySize = 1;
-    nv12.Format = DXGI_FORMAT_NV12;
-    nv12.SampleDesc.Count = 1;
-    nv12.Usage = D3D11_USAGE_DEFAULT;
-    // What an output view is required to be created from.
-    nv12.BindFlags = D3D11_BIND_RENDER_TARGET;
-    if (FAILED(d3d->CreateTexture2D(&nv12, nullptr, &target))) {
-      Reset();
-      return false;
-    }
-    nv12.Usage = D3D11_USAGE_STAGING;
-    nv12.BindFlags = 0;
-    nv12.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    nv12.MiscFlags = 0;
-    if (FAILED(d3d->CreateTexture2D(&nv12, nullptr, &readback))) {
-      Reset();
-      return false;
-    }
-
-    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC view{};
-    view.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
-    if (FAILED(device->CreateVideoProcessorOutputView(target.Get(),
-                                                      enumerator.Get(), &view,
-                                                      &target_view))) {
-      Reset();
-      return false;
-    }
-
-    this->source_width = source_width;
-    this->source_height = source_height;
-    this->width = width;
-    this->height = height;
-    return true;
+    shape.input.Usage = 0;
+    shape.input.RGB_Range = 0;
+    shape.output.Usage = 0;
+    shape.output.YCbCr_Matrix = 0;  // BT.601
+    shape.output.Nominal_Range = D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
+    return SUCCEEDED(pass.Create(d3d, immediate, shape));
   }
 
   bool Matches(int source_width, int source_height) const {
-    return device != nullptr && this->source_width == source_width &&
-           this->source_height == source_height;
+    return pass.Matches(source_width, source_height,
+                        RECT{0, 0, source_width, source_height});
   }
 
   // Converts one desktop texture into `nv12` (width * height * 3 / 2 bytes,
   // tightly packed). Blocking: the readback map waits for the GPU.
   bool Convert(ID3D11Texture2D* desktop, uint8_t* nv12) {
-    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC input{};
-    input.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
-    ComPtr<ID3D11VideoProcessorInputView> desktop_view;
-    if (FAILED(device->CreateVideoProcessorInputView(
-            desktop, enumerator.Get(), &input, &desktop_view))) {
-      return false;
-    }
-
-    D3D11_VIDEO_PROCESSOR_STREAM stream{};
-    stream.Enable = TRUE;
-    stream.pInputSurface = desktop_view.Get();
-    if (FAILED(context->VideoProcessorBlt(processor.Get(), target_view.Get(),
-                                          0, 1, &stream))) {
-      return false;
-    }
-    immediate->CopyResource(readback.Get(), target.Get());
-
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(immediate->Map(readback.Get(), 0, D3D11_MAP_READ, 0, &mapped))) {
-      return false;
-    }
-    const uint8_t* luma = static_cast<const uint8_t*>(mapped.pData);
-    const uint8_t* chroma =
-        luma + static_cast<size_t>(mapped.RowPitch) * height;
-    uint8_t* out_luma = nv12;
-    uint8_t* out_chroma = nv12 + static_cast<size_t>(width) * height;
-    for (int y = 0; y < height; ++y) {
-      memcpy(out_luma + static_cast<size_t>(y) * width,
-             luma + static_cast<size_t>(y) * mapped.RowPitch, width);
-    }
-    for (int y = 0; y < height / 2; ++y) {
-      memcpy(out_chroma + static_cast<size_t>(y) * width,
-             chroma + static_cast<size_t>(y) * mapped.RowPitch, width);
-    }
-    immediate->Unmap(readback.Get(), 0);
-    return true;
+    const int width = pass.shape.width;
+    const int height = pass.shape.height;
+    return SUCCEEDED(
+        pass.Run(desktop, 0, [&](const D3D11_MAPPED_SUBRESOURCE& mapped) {
+          const uint8_t* luma = static_cast<const uint8_t*>(mapped.pData);
+          const uint8_t* chroma =
+              luma + static_cast<size_t>(mapped.RowPitch) * height;
+          uint8_t* out_luma = nv12;
+          uint8_t* out_chroma = nv12 + static_cast<size_t>(width) * height;
+          for (int y = 0; y < height; ++y) {
+            memcpy(out_luma + static_cast<size_t>(y) * width,
+                   luma + static_cast<size_t>(y) * mapped.RowPitch, width);
+          }
+          for (int y = 0; y < height / 2; ++y) {
+            memcpy(out_chroma + static_cast<size_t>(y) * width,
+                   chroma + static_cast<size_t>(y) * mapped.RowPitch, width);
+          }
+        }));
   }
 
-  void Reset() {
-    device.Reset();
-    context.Reset();
-    immediate.Reset();
-    enumerator.Reset();
-    processor.Reset();
-    target.Reset();
-    readback.Reset();
-    target_view.Reset();
-    source_width = 0;
-    source_height = 0;
-  }
+  void Reset() { pass.Reset(); }
 
-  ComPtr<ID3D11VideoDevice> device;
-  ComPtr<ID3D11VideoContext> context;
-  ComPtr<ID3D11DeviceContext> immediate;
-  ComPtr<ID3D11VideoProcessorEnumerator> enumerator;
-  ComPtr<ID3D11VideoProcessor> processor;
-  ComPtr<ID3D11Texture2D> target;
-  ComPtr<ID3D11Texture2D> readback;
-  ComPtr<ID3D11VideoProcessorOutputView> target_view;
-  int source_width = 0;
-  int source_height = 0;
-  int width = 0;
-  int height = 0;
+  GpuVideoPass pass;
 };
 
 // Reopens the desktop duplication after AcquireNextFrame refused, retrying
@@ -1574,8 +1632,21 @@ struct FlucordVideoDecoder {
   ComPtr<IMFTransform> transform;
   FlucordVideoPictureCallback callback = nullptr;
   void* user_data = nullptr;
-  // Scratch for the NV12 the transform hands back, decode thread only.
-  std::vector<uint8_t> nv12;
+  // The GPU the transform decodes on, and the pass that turns its NV12 into
+  // BGRA there. Null while the transform decodes on the CPU; gpu_status then
+  // says why.
+  ComPtr<ID3D11Device> device;
+  ComPtr<ID3D11DeviceContext> context;
+  ComPtr<IMFDXGIDeviceManager> device_manager;
+  GpuVideoPass to_bgra;
+  // S_OK while pictures are decoded on the GPU, otherwise the HRESULT that
+  // keeps them on the CPU. Read from the Dart thread.
+  std::atomic<int32_t> gpu_status{E_PENDING};
+  // The frame as the transform lays it out, padded to whole macroblocks.
+  int32_t coded_height = 0;
+  // The part of the frame that is picture, and the size every picture is
+  // delivered at.
+  RECT visible{};
   int32_t width = 0;
   int32_t height = 0;
   // The row pitch the decoder actually writes, which a padded width makes
@@ -1617,16 +1688,23 @@ struct FlucordVideoDecoder {
 namespace {
 
 // NV12 is what the decoder hands back; a texture wants BGRA, and the two are
-// far enough apart that nothing downstream would accept the wrong one.
+// far enough apart that nothing downstream would accept the wrong one. Only
+// the `visible` part of the frame is converted: the rows below it are
+// macroblock padding.
 void Nv12ToBgra(const uint8_t* source,
                 int source_stride,
-                int width,
-                int height,
+                int coded_height,
+                const RECT& visible,
                 uint8_t* destination) {
   const uint8_t* luma = source;
-  const uint8_t* chroma = source + static_cast<size_t>(source_stride) * height;
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
+  const uint8_t* chroma =
+      source + static_cast<size_t>(source_stride) * coded_height;
+  const int width = visible.right - visible.left;
+  const int height = visible.bottom - visible.top;
+  for (int row = 0; row < height; ++row) {
+    const int y = visible.top + row;
+    for (int column = 0; column < width; ++column) {
+      const int x = visible.left + column;
       const int c = luma[static_cast<size_t>(y) * source_stride + x] - 16;
       const size_t chroma_index =
           static_cast<size_t>(y / 2) * source_stride + (x & ~1);
@@ -1635,7 +1713,8 @@ void Nv12ToBgra(const uint8_t* source,
       const int r = (298 * c + 409 * v + 128) >> 8;
       const int g = (298 * c - 100 * u - 208 * v + 128) >> 8;
       const int b = (298 * c + 516 * u + 128) >> 8;
-      uint8_t* pixel = destination + (static_cast<size_t>(y) * width + x) * 4;
+      uint8_t* pixel =
+          destination + (static_cast<size_t>(row) * width + column) * 4;
       pixel[0] = static_cast<uint8_t>(b < 0 ? 0 : (b > 255 ? 255 : b));
       pixel[1] = static_cast<uint8_t>(g < 0 ? 0 : (g > 255 ? 255 : g));
       pixel[2] = static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
@@ -1652,8 +1731,27 @@ void RecordOutputType(FlucordVideoDecoder* decoder, IMFMediaType* type) {
   UINT32 width = 0;
   UINT32 height = 0;
   if (SUCCEEDED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &width, &height))) {
-    decoder->width = static_cast<int32_t>(width);
-    decoder->height = static_cast<int32_t>(height);
+    decoder->coded_height = static_cast<int32_t>(height);
+    decoder->visible = RECT{0, 0, static_cast<LONG>(width),
+                            static_cast<LONG>(height)};
+    // The stream's own crop: 1080 rows are coded as 1088, and the aperture
+    // says which of them are picture.
+    MFVideoArea aperture{};
+    if (SUCCEEDED(type->GetBlob(MF_MT_MINIMUM_DISPLAY_APERTURE,
+                                reinterpret_cast<UINT8*>(&aperture),
+                                sizeof(aperture), nullptr))) {
+      const LONG left = aperture.OffsetX.value;
+      const LONG top = aperture.OffsetY.value;
+      const LONG right = left + aperture.Area.cx;
+      const LONG bottom = top + aperture.Area.cy;
+      if (left >= 0 && top >= 0 && right > left && bottom > top &&
+          right <= static_cast<LONG>(width) &&
+          bottom <= static_cast<LONG>(height)) {
+        decoder->visible = RECT{left, top, right, bottom};
+      }
+    }
+    decoder->width = decoder->visible.right - decoder->visible.left;
+    decoder->height = decoder->visible.bottom - decoder->visible.top;
   }
   // The decoder picks its own row pitch, padded to whatever alignment it
   // likes; the type is where it says what that is.
@@ -1661,7 +1759,7 @@ void RecordOutputType(FlucordVideoDecoder* decoder, IMFMediaType* type) {
   if (SUCCEEDED(type->GetUINT32(MF_MT_DEFAULT_STRIDE, &stride)) && stride > 0) {
     decoder->stride = static_cast<int32_t>(stride);
   } else {
-    decoder->stride = decoder->width;
+    decoder->stride = static_cast<int32_t>(width);
   }
 }
 
@@ -1686,6 +1784,95 @@ void ReadCurrentOutputType(FlucordVideoDecoder* decoder) {
   ComPtr<IMFMediaType> type;
   if (FAILED(decoder->transform->GetOutputCurrentType(0, &type))) return;
   RecordOutputType(decoder, type.Get());
+}
+
+// Converts a picture the transform decoded on the GPU, where it is: the video
+// processor turns the NV12 slice into BGRA and crops the padding, and only
+// the finished picture is read back.
+HRESULT ReadGpuPicture(FlucordVideoDecoder* decoder,
+                       IMFDXGIBuffer* buffer,
+                       uint8_t* bgra) {
+  ComPtr<ID3D11Texture2D> texture;
+  HRESULT hr = buffer->GetResource(IID_PPV_ARGS(&texture));
+  if (FAILED(hr)) return hr;
+  UINT slice = 0;
+  hr = buffer->GetSubresourceIndex(&slice);
+  if (FAILED(hr)) return hr;
+  D3D11_TEXTURE2D_DESC desc{};
+  texture->GetDesc(&desc);
+  const int source_width = static_cast<int>(desc.Width);
+  const int source_height = static_cast<int>(desc.Height);
+  if (!decoder->to_bgra.Matches(source_width, source_height,
+                                decoder->visible)) {
+    GpuVideoPass::Shape shape;
+    shape.source_width = source_width;
+    shape.source_height = source_height;
+    shape.visible = decoder->visible;
+    shape.width = decoder->width;
+    shape.height = decoder->height;
+    shape.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    // BT.601 studio in, full-range RGB out: the numbers the CPU converter
+    // uses, so a picture looks the same whichever path drew it.
+    shape.input.Usage = 0;
+    shape.input.YCbCr_Matrix = 0;  // BT.601
+    shape.input.Nominal_Range = D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
+    shape.output.Usage = 0;
+    shape.output.RGB_Range = 0;
+    hr = decoder->to_bgra.Create(decoder->device.Get(), decoder->context.Get(),
+                                 shape);
+    if (FAILED(hr)) return hr;
+  }
+  const size_t row_bytes = static_cast<size_t>(decoder->width) * 4;
+  const int height = decoder->height;
+  return decoder->to_bgra.Run(
+      texture.Get(), slice, [&](const D3D11_MAPPED_SUBRESOURCE& mapped) {
+        const uint8_t* rows = static_cast<const uint8_t*>(mapped.pData);
+        for (int y = 0; y < height; ++y) {
+          memcpy(bgra + y * row_bytes,
+                 rows + static_cast<size_t>(y) * mapped.RowPitch, row_bytes);
+        }
+      });
+}
+
+// Converts a picture the transform decoded into system memory.
+HRESULT ReadCpuPicture(FlucordVideoDecoder* decoder,
+                       IMFSample* sample,
+                       uint8_t* bgra) {
+  ComPtr<IMFMediaBuffer> contiguous;
+  HRESULT hr = sample->ConvertToContiguousBuffer(&contiguous);
+  if (FAILED(hr)) return hr;
+  BYTE* data = nullptr;
+  DWORD length = 0;
+  hr = contiguous->Lock(&data, nullptr, &length);
+  if (FAILED(hr)) return hr;
+  const size_t needed = static_cast<size_t>(decoder->stride) *
+                        decoder->coded_height * 3 / 2;
+  if (decoder->stride <= 0 || length < needed) {
+    contiguous->Unlock();
+    return MF_E_BUFFERTOOSMALL;
+  }
+  Nv12ToBgra(data, decoder->stride, decoder->coded_height, decoder->visible,
+             bgra);
+  contiguous->Unlock();
+  return S_OK;
+}
+
+// Reads one decoded sample into a BGRA picture of the visible size.
+HRESULT ReadPicture(FlucordVideoDecoder* decoder,
+                    IMFSample* sample,
+                    uint8_t* bgra) {
+  ComPtr<IMFMediaBuffer> buffer;
+  HRESULT hr = sample->GetBufferByIndex(0, &buffer);
+  if (FAILED(hr)) return hr;
+  ComPtr<IMFDXGIBuffer> on_gpu;
+  if (decoder->device && SUCCEEDED(buffer.As(&on_gpu))) {
+    decoder->gpu_status.store(S_OK);
+    return ReadGpuPicture(decoder, on_gpu.Get(), bgra);
+  }
+  // The transform took the device and decoded into memory anyway: the
+  // driver has no decoder for this stream, and the status says so.
+  if (decoder->device) decoder->gpu_status.store(E_NOINTERFACE);
+  return ReadCpuPicture(decoder, sample, bgra);
 }
 
 // How many consecutive format changes a drain replans before it gives up.
@@ -1744,44 +1931,31 @@ void DrainDecoder(FlucordVideoDecoder* decoder, int64_t timestamp_us) {
       ReadCurrentOutputType(decoder);
     }
 
-    ComPtr<IMFMediaBuffer> contiguous;
-    if (SUCCEEDED(produced->ConvertToContiguousBuffer(&contiguous)) &&
-        decoder->width > 0 && decoder->height > 0) {
-      BYTE* data = nullptr;
-      DWORD length = 0;
-      if (SUCCEEDED(contiguous->Lock(&data, nullptr, &length))) {
-        if (decoder->stride <= 0) decoder->stride = decoder->width;
-        const size_t needed =
-            static_cast<size_t>(decoder->width) * decoder->height * 4;
-        // Every picture owns its buffer: the callback is delivered on the
-        // caller's isolate some time after this returns, so nothing shared
-        // would survive the next picture.
-        std::unique_ptr<uint8_t[]> picture(new uint8_t[needed]);
-        Nv12ToBgra(data, decoder->stride, decoder->width, decoder->height,
-                   picture.get());
+    if (decoder->width > 0 && decoder->height > 0) {
+      // Every picture owns its buffer: the callback is delivered on the
+      // caller's isolate some time after this returns, so nothing shared
+      // would survive the next picture.
+      std::unique_ptr<uint8_t[]> picture(
+          new uint8_t[static_cast<size_t>(decoder->width) * decoder->height *
+                      4]);
+      const HRESULT read = ReadPicture(decoder, produced.Get(), picture.get());
+      if (FAILED(read)) {
+        decoder->outputErrors.fetch_add(1);
+        decoder->lastOutputError.store(static_cast<int64_t>(read));
+      } else {
         LONGLONG sample_time = 0;
         produced->GetSampleTime(&sample_time);
         // Ownership went with the callback when it was delivered; a picture
         // the gate refused is freed here, and nothing arrives in Dart after
         // a close that stopped waiting for this thread.
-        bool delivered = false;
-        {
-          std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
-          if (!decoder->deliveries.closed) {
-            decoder->callback(decoder->user_data, picture.get(),
-                              decoder->width, decoder->height,
-                              decoder->width * 4,
-                              sample_time != 0 ? sample_time / 10
-                                               : timestamp_us);
-            delivered = true;
-          }
+        std::lock_guard<std::mutex> guard(decoder->deliveries.lock);
+        if (!decoder->deliveries.closed) {
+          decoder->callback(decoder->user_data, picture.release(),
+                            decoder->width, decoder->height,
+                            decoder->width * 4,
+                            sample_time != 0 ? sample_time / 10
+                                             : timestamp_us);
         }
-        if (delivered) {
-          picture.release();
-        } else {
-          picture.reset();
-        }
-        contiguous->Unlock();
       }
     }
     if (allocates && out.pSample != nullptr) out.pSample->Release();
@@ -1821,6 +1995,58 @@ void SubmitToTransform(FlucordVideoDecoder* decoder,
     return;
   }
   DrainDecoder(decoder, timestamp_us);
+}
+
+// Gives the transform a Direct3D device, so it decodes on the GPU instead of
+// on the CPU a game is also using. Answers why not when it cannot: the
+// transform then decodes on the CPU, and gpu_status carries the reason to the
+// log.
+HRESULT UseGpu(FlucordVideoDecoder* decoder) {
+  ComPtr<IMFAttributes> attributes;
+  HRESULT hr = decoder->transform->GetAttributes(&attributes);
+  if (FAILED(hr)) return hr;
+  if (!MFGetAttributeUINT32(attributes.Get(), MF_SA_D3D11_AWARE, FALSE)) {
+    return MF_E_UNSUPPORTED_D3D_TYPE;
+  }
+  const D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1,
+                                      D3D_FEATURE_LEVEL_11_0,
+                                      D3D_FEATURE_LEVEL_10_1};
+  ComPtr<ID3D11Device> device;
+  ComPtr<ID3D11DeviceContext> context;
+  hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                         D3D11_CREATE_DEVICE_VIDEO_SUPPORT, levels,
+                         ARRAYSIZE(levels), D3D11_SDK_VERSION, &device,
+                         nullptr, &context);
+  if (FAILED(hr)) return hr;
+  // The transform reaches the device from its own calls while the decode
+  // thread runs the video processor on it.
+  ComPtr<ID3D10Multithread> multithread;
+  hr = device.As(&multithread);
+  if (FAILED(hr)) return hr;
+  multithread->SetMultithreadProtected(TRUE);
+  UINT token = 0;
+  ComPtr<IMFDXGIDeviceManager> manager;
+  hr = MFCreateDXGIDeviceManager(&token, &manager);
+  if (SUCCEEDED(hr)) hr = manager->ResetDevice(device.Get(), token);
+  // Before the media types: the types the transform offers depend on it.
+  if (SUCCEEDED(hr)) {
+    hr = decoder->transform->ProcessMessage(
+        MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(manager.Get()));
+  }
+  if (FAILED(hr)) return hr;
+  decoder->device = device;
+  decoder->context = context;
+  decoder->device_manager = manager;
+  return S_OK;
+}
+
+// Lets go of the GPU objects, the transform first: it holds the manager.
+void ReleaseDecoder(FlucordVideoDecoder* decoder) {
+  decoder->transform.Reset();
+  decoder->to_bgra.Reset();
+  decoder->device_manager.Reset();
+  decoder->context.Reset();
+  decoder->device.Reset();
 }
 
 // The input type, low latency, and the streaming notices: everything the
@@ -1885,7 +2111,7 @@ void DecoderLoop(FlucordVideoDecoder* decoder) {
     }
     SubmitToTransform(decoder, unit.first, unit.second);
   }
-  decoder->transform.Reset();
+  ReleaseDecoder(decoder);
 }
 
 // Everything the decoder's close does once its worker is out: the module
@@ -1925,8 +2151,9 @@ flucord_video_decoder_open(FlucordVideoPictureCallback callback,
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
+  decoder->gpu_status.store(UseGpu(decoder.get()));
   if (FAILED(ConfigureDecoder(decoder.get()))) {
-    decoder->transform.Reset();
+    ReleaseDecoder(decoder.get());
     MFShutdown();
     return FLUCORD_VIDEO_ERROR_UNSUPPORTED;
   }
@@ -2019,6 +2246,12 @@ flucord_video_decoder_info(FlucordVideoDecoder* decoder,
   *out_height = decoder->height;
   *out_stride = decoder->stride;
   return FLUCORD_VIDEO_OK;
+}
+
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decoder_gpu_status(FlucordVideoDecoder* decoder) {
+  if (decoder == nullptr) return E_POINTER;
+  return decoder->gpu_status.load();
 }
 
 FLUCORD_VIDEO_EXPORT void flucord_video_decoder_close(

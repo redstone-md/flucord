@@ -180,6 +180,10 @@ final class NativeVideoBindings {
             'flucord_video_decoder_dropped',
           ),
       decoderStats = _lookUpDecoderStats(library),
+      decoderGpuStatus = library
+          .lookupFunction<_DecoderDroppedNative, DecoderDroppedDart>(
+            'flucord_video_decoder_gpu_status',
+          ),
       decoderClose = library
           .lookupFunction<
             Void Function(Pointer<Void>),
@@ -314,6 +318,10 @@ final class NativeVideoBindings {
   /// Reads the decoder's counters (submitted, refused, produced), or null in
   /// a module built before it kept them.
   final DecoderStatsDart? decoderStats;
+
+  /// 0 while the decoder's pictures come from the GPU, otherwise the HRESULT
+  /// that keeps them on the CPU.
+  final int Function(Pointer<Void>) decoderGpuStatus;
   final void Function(Pointer<Void>) decoderClose;
   final int Function() displayCount;
 

@@ -177,14 +177,15 @@ typedef void (*FlucordVideoPictureCallback)(void* user_data,
                                             int64_t timestamp_us);
 
 // Opens a decoder for somebody else's stream. Frames are fed in as Annex B
-// access units and come back out as pictures.
+// access units and come back out as pictures, cropped to the stream's display
+// aperture.
 //
 // The system decoder is created here rather than on the decode thread, so a
 // machine without one is answered with a status instead of a decoder that
-// quietly produces nothing. The decode itself runs on the decoder's own
-// thread: a 1080p60 picture costs more to decode and convert than the frame
-// budget allows, and the thread that feeds it is the one that draws the
-// whole interface. Pictures arrive on the callback from that thread, each
+// quietly produces nothing. It decodes on the GPU where it can, and the
+// colour conversion runs there too; flucord_video_decoder_gpu_status says
+// where it ended up. The decode runs on the decoder's own thread, not on the
+// thread that feeds it, which is the one that draws the whole interface. Pictures arrive on the callback from that thread, each
 // carrying its own heap buffer that the callee releases with
 // flucord_video_decoder_release_picture once copied.
 FLUCORD_VIDEO_EXPORT FlucordVideoStatus
@@ -235,6 +236,12 @@ flucord_video_decoder_info(FlucordVideoDecoder* decoder,
                            int32_t* out_width,
                            int32_t* out_height,
                            int32_t* out_stride);
+
+// Where the decoder decodes: 0 (S_OK) while its pictures come from the GPU,
+// otherwise the HRESULT that keeps them on the CPU (no Direct3D device, or a
+// driver without a decoder for the stream). Settled by the first picture.
+FLUCORD_VIDEO_EXPORT int32_t
+flucord_video_decoder_gpu_status(FlucordVideoDecoder* decoder);
 
 // Stops and releases the decoder.
 //
