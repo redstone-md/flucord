@@ -9,6 +9,7 @@ import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
+import '../../domain/navigation_memory.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
@@ -32,10 +33,12 @@ class MessageList extends StatefulWidget {
     this.lastSentMessageId,
     this.hasNewerMessages = false,
     this.windowError,
+    this.readingPositions,
     required this.onOpenMessage,
     required this.onLoadPresent,
     required this.onReply,
     required this.onEdit,
+    this.onEditClosed,
     required this.onDelete,
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
@@ -85,6 +88,10 @@ class MessageList extends StatefulWidget {
   /// Why the last jump did not land. Each failure is a new object.
   final Object? windowError;
 
+  /// Where the reader stopped in each channel. This list reads a channel's
+  /// position when it opens, and keeps it up to date as the reader scrolls.
+  final ReadingPositions? readingPositions;
+
   /// Jumps to a message of this channel, which may not be held yet.
   final ValueChanged<String> onOpenMessage;
 
@@ -96,6 +103,10 @@ class MessageList extends StatefulWidget {
   final String? lastSentMessageId;
   final ValueChanged<ChatMessage> onReply;
   final Future<bool> Function(ChatMessage, String) onEdit;
+
+  /// An edit field closed, saved or not, and it was not opened from its row, so
+  /// the keyboard can go back to where the next message is written.
+  final VoidCallback? onEditClosed;
   final Future<void> Function(ChatMessage) onDelete;
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
@@ -122,7 +133,7 @@ class MessageList extends StatefulWidget {
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
-  State<MessageList> createState() => _MessageListState();
+  State<MessageList> createState() => MessageListState();
 }
 
 /// Where the viewport's centre sits, named by a message so that rows added on
@@ -158,7 +169,9 @@ final class _MessageRowKey extends GlobalKey {
   final String messageId;
 }
 
-class _MessageListState extends State<MessageList>
+/// Public so the conversation pane can reach the list through a global key: the
+/// keyboard works from outside this widget.
+class MessageListState extends State<MessageList>
     with SingleTickerProviderStateMixin {
   /// Where the message the viewport is built around sits in it. Not flush
   /// against the top edge: a little of what came before it reads as context.
@@ -195,6 +208,15 @@ class _MessageListState extends State<MessageList>
   /// list holds it, unless the reader scrolls first.
   String? _awaitedMessageId;
 
+  /// The saved position this opening is on its way to, until it lands or the
+  /// reader scrolls.
+  ReadingPosition? _restoring;
+
+  /// How far below the top of the timeline the centre sits, when a restored
+  /// position decides that. Otherwise [_anchorAlignment] does.
+  double? _centreFromTop;
+  bool _isKeepingPosition = false;
+
   /// Counts the scrollables this list has made. Each explicit jump starts a
   /// new one, whose first frame is already at the new centre.
   int _viewportGeneration = 0;
@@ -203,6 +225,9 @@ class _MessageListState extends State<MessageList>
   String? _highlightedMessageId;
   late final AnimationController _highlight;
   late final Animation<double> _highlightFade;
+
+  /// The one row showing its edit field.
+  String? _editingMessageId;
 
   bool _didReachUnread = false;
 
@@ -213,16 +238,13 @@ class _MessageListState extends State<MessageList>
   @override
   void initState() {
     super.initState();
-    _highlight = AnimationController(
-      vsync: this,
-      duration: _highlightDuration,
-    );
+    _highlight = AnimationController(vsync: this, duration: _highlightDuration);
     _highlightFade = CurvedAnimation(
       parent: _highlight,
       curve: const Interval(0.5, 1, curve: Curves.easeOut),
     );
     _scrollController.addListener(_handleScroll);
-    _recentre(awaiting: _openingMessageId);
+    _openChannel();
   }
 
   @override
@@ -230,12 +252,20 @@ class _MessageListState extends State<MessageList>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id != widget.channel.id) {
       _messageKeys.clear();
+      _editingMessageId = null;
       _didReachUnread = false;
-      _recentre(awaiting: _openingMessageId);
+      _openChannel();
       return;
     }
     if (oldWidget.query.trim() != widget.query.trim()) {
       _recentre(awaiting: _openingMessageId);
+    }
+    // The saved position's message is gone, so this opening goes on as if there
+    // had been no position.
+    if (_restoring != null &&
+        widget.readingPositions?.of(widget.channel.id) == null) {
+      _awaitedMessageId = _openingMessageId;
+      _restoring = null;
     }
     final oldUnreadId = oldWidget.channel.firstUnreadMessageId;
     if (oldUnreadId != widget.channel.firstUnreadMessageId) {
@@ -251,7 +281,7 @@ class _MessageListState extends State<MessageList>
     if (!oldWidget.hasNewerMessages &&
         widget.hasNewerMessages &&
         _targetMessageId == null) {
-      _awaitedMessageId = _unreadMessageId;
+      _awaitedMessageId = _restoring?.messageId ?? _unreadMessageId;
     }
     if ((oldWidget.targetMessageId != widget.targetMessageId ||
             oldWidget.targetRequest != widget.targetRequest) &&
@@ -296,6 +326,17 @@ class _MessageListState extends State<MessageList>
   /// The message a channel opens on, or null to open at the newest.
   String? get _openingMessageId => _targetMessageId ?? _unreadMessageId;
 
+  /// Opens the channel on a jump's target if there is one, then on the place the
+  /// reader left it, and only then on its unread boundary. A reader who left a
+  /// position chose it, and the NEW line still shows further down.
+  void _openChannel() {
+    final saved = _targetMessageId == null && widget.query.trim().isEmpty
+        ? widget.readingPositions?.of(widget.channel.id)
+        : null;
+    _recentre(awaiting: saved?.messageId ?? _openingMessageId);
+    _restoring = saved;
+  }
+
   List<ChatMessage> _visibleMessagesFor(MessageList source) {
     final messages = source.workspace.messagesFor(source.channel.id);
     final query = source.query.trim().toLowerCase();
@@ -316,10 +357,60 @@ class _MessageListState extends State<MessageList>
         .toList(growable: false);
   }
 
+  void _setEditing(String messageId, {required bool editing}) {
+    if (!mounted) return;
+    if (editing) {
+      setState(() => _editingMessageId = messageId);
+      return;
+    }
+    if (_editingMessageId == messageId) {
+      setState(() => _editingMessageId = null);
+    }
+  }
+
+  /// Opens the account's newest message that can be edited, and answers whether
+  /// there is one. A row that is not built yet is reached by a jump. One that
+  /// is built brings itself into view when its field takes the focus.
+  bool editLastOwnMessage() {
+    final own = _visibleMessages
+        .where(
+          (message) =>
+              message.authorId == widget.workspace.currentMemberId &&
+              message.canEdit &&
+              !message.isSystem,
+        )
+        .lastOrNull;
+    if (own == null) return false;
+    setState(() {
+      _editingMessageId = own.id;
+      if (_messageKeys[own.id]?.currentContext == null) {
+        _awaitedMessageId = own.id;
+      }
+    });
+    return true;
+  }
+
+  /// Moves the timeline by most of a screen. A negative [direction] goes toward
+  /// older messages.
+  void scrollPage(int direction) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // A reader who moved has chosen a place, and a late page must not take it.
+    _awaitedMessageId = null;
+    position.jumpTo(
+      (position.pixels + direction * position.viewportDimension * 0.9).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
+  }
+
   /// Drops the centre, so the next build captures a new one in a new
   /// scrollable. With nothing to wait for, that is the end of the conversation.
   void _recentre({String? awaiting}) {
     _centre = null;
+    _centreFromTop = null;
+    _restoring = null;
     _awaitedMessageId = awaiting;
     _isAtEnd = awaiting == null;
     _viewportGeneration++;
@@ -340,9 +431,83 @@ class _MessageListState extends State<MessageList>
         _highlightedMessageId = awaited.id;
         _highlight.forward(from: 0);
       }
+      final restored = _restoring;
+      _restoring = null;
+      _centreFromTop = restored?.messageId == awaited.id
+          ? restored?.fromTop
+          : null;
+      if (_centreFromTop == null) _forgetPosition();
       return _centre = _TimelineCentre.above(awaited);
     }
+    // A new viewport at the end of the conversation. The place the reader was
+    // before is behind them now, unless a saved position is still on its way.
+    if (_centre == null && awaitedId == null) _forgetPosition();
     return _centre ??= _TimelineCentre.below(messages.last);
+  }
+
+  /// A channel opened at, or a reader jumped to, a place they did not scroll to.
+  void _forgetPosition() =>
+      widget.readingPositions?.keep(widget.channel.id, null);
+
+  /// Answers the end of a scroll. The rows have not moved for its last step yet,
+  /// so the position is read after the next layout.
+  void _keepPositionAfterLayout() {
+    if (_isKeepingPosition) return;
+    _isKeepingPosition = true;
+    final channelId = widget.channel.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isKeepingPosition = false;
+      if (mounted && widget.channel.id == channelId) _keepPosition();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  /// Saves where the reader is. An old window's end is a place too, because the
+  /// present is further on.
+  void _keepPosition() {
+    final positions = widget.readingPositions;
+    if (positions == null ||
+        !_scrollController.hasClients ||
+        _awaitedMessageId != null ||
+        widget.query.trim().isNotEmpty) {
+      return;
+    }
+    if (_isAtEnd && !widget.hasNewerMessages) {
+      _forgetPosition();
+      return;
+    }
+    final position = _positionOnScreen();
+    if (position != null) positions.keep(widget.channel.id, position);
+  }
+
+  /// The first row that starts inside the timeline. With no such row, one row
+  /// fills the timeline, and the reader comes back to its top.
+  ReadingPosition? _positionOnScreen() {
+    final timeline = _scrollController.position.context.notificationContext
+        ?.findRenderObject();
+    if (timeline is! RenderBox) return null;
+    String? firstInside;
+    var firstInsideTop = double.infinity;
+    String? lastAbove;
+    var lastAboveTop = double.negativeInfinity;
+    for (final MapEntry(key: id, value: key) in _messageKeys.entries) {
+      final row = key.currentContext?.findRenderObject();
+      if (row is! RenderBox || !row.hasSize) continue;
+      final top = row.localToGlobal(Offset.zero, ancestor: timeline).dy;
+      if (top >= 0 && top < firstInsideTop) {
+        firstInside = id;
+        firstInsideTop = top;
+      } else if (top < 0 && top > lastAboveTop) {
+        lastAbove = id;
+        lastAboveTop = top;
+      }
+    }
+    if (firstInside != null && firstInsideTop < timeline.size.height) {
+      return ReadingPosition(messageId: firstInside, fromTop: firstInsideTop);
+    }
+    return lastAbove == null
+        ? null
+        : ReadingPosition(messageId: lastAbove, fromTop: 0);
   }
 
   /// Takes the reader to the unread boundary, which may be outside a window.
@@ -356,7 +521,7 @@ class _MessageListState extends State<MessageList>
 
   /// Takes the reader to the end of the conversation. From an old window that
   /// means loading it first, and the list recentres when the page is in.
-  void _jumpToPresent() {
+  void jumpToPresent() {
     if (widget.hasNewerMessages) {
       widget.onLoadPresent();
     } else {
@@ -364,17 +529,16 @@ class _MessageListState extends State<MessageList>
     }
   }
 
-  void _reportFailedJump() =>
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.fromLTRB(16, 0, 16, 72),
-            content: Text("Couldn't load that part of the conversation."),
-          ),
-        );
-      });
+  void _reportFailedJump() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 72),
+        content: Text("Couldn't load that part of the conversation."),
+      ),
+    );
+  });
 
   void _recordWhetherAtEnd() {
     if (!_scrollController.hasClients) return;
@@ -387,6 +551,9 @@ class _MessageListState extends State<MessageList>
   /// the end without scrolling anything. A reader who was at the end stays
   /// there. Anybody else stays where they are, and may now be at the end.
   bool _handleMetricsChange(ScrollMetricsNotification notification) {
+    // A scrollable inside a row or its menu reports here too. Its numbers say
+    // nothing about this list.
+    if (notification.depth != 0) return false;
     final metrics = notification.metrics;
     if (!_isAtEnd) {
       _recordWhetherAtEnd();
@@ -401,6 +568,7 @@ class _MessageListState extends State<MessageList>
     if (_scrollController.position.userScrollDirection !=
         ScrollDirection.idle) {
       _awaitedMessageId = null;
+      _restoring = null;
     }
     if (!_didReachUnread && _isUnreadBoundaryVisible()) {
       setState(() => _didReachUnread = true);
@@ -457,49 +625,58 @@ class _MessageListState extends State<MessageList>
           child: NotificationListener<ScrollMetricsNotification>(
             key: ValueKey('messages-${widget.channel.id}'),
             onNotification: _handleMetricsChange,
-            child: LayoutBuilder(
-              builder: (context, constraints) => CustomScrollView(
-                key: ValueKey(_viewportGeneration),
-                controller: _scrollController,
-                center: _centreKey,
-                // At the end of the conversation, the gap under the newest
-                // message fills the viewport below the centre. Offset zero is
-                // then the end, with the gap on screen.
-                anchor: centre.isBelowMessage
-                    ? (1 - _endGap / constraints.maxHeight).clamp(0.0, 1.0)
-                    : _anchorAlignment,
-                slivers: [
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => index == centreIndex
-                          ? _channelHead()
-                          : _messageAt(messages, centreIndex - 1 - index),
-                      childCount: centreIndex + 1,
-                      findChildIndexCallback: (key) {
-                        if (key == _headKey) return centreIndex;
-                        final row = rowIndex(key);
-                        return row == null || row >= centreIndex
-                            ? null
-                            : centreIndex - 1 - row;
-                      },
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (_) {
+                _keepPositionAfterLayout();
+                return false;
+              },
+              child: LayoutBuilder(
+                builder: (context, constraints) => CustomScrollView(
+                  key: ValueKey(_viewportGeneration),
+                  controller: _scrollController,
+                  center: _centreKey,
+                  // At the end of the conversation, the gap under the newest
+                  // message fills the viewport below the centre. Offset zero is
+                  // then the end, with the gap on screen.
+                  anchor: centre.isBelowMessage
+                      ? (1 - _endGap / constraints.maxHeight).clamp(0.0, 1.0)
+                      : _anchorFor(constraints.maxHeight),
+                  slivers: [
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => index == centreIndex
+                            ? _channelHead()
+                            : _messageAt(messages, centreIndex - 1 - index),
+                        childCount: centreIndex + 1,
+                        findChildIndexCallback: (key) {
+                          if (key == _headKey) return centreIndex;
+                          final row = rowIndex(key);
+                          return row == null || row >= centreIndex
+                              ? null
+                              : centreIndex - 1 - row;
+                        },
+                      ),
                     ),
-                  ),
-                  SliverToBoxAdapter(key: _centreKey, child: const SizedBox()),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          _messageAt(messages, centreIndex + index),
-                      childCount: messages.length - centreIndex,
-                      findChildIndexCallback: (key) {
-                        final row = rowIndex(key);
-                        return row == null || row < centreIndex
-                            ? null
-                            : row - centreIndex;
-                      },
+                    SliverToBoxAdapter(
+                      key: _centreKey,
+                      child: const SizedBox(),
                     ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: _endGap)),
-                ],
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) =>
+                            _messageAt(messages, centreIndex + index),
+                        childCount: messages.length - centreIndex,
+                        findChildIndexCallback: (key) {
+                          final row = rowIndex(key);
+                          return row == null || row < centreIndex
+                              ? null
+                              : row - centreIndex;
+                        },
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: _endGap)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -520,10 +697,18 @@ class _MessageListState extends State<MessageList>
           Positioned(
             bottom: 10,
             right: 16,
-            child: JumpToPresentButton(onPressed: _jumpToPresent),
+            child: JumpToPresentButton(onPressed: jumpToPresent),
           ),
       ],
     );
+  }
+
+  /// Where the centre sits in a timeline [height] tall, when it opens on a
+  /// message.
+  double _anchorFor(double height) {
+    final fromTop = _centreFromTop;
+    if (fromTop == null || height <= 0) return _anchorAlignment;
+    return (fromTop / height).clamp(0.0, 1.0);
   }
 
   /// What sits above the oldest held message: the start of the channel, or
@@ -602,6 +787,10 @@ class _MessageListState extends State<MessageList>
                     message.authorId == widget.workspace.currentMemberId,
                 onReply: widget.onReply,
                 onEdit: widget.onEdit,
+                isEditing: message.id == _editingMessageId,
+                onEditingChanged: (editing) =>
+                    _setEditing(message.id, editing: editing),
+                onEditClosed: widget.onEditClosed,
                 onDelete: widget.onDelete,
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,

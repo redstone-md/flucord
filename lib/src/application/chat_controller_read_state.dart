@@ -24,11 +24,8 @@ extension ChatControllerReadState on ChatController {
   /// R04 resolves this from the notification settings, not from the read state:
   /// a channel set to "only mentions" is unread to the server and silent in the
   /// sidebar, which is the whole point of the setting.
-  bool showsUnreadFor(ConversationChannel channel) {
-    if (channel.mentionCount > 0) return true;
-    if (!channel.unread) return false;
-    return readState.unreadBadgeFor(channel) == UnreadBadge.allMessages;
-  }
+  bool showsUnreadFor(ConversationChannel channel) =>
+      readState.showsUnread(channel);
 
   /// Acknowledges [channelId] up to the newest message the client knows of.
   ///
@@ -53,6 +50,17 @@ extension ChatControllerReadState on ChatController {
           .acknowledge(channel, messageId: messageId, immediate: immediate)
           .catchError(_absorbReadStateFailure),
     );
+  }
+
+  /// The reader is done with [channelId]: its pip and its NEW line go now, and
+  /// the server hears at once.
+  void markChannelRead(String channelId) {
+    _workspace = _workspace
+        ?.markChannelRead(channelId)
+        .clearChannelUnreadBoundary(channelId);
+    _persistChannelActivity(channelId);
+    acknowledgeChannel(channelId, immediate: true);
+    _notify();
   }
 
   /// Rewinds [message]'s channel so everything from it onward is unread again.

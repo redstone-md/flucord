@@ -120,6 +120,60 @@ extension ChatControllerHistoryWindow on ChatController {
     }
   }
 
+  bool _holdsReadingPosition(String channelId) {
+    final messageId = _readingPositions?.of(channelId)?.messageId;
+    return messageId != null &&
+        (_workspace?.messagesFor(channelId).any((m) => m.id == messageId) ??
+            false);
+  }
+
+  /// Makes sure the channel holds the message of the reader's saved position.
+  /// The cap may have dropped it, or a restart may have left only a newer page,
+  /// and then a window around it replaces what is held. Answers whether the
+  /// channel holds it now.
+  ///
+  /// Nothing here is an error to the reader, who did not ask for a jump. A
+  /// message Discord no longer has ends the position. A load that fails leaves
+  /// the position for the next time.
+  Future<bool> _reachReadingPosition(
+    String channelId,
+    bool Function() isCurrent,
+  ) async {
+    final messageId = _readingPositions?.of(channelId)?.messageId;
+    if (messageId == null) return false;
+    if (_holdsReadingPosition(channelId)) return true;
+    try {
+      final window = await _repository.loadChannelHistory(
+        channelId,
+        aroundMessageId: messageId,
+      );
+      // The reader may have scrolled while this was on its way.
+      if (!isCurrent() ||
+          _readingPositions?.of(channelId)?.messageId != messageId) {
+        return false;
+      }
+      if (!window.holds(messageId)) {
+        _readingPositions?.keep(channelId, null);
+        return false;
+      }
+      _applyWindow(channelId, window, aroundMessageId: messageId);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// [_reachReadingPosition] for a channel already loaded and on screen.
+  Future<void> _returnToReadingPosition(String channelId) async {
+    if (_readingPositions?.of(channelId) == null ||
+        _holdsReadingPosition(channelId)) {
+      return;
+    }
+    await _reachReadingPosition(channelId, _beginWindowLoad(channelId));
+    _capChannelIfNotOpen(channelId);
+    if (!_disposed) _notify();
+  }
+
   /// Keeps a new message out of a list that stops short of the present, and
   /// notes that the channel has moved on. False when the channel is not in an
   /// old window, and the message belongs in the list.

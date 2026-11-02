@@ -13,6 +13,7 @@ import 'domain/discord_social_sdk.dart';
 import 'domain/external_link_launcher.dart';
 import 'domain/keybind.dart';
 import 'domain/message_speech.dart';
+import 'domain/navigation_memory.dart';
 import 'domain/soundboard_playback.dart';
 import 'domain/stream_quality.dart';
 import 'domain/streamer_mode.dart';
@@ -64,6 +65,7 @@ class AppBootstrap {
     this.streamerModeRepository,
     this.streamQualityRepository,
     this.accessibilityRepository,
+    this.navigationMemoryRepository,
     this.spellCheckService,
     this.voiceProcessingRepository,
     this.applicationAttenuation,
@@ -135,6 +137,7 @@ class AppBootstrap {
 
   /// Where the accessibility dials are kept, injected for the same reason.
   final AccessibilityRepository? accessibilityRepository;
+  final NavigationMemoryRepository? navigationMemoryRepository;
 
   /// The local spell checker, injected so a test can hand the composer a
   /// dictionary it controls.

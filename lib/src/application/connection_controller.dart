@@ -6,6 +6,7 @@ import '../domain/chat_repository_factory.dart';
 import '../domain/credential_vault.dart';
 import '../domain/discord_session.dart';
 import 'chat_controller.dart';
+import 'navigation_memory_store.dart';
 import '../app_log.dart';
 
 enum SessionMode { disconnected, demo, discord }
@@ -20,14 +21,17 @@ final class ConnectionController extends ChangeNotifier {
     SessionMode initialMode = SessionMode.disconnected,
     this.botTransportEnabled = false,
     Future<void> Function() clearChatImages = _noChatImages,
+    NavigationMemoryStore? navigationMemory,
   }) : _mode = initialMode,
-       _clearChatImages = clearChatImages;
+       _clearChatImages = clearChatImages,
+       _navigationMemory = navigationMemory;
 
   final ChatController _chatController;
   final CredentialVault _credentialVault;
   final ChatRepositoryFactory _repositoryFactory;
   final Future<void> Function() _clearChatImages;
   final bool botTransportEnabled;
+  final NavigationMemoryStore? _navigationMemory;
 
   static Future<void> _noChatImages() async {}
 
@@ -149,6 +153,8 @@ final class ConnectionController extends ChangeNotifier {
         _activeSession = null;
       }
       final repository = await _repositoryFactory.create(session);
+      // Before the first workspace, which lands where this account last was.
+      await _navigationMemory?.openAccount(session.accountId);
       await _chatController.useRepository(repository);
     } catch (error, stackTrace) {
       AppLog.error(
@@ -212,6 +218,7 @@ final class ConnectionController extends ChangeNotifier {
     if (_mode == SessionMode.discord) await disconnect();
     await _clearFromDisk(_repositoryFactory.clearCache, 'messages');
     await _clearFromDisk(_clearChatImages, 'images');
+    await _navigationMemory?.forget();
     await _credentialVault.clearDiscordSession();
     _hasSavedCredential = false;
     notifyListeners();

@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
-import 'package:flucord/src/presentation/widgets/message_item.dart';
 
 import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
@@ -25,6 +24,8 @@ const _newestHeld = _firstHeld + _pageSize - 1;
 const _idOf = ChannelHistoryFixture.idOf;
 const _rawMessage = ChannelHistoryFixture.message;
 const _page = ChannelHistoryFixture.page;
+const _drag = ChannelHistoryFixture.drag;
+const _rowOnScreen = ChannelHistoryFixture.rowOnScreen;
 
 /// How long a plain ack waits before it goes out.
 const _ackDebounce = Duration(seconds: 3);
@@ -82,35 +83,6 @@ void _routeHistory(FakeDiscordTransport transport) {
 Future<void> _arrive(SessionHarness session, int index) =>
     session.dispatch('MESSAGE_CREATE', _rawMessage(index));
 
-/// Scrolls the timeline with a drag on a row that is on screen. A positive
-/// [dy] moves toward older messages.
-Future<void> _drag(
-  WidgetTester tester,
-  SessionHarness session,
-  double dy,
-) async {
-  final list = find.ancestor(
-    of: find.byType(MessageItem),
-    matching: find.byType(CustomScrollView),
-  );
-  await tester.drag(list.first, Offset(0, dy));
-  await session.settle();
-}
-
-/// Reads where the first row on screen sits, for a later check that it stayed.
-({Finder row, double top}) _rowOnScreen(
-  WidgetTester tester,
-  SessionHarness session,
-) {
-  for (var index = _newestHeld; index >= 0; index--) {
-    final row = session.messageRow(_idOf(index));
-    if (row.evaluate().isEmpty) continue;
-    final top = tester.getTopLeft(row).dy;
-    if (top > 200 && top < 500) return (row: row, top: top);
-  }
-  throw StateError('No message row sits in the middle of the screen.');
-}
-
 /// The newest message's row ends above the composer, where the reader sees it.
 void _expectVisible(WidgetTester tester, SessionHarness session, int index) {
   final row = session.messageRow(_idOf(index));
@@ -128,7 +100,7 @@ void main() {
     testSession('in a channel opened at its end', (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       await _drag(tester, session, 800);
-      final watched = _rowOnScreen(tester, session);
+      final watched = _rowOnScreen(tester);
 
       for (var index = _newestHeld + 1; index <= _newestHeld + 5; index++) {
         await _arrive(session, index);
@@ -176,7 +148,7 @@ void main() {
     (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       await _drag(tester, session, 800);
-      final watched = _rowOnScreen(tester, session);
+      final watched = _rowOnScreen(tester);
       final chat = ChatScope.read(tester.element(watched.row));
 
       chat.setApplicationActive(false);
@@ -225,7 +197,7 @@ void main() {
       (tester, session) async {
         await open(session);
         await _drag(tester, session, 300);
-        final watched = _rowOnScreen(tester, session);
+        final watched = _rowOnScreen(tester);
 
         for (var index = _newestHeld + 1; index <= _newestHeld + 5; index++) {
           await _arrive(session, index);
@@ -278,7 +250,7 @@ void main() {
       'moves nothing when the window blurs and comes back over the boundary',
       (tester, session) async {
         await open(session);
-        final watched = _rowOnScreen(tester, session);
+        final watched = _rowOnScreen(tester);
 
         session.blurWindow();
         await session.settle();
@@ -400,7 +372,7 @@ void main() {
     ) async {
       await session.openChannel(SessionHarness.channelId);
       await _drag(tester, session, 800);
-      final watched = _rowOnScreen(tester, session);
+      final watched = _rowOnScreen(tester);
 
       session.blurWindow();
       await _arrive(session, _newestHeld + 1);
@@ -511,7 +483,7 @@ void main() {
       await _drag(tester, session, 800);
     }
     expect(askedForOlder(), isTrue);
-    final watched = _rowOnScreen(tester, session);
+    final watched = _rowOnScreen(tester);
 
     olderPage.complete(jsonResponse(_page(0, _firstHeld)));
     await session.settle();

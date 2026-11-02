@@ -1,5 +1,8 @@
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_snowflake.dart';
+import 'package:flucord/src/presentation/widgets/message_item.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_discord_wire.dart';
 import 'session_harness.dart';
@@ -77,4 +80,30 @@ abstract final class ChannelHistoryFixture {
   static List<Map<String, Object?>> page(int first, int count) => [
     for (var index = first + count - 1; index >= first; index--) message(index),
   ];
+
+  /// Scrolls the timeline with a drag on a row that is on screen. A positive
+  /// [dy] moves toward older messages.
+  static Future<void> drag(
+    WidgetTester tester,
+    SessionHarness session,
+    double dy,
+  ) async {
+    final list = find.ancestor(
+      of: find.byType(MessageItem),
+      matching: find.byType(CustomScrollView),
+    );
+    await tester.drag(list.first, Offset(0, dy));
+    await session.settle();
+  }
+
+  /// Reads where a row in the middle of the screen sits, for a later check that
+  /// it is still there.
+  static ({Finder row, double top}) rowOnScreen(WidgetTester tester) {
+    for (final element in find.byType(MessageItem).evaluate()) {
+      final row = find.byKey(element.widget.key!);
+      final top = tester.getTopLeft(row).dy;
+      if (top > 200 && top < 500) return (row: row, top: top);
+    }
+    throw StateError('No message row sits in the middle of the screen.');
+  }
 }

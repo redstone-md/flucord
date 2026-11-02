@@ -320,6 +320,10 @@ void main() {
       'a cached page does not keep it from the true one',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
+        // Left on the DM space, so the channel opens by the tap below and not at
+        // launch.
+        await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
+        await session.settle();
         await session.relaunch(ready: backlog);
         final newestPage = Completer<DiscordHttpResponse>();
         session.transport.on('GET', _messagesPath, (request) {
