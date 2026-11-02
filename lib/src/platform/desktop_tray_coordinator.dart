@@ -231,7 +231,9 @@ final class DesktopTrayCoordinator {
             await _checkForUpdates?.call();
           }
         case DesktopTrayAction.quit:
+          final surface = _surface;
           await dispose();
+          await surface?.prepareToExit();
           await _quit();
       }
     } on Object catch (error) {
