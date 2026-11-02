@@ -931,7 +931,9 @@ final class VoiceController extends ChangeNotifier {
     _noteArrival(frame);
     if (frame.sourceId == frame.userId) _heard(frame.userId);
     final playbackService = _playbackService;
-    if (playbackService == null) return;
+    // Sound that comes while deafened is dropped, not held: on undeafen it
+    // would play late. Screen-share audio comes this way too (ADR-0004).
+    if (playbackService == null || _isDeafened) return;
     if (!_isAudioPlaybackActive) {
       if (_pendingPcmFrames.length == _pendingPcmFrameLimit) {
         _pendingPcmFrames.removeAt(0);

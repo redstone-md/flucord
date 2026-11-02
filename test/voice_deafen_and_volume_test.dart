@@ -125,6 +125,21 @@ void main() {
       expect(harness.voice.isDeafened, isFalse);
     });
 
+    testWidgets('sound that came while deafened does not play on undeafen', (
+      tester,
+    ) async {
+      final harness = await _connectedRoom(tester);
+      await harness.voice.toggleDeafen();
+      await tester.pump();
+      await _receive(tester, harness, _friend);
+      await _receive(tester, harness, _streamSource);
+
+      await harness.voice.toggleDeafen();
+      await tester.pump();
+
+      expect(harness.audio.playing, isEmpty);
+    });
+
     testWidgets('a participant who is not deafened hears the room again', (
       tester,
     ) async {
