@@ -97,6 +97,11 @@ abstract interface class ChatCache {
 
   Future<void> deleteCategory(String categoryId);
 
+  /// Writes one [diff] in one transaction. A channel or server already held
+  /// keeps its place, so an offline launch shows the same order. The diff's
+  /// members are not written: the next full load brings them.
+  Future<void> applyWorkspaceDiff(WorkspaceDiff diff);
+
   /// Removes everything held, for good, so that nothing of the account can be
   /// read back from the disk. Sign-out and a change of account call this.
   Future<void> clear();
