@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/pending_attachment_picker.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -283,6 +284,7 @@ Future<void> _pump(
       theme: FlucordTheme.dark,
       home: Scaffold(
         body: MessageComposer(
+          drafts: MemoryComposerDraftStore(),
           channelId: 'general',
           channelName: 'general',
           spaceName: 'The Forge',
