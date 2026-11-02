@@ -69,13 +69,15 @@ final class SessionHarness {
     Directory? diskDirectory,
     this._voiceMessageRecorder,
     this._accessibility,
-    this._linkAtLaunch,
-  ) : _diskDirectory = diskDirectory,
-      _factory = _FakeWireRepositoryFactory(
-        transport,
-        _connector,
-        diskDirectory,
-      );
+    this._linkAtLaunch, {
+    required bool measured,
+  }) : _diskDirectory = diskDirectory,
+       _factory = _FakeWireRepositoryFactory(
+         transport,
+         _connector,
+         diskDirectory,
+         cacheOnIsolate: measured,
+       );
 
   /// The account the default READY signs in.
   static const currentUserId = '100000000000000001';
@@ -395,6 +397,11 @@ final class SessionHarness {
     if (settle) await this.settle();
   }
 
+  /// One dispatch as a JSON frame, for `socket.receiveEncoded`. It takes its
+  /// sequence number now, so encode frames in the order they will be sent.
+  String encodeDispatch(String event, Map<String, Object?> data) =>
+      jsonEncode({'op': 0, 's': ++_sequence, 't': event, 'd': data});
+
   /// The sequence number of the last dispatch [dispatch] sent.
   int get sequence => _sequence;
 
@@ -454,6 +461,9 @@ enum SessionLaunch {
 /// Pass a [platform] when a test depends on platform gestures, such as the right
 /// button on selectable text. Without one, Flutter tests run as Android.
 /// [accessibility] is what the zoom and font dials are set to at launch.
+/// Pass [measured] for a run on a real clock that records frame times. The app
+/// then does what it does for a user: it builds no semantics tree, since no
+/// screen reader is on, and the cache works on its own isolate.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -466,9 +476,11 @@ void testSession(
   AccessibilitySettings accessibility = AccessibilitySettings.off,
   ChannelLink? linkAtLaunch,
   TargetPlatform? platform,
+  bool measured = false,
 }) {
-  testWidgets(description, (tester) async {
-    debugDefaultTargetPlatformOverride = platform;
+  testWidgets(description, semanticsEnabled: !measured, (tester) async {
+    // Outside debug builds, this setter throws even for null.
+    if (platform != null) debugDefaultTargetPlatformOverride = platform;
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final transport = FakeDiscordTransport(fallback: _emptyHistoryOrNotFound);
@@ -485,13 +497,14 @@ void testSession(
       voiceMessageRecorder,
       accessibility,
       linkAtLaunch,
+      measured: measured,
     );
     try {
       await session._start(ready ?? SessionHarness.defaultReady(), launch);
       await body(tester, session);
     } finally {
       await session._end();
-      debugDefaultTargetPlatformOverride = null;
+      if (platform != null) debugDefaultTargetPlatformOverride = null;
     }
   });
 }
@@ -510,12 +523,14 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
   _FakeWireRepositoryFactory(
     this._transport,
     this._connector,
-    this._diskDirectory,
-  );
+    this._diskDirectory, {
+    required bool cacheOnIsolate,
+  }) : _cacheOnIsolate = cacheOnIsolate;
 
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
   final Directory? _diskDirectory;
+  final bool _cacheOnIsolate;
 
   /// The cache of the repository built last.
   SqliteChatCache? openedCache;
@@ -530,9 +545,12 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
   String? get diskPath =>
       _diskDirectory == null ? null : '${_diskDirectory.path}/flucord.sqlite3';
 
+  // On its isolate, the cache is the production one, with the production
+  // factory. Its work leaves the UI thread either way, so memory or a file makes
+  // no difference to frame times.
   Future<SqliteChatCache> _openCache() => SqliteChatCache.openAt(
     diskPath ?? inMemoryDatabasePath,
-    factory: databases,
+    factory: _cacheOnIsolate ? null : databases,
   );
 
   @override

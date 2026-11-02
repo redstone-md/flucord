@@ -38,6 +38,10 @@ final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
     _etf ? DiscordEtfCodec.encode(payload) : jsonEncode(payload),
   );
 
+  /// Delivers a frame the test encoded ahead of time, so that a measured run
+  /// does not count the encoding of a large payload as the app's own work.
+  void receiveEncoded(Object frame) => _messages.add(frame);
+
   /// Closes from the server's side, as a dropped connection does.
   Future<void> dropConnection({int? code}) {
     _closeCode = code;
