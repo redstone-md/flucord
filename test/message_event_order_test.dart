@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flucord/src/data/discord/discord_api_client.dart';
 import 'package:flucord/src/data/discord/discord_chat_repository.dart';
@@ -182,25 +183,6 @@ void main() {
 
     expect(session.messageRow(_messageId), findsOneWidget);
   });
-
-  testSession('closing the app finishes the messages still in line', (
-    tester,
-    session,
-  ) async {
-    await session.openChannel(SessionHarness.channelId);
-    const lastIndex = 49;
-
-    for (var index = 0; index <= lastIndex; index++) {
-      await session.dispatch(
-        'MESSAGE_CREATE',
-        _message(_pageMessageId(index), 'message $index'),
-        settle: false,
-      );
-    }
-    await session.relaunch(ready: SessionHarness.defaultReady());
-
-    expect(await session.cachedMessage(_pageMessageId(lastIndex)), isNotNull);
-  }, onDisk: true);
 
   group('an update', () {
     testSession('to a message the timeline does not hold stays out of it', (
@@ -405,6 +387,38 @@ void main() {
         MessageUpdatedEvent,
         MessageDeletedEvent,
       ]);
+    });
+
+    test('closing finishes the messages still in line', () async {
+      final directory = await Directory.systemTemp.createTemp('flucord-queue-');
+      addTearDown(() => directory.delete(recursive: true));
+      final path = '${directory.path}${Platform.pathSeparator}cache.sqlite3';
+      final ownGateway = _FakeGateway();
+      final closing = DiscordChatRepository(
+        DiscordApiClient(botToken: 'token', transport: FakeDiscordTransport()),
+        ownGateway,
+        await SqliteChatCache.openAt(path, factory: databaseFactoryFfi),
+      );
+      const lastIndex = 49;
+
+      for (var index = 0; index <= lastIndex; index++) {
+        ownGateway.emit(
+          DiscordGatewayDispatch(
+            name: 'MESSAGE_CREATE',
+            data: _message(_pageMessageId(index), 'message $index'),
+          ),
+        );
+      }
+      // The gateway hands an event over on a later turn of the event loop.
+      await Future<void>.delayed(Duration.zero);
+      await closing.close();
+
+      final reopened = await SqliteChatCache.openAt(
+        path,
+        factory: databaseFactoryFfi,
+      );
+      addTearDown(reopened.close);
+      expect(await reopened.readMessage(_pageMessageId(lastIndex)), isNotNull);
     });
 
     test('an update does not put an old message in the timeline', () async {
