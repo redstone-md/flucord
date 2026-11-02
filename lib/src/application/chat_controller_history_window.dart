@@ -75,7 +75,8 @@ extension ChatControllerHistoryWindow on ChatController {
     // Discord fills it from both sides. Only an older page can say so.
     _setHistoryExhausted(channelId, aroundMessageId == null && !page.hasMore);
     final newestHeld = _workspace?.messagesFor(channelId).lastOrNull?.id;
-    if (aroundMessageId != null &&
+    // A cached page that stands in for the present may stop short of it too.
+    if ((aroundMessageId != null || (replaces && page.fromCache)) &&
         latestKnown != null &&
         newestHeld != null &&
         _isOlderThan(newestHeld, latestKnown)) {

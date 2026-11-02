@@ -466,6 +466,35 @@ void main() {
   });
 
   group('jump to present from an old window', () {
+    testSession(
+      'that falls back to a cached page short of the present still offers it',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _search(tester, session, _old);
+        await _jumpToResult(tester, session, _old);
+        // The channel moved on, and the cache holds none of the new messages.
+        await session.dispatch('PASSIVE_UPDATE_V2', {
+          'channels': [
+            {
+              'id': SessionHarness.channelId,
+              'last_message_id': _idOf(_newest + 5),
+            },
+          ],
+        });
+        session.transport.on(
+          'GET',
+          _messagesPath,
+          (_) => jsonResponse({'message': 'Unknown'}, statusCode: 404),
+        );
+
+        await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+        await session.settle();
+
+        expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
+
     testSession('lands on the newest message', (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
