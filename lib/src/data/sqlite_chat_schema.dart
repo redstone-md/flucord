@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class SqliteChatSchema {
-  static const version = 23;
+  static const version = 24;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -113,7 +113,9 @@ abstract final class SqliteChatSchema {
         mentions_current_member INTEGER NOT NULL,
         poll_json TEXT,
         stickers_json TEXT NOT NULL,
-        is_text_to_speech INTEGER NOT NULL DEFAULT 0
+        is_text_to_speech INTEGER NOT NULL DEFAULT 0,
+        components_json TEXT NOT NULL DEFAULT '[]',
+        mentions_everyone INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await database.execute('''
@@ -357,6 +359,21 @@ abstract final class SqliteChatSchema {
         database,
         'spaces',
         'premium_tier INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (oldVersion < 24) {
+      // A partial update fills its gaps from the cached message, so anything
+      // the cache drops is lost at the next update. A row written before this
+      // version gets its buttons back when Discord next sends the message.
+      await _addColumn(
+        database,
+        'messages',
+        "components_json TEXT NOT NULL DEFAULT '[]'",
+      );
+      await _addColumn(
+        database,
+        'messages',
+        'mentions_everyone INTEGER NOT NULL DEFAULT 0',
       );
     }
   }

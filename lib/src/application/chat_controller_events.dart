@@ -6,6 +6,13 @@ extension _ChatControllerEvents on ChatController {
       switch (event) {
         case MessageUpsertedEvent():
           _handleMessageUpsert(event);
+        case MessageUpdatedEvent(
+          :final messageId,
+          :final applyTo,
+          :final member,
+        ):
+          _workspace = _workspace?.updateMessage(messageId, applyTo);
+          if (member != null) _workspace = _workspace?.upsertMember(member);
         case MessageReactionChangedEvent(:final change):
           _workspace = _workspace?.updateMessage(
             change.messageId,

@@ -66,8 +66,8 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // showing a friend list that is quietly wrong.
         _relationships.accept(event.name, event.data);
         _sharedDispatches.route(event);
-        if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
-          unawaited(_acceptMessage(event));
+        if (event.name == 'MESSAGE_CREATE') {
+          _sharedDispatches.inOrder(() => _acceptNewMessage(event.data));
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
@@ -294,38 +294,21 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     }
   }
 
-  Future<void> _acceptMessage(DiscordGatewayDispatch event) async {
-    final messageId = event.data['id'];
-    if (messageId is! String) return;
+  Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
+    if (payload['id'] is! String) return;
     final currentUserId = _currentMemberId;
-    if (event.name == 'MESSAGE_CREATE' && currentUserId != null) {
-      await _directMessages.acceptMessage(event.data, currentUserId);
+    if (currentUserId != null) {
+      await _directMessages.acceptMessage(payload, currentUserId);
     }
-    final fallback = event.name == 'MESSAGE_UPDATE'
-        ? await _cache.readMessage(messageId)
-        : null;
-    if (event.name == 'MESSAGE_UPDATE' && fallback == null) return;
-    final message = await _storeMessage(event.data, fallback: fallback);
-    final rawAuthor = event.data['author'];
-    final member = rawAuthor is Map
-        ? _mapper.member(
-            rawAuthor.cast<String, Object?>(),
-            spaceIds: {
-              if (event.data['guild_id'] case final String guildId) guildId,
-              if (event.data['guild_id'] == null)
-                DiscordMapper.directMessagesSpaceId,
-            },
-          )
-        : null;
+    final message = await _storeMessage(payload);
+    final member = _mapper.messageAuthor(payload);
     if (member != null) await _cache.writeMember(member);
-    if (event.name == 'MESSAGE_CREATE') {
-      _readState.acceptNewMessage(event.data);
-    }
+    _readState.acceptNewMessage(payload);
     _events.add(
       MessageUpsertedEvent(
         message: message,
         member: member,
-        isNew: event.name == 'MESSAGE_CREATE',
+        isNew: true,
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
@@ -335,6 +318,15 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     Map<String, Object?> payload, {
     ChatMessage? fallback,
   }) async {
+    final message = _messageFrom(payload, fallback: fallback);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  ChatMessage _messageFrom(
+    Map<String, Object?> payload, {
+    ChatMessage? fallback,
+  }) {
     final message = _mapper.message(
       payload,
       fallback: fallback,
@@ -342,11 +334,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     );
     // The mapper knows the account's id but not its roles. The flag decides the
     // inbox and the desktop notification, so a role mention has to set it too.
-    final stored = _readState.mentionsAccountRole(payload)
+    return _readState.mentionsAccountRole(payload)
         ? message.copyWith(mentionsCurrentMember: true)
         : message;
-    await _cache.writeMessage(stored);
-    return stored;
   }
 
   void _acceptTyping(Map<String, Object?> data) {
