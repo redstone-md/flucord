@@ -72,6 +72,63 @@ void _projectionCases() {
       expect(projected.channelById(_channelId).unread, isTrue);
       expect(projected.channelById(_channelId).firstUnreadMessageId, isNull);
     });
+
+    final behind = ReadStateSnapshot(
+      readStates: {
+        _channelId: ReadState(
+          entityId: _channelId,
+          lastAckedId: _olderMessage,
+          mentionCount: 2,
+        ),
+      },
+    );
+
+    test('applying a read state that changes nothing keeps the workspace', () {
+      final projected = _workspace().applyReadState(behind);
+
+      expect(identical(projected.applyReadState(behind), projected), isTrue);
+    });
+
+    test('a channel whose unread state stays keeps its instance', () {
+      const quiet = ConversationChannel(
+        id: 'quiet',
+        spaceId: _guildId,
+        name: 'quiet',
+        topic: '',
+        kind: ChannelKind.text,
+      );
+      final workspace = _workspace()
+          .upsertChannel(quiet)
+          .applyReadState(
+            ReadStateSnapshot(
+              readStates: {'quiet': ReadState(entityId: 'quiet')},
+            ),
+          );
+      final before = workspace.channelById('quiet');
+
+      final projected = workspace.applyReadState(
+        ReadStateSnapshot(
+          readStates: {
+            ...behind.readStates,
+            'quiet': ReadState(entityId: 'quiet'),
+          },
+        ),
+      );
+
+      expect(projected.channelById(_channelId).mentionCount, 2);
+      expect(identical(projected.channelById('quiet'), before), isTrue);
+    });
+
+    test('a boundary already in place keeps the workspace', () {
+      final state = behind.forChannel(_channelId)!;
+      final placed = _workspace().withUnreadBoundaryFrom(state);
+
+      expect(
+        placed.channelById(_channelId).firstUnreadMessageId,
+        _newerMessage,
+      );
+      expect(identical(placed.withUnreadBoundaryFrom(state), placed), isTrue);
+    });
   });
 
   group('ConversationChannel.withLatestMessage', () {

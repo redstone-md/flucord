@@ -530,6 +530,35 @@ void main() {
       );
     });
 
+    test('a single presence notifies only for a member it knows', () async {
+      final repository = _EventRepository();
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await controller.load();
+      // The channel the load opened finishes first, and that notifies.
+      await pumpEventQueue();
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      repository.emit(
+        const PresenceChangedEvent(
+          memberId: 'nobody-the-app-knows',
+          presence: UserPresence(status: Presence.online),
+        ),
+      );
+      await pumpEventQueue();
+      expect(notifications, 0);
+
+      repository.emit(
+        const PresenceChangedEvent(
+          memberId: 'lena',
+          presence: UserPresence(status: Presence.online),
+        ),
+      );
+      await pumpEventQueue();
+      expect(notifications, 1);
+    });
+
     test(
       'marks every active channel read and clears unread boundaries',
       () async {
