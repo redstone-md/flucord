@@ -8,6 +8,7 @@ import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
+import 'server_menu.dart';
 import 'account_panel.dart';
 import 'activity_label.dart';
 import 'friends_panel.dart';

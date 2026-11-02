@@ -40,6 +40,7 @@ class ServerRail extends StatelessWidget {
     required this.sessionMode,
     required this.isDark,
     this.onAddServer,
+    this.onOpenSpaceMenu,
     super.key,
   });
 
@@ -62,6 +63,9 @@ class ServerRail extends StatelessWidget {
   /// create or leave anything. The button is hidden rather than disabled:
   /// a plus that can do nothing is a lie about what the app offers.
   final VoidCallback? onAddServer;
+
+  /// Opens the menu of a server at a global position, on a right click.
+  final void Function(String spaceId, Offset position)? onOpenSpaceMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +109,9 @@ class ServerRail extends StatelessWidget {
                   selected: space.id == selectedSpaceId,
                   activity: activity[space.id] ?? SpaceActivity.none,
                   onPressed: () => onSelectSpace(space.id),
+                  onOpenMenu: onOpenSpaceMenu == null
+                      ? null
+                      : (position) => onOpenSpaceMenu!(space.id, position),
                 );
               },
             ),
@@ -267,12 +274,14 @@ class _SpaceButton extends StatelessWidget {
     required this.selected,
     required this.activity,
     required this.onPressed,
+    required this.onOpenMenu,
   });
 
   final CommunitySpace space;
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback onPressed;
+  final ValueChanged<Offset>? onOpenMenu;
 
   @override
   Widget build(BuildContext context) => _RailButton(
@@ -281,6 +290,7 @@ class _SpaceButton extends StatelessWidget {
     selected: selected,
     activity: activity,
     onPressed: onPressed,
+    onOpenMenu: onOpenMenu,
     tooltip: space.name,
     idleColor: Color(space.colorValue).withValues(alpha: 0.62),
     activeColor: Color(space.colorValue),
@@ -315,6 +325,7 @@ class _RailButton extends StatefulWidget {
     required this.idleColor,
     required this.activeColor,
     required this.builder,
+    this.onOpenMenu,
   });
 
   final String spaceId;
@@ -322,6 +333,7 @@ class _RailButton extends StatefulWidget {
   final bool selected;
   final SpaceActivity activity;
   final VoidCallback? onPressed;
+  final ValueChanged<Offset>? onOpenMenu;
   final String tooltip;
   final Color idleColor;
   final Color activeColor;
@@ -387,6 +399,10 @@ class _RailButtonState extends State<_RailButton> {
                   child: InkWell(
                     key: widget.buttonKey,
                     onTap: widget.onPressed,
+                    onSecondaryTapDown: widget.onOpenMenu == null
+                        ? null
+                        : (details) =>
+                              widget.onOpenMenu!(details.globalPosition),
                     borderRadius: radius,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 140),
