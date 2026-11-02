@@ -106,6 +106,10 @@ final class DiscordReadStateRepository implements ReadStateRepository {
   void setPrivateChannelIds(Iterable<String> ids) =>
       _privateChannelIds = Set.unmodifiable(ids.toSet());
 
+  /// Adds a DM the account gained during the session.
+  void addPrivateChannel(String id) =>
+      _privateChannelIds = Set.unmodifiable({..._privateChannelIds, id});
+
   /// Rebinds the account this store belongs to, resetting the ack token.
   void setCurrentUserId(String? userId) => _queue.bindSession(userId);
 

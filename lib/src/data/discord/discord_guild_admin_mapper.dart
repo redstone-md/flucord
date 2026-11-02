@@ -224,6 +224,33 @@ abstract final class DiscordGuildAdminMapper {
     );
   }
 
+  /// A guild as `GUILD_CREATE` carries it: whole, with its threads and the
+  /// members it names. Null while it has nothing to show, as for an unavailable
+  /// guild, which READY leaves off the rail for the same reason.
+  static JoinedGuild? joinedGuildFromDispatch(
+    Map<String, Object?> payload,
+    DiscordMapper mapper,
+  ) {
+    final guildId = _string(payload['id']);
+    if (guildId == null) return null;
+    List<Map<String, Object?>> objects(String key) => [
+      for (final raw in _list(payload[key]))
+        if (raw is Map) raw.cast<String, Object?>(),
+    ];
+    final roles = objects('roles');
+    final guild = joinedGuild(
+      guild: payload,
+      channels: [...objects('channels'), ...objects('threads')],
+      roles: roles,
+      mapper: mapper,
+      members: [
+        for (final member in objects('members'))
+          if (member['user'] is Map) mapper.guildMember(member, guildId, roles),
+      ],
+    );
+    return guild.channels.isEmpty ? null : guild;
+  }
+
   static AuditLogPage auditLog(Map<String, Object?> payload) {
     final entries = <AuditLogEntry>[];
     for (final raw in _list(payload['audit_log_entries'])) {

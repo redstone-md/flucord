@@ -144,7 +144,16 @@ class FlucordShell extends StatelessWidget {
 
   Widget _buildWorkspace(BuildContext context, ChatWorkspace workspace) {
     if (workspace.spaces.isEmpty) return _buildEmptyWorkspace(context);
+    final previousChannelId = workspaceController.selectedChannelId;
     workspaceController.reconcile(workspace);
+    final landedChannelId = workspaceController.selectedChannelId;
+    if (landedChannelId != null && landedChannelId != previousChannelId) {
+      // The channel on screen went away, so the one in its place needs opening,
+      // as a click would. That notifies, so it cannot run during this build.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(chatController.openChannel(landedChannelId)),
+      );
+    }
     return ListenableBuilder(
       listenable: connectionController,
       builder: (context, _) {
