@@ -22,6 +22,12 @@ import 'window_visible.dart';
 /// A decoder needs a keyframe to start from, so frames are held back until one
 /// passes; if the first frame seen is not one, the encoder is asked for one
 /// rather than waiting a whole group of pictures for the next.
+///
+/// A decode that falls behind drops access units, and every picture after a
+/// drop is built on one that is gone. The tile then keeps its last whole
+/// picture until the encoder's next keyframe has been decoded. That keyframe
+/// is not asked for: it would cost every viewer a full picture for the
+/// sender's own tile.
 final class GoLiveSelfPreview extends ChangeNotifier {
   GoLiveSelfPreview({
     required VideoDecoderService Function() decoderFactory,
@@ -67,7 +73,13 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   VideoDecoderService? _decoder;
   StreamSubscription<EncodedVideoFrame>? _encoded;
   StreamSubscription<DecodedVideoFrame>? _decoded;
+  StreamSubscription<int>? _drops;
   bool _awaitingKeyframe = true;
+
+  /// Whether a dropped access unit has broken the pictures. They stay hidden
+  /// until the one decoded from [_mendedAt], the keyframe after the drop.
+  bool _broken = false;
+  Duration? _mendedAt;
 
   /// Asked once per share, when the tile first opens: a decoder reopened
   /// after the window came back waits for the next natural keyframe instead
@@ -136,6 +148,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _decoder = decoder;
     _error = null;
     _awaitingKeyframe = true;
+    _broken = false;
     try {
       await decoder.start();
     } on Object catch (error) {
@@ -153,18 +166,29 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       return;
     }
     _decoded = decoder.frames.listen((frame) {
+      if (_broken) {
+        final mendedAt = _mendedAt;
+        if (mendedAt == null || frame.timestamp < mendedAt) return;
+        _broken = false;
+      }
       if (!_frames.isClosed) _frames.add(frame);
+    });
+    _drops = decoder.droppedAccessUnits.listen((_) {
+      _broken = true;
+      _mendedAt = null;
+      _awaitingKeyframe = true;
     });
     _encoded = source.encoded.listen((frame) {
       if (_awaitingKeyframe) {
         if (!frame.isKeyframe) {
-          if (!_askedForKeyframe) {
+          if (!_broken && !_askedForKeyframe) {
             _askedForKeyframe = true;
             unawaited(source.requestKeyframe?.call());
           }
           return;
         }
         _awaitingKeyframe = false;
+        if (_broken) _mendedAt = frame.timestamp;
       }
       unawaited(decoder.submit(frame.bytes, timestamp: frame.timestamp));
     });
@@ -178,8 +202,10 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     // everything after it.
     unawaited(_encoded?.cancel());
     unawaited(_decoded?.cancel());
+    unawaited(_drops?.cancel());
     _encoded = null;
     _decoded = null;
+    _drops = null;
     await decoder?.stop();
   }
 

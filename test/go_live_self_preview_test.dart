@@ -9,18 +9,25 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_video_decoder.dart';
 
-EncodedVideoFrame _frame({required bool keyframe}) => EncodedVideoFrame(
+EncodedVideoFrame _frame({
+  required bool keyframe,
+  Duration timestamp = Duration.zero,
+}) => EncodedVideoFrame(
   bytes: Uint8List.fromList([keyframe ? 0x65 : 0x41]),
-  timestamp: Duration.zero,
+  timestamp: timestamp,
   isKeyframe: keyframe,
 );
 
-final DecodedVideoFrame _picture = DecodedVideoFrame(
+DecodedVideoFrame _pictureAt(Duration timestamp) => DecodedVideoFrame(
   pixels: Uint8List(4),
   width: 1,
   height: 1,
-  timestamp: Duration.zero,
+  timestamp: timestamp,
 );
+
+final DecodedVideoFrame _picture = _pictureAt(Duration.zero);
+
+Duration _ms(int milliseconds) => Duration(milliseconds: milliseconds);
 
 void main() {
   test('nothing is decoded until somebody watches', () async {
@@ -88,6 +95,51 @@ void main() {
       encoded.add(_frame(keyframe: false));
       await Future<void>.delayed(Duration.zero);
       expect(decoder.submitted, hasLength(2));
+    },
+  );
+
+  test(
+    'a dropped access unit holds the last whole picture until a keyframe',
+    () async {
+      final decoder = FakeVideoDecoder();
+      final preview = GoLiveSelfPreview(decoderFactory: () => decoder);
+      addTearDown(preview.dispose);
+      final encoded = StreamController<EncodedVideoFrame>.broadcast();
+      addTearDown(encoded.close);
+      var asked = 0;
+      final seen = <Duration>[];
+      preview.frames.listen((frame) => seen.add(frame.timestamp));
+      await preview.start(encoded.stream, requestKeyframe: () async => asked++);
+
+      encoded.add(_frame(keyframe: true));
+      encoded.add(_frame(keyframe: false, timestamp: _ms(16)));
+      await Future<void>.delayed(Duration.zero);
+      decoder.emit(_pictureAt(Duration.zero));
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [Duration.zero]);
+
+      // The decode fell behind and threw a unit away: everything built on it
+      // is wrong, both what is still queued and what comes next.
+      decoder.drop(1);
+      await Future<void>.delayed(Duration.zero);
+      decoder.emit(_pictureAt(_ms(16)));
+      encoded.add(_frame(keyframe: false, timestamp: _ms(33)));
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [Duration.zero]);
+      expect(decoder.submitted, hasLength(2));
+      // The encoder's next keyframe mends it; one asked for early would cost
+      // every viewer a full picture for the sender's own tile.
+      expect(asked, 0);
+
+      // A picture still in the queue when the keyframe arrives is older than
+      // it, and stays hidden; the keyframe's own picture is the first shown.
+      encoded.add(_frame(keyframe: true, timestamp: _ms(50)));
+      await Future<void>.delayed(Duration.zero);
+      expect(decoder.submitted, hasLength(3));
+      decoder.emit(_pictureAt(_ms(33)));
+      decoder.emit(_pictureAt(_ms(50)));
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [Duration.zero, _ms(50)]);
     },
   );
 
