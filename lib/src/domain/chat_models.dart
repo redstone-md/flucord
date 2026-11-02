@@ -193,6 +193,9 @@ final class ChatWorkspace {
       Expando<Map<String, List<ConversationChannel>>>();
   static final _categoriesBySpaceTables =
       Expando<Map<String, List<ChannelCategory>>>();
+  static final _emojisBySpaceTables = Expando<Map<String, List<GuildEmoji>>>();
+  static final _stickersBySpaceTables =
+      Expando<Map<String, List<GuildSticker>>>();
 
   Map<String, CommunitySpace> get _spaceById =>
       _spaceTables[spaces] ??= _byId(spaces, (space) => space.id);
@@ -218,11 +221,23 @@ final class ChatWorkspace {
         (category) => category.spaceId,
       );
 
+  /// Only what can be used today: Discord withholds an unavailable one.
+  Map<String, List<GuildEmoji>> get _emojisBySpaceId =>
+      _emojisBySpaceTables[emojis] ??= _groupBy(
+        emojis.where((emoji) => emoji.available),
+        (emoji) => emoji.spaceId,
+      );
+  Map<String, List<GuildSticker>> get _stickersBySpaceId =>
+      _stickersBySpaceTables[stickers] ??= _groupBy(
+        stickers.where((sticker) => sticker.available),
+        (sticker) => sticker.spaceId,
+      );
+
   static Map<String, T> _byId<T>(List<T> items, String Function(T item) idOf) =>
       {for (final item in items) idOf(item): item};
 
   static Map<String, List<T>> _groupBy<T>(
-    List<T> items,
+    Iterable<T> items,
     String Function(T item) keyOf,
   ) {
     final grouped = <String, List<T>>{};
