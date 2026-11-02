@@ -83,10 +83,10 @@ class AttachmentDownloadButton extends StatelessWidget {
         strokeWidth: 2,
       ),
     ),
-    AttachmentDownloadPhase.saved => const Icon(
+    AttachmentDownloadPhase.saved => Icon(
       Icons.check_rounded,
       size: 17,
-      color: FlucordColors.success,
+      color: context.surfaces.success,
     ),
     AttachmentDownloadPhase.failed => Icon(
       Icons.refresh_rounded,

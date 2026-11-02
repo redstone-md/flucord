@@ -64,7 +64,7 @@ class VoiceConnectionBar extends StatelessWidget {
     final accent = failed
         ? Theme.of(context).colorScheme.error
         : ready
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.muted;
     return Container(
       key: const ValueKey('voice-connection-bar'),

@@ -96,7 +96,7 @@ class _IncomingInvite extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: failed
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
                     fontSize: 10,
                   ),
@@ -147,7 +147,11 @@ class _JoinedSession extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.headset_mic_outlined, size: 18, color: _statusColor(call)),
+          Icon(
+            Icons.headset_mic_outlined,
+            size: 18,
+            color: _statusColor(context, call),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -170,7 +174,7 @@ class _JoinedSession extends StatelessWidget {
                   style: TextStyle(
                     color: controller.callError == null
                         ? context.surfaces.muted
-                        : FlucordColors.danger,
+                        : context.surfaces.errorText,
                     fontSize: 10,
                   ),
                 ),
@@ -230,7 +234,7 @@ class _JoinedSession extends StatelessWidget {
               key: const ValueKey('leave-activity-voice'),
               tooltip: 'Leave activity voice',
               icon: Icons.call_end,
-              color: FlucordColors.danger,
+              color: context.surfaces.danger,
               onPressed: controller.leaveVoice,
             ),
           ],
@@ -247,12 +251,13 @@ class _JoinedSession extends StatelessWidget {
     );
   }
 
-  Color? _statusColor(DiscordSocialCallState? call) => switch (call?.status) {
-    DiscordSocialCallStatus.connected => FlucordColors.success,
-    DiscordSocialCallStatus.reconnecting => FlucordColors.warning,
-    DiscordSocialCallStatus.disconnected => FlucordColors.danger,
-    _ => null,
-  };
+  Color? _statusColor(BuildContext context, DiscordSocialCallState? call) =>
+      switch (call?.status) {
+        DiscordSocialCallStatus.connected => context.surfaces.success,
+        DiscordSocialCallStatus.reconnecting => context.surfaces.warning,
+        DiscordSocialCallStatus.disconnected => context.surfaces.danger,
+        _ => null,
+      };
 
   String _title(DiscordSocialCallState? call) => switch (call?.status) {
     DiscordSocialCallStatus.connected => 'Activity voice connected',
@@ -292,7 +297,7 @@ class _CallButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
     tooltip: tooltip,
     visualDensity: VisualDensity.compact,
-    color: color ?? (active ? FlucordColors.brand : null),
+    color: color ?? (active ? context.surfaces.accentIcon : null),
     onPressed: onPressed,
     icon: Icon(icon, size: 18),
   );

@@ -335,10 +335,10 @@ class InlineVideoControls extends StatelessWidget {
           Expanded(
             child: SliderTheme(
               data: SliderTheme.of(context).copyWith(
-                activeTrackColor: FlucordColors.brand,
+                activeTrackColor: context.surfaces.brand,
                 inactiveTrackColor: Colors.white24,
                 thumbColor: Colors.white,
-                overlayColor: FlucordColors.brand.withValues(alpha: 0.18),
+                overlayColor: context.surfaces.brand.withValues(alpha: 0.18),
                 trackHeight: 2,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
               ),

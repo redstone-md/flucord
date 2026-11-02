@@ -24,22 +24,22 @@ final class ConnectionBanner extends StatelessWidget {
     // A session that cannot resume dials again from the start, and the bot
     // transport shows its workspace before its first READY. Neither is
     // connected yet, so the banner stays up, but only one of them lost anything.
-    RepositoryConnectionStatus.connecting => const _Bar(
+    RepositoryConnectionStatus.connecting => _Bar(
       icon: Icons.sync,
       message: 'Connecting to Discord...',
-      background: FlucordColors.warning,
+      background: context.surfaces.warning,
       foreground: Colors.black,
     ),
-    RepositoryConnectionStatus.reconnecting => const _Bar(
+    RepositoryConnectionStatus.reconnecting => _Bar(
       icon: Icons.sync,
       message: 'Connection lost. Reconnecting...',
-      background: FlucordColors.warning,
+      background: context.surfaces.warning,
       foreground: Colors.black,
     ),
     RepositoryConnectionStatus.offline => _Bar(
       icon: Icons.cloud_off,
       message: 'Not connected to Discord. New messages will not arrive.',
-      background: FlucordColors.danger,
+      background: context.surfaces.danger,
       foreground: Colors.white,
       onRetry: onRetry,
     ),

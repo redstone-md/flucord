@@ -183,7 +183,7 @@ class OAuthAccountHomeView extends StatelessWidget {
                         )
                       : null,
                   style: TextButton.styleFrom(
-                    foregroundColor: FlucordColors.success,
+                    foregroundColor: context.surfaces.success,
                     textStyle: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -197,7 +197,7 @@ class OAuthAccountHomeView extends StatelessWidget {
                 socialReady ? Icons.people_outline : Icons.lock_outline,
                 size: 16,
                 color: socialReady
-                    ? FlucordColors.success
+                    ? context.surfaces.success
                     : context.surfaces.muted,
               ),
               const SizedBox(width: 6),
@@ -299,12 +299,12 @@ class _AccountProfileCard extends StatelessWidget {
                           ),
                         ),
                         if (account.isVerified)
-                          const Tooltip(
+                          Tooltip(
                             message: 'Verified Discord account',
                             child: Icon(
                               Icons.verified_outlined,
                               size: 17,
-                              color: FlucordColors.success,
+                              color: context.surfaces.success,
                             ),
                           ),
                       ],

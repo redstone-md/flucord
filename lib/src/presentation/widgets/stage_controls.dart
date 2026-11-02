@@ -38,7 +38,7 @@ class StageControls extends StatelessWidget {
             controller.isLive ? Icons.campaign : Icons.campaign_outlined,
             size: 17,
             color: controller.isLive
-                ? FlucordColors.brand
+                ? context.surfaces.accentIcon
                 : context.surfaces.muted,
           ),
           const SizedBox(width: 10),

@@ -384,7 +384,7 @@ class _VoiceStage extends StatelessWidget {
                 voiceRoomStatusLabel(controller),
                 style: TextStyle(
                   color: controller.isTransportReady
-                      ? FlucordColors.success
+                      ? context.surfaces.success
                       : context.surfaces.muted,
                   fontSize: 11,
                 ),
@@ -523,7 +523,7 @@ class _VoiceToolbar extends StatelessWidget {
             onPressed: controller.isConnected ? controller.disconnect : null,
             tooltip: 'Disconnect',
             style: IconButton.styleFrom(
-              backgroundColor: FlucordColors.danger,
+              backgroundColor: context.surfaces.danger,
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.call_end),
@@ -541,7 +541,7 @@ class _VoiceToolbar extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: context.surfaces.raised,
           foregroundColor: control.danger
-              ? FlucordColors.danger
+              ? context.surfaces.danger
               : Theme.of(context).colorScheme.onSurface,
           side: BorderSide(color: context.surfaces.border),
         ),

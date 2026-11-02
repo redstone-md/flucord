@@ -355,7 +355,7 @@ class _FriendRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: mutationFailed
-                                ? FlucordColors.danger
+                                ? context.surfaces.errorText
                                 : context.surfaces.muted,
                             fontSize: 11,
                           ),

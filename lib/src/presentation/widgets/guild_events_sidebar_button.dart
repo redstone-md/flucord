@@ -32,7 +32,7 @@ class GuildEventsSidebarButton extends StatelessWidget {
               Icon(
                 hasError ? Icons.event_busy_outlined : Icons.event_outlined,
                 size: 19,
-                color: hasError ? FlucordColors.warning : null,
+                color: hasError ? context.surfaces.warning : null,
               ),
               const SizedBox(width: 10),
               const Expanded(

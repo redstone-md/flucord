@@ -104,8 +104,8 @@ class _DiscordAddFriendDialogState extends State<_DiscordAddFriendDialog> {
                   Text(
                     _errorLabel(error),
                     key: const ValueKey('discord-add-friend-error'),
-                    style: const TextStyle(
-                      color: FlucordColors.danger,
+                    style: TextStyle(
+                      color: context.surfaces.errorText,
                       fontSize: 11,
                     ),
                   ),

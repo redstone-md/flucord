@@ -31,8 +31,8 @@ extension _FlucordShellNavigation on FlucordShell {
         onSelectGuild: (guildId) =>
             oauthGuildDirectoryController.selectGuild(account, guildId),
         onOpenConnections: () => _openConnections(context),
-        onToggleTheme: workspaceController.toggleTheme,
-        isDark: workspaceController.themeMode == ThemeMode.dark,
+        onToggleTheme: onToggleTheme,
+        isDark: themeMode == ThemeMode.dark,
       ),
     );
   }

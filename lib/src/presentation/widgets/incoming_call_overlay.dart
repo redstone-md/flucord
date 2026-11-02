@@ -131,7 +131,7 @@ class IncomingCallCard extends StatelessWidget {
                 onPressed: isBusy ? null : onDecline,
                 tooltip: 'Decline',
                 style: IconButton.styleFrom(
-                  backgroundColor: FlucordColors.danger,
+                  backgroundColor: context.surfaces.danger,
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.call_end),
@@ -142,7 +142,7 @@ class IncomingCallCard extends StatelessWidget {
                 onPressed: isBusy ? null : onAccept,
                 tooltip: 'Accept',
                 style: IconButton.styleFrom(
-                  backgroundColor: FlucordColors.success,
+                  backgroundColor: context.surfaces.success,
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.call),

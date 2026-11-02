@@ -65,7 +65,7 @@ class OAuthGuildRail extends StatelessWidget {
           IconButton(
             key: const ValueKey('open-oauth-workspace-connections'),
             onPressed: onOpenConnections,
-            icon: const Icon(Icons.link, color: FlucordColors.brand),
+            icon: Icon(Icons.link, color: context.surfaces.accentIcon),
             tooltip: 'Connections',
           ),
           IconButton(
@@ -216,7 +216,7 @@ class _OAuthGuildRailButtonState extends State<_OAuthGuildRailButton> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: active
-                            ? FlucordColors.brand
+                            ? context.surfaces.brand
                             : context.surfaces.raised,
                         borderRadius: radius,
                       ),

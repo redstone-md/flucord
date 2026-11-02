@@ -39,7 +39,7 @@ class _DestinationRow extends StatelessWidget {
       child: MouseRegion(
         onEnter: (_) => onHover(),
         child: Material(
-          color: selected ? FlucordColors.brand : Colors.transparent,
+          color: selected ? context.surfaces.brand : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
           child: InkWell(
             key: ValueKey('quick-switcher-${destination.key}'),

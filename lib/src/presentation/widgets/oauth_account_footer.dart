@@ -85,7 +85,7 @@ class OAuthAccountFooter extends StatelessWidget {
                     color:
                         activePresence?.state ==
                             DiscordSocialPresenceState.failure
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
                     fontSize: 10,
                   ),
@@ -102,7 +102,7 @@ class OAuthAccountFooter extends StatelessWidget {
             size: 18,
             color: hasNativePresence
                 ? context.surfaces.muted
-                : FlucordColors.success,
+                : context.surfaces.success,
           ),
         ],
       ),
@@ -156,7 +156,7 @@ class _StatusMenuItem extends StatelessWidget {
           ),
         ),
         if (selected)
-          const Icon(Icons.check, size: 17, color: FlucordColors.brand),
+          Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
       ],
     );
   }
@@ -190,8 +190,8 @@ String _statusLabel(DiscordOnlineStatus status) => switch (status) {
 
 Color _statusColor(BuildContext context, DiscordOnlineStatus status) =>
     switch (status) {
-      DiscordOnlineStatus.online => FlucordColors.success,
-      DiscordOnlineStatus.idle => FlucordColors.warning,
-      DiscordOnlineStatus.doNotDisturb => FlucordColors.danger,
+      DiscordOnlineStatus.online => context.surfaces.success,
+      DiscordOnlineStatus.idle => context.surfaces.warning,
+      DiscordOnlineStatus.doNotDisturb => context.surfaces.danger,
       DiscordOnlineStatus.invisible => context.surfaces.muted,
     };

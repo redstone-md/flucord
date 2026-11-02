@@ -216,7 +216,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
               border: Border(
                 left: BorderSide(
                   width: 2,
-                  color: selected ? FlucordColors.brand : Colors.transparent,
+                  color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
               ),
             ),
@@ -291,10 +291,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.auto_awesome,
                 size: 12,
-                color: FlucordColors.warning,
+                color: context.surfaces.warning,
               ),
               const SizedBox(width: 4),
               Text(
@@ -329,11 +329,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
           ),
         ),
         if (row.type == DiscordReactionType.burst) ...[
-          const Icon(
-            Icons.auto_awesome,
-            size: 11,
-            color: FlucordColors.warning,
-          ),
+          Icon(Icons.auto_awesome, size: 11, color: context.surfaces.warning),
           const SizedBox(width: 4),
           const Text('Super', style: TextStyle(fontSize: 10)),
         ],
@@ -348,7 +344,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     ),
     child: Row(
       children: [
-        const Icon(Icons.error_outline, size: 15, color: FlucordColors.danger),
+        Icon(Icons.error_outline, size: 15, color: context.surfaces.errorText),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(

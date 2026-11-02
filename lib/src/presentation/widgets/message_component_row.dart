@@ -150,7 +150,9 @@ class _Button extends StatelessWidget {
       ),
       MessageButtonStyle.success => FilledButton(
         key: key,
-        style: FilledButton.styleFrom(backgroundColor: FlucordColors.success),
+        style: FilledButton.styleFrom(
+          backgroundColor: context.surfaces.success,
+        ),
         onPressed: enabled ? onPressed : null,
         child: child,
       ),

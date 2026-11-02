@@ -753,7 +753,7 @@ class MessageListState extends State<MessageList>
         animation: _highlightFade,
         builder: (context, row) => ColoredBox(
           color: message.id == _highlightedMessageId
-              ? FlucordColors.brand.withValues(
+              ? context.surfaces.brand.withValues(
                   alpha: _highlightAlpha * (1 - _highlightFade.value),
                 )
               : Colors.transparent,

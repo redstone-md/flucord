@@ -29,7 +29,7 @@ class MentionBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 4),
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      color: FlucordColors.mention,
+      color: context.surfaces.mention,
       borderRadius: BorderRadius.circular(9),
       border: borderColor == null
           ? null

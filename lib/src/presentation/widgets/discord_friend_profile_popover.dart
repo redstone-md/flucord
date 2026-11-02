@@ -26,7 +26,7 @@ class DiscordFriendProfilePopover extends StatelessWidget {
       secondaryLabel: user.username == null ? null : '@${user.username}',
       statusLabel: _presenceLabel(user.status),
       userId: user.id,
-      bannerColor: FlucordColors.brand,
+      bannerColor: context.surfaces.brand,
       avatar: DiscordRelationshipAvatar(
         user: user,
         size: 64,
@@ -36,7 +36,7 @@ class DiscordFriendProfilePopover extends StatelessWidget {
         DiscordIdentityProfileDetail(
           label: 'RELATIONSHIP',
           value: _relationshipLabel(relationship.kind),
-          indicatorColor: _relationshipColor(relationship.kind),
+          indicatorColor: _relationshipColor(context, relationship.kind),
         ),
         if (user.isProvisional)
           const DiscordIdentityProfileDetail(
@@ -76,13 +76,14 @@ class DiscordFriendProfilePopover extends StatelessWidget {
         DiscordRelationshipKind.unknown => 'Relationship unavailable',
       };
 
-  static Color? _relationshipColor(DiscordRelationshipKind kind) =>
-      switch (kind) {
-        DiscordRelationshipKind.friend => FlucordColors.success,
-        DiscordRelationshipKind.incomingRequest ||
-        DiscordRelationshipKind.outgoingRequest => FlucordColors.warning,
-        DiscordRelationshipKind.blocked => FlucordColors.danger,
-        DiscordRelationshipKind.implicit ||
-        DiscordRelationshipKind.unknown => null,
-      };
+  static Color? _relationshipColor(
+    BuildContext context,
+    DiscordRelationshipKind kind,
+  ) => switch (kind) {
+    DiscordRelationshipKind.friend => context.surfaces.success,
+    DiscordRelationshipKind.incomingRequest ||
+    DiscordRelationshipKind.outgoingRequest => context.surfaces.warning,
+    DiscordRelationshipKind.blocked => context.surfaces.danger,
+    DiscordRelationshipKind.implicit || DiscordRelationshipKind.unknown => null,
+  };
 }

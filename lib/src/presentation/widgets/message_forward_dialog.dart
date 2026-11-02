@@ -237,7 +237,7 @@ class _DestinationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: selected
-        ? FlucordColors.brand.withValues(alpha: 0.16)
+        ? context.surfaces.brand.withValues(alpha: 0.16)
         : Colors.transparent,
     borderRadius: BorderRadius.circular(4),
     child: InkWell(
@@ -279,7 +279,7 @@ class _DestinationRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.check, size: 17, color: FlucordColors.brand),
+              Icon(Icons.check, size: 17, color: context.surfaces.accentIcon),
             const SizedBox(width: 10),
           ],
         ),

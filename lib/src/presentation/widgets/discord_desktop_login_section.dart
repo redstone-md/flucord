@@ -127,7 +127,7 @@ final class _DisconnectedContent extends StatelessWidget {
         if (controller.errorMessage case final error?) ...[
           Text(
             error,
-            style: const TextStyle(color: FlucordColors.danger, fontSize: 13),
+            style: TextStyle(color: context.surfaces.errorText, fontSize: 13),
           ),
           const SizedBox(height: 12),
         ],

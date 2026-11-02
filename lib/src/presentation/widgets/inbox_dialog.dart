@@ -265,7 +265,7 @@ class _UnreadRow extends StatelessWidget {
                 height: 7,
                 decoration: BoxDecoration(
                   color: entry.mentionCount > 0
-                      ? FlucordColors.mention
+                      ? context.surfaces.mention
                       : Theme.of(context).colorScheme.onSurface,
                   shape: BoxShape.circle,
                 ),
@@ -462,7 +462,7 @@ class _MentionRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: FlucordColors.mention,
+                        color: context.surfaces.mention,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),

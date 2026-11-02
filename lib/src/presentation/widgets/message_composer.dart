@@ -722,7 +722,8 @@ class MessageComposerState extends State<MessageComposer>
                               bottom: Radius.circular(6),
                             ),
                             borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: context.surfaces.focusRing,
+                              width: 2,
                             ),
                           ),
                     prefixIcon: _composerMenu(),
@@ -911,7 +912,7 @@ class MessageComposerState extends State<MessageComposer>
         constraints: const BoxConstraints.tightFor(width: 48, height: 48),
         padding: EdgeInsets.zero,
         onPressed: _send,
-        icon: const Icon(Icons.send, size: 19, color: FlucordColors.brand),
+        icon: Icon(Icons.send, size: 19, color: context.surfaces.accentIcon),
         tooltip: 'Send message',
       );
     }

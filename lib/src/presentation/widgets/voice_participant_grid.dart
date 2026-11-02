@@ -222,7 +222,7 @@ class VoiceParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = participant.isSpeaking
-        ? FlucordColors.success
+        ? context.surfaces.success
         : context.surfaces.border;
     final onTap = this.onTap;
     return GestureDetector(
@@ -438,7 +438,7 @@ class _StreamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = FlucordColors.danger;
+    final accent = context.surfaces.danger;
     return DecoratedBox(
       key: ValueKey('voice-stream-card-$userId'),
       decoration: BoxDecoration(
@@ -515,6 +515,7 @@ class _StreamCard extends StatelessWidget {
   Widget _control(BuildContext context) {
     if (onStopShare case final stop?) {
       return _button(
+        context,
         key: 'voice-stop-share-$userId',
         label: 'Stop sharing',
         tooltip: 'Stop sharing your stream',
@@ -531,6 +532,7 @@ class _StreamCard extends StatelessWidget {
         style: TextStyle(color: context.surfaces.muted, fontSize: 10),
       ),
       final watch => _button(
+        context,
         key: 'voice-watch-$userId',
         label: isOpen ? 'Stop watching' : 'Watch',
         // The name sits beside the button, not in it, so without this two
@@ -542,7 +544,8 @@ class _StreamCard extends StatelessWidget {
     };
   }
 
-  Widget _button({
+  Widget _button(
+    BuildContext context, {
     required String key,
     required String label,
     required String tooltip,
@@ -557,7 +560,7 @@ class _StreamCard extends StatelessWidget {
         minimumSize: Size.zero,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: danger ? FlucordColors.danger : null,
+        foregroundColor: danger ? context.surfaces.danger : null,
         textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
       ),
       child: Text(label),
@@ -593,7 +596,7 @@ class _StateIcon extends StatelessWidget {
       padding: const EdgeInsets.only(left: 7),
       child: Tooltip(
         message: label,
-        child: Icon(icon, size: 15, color: FlucordColors.danger),
+        child: Icon(icon, size: 15, color: context.surfaces.danger),
       ),
     );
   }

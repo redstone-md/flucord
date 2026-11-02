@@ -130,7 +130,7 @@ class _ReactionChip extends StatelessWidget {
         message: 'Click to toggle · Right-click for details',
         child: Material(
           color: selected
-              ? FlucordColors.brand.withValues(alpha: 0.16)
+              ? context.surfaces.brand.withValues(alpha: 0.16)
               : context.surfaces.inset,
           borderRadius: BorderRadius.circular(4),
           child: InkWell(
@@ -143,7 +143,7 @@ class _ReactionChip extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border.all(
                   color: selected
-                      ? FlucordColors.brand.withValues(alpha: 0.65)
+                      ? context.surfaces.brand.withValues(alpha: 0.65)
                       : context.surfaces.border,
                 ),
                 borderRadius: BorderRadius.circular(4),
@@ -167,7 +167,7 @@ class _ReactionChip extends StatelessWidget {
                       Icons.auto_awesome,
                       size: 10,
                       color: burstColor == null
-                          ? FlucordColors.warning
+                          ? context.surfaces.warning
                           : Color(burstColor),
                     ),
                   ],

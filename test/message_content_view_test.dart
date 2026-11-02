@@ -7,6 +7,8 @@ import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/presentation/widgets/message_content_view.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/contrast.dart';
+
 void main() {
   group('a body with no markup', () {
     // Each pair draws the same text. The backslash only sends the second body
@@ -184,6 +186,47 @@ void main() {
     expect(find.text('The link could not be opened.'), findsOneWidget);
   });
 
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('links and image fallbacks read at 4.5:1 in $name', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          '[Docs](https://example.com/path) ![Map](https://example.com/m.png)',
+          theme: theme,
+        ),
+      );
+
+      expectReadable(theme, _spanWithText(tester, 'Docs').style?.color, 4.5);
+      expectReadable(
+        theme,
+        tester.widget<Text>(find.text('Map')).style?.color,
+        4.5,
+      );
+    });
+  }
+
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('mentions and commands read at 4.5:1 in $name', (tester) async {
+      await tester.pumpWidget(_host('<@100> </deploy:500>', theme: theme));
+      await tester.pump();
+
+      for (final label in ['@Mira', '/deploy']) {
+        expectReadable(
+          theme,
+          tester.widget<Text>(find.text(label)).style?.color,
+          4.5,
+        );
+      }
+    });
+  }
+
   test(
     'native launcher rejects non-web schemes before platform dispatch',
     () async {
@@ -200,8 +243,9 @@ Widget _host(
   DateTime? now,
   ExternalLinkLauncher? launcher,
   ValueChanged<String>? onSelectChannel,
+  ThemeData? theme,
 }) => MaterialApp(
-  theme: FlucordTheme.dark,
+  theme: theme ?? FlucordTheme.dark,
   home: Scaffold(
     body: Align(
       alignment: Alignment.topLeft,
