@@ -136,8 +136,6 @@ class ConversationPane extends StatefulWidget {
 }
 
 class _ConversationPaneState extends State<ConversationPane> {
-  ChatMessage? _replyTo;
-
   /// Holds a send failure's note clear of the composer, even with four lines
   /// of text in it. A note at the window's edge would cover the restored text
   /// and the Send button the user needs to try again.
@@ -162,9 +160,19 @@ class _ConversationPaneState extends State<ConversationPane> {
   void didUpdateWidget(covariant ConversationPane oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id == widget.channel.id) return;
-    _replyTo = null;
     _watchCall();
     _pointControllersAtChannel();
+  }
+
+  /// Sets who the open channel's draft answers.
+  void _setReply(ChatController chat, ChatMessage? message) {
+    final channelId = widget.channel.id;
+    setState(() {
+      chat.drafts.write(
+        channelId,
+        chat.drafts.read(channelId).withReply(message),
+      );
+    });
   }
 
   /// When slowmode releases this account's next send, or null while nothing
@@ -298,6 +306,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     final chat = ChatScope.of(context);
     final workspaceController = WorkspaceScope.of(context);
     final channel = widget.channel;
+    final replyTo = chat.drafts.read(channel.id).replyTo;
     final inCall = callController?.activeCallChannelId == channel.id;
     final voiceSurface = workspaceController.voiceSurfaceOf(channel.id);
     final showsMessages = showsMessageTimeline(
@@ -556,11 +565,12 @@ class _ConversationPaneState extends State<ConversationPane> {
             expressionFavorites: ExpressionFavoritesScope.read(context),
             channelId: channel.id,
             channelName: channel.name,
-            replyTo: _replyTo,
-            replyAuthor: _replyTo == null
+            drafts: chat.drafts,
+            replyTo: replyTo,
+            replyAuthor: replyTo == null
                 ? null
-                : widget.workspace.memberOrNull(_replyTo!.authorId),
-            onCancelReply: () => setState(() => _replyTo = null),
+                : widget.workspace.memberOrNull(replyTo.authorId),
+            onCancelReply: () => _setReply(chat, null),
             slowmode: Duration(seconds: channel.rateLimitPerUser),
             slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
@@ -624,8 +634,11 @@ class _ConversationPaneState extends State<ConversationPane> {
                     return false;
                   }
                   // A reply picked while this send ran is not this send's.
-                  if (mounted && _replyTo?.id == replyToMessageId) {
-                    setState(() => _replyTo = null);
+                  // The user may be in another channel by now.
+                  final draft = chat.drafts.read(channel.id);
+                  if (draft.replyTo?.id == replyToMessageId) {
+                    chat.drafts.write(channel.id, draft.withReply(null));
+                    if (mounted) setState(() {});
                   }
                   return true;
                 },
@@ -804,7 +817,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       onOpenMessage: (messageId) =>
           _jumpToMessage(chat, workspaceController, channel.id, messageId),
       onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
-      onReply: (message) => setState(() => _replyTo = message),
+      onReply: (message) => _setReply(chat, message),
       onEdit: chat.editMessage,
       onDelete: chat.deleteMessage,
       onToggleReaction: chat.toggleReaction,
