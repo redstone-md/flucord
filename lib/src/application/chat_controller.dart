@@ -343,6 +343,10 @@ final class ChatController extends ChangeNotifier {
     _archivedThreadState.clear();
     _askedAuthors.clear();
     _clearTyping();
+    // Presences still held belong to the last account.
+    _presenceFold?.cancel();
+    _presenceFold = null;
+    _heldPresences.clear();
     _unreadOpenings.clear();
     _activeChannelId = null;
     _connectionStatus = RepositoryConnectionStatus.offline;

@@ -563,6 +563,32 @@ void main() {
     });
 
     test(
+      'a presence held for the last account does not reach the next',
+      () async {
+        final repository = _EventRepository();
+        final controller = ChatController(repository);
+        addTearDown(controller.dispose);
+        await controller.load();
+        await pumpEventQueue();
+
+        repository.emit(
+          const PresenceChangedEvent(
+            memberId: 'lena',
+            presence: UserPresence(status: Presence.online),
+          ),
+        );
+        await pumpEventQueue();
+        final next = _EventRepository();
+        await controller.useRepository(next);
+        final before = controller.workspace!.memberById('lena').presence;
+        await Future<void>.delayed(_presenceWindow);
+
+        expect(before, isNot(Presence.online));
+        expect(controller.workspace!.memberById('lena').presence, before);
+      },
+    );
+
+    test(
       'marks every active channel read and clears unread boundaries',
       () async {
         final repository = _EventRepository();
