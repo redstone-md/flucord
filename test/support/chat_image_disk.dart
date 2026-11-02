@@ -66,6 +66,11 @@ final class ChatImageDisk {
 
   Future<void> _answer(HttpRequest request) async {
     requests.add(request.uri);
+    // Each answer ends its connection. A kept-alive one goes back to the
+    // client's pool, which starts a 15 second idle timer on the fake clock.
+    // On a slow machine that can land after the test has let its timers end,
+    // and the test then fails with a timer still pending.
+    request.response.persistentConnection = false;
     final picture = _pictures[request.uri.path];
     if (picture == null) {
       request.response.statusCode = HttpStatus.notFound;
@@ -120,7 +125,7 @@ final class ChatImageDisk {
   /// Lets the timers of the download end, which a test must do before it ends.
   ///
   /// They run on the fake clock. The cache plans a cleanup 10 seconds after each
-  /// read, and the HTTP client drops an idle connection after 15 seconds.
+  /// read.
   ///
   /// The real loop goes first, and more than once, because the last steps of a
   /// download start those timers.
