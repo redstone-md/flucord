@@ -140,6 +140,10 @@ class MessageItem extends StatefulWidget {
 }
 
 class _MessageItemState extends State<MessageItem> {
+  /// The avatar's lane at the default font size. `12:59 PM` in the caption
+  /// size is 54 px wide in the bundled font.
+  static const _leadingLaneWidth = 60.0;
+
   bool _hovered = false;
   bool _reactionPickerOpen = false;
 
@@ -286,7 +290,7 @@ class _MessageItemState extends State<MessageItem> {
                     minHeight: MessageActionBar.height,
                   ),
                   padding: EdgeInsets.fromLTRB(
-                    20,
+                    6,
                     widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
                     20,
                     compact ? 4 : 5,
@@ -294,31 +298,39 @@ class _MessageItemState extends State<MessageItem> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // The lane holds the avatar, or on a grouped row the
+                      // clock. It fits the widest clock, `12:59 PM`, and grows
+                      // with the font dial, so the clock never wraps.
                       SizedBox(
-                        width: 38,
-                        child: widget.grouped
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: MessageTimeLabel(
-                                  widget.message.sentAt,
-                                  style: TextStyle(
-                                    color: context.surfaces.muted,
-                                    fontSize: FlucordType.caption,
+                        width: MediaQuery.textScalerOf(
+                          context,
+                        ).scale(_leadingLaneWidth),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: widget.grouped
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: MessageTimeLabel(
+                                    widget.message.sentAt,
+                                    style: TextStyle(
+                                      color: context.surfaces.muted,
+                                      fontSize: FlucordType.caption,
+                                    ),
+                                  ),
+                                )
+                              : _opensAuthorProfile(
+                                  key: const ValueKey('message-author-avatar'),
+                                  child: MemberAvatar(
+                                    member: widget.member,
+                                    size: 34,
+                                    spaceId: widget.workspace
+                                        .channelById(widget.message.channelId)
+                                        .spaceId,
                                   ),
                                 ),
-                              )
-                            : _opensAuthorProfile(
-                                key: const ValueKey('message-author-avatar'),
-                                child: MemberAvatar(
-                                  member: widget.member,
-                                  size: 34,
-                                  spaceId: widget.workspace
-                                      .channelById(widget.message.channelId)
-                                      .spaceId,
-                                ),
-                              ),
+                        ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: MessageMenuScope(
                           onOpen: (position) =>
