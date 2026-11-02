@@ -222,7 +222,12 @@ class _ReadyFriendDirectoryState extends State<_ReadyFriendDirectory> {
     LayerLink link,
   ) {
     final box = context.findRenderObject() as RenderBox?;
-    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final origin =
+        box?.localToGlobal(
+          Offset.zero,
+          ancestor: Overlay.of(context).context.findRenderObject(),
+        ) ??
+        Offset.zero;
     final centerY = origin.dy + (box?.size.height ?? 0) / 2;
     final viewport = MediaQuery.sizeOf(context);
     final maxProfileLeft = viewport.width <= 316 ? 8.0 : viewport.width - 308;

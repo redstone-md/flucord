@@ -213,7 +213,11 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.controller.load());
+    // Loading notifies at once, and the screen behind this dialog listens. It
+    // has to wait for the frame that is building now.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(widget.controller.load());
+    });
   }
 
   @override

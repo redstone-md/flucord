@@ -13,6 +13,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
@@ -22,6 +23,7 @@ import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
+import 'zoomed_app.dart';
 
 /// The whole app, in a real session, driven by raw gateway events (seam A).
 ///
@@ -58,6 +60,7 @@ final class SessionHarness {
     this._connector,
     this._diskDirectory,
     this._voiceMessageRecorder,
+    this._accessibility,
   );
 
   /// The account the default READY signs in.
@@ -84,6 +87,7 @@ final class SessionHarness {
   /// Where the cache lives when the test asked for `onDisk`.
   final Directory? _diskDirectory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
+  final AccessibilitySettings _accessibility;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
@@ -139,6 +143,7 @@ final class SessionHarness {
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
+        accessibilityRepository: FixedDials(_accessibility),
         chatRepositoryFactory: _FakeWireRepositoryFactory(
           transport,
           _connector,
@@ -287,6 +292,7 @@ final class SessionHarness {
 /// [voiceMessageRecorder] for the composer's voice message button, which only
 /// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
 /// memory, which a test of a relaunch or of the cache file needs.
+/// [accessibility] is what the zoom and font dials are set to at launch.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -295,6 +301,7 @@ void testSession(
   Size size = const Size(1440, 900),
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
+  AccessibilitySettings accessibility = AccessibilitySettings.off,
 }) {
   testWidgets(description, (tester) async {
     await tester.binding.setSurfaceSize(size);
@@ -311,6 +318,7 @@ void testSession(
       MemoryDesktopWebSocketConnector(),
       disk,
       voiceMessageRecorder,
+      accessibility,
     );
     try {
       await session._start(ready ?? SessionHarness.defaultReady());
