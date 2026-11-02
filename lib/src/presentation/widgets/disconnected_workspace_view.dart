@@ -29,30 +29,45 @@ final class DisconnectedWorkspaceView extends StatefulWidget {
 
 final class _DisconnectedWorkspaceViewState
     extends State<DisconnectedWorkspaceView> {
+  late final Listenable _signInChanges = Listenable.merge([
+    widget.connection,
+    widget.login,
+  ]);
+
+  /// The sign-in this screen started, while it is still opening. A sign-out
+  /// sets the sign-in back to idle as its last step, which can land while this
+  /// runs, and must not open a second one.
+  Future<void>? _opening;
+
   @override
   void initState() {
     super.initState();
-    widget.connection.addListener(_offerSignIn);
+    _signInChanges.addListener(_offerSignIn);
     _offerSignIn();
   }
 
   @override
   void dispose() {
-    widget.connection.removeListener(_offerSignIn);
+    _signInChanges.removeListener(_offerSignIn);
     super.dispose();
   }
 
   /// A new user gets the QR at once. Someone with a saved session gets Retry
   /// instead, and a sign-in that just failed keeps its error on screen.
   ///
-  /// It runs again on each change of the connection, because a sign-out shows
-  /// this screen before it has finished: the saved session goes last, once the
-  /// files of the account are off the disk.
+  /// It runs again on each change of the connection or the sign-in, because a
+  /// sign-out shows this screen before it has finished. The saved session goes
+  /// last, once the files of the account are off the disk, and a QR sign-in
+  /// only goes idle after that.
   void _offerSignIn() {
-    if (widget.connection.state == ConnectionActionState.idle &&
+    if (_opening == null &&
+        widget.connection.state == ConnectionActionState.idle &&
         !widget.connection.hasSavedCredential &&
         widget.login.state == DiscordDesktopLoginState.idle) {
-      unawaited(widget.login.start());
+      final opening = _opening = widget.login.start().whenComplete(
+        () => _opening = null,
+      );
+      unawaited(opening);
     }
   }
 

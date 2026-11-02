@@ -191,6 +191,27 @@ void main() {
     );
 
     testSession(
+      'signing out after a QR sign-in offers the QR again',
+      (tester, session) async {
+        session.remoteAuth.add(
+          DiscordRemoteAuthCompleted(DiscordDesktopUserSession(_savedToken)),
+        );
+        await session.connectToReady(SessionHarness.defaultReady());
+        expect(session.remoteAuth.starts, 1);
+
+        // The sign-in is still marked connected when the connection last
+        // changes, so the screen has to look again once the sign-in goes idle.
+        await session.signOut();
+        session.remoteAuth.add(const DiscordRemoteAuthQrReady('fingerprint'));
+        await session.settle();
+
+        expect(session.remoteAuth.starts, 2);
+        expect(find.byType(QrImageView), findsWidgets);
+      },
+      launch: SessionLaunch.signedOut,
+    );
+
+    testSession(
       'the sign-in screen fits a small window',
       (tester, session) async {
         session.remoteAuth.add(const DiscordRemoteAuthQrReady('fingerprint'));
