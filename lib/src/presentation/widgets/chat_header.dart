@@ -100,148 +100,20 @@ class ChatHeader extends StatelessWidget {
         builder: (context, constraints) {
           final showTopic = constraints.maxWidth >= 430;
           final showSearch = constraints.maxWidth >= 610;
+          // The controls take their full width first, then the title and the
+          // topic share what is left, the topic giving way first. The cap keeps
+          // the title readable in a narrow window, where the controls scroll.
           return Row(
             children: [
-              if (showCompactPicker)
-                PopupMenuButton<String>(
-                  tooltip: 'Choose channel',
-                  onSelected: onSelectChannel,
-                  itemBuilder: (context) => [
-                    for (final item in channels.where(
-                      (item) => !item.isArchived || item.id == channel.id,
-                    ))
-                      PopupMenuItem(
-                        value: item.id,
-                        child: Text('${_channelLabel(item)} ${item.name}'),
-                      ),
-                  ],
-                  icon: const Icon(Icons.menu),
-                )
-              else
-                Icon(_channelIcon(channel), size: 20),
-              const SizedBox(width: 9),
-              Flexible(
-                fit: FlexFit.loose,
-                child: Text(
-                  channel.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+              Expanded(child: _title(context, showTopic: showTopic)),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: (constraints.maxWidth - _minTitleWidth).clamp(
+                    0,
+                    constraints.maxWidth,
                   ),
                 ),
-              ),
-              if (showTopic) ...[
-                const SizedBox(width: 14),
-                Container(width: 1, height: 20, color: context.surfaces.border),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    channel.topic,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.surfaces.muted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ] else
-                const Spacer(),
-              if (threadMembership case final membership?) ...[
-                const SizedBox(width: 4),
-                membership,
-              ],
-              if (onToggleCall != null) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('toggle-call'),
-                  onPressed: onToggleCall,
-                  tooltip: callLabel ?? 'Start call',
-                  color: isInCall ? FlucordColors.danger : null,
-                  icon: Icon(isInCall ? Icons.call_end : Icons.call),
-                ),
-              ],
-              if (showVoiceSurfaces) ...[
-                const SizedBox(width: 8),
-                VoiceSurfaceSwitch(
-                  surface: voiceSurface,
-                  showLabels: showTopic,
-                  onChanged: onSelectVoiceSurface,
-                ),
-              ],
-              // Everything past here scrolls rather than overflows.
-              // There are up to five more controls and a search field,
-              // and a narrow window — or an open members panel — used
-              // to push the last one past the edge and stripe it
-              // yellow. The room's own switch stays out of it: a
-              // control that has to be scrolled to is one people do
-              // not find.
-              Flexible(
-                fit: FlexFit.loose,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  child: Row(
-                    children: [
-                      if (showsMessages && showSearch)
-                        SizedBox(
-                          width: 190,
-                          child: _SearchField(
-                            query: query,
-                            onChanged: onQueryChanged,
-                            onSubmitted: onSubmitQuery,
-                          ),
-                        ),
-                      const SizedBox(width: 4),
-                      InboxActivityButton(
-                        summary: inboxSummary,
-                        onPressed: onOpenInbox,
-                      ),
-                      if (allowThreadPanel) ...[
-                        const SizedBox(width: 4),
-                        IconButton(
-                          key: const ValueKey('toggle-threads'),
-                          onPressed: onToggleThreads,
-                          icon: Icon(
-                            showThreads ? Icons.forum : Icons.forum_outlined,
-                            size: 19,
-                          ),
-                          tooltip: showThreads ? 'Close threads' : 'Threads',
-                        ),
-                      ],
-                      // Pinning is absent from the voice text-chat permission set, so
-                      // the panel and its toggle stay out of a voice channel's chat.
-                      if (showsMessages &&
-                          channel.kind != ChannelKind.voice) ...[
-                        const SizedBox(width: 4),
-                        IconButton(
-                          key: const ValueKey('toggle-pins'),
-                          onPressed: onTogglePins,
-                          icon: Icon(
-                            showPins ? Icons.push_pin : Icons.push_pin_outlined,
-                            size: 19,
-                          ),
-                          tooltip: showPins
-                              ? 'Close pinned messages'
-                              : 'Pinned messages',
-                        ),
-                      ],
-                      if (allowMemberPanel) ...[
-                        const SizedBox(width: 4),
-                        IconButton(
-                          key: const ValueKey('toggle-members'),
-                          onPressed: onToggleMembers,
-                          icon: Icon(
-                            showMembers ? Icons.group : Icons.group_outlined,
-                          ),
-                          tooltip: showMembers
-                              ? 'Hide members'
-                              : 'Show members',
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                child: _controls(showTopic: showTopic, showSearch: showSearch),
               ),
             ],
           );
@@ -249,6 +121,147 @@ class ChatHeader extends StatelessWidget {
       ),
     );
   }
+
+  /// What the header keeps for the channel's icon and name.
+  static const _minTitleWidth = 120.0;
+
+  Widget _title(BuildContext context, {required bool showTopic}) => Row(
+    children: [
+      if (showCompactPicker)
+        PopupMenuButton<String>(
+          tooltip: 'Choose channel',
+          onSelected: onSelectChannel,
+          itemBuilder: (context) => [
+            for (final item in channels.where(
+              (item) => !item.isArchived || item.id == channel.id,
+            ))
+              PopupMenuItem(
+                value: item.id,
+                child: Text('${_channelLabel(item)} ${item.name}'),
+              ),
+          ],
+          icon: const Icon(Icons.menu),
+        )
+      else
+        Icon(_channelIcon(channel), size: 20),
+      const SizedBox(width: 9),
+      Flexible(
+        fit: FlexFit.loose,
+        child: Text(
+          channel.name,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+      ),
+      if (showTopic) ...[
+        const SizedBox(width: 14),
+        Container(width: 1, height: 20, color: context.surfaces.border),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            channel.topic,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          ),
+        ),
+      ],
+    ],
+  );
+
+  Widget _controls({required bool showTopic, required bool showSearch}) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (threadMembership case final membership?) ...[
+        const SizedBox(width: 4),
+        membership,
+      ],
+      if (onToggleCall != null) ...[
+        const SizedBox(width: 4),
+        IconButton(
+          key: const ValueKey('toggle-call'),
+          onPressed: onToggleCall,
+          tooltip: callLabel ?? 'Start call',
+          color: isInCall ? FlucordColors.danger : null,
+          icon: Icon(isInCall ? Icons.call_end : Icons.call),
+        ),
+      ],
+      if (showVoiceSurfaces) ...[
+        const SizedBox(width: 8),
+        VoiceSurfaceSwitch(
+          surface: voiceSurface,
+          showLabels: showTopic,
+          onChanged: onSelectVoiceSurface,
+        ),
+      ],
+      // Everything past here scrolls rather than overflows. There are up to
+      // five more controls and a search field, and a narrow window used to
+      // push the last one past the edge and stripe it yellow. The room's own
+      // switch stays out of it: a control that has to be scrolled to is one
+      // people do not find.
+      Flexible(
+        fit: FlexFit.loose,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          reverse: true,
+          child: Row(
+            children: [
+              if (showsMessages && showSearch)
+                SizedBox(
+                  width: 190,
+                  child: _SearchField(
+                    query: query,
+                    onChanged: onQueryChanged,
+                    onSubmitted: onSubmitQuery,
+                  ),
+                ),
+              const SizedBox(width: 4),
+              InboxActivityButton(
+                summary: inboxSummary,
+                onPressed: onOpenInbox,
+              ),
+              if (allowThreadPanel) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-threads'),
+                  onPressed: onToggleThreads,
+                  icon: Icon(
+                    showThreads ? Icons.forum : Icons.forum_outlined,
+                    size: 19,
+                  ),
+                  tooltip: showThreads ? 'Close threads' : 'Threads',
+                ),
+              ],
+              // Pinning is absent from the voice text-chat permission set, so
+              // the panel and its toggle stay out of a voice channel's chat.
+              if (showsMessages && channel.kind != ChannelKind.voice) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-pins'),
+                  onPressed: onTogglePins,
+                  icon: Icon(
+                    showPins ? Icons.push_pin : Icons.push_pin_outlined,
+                    size: 19,
+                  ),
+                  tooltip: showPins
+                      ? 'Close pinned messages'
+                      : 'Pinned messages',
+                ),
+              ],
+              if (allowMemberPanel) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const ValueKey('toggle-members'),
+                  onPressed: onToggleMembers,
+                  icon: Icon(showMembers ? Icons.group : Icons.group_outlined),
+                  tooltip: showMembers ? 'Hide members' : 'Show members',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 
   static String _channelLabel(ConversationChannel channel) {
     if (channel.isThread) return 'Post:';
@@ -313,7 +326,7 @@ class _SearchFieldState extends State<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    final field = TextField(
       key: const ValueKey('message-search'),
       controller: _controller,
       onChanged: widget.onChanged,
@@ -321,9 +334,7 @@ class _SearchFieldState extends State<_SearchField> {
       textInputAction: TextInputAction.search,
       style: const TextStyle(fontSize: 12),
       decoration: InputDecoration(
-        hintText: widget.onSubmitted == null
-            ? 'Search messages'
-            : 'Search — enter to search the server',
+        hintText: 'Search',
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         suffixIcon: _controller.text.isEmpty
@@ -339,5 +350,7 @@ class _SearchFieldState extends State<_SearchField> {
               ),
       ),
     );
+    if (widget.onSubmitted == null) return field;
+    return Tooltip(message: 'Press Enter to search the server', child: field);
   }
 }

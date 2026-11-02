@@ -36,6 +36,7 @@ import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/connection_dialog.dart';
+import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/guild_event_form_dialog.dart';
