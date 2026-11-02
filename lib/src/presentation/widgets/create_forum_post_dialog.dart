@@ -142,8 +142,11 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ForumDialogHeader(
-            isMedia: widget.channel.kind == ChannelKind.media,
+          FlucordDialogHeader(
+            title: 'Create a post',
+            icon: widget.channel.kind == ChannelKind.media
+                ? Icons.perm_media_outlined
+                : Icons.forum_outlined,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -291,38 +294,6 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
         ],
       ),
     ),
-  );
-}
-
-class _ForumDialogHeader extends StatelessWidget {
-  const _ForumDialogHeader({required this.isMedia, required this.onClose});
-
-  final bool isMedia;
-  final VoidCallback? onClose;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Icon(
-        isMedia ? Icons.perm_media_outlined : Icons.forum_outlined,
-        size: 18,
-      ),
-      const SizedBox(width: 8),
-      const Expanded(
-        child: Text(
-          'Create a post',
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      IconButton(
-        onPressed: onClose,
-        icon: const Icon(Icons.close, size: 18),
-        tooltip: 'Close',
-      ),
-    ],
   );
 }
 

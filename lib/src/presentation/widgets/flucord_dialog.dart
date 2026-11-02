@@ -76,3 +76,37 @@ class FlucordDialog extends StatelessWidget {
     );
   }
 }
+
+/// The title row of a [FlucordDialog.frame]: an optional [icon], the [title]
+/// in the dialog title style, and a close button. A null [onClose] shows the
+/// button disabled, for a dialog that is busy and must not close.
+class FlucordDialogHeader extends StatelessWidget {
+  const FlucordDialogHeader({
+    required this.title,
+    required this.onClose,
+    this.icon,
+    super.key,
+  });
+
+  final String title;
+  final VoidCallback? onClose;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      if (icon case final icon?) ...[
+        Icon(icon, size: 18),
+        const SizedBox(width: 8),
+      ],
+      Expanded(
+        child: Text(title, style: DialogTheme.of(context).titleTextStyle),
+      ),
+      IconButton(
+        onPressed: onClose,
+        icon: const Icon(Icons.close, size: 18),
+        tooltip: 'Close',
+      ),
+    ],
+  );
+}

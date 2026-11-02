@@ -109,7 +109,9 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PollDialogHeader(
+          FlucordDialogHeader(
+            title: 'Create a poll',
+            icon: Icons.poll_outlined,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -231,34 +233,6 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
         ],
       ),
     ),
-  );
-}
-
-class _PollDialogHeader extends StatelessWidget {
-  const _PollDialogHeader({required this.onClose});
-
-  final VoidCallback? onClose;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      const Icon(Icons.poll_outlined, size: 18),
-      const SizedBox(width: 8),
-      const Expanded(
-        child: Text(
-          'Create a poll',
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      IconButton(
-        onPressed: onClose,
-        icon: const Icon(Icons.close, size: 18),
-        tooltip: 'Close',
-      ),
-    ],
   );
 }
 

@@ -88,7 +88,9 @@ void main() {
 Future<void> _tapConfirm(WidgetTester tester) async {
   final button = find.byKey(const ValueKey('create-forum-post-confirm'));
   await tester.ensureVisible(button);
-  await tester.pump();
+  // A field that took focus scrolls itself into view, and a scroll in motion
+  // takes no taps.
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pump();
 }

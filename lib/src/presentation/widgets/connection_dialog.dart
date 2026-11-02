@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../theme/flucord_theme.dart';
-import '../../theme/flucord_type.dart';
 import 'developer_bot_transport_section.dart';
 import 'discord_account_connection_scope.dart';
 import 'discord_desktop_login_section.dart';
@@ -34,7 +33,13 @@ class ConnectionDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _DialogHeader(onClose: () => Navigator.of(context).pop()),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+                child: FlucordDialogHeader(
+                  title: 'Connections',
+                  onClose: () => Navigator.of(context).pop(),
+                ),
+              ),
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
@@ -69,40 +74,6 @@ class ConnectionDialog extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogHeader extends StatelessWidget {
-  const _DialogHeader({required this.onClose});
-
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 54,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 20, right: 8),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Connections',
-                style: TextStyle(
-                  fontSize: FlucordType.body,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: onClose,
-              icon: const Icon(Icons.close),
-              tooltip: 'Close',
-            ),
-          ],
         ),
       ),
     );

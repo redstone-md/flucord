@@ -70,7 +70,9 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _DialogHeader(
+          FlucordDialogHeader(
+            title: 'Create thread',
+            icon: Icons.forum_outlined,
             onClose: _isCreating ? null : () => Navigator.pop(context),
           ),
           const SizedBox(height: 16),
@@ -159,34 +161,6 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
         ],
       ),
     ),
-  );
-}
-
-class _DialogHeader extends StatelessWidget {
-  const _DialogHeader({required this.onClose});
-
-  final VoidCallback? onClose;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      const Icon(Icons.forum_outlined, size: 18),
-      const SizedBox(width: 8),
-      const Expanded(
-        child: Text(
-          'Create thread',
-          style: TextStyle(
-            fontSize: FlucordType.body,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      IconButton(
-        onPressed: onClose,
-        icon: const Icon(Icons.close, size: 18),
-        tooltip: 'Close',
-      ),
-    ],
   );
 }
 
