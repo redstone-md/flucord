@@ -235,14 +235,16 @@ final class DiscordApiClient {
   Future<Map<String, Object?>> _createMultipartObject(
     String path,
     Map<String, Object?> payload,
-    List<PendingAttachment> attachments,
-  ) async {
+    List<PendingAttachment> attachments, {
+    bool guardedByNonce = false,
+  }) async {
     final multipart = await DiscordMultipartBody.build(payload, attachments);
     final response = await _request(
       'POST',
       path,
       rawBody: multipart.bytes,
       contentType: multipart.contentType,
+      guardedByNonce: guardedByNonce,
     );
     if (response is! Map) {
       throw const DiscordApiException(
@@ -279,8 +281,15 @@ final class DiscordApiClient {
     String path, {
     Map<String, String>? query,
     Map<String, Object?>? body,
+    bool guardedByNonce = false,
   }) async {
-    return _rest.requestObject(method, path, query: query, body: body);
+    return _rest.requestObject(
+      method,
+      path,
+      query: query,
+      body: body,
+      guardedByNonce: guardedByNonce,
+    );
   }
 
   Future<void> _requestEmpty(String method, String path) async {
@@ -294,6 +303,7 @@ final class DiscordApiClient {
     Map<String, Object?>? body,
     List<int>? rawBody,
     String contentType = 'application/json',
+    bool guardedByNonce = false,
   }) => _rest.request(
     method,
     path,
@@ -301,6 +311,7 @@ final class DiscordApiClient {
     body: body,
     rawBody: rawBody,
     contentType: contentType,
+    guardedByNonce: guardedByNonce,
   );
 
   void close() => _rest.close();
