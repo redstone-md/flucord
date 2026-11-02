@@ -36,6 +36,7 @@ import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
 import 'widgets/connection_dialog.dart';
+import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
 import 'widgets/direct_message_views.dart';
 import 'widgets/guild_event_form_dialog.dart';
@@ -143,7 +144,16 @@ class FlucordShell extends StatelessWidget {
 
   Widget _buildWorkspace(BuildContext context, ChatWorkspace workspace) {
     if (workspace.spaces.isEmpty) return _buildEmptyWorkspace(context);
+    final previousChannelId = workspaceController.selectedChannelId;
     workspaceController.reconcile(workspace);
+    final landedChannelId = workspaceController.selectedChannelId;
+    if (landedChannelId != null && landedChannelId != previousChannelId) {
+      // The channel on screen went away, so the one in its place needs opening,
+      // as a click would. That notifies, so it cannot run during this build.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(chatController.openChannel(landedChannelId)),
+      );
+    }
     return ListenableBuilder(
       listenable: connectionController,
       builder: (context, _) {
@@ -318,22 +328,13 @@ class FlucordShell extends StatelessWidget {
                                   // A voice connection outlives the room view, so
                                   // leaving it has to stay reachable from wherever
                                   // the user has navigated to since.
-                                  // Rebuilt from the voice controller rather than
-                                  // with the rest of the shell: joining a channel is
-                                  // not a workspace change, and the strip used to
-                                  // appear only when something else happened to
-                                  // redraw the sidebar.
-                                  voiceConnectionBar: ListenableBuilder(
-                                    listenable: voiceController,
-                                    builder: (_, _) => VoiceConnectionBar(
-                                      controller: voiceController,
-                                      camera: selfVideoController,
-                                      channelNameFor: (id) => channels
-                                          .where((channel) => channel.id == id)
-                                          .map((channel) => channel.name)
-                                          .firstOrNull,
-                                      onOpenChannel: _selectChannel,
-                                    ),
+                                  voiceConnectionBar: VoiceConnectionBar(
+                                    controller: voiceController,
+                                    camera: selfVideoController,
+                                    channelNameFor: (id) =>
+                                        _channelOf(id)?.name,
+                                    serverNameFor: _serverNameOf,
+                                    onOpenChannel: _openVoiceRoom,
                                   ),
                                   channels: channels,
                                   selectedChannelId: channelId,

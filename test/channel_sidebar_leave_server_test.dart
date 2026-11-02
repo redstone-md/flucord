@@ -55,8 +55,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('leave-server')));
-    await tester.pumpAndSettle();
+    await _chooseFromServerMenu(tester, 'leave-server');
 
     // The confirmation names the server and what disappears with it.
     expect(find.byKey(const ValueKey('leave-server-dialog')), findsOneWidget);
@@ -74,8 +73,7 @@ void main() {
     expect(find.byKey(const ValueKey('leave-server-dialog')), findsNothing);
 
     // Confirming answers yes, and the shell carries the leave from there.
-    await tester.tap(find.byKey(const ValueKey('leave-server')));
-    await tester.pumpAndSettle();
+    await _chooseFromServerMenu(tester, 'leave-server');
     await tester.tap(find.byKey(const ValueKey('leave-server-confirm')));
     await tester.pumpAndSettle();
     expect(confirmed, isTrue);
@@ -109,8 +107,63 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('leave-server')), findsNothing);
+    expect(find.byKey(const ValueKey('space-menu')), findsNothing);
   });
+
+  testWidgets('the header gives the name room and one menu for its actions', (
+    tester,
+  ) async {
+    final workspace = _workspace();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.dark,
+        home: Scaffold(
+          body: ChannelSidebar(
+            space: workspace.spaces.single,
+            channels: workspace.channels,
+            selectedChannelId: 'forge-general',
+            onSelectChannel: (_) {},
+            sessionMode: SessionMode.demo,
+            connectionStatus: RepositoryConnectionStatus.connected,
+            categories: const [],
+            currentMember: workspace.memberById('jack'),
+            memberOf: workspace.memberOrNull,
+            channelOf: workspace.channelOrNull,
+            collapsedCategoryIds: const {},
+            onToggleCategory: (_) {},
+            onNewDirectMessage: () {},
+            readState: ReadStateSnapshot.empty,
+            onOpenServerSettings: () {},
+            onLeaveServer: () {},
+            onReportServer: () {},
+            onNotificationRequest: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    // The sidebar is 236 wide: this is everything but its padding and the
+    // menu's arrow.
+    expect(tester.getSize(find.text('The Forge')).width, greaterThan(170));
+
+    await tester.tap(find.byKey(const ValueKey('space-menu')));
+    await tester.pumpAndSettle();
+    for (final label in const [
+      'Server settings',
+      'Notification settings',
+      'Report server',
+      'Leave server',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+  });
+}
+
+Future<void> _chooseFromServerMenu(WidgetTester tester, String item) async {
+  await tester.tap(find.byKey(const ValueKey('space-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey(item)));
+  await tester.pumpAndSettle();
 }
 
 ChatWorkspace _workspace() => ChatWorkspace(

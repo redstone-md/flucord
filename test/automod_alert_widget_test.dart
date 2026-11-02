@@ -152,6 +152,7 @@ const _readOnly = ChannelCapabilities(
   attachFiles: true,
   embedLinks: true,
   moderateStage: false,
+  bypassesSlowmode: false,
 );
 
 final _workspace = ChatWorkspace(

@@ -331,8 +331,11 @@ final class DiscordStreamRtcService {
         'giving up after $maxRecoveries re-issued credentials',
         key.userId,
       );
-      // The watch cannot go on a connection that keeps dying: the close is
-      // news to the router, and the watch ends with it.
+      // The watch cannot go on a connection that keeps dying. It may never have
+      // reached ready, so nothing else would tell the room that it failed.
+      _held[key.value]?.session.reportFailure(
+        StateError('Discord kept ending the stream connection'),
+      );
       unawaited(_drop(key, endsTheWatch: true));
       return;
     }

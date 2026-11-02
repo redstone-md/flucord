@@ -64,6 +64,9 @@ final class DiscordVoiceSignalingService
   final Map<VoiceSessionKey, int> _generations = {};
   final Map<VoiceSessionKey, DiscordVoiceClient> _clients = {};
 
+  /// The client start running for each session. The next one waits for it.
+  final Map<VoiceSessionKey, Future<void>> _clientStarts = {};
+
   /// What each session's client last reported, so a join into a channel this
   /// service already wants can tell a live connection from a dead one.
   final Map<VoiceSessionKey, VoiceConnectionStatus> _lastStatuses = {};
@@ -209,6 +212,9 @@ final class DiscordVoiceSignalingService
       // server-side, Discord answers it with silence, and the only way out is
       // the leave-and-rejoin cycle below.
       if (_isStuck(key)) {
+        // Stored first: the cycle repeats what was last asked for, and this
+        // press is the newest choice.
+        _lastFlags[key] = (mute: selfMute, deaf: selfDeaf, video: selfVideo);
         _forcedReissues.remove(key);
         _pingedSessions.add(key);
         _forceReissue(key);
@@ -364,7 +370,7 @@ final class DiscordVoiceSignalingService
     _currentSessionId = credentials.sessionId;
     final key = credentials.sessionKey;
     if (_desiredChannels[key] != credentials.channelId) return;
-    unawaited(_startVoiceClient(credentials, _generations[key] ?? 0));
+    _queueVoiceClient(credentials);
   }
 
   /// Pokes the main gateway when a voice socket drops but intends to come back.
@@ -446,10 +452,13 @@ final class DiscordVoiceSignalingService
   /// Whether the session's connection is one a join into the same channel
   /// has to revive rather than re-announce. A status of null means no client
   /// has reported anything yet: the first pairing is still in flight.
+  ///
+  /// `reconnecting` is not stuck. The client is still working, and the wait in
+  /// [_scheduleReissueFallback] already covers it failing to come back: a mute
+  /// pressed meanwhile must not make the room see this account leave and
+  /// return.
   bool _isStuck(VoiceSessionKey key) => switch (_lastStatuses[key]) {
-    VoiceConnectionStatus.reconnecting ||
-    VoiceConnectionStatus.failure ||
-    VoiceConnectionStatus.disconnected => true,
+    VoiceConnectionStatus.failure || VoiceConnectionStatus.disconnected => true,
     _ => false,
   };
 
@@ -504,35 +513,80 @@ final class DiscordVoiceSignalingService
     _scheduleReissueFallback(key);
   }
 
+  /// Queues the client for [credentials] behind any start running for its
+  /// session.
+  ///
+  /// Two arrivals in one batch would otherwise overlap. The second finds the
+  /// first still closing the old client, so both go on to build one. The map
+  /// holds only one of them, and the other keeps playing and reporting with
+  /// nothing left to close it.
+  ///
+  /// The newest credentials take the generation, so a start still waiting
+  /// gives way to them instead of dialling a client only to close it.
+  void _queueVoiceClient(VoiceServerCredentials credentials) {
+    final key = credentials.sessionKey;
+    final generation = (_generations[key] ?? 0) + 1;
+    _generations[key] = generation;
+    final queued = _clientStarts[key] ?? Future<void>.value();
+    final start = queued.then(
+      (_) => _startVoiceClient(credentials, generation),
+    );
+    _clientStarts[key] = start;
+    unawaited(
+      start.whenComplete(() {
+        if (identical(_clientStarts[key], start)) _clientStarts.remove(key);
+      }),
+    );
+  }
+
   Future<void> _startVoiceClient(
     VoiceServerCredentials credentials,
     int generation,
   ) async {
     final key = credentials.sessionKey;
-    await _closeClient(key);
-    if (_closed ||
-        generation != _generations[key] ||
-        _desiredChannels[key] != credentials.channelId) {
-      return;
-    }
-    // Fresh credentials are the recovery's answer: the fallback that would
-    // force another cycle stands down.
-    _reissueTimers.remove(key)?.cancel();
-    final client = _socketFactory.callSocket(credentials);
-    _clients[key] = client;
-    _clientSubscriptions[key] = client.events.listen(
-      (event) => _onClientEvent(key, event),
-    );
-    if (client case final VoiceAudioTransport audioTransport) {
-      _audioSubscriptions[key] = audioTransport.remoteAudio.listen(
-        _emitRemoteAudio,
-        onError: _remoteAudio.addError,
+    try {
+      await _closeClient(key);
+      if (_closed ||
+          generation != _generations[key] ||
+          _desiredChannels[key] != credentials.channelId) {
+        return;
+      }
+      // Fresh credentials are the recovery's answer: the fallback that would
+      // force another cycle stands down.
+      _reissueTimers.remove(key)?.cancel();
+      final client = _socketFactory.callSocket(credentials);
+      _clients[key] = client;
+      _clientSubscriptions[key] = client.events.listen(
+        (event) => _onClientEvent(key, event),
+      );
+      if (client case final VoiceAudioTransport audioTransport) {
+        _audioSubscriptions[key] = audioTransport.remoteAudio.listen(
+          _emitRemoteAudio,
+          onError: _remoteAudio.addError,
+        );
+      }
+      _emit(VoiceCredentialsReadyEvent(credentials));
+      // Not awaited: a slow dial must not hold up newer credentials. Closing
+      // the client ends the dial.
+      unawaited(_connectVoiceClient(key, client));
+    } on Object catch (error) {
+      // A throw must not reach the queue, or every later start is lost.
+      if (generation != _generations[key]) return;
+      _emit(
+        VoiceSignalingStatusEvent(VoiceConnectionStatus.failure, error: error),
       );
     }
-    _emit(VoiceCredentialsReadyEvent(credentials));
+  }
+
+  Future<void> _connectVoiceClient(
+    VoiceSessionKey key,
+    DiscordVoiceClient client,
+  ) async {
     try {
       await client.connect();
-    } catch (error) {
+    } on Object catch (error) {
+      // A client that was replaced or left no longer speaks for the session.
+      if (!identical(_clients[key], client)) return;
       _emit(
         VoiceSignalingStatusEvent(VoiceConnectionStatus.failure, error: error),
       );

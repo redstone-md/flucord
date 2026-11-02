@@ -6,16 +6,26 @@ extension _ChatControllerEvents on ChatController {
       switch (event) {
         case MessageUpsertedEvent():
           _handleMessageUpsert(event);
+        case MessageReactionChangedEvent(:final change):
+          _workspace = _workspace?.updateMessage(
+            change.messageId,
+            change.applyTo,
+          );
         case MessageDeletedEvent():
           _workspace = _workspace?.removeMessage(event.messageId);
+        case MessagesDeletedEvent():
+          _workspace = _workspace?.removeMessages(event.messageIds);
         case ChannelUpsertedEvent():
           _workspace = _workspace?.upsertChannel(event.channel);
         case CategoryUpsertedEvent():
           _workspace = _workspace?.upsertCategory(event.category);
         case SpaceUpsertedEvent():
           _workspace = _workspace?.upsertSpace(event.space);
+        case GuildGainedEvent():
+          _workspace = _workspace?.mergeGuild(event.guild);
+          _applyReadState();
         case SpaceRemovedEvent():
-          _workspace = _workspace?.removeSpace(event.spaceId);
+          _workspace = _workspace?.removeGuild(event.spaceId);
         case GuildEmojisReplacedEvent():
           _workspace = _workspace?.replaceGuildEmojis(
             event.spaceId,
@@ -127,6 +137,10 @@ extension _ChatControllerEvents on ChatController {
       // the user is looking at is read the moment it arrives.
       acknowledgeChannel(message.channelId);
       return;
+    }
+    if (_boundaryAwaitsNewMessage && message.channelId == _activeChannelId) {
+      _boundaryAwaitsNewMessage = false;
+      _workspace = _workspace?.clearChannelUnreadBoundary(message.channelId);
     }
     // The local mark stays: it is the whole unread model on a transport with no
     // read state, and on one that has read state the projection below simply

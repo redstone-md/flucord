@@ -5,6 +5,7 @@ import '../../application/connection_controller.dart';
 import '../../application/discord_desktop_login_controller.dart';
 import '../../domain/discord_session.dart';
 import '../../theme/flucord_theme.dart';
+import 'destructive_confirmation.dart';
 import 'discord_hcaptcha_panel.dart';
 
 final class DiscordDesktopLoginSection extends StatelessWidget {
@@ -43,7 +44,7 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
           const SizedBox(height: 14),
           if (connected)
             FilledButton.icon(
-              onPressed: controller.isBusy ? null : controller.disconnect,
+              onPressed: controller.isBusy ? null : () => _signOut(context),
               icon: const Icon(Icons.logout, size: 18),
               label: const Text('Sign out'),
             )
@@ -52,6 +53,16 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Sign out of Discord?',
+      message: 'You will have to scan a new QR code to sign back in.',
+      confirmLabel: 'Sign out',
+    );
+    if (confirmed) await controller.disconnect();
   }
 }
 

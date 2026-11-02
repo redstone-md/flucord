@@ -31,7 +31,7 @@ class AppearanceSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'Theme',
-          description: 'The palette every surface is built from.',
+          description: 'The colours the whole app is drawn with.',
           support: UserSettingSupport.applied,
           note: appearance.theme.isRenderable
               ? null
@@ -71,7 +71,7 @@ class AppearanceSettingsSection extends StatelessWidget {
         ),
         SettingRow(
           title: 'Developer mode',
-          description: 'Discord\'s copy-id menus.',
+          description: 'Adds Copy ID to Discord\'s menus.',
           support: UserSettingSupport.unavailable,
           child: SettingSwitch.readOnly(
             key: const ValueKey('setting-developer-mode'),

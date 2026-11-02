@@ -18,8 +18,6 @@ import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/streamer_mode.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
-import 'package:flucord/src/domain/video_encoder.dart';
-import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/platform/voice_overlay.dart';
 
@@ -173,18 +171,18 @@ void main() {
       signalingServiceProvider: () => signaling,
     );
     final encoder = FakeVideoEncoder();
-    final transport = _FakeSelfVideoTransport();
+    final transport = StreamRoomCameraTransport();
     final camera = SelfVideoController(
       capture: VideoCaptureHub(encoder: encoder),
       transportProvider: () => transport,
       sinkProvider: () => transport.send,
       isVoiceReady: () => voice.connectionStatus == VoiceConnectionStatus.ready,
-      announceSelfVideo: ({required bool enabled}) async => true,
+      announceSelfVideo: voice.setCameraAnnounced,
     );
     addTearDown(camera.dispose);
     final room = _buildRoom(voice: voice, selfVideo: camera);
     addTearDown(room.dispose);
-    await voice.refreshSignalingService();
+    await voice.connect(guildId: 'guild-1', channelId: 'voice-1');
     await camera.turnOn();
     expect(camera.isOn, isTrue);
 
@@ -403,32 +401,16 @@ class _CountingVoiceOverlay implements VoiceOverlay {
   void close() {}
 }
 
-/// The voice side of the camera: declares SSRCs, takes pictures.
-class _FakeSelfVideoTransport implements VoiceVideoTransport {
-  final List<bool> announcements = [];
-
-  @override
-  int? get audioSsrc => 40;
-
-  int send(DiscordRtpFrame frame) => frame.payload.length;
-
-  @override
-  bool announceVideo({
-    required bool enabled,
-    required VideoEncoderSettings settings,
-  }) {
-    announcements.add(enabled);
-    return true;
-  }
-}
-
 class _FakeGoLiveRepository implements GoLiveRepository {
   final StreamController<GoLiveStream> _updates = StreamController.broadcast();
 
-  void announce(GoLiveStream stream) => _updates.add(stream);
+  void announce(GoLiveStream stream) {
+    streams[stream.key.value] = stream;
+    _updates.add(stream);
+  }
 
   @override
-  Map<String, GoLiveStream> get streams => const {};
+  final Map<String, GoLiveStream> streams = {};
 
   @override
   Stream<GoLiveStream> get updates => _updates.stream;

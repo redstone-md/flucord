@@ -225,26 +225,15 @@ extension _FlucordShellNavigation on FlucordShell {
     BuildContext context,
     GuildScheduledEvent event,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('guild-event-delete-confirm'),
-        title: const Text('Delete this event?'),
-        content: Text('${event.name} will be removed for everybody.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('guild-event-delete-accept'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete this event?',
+      message: '${event.name} will be removed for everybody.',
+      confirmLabel: 'Delete',
+      dialogKey: const ValueKey('guild-event-delete-confirm'),
+      confirmKey: const ValueKey('guild-event-delete-accept'),
     );
-    if (confirmed ?? false) await chatController.deleteScheduledEvent(event);
+    if (confirmed) await chatController.deleteScheduledEvent(event);
   }
 
   /// Opens the server-settings window for [space].
@@ -378,28 +367,16 @@ extension _FlucordShellNavigation on FlucordShell {
   Future<void> _blockMember(BuildContext context, Member member) async {
     final repository = chatController.moderation;
     if (repository == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('block-member-dialog'),
-        title: Text('Block ${member.displayName}?'),
-        content: const Text(
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Block ${member.displayName}?',
+      message:
           'You will stop seeing their messages and they cannot message you.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const ValueKey('block-member-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Block'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Block',
+      dialogKey: const ValueKey('block-member-dialog'),
+      confirmKey: const ValueKey('block-member-confirm'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       await repository.blockUser(member.id);
     } on Object {
@@ -422,6 +399,25 @@ extension _FlucordShellNavigation on FlucordShell {
   void _selectChannel(String channelId, {VoiceChannelSurface? voiceSurface}) {
     workspaceController.selectChannel(channelId, surface: voiceSurface);
     unawaited(chatController.openChannel(channelId));
+  }
+
+  /// Walks back to the Room the account is connected to, from any server and
+  /// from the channel's chat.
+  void _openVoiceRoom(String channelId) {
+    final channel = _channelOf(channelId);
+    if (channel == null) return;
+    _openDestination(
+      spaceId: channel.spaceId,
+      channelId: channelId,
+      voiceSurface: VoiceChannelSurface.room,
+    );
+  }
+
+  /// The name of the server [channelId] is in, or null for a call.
+  String? _serverNameOf(String channelId) {
+    final guildId = _channelOf(channelId)?.guildId;
+    if (guildId == null) return null;
+    return chatController.workspace?.spaceOrNull(guildId)?.name;
   }
 
   /// Looks a member up in the workspace as it stands.

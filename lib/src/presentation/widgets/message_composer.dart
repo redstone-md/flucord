@@ -39,7 +39,7 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelId,
     required this.channelName,
-    this.channelIsVoice = false,
+    this.channelHintPrefix = '#',
     required this.spaceName,
     required this.emojiSections,
     required this.stickerSections,
@@ -70,9 +70,9 @@ class MessageComposer extends StatefulWidget {
   final String channelId;
   final String channelName;
 
-  /// A voice channel's chat is not addressed with a hash, because the
-  /// channel is not a text channel and `#name` would not resolve to it.
-  final bool channelIsVoice;
+  /// What stands before the channel's name in the box's hint: `#` for a text
+  /// channel, `@` for a person, nothing where `#name` would not resolve.
+  final String channelHintPrefix;
   final String spaceName;
 
   /// Every server's emoji, the space this channel lives in first. The picker
@@ -115,8 +115,8 @@ class MessageComposer extends StatefulWidget {
   final Duration slowmode;
 
   /// When slowmode lets this account send again, or null while it does not
-  /// hold them. Fed by the surface that owns the last-send time, which is the
-  /// channel model plus the composer's own successful sends.
+  /// hold them. Until then nothing goes out from here: the server would only
+  /// refuse it.
   final DateTime? slowmodeUntil;
 
   /// The longest message this account may type here, in characters. Fed from
@@ -141,10 +141,15 @@ class _MessageComposerState extends State<MessageComposer>
   bool _suppressNotifications = false;
   int _charactersUsed = 0;
   bool get _canSend =>
-      (_hasContent || _attachments.isNotEmpty) && !_isOverCharacterLimit;
+      (_hasContent || _attachments.isNotEmpty) &&
+      !_isOverCharacterLimit &&
+      !_isHeldBySlowmode;
 
   @override
   bool get _hasRegularMessageContent => _canSend;
+
+  @override
+  bool get _isHeldBySlowmode => _slowmodeRemaining != null;
 
   /// How many characters the typed message still has room for. Counted by
   /// characters rather than the string's code units, because Discord counts
@@ -264,27 +269,40 @@ class _MessageComposerState extends State<MessageComposer>
         remaining.inSeconds +
         (remaining.inMilliseconds.remainder(1000) > 0 ? 1 : 0);
     if (seconds >= 60) {
-      final minutes = seconds ~/ 60;
-      final rest = seconds % 60;
-      return rest == 0 ? '$minutes:00' : '$minutes:$rest';
+      final rest = (seconds % 60).toString().padLeft(2, '0');
+      return '${seconds ~/ 60}:$rest';
     }
     return '$seconds';
   }
 
-  Widget _slowmodeNotice(Duration remaining) => Padding(
-    key: const ValueKey('composer-slowmode-countdown'),
+  /// One line of small text above the field.
+  Widget _composerNotice({
+    required Key key,
+    required IconData icon,
+    required String text,
+  }) => Padding(
+    key: key,
     padding: const EdgeInsets.only(left: 14, bottom: 4),
     child: Row(
       children: [
-        Icon(Icons.timer_outlined, size: 13, color: context.surfaces.muted),
+        Icon(icon, size: 13, color: context.surfaces.muted),
         const SizedBox(width: 5),
-        Text(
-          'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
-          'before sending again.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          ),
         ),
       ],
     ),
+  );
+
+  Widget _slowmodeNotice(Duration remaining) => _composerNotice(
+    key: const ValueKey('composer-slowmode-countdown'),
+    icon: Icons.timer_outlined,
+    text:
+        'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
+        'before sending again.',
   );
 
   Future<void> _pickAttachments() async {
@@ -345,16 +363,42 @@ class _MessageComposerState extends State<MessageComposer>
     );
   });
 
-  Future<void> _send() async {
-    if (!_canSend || widget.isSending) return;
-    final sent = await widget.onSend(
-      _controller.text,
-      _attachments.items,
-      widget.replyTo?.id,
-      _suppressNotifications,
+  /// Whether a slash in the box took the send, rather than the text going out.
+  ///
+  /// The text waits while the list is still looking, because `/ban` must not
+  /// post just because Enter beat the answer. A slash no command matches is
+  /// ordinary text, as it is in Discord.
+  bool _runTypedCommand() {
+    final commands = widget.slashCommands;
+    if (commands == null || !commands.isSupported || !commands.isOpen) {
+      return false;
+    }
+    if (commands.isLoading || commands.isSending) return true;
+    final command = commands.commands.firstOrNull;
+    if (command == null) return false;
+    unawaited(
+      SlashCommandList.run(
+        context,
+        controller: commands,
+        command: command,
+        onPicked: _clearComposer,
+      ),
     );
-    if (!mounted || !sent) return;
+    return true;
+  }
+
+  Future<void> _send() async {
+    if (!_canSend || widget.isSending || _runTypedCommand()) return;
+    final channelId = widget.channelId;
+    final text = _controller.text;
+    final attachments = _attachments.items;
+    final silent = _suppressNotifications;
+    final send = widget.onSend(text, attachments, widget.replyTo?.id, silent);
+    // The box empties on the press, not on the answer, so whatever is typed
+    // while the request runs belongs to the next message.
     _controller.clear();
+    // Clearing from code does not reach the field's onChanged.
+    widget.slashCommands?.close();
     setState(() {
       _hasContent = false;
       _charactersUsed = 0;
@@ -362,12 +406,39 @@ class _MessageComposerState extends State<MessageComposer>
       _suppressNotifications = false;
     });
     _focusNode.requestFocus();
+    final sent = await send;
+    if (sent || !mounted || widget.channelId != channelId) return;
+    _restoreFailedSend(text, attachments, silent);
+  }
+
+  /// Puts a failed send back without overwriting anything: text typed since
+  /// then is the user's newer work and stays, while the files can join it.
+  void _restoreFailedSend(
+    String text,
+    List<PendingAttachment> attachments,
+    bool silent,
+  ) {
+    final restoresText = !_hasContent;
+    if (restoresText) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    setState(() {
+      if (restoresText) {
+        _hasContent = text.trim().isNotEmpty;
+        _charactersUsed = text.characters.length;
+        _suppressNotifications = silent;
+      }
+      _attachments.merge(attachments);
+    });
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
   /// a send action, not a way to paste a link into a half-written message.
   Future<void> _sendGif(String url) async {
-    if (widget.isSending) return;
+    if (widget.isSending || _isHeldBySlowmode) return;
     await widget.onSend(
       url,
       const [],
@@ -430,6 +501,13 @@ class _MessageComposerState extends State<MessageComposer>
             ),
           if (_slowmodeRemaining case final remaining?)
             _slowmodeNotice(remaining),
+          // The switch lives in a closed menu, so its state shows here.
+          if (_suppressNotifications)
+            _composerNotice(
+              key: const ValueKey('composer-silent-notice'),
+              icon: Icons.notifications_off_outlined,
+              text: 'This message will send without notifications.',
+            ),
           if (widget.replyTo != null) _replyBar(context),
           if (_attachments.isNotEmpty) ...[
             PendingAttachmentStrip(
@@ -487,9 +565,8 @@ class _MessageComposerState extends State<MessageComposer>
                     }
                   },
                   decoration: InputDecoration(
-                    hintText: widget.channelIsVoice
-                        ? 'Message ${widget.channelName}'
-                        : 'Message #${widget.channelName}',
+                    hintText:
+                        'Message ${widget.channelHintPrefix}${widget.channelName}',
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
                     // Square top corners under the reply bar, so the two read
                     // as one surface. Null elsewhere keeps the theme's rounded
@@ -512,23 +589,7 @@ class _MessageComposerState extends State<MessageComposer>
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
-                    prefixIcon: widget.canAttachFiles
-                        ? IconButton(
-                            key: const ValueKey('add-attachment'),
-                            onPressed: widget.isSending
-                                ? null
-                                : _pickAttachments,
-                            icon: const Icon(
-                              Icons.add_circle_outline,
-                              size: 20,
-                            ),
-                            tooltip: 'Add attachment',
-                          )
-                        : null,
-                    suffixIconConstraints: const BoxConstraints.tightFor(
-                      width: 240,
-                      height: 48,
-                    ),
+                    prefixIcon: _composerMenu(),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -552,47 +613,9 @@ class _MessageComposerState extends State<MessageComposer>
                           ),
                         StickerPickerButton(
                           sections: widget.stickerSections,
-                          isSending: widget.isSending,
+                          isSending: widget.isSending || _isHeldBySlowmode,
                           onSend: widget.onSendStickers,
                           favorites: widget.expressionFavorites,
-                        ),
-                        IconButton(
-                          key: const ValueKey('create-poll'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: widget.isSending ? null : _showPollDialog,
-                          icon: const Icon(Icons.poll_outlined, size: 19),
-                          tooltip: 'Create poll',
-                        ),
-                        IconButton(
-                          key: const ValueKey('send-silently'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          isSelected: _suppressNotifications,
-                          onPressed: widget.isSending
-                              ? null
-                              : () => setState(
-                                  () => _suppressNotifications =
-                                      !_suppressNotifications,
-                                ),
-                          icon: const Icon(
-                            Icons.notifications_outlined,
-                            size: 19,
-                          ),
-                          selectedIcon: const Icon(
-                            Icons.notifications_off_outlined,
-                            size: 19,
-                            color: FlucordColors.brand,
-                          ),
-                          tooltip: _suppressNotifications
-                              ? 'Send with notifications'
-                              : 'Send silently',
                         ),
                         // The two send buttons share one key, so a disabled
                         // send updates in place; only the spinner and the
@@ -672,6 +695,59 @@ class _MessageComposerState extends State<MessageComposer>
         ],
       ],
     ),
+  );
+
+  /// The button at the start of the field: uploads, polls and silent send.
+  ///
+  /// Without `ATTACH_FILES` it holds no upload and stops looking like an
+  /// attach button, while polls and silent send stay in reach.
+  Widget _composerMenu() => PopupMenuButton<_ComposerMenuAction>(
+    key: const ValueKey('composer-menu'),
+    enabled: !widget.isSending,
+    tooltip: 'More options',
+    icon: Icon(
+      widget.canAttachFiles ? Icons.add_circle_outline : Icons.more_horiz,
+      size: 20,
+    ),
+    onSelected: (action) => switch (action) {
+      _ComposerMenuAction.attach => unawaited(_pickAttachments()),
+      _ComposerMenuAction.poll => _showPollDialog(),
+      _ComposerMenuAction.silent => setState(
+        () => _suppressNotifications = !_suppressNotifications,
+      ),
+    },
+    itemBuilder: (_) => [
+      if (widget.canAttachFiles)
+        const PopupMenuItem(
+          key: ValueKey('add-attachment'),
+          value: _ComposerMenuAction.attach,
+          child: _ComposerMenuRow(
+            icon: Icons.upload_file_outlined,
+            label: 'Add attachment',
+          ),
+        ),
+      const PopupMenuItem(
+        key: ValueKey('create-poll'),
+        value: _ComposerMenuAction.poll,
+        child: _ComposerMenuRow(
+          icon: Icons.poll_outlined,
+          label: 'Create poll',
+        ),
+      ),
+      PopupMenuItem(
+        key: const ValueKey('send-silently'),
+        value: _ComposerMenuAction.silent,
+        child: _suppressNotifications
+            ? const _ComposerMenuRow(
+                icon: Icons.notifications_outlined,
+                label: 'Send with notifications',
+              )
+            : const _ComposerMenuRow(
+                icon: Icons.notifications_off_outlined,
+                label: 'Send silently',
+              ),
+      ),
+    ],
   );
 
   /// The last control in the composer's trailing cluster.
@@ -762,6 +838,25 @@ class _MessageComposerState extends State<MessageComposer>
         ),
       ],
     ),
+  );
+}
+
+enum _ComposerMenuAction { attach, poll, silent }
+
+class _ComposerMenuRow extends StatelessWidget {
+  const _ComposerMenuRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 10),
+      Text(label, style: const TextStyle(fontSize: 13)),
+    ],
   );
 }
 

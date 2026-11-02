@@ -8,8 +8,8 @@ part of 'voice_controller.dart';
 /// leave paths made the file harder to follow than the two concerns are apart.
 extension VoiceControllerDevices on VoiceController {
   Future<void> selectInput(String deviceId) async {
-    if (_selectedInputId == deviceId) return;
     await _run(() async {
+      if (_selectedInputId == deviceId) return;
       _selectedInputId = deviceId;
       if (isConnected) {
         await _mediaService.startMicrophone(deviceId);
@@ -19,8 +19,8 @@ extension VoiceControllerDevices on VoiceController {
   }
 
   Future<void> selectOutput(String deviceId) async {
-    if (_selectedOutputId == deviceId) return;
     await _run(() async {
+      if (_selectedOutputId == deviceId) return;
       final playbackService = _playbackService;
       if (playbackService == null) {
         await _mediaService.selectAudioOutput(deviceId);
@@ -31,13 +31,13 @@ extension VoiceControllerDevices on VoiceController {
     });
   }
 
-  Future<void> toggleMute() async {
-    if (!isConnected) return;
-    await _run(() async {
-      _isMuted = !_isMuted;
-      await _applyMuteState();
-      await _sendJoin();
-    });
+  Future<void> toggleMute() =>
+      _changeFlags(() => _isMuted = !_isMuted, _announceMute);
+
+  /// Puts the mute flag as it stands on the uplink and on the wire.
+  Future<void> _announceMute() async {
+    await _applyMuteState();
+    await _sendJoin();
   }
 
   /// Silences, or unsilences, every path a voice can leave by.
@@ -82,7 +82,6 @@ extension VoiceControllerDevices on VoiceController {
   /// takes effect immediately regardless: they are deliberate acts with no
   /// key to outrun.
   Future<void> setMuted({required bool muted}) async {
-    if (!isConnected) return;
     // A press inside the release window cancels the pending end, whatever
     // the flag already reads: the uplink never dropped, but the timer that
     // would drop it is still running.
@@ -90,8 +89,11 @@ extension VoiceControllerDevices on VoiceController {
       _releaseDelayTimer?.cancel();
       _releaseDelayTimer = null;
     }
-    if (_isMuted == muted) return;
-    if (muted && !_isDeafened && _processing.pushToTalkReleaseDelayMs > 0) {
+    if (isConnected && _isMuted == muted) return;
+    if (isConnected &&
+        muted &&
+        !_isDeafened &&
+        _processing.pushToTalkReleaseDelayMs > 0) {
       // The key came up: keep transmitting for the configured window. The
       // room is not told anything, because nothing changed for it.
       _releaseDelayTimer = Timer(
@@ -103,24 +105,14 @@ extension VoiceControllerDevices on VoiceController {
       );
       return;
     }
-    await _run(() async {
-      _isMuted = muted;
-      await _applyMuteState();
-      await _sendJoin();
-    });
+    await _changeFlags(() => _isMuted = muted, _announceMute);
   }
 
   /// The release delay ran out: the uplink goes quiet now, unless the
   /// session changed underneath it. The timer's own existence is what held
   /// the uplink live, so nothing else needs to be checked against it.
-  Future<void> _endReleaseDelay() async {
-    if (!isConnected) return;
-    await _run(() async {
-      _isMuted = true;
-      await _applyMuteState();
-      await _sendJoin();
-    });
-  }
+  Future<void> _endReleaseDelay() =>
+      _changeFlags(() => _isMuted = true, _announceMute);
 
   /// Whether this build can clean the microphone at all.
   bool get isNoiseSuppressionAvailable =>
@@ -252,16 +244,17 @@ extension VoiceControllerDevices on VoiceController {
 
   /// Deafening also mutes, which is what Discord does: somebody who cannot
   /// hear the room should not still be speaking into it.
-  Future<void> toggleDeafen() async {
-    if (!isConnected) return;
-    await _run(() async {
+  Future<void> toggleDeafen() => _changeFlags(
+    () {
       _isDeafened = !_isDeafened;
       if (_isDeafened) _isMuted = true;
+    },
+    () async {
       await _applyMuteState();
       await _silence(
         () => _setPlaybackEnabled(!_isDeafened && isTransportReady),
       );
       await _sendJoin();
-    });
-  }
+    },
+  );
 }

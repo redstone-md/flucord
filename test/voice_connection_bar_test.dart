@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flucord/src/app.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_media.dart';
@@ -14,17 +15,23 @@ void main() {
     VoiceController controller, {
     void Function(String channelId)? onOpenChannel,
     String? Function(String channelId)? nameFor,
+    String? Function(String channelId)? serverFor,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: FlucordTheme.dark,
         home: Scaffold(
-          body: ListenableBuilder(
-            listenable: controller,
-            builder: (_, _) => VoiceConnectionBar(
-              controller: controller,
-              channelNameFor: nameFor ?? (_) => 'General',
-              onOpenChannel: onOpenChannel,
+          body: Align(
+            alignment: Alignment.topLeft,
+            // As wide as the channel sidebar it lives in.
+            child: SizedBox(
+              width: 236,
+              child: VoiceConnectionBar(
+                controller: controller,
+                channelNameFor: nameFor ?? (_) => 'General',
+                serverNameFor: serverFor ?? (_) => null,
+                onOpenChannel: onOpenChannel,
+              ),
             ),
           ),
         ),
@@ -89,7 +96,103 @@ void main() {
     expect(opened, ['voice-1']);
   });
 
-  testWidgets('a connection in another server has no way back', (tester) async {
+  testWidgets('deafens from wherever the user navigated to', (tester) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    await pump(tester, controller);
+
+    await tester.tap(find.byKey(const ValueKey('voice-bar-deafen')));
+    await tester.pumpAndSettle();
+
+    expect(controller.isDeafened, isTrue);
+    expect(find.byTooltip('Undeafen'), findsOneWidget);
+    expect(_iconColour(tester, 'voice-bar-deafen'), _danger);
+  });
+
+  testWidgets('muted uses the danger colour, and unmuted does not', (
+    tester,
+  ) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    await pump(tester, controller);
+    expect(_iconColour(tester, 'voice-bar-mute'), isNot(_danger));
+
+    await tester.tap(find.byKey(const ValueKey('voice-bar-mute')));
+    await tester.pumpAndSettle();
+
+    expect(_iconColour(tester, 'voice-bar-mute'), _danger);
+  });
+
+  testWidgets('names the Room and its server where there is room to read it', (
+    tester,
+  ) async {
+    final signaling = _FakeSignaling();
+    final controller = VoiceController(
+      _FakeMedia(),
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+
+    await controller.connect(guildId: 'forge', channelId: 'voice-1');
+    await pump(
+      tester,
+      controller,
+      onOpenChannel: (_) {},
+      serverFor: (_) => 'Forge',
+    );
+
+    final names = find.text('General / Forge');
+    expect(names, findsOneWidget);
+    expect(tester.getSize(names).width, greaterThan(100));
+  });
+
+  testWidgets('from another server, a click returns to the Room', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 860));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(FlucordApp.demo());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    Future<void> tap(String key) async {
+      await tester.tap(find.byKey(ValueKey(key)));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+    }
+
+    await tap('channel-forge-voice');
+    await tap('voice-channel-join');
+    // Reading the channel's chat, then walking off to another server.
+    await tap('voice-surface-chat');
+    await tap('space-night');
+    expect(find.byKey(const ValueKey('channel-forge-voice')), findsNothing);
+    expect(find.byKey(const ValueKey('voice-mute')), findsNothing);
+    expect(find.text('workbench / The Forge'), findsOneWidget);
+
+    await tap('voice-bar-open');
+
+    expect(find.byKey(const ValueKey('channel-forge-voice')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-mute')), findsOneWidget);
+  });
+
+  testWidgets('a Room the workspace does not know has no way back', (
+    tester,
+  ) async {
     final signaling = _FakeSignaling();
     final controller = VoiceController(
       _FakeMedia(),
@@ -101,8 +204,7 @@ void main() {
     await controller.connect(guildId: 'forge', channelId: 'voice-1');
     await pump(tester, controller, onOpenChannel: (_) {}, nameFor: (_) => null);
 
-    // The sidebar is showing a different space, so the channel is not one it
-    // can select. The bar still offers mute and hang-up.
+    // There is no channel to select. The bar still offers mute and hang-up.
     expect(find.byKey(const ValueKey('voice-bar-open')), findsNothing);
     expect(find.byKey(const ValueKey('voice-bar-disconnect')), findsOne);
     expect(find.text('Voice channel'), findsOne);
@@ -123,6 +225,18 @@ void main() {
     expect(find.byKey(const ValueKey('voice-bar-warning')), findsOne);
   });
 }
+
+final _danger = FlucordTheme.dark.colorScheme.error;
+
+/// The colour the button with [key] draws its icon in.
+Color? _iconColour(WidgetTester tester, String key) => tester
+    .widget<Icon>(
+      find.descendant(
+        of: find.byKey(ValueKey(key)),
+        matching: find.byType(Icon),
+      ),
+    )
+    .color;
 
 final class _FakeSignaling implements VoiceSignalingService {
   @override

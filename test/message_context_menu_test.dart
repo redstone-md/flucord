@@ -75,6 +75,7 @@ void main() {
           attachFiles: false,
           embedLinks: false,
           moderateStage: false,
+          bypassesSlowmode: false,
         ),
         isCurrentUser: false,
       );
@@ -112,6 +113,7 @@ void main() {
           attachFiles: true,
           embedLinks: true,
           moderateStage: false,
+          bypassesSlowmode: false,
         ),
         isCurrentUser: false,
       );
@@ -134,6 +136,7 @@ Future<void> _pumpMenu(
     attachFiles: true,
     embedLinks: true,
     moderateStage: false,
+    bypassesSlowmode: false,
   ),
   required bool isCurrentUser,
 }) async {

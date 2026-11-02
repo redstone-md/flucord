@@ -180,16 +180,17 @@ final class StreamViewerController extends ChangeNotifier {
   /// Why [key] could not be opened, or null when it was, or has been since.
   Object? errorFor(GoLiveStreamKey key) => _errors[key];
 
-  /// Records a refusal from the RTC side, which can happen after the watch ask
-  /// itself already succeeded. The tile keeps this error while the next ask
-  /// gets a clean attempt.
+  /// Ends [key]'s watch because its connection failed, and keeps the reason
+  /// for the tile until the next ask.
+  ///
+  /// Ended the way a stop ends it: Discord is told, and the connection goes.
+  /// Left listed there, this client's next ask may get no answer, and the tile
+  /// would say "Stop watching" over no picture.
   void reportError(GoLiveStreamKey key, Object error) {
     if (_disposed) return;
     _errors[key] = error;
     _diagnose('watch failed ${key.userId}: $error');
-    _order.remove(key);
-    _cancelled.add(key);
-    unawaited(_teardown(key));
+    unawaited(_end(key));
     _notify();
   }
 
@@ -367,38 +368,26 @@ final class StreamViewerController extends ChangeNotifier {
   /// holding goes.
   Future<void> stop([GoLiveStreamKey? key]) async {
     final targets = key == null ? [..._order] : [key];
+    // A failure is the last thing that happened to a watch. Once that watch is
+    // stopped or its room is left, the tile starts clean.
+    final failures = _errors.length;
+    if (key == null) {
+      _errors.clear();
+    } else {
+      _errors.remove(key);
+    }
     // The room is left far more often than a watch is held through it.
-    if (targets.isEmpty) return;
-    final repository = _repositoryProvider();
+    if (targets.isEmpty && _errors.length == failures) return;
     for (final each in targets) {
-      final wasOpen = _order.remove(each);
-      final arrived = _sessions.containsKey(each);
       // A control that answers a press by withdrawing a held ask looks
       // exactly like a button that does nothing. Say so.
       if (key != null) {
         _diagnose(
-          'watch stop for ${each.userId}: was held $wasOpen, '
-          'arrived $arrived',
+          'watch stop for ${each.userId}: was held ${isOpen(each)}, '
+          'arrived ${isWatching(each)}',
         );
       }
-      // Everything decided about this stop is recorded before the first
-      // await: an ask made again meanwhile is a new one, and must find
-      // neither a withdrawal filed against it nor its connection taken down.
-      _onWatchStopped?.call(each);
-      if (wasOpen && !arrived) {
-        // Withdrawing an ask Discord never answered has to be both announced
-        // and remembered: announced so the tile's control goes back to opening
-        // the stream, remembered so the connection Discord opens anyway is
-        // dropped here instead of taking the stage.
-        _cancelled.add(each);
-      }
-      // Discord keeps a watcher on its list until told, and then answers no
-      // second ask for that stream. Told for a held ask that never arrived
-      // too: the answer may still be on its way.
-      if (wasOpen && repository != null) {
-        unawaited(_withdraw(repository, each));
-      }
-      await _teardown(each);
+      await _end(each);
     }
     // Once for the whole stop, not once per session: the room is rebuilt
     // either way, and it cannot be drawn between the two.
@@ -415,6 +404,31 @@ final class StreamViewerController extends ChangeNotifier {
       }),
     );
     super.dispose();
+  }
+
+  /// Lets go of everything held for [key]: its place, its connection, its
+  /// session, and Discord's record of this client as a watcher.
+  ///
+  /// Everything decided here is recorded before the first await: an ask made
+  /// again meanwhile is a new one, and must find neither a withdrawal filed
+  /// against it nor its connection taken down.
+  Future<void> _end(GoLiveStreamKey key) async {
+    final wasOpen = _order.remove(key);
+    final arrived = _sessions.containsKey(key);
+    _onWatchStopped?.call(key);
+    if (wasOpen && !arrived) {
+      // Withdrawing an ask Discord never answered has to be both announced
+      // and remembered: announced so the tile's control goes back to opening
+      // the stream, remembered so the connection Discord opens anyway is
+      // dropped here instead of taking the stage.
+      _cancelled.add(key);
+    }
+    // Discord keeps a watcher on its list until told, and then answers no
+    // second ask for that stream. Told for a held ask that never arrived too:
+    // the answer may still be on its way.
+    final repository = _repositoryProvider();
+    if (wasOpen && repository != null) unawaited(_withdraw(repository, key));
+    await _teardown(key);
   }
 
   /// Puts [key] last, which is where the stage reads from.

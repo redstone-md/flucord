@@ -108,6 +108,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadingEventAttendees = {};
   final Set<String> _loadingScheduledEventSpaces = {};
   final Map<String, Object> _scheduledEventErrors = {};
+  final Map<String, DateTime> _lastSentAt = {};
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
@@ -115,6 +116,11 @@ final class ChatController extends ChangeNotifier {
   String? _activeChannelId;
   String? _guildAccessError;
   bool _isApplicationActive = true;
+  ChatMessage? _lastSentMessage;
+
+  /// Set while the window is away. The first message to arrive in the active
+  /// channel then replaces its unread boundary.
+  bool _boundaryAwaitsNewMessage = false;
   bool _disposed = false;
 
   ChatLoadState get state => _state;
@@ -175,13 +181,25 @@ final class ChatController extends ChangeNotifier {
         : null;
   }
 
+  /// The id of the message this client last sent, if it went to [channelId].
+  String? lastSentMessageIdIn(String channelId) =>
+      _lastSentMessage?.channelId == channelId ? _lastSentMessage?.id : null;
+
   void setApplicationActive(bool value) {
     if (_isApplicationActive == value) return;
-    if (!value && _activeChannelId != null) {
-      _workspace = _workspace?.clearChannelUnreadBoundary(_activeChannelId!);
-      _persistChannelActivity(_activeChannelId!);
-    }
     _isApplicationActive = value;
+    _boundaryAwaitsNewMessage = !value;
+    if (!value && _activeChannelId != null) {
+      // The NEW line stays on screen, since leaving the window must move
+      // nothing. The saved copy drops it, so a later launch does not open on it.
+      unawaited(
+        ChannelActivityPersistence.save(
+          _repository,
+          _workspace?.clearChannelUnreadBoundary(_activeChannelId!),
+          _activeChannelId!,
+        ),
+      );
+    }
     if (value && _activeChannelId != null) {
       _workspace = _workspace?.markChannelRead(_activeChannelId!);
       _persistChannelActivity(_activeChannelId!);
@@ -197,6 +215,10 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.contains(channelId);
 
   Object? channelError(String channelId) => _channelErrors[channelId];
+
+  /// When this account's last message in the channel went out. Slowmode's
+  /// clock starts here, per channel, so moving between channels cannot reset it.
+  DateTime? lastSentAt(String channelId) => _lastSentAt[channelId];
   bool canLoadOlderMessages(String channelId) =>
       _loadedChannels.contains(channelId) &&
       !_exhaustedChannels.contains(channelId);
@@ -231,6 +253,7 @@ final class ChatController extends ChangeNotifier {
     _loadingEventAttendees.clear();
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
+    _lastSentAt.clear();
     _archivedThreadState.clear();
     _clearTyping();
     _activeChannelId = null;
@@ -447,6 +470,8 @@ final class ChatController extends ChangeNotifier {
     String? replyToMessageId,
     bool suppressNotifications = false,
   }) async {
+    // A refusal below must not be read as the failure of some earlier action.
+    _error = null;
     final workspace = _workspace;
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
@@ -468,9 +493,8 @@ final class ChatController extends ChangeNotifier {
         suppressNotifications: suppressNotifications,
         textToSpeech: spoken.$1,
       );
-      _workspace = _workspace?.upsertMessage(message);
-      _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
+      _applySentMessage(message);
+      _lastSentAt[channelId] = DateTime.now();
       return true;
     } catch (error) {
       _error = error;
@@ -612,6 +636,16 @@ final class ChatController extends ChangeNotifier {
       _error = error;
     }
     notifyListeners();
+  }
+
+  /// Folds in a message this client just sent. It reads its channel, and the
+  /// timeline takes the reader to it.
+  void _applySentMessage(ChatMessage message) {
+    _workspace = _workspace
+        ?.upsertMessage(message)
+        .clearChannelUnreadBoundary(message.channelId);
+    _persistChannelActivity(message.channelId);
+    _lastSentMessage = message;
   }
 
   void _persistChannelActivity(String channelId) => unawaited(

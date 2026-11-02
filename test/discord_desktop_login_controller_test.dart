@@ -11,6 +11,7 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 import 'package:flucord/src/presentation/widgets/discord_desktop_login_section.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -70,6 +71,36 @@ void main() {
     expect(vault.session?.transportCredential, 'desktop-authorization');
   });
 
+  test(
+    'a sign-out with a locked cache forgets the account and says so',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryVault();
+      final connection = ConnectionController(
+        chat,
+        vault,
+        _RepositoryFactory(clearFails: true),
+      );
+      final controller = DiscordDesktopLoginController(
+        _RemoteAuthFactory(_RemoteAuthGateway()),
+        connection,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(connection.dispose);
+      addTearDown(chat.dispose);
+      await connection.connectSession(
+        session: DiscordDesktopUserSession('desktop-authorization'),
+        remember: true,
+      );
+
+      await controller.disconnect();
+
+      expect(vault.session, isNull);
+      expect(connection.mode, SessionMode.disconnected);
+      expect(controller.errorMessage, contains('could not be removed'));
+    },
+  );
+
   testWidgets('renders a standard square QR code with a quiet zone', (
     tester,
   ) async {
@@ -109,6 +140,67 @@ void main() {
     expect(qr.gapless, isTrue);
     expect(qr.semanticsLabel, 'Discord sign-in QR code');
   });
+
+  testWidgets('signing out asks first and keeps the session on cancel', (
+    tester,
+  ) async {
+    final chat = ChatController(MockChatRepository(latency: Duration.zero));
+    final vault = _MemoryVault();
+    final connection = ConnectionController(chat, vault, _RepositoryFactory());
+    final gateway = _RemoteAuthGateway();
+    final controller = DiscordDesktopLoginController(
+      _RemoteAuthFactory(gateway),
+      connection,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(connection.dispose);
+    addTearDown(chat.dispose);
+
+    await controller.start();
+    gateway.add(
+      DiscordRemoteAuthCompleted(
+        DiscordDesktopUserSession('desktop-authorization'),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => controller.state == DiscordDesktopLoginState.connected,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DiscordDesktopLoginSection(
+            controller: controller,
+            connectionController: connection,
+          ),
+        ),
+      ),
+    );
+    final signOut = find.widgetWithText(FilledButton, 'Sign out');
+
+    await tester.tap(signOut);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(vault.session, isNotNull);
+
+    await tester.tap(signOut);
+    await tester.pumpAndSettle();
+    expect(vault.session, isNotNull);
+    await tester.tap(find.byKey(destructiveConfirmKey));
+    await tester.pumpAndSettle();
+    await _pumpUntil(tester, () => vault.session == null);
+  });
+}
+
+/// Waits on work that mixes real time and the test clock: the sign-in writes
+/// through futures on both.
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var attempt = 0; attempt < 50 && !condition(); attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.runAsync(_settle);
+  }
+  expect(condition(), isTrue);
 }
 
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
@@ -169,7 +261,16 @@ final class _MemoryVault implements CredentialVault {
 }
 
 final class _RepositoryFactory implements ChatRepositoryFactory {
+  _RepositoryFactory({this.clearFails = false});
+
+  final bool clearFails;
+
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async =>
       MockChatRepository(latency: Duration.zero);
+
+  @override
+  Future<void> clearCache() async {
+    if (clearFails) throw StateError('The file is locked');
+  }
 }

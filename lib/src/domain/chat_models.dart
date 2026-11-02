@@ -401,9 +401,18 @@ final class ChatWorkspace {
     return copyWith(members: merged.values.toList(growable: false));
   }
 
-  ChatWorkspace upsertSpace(CommunitySpace space) => copyWith(
-    spaces: [...spaces.where((existing) => existing.id != space.id), space],
-  );
+  ChatWorkspace upsertSpace(CommunitySpace space) =>
+      copyWith(spaces: _withSpace(space));
+
+  /// [spaces] with [space] in place of its earlier copy, so a server keeps its
+  /// place on the rail when it changes. A new one goes last.
+  List<CommunitySpace> _withSpace(CommunitySpace space) =>
+      spaceOrNull(space.id) == null
+      ? [...spaces, space]
+      : [
+          for (final existing in spaces)
+            existing.id == space.id ? space : existing,
+        ];
 
   ChatWorkspace upsertCategory(ChannelCategory category) => copyWith(
     categories: [
@@ -419,15 +428,14 @@ final class ChatWorkspace {
   /// this is the one fold that touches every collection at once. Each piece
   /// replaces anything the workspace already held under the same id, so a
   /// hydration answer that arrives twice lands the same as one that arrives
-  /// once.
+  /// once. A channel it already held keeps its unread state, because
+  /// `GUILD_CREATE` also arrives for a server the account is already in.
   ChatWorkspace mergeGuild(JoinedGuild guild) => copyWith(
-    spaces: [
-      ...spaces.where((space) => space.id != guild.space.id),
-      guild.space,
-    ],
+    spaces: _withSpace(guild.space),
     channels: [
       ...channels.where((channel) => channel.spaceId != guild.space.id),
-      ...guild.channels,
+      for (final channel in guild.channels)
+        channel.withActivityOf(channelOrNull(channel.id) ?? channel),
     ],
     categories: [
       ...categories.where((category) => category.spaceId != guild.space.id),
@@ -560,23 +568,47 @@ final class ChatWorkspace {
     ],
   );
 
-  ChatWorkspace removeMessage(String messageId) => copyWith(
-    messages: messages.where((message) => message.id != messageId).toList(),
+  /// Replaces a held message with [update]'s answer. It stays where it is in its
+  /// channel, and a message that is not held is left out.
+  ChatWorkspace updateMessage(
+    String messageId,
+    ChatMessage Function(ChatMessage message) update,
+  ) {
+    final index = messages.indexWhere((message) => message.id == messageId);
+    if (index < 0) return this;
+    return copyWith(messages: [...messages]..[index] = update(messages[index]));
+  }
+
+  ChatWorkspace removeMessage(String messageId) => removeMessages({messageId});
+
+  ChatWorkspace removeMessages(Set<String> messageIds) => copyWith(
+    messages: messages
+        .where((message) => !messageIds.contains(message.id))
+        .toList(),
     channels: [
       for (final channel in channels)
-        channel.firstUnreadMessageId == messageId
+        messageIds.contains(channel.firstUnreadMessageId)
             ? channel.clearUnreadBoundary()
             : channel,
     ],
   );
 
+  /// A channel the workspace holds keeps its place and its unread state. A new
+  /// DM is the newest conversation, so it goes first in the list.
   ChatWorkspace upsertChannel(ConversationChannel channel) {
     final previous = channelOrNull(channel.id);
-    final next = previous == null ? channel : channel.withActivityOf(previous);
+    if (previous == null) {
+      return copyWith(
+        channels: channel.isDirectMessage
+            ? [channel, ...channels]
+            : [...channels, channel],
+      );
+    }
+    final next = channel.withActivityOf(previous);
     return copyWith(
       channels: [
-        ...channels.where((existing) => existing.id != channel.id),
-        next,
+        for (final existing in channels)
+          existing.id == channel.id ? next : existing,
       ],
     );
   }
@@ -592,14 +624,6 @@ final class ChatWorkspace {
           .toList(),
     );
   }
-
-  /// Takes a server row off the rail.
-  ///
-  /// The server's channels and messages stay until their own deletion events
-  /// arrive; a server that leaves while its channels remain renders as an
-  /// empty row for a moment rather than as a vanished conversation.
-  ChatWorkspace removeSpace(String spaceId) =>
-      copyWith(spaces: spaces.where((space) => space.id != spaceId).toList());
 
   static List<Member> _mergeMemberInto(List<Member> current, Member incoming) {
     final existing = current.where((member) => member.id == incoming.id);

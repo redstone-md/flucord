@@ -13,6 +13,7 @@ import 'multi_factor_auth.dart';
 import 'family_centre.dart';
 import 'guild_expression_repository.dart';
 import 'guild_management_repository.dart';
+import 'message_reaction_change.dart';
 import 'message_search_repository.dart';
 import 'moderation_repository.dart';
 import 'presence_repository.dart';
@@ -50,6 +51,16 @@ final class MessageUpsertedEvent extends ChatRepositoryEvent {
   final Member? member;
   final bool isNew;
   final bool mentionsCurrentMember;
+}
+
+/// The reactions on a message changed.
+///
+/// Kept distinct from [MessageUpsertedEvent] because a reaction is not a new
+/// message: it must not mark the channel read or move its latest message.
+final class MessageReactionChangedEvent extends ChatRepositoryEvent {
+  const MessageReactionChangedEvent(this.change);
+
+  final MessageReactionChange change;
 }
 
 final class MemberUpsertedEvent extends ChatRepositoryEvent {
@@ -113,6 +124,25 @@ final class MessageDeletedEvent extends ChatRepositoryEvent {
   const MessageDeletedEvent({required this.messageId, required this.channelId});
 
   final String messageId;
+  final String channelId;
+}
+
+/// A server the account gained or got back, whole, as `GUILD_CREATE` carries it.
+final class GuildGainedEvent extends ChatRepositoryEvent {
+  const GuildGainedEvent(this.guild);
+
+  final JoinedGuild guild;
+}
+
+/// One bulk delete, folded at once: a moderator's purge can name a hundred
+/// messages in a channel somebody is reading.
+final class MessagesDeletedEvent extends ChatRepositoryEvent {
+  const MessagesDeletedEvent({
+    required this.messageIds,
+    required this.channelId,
+  });
+
+  final Set<String> messageIds;
   final String channelId;
 }
 
@@ -189,11 +219,10 @@ final class ChannelDeletedEvent extends ChatRepositoryEvent {
   final String channelId;
 }
 
-/// A server the account can no longer see.
+/// A server the account can no longer see, gone from the workspace whole.
 ///
-/// A `READY` that stops naming a guild says the account left it while the
-/// socket was down. The server's channels each carry their own deletion event,
-/// so this one only takes the server row off the rail.
+/// `GUILD_DELETE` says so while the socket is up. A `READY` that stops naming a
+/// guild says the account left it while the socket was down.
 final class SpaceRemovedEvent extends ChatRepositoryEvent {
   const SpaceRemovedEvent(this.spaceId);
 

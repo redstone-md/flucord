@@ -65,19 +65,55 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // current. There is no route to re-read it, so missing one means
         // showing a friend list that is quietly wrong.
         _relationships.accept(event.name, event.data);
+        _sharedDispatches.route(event);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
-        } else if (event.name == 'MESSAGE_DELETE') {
-          unawaited(_acceptDelete(event.data));
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
           _acceptPassiveUpdate(event.data);
+        } else if (event.name == 'GUILD_CREATE') {
+          unawaited(_acceptGuild(event.data));
+        } else if (event.name == 'GUILD_UPDATE') {
+          unawaited(_acceptGuildUpdate(event.data));
+        } else if (event.name == 'GUILD_DELETE') {
+          unawaited(_acceptGuildRemoval(event.data));
         } else if (event.name == 'READY' ||
             event.name == 'READY_SUPPLEMENTAL') {
           unawaited(_rehydrateWorkspace());
         }
     }
+  }
+
+  /// A guild the account gained, or got back, once a workspace is on screen.
+  /// Before that, the opening dispatches build the workspace.
+  Future<void> _acceptGuild(Map<String, Object?> data) async {
+    if (!_workspaceShown) return;
+    final guild = DiscordGuildAdminMapper.joinedGuildFromDispatch(
+      data,
+      _mapper,
+    );
+    if (guild == null) return;
+    _events.publish(GuildGainedEvent(guild));
+    await _persistGainedGuild(guild);
+  }
+
+  Future<void> _acceptGuildUpdate(Map<String, Object?> data) async {
+    if (!_workspaceShown || data['id'] is! String) return;
+    final space = _mapper.spaceFromGuildPayload(data);
+    _events.publish(SpaceUpsertedEvent(space));
+    await _cache.writeSpace(space);
+  }
+
+  /// `unavailable` marks an outage on Discord's side. The account is still in
+  /// that guild, so it stays on the rail.
+  Future<void> _acceptGuildRemoval(Map<String, Object?> data) async {
+    final guildId = data['id'];
+    if (!_workspaceShown || guildId is! String || data['unavailable'] == true) {
+      return;
+    }
+    _events.publish(SpaceRemovedEvent(guildId));
+    await _persistLeftGuild(guildId);
   }
 
   /// Applies a post-load READY to the workspace in place.
@@ -261,6 +297,10 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
   Future<void> _acceptMessage(DiscordGatewayDispatch event) async {
     final messageId = event.data['id'];
     if (messageId is! String) return;
+    final currentUserId = _currentMemberId;
+    if (event.name == 'MESSAGE_CREATE' && currentUserId != null) {
+      await _directMessages.acceptMessage(event.data, currentUserId);
+    }
     final fallback = event.name == 'MESSAGE_UPDATE'
         ? await _cache.readMessage(messageId)
         : null;
@@ -278,6 +318,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           )
         : null;
     if (member != null) await _cache.writeMember(member);
+    if (event.name == 'MESSAGE_CREATE') {
+      _readState.acceptNewMessage(event.data);
+    }
     _events.add(
       MessageUpsertedEvent(
         message: message,
@@ -297,18 +340,13 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       fallback: fallback,
       currentMemberId: _currentMemberId,
     );
-    await _cache.writeMessage(message);
-    return message;
-  }
-
-  Future<void> _acceptDelete(Map<String, Object?> data) async {
-    final messageId = data['id'];
-    final channelId = data['channel_id'];
-    if (messageId is! String || channelId is! String) return;
-    await _cache.deleteMessage(messageId);
-    _events.add(
-      MessageDeletedEvent(messageId: messageId, channelId: channelId),
-    );
+    // The mapper knows the account's id but not its roles. The flag decides the
+    // inbox and the desktop notification, so a role mention has to set it too.
+    final stored = _readState.mentionsAccountRole(payload)
+        ? message.copyWith(mentionsCurrentMember: true)
+        : message;
+    await _cache.writeMessage(stored);
+    return stored;
   }
 
   void _acceptTyping(Map<String, Object?> data) {

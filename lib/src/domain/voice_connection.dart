@@ -258,17 +258,22 @@ final class VoiceUserDisconnectedEvent extends VoiceSignalingEvent {
   final String userId;
 }
 
+/// Something the media server wants of whoever sends this client's pictures.
+sealed class VoicePictureAsk extends VoiceSignalingEvent {
+  const VoicePictureAsk();
+}
+
 /// The media server relayed a viewer's picture-loss indication, which means a
 /// viewer cannot decode what is arriving and only a fresh keyframe recovers
 /// them.
-final class VoiceKeyframeRequestedEvent extends VoiceSignalingEvent {
+final class VoiceKeyframeRequestedEvent extends VoicePictureAsk {
   const VoiceKeyframeRequestedEvent();
 }
 
 /// The media server did not get these packets of this client's pictures and
 /// wants them again. Answered from the sender's history, or not at all: a
 /// packet too old to be held is one the viewer has given up on already.
-final class VoiceRetransmitRequestedEvent extends VoiceSignalingEvent {
+final class VoiceRetransmitRequestedEvent extends VoicePictureAsk {
   const VoiceRetransmitRequestedEvent({
     required this.ssrc,
     required this.sequences,
