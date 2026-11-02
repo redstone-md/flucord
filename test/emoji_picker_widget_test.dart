@@ -311,9 +311,7 @@ void main() {
     ) async {
       await _pumpFavoritesPanel(tester, null);
 
-      final tile = tester.widget<InkWell>(
-        find.byKey(const ValueKey('emoji-choice-custom-custom-1')),
-      );
+      final tile = tester.widget<InkWell>(await _revealCustomTile(tester));
 
       expect(tile.onSecondaryTap, isNull);
       expect(tile.onLongPress, isNull);

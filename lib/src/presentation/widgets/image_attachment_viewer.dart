@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../attachment_download_controller.dart';
 import 'attachment_download_button.dart';
 
@@ -303,7 +305,7 @@ class _ViewerToolbar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: FlucordType.label,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -312,7 +314,10 @@ class _ViewerToolbar extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '${attachment.width}×${attachment.height ?? '?'}',
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ],
             SizedBox(width: compact ? 4 : 12),
@@ -424,7 +429,10 @@ class _NetworkViewerImage extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'The original attachment can still be saved.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ],
         ],

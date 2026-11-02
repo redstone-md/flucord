@@ -27,6 +27,11 @@ abstract final class FlucordType {
 
   static const sizes = [caption, label, body, title, display];
 
+  /// The largest size on the scale that fits in [space], and never under
+  /// [caption]. For text drawn to fill a box, such as an avatar's initial.
+  static double fitting(double space) =>
+      sizes.lastWhere((size) => size <= space, orElse: () => caption);
+
   /// Material's text roles, each set to a size on the scale.
   ///
   /// Material widgets draw in these roles: a badge in `labelSmall`, helper

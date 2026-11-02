@@ -8,7 +8,9 @@ import '../../application/composer_autocomplete_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../clipboard_attachments.dart';
 import '../pending_attachment_picker.dart';
 import 'create_poll_dialog.dart';
@@ -391,7 +393,10 @@ class MessageComposerState extends State<MessageComposer>
         Expanded(
           child: Text(
             text,
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ),
       ],
@@ -819,7 +824,7 @@ class MessageComposerState extends State<MessageComposer>
         Text(
           '$_charactersRemaining',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FlucordType.caption,
             color: _isOverCharacterLimit
                 ? Theme.of(context).colorScheme.error
                 : context.surfaces.muted,
@@ -830,7 +835,7 @@ class MessageComposerState extends State<MessageComposer>
           Text(
             'Your message is above the limit.',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: FlucordType.caption,
               color: Theme.of(context).colorScheme.error,
             ),
           ),
@@ -970,7 +975,10 @@ class MessageComposerState extends State<MessageComposer>
           child: Text(
             'Replying to ${widget.replyAuthor?.displayName ?? 'Unknown user'}',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         IconButton(
@@ -1011,7 +1019,7 @@ class _ComposerMenuRow extends StatelessWidget {
     children: [
       Icon(icon, size: 18),
       const SizedBox(width: 10),
-      Text(label, style: const TextStyle(fontSize: 13)),
+      Text(label, style: const TextStyle(fontSize: FlucordType.label)),
     ],
   );
 }
@@ -1038,7 +1046,10 @@ class ReadOnlyChannelNotice extends StatelessWidget {
         const Expanded(
           child: Text(
             'You do not have permission to send messages here.',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],

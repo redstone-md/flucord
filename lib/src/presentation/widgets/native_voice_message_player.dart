@@ -5,7 +5,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 typedef InlineVoiceBuilder =
     Widget Function({
@@ -260,7 +262,7 @@ class VoiceMessageControls extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -294,7 +296,7 @@ class VoiceMessageControls extends StatelessWidget {
             key: const ValueKey('voice-message-time'),
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
@@ -428,7 +430,7 @@ class _VoiceMessageError extends StatelessWidget {
     decoration: BoxDecoration(
       color: context.surfaces.inset,
       border: Border.all(color: context.surfaces.border),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
     ),
     child: Row(
       children: [
@@ -437,7 +439,7 @@ class _VoiceMessageError extends StatelessWidget {
         const Expanded(
           child: Text(
             'Voice message unavailable',
-            style: TextStyle(fontSize: 11),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         TextButton(onPressed: onRetry, child: const Text('Retry')),

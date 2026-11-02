@@ -250,7 +250,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.inset,
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Row(
         children: [
@@ -291,7 +291,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
             key: const ValueKey('voice-recording-time'),
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),

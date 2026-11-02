@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 
 typedef CreateThreadCallback =
@@ -93,7 +94,7 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
             'AUTO-ARCHIVE',
             style: TextStyle(
               color: context.surfaces.muted,
-              fontSize: 10,
+              fontSize: FlucordType.caption,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -120,7 +121,9 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
                 padding: WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 8),
                 ),
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 10)),
+                textStyle: WidgetStatePropertyAll(
+                  TextStyle(fontSize: FlucordType.caption),
+                ),
               ),
             ),
           ),
@@ -172,7 +175,10 @@ class _DialogHeader extends StatelessWidget {
       const Expanded(
         child: Text(
           'Create thread',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       IconButton(
@@ -203,7 +209,7 @@ class _DialogError extends StatelessWidget {
           message,
           style: TextStyle(
             color: Theme.of(context).colorScheme.error,
-            fontSize: 11,
+            fontSize: FlucordType.caption,
           ),
         ),
       ),

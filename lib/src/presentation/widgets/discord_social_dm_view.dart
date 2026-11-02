@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import '../../application/discord_social_dm_controller.dart';
 import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_dm.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_social_dm_message_row.dart';
 import 'accessibility_scope.dart';
 import 'spell_check_scope.dart';
@@ -128,7 +130,10 @@ class _DmHeader extends StatelessWidget {
               user.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: FlucordType.label,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Icon(Icons.phone_outlined, size: 18, color: context.surfaces.muted),
@@ -246,7 +251,7 @@ class _DmComposerState extends State<_DmComposer> {
       child: Container(
         decoration: BoxDecoration(
           color: context.surfaces.raised,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: FlucordRadius.medium,
         ),
         padding: const EdgeInsets.only(left: 12, right: 6),
         child: Row(
@@ -341,7 +346,10 @@ class _DmTimelineState extends StatelessWidget {
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             if (action case final action?) ...[
               const SizedBox(height: 14),

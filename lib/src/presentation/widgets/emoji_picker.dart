@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/unicode_emoji.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'accessibility_dials.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
@@ -135,7 +137,7 @@ final Color _panelShadow = Colors.black.withValues(alpha: 0.42);
 
 RoundedRectangleBorder _panelShape(BuildContext context) =>
     RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: FlucordRadius.medium,
       side: BorderSide(color: context.surfaces.border),
     );
 
@@ -349,7 +351,7 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
               autofocus: true,
               onChanged: (value) =>
                   setState(() => _query = value.trim().toLowerCase()),
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: FlucordType.caption),
               decoration: const InputDecoration(
                 hintText: 'Find emoji',
                 prefixIcon: Icon(Icons.search, size: 16),
@@ -508,7 +510,7 @@ class _ToneBar extends StatelessWidget {
               icon: Text(
                 _swatches[index],
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: FlucordType.body,
                   color: index == tone
                       ? null
                       : context.surfaces.muted.withValues(alpha: 0.6),
@@ -606,7 +608,7 @@ class _EmojiTile extends StatelessWidget {
                   '${starred ? 'unfavourite' : 'favourite'}',
         child: InkWell(
           key: ValueKey('emoji-choice-${choice.key}'),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           onTap: () => onSelected(choice),
           onSecondaryTap: star,
           onLongPress: star,
@@ -642,12 +644,12 @@ class _EmojiGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (choice.unicodeGlyph case final String glyph) {
-      return Text(glyph, style: const TextStyle(fontSize: 22));
+      return Text(glyph, style: const TextStyle(fontSize: FlucordType.display));
     }
     return SizedBox.square(
       dimension: 27,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: FlucordRadius.small,
         child: RemoteIdentityImage(
           url: choice.imageUrl,
           // The account's animate-emoji answer, read here so the flag from
@@ -661,7 +663,7 @@ class _EmojiGlyph extends StatelessWidget {
               child: Text(
                 choice.fallback,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -683,7 +685,10 @@ class _EmojiEmptyState extends StatelessWidget {
       children: [
         Icon(Icons.search_off, size: 26, color: context.surfaces.muted),
         const SizedBox(height: 8),
-        const Text('No emoji found', style: TextStyle(fontSize: 12)),
+        const Text(
+          'No emoji found',
+          style: TextStyle(fontSize: FlucordType.caption),
+        ),
       ],
     ),
   );

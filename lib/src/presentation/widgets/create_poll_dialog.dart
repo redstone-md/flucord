@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 
 typedef CreatePollCallback = Future<bool> Function(PendingPoll poll);
@@ -186,7 +187,10 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
             dense: true,
             title: const Text(
               'Allow multiple answers',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (_error case final error?) ...[
@@ -195,7 +199,7 @@ class _CreatePollDialogState extends State<CreatePollDialog> {
               error,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 11,
+                fontSize: FlucordType.caption,
               ),
             ),
           ],
@@ -243,7 +247,10 @@ class _PollDialogHeader extends StatelessWidget {
       const Expanded(
         child: Text(
           'Create a poll',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       IconButton(
@@ -311,14 +318,17 @@ class _PollFieldLabel extends StatelessWidget {
         label,
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 10,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w700,
         ),
       ),
       const Spacer(),
       Text(
         detail,
-        style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
     ],
   );

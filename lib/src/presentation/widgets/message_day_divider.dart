@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Marks the place in the timeline where the calendar day changes.
 class MessageDayDivider extends StatelessWidget {
@@ -29,7 +30,7 @@ class MessageDayDivider extends StatelessWidget {
               MaterialLocalizations.of(context).formatFullDate(day.toLocal()),
               style: TextStyle(
                 color: context.surfaces.muted,
-                fontSize: 10,
+                fontSize: FlucordType.caption,
                 fontWeight: FontWeight.w600,
               ),
             ),

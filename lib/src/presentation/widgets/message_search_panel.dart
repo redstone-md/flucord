@@ -5,7 +5,9 @@ import '../../application/message_search_grammar.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/message_search.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 import 'member_avatar.dart';
 import 'message_content_view.dart';
@@ -107,12 +109,18 @@ class MessageSearchPanel extends StatelessWidget {
             children: [
               const Text(
                 'Search results',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: FlucordType.label,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               if (_countLabel case final label?)
                 Text(
                   label,
-                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
             ],
           ),

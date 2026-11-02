@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/reaction_repository.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'member_avatar.dart';
 import 'message_reaction_strip.dart';
 import 'flucord_dialog.dart';
@@ -185,7 +186,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         const Expanded(
           child: Text(
             'Reactions',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: FlucordType.body,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         IconButton(
@@ -228,7 +232,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
                   channelId: widget.message.channelId,
                 ),
                 const SizedBox(width: 8),
-                Text('${reaction.count}', style: const TextStyle(fontSize: 12)),
+                Text(
+                  '${reaction.count}',
+                  style: const TextStyle(fontSize: FlucordType.caption),
+                ),
               ],
             ),
           ),
@@ -285,7 +292,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         ),
         Text(
           '${_selected.normalCount} normal',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: FlucordType.caption,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         if (_selected.burstCount > 0)
           Row(
@@ -299,7 +309,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
               const SizedBox(width: 4),
               Text(
                 '${_selected.burstCount} super',
-                style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                style: TextStyle(
+                  fontSize: FlucordType.caption,
+                  color: context.surfaces.muted,
+                ),
               ),
             ],
           ),
@@ -310,7 +323,10 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
   Widget _emptyState(BuildContext context) => Center(
     child: Text(
       _error == null && !_loading ? 'No reactions to show' : 'Loading people…',
-      style: TextStyle(fontSize: 12, color: context.surfaces.muted),
+      style: TextStyle(
+        fontSize: FlucordType.caption,
+        color: context.surfaces.muted,
+      ),
     ),
   );
 
@@ -325,13 +341,16 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
             row.user.displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: FlucordType.caption,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         if (row.type == DiscordReactionType.burst) ...[
           Icon(Icons.auto_awesome, size: 11, color: context.surfaces.warning),
           const SizedBox(width: 4),
-          const Text('Super', style: TextStyle(fontSize: 10)),
+          const Text('Super', style: TextStyle(fontSize: FlucordType.caption)),
         ],
       ],
     ),
@@ -349,7 +368,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
         const Expanded(
           child: Text(
             'Could not load reactions',
-            style: TextStyle(fontSize: 11),
+            style: TextStyle(fontSize: FlucordType.caption),
           ),
         ),
         TextButton(

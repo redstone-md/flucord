@@ -27,7 +27,7 @@ class _GalleryNavigationButton extends StatelessWidget {
             alpha: onPressed == null ? 0.48 : 1,
           ),
         ),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: IconButton(
         constraints: const BoxConstraints.tightFor(width: 40, height: 48),
@@ -55,12 +55,12 @@ class _GalleryCounter extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.surfaces.surface.withValues(alpha: 0.92),
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       child: Text(
         '${index + 1} / $total',
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w600,
           fontFeatures: [FontFeature.tabularFigures()],
         ),

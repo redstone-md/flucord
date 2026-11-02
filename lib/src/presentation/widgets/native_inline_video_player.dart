@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 typedef InlineVideoBuilder =
     Widget Function({
@@ -253,7 +255,7 @@ class _NativeInlineVideoPlayerState extends State<NativeInlineVideoPlayer> {
       child: AspectRatio(
         aspectRatio: widget.aspectRatio.clamp(0.65, 2.2),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: FlucordRadius.small,
           child: ColoredBox(
             color: Colors.black,
             child: Stack(
@@ -355,7 +357,10 @@ class InlineVideoControls extends StatelessWidget {
           Text(
             '${_formatDuration(state.position)} / '
             '${_formatDuration(state.duration)}',
-            style: const TextStyle(color: Colors.white, fontSize: 10),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: FlucordType.caption,
+            ),
           ),
           _controlButton(
             icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
@@ -482,7 +487,10 @@ class _InlineVideoError extends StatelessWidget {
             color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 8),
-          const Text('Video unavailable', style: TextStyle(fontSize: 11)),
+          const Text(
+            'Video unavailable',
+            style: TextStyle(fontSize: FlucordType.caption),
+          ),
           const SizedBox(height: 4),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],

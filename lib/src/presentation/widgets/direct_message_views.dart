@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/direct_message_candidate.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'remote_identity_image.dart';
 import 'flucord_dialog.dart';
 
@@ -131,7 +132,10 @@ class DirectMessagesEmptyView extends StatelessWidget {
         const SizedBox(height: 12),
         const Text(
           'No direct messages',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: FlucordType.label,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(

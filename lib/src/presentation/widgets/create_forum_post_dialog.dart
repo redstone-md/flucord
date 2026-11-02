@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import '../pending_attachment_picker.dart';
 import 'pending_attachment_strip.dart';
 import 'flucord_dialog.dart';
@@ -183,7 +184,10 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
               const SizedBox(width: 10),
               Text(
                 '${_attachments.items.length}/${PendingAttachment.maxCount}',
-                style: TextStyle(color: context.surfaces.muted, fontSize: 11),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             ],
           ),
@@ -214,7 +218,9 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
                         ? null
                         : Text(
                             tag.emojiName!,
-                            style: const TextStyle(fontSize: 11),
+                            style: const TextStyle(
+                              fontSize: FlucordType.caption,
+                            ),
                           ),
                     label: Text(tag.name),
                     visualDensity: VisualDensity.compact,
@@ -247,7 +253,9 @@ class _CreateForumPostDialogState extends State<CreateForumPostDialog> {
                 padding: WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 8),
                 ),
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 10)),
+                textStyle: WidgetStatePropertyAll(
+                  TextStyle(fontSize: FlucordType.caption),
+                ),
               ),
             ),
           ),
@@ -303,7 +311,10 @@ class _ForumDialogHeader extends StatelessWidget {
       const Expanded(
         child: Text(
           'Create a post',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       IconButton(
@@ -328,7 +339,7 @@ class _FieldLabel extends StatelessWidget {
         label,
         style: TextStyle(
           color: context.surfaces.muted,
-          fontSize: 10,
+          fontSize: FlucordType.caption,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -336,7 +347,10 @@ class _FieldLabel extends StatelessWidget {
         const Spacer(),
         Text(
           detail!,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
       ],
     ],
@@ -362,7 +376,7 @@ class _ForumDialogError extends StatelessWidget {
           message,
           style: TextStyle(
             color: Theme.of(context).colorScheme.error,
-            fontSize: 11,
+            fontSize: FlucordType.caption,
           ),
         ),
       ),

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../application/message_forward_destination_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'flucord_dialog.dart';
 
 typedef ForwardMessageCallback =
@@ -91,7 +93,10 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
       children: [
         const Text(
           'Forward message',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: FlucordType.body,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 10),
         TextField(
@@ -119,7 +124,10 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
             'No matching text channels or conversations.',
             key: const ValueKey('message-forward-empty'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
       );
@@ -151,7 +159,7 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
       key: const ValueKey('message-forward-error'),
       style: TextStyle(
         color: Theme.of(context).colorScheme.error,
-        fontSize: 11,
+        fontSize: FlucordType.caption,
       ),
     ),
   );
@@ -233,11 +241,11 @@ class _DestinationRow extends StatelessWidget {
     color: selected
         ? context.surfaces.brand.withValues(alpha: 0.16)
         : Colors.transparent,
-    borderRadius: BorderRadius.circular(4),
+    borderRadius: FlucordRadius.small,
     child: InkWell(
       key: ValueKey('message-forward-${destination.channelId}'),
       onTap: enabled ? onPressed : null,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: FlucordRadius.small,
       child: SizedBox(
         height: 48,
         child: Row(
@@ -255,7 +263,7 @@ class _DestinationRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: FlucordType.label,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -266,7 +274,7 @@ class _DestinationRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.surfaces.muted,
-                      fontSize: 10,
+                      fontSize: FlucordType.caption,
                     ),
                   ),
                 ],

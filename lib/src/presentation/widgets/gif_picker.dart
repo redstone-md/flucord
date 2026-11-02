@@ -6,7 +6,9 @@ import '../../application/expression_favorites_controller.dart';
 import '../../application/gif_picker_controller.dart';
 import '../../domain/expression_favorites.dart';
 import '../../domain/gif_picker.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'expression_favorite_star.dart';
 
 /// The composer's GIF button, and the sheet it opens.
@@ -184,7 +186,10 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
               controller.error == null
                   ? 'Nothing matched that.'
                   : 'Discord did not return any GIFs.',
-              style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+              style: TextStyle(
+                color: context.surfaces.muted,
+                fontSize: FlucordType.caption,
+              ),
             ),
             const SizedBox(height: 10),
             FilledButton(
@@ -305,7 +310,7 @@ class _TileFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.surfaces.raised,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: FlucordRadius.medium,
     clipBehavior: Clip.antiAlias,
     child: Stack(
       fit: StackFit.expand,
@@ -338,7 +343,7 @@ class _CategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: context.surfaces.raised,
-    borderRadius: BorderRadius.circular(6),
+    borderRadius: FlucordRadius.medium,
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       key: ValueKey('gif-category-${category.name}'),
@@ -363,7 +368,7 @@ class _CategoryTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: FlucordType.caption,
                   fontWeight: FontWeight.w600,
                 ),
               ),

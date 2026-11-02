@@ -2,6 +2,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import '../../theme/flucord_type.dart';
 import 'emoji_picker.dart';
 import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
@@ -302,7 +303,7 @@ class _MessageItemState extends State<MessageItem> {
                                   widget.message.sentAt,
                                   style: TextStyle(
                                     color: context.surfaces.muted,
-                                    fontSize: 9,
+                                    fontSize: FlucordType.caption,
                                   ),
                                 ),
                               )
@@ -410,7 +411,10 @@ class _MessageItemState extends State<MessageItem> {
         if (message.isEdited && !widget.isEditing)
           Text(
             '(edited)',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         if (message.attachments.isNotEmpty)
           MessageAttachmentGallery(
@@ -492,7 +496,7 @@ class _MessageItemState extends State<MessageItem> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: FlucordType.body,
                 fontWeight: FontWeight.w600,
                 color: _nameColor(widget.member),
               ),
@@ -502,7 +506,10 @@ class _MessageItemState extends State<MessageItem> {
         const SizedBox(width: 8),
         MessageTimeLabel(
           widget.message.sentAt,
-          style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         // The flags a reader cannot guess from the text: why nothing
         // notified them, and why the machine just spoke.
@@ -599,7 +606,7 @@ class _MessageItemState extends State<MessageItem> {
             Text(
               author?.displayName ?? 'Unknown user',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: FlucordType.label,
                 fontWeight: FontWeight.w600,
                 color: author == null ? null : _nameColor(author),
               ),
@@ -612,7 +619,10 @@ class _MessageItemState extends State<MessageItem> {
                     : messagePreviewText(context, reply.body, widget.workspace),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.label,
+                ),
               ),
             ),
           ],
@@ -640,7 +650,10 @@ class _MessageItemState extends State<MessageItem> {
       const SizedBox(height: 4),
       Text(
         'Escape to cancel · Enter to save',
-        style: TextStyle(color: context.surfaces.muted, fontSize: 9),
+        style: TextStyle(
+          color: context.surfaces.muted,
+          fontSize: FlucordType.caption,
+        ),
       ),
     ],
   );

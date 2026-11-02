@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// The "Apps" entry Discord puts on a message and on a member.
 ///
@@ -82,7 +83,10 @@ class ApplicationCommandSheet extends StatelessWidget {
         children: [
           const Text(
             'Apps',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: FlucordType.body,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           if (commands.isEmpty)
@@ -91,7 +95,10 @@ class ApplicationCommandSheet extends StatelessWidget {
               child: Text(
                 'No app offers anything here.',
                 key: const ValueKey('apps-empty'),
-                style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+                style: TextStyle(
+                  color: context.surfaces.muted,
+                  fontSize: FlucordType.caption,
+                ),
               ),
             )
           else

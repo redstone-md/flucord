@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme/flucord_radius.dart';
+import '../../theme/flucord_type.dart';
 import 'streamer_mode_scope.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -215,7 +217,8 @@ class _MessageContentViewState extends State<MessageContentView> {
   }
 
   TextStyle get _bodyStyle =>
-      widget.textStyle ?? const TextStyle(fontSize: 13, height: 1.38);
+      widget.textStyle ??
+      const TextStyle(fontSize: FlucordType.body, height: 1.38);
 
   MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
     final bodyStyle = _bodyStyle;
@@ -230,15 +233,24 @@ class _MessageContentViewState extends State<MessageContentView> {
       ),
       code: bodyStyle.copyWith(
         fontFamily: 'Consolas',
-        fontSize: 12,
+        fontSize: FlucordType.label,
         backgroundColor: surfaces.inset,
       ),
       strong: const TextStyle(fontWeight: FontWeight.w700),
       em: const TextStyle(fontStyle: FontStyle.italic),
       del: const TextStyle(decoration: TextDecoration.lineThrough),
-      h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-      h2: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      h3: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      h1: const TextStyle(
+        fontSize: FlucordType.display,
+        fontWeight: FontWeight.w700,
+      ),
+      h2: const TextStyle(
+        fontSize: FlucordType.title,
+        fontWeight: FontWeight.w700,
+      ),
+      h3: const TextStyle(
+        fontSize: FlucordType.body,
+        fontWeight: FontWeight.w700,
+      ),
       h1Padding: const EdgeInsets.only(bottom: 4),
       h2Padding: const EdgeInsets.only(bottom: 4),
       h3Padding: const EdgeInsets.only(bottom: 2),
@@ -254,7 +266,7 @@ class _MessageContentViewState extends State<MessageContentView> {
       codeblockDecoration: BoxDecoration(
         color: surfaces.inset,
         border: Border.all(color: surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: FlucordRadius.small,
       ),
       tableBorder: TableBorder.all(color: surfaces.border),
       tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),

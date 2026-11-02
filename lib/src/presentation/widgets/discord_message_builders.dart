@@ -4,6 +4,7 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_preview_text.dart';
 import 'user_settings_scope.dart';
@@ -68,11 +69,11 @@ final class _MentionBuilder extends MarkdownElementBuilder {
       child: InkWell(
         key: ValueKey('discord-${_kind.name}-$id'),
         onTap: enabled ? () => onSelectChannel?.call(id) : null,
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: FlucordRadius.small,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: foreground.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: FlucordRadius.small,
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
@@ -155,7 +156,7 @@ final class _TimestampBuilder extends MarkdownElementBuilder {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: context.surfaces.raised,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: FlucordRadius.small,
         ),
         child: Padding(
           key: ValueKey('discord-timestamp-$epoch'),
@@ -228,7 +229,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
   ) => DecoratedBox(
     decoration: BoxDecoration(
       color: context.surfaces.brand.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: FlucordRadius.small,
     ),
     child: Padding(
       key: ValueKey('discord-command-${element.attributes['id']}'),
@@ -277,11 +278,11 @@ class _DiscordSpoilerState extends State<_DiscordSpoiler> {
     child: InkWell(
       key: const ValueKey('discord-spoiler'),
       onTap: () => setState(() => _revealed = !_revealed),
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: FlucordRadius.small,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: _revealed ? context.surfaces.raised : context.surfaces.muted,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: FlucordRadius.small,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),

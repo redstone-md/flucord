@@ -11,6 +11,7 @@ import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/navigation_memory.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
