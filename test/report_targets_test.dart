@@ -93,12 +93,12 @@ void main() {
       );
     });
 
-    testWidgets('a server offers a report control beside its settings', (
-      tester,
-    ) async {
+    testWidgets('a server offers a report entry in its menu', (tester) async {
       var reports = 0;
       await _pumpSidebar(tester, onReportServer: () => reports++);
 
+      await tester.tap(find.byKey(const ValueKey('space-menu')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('report-server')));
       await tester.pumpAndSettle();
 
@@ -108,7 +108,7 @@ void main() {
     testWidgets('direct messages are no server to report', (tester) async {
       await _pumpSidebar(tester, direct: true, onReportServer: () {});
 
-      expect(find.byKey(const ValueKey('report-server')), findsNothing);
+      expect(find.byKey(const ValueKey('space-menu')), findsNothing);
     });
   });
 }

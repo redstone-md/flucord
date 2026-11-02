@@ -126,6 +126,8 @@ void main() {
           requests.add((request, channel?.id)),
     );
 
+    await tester.tap(find.byKey(const ValueKey('space-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('space-notification-menu')));
     await tester.pumpAndSettle();
     expect(find.text('Suppress @everyone and @here'), findsOneWidget);

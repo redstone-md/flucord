@@ -560,6 +560,17 @@ final class ChatWorkspace {
     ],
   );
 
+  /// Replaces a held message with [update]'s answer. It stays where it is in its
+  /// channel, and a message that is not held is left out.
+  ChatWorkspace updateMessage(
+    String messageId,
+    ChatMessage Function(ChatMessage message) update,
+  ) {
+    final index = messages.indexWhere((message) => message.id == messageId);
+    if (index < 0) return this;
+    return copyWith(messages: [...messages]..[index] = update(messages[index]));
+  }
+
   ChatWorkspace removeMessage(String messageId) => copyWith(
     messages: messages.where((message) => message.id != messageId).toList(),
     channels: [

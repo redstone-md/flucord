@@ -8,6 +8,7 @@ import '../../domain/discord_permissions.dart';
 import '../../domain/guild_management.dart';
 import '../../domain/permission_overwrite.dart';
 import '../../theme/flucord_theme.dart';
+import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
 
 /// The channels page: create, rename, reorder, delete.
@@ -134,12 +135,22 @@ class _GuildSettingsChannelsSectionState
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.delete_outline),
             onPressed: manageable && !controller.isBusy
-                ? () => unawaited(controller.deleteChannel(channel.id))
+                ? () => unawaited(_confirmDelete(channel))
                 : null,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDelete(ConversationChannel channel) async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete ${channel.name}?',
+      message: 'The channel and its messages are removed for everybody.',
+      confirmLabel: 'Delete',
+    );
+    if (confirmed) await widget.controller.deleteChannel(channel.id);
   }
 
   /// Swaps two rows and sends the whole reorder as one batch.

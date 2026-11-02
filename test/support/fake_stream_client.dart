@@ -13,6 +13,8 @@ final class FakeStreamClient
     implements DiscordVoiceClient, VoiceAudioTransport {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast(sync: true);
+  final StreamController<(String, DiscordRtpFrame)> _video =
+      StreamController.broadcast(sync: true);
   final List<DiscordRtpFrame> sentFrames = [];
   final List<({bool enabled, VideoEncoderSettings settings})> announcements =
       [];
@@ -29,6 +31,10 @@ final class FakeStreamClient
 
   void emit(VoiceSignalingEvent event) => _events.add(event);
 
+  /// Delivers a packet as if it arrived off the wire.
+  void emitVideo(String userId, DiscordRtpFrame frame) =>
+      _video.add((userId, frame));
+
   @override
   int? get audioSsrc => 4242;
 
@@ -36,8 +42,7 @@ final class FakeStreamClient
   Stream<VoiceSignalingEvent> get events => _events.stream;
 
   @override
-  Stream<(String, DiscordRtpFrame)> get videoPackets =>
-      const Stream<(String, DiscordRtpFrame)>.empty();
+  Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
 
   @override
   Stream<VoiceRemoteOpusFrame> get remoteAudio =>
@@ -99,5 +104,6 @@ final class FakeStreamClient
   Future<void> close() async {
     closed = true;
     await _events.close();
+    await _video.close();
   }
 }

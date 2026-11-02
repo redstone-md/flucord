@@ -136,6 +136,14 @@ class ConversationPane extends StatefulWidget {
 class _ConversationPaneState extends State<ConversationPane> {
   ChatMessage? _replyTo;
 
+  static String _composerHintPrefix(ConversationChannel channel) {
+    if (channel.isDirectMessage) return '@';
+    final hasNoHash =
+        channel.kind == ChannelKind.voice ||
+        channel.spaceId == CommunitySpace.directMessagesId;
+    return hasNoHash ? '' : '#';
+  }
+
   /// When this account last sent in the channel, for the composer's slowmode
   /// countdown. Null on a channel without slowmode, where nothing needs it.
   DateTime? _lastSentAt;
@@ -359,6 +367,8 @@ class _ConversationPaneState extends State<ConversationPane> {
     // four arguments because the mark is asked of each tile now.
     VoiceStreamControls streamControls() => VoiceStreamControls(
       isOpen: (userId) => viewer.isOpen(widget.channel.streamKeyFor(userId)),
+      hasFailed: (userId) =>
+          viewer.errorFor(widget.channel.streamKeyFor(userId)) != null,
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
       selfPreview: selfPreview(),
@@ -543,7 +553,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             slowmodeUntil: _slowmodeUntil,
             characterLimit: _characterLimit(),
             attachmentSizeLimitBytes: _attachmentSizeLimit(channel),
-            channelIsVoice: channel.kind == ChannelKind.voice,
+            channelHintPrefix: _composerHintPrefix(channel),
             spaceName: widget.workspace.spaceById(channel.spaceId).name,
             autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
               widget.workspace,

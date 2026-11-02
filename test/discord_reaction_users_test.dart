@@ -108,10 +108,11 @@ void main() {
       );
       final handler = DiscordReactionHandler(cache, () => 'user-1');
 
-      final added = await handler.apply(
+      await handler.apply(
         const DiscordGatewayDispatch(
           name: 'MESSAGE_REACTION_ADD',
           data: {
+            'channel_id': 'channel-1',
             'message_id': 'message-1',
             'user_id': 'user-1',
             'type': 1,
@@ -120,17 +121,18 @@ void main() {
           },
         ),
       );
-      final afterAdd = added!.message.reactions.single;
+      final afterAdd = (await cache.readMessage('message-1'))!.reactions.single;
       expect(afterAdd.count, 2);
       expect(afterAdd.normalCount, 1);
       expect(afterAdd.burstCount, 1);
       expect(afterAdd.burstByCurrentUser, isTrue);
       expect(afterAdd.burstColorValues, [0xffff3366]);
 
-      final removed = await handler.apply(
+      await handler.apply(
         const DiscordGatewayDispatch(
           name: 'MESSAGE_REACTION_REMOVE',
           data: {
+            'channel_id': 'channel-1',
             'message_id': 'message-1',
             'user_id': 'user-1',
             'type': 1,
@@ -138,7 +140,9 @@ void main() {
           },
         ),
       );
-      final afterRemove = removed!.message.reactions.single;
+      final afterRemove = (await cache.readMessage(
+        'message-1',
+      ))!.reactions.single;
       expect(afterRemove.count, 1);
       expect(afterRemove.normalCount, 1);
       expect(afterRemove.burstCount, 0);
@@ -146,6 +150,41 @@ void main() {
       expect(afterRemove.burstColorValues, isEmpty);
     },
   );
+
+  test('reactions that land together all reach the cache', () async {
+    final cache = await SqliteChatCache.openAt(
+      inMemoryDatabasePath,
+      factory: databaseFactoryFfi,
+    );
+    addTearDown(cache.close);
+    await cache.writeMessage(
+      ChatMessage(
+        id: 'message-1',
+        channelId: 'channel-1',
+        authorId: 'author-1',
+        body: 'Ship it',
+        sentAt: DateTime(2026, 7, 24, 8),
+      ),
+    );
+    final handler = DiscordReactionHandler(cache, () => 'user-1');
+
+    await Future.wait([
+      for (final userId in ['user-2', 'user-3', 'user-4'])
+        handler.apply(
+          DiscordGatewayDispatch(
+            name: 'MESSAGE_REACTION_ADD',
+            data: {
+              'channel_id': 'channel-1',
+              'message_id': 'message-1',
+              'user_id': userId,
+              'emoji': const {'id': null, 'name': '🔥'},
+            },
+          ),
+        ),
+    ]);
+
+    expect((await cache.readMessage('message-1'))!.reactions.single.count, 3);
+  });
 }
 
 final class _RecordingTransport implements DiscordHttpTransport {
