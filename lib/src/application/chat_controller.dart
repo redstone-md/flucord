@@ -121,6 +121,11 @@ final class ChatController extends ChangeNotifier {
   /// Set while the window is away. The first message to arrive in the active
   /// channel then replaces its unread boundary.
   bool _boundaryAwaitsNewMessage = false;
+
+  /// The read state of each channel that opened unread and is still loading, as
+  /// it stood before the open acked it. Its history names the first unread
+  /// message, so the boundary can only be set when a page arrives.
+  final Map<String, ReadState> _unreadOpenings = {};
   bool _disposed = false;
 
   ChatLoadState get state => _state;
@@ -256,6 +261,7 @@ final class ChatController extends ChangeNotifier {
     _lastSentAt.clear();
     _archivedThreadState.clear();
     _clearTyping();
+    _unreadOpenings.clear();
     _activeChannelId = null;
     _connectionStatus = RepositoryConnectionStatus.offline;
     _listenToRepository();
@@ -277,13 +283,22 @@ final class ChatController extends ChangeNotifier {
       _error = error;
       _state = ChatLoadState.failure;
     }
-    notifyListeners();
-    final workspace = _workspace;
-    if (_state == ChatLoadState.ready && workspace != null) {
+    if (_state == ChatLoadState.ready) {
       // The read state came back whole with the workspace, so this is the one
       // moment a session can judge which entries are older than the collector
       // keeps. A transport without read state has nothing to collect.
       unawaited(collectReadStateGarbage());
+      // READY's own update reached the controller before it had a workspace to
+      // fold it into, and the first screen must already show it.
+      _applyReadState();
+    }
+    notifyListeners();
+    final workspace = _workspace;
+    // A link held through the launch has opened its channel during the notify
+    // above. The user asked for that channel, so the app does not land elsewhere.
+    if (_state == ChatLoadState.ready &&
+        workspace != null &&
+        _activeChannelId == null) {
       // A voice channel does carry messages, but it is never the channel the
       // app lands on unasked, so warming its history here would be wasted work.
       // The same visibility filter the shell lands by is applied here, or the
@@ -313,6 +328,8 @@ final class ChatController extends ChangeNotifier {
     }
     _activeChannelId = channelId;
     if (previousChannelId != null) _capChannelIfNotOpen(previousChannelId);
+    // Read here, because the ack below moves the cursor.
+    final stateAtOpen = readState.forChannel(channelId);
     _workspace = _workspace?.markChannelRead(channelId);
     _persistChannelActivity(channelId);
     acknowledgeChannel(channelId);
@@ -332,6 +349,13 @@ final class ChatController extends ChangeNotifier {
     _loadingChannels.add(channelId);
     _channelErrors.remove(channelId);
     _olderChannelErrors.remove(channelId);
+    // A link that names a message opens on that message. Its page is a window
+    // around the anchor, which says nothing about where unread starts.
+    if (anchorMessageId == null &&
+        stateAtOpen != null &&
+        stateAtOpen.isBehind(channel?.lastMessageId)) {
+      _unreadOpenings[channelId] = stateAtOpen;
+    }
     notifyListeners();
     try {
       // A link that names a message lands on that message: the window is
@@ -345,6 +369,7 @@ final class ChatController extends ChangeNotifier {
         page.history,
         retainExisting: anchorMessageId != null,
       );
+      _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);
       _setHistoryExhausted(channelId, !page.hasMore);
       // The page may name a newer message than the channel record did, and the
@@ -357,6 +382,7 @@ final class ChatController extends ChangeNotifier {
         _channelErrors[channelId] = error;
       }
     } finally {
+      _unreadOpenings.remove(channelId);
       _loadingChannels.remove(channelId);
       _capChannelIfNotOpen(channelId);
       if (!_disposed) notifyListeners();
@@ -371,6 +397,16 @@ final class ChatController extends ChangeNotifier {
     if (identical(capped, _workspace)) return;
     _workspace = capped;
     _loadedChannels.remove(channelId);
+  }
+
+  /// Sets the boundary of [channelId] if it opened unread. Answers whether the
+  /// list can open now: false when the channel opened unread and no held message
+  /// is unread yet, so opening would land on the wrong place.
+  bool _setBoundaryOfUnreadOpening(String channelId) {
+    final opening = _unreadOpenings[channelId];
+    if (opening == null) return true;
+    _workspace = _workspace?.withUnreadBoundaryFrom(opening);
+    return _workspace?.channelOrNull(channelId)?.firstUnreadMessageId != null;
   }
 
   Future<String?> openDirectConversation(String recipientId) async {
@@ -432,14 +468,18 @@ final class ChatController extends ChangeNotifier {
   /// Puts a transport's locally held page on screen while its refresh runs.
   ///
   /// The channel counts as loaded from here: it has messages to read, so the
-  /// loading view would only hide them.
+  /// loading view would only hide them. The one exception is below.
   void _restoreChannelHistory(ChannelHistoryRestoredEvent event) {
     final channelId = event.history.channelId;
     if (_workspace == null || _loadedChannels.contains(channelId)) return;
     _workspace = _workspace?.mergeInitialHistory(event.history);
     _loadedChannels.add(channelId);
     _restoredChannels.add(channelId);
-    _loadingChannels.remove(channelId);
+    // The list reads the boundary once, when it opens, so a channel with no
+    // boundary yet waits for the refresh that can name one.
+    if (_setBoundaryOfUnreadOpening(channelId)) {
+      _loadingChannels.remove(channelId);
+    }
     _setHistoryExhausted(channelId, !event.hasMore);
   }
 

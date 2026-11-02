@@ -122,7 +122,9 @@ extension _ChatControllerEvents on ChatController {
   void _applyReadState() {
     final snapshot = _repository.readState?.current;
     if (snapshot == null) return;
-    _workspace = _workspace?.applyReadState(snapshot);
+    _workspace = _workspace
+        ?.applyReadState(snapshot)
+        .clearReadBoundaries(activeChannelId: _activeChannelId);
   }
 
   void _handleMessageUpsert(MessageUpsertedEvent event) {

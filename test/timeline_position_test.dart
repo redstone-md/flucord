@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -22,7 +24,20 @@ const _pageSize = 100;
 const _firstHeld = 100;
 const _newestHeld = _firstHeld + _pageSize - 1;
 
-String _idOf(int index) => '9${index.toString().padLeft(17, '0')}';
+/// How long a plain ack waits before it goes out.
+const _ackDebounce = Duration(seconds: 3);
+
+/// The first unread message of a channel opened with [_readyWithUnread].
+const _firstUnread = _firstHeld + 50;
+
+final _idsStartAt = DateTime.now()
+    .subtract(const Duration(days: 2))
+    .millisecondsSinceEpoch;
+
+/// Ids from recent days, because the app deletes a read cursor older than 30.
+String _idOf(int index) => DiscordSnowflake.fromTimestampMillis(
+  _idsStartAt + index * Duration.millisecondsPerMinute,
+);
 
 Map<String, Object?> _rawMessage(int index, {String? authorId}) => rawMessage(
   id: _idOf(index),
@@ -42,6 +57,66 @@ List<Map<String, Object?>> _page(int first, int count) => [
   for (var index = first + count - 1; index >= first; index--)
     _rawMessage(index),
 ];
+
+/// READY for an account that has read the channel up to [firstUnread], with the
+/// channel's newest message at [newest].
+Map<String, Object?> _readyWithUnread({
+  int firstUnread = _firstUnread,
+  int newest = _newestHeld,
+}) => SessionHarness.defaultReady()
+  ..['guilds'] = [
+    rawGuild(
+      id: SessionHarness.guildId,
+      name: 'The Forge',
+      channels: [
+        rawChannel(
+          id: SessionHarness.channelId,
+          name: 'general',
+          lastMessageId: _idOf(newest),
+        ),
+      ],
+      everyonePermissions: '${DiscordPermissions.viewChannel}',
+    ),
+  ]
+  ..['read_state'] = {
+    'version': 1,
+    'partial': false,
+    'entries': [
+      {
+        'id': SessionHarness.channelId,
+        'last_message_id': _idOf(firstUnread - 1),
+      },
+    ],
+  };
+
+Finder get _newLine => find.byKey(const ValueKey('unread-message-boundary'));
+
+/// The NEW line sits directly above the row of the message at [index].
+void _expectNewLineAbove(
+  WidgetTester tester,
+  SessionHarness session,
+  int index,
+) {
+  expect(_newLine, findsOneWidget);
+  expect(
+    tester.getBottomLeft(_newLine).dy,
+    tester.getTopLeft(session.messageRow(_idOf(index))).dy,
+  );
+}
+
+/// Waits for the plain ack, and returns the messages acked in the channel.
+Future<List<String>> _ackedMessages(
+  WidgetTester tester,
+  SessionHarness session,
+) async {
+  await tester.pump(_ackDebounce);
+  await session.settle();
+  return [
+    for (final request in session.transport.requests)
+      if (request.method == 'POST' && request.uri.path.endsWith('/ack'))
+        request.uri.pathSegments[5],
+  ];
+}
 
 /// Answers with the newest page, and with the page before it when asked.
 void _routeHistory(FakeDiscordTransport transport) {
@@ -162,6 +237,255 @@ void main() {
     },
     routes: _routeHistory,
   );
+
+  group('a channel opened unread', () {
+    Future<void> open(SessionHarness session) =>
+        session.openChannel(SessionHarness.channelId);
+
+    testSession(
+      'shows the NEW line at the first unread message, after the ack went out',
+      (tester, session) async {
+        await open(session);
+
+        _expectNewLineAbove(tester, session, _firstUnread);
+        expect(await _ackedMessages(tester, session), [_idOf(_newestHeld)]);
+        _expectNewLineAbove(tester, session, _firstUnread);
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'opens at that message and not at the newest',
+      (tester, session) async {
+        await open(session);
+
+        final top = tester.getTopLeft(session.messageRow(_idOf(_firstUnread)));
+        expect(top.dy, inInclusiveRange(60, 300));
+        expect(session.messageRow(_idOf(_newestHeld)), findsNothing);
+        expect(find.byKey(const ValueKey('jump-to-unread')), findsNothing);
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'holds still for a reader scrolled up when messages arrive',
+      (tester, session) async {
+        await open(session);
+        await _drag(tester, session, 300);
+        final watched = _rowOnScreen(tester, session);
+
+        for (var index = _newestHeld + 1; index <= _newestHeld + 5; index++) {
+          await _arrive(session, index);
+          expect(tester.getTopLeft(watched.row).dy, watched.top);
+        }
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'follows new messages once the reader reaches the end',
+      (tester, session) async {
+        await open(session);
+        for (var drag = 0; drag < 20; drag++) {
+          await _drag(tester, session, -800);
+        }
+        _expectVisible(tester, session, _newestHeld);
+
+        for (var index = _newestHeld + 1; index <= _newestHeld + 3; index++) {
+          await _arrive(session, index);
+          _expectVisible(tester, session, index);
+        }
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'keeps the NEW line when only the channel pointer moves',
+      (tester, session) async {
+        await open(session);
+
+        await session.dispatch('PASSIVE_UPDATE_V2', {
+          'channels': [
+            {
+              'id': SessionHarness.channelId,
+              'last_message_id': _idOf(_newestHeld + 1),
+            },
+          ],
+        });
+
+        _expectNewLineAbove(tester, session, _firstUnread);
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'moves nothing when the window blurs and comes back over the boundary',
+      (tester, session) async {
+        await open(session);
+        final watched = _rowOnScreen(tester, session);
+
+        session.blurWindow();
+        await session.settle();
+        expect(tester.getTopLeft(watched.row).dy, watched.top);
+        _expectNewLineAbove(tester, session, _firstUnread);
+
+        session.focusWindow();
+        await session.settle();
+        expect(tester.getTopLeft(watched.row).dy, watched.top);
+        _expectNewLineAbove(tester, session, _firstUnread);
+      },
+      ready: _readyWithUnread(),
+      routes: _routeHistory,
+    );
+  });
+
+  group('a channel opened unread after a relaunch, with a cached page', () {
+    /// Puts the newest page in the cache, then relaunches with the channel's
+    /// refresh held open until the returned completer finishes.
+    Future<Completer<DiscordHttpResponse>> relaunch(
+      SessionHarness session,
+      Map<String, Object?> ready,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      final refresh = Completer<DiscordHttpResponse>();
+      session.transport.on('GET', _channelMessagesPath, (_) => refresh.future);
+      await session.relaunch(ready: ready);
+      await session.openChannel(SessionHarness.channelId);
+      return refresh;
+    }
+
+    testSession(
+      'opens on the boundary at once when the cache holds it',
+      (tester, session) async {
+        final refresh = await relaunch(session, _readyWithUnread());
+
+        _expectNewLineAbove(tester, session, _firstUnread);
+
+        refresh.complete(jsonResponse(_page(_firstHeld, _pageSize)));
+        await session.settle();
+
+        _expectNewLineAbove(tester, session, _firstUnread);
+      },
+      routes: _routeHistory,
+      onDisk: true,
+    );
+
+    testSession(
+      'waits for the refresh when every cached message is older than the boundary',
+      (tester, session) async {
+        final refresh = await relaunch(
+          session,
+          _readyWithUnread(
+            firstUnread: _newestHeld + 1,
+            newest: _newestHeld + 60,
+          ),
+        );
+
+        expect(session.messageRow(_idOf(_newestHeld)), findsNothing);
+
+        refresh.complete(jsonResponse(_page(_firstHeld + 60, _pageSize)));
+        await session.settle();
+
+        _expectNewLineAbove(tester, session, _newestHeld + 1);
+        expect(session.messageRow(_idOf(_newestHeld + 60)), findsNothing);
+      },
+      routes: _routeHistory,
+      onDisk: true,
+    );
+
+    testSession(
+      'shows the cached page if the refresh fails',
+      (tester, session) async {
+        final refresh = await relaunch(
+          session,
+          _readyWithUnread(
+            firstUnread: _newestHeld + 1,
+            newest: _newestHeld + 60,
+          ),
+        );
+
+        refresh.complete(jsonResponse({'message': 'Nope'}, statusCode: 403));
+        await session.settle();
+
+        expect(session.messageRow(_idOf(_newestHeld)), findsOneWidget);
+      },
+      routes: _routeHistory,
+      onDisk: true,
+    );
+  });
+
+  group('a channel opened read', () {
+    testSession(
+      'on refocus shows the NEW line at the first message that came while away',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        expect(_newLine, findsNothing);
+
+        session.blurWindow();
+        await session.settle();
+        await _arrive(session, _newestHeld + 1);
+        await _arrive(session, _newestHeld + 2);
+        session.focusWindow();
+        await session.settle();
+
+        _expectNewLineAbove(tester, session, _newestHeld + 1);
+        expect(
+          await _ackedMessages(tester, session),
+          contains(_idOf(_newestHeld + 2)),
+        );
+        _expectNewLineAbove(tester, session, _newestHeld + 1);
+      },
+      routes: _routeHistory,
+    );
+
+    testSession('on refocus holds still for a reader scrolled up', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _drag(tester, session, 800);
+      final watched = _rowOnScreen(tester, session);
+
+      session.blurWindow();
+      await _arrive(session, _newestHeld + 1);
+      session.focusWindow();
+      await session.settle();
+
+      expect(tester.getTopLeft(watched.row).dy, watched.top);
+      expect(find.byKey(const ValueKey('jump-to-unread')), findsOneWidget);
+    }, routes: _routeHistory);
+
+    testSession('after another device read it has no NEW line', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.otherChannelId);
+      await session.dispatch('MESSAGE_CREATE', _rawMessage(_newestHeld + 1));
+      await session.dispatch('MESSAGE_ACK', {
+        'channel_id': SessionHarness.channelId,
+        'message_id': _idOf(_newestHeld + 1),
+        'version': 2,
+      });
+      session.transport.on(
+        'GET',
+        _channelMessagesPath,
+        (_) => jsonResponse(_page(_firstHeld + 1, _pageSize)),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('channel-${SessionHarness.channelId}')),
+      );
+      await session.settle();
+
+      expect(_newLine, findsNothing);
+      _expectVisible(tester, session, _newestHeld + 1);
+    });
+  });
 
   group('markdown parses per appended message', () {
     testSession(
