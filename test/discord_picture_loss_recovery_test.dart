@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flucord/src/data/discord/discord_picture_loss_recovery.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
@@ -288,7 +290,7 @@ DiscordRtpFrame _video(int sequence, {int ssrc = _videoSsrc}) =>
         payloadType: DiscordRtpHeader.discordVideoPayloadType,
         marker: true,
       ),
-      payload: [sequence],
+      payload: Uint8List.fromList([sequence]),
     );
 
 /// [sequence]'s retransmission (RFC 4588): on the SSRC above, with the
@@ -301,7 +303,7 @@ DiscordRtpFrame _retransmission(int sequence) => DiscordRtpFrame(
     payloadType: DiscordRtpHeader.discordVideoRtxPayloadType,
     marker: true,
   ),
-  payload: [sequence >> 8, sequence & 0xff, sequence],
+  payload: Uint8List.fromList([sequence >> 8, sequence & 0xff, sequence]),
 );
 
 /// A packet on the retransmission SSRC that is not a retransmission.
@@ -312,7 +314,7 @@ DiscordRtpFrame _onRtxSsrc(int sequence) => DiscordRtpFrame(
     ssrc: _videoSsrc + 1,
     payloadType: DiscordRtpHeader.discordVideoPayloadType,
   ),
-  payload: [0, 0, 0],
+  payload: Uint8List.fromList([0, 0, 0]),
 );
 
 /// The recovery on a fake clock, with one announced sender.

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/discord/discord_voice_dave_controller.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
@@ -197,7 +199,10 @@ void main() {
     });
     controller.acceptBinary(opcode: 29, payload: [0, 1, 7]);
     expect(
-      controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
+      controller.decryptAudioFrame(
+        userId: '200',
+        encryptedFrame: Uint8List.fromList([6, 7]),
+      ),
       [6, 7],
     );
 
@@ -206,7 +211,10 @@ void main() {
 
     expect(service.decryptors.single.disposed, isTrue);
     expect(
-      () => controller.decryptAudioFrame(userId: '200', encryptedFrame: [6, 7]),
+      () => controller.decryptAudioFrame(
+        userId: '200',
+        encryptedFrame: Uint8List.fromList([6, 7]),
+      ),
       throwsStateError,
     );
   });
@@ -420,10 +428,10 @@ final class _FakeDaveDecryptor implements VoiceDaveDecryptor {
   bool disposed = false;
 
   @override
-  List<int> decrypt({
+  Uint8List decrypt({
     required DaveMediaType mediaType,
-    required List<int> encryptedFrame,
-  }) => List.of(encryptedFrame);
+    required Uint8List encryptedFrame,
+  }) => Uint8List.fromList(encryptedFrame);
 
   @override
   void transitionToKeyRatchet(VoiceDaveKeyRatchet keyRatchet) {

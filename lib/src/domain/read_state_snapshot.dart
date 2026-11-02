@@ -188,12 +188,49 @@ extension ReadStateProjection on ChatWorkspace {
       ],
     );
   }
+
+  /// Sets a channel's boundary to its first held message newer than [state]'s
+  /// cursor. [state] is what the channel's read state was before it was read,
+  /// so this is how a channel that an open acked still gets its NEW line.
+  ///
+  /// With no such message held, the channel stays as it is.
+  ChatWorkspace withUnreadBoundaryFrom(ReadState state) {
+    final first = messagesFor(
+      state.entityId,
+    ).where((message) => state.isBehind(message.id)).firstOrNull;
+    if (first == null) return this;
+    return updateChannel(
+      state.entityId,
+      (channel) => channel.copyWith(firstUnreadMessageId: first.id),
+    );
+  }
+
+  /// Clears the boundary of every read channel except [activeChannelId], whose
+  /// NEW line is on screen. A channel read somewhere else, while the client was
+  /// not looking at it, has nothing new to show when it opens.
+  ChatWorkspace clearReadBoundaries({String? activeChannelId}) {
+    bool isStale(ConversationChannel channel) =>
+        !channel.unread &&
+        channel.firstUnreadMessageId != null &&
+        channel.id != activeChannelId;
+    if (!channels.any(isStale)) return this;
+    return copyWith(
+      channels: [
+        for (final channel in channels)
+          isStale(channel) ? channel.clearUnreadBoundary() : channel,
+      ],
+    );
+  }
 }
 
 /// A channel the server holds no read state for keeps whatever it already had.
 /// Silence is not disagreement: Discord garbage-collects read states it
 /// considers stale, and reading that as "everything is read" would wipe an
 /// unread marker the account can still see in the official client.
+///
+/// A channel that is read keeps its boundary: the NEW line outlives the ack that
+/// opening the channel sends. Clearing it is left to the explicit clear. An
+/// unread channel keeps its boundary too when no held message can replace it.
 ConversationChannel _projectedChannel(
   ConversationChannel channel,
   ReadStateSnapshot snapshot,
@@ -205,6 +242,7 @@ ConversationChannel _projectedChannel(
   return channel.copyWith(
     unread: unread,
     mentionCount: state.mentionCount,
-    firstUnreadMessageId: unread ? firstUnreadMessageId : null,
+    firstUnreadMessageId:
+        (unread ? firstUnreadMessageId : null) ?? channel.firstUnreadMessageId,
   );
 }

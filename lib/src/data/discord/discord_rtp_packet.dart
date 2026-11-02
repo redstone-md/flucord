@@ -113,7 +113,7 @@ final class DiscordRtpHeader {
       payloadType: packet[1] & 0x7f,
       marker: packet[1] & 0x80 != 0,
       padding: packet[0] & 0x20 != 0,
-      csrcs: List.unmodifiable(csrcs),
+      csrcs: csrcs,
       extensionProfile: hasExtension
           ? data.getUint16(offset, Endian.big)
           : null,
@@ -125,11 +125,12 @@ final class DiscordRtpHeader {
 }
 
 final class DiscordRtpFrame {
-  DiscordRtpFrame({required this.header, required List<int> payload})
-    : payload = List<int>.unmodifiable(payload);
+  /// Holds [payload] as it is, with no copy. Nobody may change those bytes
+  /// afterwards.
+  DiscordRtpFrame({required this.header, required this.payload});
 
   final DiscordRtpHeader header;
-  final List<int> payload;
+  final Uint8List payload;
 
   Uint8List encodeUnencrypted() {
     final additionalData = header.encodeAeadAdditionalData();
