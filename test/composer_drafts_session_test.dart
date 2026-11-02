@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_remote_auth.dart';
+import 'package:flucord/src/domain/discord_session.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';
@@ -342,7 +344,14 @@ void main() {
     await _type(tester, session, 'private words');
 
     await session.signOut();
-    await session.signIn(ready: SessionHarness.defaultReady());
+    session.remoteAuth.add(
+      DiscordRemoteAuthCompleted(
+        DiscordDesktopUserSession(
+          SessionHarness.tokenOf(SessionHarness.currentUserId),
+        ),
+      ),
+    );
+    await session.connectToReady(SessionHarness.defaultReady());
     await session.openChannel(SessionHarness.channelId);
 
     expect(_boxText(tester), isEmpty);

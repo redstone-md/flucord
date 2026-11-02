@@ -25,7 +25,7 @@ class AccountPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presence = SelfPresenceScope.maybeOf(context);
-    final (status, color, tooltip) = _transportStatus(context);
+    final (status, color, tooltip) = _connectionLabels(context);
     // The account's own row is composed locally, so the panel prefers what
     // this client is broadcasting over whatever the member table last cached.
     final self = presence?.isAvailable ?? false
@@ -109,38 +109,38 @@ class AccountPanel extends StatelessWidget {
     );
   }
 
-  (String, Color, String) _transportStatus(BuildContext context) =>
+  (String, Color, String) _connectionLabels(BuildContext context) =>
       switch (sessionMode) {
         SessionMode.disconnected => (
           'Disconnected',
           context.surfaces.muted,
-          'No chat transport',
+          'Not connected to Discord',
         ),
         SessionMode.demo => (
           'Demo workspace',
           Theme.of(context).colorScheme.primary,
-          'Deterministic demo data',
+          'Sample data, not your account',
         ),
         SessionMode.discord => switch (connectionStatus) {
           RepositoryConnectionStatus.connected => (
             'Discord online',
             FlucordColors.success,
-            'Discord Gateway',
+            'Connected to Discord',
           ),
           RepositoryConnectionStatus.connecting => (
             'Connecting...',
             FlucordColors.warning,
-            'Discord Gateway',
+            'Connecting to Discord',
           ),
           RepositoryConnectionStatus.reconnecting => (
             'Reconnecting...',
             FlucordColors.warning,
-            'Discord Gateway',
+            'Reconnecting to Discord',
           ),
           RepositoryConnectionStatus.offline => (
             'Offline',
             context.surfaces.muted,
-            'Discord Gateway',
+            'Not connected to Discord',
           ),
         },
       };
