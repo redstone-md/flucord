@@ -29,7 +29,7 @@ A participant receiving somebody else's stream.
 _Avoid_: viewer, spectator, audience
 
 **Watched session**:
-One stream this client is receiving, from the ask to the last picture. Somebody else's stream, never this account's own.
+One stream this client is receiving, from the ask to the last picture. Somebody else's stream, never this account's own. Decoded only while a tile draws it and the client is not suspended.
 _Avoid_: connection, socket, channel
 
 **Self-preview**:
