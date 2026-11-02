@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Size;
 
 import 'package:window_manager/window_manager.dart';
 
@@ -8,6 +9,12 @@ import 'desktop_protocol_intake.dart';
 import 'desktop_protocol_router.dart';
 import 'desktop_tray_coordinator.dart';
 import '../app_log.dart';
+
+/// The smallest the window can be made, on every desktop platform.
+///
+/// The account panel, the voice bar and the composer all still fit here, even
+/// at the largest zoom. The shell's breakpoints rely on this size.
+const minimumWindowSize = Size(940, 500);
 
 /// The app's update channel, when the platform has one. Windows wraps
 /// auto_updater, which reads an appcast: an XML feed listing releases. The
@@ -76,6 +83,7 @@ final class DesktopIntegrationFlow
   Future<void> _initializeWindow() async {
     try {
       await windowManager.ensureInitialized();
+      await windowManager.setMinimumSize(minimumWindowSize);
       windowManager.addListener(this);
       _windowReady = true;
     } on Object catch (error) {
