@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../domain/user_settings.dart';
 import 'user_settings_scope.dart';
@@ -13,6 +13,13 @@ abstract final class MessageTimestamp {
   static String of(BuildContext context, DateTime value) =>
       format(value, UserSettingsScope.hourCycleOf(context));
 
+  /// The long form, such as `Sunday, March 1, 2026 at 9:04 PM`.
+  static String longOf(BuildContext context, DateTime value) {
+    final local = value.toLocal();
+    final date = MaterialLocalizations.of(context).formatFullDate(local);
+    return '$date at ${of(context, local)}';
+  }
+
   static String format(DateTime value, TimestampHourCycle cycle) {
     final minute = value.minute.toString().padLeft(2, '0');
     if (cycle != TimestampHourCycle.hour12) {
@@ -24,4 +31,18 @@ abstract final class MessageTimestamp {
     final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
     return '$hour:$minute ${value.hour < 12 ? 'AM' : 'PM'}';
   }
+}
+
+/// The clock on a timeline row. Hovering it shows the full date.
+class MessageTimeLabel extends StatelessWidget {
+  const MessageTimeLabel(this.sentAt, {required this.style, super.key});
+
+  final DateTime sentAt;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: MessageTimestamp.longOf(context, sentAt),
+    child: Text(MessageTimestamp.of(context, sentAt), style: style),
+  );
 }

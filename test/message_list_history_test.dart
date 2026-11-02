@@ -1,10 +1,16 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/application/user_settings_controller.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
+import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/presentation/widgets/message_list.dart';
+import 'package:flucord/src/presentation/widgets/user_settings_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/fake_user_settings_repository.dart';
 
 void main() {
   testWidgets('shows load, progress, and retry history boundaries', (
@@ -180,6 +186,154 @@ void main() {
     expect(target, findsOneWidget);
     expect(tester.getTopLeft(target).dy, inInclusiveRange(60, 250));
   });
+
+  group('dates', () {
+    testWidgets('a divider sits between messages on different local days', (
+      tester,
+    ) async {
+      // Sent minutes apart, and given in UTC the way a wire time can be: the
+      // day that counts is the one on the reader's own calendar.
+      await tester.pumpWidget(
+        _host([
+          _sentAt('m001', DateTime(2026, 3, 1, 23, 58).toUtc()),
+          _sentAt('m002', DateTime(2026, 3, 2, 0, 3).toUtc()),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      final divider = find.text('Monday, March 2, 2026');
+      expect(divider, findsOneWidget);
+      expect(
+        tester.getBottomLeft(find.byKey(const ValueKey('message-m001'))).dy,
+        lessThanOrEqualTo(tester.getTopLeft(divider).dy),
+      );
+      expect(
+        tester.getBottomLeft(divider).dy,
+        lessThanOrEqualTo(
+          tester.getTopLeft(find.byKey(const ValueKey('message-m002'))).dy,
+        ),
+      );
+    });
+
+    testWidgets('messages on one day have no divider between them', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host([
+          _sentAt('m001', DateTime(2026, 3, 2, 9, 0)),
+          _sentAt('m002', DateTime(2026, 3, 2, 21, 0)),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('March 2, 2026'), findsNothing);
+    });
+
+    testWidgets('one author does not group across midnight', (tester) async {
+      await tester.pumpWidget(
+        _host([
+          _sentAt('m001', DateTime(2026, 3, 1, 23, 58)),
+          _sentAt('m002', DateTime(2026, 3, 2, 0, 3)),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      // Each row that opens a group carries the author's name.
+      expect(find.text('Flucord'), findsNWidgets(2));
+    });
+
+    testWidgets('one author still groups within a day', (tester) async {
+      await tester.pumpWidget(
+        _host([
+          _sentAt('m001', DateTime(2026, 3, 2, 9, 0)),
+          _sentAt('m002', DateTime(2026, 3, 2, 9, 5)),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Flucord'), findsOneWidget);
+    });
+
+    group('hovering a timestamp shows the full date', () {
+      final message = DateTime(2026, 3, 1, 21, 4);
+
+      testWidgets('in the 12-hour cycle the account chose', (tester) async {
+        final settings = await _settings(TimestampHourCycle.hour12);
+        await tester.pumpWidget(
+          _host([_sentAt('m001', message)], settings: settings),
+        );
+        await tester.pumpAndSettle();
+
+        await _hover(tester, find.text('9:04 PM'));
+
+        expect(find.text('Sunday, March 1, 2026 at 9:04 PM'), findsOneWidget);
+      });
+
+      testWidgets('in the 24-hour cycle the account chose', (tester) async {
+        final settings = await _settings(TimestampHourCycle.hour23);
+        await tester.pumpWidget(
+          _host([_sentAt('m001', message)], settings: settings),
+        );
+        await tester.pumpAndSettle();
+
+        await _hover(tester, find.text('21:04'));
+
+        expect(find.text('Sunday, March 1, 2026 at 21:04'), findsOneWidget);
+      });
+
+      testWidgets('on a grouped row', (tester) async {
+        final settings = await _settings(TimestampHourCycle.hour12);
+        await tester.pumpWidget(
+          _host([
+            _sentAt('m001', message),
+            _sentAt('m002', message.add(const Duration(minutes: 2))),
+          ], settings: settings),
+        );
+        await tester.pumpAndSettle();
+
+        await _hover(tester, find.text('9:06 PM'));
+
+        expect(find.text('Sunday, March 1, 2026 at 9:06 PM'), findsOneWidget);
+      });
+
+      testWidgets('on a system message', (tester) async {
+        final settings = await _settings(TimestampHourCycle.hour12);
+        await tester.pumpWidget(
+          _host([
+            _sentAt('m001', message, type: DiscordMessageType.userJoin),
+          ], settings: settings),
+        );
+        await tester.pumpAndSettle();
+
+        await _hover(tester, find.text('9:04 PM'));
+
+        expect(find.text('Sunday, March 1, 2026 at 9:04 PM'), findsOneWidget);
+      });
+    });
+  });
+}
+
+/// Rests a mouse on [target] for as long as a tooltip waits before it opens.
+Future<void> _hover(WidgetTester tester, Finder target) async {
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(location: Offset.zero);
+  addTearDown(mouse.removePointer);
+  await mouse.moveTo(tester.getCenter(target));
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
+Future<UserSettingsController> _settings(TimestampHourCycle cycle) async {
+  final controller = UserSettingsController(
+    () => FakeUserSettingsRepository(
+      UserSettings(
+        appearance: AppearancePreferences(timestampHourCycle: cycle),
+      ),
+    ),
+  );
+  addTearDown(controller.dispose);
+  await controller.load();
+  return controller;
 }
 
 Widget _host(
@@ -190,43 +344,47 @@ Widget _host(
   ConversationChannel channel = _channel,
   String query = '',
   String? targetMessageId,
+  UserSettingsController? settings,
 }) {
+  final list = MessageList(
+    workspace: ChatWorkspace(
+      spaces: const [_space],
+      channels: [channel],
+      members: const [_member],
+      messages: messages,
+      currentMemberId: 'bot-1',
+    ),
+    channel: channel,
+    query: query,
+    targetMessageId: targetMessageId,
+    onReply: (_) {},
+    onEdit: (_, _) async => true,
+    onDelete: (_) async {},
+    onToggleReaction: (_, _) async {},
+    onLoadReactionUsers: (_, _, _, _) async =>
+        const ReactionUsersPage(users: [], hasMore: false),
+    onAddReaction: (_, _) async {},
+    onCreateThread: (_, _, _) async => true,
+    onTogglePin: (_) async {},
+    onEndPoll: (_) async => true,
+    onForward: (_, _) async => true,
+    onToggleSuppressEmbeds: (_) async => true,
+    canLoadOlder: true,
+    isLoadingOlder: isLoadingOlder,
+    olderLoadError: olderLoadError,
+    onLoadOlder: onLoadOlder ?? () {},
+    externalLinkLauncher: const _TestLinkLauncher(),
+    onSelectChannel: (_) {},
+  );
   return MaterialApp(
     theme: FlucordTheme.dark,
     home: Scaffold(
       body: SizedBox(
         width: 700,
         height: 500,
-        child: MessageList(
-          workspace: ChatWorkspace(
-            spaces: const [_space],
-            channels: [channel],
-            members: const [_member],
-            messages: messages,
-            currentMemberId: 'bot-1',
-          ),
-          channel: channel,
-          query: query,
-          targetMessageId: targetMessageId,
-          onReply: (_) {},
-          onEdit: (_, _) async => true,
-          onDelete: (_) async {},
-          onToggleReaction: (_, _) async {},
-          onLoadReactionUsers: (_, _, _, _) async =>
-              const ReactionUsersPage(users: [], hasMore: false),
-          onAddReaction: (_, _) async {},
-          onCreateThread: (_, _, _) async => true,
-          onTogglePin: (_) async {},
-          onEndPoll: (_) async => true,
-          onForward: (_, _) async => true,
-          onToggleSuppressEmbeds: (_) async => true,
-          canLoadOlder: true,
-          isLoadingOlder: isLoadingOlder,
-          olderLoadError: olderLoadError,
-          onLoadOlder: onLoadOlder ?? () {},
-          externalLinkLauncher: const _TestLinkLauncher(),
-          onSelectChannel: (_) {},
-        ),
+        child: settings == null
+            ? list
+            : UserSettingsScope(controller: settings, child: list),
       ),
     ),
   );
@@ -238,6 +396,19 @@ ChatMessage _message(int index) => ChatMessage(
   authorId: 'bot-1',
   body: 'Message $index with enough content to keep row height stable.',
   sentAt: DateTime.utc(2026, 1, 1).add(Duration(minutes: index)),
+);
+
+ChatMessage _sentAt(
+  String id,
+  DateTime sentAt, {
+  DiscordMessageType type = DiscordMessageType.defaultMessage,
+}) => ChatMessage(
+  id: id,
+  channelId: 'channel-1',
+  authorId: 'bot-1',
+  body: 'Sent as $id',
+  sentAt: sentAt,
+  type: type,
 );
 
 /// Messages whose heights differ by an order of magnitude, which is what a

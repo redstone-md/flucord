@@ -9,6 +9,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/attachment_download.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'message_day_divider.dart';
 import 'message_item.dart';
 import 'message_forward_dialog.dart';
 import 'reaction_details_dialog.dart';
@@ -369,8 +370,12 @@ class _MessageListState extends State<MessageList> {
     final message = messages[index];
     final previous = index > 0 ? messages[index - 1] : null;
     final startsUnread = message.id == _unreadMessageId;
+    final startsDay =
+        previous != null &&
+        MessageDayDivider.between(previous.sentAt, message.sentAt);
     final grouped =
         !startsUnread &&
+        !startsDay &&
         !message.isSystem &&
         message.reply == null &&
         previous != null &&
@@ -388,6 +393,7 @@ class _MessageListState extends State<MessageList> {
             : Colors.transparent,
         child: Column(
           children: [
+            if (startsDay) MessageDayDivider(day: message.sentAt),
             if (startsUnread) const UnreadMessageBoundary(),
             if (message.isSystem)
               SystemMessageItem(

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/user_settings_controller.dart';
@@ -8,13 +6,14 @@ import 'package:flucord/src/domain/external_link_launcher.dart';
 import 'package:flucord/src/domain/message_embed.dart';
 import 'package:flucord/src/domain/reaction_repository.dart';
 import 'package:flucord/src/domain/user_settings.dart';
-import 'package:flucord/src/domain/user_settings_repository.dart';
 import 'package:flucord/src/presentation/widgets/message_embed_view.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/presentation/widgets/message_reaction_strip.dart';
 import 'package:flucord/src/presentation/widgets/message_timestamp.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_scope.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/fake_user_settings_repository.dart';
 
 void main() {
   group('MessageTimestamp', () {
@@ -161,7 +160,9 @@ void main() {
 }
 
 Future<UserSettingsController> _controller(UserSettings settings) async {
-  final controller = UserSettingsController(() => _Repository(settings));
+  final controller = UserSettingsController(
+    () => FakeUserSettingsRepository(settings),
+  );
   addTearDown(controller.dispose);
   await controller.load();
   return controller;
@@ -206,36 +207,6 @@ Future<void> _pumpMessage(
     ),
   );
   await tester.pump();
-}
-
-final class _Repository implements UserSettingsRepository {
-  _Repository(this._settings);
-
-  final UserSettings _settings;
-
-  @override
-  Stream<UserSettings> get updates => const Stream.empty();
-
-  @override
-  UserSettings? get current => null;
-
-  @override
-  bool get isLoaded => false;
-
-  @override
-  Object? get lastWriteError => null;
-
-  @override
-  Future<UserSettings> load() async => _settings;
-
-  @override
-  Future<void> apply(
-    UserSettingsPatch patch, {
-    UserSettingsSaveDelay delay = UserSettingsSaveDelay.immediate,
-  }) async {}
-
-  @override
-  Future<void> flush() async {}
 }
 
 final class _TestLinkLauncher implements ExternalLinkLauncher {
