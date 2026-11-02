@@ -169,13 +169,17 @@ class _MessageItemState extends State<MessageItem> {
         onSecondaryTapDown: (details) =>
             unawaited(_openContextMenu(context, details.globalPosition)),
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
             Container(
               decoration: BoxDecoration(
                 color: _hovered
                     ? context.surfaces.raised.withValues(alpha: 0.45)
                     : Colors.transparent,
+              ),
+              // The bar must fit inside the row. A part of it outside the row
+              // gets no clicks, and the pointer there hovers the next row.
+              constraints: const BoxConstraints(
+                minHeight: MessageActionBar.height,
               ),
               padding: EdgeInsets.fromLTRB(
                 20,
@@ -221,7 +225,7 @@ class _MessageItemState extends State<MessageItem> {
               ),
             ),
             if ((_hovered || _reactionPickerOpen) && !_editing)
-              Positioned(right: 18, top: -12, child: _actionBar(context)),
+              Positioned(right: 18, top: 0, child: _actionBar(context)),
           ],
         ),
       ),

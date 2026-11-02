@@ -36,6 +36,9 @@ class MessageActionBar extends StatelessWidget {
     super.key,
   });
 
+  /// As tall as the shortest message row, so the bar fits inside any row.
+  static const height = 24.0;
+
   /// The starred expressions, when the transport holds any.
   final ExpressionFavoritesController? expressionFavorites;
   final ChatMessage message;
@@ -69,12 +72,17 @@ class MessageActionBar extends StatelessWidget {
       message,
       currentMemberId: workspace.currentMemberId,
     );
+    final corners = BorderRadius.circular(4);
     return Container(
-      height: 36,
+      height: height,
       decoration: BoxDecoration(
         color: context.surfaces.surface,
+        borderRadius: corners,
+      ),
+      // In the foreground, so the border takes no height from the buttons.
+      foregroundDecoration: BoxDecoration(
         border: Border.all(color: context.surfaces.border),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: corners,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -232,6 +240,9 @@ class _ActionButton extends StatelessWidget {
     ),
     tooltip: tooltip,
     padding: EdgeInsets.zero,
-    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+    constraints: const BoxConstraints.tightFor(
+      width: 36,
+      height: MessageActionBar.height,
+    ),
   );
 }
