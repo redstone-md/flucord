@@ -13,12 +13,14 @@ mixin _VoiceMessageComposerStateMixin on State<MessageComposer> {
   int _voiceGeneration = 0;
 
   bool get _hasRegularMessageContent;
+  bool get _isHeldBySlowmode;
   bool get _hasVoiceSession =>
       _isRecordingVoice || _pendingVoiceMessage != null || _isUploadingVoice;
   bool get _canRecordVoice =>
       widget.voiceMessageRecorder != null &&
       widget.onSendVoiceMessage != null &&
       !_hasRegularMessageContent &&
+      !_isHeldBySlowmode &&
       widget.replyTo == null &&
       !widget.isSending;
 
