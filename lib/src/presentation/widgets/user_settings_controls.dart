@@ -104,7 +104,7 @@ class SettingRow extends StatelessWidget {
     UserSettingSupport.accountOnly =>
       note ?? 'Saved to your Discord account. Flucord does not act on it.',
     UserSettingSupport.unavailable =>
-      note ?? 'Flucord has no surface for this setting yet.',
+      note ?? 'Flucord has no screen for this setting yet.',
   };
 }
 

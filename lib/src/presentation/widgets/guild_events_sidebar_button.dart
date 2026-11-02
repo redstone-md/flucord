@@ -54,9 +54,9 @@ class GuildEventsSidebarButton extends StatelessWidget {
                     color: context.surfaces.raised,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  alignment: Alignment.center,
                   child: Text(
                     '$count',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,

@@ -20,13 +20,12 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
             RepositoryConnectionStatus.reconnecting,
         });
       case DiscordGatewayDispatch():
+        _sharedDispatches.route(event);
         switch (event.name) {
           case 'MESSAGE_CREATE' || 'MESSAGE_UPDATE':
             unawaited(_handleMessageDispatch(event));
           case 'MESSAGE_DELETE':
             unawaited(_handleMessageDelete(event.data));
-          case 'MESSAGE_REACTION_ADD' || 'MESSAGE_REACTION_REMOVE':
-            unawaited(_handleReaction(event));
           case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
             unawaited(_handlePollVote(event));
           case 'CHANNEL_CREATE' ||
@@ -77,11 +76,6 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
         MessageDeletedEvent(messageId: messageId, channelId: channelId),
       );
     }
-  }
-
-  Future<void> _handleReaction(DiscordGatewayDispatch event) async {
-    final update = await _reactionHandler.apply(event);
-    if (update != null && !_events.isClosed) _events.add(update);
   }
 
   Future<void> _handleChannelUpsert(Map<String, Object?> data) async {

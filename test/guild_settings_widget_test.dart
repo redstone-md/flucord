@@ -7,6 +7,7 @@ import 'package:flucord/src/domain/guild_audit_log.dart';
 import 'package:flucord/src/domain/guild_management.dart';
 import 'package:flucord/src/domain/permission_overwrite.dart';
 import 'package:flucord/src/domain/workspace_permissions.dart';
+import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_audit_section.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/guild_settings_dialog.dart';
@@ -144,11 +145,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.repository.calls, contains('createGuildChannel'));
 
-    await tester.tap(
-      find.byKey(const ValueKey('guild-channel-delete-$textChannelId')),
+    await _deleteAfterAsking(
+      tester,
+      harness,
+      control: 'guild-channel-delete-$textChannelId',
+      call: 'deleteGuildChannel',
     );
+    harness.dispose();
+  });
+
+  testWidgets('deleting a role asks first', (tester) async {
+    final harness = await _pump(tester);
+    await tester.tap(find.byKey(const ValueKey('guild-settings-rail-roles')));
     await tester.pumpAndSettle();
-    expect(harness.repository.calls, contains('deleteGuildChannel'));
+
+    await _deleteAfterAsking(
+      tester,
+      harness,
+      control: 'guild-role-delete-member',
+      call: 'deleteRole',
+    );
     harness.dispose();
   });
 
@@ -330,11 +346,12 @@ void main() {
     expect(harness.repository.calls, contains('updateWebhook'));
     expect(find.text('builds v2'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('guild-webhook-delete-555555555555555555')),
+    await _deleteAfterAsking(
+      tester,
+      harness,
+      control: 'guild-webhook-delete-555555555555555555',
+      call: 'deleteWebhook',
     );
-    await tester.pumpAndSettle();
-    expect(harness.repository.calls, contains('deleteWebhook'));
     expect(find.text('There are no webhooks yet.'), findsOneWidget);
     harness.dispose();
   });
@@ -596,6 +613,29 @@ Future<void> _choose(WidgetTester tester, String key, String option) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text(option).last);
   await tester.pumpAndSettle();
+}
+
+/// Presses the delete control keyed [control]: Cancel sends nothing, and only
+/// the confirm button sends [call].
+Future<void> _deleteAfterAsking(
+  WidgetTester tester,
+  _Harness harness, {
+  required String control,
+  required String call,
+}) async {
+  await tester.tap(find.byKey(ValueKey(control)));
+  await tester.pumpAndSettle();
+  expect(harness.repository.calls, isNot(contains(call)));
+
+  await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+  await tester.pumpAndSettle();
+  expect(harness.repository.calls, isNot(contains(call)));
+
+  await tester.tap(find.byKey(ValueKey(control)));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(destructiveConfirmKey));
+  await tester.pumpAndSettle();
+  expect(harness.repository.calls, contains(call));
 }
 
 final class _Harness {

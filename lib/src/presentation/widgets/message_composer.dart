@@ -39,7 +39,7 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelId,
     required this.channelName,
-    this.channelIsVoice = false,
+    this.channelHintPrefix = '#',
     required this.spaceName,
     required this.emojiSections,
     required this.stickerSections,
@@ -70,9 +70,9 @@ class MessageComposer extends StatefulWidget {
   final String channelId;
   final String channelName;
 
-  /// A voice channel's chat is not addressed with a hash, because the
-  /// channel is not a text channel and `#name` would not resolve to it.
-  final bool channelIsVoice;
+  /// What stands before the channel's name in the box's hint: `#` for a text
+  /// channel, `@` for a person, nothing where `#name` would not resolve.
+  final String channelHintPrefix;
   final String spaceName;
 
   /// Every server's emoji, the space this channel lives in first. The picker
@@ -264,9 +264,8 @@ class _MessageComposerState extends State<MessageComposer>
         remaining.inSeconds +
         (remaining.inMilliseconds.remainder(1000) > 0 ? 1 : 0);
     if (seconds >= 60) {
-      final minutes = seconds ~/ 60;
-      final rest = seconds % 60;
-      return rest == 0 ? '$minutes:00' : '$minutes:$rest';
+      final rest = (seconds % 60).toString().padLeft(2, '0');
+      return '${seconds ~/ 60}:$rest';
     }
     return '$seconds';
   }
@@ -534,9 +533,8 @@ class _MessageComposerState extends State<MessageComposer>
                     }
                   },
                   decoration: InputDecoration(
-                    hintText: widget.channelIsVoice
-                        ? 'Message ${widget.channelName}'
-                        : 'Message #${widget.channelName}',
+                    hintText:
+                        'Message ${widget.channelHintPrefix}${widget.channelName}',
                     contentPadding: const EdgeInsets.fromLTRB(12, 11, 6, 11),
                     // Square top corners under the reply bar, so the two read
                     // as one surface. Null elsewhere keeps the theme's rounded
