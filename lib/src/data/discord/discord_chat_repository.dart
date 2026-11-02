@@ -158,6 +158,11 @@ final class DiscordChatRepository
         directMessages: _directMessages,
         currentMemberId: () => _currentMemberId,
         rolesOf: (guildId) => _rolesByGuild[guildId] ?? const [],
+        updatedMessage: (payload, held) => _mapper.message(
+          payload,
+          fallback: held,
+          currentMemberId: _currentMemberId,
+        ),
         events: _events,
       );
 

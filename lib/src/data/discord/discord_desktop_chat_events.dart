@@ -318,6 +318,15 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     Map<String, Object?> payload, {
     ChatMessage? fallback,
   }) async {
+    final message = _messageFrom(payload, fallback: fallback);
+    await _cache.writeMessage(message);
+    return message;
+  }
+
+  ChatMessage _messageFrom(
+    Map<String, Object?> payload, {
+    ChatMessage? fallback,
+  }) {
     final message = _mapper.message(
       payload,
       fallback: fallback,
@@ -325,11 +334,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
     );
     // The mapper knows the account's id but not its roles. The flag decides the
     // inbox and the desktop notification, so a role mention has to set it too.
-    final stored = _readState.mentionsAccountRole(payload)
+    return _readState.mentionsAccountRole(payload)
         ? message.copyWith(mentionsCurrentMember: true)
         : message;
-    await _cache.writeMessage(stored);
-    return stored;
   }
 
   void _acceptTyping(Map<String, Object?> data) {

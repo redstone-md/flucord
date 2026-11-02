@@ -3,6 +3,11 @@ import '../../domain/chat_models.dart';
 import '../../domain/chat_repository.dart';
 import 'discord_mapper.dart';
 
+/// [held] with what [payload] names applied. Each transport supplies this,
+/// because the desktop one also knows the account's roles.
+typedef DiscordUpdatedMessage =
+    ChatMessage Function(Map<String, Object?> payload, ChatMessage held);
+
 /// Turns `MESSAGE_UPDATE` into a change for the cache and the workspace.
 ///
 /// An update only changes a copy that exists. It adds no row to the cache, and
@@ -10,11 +15,11 @@ import 'discord_mapper.dart';
 /// an update for any old message, and a stray one in the timeline would make
 /// the next older page start from the wrong place.
 final class DiscordMessageUpdateHandler {
-  DiscordMessageUpdateHandler(this._cache, this._mapper, this._currentMemberId);
+  DiscordMessageUpdateHandler(this._cache, this._mapper, this._updatedMessage);
 
   final ChatCache _cache;
   final DiscordMapper _mapper;
-  final String? Function() _currentMemberId;
+  final DiscordUpdatedMessage _updatedMessage;
 
   /// Applies [payload] to the cached message, if there is one, and returns the
   /// event to announce. The cache may not hold a message the screen shows, so
@@ -22,11 +27,7 @@ final class DiscordMessageUpdateHandler {
   Future<MessageUpdatedEvent?> apply(Map<String, Object?> payload) async {
     final messageId = payload['id'];
     if (messageId is! String) return null;
-    ChatMessage applyTo(ChatMessage held) => _mapper.message(
-      payload,
-      fallback: held,
-      currentMemberId: _currentMemberId(),
-    );
+    ChatMessage applyTo(ChatMessage held) => _updatedMessage(payload, held);
     final member = _mapper.messageAuthor(payload);
     final cached = await _cache.readMessage(messageId);
     if (cached != null) {

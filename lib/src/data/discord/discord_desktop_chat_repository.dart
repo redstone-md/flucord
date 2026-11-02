@@ -210,6 +210,8 @@ final class DiscordDesktopChatRepository
         directMessages: _directMessages,
         currentMemberId: () => _currentMemberId,
         rolesOf: _memberLists.rolesOf,
+        updatedMessage: (payload, held) =>
+            _messageFrom(payload, fallback: held),
         events: _events,
       );
 

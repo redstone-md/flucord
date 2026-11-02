@@ -24,6 +24,7 @@ final class DiscordSharedDispatches {
     required DiscordDirectMessages directMessages,
     required String? Function() currentMemberId,
     required List<Map<String, Object?>> Function(String guildId) rolesOf,
+    required DiscordUpdatedMessage updatedMessage,
     required StreamController<ChatRepositoryEvent> events,
   }) : _cache = cache,
        _mapper = mapper,
@@ -32,7 +33,7 @@ final class DiscordSharedDispatches {
        _rolesOf = rolesOf,
        _events = events,
        _reactions = DiscordReactionHandler(cache, currentMemberId),
-       _updates = DiscordMessageUpdateHandler(cache, mapper, currentMemberId),
+       _updates = DiscordMessageUpdateHandler(cache, mapper, updatedMessage),
        _channels = DiscordChannelHandler(cache, mapper, events.publish);
 
   final ChatCache _cache;

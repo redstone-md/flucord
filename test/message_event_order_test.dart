@@ -16,6 +16,7 @@ import 'support/session_harness.dart';
 const _messageId = '900000000000000001';
 const _historyPath = '/api/v9/channels/${SessionHarness.channelId}/messages';
 const _approveButton = ValueKey('component-approve-Approve');
+const _heldRole = '400000000000000001';
 
 Map<String, Object?> _message(
   String id,
@@ -122,6 +123,28 @@ void main() {
           _reaction(_messageId, SessionHarness.friendId),
         ),
         ('MESSAGE_DELETE', _partial(_messageId, const {})),
+      ]);
+
+      expect(session.messageRow(_messageId), findsNothing);
+      expect(await session.cachedMessage(_messageId), isNull);
+    });
+
+    testSession('when its create and a bulk delete land in one burst', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await _burst(session, [
+        ('MESSAGE_CREATE', _message(_messageId, 'gone soon')),
+        (
+          'MESSAGE_DELETE_BULK',
+          const {
+            'ids': [_messageId],
+            'channel_id': SessionHarness.channelId,
+            'guild_id': SessionHarness.guildId,
+          },
+        ),
       ]);
 
       expect(session.messageRow(_messageId), findsNothing);
@@ -244,6 +267,37 @@ void main() {
       expect(session.messageRow(_messageId), findsNothing);
       expect(await session.cachedMessage(_messageId), isNull);
     });
+
+    testSession(
+      'that still mentions a role the account holds keeps the mention',
+      (tester, session) async {
+        final mentionsHeldRole = {
+          ..._message(_messageId, 'hey team'),
+          'mentions': const <Object?>[],
+          'mention_roles': const [_heldRole],
+        };
+        await session.openChannel(SessionHarness.channelId);
+        await session.dispatch('MESSAGE_CREATE', mentionsHeldRole);
+
+        await session.dispatch('MESSAGE_UPDATE', {
+          ...mentionsHeldRole,
+          'content': 'hey team, edited',
+        });
+
+        final cached = await session.cachedMessage(_messageId);
+        expect(cached?.body, 'hey team, edited');
+        expect(cached?.mentionsCurrentMember, isTrue);
+      },
+      ready: SessionHarness.defaultReady()
+        ..['merged_members'] = [
+          [
+            {
+              'user_id': SessionHarness.currentUserId,
+              'roles': [_heldRole],
+            },
+          ],
+        ],
+    );
 
     testSession(
       'to an on-screen message missing from the cache still applies',
