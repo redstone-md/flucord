@@ -36,6 +36,7 @@ class ApplicationCommandMenuButton extends StatelessWidget {
       key: ValueKey('apps-menu-$targetId'),
       tooltip: tooltip,
       iconSize: 16,
+      padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       onPressed: () => unawaited(_open(context)),
       icon: const Icon(Icons.apps),
