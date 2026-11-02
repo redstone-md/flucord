@@ -6,6 +6,7 @@ import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/friends_controller.dart';
+import '../domain/direct_message_candidate.dart';
 import '../application/guild_member_admin_controller.dart';
 import '../application/guild_member_list_controller.dart';
 import '../application/member_profile_controller.dart';
@@ -54,6 +55,7 @@ import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
 import 'widgets/leave_server_dialog.dart';
+import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
@@ -200,9 +202,7 @@ class FlucordShell extends StatelessWidget {
             // not answer differently about the same account.
             final administration = permissions.administrationOf(spaceId);
             final canOpenSettings =
-                !space.isDirectMessages &&
-                administration.hasAnySurface &&
-                chatController.guildManagement != null;
+                !space.isDirectMessages && _canOpenSettings(administration);
             final canReport = chatController.moderation != null;
 
             /// Joining, creating and leaving need the guild-management plane;
@@ -397,6 +397,9 @@ class FlucordShell extends StatelessWidget {
                             onAddServer: canManageServers
                                 ? () => unawaited(_addServer(context))
                                 : null,
+                            onOpenSpaceMenu: (spaceId, position) => unawaited(
+                              _openSpaceMenu(context, spaceId, position),
+                            ),
                             sessionMode: connectionController.mode,
                             isDark:
                                 workspaceController.themeMode == ThemeMode.dark,

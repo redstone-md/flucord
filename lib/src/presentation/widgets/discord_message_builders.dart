@@ -5,6 +5,7 @@ import 'package:markdown/markdown.dart' as md;
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'message_preview_text.dart';
 import 'user_settings_scope.dart';
 
 Map<String, MarkdownElementBuilder> discordMessageBuilders({
@@ -44,12 +45,9 @@ final class _MentionBuilder extends MarkdownElementBuilder {
   ) {
     final id = element.attributes['id'] ?? element.textContent;
     final label = switch (_kind) {
-      _MentionKind.user =>
-        '@${_workspace.memberOrNull(id)?.displayName ?? 'unknown-user'}',
-      _MentionKind.role =>
-        '@${_workspace.roleOrNull(id)?.name ?? 'unknown-role'}',
-      _MentionKind.channel =>
-        '#${_workspace.channelOrNull(id)?.name ?? 'unknown-channel'}',
+      _MentionKind.user => DiscordMentionLabel.user(_workspace, id),
+      _MentionKind.role => DiscordMentionLabel.role(_workspace, id),
+      _MentionKind.channel => DiscordMentionLabel.channel(_workspace, id),
       _MentionKind.broadcast => '@${element.textContent}',
     };
     final roleColor = _kind == _MentionKind.role

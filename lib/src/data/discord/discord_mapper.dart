@@ -279,11 +279,25 @@ final class DiscordMapper {
     Map<Object?, Object?> row,
     String guildId,
   ) {
-    final mapped = member(user, spaceIds: {guildId});
-    final nickname = row['nick'];
-    return nickname is String && nickname.isNotEmpty
-        ? mapped.copyWith(displayName: nickname)
-        : mapped;
+    return _withGuildStanding(
+      member(user, spaceIds: {guildId}),
+      row.cast<String, Object?>(),
+      guildId,
+    );
+  }
+
+  /// [mapped] with what a guild member payload adds: the nickname, and the
+  /// roles the name's colour comes from.
+  Member _withGuildStanding(
+    Member mapped,
+    Map<String, Object?> guildMember,
+    String guildId,
+  ) {
+    final nickname = guildMember['nick'];
+    return mapped.copyWith(
+      displayName: nickname is String && nickname.isNotEmpty ? nickname : null,
+      membershipsBySpace: {guildId: membership(guildMember)},
+    );
   }
 
   Member member(

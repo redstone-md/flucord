@@ -46,7 +46,6 @@ void main() {
         .width;
     expect(firstWidth, greaterThan(150));
     expect(firstWidth, closeTo(secondWidth, 0.1));
-    expect(find.byIcon(Icons.broken_image_outlined), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

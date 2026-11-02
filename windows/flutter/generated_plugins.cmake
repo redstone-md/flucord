@@ -4,11 +4,13 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   auto_updater_windows
+  desktop_drop
   flutter_secure_storage_windows
   flutter_webrtc
   local_notifier
   media_kit_libs_windows_video
   media_kit_video
+  pasteboard
   protocol_handler_windows
   record_windows
   screen_retriever_windows
