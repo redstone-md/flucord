@@ -35,6 +35,7 @@ import 'message_reaction_strip.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
 import 'reaction_details_dialog.dart';
+import 'streamer_mode_scope.dart';
 import 'user_settings_scope.dart';
 
 class MessageItem extends StatefulWidget {
@@ -137,6 +138,25 @@ class _MessageItemState extends State<MessageItem> {
   );
   final FocusNode _editFocus = FocusNode();
 
+  /// The row as one stop for the keyboard and for a screen reader.
+  final FocusNode _rowFocus = FocusNode(debugLabel: 'message row');
+
+  /// Holds the action bar's buttons, to tell them from the text of the row. A
+  /// click on the text takes focus too, and must not pin the bar in place.
+  final FocusNode _barFocus = FocusNode(
+    debugLabel: 'message action bar',
+    skipTraversal: true,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _rowFocus.addListener(_redrawForFocus);
+    _barFocus.addListener(_redrawForFocus);
+  }
+
+  void _redrawForFocus() => setState(() {});
+
   @override
   void didUpdateWidget(covariant MessageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -149,6 +169,8 @@ class _MessageItemState extends State<MessageItem> {
   void dispose() {
     _editController.dispose();
     _editFocus.dispose();
+    _rowFocus.dispose();
+    _barFocus.dispose();
     super.dispose();
   }
 
@@ -179,81 +201,131 @@ class _MessageItemState extends State<MessageItem> {
     // through constructors: a change from another device tightens the list
     // without anybody rebuilding it by hand.
     final compact = UserSettingsScope.appearanceOf(context).packsDensely;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        // The right button reaches the same actions the hover bar carries.
-        // Without it half of them were only discoverable by hovering the
-        // exact right pixels, and copying an id or a link had nowhere to live.
-        onSecondaryTapDown: (details) =>
-            unawaited(_openContextMenu(context, details.globalPosition)),
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: _hovered
-                    ? context.surfaces.raised.withValues(alpha: 0.45)
-                    : Colors.transparent,
-              ),
-              // The bar must fit inside the row. A part of it outside the row
-              // gets no clicks, and the pointer there hovers the next row.
-              constraints: const BoxConstraints(
-                minHeight: MessageActionBar.height,
-              ),
-              padding: EdgeInsets.fromLTRB(
-                20,
-                widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
-                20,
-                compact ? 4 : 5,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 38,
-                    child: widget.grouped
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: MessageTimeLabel(
-                              widget.message.sentAt,
-                              style: TextStyle(
-                                color: context.surfaces.muted,
-                                fontSize: 9,
-                              ),
-                            ),
-                          )
-                        : _opensAuthorProfile(
-                            key: const ValueKey('message-author-avatar'),
-                            child: MemberAvatar(
-                              member: widget.member,
-                              size: 34,
-                              spaceId: widget.workspace
-                                  .channelById(widget.message.channelId)
-                                  .spaceId,
-                            ),
-                          ),
+    return Semantics(
+      container: true,
+      // The parts of the row stay their own nodes, so links, attachments and
+      // buttons inside it can still be reached one by one.
+      explicitChildNodes: true,
+      label: _announcement(context),
+      focusable: true,
+      focused: _rowFocus.hasPrimaryFocus,
+      onFocus: _rowFocus.requestFocus,
+      child: Focus(
+        focusNode: _rowFocus,
+        includeSemantics: false,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            // The right button reaches the same actions the hover bar carries.
+            // Without it half of them were only discoverable by hovering the
+            // exact right pixels, and copying an id or a link had nowhere to live.
+            onSecondaryTapDown: (details) =>
+                unawaited(_openContextMenu(context, details.globalPosition)),
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: _hovered
+                        ? context.surfaces.raised.withValues(alpha: 0.45)
+                        : Colors.transparent,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: MessageMenuScope(
-                      onOpen: (position) =>
-                          unawaited(_openContextMenu(context, position)),
-                      onSelectionChanged: (content) =>
-                          _selectedText = content?.plainText ?? '',
-                      child: _content(context),
+                  // The bar must fit inside the row. A part of it outside the row
+                  // gets no clicks, and the pointer there hovers the next row.
+                  constraints: const BoxConstraints(
+                    minHeight: MessageActionBar.height,
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    widget.grouped ? (compact ? 2 : 3) : (compact ? 6 : 9),
+                    20,
+                    compact ? 4 : 5,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 38,
+                        child: widget.grouped
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: MessageTimeLabel(
+                                  widget.message.sentAt,
+                                  style: TextStyle(
+                                    color: context.surfaces.muted,
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              )
+                            : _opensAuthorProfile(
+                                key: const ValueKey('message-author-avatar'),
+                                child: MemberAvatar(
+                                  member: widget.member,
+                                  size: 34,
+                                  spaceId: widget.workspace
+                                      .channelById(widget.message.channelId)
+                                      .spaceId,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: MessageMenuScope(
+                          onOpen: (position) =>
+                              unawaited(_openContextMenu(context, position)),
+                          onSelectionChanged: (content) =>
+                              _selectedText = content?.plainText ?? '',
+                          child: _content(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if ((_hovered ||
+                        _reactionPickerOpen ||
+                        _rowFocus.hasPrimaryFocus ||
+                        _barFocus.hasFocus) &&
+                    !_editing)
+                  Positioned(
+                    right: 18,
+                    top: 0,
+                    child: Focus(
+                      focusNode: _barFocus,
+                      includeSemantics: false,
+                      child: _actionBar(context),
                     ),
                   ),
-                ],
-              ),
+                if (_rowFocus.hasPrimaryFocus)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        key: const ValueKey('message-focus-ring'),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: context.surfaces.focusRing,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            if ((_hovered || _reactionPickerOpen) && !_editing)
-              Positioned(right: 18, top: 0, child: _actionBar(context)),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  /// What a screen reader says when the row takes focus: author, time, text.
+  String _announcement(BuildContext context) {
+    final body = StreamerModeScope.redact(context, widget.message.body);
+    return [
+      widget.member.displayName,
+      MessageTimestamp.longOf(context, widget.message.sentAt),
+      if (body.isNotEmpty) messagePreviewText(context, body, widget.workspace),
+    ].join(', ');
   }
 
   Widget _content(BuildContext context) {

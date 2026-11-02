@@ -9,10 +9,14 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'discord_gateway_framing.dart';
+
 part 'discord_winhttp_websocket_bindings.dart';
 
 abstract interface class DiscordDesktopWebSocket {
-  /// Emits `String` for text frames and `Uint8List` for binary frames.
+  /// Emits `String` for text frames and `Uint8List` for binary frames. A socket
+  /// whose worker decodes JSON emits a [DiscordGatewayDecodedJsonFrame] for a
+  /// text frame instead.
   Stream<Object?> get messages;
   bool get isOpen;
   int? get closeCode;
@@ -31,11 +35,23 @@ abstract interface class DiscordDesktopWebSocketConnector {
 
 final class PlatformDiscordDesktopWebSocketConnector
     implements DiscordDesktopWebSocketConnector {
-  const PlatformDiscordDesktopWebSocketConnector();
+  const PlatformDiscordDesktopWebSocketConnector({
+    this.decodeJsonInWorker = false,
+  });
+
+  /// Whether the Windows socket's worker isolate, which already reads every
+  /// frame, also decodes text frames as JSON, so the main isolate never has to.
+  /// Other platforms have no such worker, and always emit text.
+  final bool decodeJsonInWorker;
 
   @override
   Future<DiscordDesktopWebSocket> connect(Uri uri) {
-    if (Platform.isWindows) return _WinHttpDiscordDesktopWebSocket.connect(uri);
+    if (Platform.isWindows) {
+      return _WinHttpDiscordDesktopWebSocket.connect(
+        uri,
+        decodeJson: decodeJsonInWorker,
+      );
+    }
     return _IoDiscordDesktopWebSocket.connect(uri);
   }
 }
@@ -108,7 +124,10 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
   /// takes over.
   static const _closeGrace = Duration(seconds: 5);
 
-  static Future<_WinHttpDiscordDesktopWebSocket> connect(Uri uri) async {
+  static Future<_WinHttpDiscordDesktopWebSocket> connect(
+    Uri uri, {
+    required bool decodeJson,
+  }) async {
     if (uri.scheme != 'wss' || uri.host.isEmpty) {
       throw ArgumentError.value(uri, 'uri', 'A wss URI is required');
     }
@@ -124,6 +143,7 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
       await Isolate.spawn(_runWinHttpWorker, {
         'uri': uri.toString(),
         'events': receivePort.sendPort,
+        'decodeJson': decodeJson,
       });
       await socket._connected.future.timeout(const Duration(seconds: 20));
       return socket;
@@ -215,7 +235,10 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
         return;
       case 'message':
         final value = raw['value'];
-        if ((value is String || value is Uint8List) && !_messages.isClosed) {
+        if ((value is String ||
+                value is Uint8List ||
+                value is DiscordGatewayDecodedJsonFrame) &&
+            !_messages.isClosed) {
           _messages.add(value);
         }
         return;
@@ -274,6 +297,7 @@ final class _WinHttpDiscordDesktopWebSocket implements DiscordDesktopWebSocket {
 void _runWinHttpWorker(Map<Object?, Object?> request) {
   final events = request['events'];
   final rawUri = request['uri'];
+  final decodeJson = request['decodeJson'] == true;
   if (events is! SendPort || rawUri is! String) return;
   final bindings = _WinHttpBindings.open();
   Pointer<Void> session = nullptr;
@@ -377,7 +401,12 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
     bindings.closeHandle(upgradeRequest);
     upgradeRequest = nullptr;
     events.send({'type': 'connected', 'handle': webSocket.address});
-    closeCode = _receiveWinHttpMessages(bindings, webSocket, events);
+    closeCode = _receiveWinHttpMessages(
+      bindings,
+      webSocket,
+      events,
+      decodeJson: decodeJson,
+    );
   } on Object catch (error) {
     events.send({'type': 'error', 'message': error.toString()});
   } finally {
@@ -396,8 +425,9 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
 int? _receiveWinHttpMessages(
   _WinHttpBindings bindings,
   Pointer<Void> webSocket,
-  SendPort events,
-) {
+  SendPort events, {
+  required bool decodeJson,
+}) {
   const bufferSize = 64 * 1024;
   final buffer = calloc<Uint8>(bufferSize);
   final bytesRead = calloc<Uint32>();
@@ -423,9 +453,12 @@ int? _receiveWinHttpMessages(
       }
       message.add(Uint8List.fromList(buffer.asTypedList(bytesRead.value)));
       if (bufferType.value == _winHttpUtf8Message) {
+        final text = utf8.decode(message.takeBytes());
         events.send({
           'type': 'message',
-          'value': utf8.decode(message.takeBytes()),
+          'value': decodeJson
+              ? DiscordGatewayDecodedJsonFrame.read(text)
+              : text,
         });
       } else if (bufferType.value == _winHttpBinaryMessage) {
         events.send({'type': 'message', 'value': message.takeBytes()});
