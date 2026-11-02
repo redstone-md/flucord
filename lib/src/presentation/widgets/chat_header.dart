@@ -108,7 +108,10 @@ class ChatHeader extends StatelessWidget {
               Expanded(child: _title(context, showTopic: showTopic)),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: constraints.maxWidth - _minTitleWidth,
+                  maxWidth: (constraints.maxWidth - _minTitleWidth).clamp(
+                    0,
+                    constraints.maxWidth,
+                  ),
                 ),
                 child: _controls(showTopic: showTopic, showSearch: showSearch),
               ),
