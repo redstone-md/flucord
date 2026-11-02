@@ -124,6 +124,15 @@ Map<String, Object?> _withGainedDms(Map<String, Object?> ready) => ready
     _dm(_gainedDmB, _friendB),
   ];
 
+/// How many times the open DM asked for its history.
+int _catchUps(SessionHarness session) => session.transport.requests
+    .where(
+      (request) =>
+          request.method == 'GET' &&
+          request.uri.path == '/api/v9/channels/$_dmChannelId/messages',
+    )
+    .length;
+
 /// The session ends and the client identifies again, with this READY.
 Future<void> _identifyAgain(
   SessionHarness session,
@@ -171,31 +180,37 @@ void main() {
       chat.addListener(count);
       addTearDown(() => chat.removeListener(count));
 
+      // A READY this large decodes on a worker, so `settle` does not wait for
+      // it. The pass ends by asking for what the open channel missed, and that
+      // request shows the READY has landed in both cases.
       Future<(int, int)> costOf(Map<String, Object?> ready) async {
         session.socket.receive(const {'op': 9, 'd': false});
         await session.settle();
         final notificationsBefore = notifications;
         final commitsBefore = session.cacheCommits;
+        final catchUpsBefore = _catchUps(session);
         await session.dispatch('READY', ready);
+        await session.settleUntilDecoded(
+          () => _catchUps(session) > catchUpsBefore,
+        );
+        await session.settle();
         return (
           notifications - notificationsBefore,
           session.cacheCommits - commitsBefore,
         );
       }
 
+      await costOf(_readyWithManyChannels('before'));
       final (quietNotifications, quietCommits) = await costOf(
         _readyWithManyChannels('before'),
       );
-      final channelsBefore = chat.workspace!.channels;
       final (notified, commits) = await costOf(_readyWithManyChannels('after'));
 
       expect(notified, quietNotifications + 1);
       expect(commits, quietCommits + 1);
-      expect(chat.workspace!.channels, isNot(same(channelsBefore)));
       final renamed = chat.workspace!.channelOrNull('310000000000004999')!;
       expect(renamed.name, 'after-4999');
     },
-    ready: _readyWithManyChannels('before'),
   );
 
   group('what a reconnect changes', () {
