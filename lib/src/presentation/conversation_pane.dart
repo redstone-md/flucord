@@ -827,6 +827,9 @@ class _ConversationPaneState extends State<ConversationPane> {
       onToggleReaction: chat.toggleReaction,
       onLoadReactionUsers: chat.loadReactionUsers,
       onAddReaction: chat.addReaction,
+      onMarkUnread: chat.readStateRepository == null
+          ? null
+          : chat.markChannelUnreadFrom,
       onCreateThread: (message, name, duration) async {
         final thread = await chat.createThreadFromMessage(
           message,

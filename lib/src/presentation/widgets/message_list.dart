@@ -40,6 +40,7 @@ class MessageList extends StatefulWidget {
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
@@ -99,6 +100,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
@@ -606,6 +608,7 @@ class _MessageListState extends State<MessageList>
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
                 onAddReaction: widget.onAddReaction,
+                onMarkUnread: widget.onMarkUnread,
                 onCreateThread: widget.onCreateThread,
                 onTogglePin: widget.onTogglePin,
                 onResolveAlert: widget.onResolveAlert,

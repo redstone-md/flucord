@@ -13,11 +13,13 @@ import '../../domain/chat_models.dart';
 /// half the actions are only discoverable by hovering the exact right pixels,
 /// and copying an id or a link had nowhere to live at all.
 enum MessageMenuAction {
+  addReaction,
   reply,
   edit,
   pin,
   forward,
   createThread,
+  markUnread,
   copySelection,
   copyText,
   copyLink,
@@ -27,13 +29,15 @@ enum MessageMenuAction {
 
 /// Opens the menu at [position], answering what was chosen, or null.
 ///
-/// A non-empty [selectedText] adds a Copy item for that text.
+/// A non-empty [selectedText] adds a Copy item for that text. [canMarkUnread]
+/// says whether this transport keeps read state at all.
 Future<MessageMenuAction?> showMessageContextMenu({
   required BuildContext context,
   required Offset position,
   required ChatMessage message,
   required ChannelCapabilities capabilities,
   required bool isCurrentUser,
+  bool canMarkUnread = false,
   String selectedText = '',
 }) {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
@@ -45,6 +49,12 @@ Future<MessageMenuAction?> showMessageContextMenu({
       Offset.zero & overlay.size,
     ),
     items: [
+      if (capabilities.addReactions)
+        const PopupMenuItem(
+          key: ValueKey('message-menu-add-reaction'),
+          value: MessageMenuAction.addReaction,
+          child: Text('Add reaction'),
+        ),
       if (capabilities.sendMessages)
         const PopupMenuItem(
           key: ValueKey('message-menu-reply'),
@@ -74,6 +84,12 @@ Future<MessageMenuAction?> showMessageContextMenu({
           key: ValueKey('message-menu-thread'),
           value: MessageMenuAction.createThread,
           child: Text('Create thread'),
+        ),
+      if (canMarkUnread)
+        const PopupMenuItem(
+          key: ValueKey('message-menu-mark-unread'),
+          value: MessageMenuAction.markUnread,
+          child: Text('Mark unread'),
         ),
       const PopupMenuDivider(),
       if (selectedText.isNotEmpty)

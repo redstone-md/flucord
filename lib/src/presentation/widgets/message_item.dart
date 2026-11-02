@@ -2,6 +2,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/automod_rule.dart';
 import 'dart:async';
 
+import 'emoji_picker.dart';
 import 'message_context_menu.dart';
 import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
@@ -49,6 +50,7 @@ class MessageItem extends StatefulWidget {
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
@@ -91,6 +93,10 @@ class MessageItem extends StatefulWidget {
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+
+  /// Makes this message and everything after it unread again. Null on a
+  /// transport with no read state.
+  final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
 
@@ -520,10 +526,15 @@ class _MessageItemState extends State<MessageItem> {
       message: widget.message,
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
+      canMarkUnread: widget.onMarkUnread != null,
       selectedText: selectedText,
     );
     if (action == null || !mounted) return;
     switch (action) {
+      case MessageMenuAction.addReaction:
+        await _pickReactionAt(position);
+      case MessageMenuAction.markUnread:
+        await widget.onMarkUnread?.call(widget.message);
       case MessageMenuAction.reply:
         widget.onReply(widget.message);
       case MessageMenuAction.edit:
@@ -555,6 +566,23 @@ class _MessageItemState extends State<MessageItem> {
         await copyToClipboard(widget.message.id);
       case MessageMenuAction.delete:
         await _confirmDelete();
+    }
+  }
+
+  Future<void> _pickReactionAt(Offset position) async {
+    final spaceId = widget.workspace
+        .channelById(widget.message.channelId)
+        .spaceId;
+    final emoji = await showEmojiPickerAt(
+      context: context,
+      position: position,
+      spaceName: widget.workspace.spaceById(spaceId).name,
+      emojiSections: emojiSectionsFromWorkspace(widget.workspace, spaceId),
+      purpose: EmojiPickerPurpose.reaction,
+      favorites: widget.expressionFavorites,
+    );
+    if (emoji != null && mounted) {
+      await widget.onAddReaction(widget.message, emoji);
     }
   }
 
