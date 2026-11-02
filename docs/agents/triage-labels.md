@@ -1,15 +1,15 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+The skills speak in terms of five canonical triage roles. This file maps those roles to what the `FLUCORD` project in itsaplan really has. The project has one triage label: `ready-for-agent`.
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+| Role in mattpocock/skills | In our tracker                                                       | Meaning                                  |
+| ------------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
+| `needs-triage`            | No label. An issue with no triage label waits for triage.            | Maintainer needs to evaluate this issue  |
+| `needs-info`              | No label. Ask the question in a comment.                             | Waiting on reporter for more information |
+| `ready-for-agent`         | The label `ready-for-agent`                                          | Fully specified, ready for an AFK agent  |
+| `ready-for-human`         | No label. Assign the issue to a person.                              | Requires human implementation            |
+| `wontfix`                 | No label. Say why in a comment, then move it to a `canceled` column. | Will not be actioned                     |
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+When a skill mentions a role (e.g. "apply the AFK-ready triage label"), do what this table says for that role. Do not create a label to fill a gap unless a person asks for it.
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+`labels` in `get_project` is the source of truth, and its ids are what `labelIds` takes. If the project's labels change, update this table. See `docs/agents/issue-tracker.md` for the operations.
