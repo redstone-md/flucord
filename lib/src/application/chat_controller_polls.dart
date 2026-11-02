@@ -26,10 +26,7 @@ extension ChatControllerPolls on ChatController {
         authorId: workspace.currentMemberId,
         poll: normalized,
       );
-      _workspace = _workspace
-          ?.upsertMessage(message)
-          .clearChannelUnreadBoundary(channelId);
-      _persistChannelActivity(channelId);
+      _applySentMessage(message);
       _error = null;
       return true;
     } catch (error) {

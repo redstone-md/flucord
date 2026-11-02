@@ -30,10 +30,7 @@ extension ChatControllerForwards on ChatController {
         sourceMessageId: source.id,
         targetChannelId: targetChannelId,
       );
-      _workspace = _workspace
-          ?.upsertMessage(forwarded)
-          .clearChannelUnreadBoundary(targetChannelId);
-      _persistChannelActivity(targetChannelId);
+      _applySentMessage(forwarded);
       _error = null;
       return true;
     } catch (error) {

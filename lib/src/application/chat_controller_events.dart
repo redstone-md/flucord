@@ -138,6 +138,10 @@ extension _ChatControllerEvents on ChatController {
       acknowledgeChannel(message.channelId);
       return;
     }
+    if (_boundaryAwaitsNewMessage && message.channelId == _activeChannelId) {
+      _boundaryAwaitsNewMessage = false;
+      _workspace = _workspace?.clearChannelUnreadBoundary(message.channelId);
+    }
     // The local mark stays: it is the whole unread model on a transport with no
     // read state, and on one that has read state the projection below simply
     // overwrites it with the server's answer a moment later.
