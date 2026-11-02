@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'dart:async';
 
 import 'package:flucord/src/application/remote_camera_controller.dart';
@@ -126,5 +128,5 @@ DiscordRtpFrame _frame(List<int> payload, {required bool marker}) =>
         ssrc: 41,
         marker: marker,
       ),
-      payload: payload,
+      payload: Uint8List.fromList(payload),
     );

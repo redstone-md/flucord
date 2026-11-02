@@ -89,7 +89,7 @@ final class DiscordVoiceTransportCipher {
     if (extensionLength > clearText.length) {
       throw const FormatException('Truncated encrypted RTP extension payload');
     }
-    var payload = clearText.sublist(extensionLength);
+    var payload = Uint8List.sublistView(clearText, extensionLength);
     // RFC 3550 §5.1: when the padding bit is set, the payload's last byte
     // says how many padding bytes sit behind the real payload, itself
     // included. A sender rounds some packets up, and a picture reassembled
@@ -98,7 +98,7 @@ final class DiscordVoiceTransportCipher {
     if (header.padding && payload.isNotEmpty) {
       final count = payload.last;
       if (count > 0 && count <= payload.length) {
-        payload = payload.sublist(0, payload.length - count);
+        payload = Uint8List.sublistView(payload, 0, payload.length - count);
       }
     }
     return DiscordRtpFrame(header: header, payload: payload);
@@ -158,7 +158,10 @@ final class DiscordVoiceTransportCipher {
 
   /// Authenticates [packet] against its first [clearLength] bytes and
   /// answers what the rest decrypted to.
-  List<int> _open(Uint8List packet, int clearLength) {
+  ///
+  /// The pieces of [packet] go in as views. Neither cipher keeps them, and
+  /// neither writes to them.
+  Uint8List _open(Uint8List packet, int clearLength) {
     final encryptedEnd = packet.length - nonceSuffixLength;
     final tagStart = encryptedEnd - authenticationTagLength;
     if (tagStart < clearLength) {
@@ -172,11 +175,16 @@ final class DiscordVoiceTransportCipher {
       packet.length - nonceSuffixLength,
     );
     final box = SecretBox(
-      packet.sublist(clearLength, tagStart),
+      Uint8List.sublistView(packet, clearLength, tagStart),
       nonce: nonce,
-      mac: Mac(packet.sublist(tagStart, encryptedEnd)),
+      mac: Mac(Uint8List.sublistView(packet, tagStart, encryptedEnd)),
     );
-    return _decrypt(box, packet.sublist(0, clearLength));
+    final clearText = _decrypt(
+      box,
+      Uint8List.sublistView(packet, 0, clearLength),
+    );
+    // Typed as a list by the package, and bytes from both ciphers today.
+    return clearText is Uint8List ? clearText : Uint8List.fromList(clearText);
   }
 
   List<int> _decrypt(SecretBox box, List<int> additionalData) {

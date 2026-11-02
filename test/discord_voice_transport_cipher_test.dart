@@ -19,7 +19,7 @@ void main() {
           timestamp: 0x10,
           ssrc: 0xdeadbeef,
         ),
-        payload: [0x10, 0x20, 0x30, 0x40, 0x50],
+        payload: Uint8List.fromList([0x10, 0x20, 0x30, 0x40, 0x50]),
       );
 
       expect(
@@ -78,7 +78,7 @@ void main() {
             extensionProfile: 0xbede,
             extensionLengthWords: 1,
           ),
-          payload: [90, 91, 92, 93, 1, 2, 3],
+          payload: Uint8List.fromList([90, 91, 92, 93, 1, 2, 3]),
         );
 
         final decrypted = receiver.decryptPacket(sender.encryptFrame(frame));
@@ -119,7 +119,7 @@ void main() {
                     extensionProfile: extensionWords > 0 ? 0xbede : null,
                     extensionLengthWords: extensionWords,
                   ),
-                  payload: sent,
+                  payload: Uint8List.fromList(sent),
                 ),
               ),
             );
@@ -145,7 +145,7 @@ void main() {
       final packet = sender.encryptFrame(
         DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 3),
-          payload: [4, 5, 6],
+          payload: Uint8List.fromList([4, 5, 6]),
         ),
       );
 
@@ -167,7 +167,7 @@ void main() {
       addTearDown(cipher.dispose);
       final frame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 3),
-        payload: [4],
+        payload: Uint8List.fromList([4]),
       );
 
       cipher.encryptFrame(frame);
