@@ -278,6 +278,9 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           )
         : null;
     if (member != null) await _cache.writeMember(member);
+    if (event.name == 'MESSAGE_CREATE') {
+      _readState.acceptNewMessage(event.data);
+    }
     _events.add(
       MessageUpsertedEvent(
         message: message,
@@ -297,8 +300,13 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       fallback: fallback,
       currentMemberId: _currentMemberId,
     );
-    await _cache.writeMessage(message);
-    return message;
+    // The mapper knows the account's id but not its roles. The flag decides the
+    // inbox and the desktop notification, so a role mention has to set it too.
+    final stored = _readState.mentionsAccountRole(payload)
+        ? message.copyWith(mentionsCurrentMember: true)
+        : message;
+    await _cache.writeMessage(stored);
+    return stored;
   }
 
   Future<void> _acceptDelete(Map<String, Object?> data) async {

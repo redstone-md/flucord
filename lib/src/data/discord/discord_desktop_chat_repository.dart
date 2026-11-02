@@ -563,7 +563,11 @@ final class DiscordDesktopChatRepository
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
     );
-    return _storeMessage(payload);
+    final message = await _storeMessage(payload);
+    // The gateway's copy may come later, and the channel must read as read
+    // from the moment the send returns.
+    _readState.acceptNewMessage(payload);
+    return message;
   }
 
   @override
