@@ -10,6 +10,7 @@ final class WorkspaceController extends ChangeNotifier {
   String? _selectedSpaceId;
   String? _selectedChannelId;
   String? _targetMessageId;
+  int _targetRequest = 0;
   String _query = '';
   ThemeMode _themeMode = ThemeMode.dark;
   bool _showMembers = true;
@@ -23,6 +24,10 @@ final class WorkspaceController extends ChangeNotifier {
   String? get selectedSpaceId => _selectedSpaceId;
   String? get selectedChannelId => _selectedChannelId;
   String? get targetMessageId => _targetMessageId;
+
+  /// Changes with each [selectMessage], so the timeline can land again on the
+  /// message it already points at.
+  int get targetRequest => _targetRequest;
   String get query => _query;
   ThemeMode get themeMode => _themeMode;
   bool get showMembers => _showMembers;
@@ -169,18 +174,12 @@ final class WorkspaceController extends ChangeNotifier {
   /// Jumping to a message is the most message-shaped route there is, so a voice
   /// channel opens on its timeline rather than on the room the anchor is not in.
   void selectMessage(String channelId, String messageId) {
-    final changed =
-        _selectedChannelId != channelId ||
-        _targetMessageId != messageId ||
-        _query.isNotEmpty;
-    final surfaceChanged = _voiceSurfaces.select(
-      channelId,
-      VoiceChannelSurface.chat,
-    );
+    _voiceSurfaces.select(channelId, VoiceChannelSurface.chat);
     _selectedChannelId = channelId;
     _targetMessageId = messageId;
+    _targetRequest++;
     _query = '';
-    if (changed || surfaceChanged) notifyListeners();
+    notifyListeners();
   }
 
   bool openChannelLink(ChatWorkspace workspace, ChannelLink link) {
