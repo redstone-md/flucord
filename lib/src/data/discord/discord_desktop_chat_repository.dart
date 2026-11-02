@@ -861,10 +861,7 @@ final class DiscordDesktopChatRepository
 
   @override
   Future<void> close() async {
-    await _gatewaySubscription.cancel();
-    await _sharedDispatches.drained;
-    // First, so that a slow socket further down cannot cost what is waiting.
-    await _cache.flush();
+    await _sharedDispatches.stop(_gatewaySubscription);
     await _selfPresenceSubscription.cancel();
     await _presence.close();
     // Pending settings edits are written before the socket goes away; a

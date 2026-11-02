@@ -23,7 +23,11 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
         _sharedDispatches.route(event);
         switch (event.name) {
           case 'MESSAGE_CREATE':
-            _sharedDispatches.inOrder(() => _handleNewMessage(event.data));
+            _sharedDispatches.acceptNewMessage(
+              event.data,
+              read: (payload) =>
+                  _mapper.message(payload, currentMemberId: _currentMemberId),
+            );
           case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
             _sharedDispatches.inOrder(() => _handlePollVote(event));
           case 'PRESENCE_UPDATE':

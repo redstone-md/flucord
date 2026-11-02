@@ -67,7 +67,14 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         _relationships.accept(event.name, event.data);
         _sharedDispatches.route(event);
         if (event.name == 'MESSAGE_CREATE') {
-          _sharedDispatches.inOrder(() => _acceptNewMessage(event.data));
+          _sharedDispatches.acceptNewMessage(
+            event.data,
+            read: _messageFrom,
+            // Nothing may wait between the fold and the announce. A frame drawn
+            // in between would show a badge on the channel on screen, because
+            // the message that clears it has not arrived yet.
+            beforeAnnounce: () => _readState.acceptNewMessage(event.data),
+          );
         } else if (event.name == 'TYPING_START') {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
@@ -350,31 +357,6 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         ChannelLastMessageEvent(channelId: channelId, messageId: messageId),
       );
     }
-  }
-
-  Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
-    if (payload['id'] is! String) return;
-    final message = _messageFrom(payload);
-    final member = _mapper.messageAuthor(payload);
-    final currentUserId = _currentMemberId;
-    // A new channel is announced and queued here, ahead of the message.
-    final channelAdopted = currentUserId == null
-        ? null
-        : _directMessages.acceptMessage(payload, currentUserId);
-    // Nothing may wait between the fold and the announce. A frame drawn in
-    // between would show a badge on the channel on screen, because the message
-    // that clears it has not arrived yet.
-    _readState.acceptNewMessage(payload);
-    _events.add(
-      MessageUpsertedEvent(
-        message: message,
-        member: member,
-        isNew: true,
-        mentionsCurrentMember: message.mentionsCurrentMember,
-      ),
-    );
-    await _cache.writeMessage(message, member: member);
-    await channelAdopted;
   }
 
   Future<ChatMessage> _storeMessage(

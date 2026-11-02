@@ -97,25 +97,3 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
   }) async {}
 }
 
-extension _DiscordChatRepositoryMessages on DiscordChatRepository {
-  Future<void> _handleNewMessage(Map<String, Object?> payload) async {
-    if (payload['id'] is! String) return;
-    final currentUserId = _currentMemberId;
-    final message = _mapper.message(payload, currentMemberId: currentUserId);
-    final member = _mapper.messageAuthor(payload);
-    // A new channel is announced and queued here, ahead of the message.
-    final channelAdopted = currentUserId == null
-        ? null
-        : _directMessages.acceptMessage(payload, currentUserId);
-    _events.add(
-      MessageUpsertedEvent(
-        message: message,
-        member: member,
-        isNew: true,
-        mentionsCurrentMember: message.mentionsCurrentMember,
-      ),
-    );
-    await _cache.writeMessage(message, member: member);
-    await channelAdopted;
-  }
-}
