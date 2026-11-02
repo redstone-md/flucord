@@ -21,6 +21,7 @@ extension _FlucordShellConversation on FlucordShell {
     required bool allowThreadPanel,
     required bool canSearch,
   }) => ConversationPane(
+    key: ShellKeyboard.paneKeyOf(context),
     workspace: workspace,
     capabilities: capabilities,
     channel: channel,

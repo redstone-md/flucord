@@ -134,10 +134,12 @@ class MessageComposer extends StatefulWidget {
   final int? attachmentSizeLimitBytes;
 
   @override
-  State<MessageComposer> createState() => _MessageComposerState();
+  State<MessageComposer> createState() => MessageComposerState();
 }
 
-class _MessageComposerState extends State<MessageComposer>
+/// Public so the conversation pane can reach the box through a global key: the
+/// keyboard works from outside this widget.
+class MessageComposerState extends State<MessageComposer>
     with _ComposerAutocompleteStateMixin, _VoiceMessageComposerStateMixin {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -185,6 +187,11 @@ class _MessageComposerState extends State<MessageComposer>
     _initializeComposerAutocomplete();
     _listenToVoiceProgress();
     _startSlowmodeTicker();
+    // A box that appears under a room or a read-only notice is where typing
+    // goes next. It has no route to ask about until the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) focus();
+    });
   }
 
   @override
@@ -195,6 +202,7 @@ class _MessageComposerState extends State<MessageComposer>
       _saveDraft(oldWidget.channelId);
       _discardVoiceState(oldWidget.voiceMessageRecorder);
       _withAutocompleteClosed(_openDraft);
+      focus();
     }
     if (oldWidget.slowmodeUntil != widget.slowmodeUntil ||
         oldWidget.slowmode != widget.slowmode) {
@@ -236,6 +244,25 @@ class _MessageComposerState extends State<MessageComposer>
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// Puts the cursor in the box, unless a dialog or a menu covers it. A focus
+  /// request from behind one would take the keyboard away from it.
+  void focus() {
+    if (ModalRoute.isCurrentOf(context) ?? true) _focusNode.requestFocus();
+  }
+
+  /// Types [text] at the caret on behalf of a key pressed elsewhere, as if the
+  /// box had the focus all along. Answers false while a voice message stands in
+  /// for the box.
+  bool typeText(String text) {
+    if (_hasVoiceSession) return false;
+    _focusNode.requestFocus();
+    // Suggestions only open for a box that has the focus, and a request lands
+    // at the end of this event. A first `@` must not miss them.
+    FocusManager.instance.applyFocusChangesIfNeeded();
+    _insertText(text);
+    return true;
   }
 
   /// What the box holds now. The reply target is the pane's to set, so it is
@@ -479,7 +506,7 @@ class _MessageComposerState extends State<MessageComposer>
     );
   }
 
-  void _insertEmoji(String token) {
+  void _insertText(String token) {
     final text = _controller.text;
     final selection = _controller.selection;
     final start = selection.isValid ? selection.start : text.length;
@@ -491,6 +518,7 @@ class _MessageComposerState extends State<MessageComposer>
     );
     final hasContent = next.trim().isNotEmpty;
     if (hasContent) widget.onTyping();
+    widget.slashCommands?.syncComposer(next);
     setState(() {
       _hasContent = hasContent;
       _charactersUsed = next.characters.length;
@@ -629,7 +657,7 @@ class _MessageComposerState extends State<MessageComposer>
                         EmojiPickerButton(
                           spaceName: widget.spaceName,
                           emojiSections: widget.emojiSections,
-                          onSelected: _insertEmoji,
+                          onSelected: _insertText,
                           favorites: widget.expressionFavorites,
                         ),
                         if (widget.gifPicker case final picker?)

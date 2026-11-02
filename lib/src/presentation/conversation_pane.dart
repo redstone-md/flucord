@@ -132,14 +132,18 @@ class ConversationPane extends StatefulWidget {
   final VoidCallback onOpenInbox;
 
   @override
-  State<ConversationPane> createState() => _ConversationPaneState();
+  State<ConversationPane> createState() => ConversationPaneState();
 }
 
-class _ConversationPaneState extends State<ConversationPane> {
+/// Public so the shell's keyboard map can reach the open conversation through a
+/// global key, as a form reaches its `FormState`.
+class ConversationPaneState extends State<ConversationPane> {
   /// Holds a send failure's note clear of the composer, even with four lines
   /// of text in it. A note at the window's edge would cover the restored text
   /// and the Send button the user needs to try again.
   static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
+
+  final _composerKey = GlobalKey<MessageComposerState>();
 
   static String _composerHintPrefix(ConversationChannel channel) {
     if (channel.isDirectMessage) return '@';
@@ -163,6 +167,14 @@ class _ConversationPaneState extends State<ConversationPane> {
     _watchCall();
     _pointControllersAtChannel();
   }
+
+  /// Puts the cursor in the composer, if this channel has one.
+  void focusComposer() => _composerKey.currentState?.focus();
+
+  /// Types [text] into the composer and focuses it. Answers false when this
+  /// channel has no composer to type in.
+  bool typeInComposer(String text) =>
+      _composerKey.currentState?.typeText(text) ?? false;
 
   /// Sets who the open channel's draft answers.
   void _setReply(ChatController chat, ChatMessage? message) {
@@ -559,6 +571,7 @@ class _ConversationPaneState extends State<ConversationPane> {
           const ReadOnlyChannelNotice()
         else if (showsMessages)
           MessageComposer(
+            key: _composerKey,
             gifPicker: GifPickerScope.read(context),
             canAttachFiles: widget.capabilities.attachFiles,
             slashCommands: SlashCommandScope.read(context),
