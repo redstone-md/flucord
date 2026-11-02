@@ -85,10 +85,25 @@ void main() {
       expect(find.byKey(const ValueKey('message-menu-reply')), findsNothing);
       expect(find.byKey(const ValueKey('message-menu-delete')), findsNothing);
       expect(find.byKey(const ValueKey('message-menu-edit')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('message-menu-add-reaction')),
+        findsNothing,
+      );
       // Copying is always on: it asks nothing of the server.
       expect(
         find.byKey(const ValueKey('message-menu-copy-id')),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('no Mark unread on a transport with no read state', (
+      tester,
+    ) async {
+      await _pumpMenu(tester, isCurrentUser: false);
+
+      expect(
+        find.byKey(const ValueKey('message-menu-mark-unread')),
+        findsNothing,
       );
     });
 

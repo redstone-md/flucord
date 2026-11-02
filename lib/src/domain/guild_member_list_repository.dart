@@ -20,6 +20,15 @@ abstract interface class GuildMemberListRepository {
     int limit = 25,
   });
 
+  /// Asks the guild for the members with these ids.
+  ///
+  /// A history page names its authors but not their roles. The answer arrives
+  /// the same way as for [searchGuildMembers]. At most 100 ids.
+  void requestGuildMembers({
+    required String guildId,
+    required List<String> userIds,
+  });
+
   /// Lists that changed, one event per applied `GUILD_MEMBER_LIST_UPDATE`.
   Stream<GuildMemberList> get memberListUpdates;
 

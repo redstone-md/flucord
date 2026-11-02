@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/application/connection_controller.dart';
@@ -133,6 +135,70 @@ void main() {
       expect(chat.workspace?.spaces, isEmpty);
     },
   );
+
+  group('forgetting the account', () {
+    ConnectionController controllerWith(
+      Future<void> Function() clearChatImages, {
+      ChatRepositoryFactory? factory,
+      required _MemoryCredentialVault vault,
+    }) {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      addTearDown(chat.dispose);
+      return ConnectionController(
+        chat,
+        vault,
+        factory ??
+            _StaticRepositoryFactory(
+              MockChatRepository(latency: Duration.zero),
+            ),
+        clearChatImages: clearChatImages,
+      );
+    }
+
+    test('clears the pictures of its chats', () async {
+      var clears = 0;
+      final controller = controllerWith(
+        () async => clears++,
+        vault: _MemoryCredentialVault(),
+      );
+
+      await controller.forgetSavedCredential();
+
+      expect(clears, 1);
+      expect(controller.errorMessage, isNull);
+    });
+
+    test(
+      'drops the credential when the pictures cannot go, and says so',
+      () async {
+        final vault = _MemoryCredentialVault()
+          ..session = DiscordBotSession('saved-token');
+        final controller = controllerWith(
+          () async => throw const FileSystemException('locked'),
+          vault: vault,
+        );
+
+        await controller.forgetSavedCredential();
+
+        expect(vault.token, isNull);
+        expect(controller.errorMessage, contains('images'));
+      },
+    );
+
+    test('clears the pictures when the chat cache cannot go', () async {
+      var clears = 0;
+      final controller = controllerWith(
+        () async => clears++,
+        factory: _CacheLockedRepositoryFactory(),
+        vault: _MemoryCredentialVault(),
+      );
+
+      await controller.forgetSavedCredential();
+
+      expect(clears, 1);
+      expect(controller.errorMessage, contains('messages'));
+    });
+  });
 
   test('automatically restores a typed session from the vault', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
@@ -370,6 +436,15 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
 
   @override
   Future<void> clearCache() async {}
+}
+
+final class _CacheLockedRepositoryFactory implements ChatRepositoryFactory {
+  @override
+  Future<ChatRepository> create(DiscordAccountSession session) async =>
+      MockChatRepository(latency: Duration.zero);
+
+  @override
+  Future<void> clearCache() async => throw const FileSystemException('locked');
 }
 
 final class _RejectingRepositoryFactory implements ChatRepositoryFactory {

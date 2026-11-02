@@ -6,13 +6,23 @@ extension DiscordMessageMapper on DiscordMapper {
   Member? messageAuthor(Map<String, Object?> payload) {
     final author = payload['author'];
     if (author is! Map) return null;
-    return member(
+    final mapped = member(
       author.cast<String, Object?>(),
       spaceIds: {
         if (payload['guild_id'] case final String guildId) guildId,
         if (payload['guild_id'] == null) DiscordMapper.directMessagesSpaceId,
       },
     );
+    // A gateway message says who the author is in this guild. A history page
+    // does not, so there the roles come from a member request.
+    return switch ((payload['guild_id'], payload['member'])) {
+      (final String guildId, final Map guildMember) => _withGuildStanding(
+        mapped,
+        guildMember.cast<String, Object?>(),
+        guildId,
+      ),
+      _ => mapped,
+    };
   }
 
   ChatMessage message(

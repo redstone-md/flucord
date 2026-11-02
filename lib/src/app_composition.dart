@@ -79,6 +79,7 @@ import 'data/video/system_audio_capture.dart';
 import 'data/audio/isolate_noise_suppressor.dart';
 import 'data/discord/discord_stream_rtc_service.dart';
 import 'data/discord/discord_voice_signaling_service.dart';
+import 'data/chat_image_cache.dart';
 import 'data/disconnected_chat_repository.dart';
 import 'data/file_voice_processing_repository.dart';
 import 'data/media_kit_soundboard_player.dart';
@@ -269,6 +270,7 @@ final class AppComposition {
         bootstrap.chatRepositoryFactory ?? const DiscordRepositoryFactory(),
         initialMode: bootstrap.initialSessionMode,
         botTransportEnabled: bootstrap.enableBotTransport,
+        clearChatImages: bootstrap.clearChatImages ?? ChatImageCache.clear,
       ),
     );
     desktopLogin = _register(

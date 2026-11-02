@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/chat_image_disk.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -161,6 +162,57 @@ void main() {
     onDisk: true,
     ready: _readyOf(SessionHarness.currentUserId),
   );
+
+  group('the pictures of a chat', () {
+    final images = ChatImageDisk.declare();
+
+    testSession(
+      'signing out leaves no picture of the account and no address on disk',
+      (tester, session) async {
+        const path = '/external/private/photo.png';
+        final address = images.serve(path, images.largePhoto);
+        await session.dispatch('MESSAGE_CREATE', {
+          ...rawMessage(
+            id: _dmMessageId,
+            channelId: SessionHarness.dmChannelId,
+            authorId: SessionHarness.friendId,
+            content: _privateText,
+          ),
+          'embeds': [
+            {
+              'type': 'rich',
+              'image': {
+                'url': 'https://pictures.example/original',
+                'proxy_url': address,
+                'width': 3000,
+                'height': 2000,
+              },
+            },
+          ],
+        });
+        // The cache's index reaches the disk some seconds after the download.
+        await tester.pump(const Duration(seconds: 4));
+        // Without this check, a cache that was never written would also pass.
+        await images.waitUntil(
+          tester,
+          () =>
+              images.bytesOnDisk.contains(ChatImageDisk.pictureMark) &&
+              images.bytesOnDisk.contains(path),
+          'the picture and its address on disk',
+        );
+
+        await session.signOut();
+
+        expect(images.bytesOnDisk, isNot(contains(ChatImageDisk.pictureMark)));
+        expect(images.bytesOnDisk, isNot(contains(path)));
+
+        await images.letTimersEnd(tester);
+      },
+      onDisk: true,
+      chatImagesOnDisk: true,
+      ready: _readyOf(SessionHarness.currentUserId),
+    );
+  });
 
   group('the bot transport', () {
     setUpAll(sqfliteFfiInit);

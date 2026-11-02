@@ -263,6 +263,12 @@ final class _EventRepository
   }) => memberSearches.add((guildId, query));
 
   @override
+  void requestGuildMembers({
+    required String guildId,
+    required List<String> userIds,
+  }) {}
+
+  @override
   Future<List<GuildScheduledEventAttendee>> loadEventAttendees({
     required String spaceId,
     required String eventId,
