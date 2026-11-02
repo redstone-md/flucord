@@ -279,7 +279,7 @@ class _SuspensionNotice extends StatelessWidget {
     margin: const EdgeInsets.only(top: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+      color: context.surfaces.danger.withValues(alpha: 0.12),
       borderRadius: FlucordRadius.medium,
     ),
     child: Column(

@@ -98,6 +98,12 @@ abstract final class FlucordTheme {
       backgrounds: backgrounds,
       ratio: _nonTextContrast,
     );
+    final errorText = _readable(
+      danger,
+      text: text,
+      backgrounds: backgrounds,
+      ratio: _textContrast,
+    );
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>(
       (states) => states.contains(WidgetState.focused)
           ? BorderSide(color: focusRing, width: _focusRingWidth)
@@ -109,7 +115,9 @@ abstract final class FlucordTheme {
       onPrimary: Colors.white,
       secondary: success,
       onSecondary: const Color(0xff051b10),
-      error: danger,
+      // Widgets and Material's own fields draw error text in this, so it is the
+      // readable error text. A danger fill takes `surfaces.danger` instead.
+      error: errorText,
       onError: Colors.white,
       surface: surface,
       onSurface: text,
@@ -240,12 +248,7 @@ abstract final class FlucordTheme {
             backgrounds: backgrounds,
             ratio: _textContrast,
           ),
-          errorText: _readable(
-            danger,
-            text: text,
-            backgrounds: backgrounds,
-            ratio: _textContrast,
-          ),
+          errorText: errorText,
           accentIcon: focusRing,
           focusRing: focusRing,
         ),

@@ -14,7 +14,6 @@ void main() {
 
     expect(theme.colorScheme.primary, const Color(0xff5865f2));
     expect(theme.colorScheme.secondary, const Color(0xff23a55a));
-    expect(theme.colorScheme.error, const Color(0xffda373c));
     expect(surfaces.rail, const Color(0xff1e1f22));
     expect(surfaces.canvas, const Color(0xff313338));
     expect(surfaces.surface, const Color(0xff2b2d31));
@@ -193,6 +192,12 @@ void main() {
           () => expectContrast(surfaces.errorText, 4.5),
         );
 
+        // Widgets and Material's own fields draw error text in it.
+        test(
+          'the scheme\'s error colour reaches 4.5:1',
+          () => expectContrast(theme.colorScheme.error, 4.5),
+        );
+
         test(
           'the default icon colour reaches 3:1',
           () => expectContrast(surfaces.muted, 3),
@@ -229,7 +234,6 @@ void main() {
       expect(surfaces.brand, const Color(0xff5865f2));
       expect(surfaces.danger, const Color(0xffda373c));
       expect(FlucordTheme.dark.colorScheme.primary, const Color(0xff5865f2));
-      expect(FlucordTheme.dark.colorScheme.error, const Color(0xffda373c));
     });
   });
 

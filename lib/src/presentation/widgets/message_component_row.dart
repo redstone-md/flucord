@@ -161,7 +161,7 @@ class _Button extends StatelessWidget {
       MessageButtonStyle.danger => FilledButton(
         key: key,
         style: FilledButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.error,
+          backgroundColor: context.surfaces.danger,
         ),
         onPressed: enabled ? onPressed : null,
         child: child,

@@ -88,6 +88,36 @@ void main() {
     expect(repository.presses.single, ('message-1', 'confirm', 64));
   });
 
+  testWidgets('a danger button keeps the danger fill', (tester) async {
+    final repository = _FakeRepository();
+    final controller = MessageComponentController(() => repository)
+      ..show(channelId: 'channel-1');
+    addTearDown(controller.dispose);
+    addTearDown(repository.close);
+
+    await pump(tester, controller, const [
+      MessageActionRow(
+        components: [
+          MessageComponent(
+            type: 2,
+            customId: 'delete',
+            label: 'Delete',
+            style: MessageButtonStyle.danger,
+          ),
+        ],
+      ),
+    ]);
+
+    final fill = tester
+        .widget<Material>(
+          find
+              .ancestor(of: find.text('Delete'), matching: find.byType(Material))
+              .first,
+        )
+        .color;
+    expect(fill, FlucordTheme.dark.extension<FlucordSurfaceTheme>()!.danger);
+  });
+
   testWidgets('a link button opens rather than interacting', (tester) async {
     final repository = _FakeRepository();
     final controller = MessageComponentController(() => repository)
