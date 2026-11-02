@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../profile_image_picker.dart';
+import 'flucord_dialog.dart';
 
 /// Creates or edits one server event.
 ///
@@ -82,7 +83,7 @@ class _GuildEventFormDialogState extends State<GuildEventFormDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('guild-event-form'),
     title: Text(_isEditing ? 'Edit event' : 'New event'),
     content: SizedBox(

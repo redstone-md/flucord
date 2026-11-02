@@ -8,6 +8,7 @@ import '../../domain/guild_expression_errors.dart';
 import '../../theme/flucord_theme.dart';
 import '../expression_file_picker.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The expressions page: the server's emoji, stickers and soundboard sounds,
 /// each with an upload and a delete.
@@ -299,7 +300,7 @@ class _NameDialogState extends State<_NameDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: Text(widget.title),
     content: TextField(
       key: const ValueKey('guild-expression-name-field'),
@@ -347,7 +348,7 @@ class _SoundDialogState extends State<_SoundDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: const Text('Name this sound'),
     content: Column(
       mainAxisSize: MainAxisSize.min,

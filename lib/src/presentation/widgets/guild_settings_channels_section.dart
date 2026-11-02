@@ -10,6 +10,7 @@ import '../../domain/permission_overwrite.dart';
 import '../../theme/flucord_theme.dart';
 import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The channels page: create, rename, reorder, delete.
 ///
@@ -757,16 +758,23 @@ class _OverwriteTargetDialog extends StatelessWidget {
   final List<({String id, String label})> entries;
 
   @override
-  Widget build(BuildContext context) => SimpleDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     title: Text(title),
-    children: [
-      for (final (id: id, label: label) in entries)
-        SimpleDialogOption(
-          key: ValueKey('overwrite-target-$id'),
-          onPressed: () => Navigator.of(context).pop(id),
-          child: Text(label),
-        ),
-    ],
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (id: id, label: label) in entries)
+            SimpleDialogOption(
+              key: ValueKey('overwrite-target-$id'),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              onPressed: () => Navigator.of(context).pop(id),
+              child: Text(label),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -782,7 +790,7 @@ class _OverwriteBitsDialog extends StatelessWidget {
     final name = overwrite.kind == PermissionOverwriteKind.member
         ? 'member'
         : 'role';
-    return AlertDialog(
+    return FlucordDialog(
       key: const ValueKey('overwrite-bits-dialog'),
       title: Text('Overwrite for this $name'),
       content: SizedBox(
@@ -858,7 +866,7 @@ class _CreateChannelDialogState extends State<_CreateChannelDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('create-channel-dialog'),
     title: const Text('Create channel'),
     content: SizedBox(

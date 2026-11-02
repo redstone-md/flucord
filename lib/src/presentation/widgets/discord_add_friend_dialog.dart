@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../application/discord_friends_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 Future<void> showDiscordAddFriendDialog(
   BuildContext context,
@@ -55,9 +56,8 @@ class _DiscordAddFriendDialogState extends State<_DiscordAddFriendDialog> {
       builder: (context, _) {
         final sending = widget.controller.isSendingFriendRequest;
         final error = widget.controller.friendRequestError;
-        return AlertDialog(
+        return FlucordDialog(
           key: const ValueKey('discord-add-friend-dialog'),
-          backgroundColor: context.surfaces.surface,
           title: const Text('Add Friend'),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),

@@ -6,6 +6,7 @@ import '../../application/guild_settings_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The invites page: what is outstanding, and how to add or revoke one.
 ///
@@ -119,7 +120,7 @@ class _CreateInviteDialogState extends State<_CreateInviteDialog> {
   bool _temporary = false;
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('create-invite-dialog'),
     title: const Text('Create invite'),
     content: SizedBox(

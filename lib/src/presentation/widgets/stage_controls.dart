@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/stage_controller.dart';
 import '../../domain/stage_channel.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 /// The strip a stage channel shows above its participants.
 ///
@@ -257,7 +258,7 @@ class _StageTopicDialogState extends State<StageTopicDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('stage-topic-dialog'),
     title: Text(widget.isStarting ? 'Start a stage' : 'Edit the topic'),
     content: TextField(

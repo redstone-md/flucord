@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/chat_controller.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's create-a-server dialog: a name in, a server out, owned by this
 /// account and ready to configure.
@@ -57,7 +58,7 @@ class _CreateServerDialogState extends State<CreateServerDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('create-server-dialog'),
     title: const Text('Create a server'),
     content: SizedBox(

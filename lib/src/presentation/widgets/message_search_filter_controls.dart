@@ -243,7 +243,7 @@ class _DateFilterDialogState extends State<_DateFilterDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: ValueKey('search-date-${widget.filter}'),
     title: Text('${widget.filter == 'before' ? 'Before' : 'After'} date'),
     content: Column(

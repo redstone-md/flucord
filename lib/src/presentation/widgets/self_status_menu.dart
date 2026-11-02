@@ -5,6 +5,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/presence_repository.dart';
 import '../../theme/flucord_theme.dart';
 import 'presence_indicator.dart';
+import 'flucord_dialog.dart';
 
 /// What a status row can ask for beyond picking one of the four statuses.
 enum _StatusMenuAction { custom, clearCustom }
@@ -153,7 +154,7 @@ class _CustomStatusDialogState extends State<CustomStatusDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('custom-status-dialog'),
     title: const Text('Set a custom status'),
     content: SizedBox(

@@ -8,6 +8,7 @@ import '../../domain/channel_link.dart';
 import '../../domain/guild_management.dart';
 import '../../theme/flucord_theme.dart';
 import 'remote_identity_image.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's join-a-server dialog: an invite link or code in, a preview of
 /// the server out, and a join that lands the user inside it.
@@ -116,7 +117,7 @@ class _JoinServerDialogState extends State<JoinServerDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('join-server-dialog'),
     title: const Text('Join a server'),
     content: SizedBox(

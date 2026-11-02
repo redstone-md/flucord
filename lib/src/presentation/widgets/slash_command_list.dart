@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/slash_command_controller.dart';
 import '../../domain/application_command.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 /// The command list Discord shows above the composer after a slash.
 class SlashCommandList extends StatelessWidget {
@@ -212,7 +213,7 @@ class _SlashCommandOptionsDialogState extends State<SlashCommandOptionsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('slash-command-options'),
     title: Text('/${widget.command.name}'),
     content: SingleChildScrollView(

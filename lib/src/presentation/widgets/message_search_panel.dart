@@ -6,6 +6,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../domain/message_search.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 import 'member_avatar.dart';
 import 'message_content_view.dart';
 import 'message_timestamp.dart';

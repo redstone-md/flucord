@@ -7,6 +7,7 @@ import '../../domain/chat_models.dart';
 import '../../domain/guild_management.dart';
 import 'destructive_confirmation.dart';
 import 'guild_settings_controls.dart';
+import 'flucord_dialog.dart';
 
 /// The webhooks page: what exists, where each one posts, and the controls to
 /// add, retarget and remove them.
@@ -177,7 +178,7 @@ class _WebhookDialogState extends State<_WebhookDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('webhook-dialog'),
     title: Text(widget.title),
     content: SizedBox(

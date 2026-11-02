@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'flucord_dialog.dart';
 
 /// The key of the confirm button when a caller does not name its own.
 const destructiveConfirmKey = ValueKey('destructive-confirm');
@@ -21,7 +22,7 @@ Future<bool> confirmDestructiveAction(
     context: context,
     builder: (dialogContext) {
       final colors = Theme.of(dialogContext).colorScheme;
-      return AlertDialog(
+      return FlucordDialog(
         key: dialogKey,
         title: Text(title),
         // A message can quote somebody's text, so a long one is cut short.
