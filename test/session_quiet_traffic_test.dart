@@ -1,8 +1,10 @@
+import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
+import 'package:flucord/src/presentation/widgets/presence_indicator.dart';
 import 'package:flucord/src/presentation/widgets/typing_indicator.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -153,6 +155,24 @@ Future<void> _createChannel(SessionHarness session) => session.dispatch(
   'CHANNEL_CREATE',
   {...rawChannel(id: _madeLaterId, name: 'made-later'), 'guild_id': _guildId},
 );
+
+/// The status the row of [_spokenId] draws on its author's avatar.
+Presence _authorStatus(WidgetTester tester, SessionHarness session) => tester
+    .widget<PresenceIndicator>(
+      find.descendant(
+        of: session.messageRow(_spokenId),
+        matching: find.byKey(const ValueKey('member-presence-$_friendId')),
+      ),
+    )
+    .presence
+    .status;
+
+/// Lets the real event loop deliver what the socket received, then moves the
+/// fake clock by exactly [time]. [SessionHarness.settle] would move it too far.
+Future<void> _passWithoutSettling(WidgetTester tester, Duration time) async {
+  await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+  await tester.pump(time);
+}
 
 /// Fills the open channel with more rows than fit on the screen.
 void _routeHistory(FakeDiscordTransport transport) => transport.on(
@@ -326,6 +346,53 @@ void main() {
       final builds = await countBuilds(() => _presence(session, _friendId));
 
       expect(_shellBuilds(builds), greaterThan(0));
+    });
+
+    testSession('in a burst folds once, and the last one for a person wins', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'on screen');
+      await _meetFarMembers(session);
+      await _rest(tester, session);
+      final chat = ChatScope.read(
+        tester.element(session.messageRow(_spokenId)),
+      );
+      var folds = 0;
+      void countFold() => folds++;
+      chat.addListener(countFold);
+      addTearDown(() => chat.removeListener(countFold));
+
+      for (final id in _farMembers) {
+        await _presence(session, id, guildId: _farGuildId, settle: false);
+        await _passWithoutSettling(tester, const Duration(milliseconds: 1));
+      }
+      await _presence(session, _friendId, settle: false);
+      await _passWithoutSettling(tester, const Duration(milliseconds: 1));
+      await _presence(session, _friendId, status: 'idle', settle: false);
+      await session.settle();
+
+      expect(folds, 1);
+      expect(_authorStatus(tester, session), Presence.idle);
+    });
+
+    testSession('waits for the window, then updates the author on screen', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'on screen');
+      await _rest(tester, session);
+      final before = _authorStatus(tester, session);
+      expect(before, isNot(Presence.doNotDisturb));
+
+      await _presence(session, _friendId, settle: false);
+      await _passWithoutSettling(tester, const Duration(milliseconds: 99));
+      expect(_authorStatus(tester, session), before);
+
+      await _passWithoutSettling(tester, const Duration(milliseconds: 151));
+      expect(_authorStatus(tester, session), Presence.doNotDisturb);
     });
 
     testSession('that repeats what the app shows builds nothing', (
