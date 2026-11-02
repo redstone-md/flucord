@@ -319,22 +319,13 @@ class FlucordShell extends StatelessWidget {
                                   // A voice connection outlives the room view, so
                                   // leaving it has to stay reachable from wherever
                                   // the user has navigated to since.
-                                  // Rebuilt from the voice controller rather than
-                                  // with the rest of the shell: joining a channel is
-                                  // not a workspace change, and the strip used to
-                                  // appear only when something else happened to
-                                  // redraw the sidebar.
-                                  voiceConnectionBar: ListenableBuilder(
-                                    listenable: voiceController,
-                                    builder: (_, _) => VoiceConnectionBar(
-                                      controller: voiceController,
-                                      camera: selfVideoController,
-                                      channelNameFor: (id) => channels
-                                          .where((channel) => channel.id == id)
-                                          .map((channel) => channel.name)
-                                          .firstOrNull,
-                                      onOpenChannel: _selectChannel,
-                                    ),
+                                  voiceConnectionBar: VoiceConnectionBar(
+                                    controller: voiceController,
+                                    camera: selfVideoController,
+                                    channelNameFor: (id) =>
+                                        _channelOf(id)?.name,
+                                    serverNameFor: _serverNameOf,
+                                    onOpenChannel: _openVoiceRoom,
                                   ),
                                   channels: channels,
                                   selectedChannelId: channelId,
