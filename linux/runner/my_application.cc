@@ -107,6 +107,15 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // The smallest the window can be made, the same as minimumWindowSize in Dart.
+  // It is set here because GTK writes the window's size hints again each time
+  // it lays the window out, which undoes window_manager's setMinimumSize.
+  GdkGeometry minimum_size = {};
+  minimum_size.min_width = 940;
+  minimum_size.min_height = 500;
+  gtk_window_set_geometry_hints(window, nullptr, &minimum_size,
+                                GDK_HINT_MIN_SIZE);
+
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

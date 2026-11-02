@@ -20,9 +20,8 @@ final class GuildSticker {
 }
 
 extension GuildStickerWorkspace on ChatWorkspace {
-  List<GuildSticker> stickersFor(String spaceId) => stickers
-      .where((sticker) => sticker.spaceId == spaceId && sticker.available)
-      .toList(growable: false);
+  List<GuildSticker> stickersFor(String spaceId) =>
+      ChatWorkspace._group(_stickersBySpaceId, spaceId);
 
   ChatWorkspace replaceGuildStickers(
     String spaceId,
