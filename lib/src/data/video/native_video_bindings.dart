@@ -72,6 +72,10 @@ typedef _DecoderDroppedNative = Int32 Function(Pointer<Void>);
 
 typedef DecoderDroppedDart = int Function(Pointer<Void>);
 
+typedef _DecoderGpuStatusNative = Int32 Function(Pointer<Void>);
+
+typedef DecoderGpuStatusDart = int Function(Pointer<Void>);
+
 typedef _DecoderStatsNative =
     Void Function(
       Pointer<Void>,
@@ -180,10 +184,7 @@ final class NativeVideoBindings {
             'flucord_video_decoder_dropped',
           ),
       decoderStats = _lookUpDecoderStats(library),
-      decoderGpuStatus = library
-          .lookupFunction<_DecoderDroppedNative, DecoderDroppedDart>(
-            'flucord_video_decoder_gpu_status',
-          ),
+      decoderGpuStatus = _lookUpDecoderGpuStatus(library),
       decoderClose = library
           .lookupFunction<
             Void Function(Pointer<Void>),
@@ -276,6 +277,18 @@ final class NativeVideoBindings {
     }
   }
 
+  /// Absent in a module built before the decoder could decode on the GPU.
+  static DecoderGpuStatusDart? _lookUpDecoderGpuStatus(DynamicLibrary library) {
+    try {
+      return library
+          .lookupFunction<_DecoderGpuStatusNative, DecoderGpuStatusDart>(
+            'flucord_video_decoder_gpu_status',
+          );
+    } on Object {
+      return null;
+    }
+  }
+
   /// Absent in a module built before screenshots existed, which is a build
   /// that must still run rather than fail to load.
   static ScreenshotCaptureDart? _lookUpCaptureScreen(DynamicLibrary library) {
@@ -320,8 +333,9 @@ final class NativeVideoBindings {
   final DecoderStatsDart? decoderStats;
 
   /// 0 while the decoder's pictures come from the GPU, otherwise the HRESULT
-  /// that keeps them on the CPU.
-  final int Function(Pointer<Void>) decoderGpuStatus;
+  /// that keeps them on the CPU; null in a module built before it decoded on
+  /// the GPU.
+  final DecoderGpuStatusDart? decoderGpuStatus;
   final void Function(Pointer<Void>) decoderClose;
   final int Function() displayCount;
 

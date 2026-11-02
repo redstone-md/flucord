@@ -167,8 +167,9 @@ FLUCORD_VIDEO_EXPORT int32_t flucord_video_describe_displays(char* buffer,
 
 typedef struct FlucordVideoDecoder FlucordVideoDecoder;
 
-// One decoded picture, as BGRA ready for a texture. Valid for the duration of
-// the callback only: the decoder reuses its buffer.
+// One decoded picture, as BGRA ready for a texture. Each picture owns its
+// buffer, which stays valid after the callback returns until the callee
+// passes it to flucord_video_decoder_release_picture.
 typedef void (*FlucordVideoPictureCallback)(void* user_data,
                                             const uint8_t* bgra,
                                             int32_t width,
