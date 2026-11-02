@@ -8,11 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_item.dart';
 
+import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
-const _channelMessagesPath =
-    '/api/v9/channels/${SessionHarness.channelId}/messages';
+const _channelMessagesPath = ChannelHistoryFixture.messagesPath;
 
 /// What a full page holds. A full page tells the client that more history
 /// exists, so it can ask for an older one.
@@ -22,26 +22,9 @@ const _pageSize = 100;
 const _firstHeld = 100;
 const _newestHeld = _firstHeld + _pageSize - 1;
 
-String _idOf(int index) => '9${index.toString().padLeft(17, '0')}';
-
-Map<String, Object?> _rawMessage(int index, {String? authorId}) => rawMessage(
-  id: _idOf(index),
-  channelId: SessionHarness.channelId,
-  guildId: SessionHarness.guildId,
-  authorId: authorId ?? SessionHarness.friendId,
-  content: 'Message $index',
-  timestamp: DateTime.utc(
-    2026,
-    7,
-    20,
-  ).add(Duration(minutes: index * 10)).toIso8601String(),
-);
-
-/// A page of history as Discord answers it, newest first.
-List<Map<String, Object?>> _page(int first, int count) => [
-  for (var index = first + count - 1; index >= first; index--)
-    _rawMessage(index),
-];
+const _idOf = ChannelHistoryFixture.idOf;
+const _rawMessage = ChannelHistoryFixture.message;
+const _page = ChannelHistoryFixture.page;
 
 /// Answers with the newest page, and with the page before it when asked.
 void _routeHistory(FakeDiscordTransport transport) {
