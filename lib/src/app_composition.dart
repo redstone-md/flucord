@@ -834,6 +834,7 @@ final class AppComposition {
   /// The system closes a window with no help from the widgets, which stay
   /// mounted until the process ends. So this is the last chance to save.
   Future<AppExitResponse> _closeBeforeExit() async {
+    await navigationMemory.flush();
     await chat.closeForExit();
     return AppExitResponse.exit;
   }

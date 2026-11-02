@@ -91,7 +91,13 @@ final class NavigationMemoryStore implements ReadingPositions {
     _scheduleSave();
   }
 
-  /// Writes what is still waiting. The app is closing, so nobody awaits it.
+  /// Writes what is still waiting, for a process about to end.
+  Future<void> flush() {
+    _writePending();
+    return _lastWrite;
+  }
+
+  /// Writes what is still waiting. The widgets are going, so nobody awaits it.
   void dispose() => _writePending();
 
   Future<NavigationMemory?> _load() async {

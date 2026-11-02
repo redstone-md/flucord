@@ -376,6 +376,10 @@ final class SessionHarness {
     }
   }
 
+  /// What the next launch would read as the navigation memory.
+  Future<NavigationMemory?> savedNavigation() async =>
+      _tester.runAsync<NavigationMemory?>(_navigationMemory.load);
+
   /// What the app answered to [systemAsksToExit], once it has.
   Object? exitAnswer;
 
@@ -677,8 +681,7 @@ final class _WatchedNavigationMemory implements NavigationMemoryRepository {
   Future<NavigationMemory?> load() => _inner.load();
 
   @override
-  Future<void> save(NavigationMemory memory) =>
-      lastWrite = _inner.save(memory);
+  Future<void> save(NavigationMemory memory) => lastWrite = _inner.save(memory);
 
   @override
   Future<void> clear() => lastWrite = _inner.clear();

@@ -120,6 +120,25 @@ void main() {
     );
 
     testSession(
+      'a location still waiting for its write reaches the disk when the system '
+      'asks the app to exit',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.otherChannelId);
+
+        await session.systemAsksToExit();
+
+        final saved = await session.savedNavigation();
+        expect(
+          saved?.lastChannels[SessionHarness.guildId],
+          SessionHarness.otherChannelId,
+        );
+        await session.settle();
+      },
+      routes: _routeChannels,
+      onDisk: true,
+    );
+
+    testSession(
       'keeps collapsed categories collapsed',
       (tester, session) async {
         await tester.tap(find.byKey(_guildRail));
