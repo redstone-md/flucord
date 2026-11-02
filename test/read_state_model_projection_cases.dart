@@ -34,7 +34,7 @@ void _projectionCases() {
       final channel = projected.channelById(_channelId);
       expect(channel.unread, isFalse);
       expect(channel.mentionCount, 0);
-      expect(channel.firstUnreadMessageId, isNull);
+      expect(channel.firstUnreadMessageId, _newerMessage);
     });
 
     test('derives the NEW divider from the ack cursor', () {
