@@ -96,6 +96,8 @@ void main() {
     addTearDown(controller.dispose);
 
     expect(await controller.watch(_key, packets: packets.stream), isTrue);
+    _draw(controller, _key);
+    await Future<void>.delayed(Duration.zero);
 
     // Discord does not send the picture to a client that never asked, so the
     // ask comes before the decoder is opened.
@@ -129,6 +131,7 @@ void main() {
     );
     addTearDown(controller.dispose);
     await controller.watch(_key, packets: packets.stream);
+    _draw(controller, _key);
     for (final packet in _packetsFor()) {
       packets.add(packet);
     }
@@ -294,10 +297,9 @@ void main() {
       );
       addTearDown(controller.dispose);
 
-      expect(
-        await controller.watch(_key, packets: const Stream.empty()),
-        isFalse,
-      );
+      await controller.watch(_key, packets: const Stream.empty());
+      _draw(controller, _key);
+      await pumpEventQueue();
 
       expect(controller.error, isNotNull);
       // Held, not torn down: the stage keeps the session and shows why there
@@ -315,10 +317,9 @@ void main() {
     );
     addTearDown(controller.dispose);
 
-    expect(
-      await controller.watch(_key, packets: const Stream.empty()),
-      isFalse,
-    );
+    await controller.watch(_key, packets: const Stream.empty());
+    _draw(controller, _key);
+    await pumpEventQueue();
     expect(controller.errorFor(_key), isNotNull);
 
     fail = false;
@@ -338,6 +339,8 @@ void main() {
     );
     addTearDown(controller.dispose);
     await controller.watch(_key, packets: const Stream.empty());
+    _draw(controller, _key);
+    await pumpEventQueue();
     expect(controller.errorFor(_key), isNotNull);
 
     await controller.stop(_key);
@@ -454,6 +457,7 @@ void main() {
 
       await controller.requestWatch(_key);
       expect(await controller.attach(_key, packets: packets.stream), isTrue);
+      _draw(controller, _key);
 
       // A second ask would open a second connection for one stream.
       expect(repository.watched, [_key]);
@@ -562,10 +566,9 @@ void main() {
         addTearDown(controller.dispose);
 
         await controller.requestWatch(_key);
-        expect(
-          await controller.attach(_key, packets: const Stream.empty()),
-          isFalse,
-        );
+        await controller.attach(_key, packets: const Stream.empty());
+        _draw(controller, _key);
+        await pumpEventQueue();
         // The session is kept, with the failure on it: the stage can say why
         // there is no picture, and nothing is silently half-attached.
         expect(controller.watching, _key);
@@ -586,7 +589,9 @@ void main() {
       addTearDown(controller.dispose);
 
       await controller.watch(_key, packets: first.stream);
+      _draw(controller, _key);
       await controller.watch(_other, packets: second.stream);
+      _draw(controller, _other);
 
       // Two streams, two decoders: a decoder shared between them has
       // nowhere to put the second one's pictures.
@@ -605,7 +610,9 @@ void main() {
       addTearDown(controller.dispose);
 
       await controller.watch(_key, packets: first.stream);
+      _draw(controller, _key);
       await controller.watch(_other, packets: second.stream);
+      _draw(controller, _other);
 
       for (final packet in _packetsFor()) {
         first.add(packet);
@@ -633,7 +640,9 @@ void main() {
       addTearDown(controller.dispose);
 
       await controller.watch(_key, packets: first.stream);
+      _draw(controller, _key);
       await controller.watch(_other, packets: second.stream);
+      _draw(controller, _other);
 
       await controller.stop(_key);
 
@@ -678,6 +687,8 @@ void main() {
 
       await controller.watch(_key, packets: const Stream.empty());
       await controller.watch(_other, packets: const Stream.empty());
+      _draw(controller, _key);
+      _draw(controller, _other);
 
       await controller.stop();
 
@@ -821,14 +832,12 @@ void main() {
         addTearDown(controller.dispose);
 
         await controller.requestWatch(_key);
-        final attaching = controller.attach(
-          _key,
-          packets: const Stream.empty(),
-        );
+        await controller.attach(_key, packets: const Stream.empty());
+        _draw(controller, _key);
         await controller.stop(_key);
         gate.complete();
+        await pumpEventQueue();
 
-        expect(await attaching, isFalse);
         expect(controller.isWatching(_key), isFalse);
         expect(controller.watching, isNull);
         // Opened for a stream that was closed while it opened, and shut rather
@@ -838,7 +847,7 @@ void main() {
     );
 
     test(
-      'a connection reopened while one is opening does not replace it',
+      'a connection reopened while a decoder is opening hands that one back',
       () async {
         final repository = _FakeRepository();
         // Both held shut, so the order they open in is chosen here rather than
@@ -858,17 +867,17 @@ void main() {
         made.clear();
 
         await controller.requestWatch(_key);
-        final reopened = controller.attach(_key, packets: const Stream.empty());
-        final reading = controller.attach(_key, packets: const Stream.empty());
+        await controller.attach(_key, packets: const Stream.empty());
+        _draw(controller, _key);
+        await controller.attach(_key, packets: const Stream.empty());
+        _draw(controller, _key);
         gates[1].complete();
         gates[0].complete();
+        await pumpEventQueue();
 
-        // One attach wins and the other decoder is stopped.
-        expect([await reopened, await reading].where((ok) => ok), hasLength(1));
         expect(controller.isWatching(_key), isTrue);
-        // The losing decoder is stopped.
-        final stopped = [for (final decoder in made) decoder.stopped];
-        expect(stopped.where((each) => each == 1), hasLength(1));
+        // The session's decoder runs, and the one it replaced is stopped.
+        expect([for (final decoder in made) decoder.stopped], [1, 0]);
       },
     );
   });
@@ -1073,7 +1082,9 @@ void main() {
       final controller = _viewer(repository, made: made);
       addTearDown(controller.dispose);
       await controller.watch(_key, packets: first.stream);
+      _draw(controller, _key);
       await controller.watch(_other, packets: second.stream);
+      _draw(controller, _other);
 
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
@@ -1095,6 +1106,7 @@ void main() {
       final controller = _viewer(repository, made: made);
       addTearDown(controller.dispose);
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
       // Half a picture, as a window going away mid-picture leaves it: the
       // parameter set and the first fragment of the slice behind it. A slice
       // this size is what makes the packetiser fragment one at all.
@@ -1163,6 +1175,7 @@ void main() {
         controller.setSuspended(true);
         await Future<void>.delayed(Duration.zero);
         expect(await controller.watch(_key, packets: packets.stream), isTrue);
+        _draw(controller, _key);
 
         // Asked for and arriving, with nothing decoding it: a decoder opened
         // for a window that is not looking would only be let go of again.
@@ -1210,6 +1223,7 @@ void main() {
         made.clear();
 
         await controller.watch(_key, packets: packets.stream);
+        _draw(controller, _key);
         controller.setSuspended(true);
         await Future<void>.delayed(Duration.zero);
         controller.setSuspended(false);
@@ -1250,17 +1264,17 @@ void main() {
         made.clear();
 
         await controller.requestWatch(_key);
-        final attaching = controller.attach(_key, packets: packets.stream);
+        await controller.attach(_key, packets: packets.stream);
+        _draw(controller, _key);
         // Far enough in for the decoder to be opening, which is where the
         // window going away catches it.
         await Future<void>.delayed(Duration.zero);
         controller.setSuspended(true);
         gate.complete();
-        expect(await attaching, isTrue);
+        await pumpEventQueue();
 
         // Arriving, and not decoding. The session keeps the connection it was
-        // given, and the decoder that opened for it is handed straight back:
-        // suspending could not reach a key that was not being held yet.
+        // given, and the decoder that opened for it is handed straight back.
         expect(controller.isWatching(_key), isTrue);
         expect(made, hasLength(1));
         expect(made.single.started, 1);
@@ -1310,6 +1324,7 @@ void main() {
       made.clear();
 
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
       // A burst: away, back, away, back again. Each call starts its work at
@@ -1355,6 +1370,7 @@ void main() {
       final controller = _viewer(repository, made: made);
       addTearDown(controller.dispose);
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
 
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
@@ -1376,6 +1392,7 @@ void main() {
       final controller = _viewer(repository, made: made);
       addTearDown(controller.dispose);
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
 
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
@@ -1415,6 +1432,7 @@ void main() {
       made.clear();
 
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
       refuse = true;
@@ -1463,6 +1481,7 @@ void main() {
       made.clear();
 
       await controller.watch(_key, packets: packets.stream);
+      _draw(controller, _key);
       controller.setSuspended(true);
       await Future<void>.delayed(Duration.zero);
       controller.setSuspended(false);
@@ -1479,6 +1498,13 @@ void main() {
       expect(made.last.stopped, 1);
     });
   });
+}
+
+/// What a tile does: listens for [key]'s pictures, which is what opens the
+/// session's decoder.
+void _draw(StreamViewerController controller, GoLiveStreamKey key) {
+  final tile = controller.framesFor(key).listen(null);
+  addTearDown(tile.cancel);
 }
 
 /// A controller that makes one decoder per session, recording them in [made]

@@ -67,7 +67,7 @@ final class StreamRoomHarness {
     viewer = StreamViewerController(
       repositoryProvider: () => repository,
       decoderFactory: () {
-        final decoder = StreamRoomDecoder();
+        final decoder = StreamRoomDecoder(failStart: viewerDecoderFails);
         viewerDecoders.add(decoder);
         return decoder;
       },
@@ -137,6 +137,9 @@ final class StreamRoomHarness {
 
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
+
+  /// Whether the next decoder the viewer makes refuses to open.
+  bool viewerDecoderFails = false;
 
   /// Every decoder the viewer made, oldest first. One is made just to ask
   /// whether the build can decode, and is never opened.
