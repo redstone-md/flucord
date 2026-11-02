@@ -359,12 +359,11 @@ class _MessageListState extends State<MessageList> {
       children: [
         Positioned.fill(
           child: NotificationListener<ScrollMetricsNotification>(
+            key: ValueKey('messages-${widget.channel.id}'),
             onNotification: _handleMetricsChange,
             child: LayoutBuilder(
               builder: (context, constraints) => CustomScrollView(
-                key: ValueKey(
-                  'messages-${widget.channel.id}-$_viewportGeneration',
-                ),
+                key: ValueKey(_viewportGeneration),
                 controller: _scrollController,
                 center: _centreKey,
                 // At the end of the conversation, the gap under the newest
