@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,6 +20,7 @@ import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/presentation/flucord_shell.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
@@ -152,6 +154,26 @@ final class SessionHarness {
   Future<void> _start(Map<String, Object?> ready) async {
     final dialled = sockets.length;
     await _launch();
+    await _walkToReady(dialled, ready);
+  }
+
+  /// Signs in after [signOut], in the same run of the app, up to READY.
+  Future<void> signIn({
+    String accountId = currentUserId,
+    required Map<String, Object?> ready,
+  }) async {
+    final dialled = sockets.length;
+    final shell = _tester.widget<FlucordShell>(find.byType(FlucordShell));
+    unawaited(
+      shell.connectionController.connectSession(
+        session: _MemoryCredentialVault._sessionOf(accountId),
+        remember: true,
+      ),
+    );
+    await _walkToReady(dialled, ready);
+  }
+
+  Future<void> _walkToReady(int dialled, Map<String, Object?> ready) async {
     await _settleUntil(() => sockets.length > dialled, 'a socket');
     await hello();
     await _settleUntil(

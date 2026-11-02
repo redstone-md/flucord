@@ -10,6 +10,7 @@ import '../domain/account_entitlements.dart';
 import '../domain/app_authorisation.dart';
 import '../domain/account_standing.dart';
 import '../domain/automod_rule.dart';
+import '../domain/composer_draft.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -109,6 +110,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadingScheduledEventSpaces = {};
   final Map<String, Object> _scheduledEventErrors = {};
   final Map<String, DateTime> _lastSentAt = {};
+  ComposerDraftStore _drafts = MemoryComposerDraftStore();
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
@@ -219,6 +221,9 @@ final class ChatController extends ChangeNotifier {
   /// When this account's last message in the channel went out. Slowmode's
   /// clock starts here, per channel, so moving between channels cannot reset it.
   DateTime? lastSentAt(String channelId) => _lastSentAt[channelId];
+
+  /// What this account has written and not sent, per channel.
+  ComposerDraftStore get drafts => _drafts;
   bool canLoadOlderMessages(String channelId) =>
       _loadedChannels.contains(channelId) &&
       !_exhaustedChannels.contains(channelId);
@@ -254,6 +259,9 @@ final class ChatController extends ChangeNotifier {
     _loadingScheduledEventSpaces.clear();
     _scheduledEventErrors.clear();
     _lastSentAt.clear();
+    // A new store, not a cleared one: a composer closing now, or a send failing
+    // late, still writes to the store of the account it belongs to.
+    _drafts = MemoryComposerDraftStore();
     _archivedThreadState.clear();
     _clearTyping();
     _activeChannelId = null;

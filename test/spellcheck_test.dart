@@ -1,6 +1,7 @@
 import 'package:flucord/src/application/accessibility_controller.dart';
 import 'package:flucord/src/data/spell_check/word_list_spell_check_service.dart';
 import 'package:flucord/src/domain/accessibility.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/widgets/accessibility_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/presentation/widgets/spell_check_scope.dart';
@@ -71,6 +72,7 @@ void main() {
               child: SpellCheckScope(
                 service: service,
                 child: MessageComposer(
+                  drafts: MemoryComposerDraftStore(),
                   channelId: 'general',
                   channelName: 'general',
                   spaceName: 'The Forge',
