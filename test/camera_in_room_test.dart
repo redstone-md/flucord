@@ -78,6 +78,49 @@ void main() {
       expect(room.camera.isOn, isTrue);
     });
   });
+
+  group('the media server', () {
+    testWidgets('asking for a keyframe reaches the camera', (tester) async {
+      final room = await cameraRoom(tester);
+
+      room.signaling.emit(const VoiceKeyframeRequestedEvent());
+      await tester.pumpAndSettle();
+
+      expect(room.encoder.keyframes, 1);
+    });
+
+    testWidgets('asking for lost packets gets them from the camera', (
+      tester,
+    ) async {
+      final room = await cameraRoom(tester);
+      room.encoder.emit();
+      await tester.pumpAndSettle();
+
+      room.signaling.emit(
+        const VoiceRetransmitRequestedEvent(ssrc: 41, sequences: [0]),
+      );
+      await tester.pumpAndSettle();
+
+      // On the retransmission SSRC opcode 12 declared, the original sequence
+      // leading the payload.
+      final resent = room.cameraTransport.sent.last;
+      expect(resent.header.ssrc, 42);
+      expect(resent.payload.take(2), [0, 0]);
+    });
+
+    testWidgets('asks nothing of a camera that is off', (tester) async {
+      final room = await pumpStreamRoom(tester, streamRoomVoiceChannel);
+      await say(tester, room, VoiceConnectionStatus.ready);
+
+      room.signaling
+        ..emit(const VoiceKeyframeRequestedEvent())
+        ..emit(const VoiceRetransmitRequestedEvent(ssrc: 41, sequences: [0]));
+      await tester.pumpAndSettle();
+
+      expect(room.encoder.keyframes, 0);
+      expect(room.cameraTransport.sent, isEmpty);
+    });
+  });
 }
 
 /// The voice connection reports [status], and the Room hears it.

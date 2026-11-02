@@ -7,6 +7,7 @@ import '../data/discord/discord_voice_gateway_protocol.dart';
 import '../domain/video_capture_hub.dart';
 import '../domain/video_encoder.dart';
 import '../domain/voice_audio.dart';
+import '../domain/voice_connection.dart';
 
 /// Sets `self_video` on the account's voice state and answers whether the
 /// gateway took it.
@@ -151,6 +152,18 @@ final class SelfVideoController extends ChangeNotifier {
     _startSending(voice, lease);
     // A viewer of the new numbering decodes nothing until a keyframe.
     unawaited(lease.requestKeyframe());
+  }
+
+  /// Answers the media server about the camera's pictures: a keyframe for a
+  /// viewer who cannot decode, or lost packets again from the history. With no
+  /// camera running, there is nothing to answer with.
+  void answer(VoicePictureAsk ask) {
+    switch (ask) {
+      case VoiceKeyframeRequestedEvent():
+        unawaited(_lease?.requestKeyframe());
+      case VoiceRetransmitRequestedEvent(:final sequences):
+        _transport?.retransmit(sequences);
+    }
   }
 
   Future<void> turnOff() async {

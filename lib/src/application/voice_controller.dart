@@ -173,6 +173,13 @@ final class VoiceController extends ChangeNotifier {
   /// listen while the room is being built, before anybody can leave it.
   Stream<String> get camerasGone => _camerasGone.stream;
 
+  final StreamController<VoicePictureAsk> _pictureAsks =
+      StreamController.broadcast();
+
+  /// What the media server wants of the pictures this connection sends, which
+  /// on a voice connection are the camera's. Go Live hears its own connection.
+  Stream<VoicePictureAsk> get pictureAsks => _pictureAsks.stream;
+
   /// How long a participant still counts as speaking after their last voice
   /// frame. A sender closes a burst with five silence frames, 100 ms; this is
   /// long enough to ride over those and a lost packet, short enough that the
@@ -638,16 +645,12 @@ final class VoiceController extends ChangeNotifier {
         _forgetParticipant(event.userId);
       case VoiceDaveBinaryEvent():
         break;
-      case VoiceKeyframeRequestedEvent():
-        // Answered where the pictures come from: the stream router points the
-        // share's capture at one of these. A camera's turn, when its pictures
-        // are being sent at all.
-        break;
-      case VoiceRetransmitRequestedEvent():
+      case VoicePictureAsk():
+        if (!_disposed) _pictureAsks.add(event);
       case VoiceReceiverReportEvent():
         // Feedback about the pictures this client sends. The Go Live path
-        // acts on it through the stream router; a call carrying only audio
-        // has nothing to resend.
+        // acts on it through the stream router; the camera has no bitrate to
+        // change.
         break;
       case VoiceCredentialsNeededEvent():
         // The signaling service asks the gateway for fresh credentials; the
@@ -967,6 +970,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
     unawaited(_camerasGone.close());
+    unawaited(_pictureAsks.close());
     unawaited(_audioPipeline?.dispose());
     unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());
