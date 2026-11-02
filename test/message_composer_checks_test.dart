@@ -110,7 +110,7 @@ void main() {
       picker: picker,
     );
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -137,7 +137,7 @@ void main() {
     ]);
     await _pump(tester, attachmentSizeLimitBytes: null, picker: picker);
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -161,7 +161,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-spoiler-/tmp/cat.png')));
     await tester.pumpAndSettle();
@@ -192,7 +192,7 @@ void main() {
     ]);
     await _pump(tester, picker: picker);
 
-    await tester.tap(find.byKey(const ValueKey('add-attachment')));
+    await _openAttachmentPicker(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('toggle-spoiler-/tmp/cat.png')));
     await tester.pumpAndSettle();
@@ -248,4 +248,10 @@ final class _FixedPicker implements PendingAttachmentPicker {
 
   @override
   Future<List<PendingAttachment>> pick() async => files;
+}
+
+Future<void> _openAttachmentPicker(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('composer-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('add-attachment')));
 }

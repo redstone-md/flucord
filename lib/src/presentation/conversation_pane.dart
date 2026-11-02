@@ -367,6 +367,8 @@ class _ConversationPaneState extends State<ConversationPane> {
     // four arguments because the mark is asked of each tile now.
     VoiceStreamControls streamControls() => VoiceStreamControls(
       isOpen: (userId) => viewer.isOpen(widget.channel.streamKeyFor(userId)),
+      hasFailed: (userId) =>
+          viewer.errorFor(widget.channel.streamKeyFor(userId)) != null,
       onWatch: _toggleWatch,
       onStopShare: stopShare(),
       selfPreview: selfPreview(),
@@ -540,6 +542,9 @@ class _ConversationPaneState extends State<ConversationPane> {
         else if (showsMessages)
           MessageComposer(
             gifPicker: GifPickerScope.read(context),
+            canAttachFiles: widget.capabilities.attachFiles,
+            slashCommands: SlashCommandScope.read(context),
+            expressionFavorites: ExpressionFavoritesScope.read(context),
             channelId: channel.id,
             channelName: channel.name,
             replyTo: _replyTo,

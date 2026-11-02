@@ -110,6 +110,30 @@ void main() {
     expect(controller.errorMessage, contains('credential vault'));
   });
 
+  test(
+    'forgetting the credential of a live session ends the session',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryCredentialVault();
+      final controller = ConnectionController(
+        chat,
+        vault,
+        _StaticRepositoryFactory(MockChatRepository(latency: Duration.zero)),
+        botTransportEnabled: true,
+      );
+      addTearDown(chat.dispose);
+      await chat.load();
+      await controller.connectWithBotToken(token: 'bot-token', remember: true);
+
+      await controller.forgetSavedCredential();
+
+      expect(controller.mode, SessionMode.disconnected);
+      expect(controller.hasSavedCredential, isFalse);
+      expect(vault.token, isNull);
+      expect(chat.workspace?.spaces, isEmpty);
+    },
+  );
+
   test('automatically restores a typed session from the vault', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
     final vault = _MemoryCredentialVault()
@@ -343,6 +367,9 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
     receivedSession = session;
     return repository;
   }
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _RejectingRepositoryFactory implements ChatRepositoryFactory {
@@ -350,6 +377,9 @@ final class _RejectingRepositoryFactory implements ChatRepositoryFactory {
   Future<ChatRepository> create(DiscordAccountSession session) {
     throw const DiscordApiException(statusCode: 401, message: 'Unauthorized');
   }
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _UnsupportedRepositoryFactory implements ChatRepositoryFactory {
@@ -357,6 +387,9 @@ final class _UnsupportedRepositoryFactory implements ChatRepositoryFactory {
   Future<ChatRepository> create(DiscordAccountSession session) {
     throw UnsupportedDiscordSessionException(session.kind);
   }
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _CountingRepositoryFactory implements ChatRepositoryFactory {
@@ -367,4 +400,7 @@ final class _CountingRepositoryFactory implements ChatRepositoryFactory {
     calls++;
     return MockChatRepository(latency: Duration.zero);
   }
+
+  @override
+  Future<void> clearCache() async {}
 }

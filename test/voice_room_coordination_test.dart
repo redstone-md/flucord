@@ -177,12 +177,12 @@ void main() {
       transportProvider: () => transport,
       sinkProvider: () => transport.send,
       isVoiceReady: () => voice.connectionStatus == VoiceConnectionStatus.ready,
-      announceSelfVideo: ({required bool enabled}) async => true,
+      announceSelfVideo: voice.setCameraAnnounced,
     );
     addTearDown(camera.dispose);
     final room = _buildRoom(voice: voice, selfVideo: camera);
     addTearDown(room.dispose);
-    await voice.refreshSignalingService();
+    await voice.connect(guildId: 'guild-1', channelId: 'voice-1');
     await camera.turnOn();
     expect(camera.isOn, isTrue);
 
