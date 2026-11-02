@@ -94,6 +94,9 @@ final class FlucordAppSurface extends ChangeNotifier
     _visible.setInView(value);
   }
 
+  @override
+  Future<void> prepareToExit() => _chat.closeForExit();
+
   /// Re-checks whatever the desktop holds on the app's behalf, and tells the
   /// chrome (the tray, pending protocol links) that app state moved.
   void _chatChanged() {

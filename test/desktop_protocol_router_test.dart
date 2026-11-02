@@ -90,4 +90,7 @@ final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
 
   @override
   void setWindowVisible(bool value) {}
+
+  @override
+  Future<void> prepareToExit() async {}
 }
