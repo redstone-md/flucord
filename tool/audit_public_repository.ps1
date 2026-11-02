@@ -297,8 +297,9 @@ class RepositoryPrivacyAudit {
       $this.FixtureSnowflakePattern.IsMatch($value)
   }
 
+  # RFC 2606 reserves .test and .invalid, so no real mailbox can use them.
   hidden [bool] IsAllowedEmail([string] $email) {
-    return $email -match '(?i)@(?:example\.(?:com|org|net)|[^@]+\.test|users\.noreply\.github\.com)$'
+    return $email -match '(?i)@(?:example\.(?:com|org|net)|[^@]+\.(?:test|invalid)|users\.noreply\.github\.com)$'
   }
 
   hidden [bool] IsAllowedIpAddress([string] $value) {
