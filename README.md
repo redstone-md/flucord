@@ -166,8 +166,9 @@ paths, tracked text, and image metadata. It blocks known credential formats,
 private keys, personal email addresses, public IP addresses, local user paths,
 and non-fixture Discord snowflakes without printing matched secret values.
 
-To measure what the core workspace folds cost and compare it with an earlier
-result, see [`tool/bench/README.md`](tool/bench/README.md).
+To measure what the core workspace folds cost, or the frame times of the whole
+app on Windows, and to compare with an earlier result, see
+[`tool/bench/README.md`](tool/bench/README.md).
 
 Live network checks are opt-in:
 
