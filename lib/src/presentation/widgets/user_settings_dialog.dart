@@ -499,12 +499,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.profile) {
       final profile = profileController;
       if (profile == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-profile-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to edit its profile. Demo mode and '
-              'bot accounts have no profile behind them.',
+          toDo: 'edit its profile',
         );
       }
       return ListenableBuilder(
@@ -597,12 +594,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.standing) {
       final standing = standingController;
       if (standing == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-standing-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see what is on its record. Demo '
-              'mode and bot accounts have none.',
+          toDo: 'see what is on its record',
         );
       }
       return AccountStandingSection(controller: standing);
@@ -611,12 +605,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.family) {
       final family = familyController;
       if (family == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-family-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see its family centre. Demo mode '
-              'and bot accounts have none.',
+          toDo: 'see its family centre',
         );
       }
       return FamilyCentreSection(controller: family);
@@ -624,13 +615,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.devices) {
       final sessions = sessionController;
       if (sessions == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-devices-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see where it is signed in. Demo '
-              'mode and bot accounts have one session and no way to list '
-              'it.',
+          toDo: 'see where it is signed in',
         );
       }
       return DevicesSettingsSection(controller: sessions);
@@ -642,12 +629,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.connections) {
       final connections = connectionsController;
       if (connections == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-connections-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to link third-party accounts to '
-              'it. Demo mode and bot accounts have no account to link.',
+          toDo: 'link third-party accounts to it',
         );
       }
       return ConnectionsSettingsSection(controller: connections);
@@ -655,12 +639,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.entitlements) {
       final entitlements = entitlementsController;
       if (entitlements == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-entitlements-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see what it holds. Demo mode '
-              'and bot accounts have no account behind them.',
+          toDo: 'see what it holds',
         );
       }
       return EntitlementsSettingsSection(controller: entitlements);
@@ -668,13 +649,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.apps) {
       final apps = appAuthorisationController;
       if (apps == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-apps-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to authorise apps into servers '
-              'it manages. Demo mode and bot accounts have no account to '
-              'consent with.',
+          toDo: 'authorise apps into servers it manages',
         );
       }
       return AppAuthorisationSection(controller: apps);
@@ -683,12 +660,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.dataPackage) {
       final dataPackage = dataPackageController;
       if (dataPackage == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-data-package-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to request its data. Demo mode '
-              'and bot accounts have no account to collect from.',
+          toDo: 'request its data',
         );
       }
       return DataPackageSettingsSection(controller: dataPackage);
@@ -696,12 +670,9 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.security) {
       final mfa = mfaController;
       if (mfa == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-mfa-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to manage two-factor authentication. '
-              'Demo mode and bot accounts have no account to secure.',
+          toDo: 'manage two-factor authentication',
         );
       }
       return MfaSettingsSection(controller: mfa);
@@ -709,23 +680,17 @@ class _Body extends StatelessWidget {
     if (category == UserSettingsCategory.age) {
       final age = ageController;
       if (age == null) {
-        return const ProfileNotice(
+        return const _NeedsAccountNotice(
           key: ValueKey('user-age-unavailable'),
-          icon: Icons.cloud_off_outlined,
-          message:
-              'Connect a Discord account to see how it can prove its age. '
-              'Demo mode and bot accounts have no account to verify.',
+          toDo: 'see how it can prove its age',
         );
       }
       return AgeVerificationSection(controller: age);
     }
     if (!controller.isAvailable) {
-      return _Notice(
-        key: const ValueKey('user-settings-unavailable'),
-        icon: Icons.cloud_off_outlined,
-        message:
-            'Connect a Discord account to read and change its settings. '
-            'Demo mode and bot accounts have no account behind them.',
+      return const _NeedsAccountNotice(
+        key: ValueKey('user-settings-unavailable'),
+        toDo: 'read and change its settings',
       );
     }
     final settings = controller.settings;
@@ -743,7 +708,7 @@ class _Body extends StatelessWidget {
         key: const ValueKey('user-settings-error'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _Notice(
+          const ProfileNotice(
             icon: Icons.error_outline,
             message: 'Discord did not return your settings.',
           ),
@@ -804,27 +769,20 @@ class _Body extends StatelessWidget {
   void _edit(UserSettingsPatch patch) => unawaited(controller.apply(patch));
 }
 
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.message, super.key});
+/// What a pane that needs a Discord account shows in demo mode and on a bot
+/// account: what connecting one would let the person do, and why it is not
+/// here now.
+class _NeedsAccountNotice extends StatelessWidget {
+  const _NeedsAccountNotice({required this.toDo, super.key});
 
-  final IconData icon;
-  final String message;
+  /// What the person could do with an account, as in "edit its profile".
+  final String toDo;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, size: 18, color: context.surfaces.muted),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          message,
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-          ),
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => ProfileNotice(
+    icon: Icons.cloud_off_outlined,
+    message:
+        'Connect a Discord account to $toDo. Demo mode and bot accounts have '
+        'no account behind them.',
   );
 }
