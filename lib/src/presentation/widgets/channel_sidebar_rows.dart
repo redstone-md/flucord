@@ -310,34 +310,44 @@ class _CategorySection extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey('category-${category.id}'),
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 28,
-              child: Row(
-                children: [
-                  Icon(
-                    collapsed ? Icons.chevron_right : Icons.expand_more,
-                    size: 16,
-                    color: context.surfaces.muted,
-                  ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(
-                      category.name.toUpperCase(),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+        Semantics(
+          container: true,
+          // The name as written. Capitals are only how it is drawn, and some
+          // screen readers would spell them out.
+          label: category.name,
+          button: true,
+          expanded: !collapsed,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('category-${category.id}'),
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(4),
+              child: ExcludeSemantics(
+                child: SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      Icon(
+                        collapsed ? Icons.chevron_right : Icons.expand_more,
+                        size: 16,
                         color: context.surfaces.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
                       ),
-                    ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          category.name.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: context.surfaces.muted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

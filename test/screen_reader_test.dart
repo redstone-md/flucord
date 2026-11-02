@@ -6,6 +6,7 @@ import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
 const _messageId = '900000000000000001';
+const _categoryId = '800000000000000001';
 
 /// What a screen reader gets for the widget with this key.
 SemanticsNode _announced(WidgetTester tester, String key) =>
@@ -24,6 +25,24 @@ Map<String, Object?> _elsewhere(String id, {bool mentionsMe = false}) => {
     'mentions': [
       {'id': SessionHarness.currentUserId, 'username': 'me'},
     ],
+};
+
+/// The default account, with its channels under one category.
+Map<String, Object?> _readyWithCategory() => {
+  ...SessionHarness.defaultReady(),
+  'guilds': [
+    rawGuild(
+      id: SessionHarness.guildId,
+      name: 'The Forge',
+      channels: [
+        {...rawChannel(id: _categoryId, name: 'Text channels'), 'type': 4},
+        {
+          ...rawChannel(id: SessionHarness.channelId, name: 'general'),
+          'parent_id': _categoryId,
+        },
+      ],
+    ),
+  ],
 };
 
 void main() {
@@ -80,4 +99,34 @@ void main() {
       );
     });
   });
+
+  testSession('a category announces whether it is expanded', (
+    tester,
+    session,
+  ) async {
+    await tester.tap(
+      find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
+    );
+    await session.settle();
+
+    expect(
+      _announced(tester, 'category-$_categoryId'),
+      containsSemantics(
+        label: 'Text channels',
+        isButton: true,
+        hasExpandedState: true,
+        isExpanded: true,
+        isFocusable: true,
+        hasTapAction: true,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-$_categoryId')));
+    await session.settle();
+
+    expect(
+      _announced(tester, 'category-$_categoryId'),
+      containsSemantics(hasExpandedState: true, isExpanded: false),
+    );
+  }, ready: _readyWithCategory());
 }
