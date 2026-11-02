@@ -550,7 +550,7 @@ void main() {
       incoming.add(
         DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 1, timestamp: 1, ssrc: 7),
-          payload: const [0xd0, 7],
+          payload: Uint8List.fromList([0xd0, 7]),
         ),
       );
       await _flush();

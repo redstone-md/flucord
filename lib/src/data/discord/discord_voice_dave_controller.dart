@@ -319,9 +319,9 @@ final class DiscordVoiceDaveController {
         frame: frame,
       );
 
-  List<int> decryptAudioFrame({
+  Uint8List decryptAudioFrame({
     required String userId,
-    required List<int> encryptedFrame,
+    required Uint8List encryptedFrame,
   }) {
     var decryptor = _decryptors[userId];
     if (decryptor == null && _protocolVersion == 0) {
@@ -339,9 +339,9 @@ final class DiscordVoiceDaveController {
 
   /// Decrypts one picture from [userId], or throws when there is no key for
   /// them yet.
-  List<int> decryptVideoFrame({
+  Uint8List decryptVideoFrame({
     required String userId,
-    required List<int> encryptedFrame,
+    required Uint8List encryptedFrame,
   }) {
     var decryptor = _decryptors[userId];
     if (decryptor == null && _protocolVersion == 0) {

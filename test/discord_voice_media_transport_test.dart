@@ -107,7 +107,7 @@ void main() {
     incoming.add(
       DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 1, timestamp: 1, ssrc: 7),
-        payload: const [1, 2, 3],
+        payload: Uint8List.fromList([1, 2, 3]),
       ),
     );
     await Future<void>.delayed(Duration.zero);
@@ -242,5 +242,5 @@ DiscordRtpFrame _frame({
   int sequence = 1,
 }) => DiscordRtpFrame(
   header: DiscordRtpHeader(sequence: sequence, timestamp: 2, ssrc: ssrc),
-  payload: payload,
+  payload: Uint8List.fromList(payload),
 );

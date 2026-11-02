@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:typed_data';
 
 final class NativeDaveBuffers {
   const NativeDaveBuffers._();
@@ -15,8 +16,9 @@ final class NativeDaveBuffers {
     return pointer;
   }
 
-  static List<int> copy(Pointer<Uint8> pointer, int length) {
-    if (pointer == nullptr || length == 0) return const [];
-    return List<int>.unmodifiable(pointer.asTypedList(length));
+  /// Bytes of their own, so they outlive the native memory they came from.
+  static Uint8List copy(Pointer<Uint8> pointer, int length) {
+    if (pointer == nullptr || length == 0) return Uint8List(0);
+    return Uint8List.fromList(pointer.asTypedList(length));
   }
 }

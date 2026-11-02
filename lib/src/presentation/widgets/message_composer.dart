@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../application/composer_autocomplete_catalog.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
 import '../../theme/flucord_theme.dart';
 import '../pending_attachment_picker.dart';
@@ -39,6 +40,7 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.channelId,
     required this.channelName,
+    required this.drafts,
     this.channelHintPrefix = '#',
     required this.spaceName,
     required this.emojiSections,
@@ -69,6 +71,9 @@ class MessageComposer extends StatefulWidget {
 
   final String channelId;
   final String channelName;
+
+  /// Where the box keeps its text and files while another channel is open.
+  final ComposerDraftStore drafts;
 
   /// What stands before the channel's name in the box's hint: `#` for a text
   /// channel, `@` for a person, nothing where `#name` would not resolve.
@@ -176,6 +181,7 @@ class _MessageComposerState extends State<MessageComposer>
   @override
   void initState() {
     super.initState();
+    _openDraft();
     _initializeComposerAutocomplete();
     _listenToVoiceProgress();
     _startSlowmodeTicker();
@@ -186,13 +192,9 @@ class _MessageComposerState extends State<MessageComposer>
     super.didUpdateWidget(oldWidget);
     final channelChanged = oldWidget.channelId != widget.channelId;
     if (channelChanged) {
-      _controller.clear();
-      _attachments.clear();
-      _hasContent = false;
-      _charactersUsed = 0;
-      _suppressNotifications = false;
+      _saveDraft(oldWidget.channelId);
       _discardVoiceState(oldWidget.voiceMessageRecorder);
-      _resetComposerAutocomplete();
+      _withAutocompleteClosed(_openDraft);
     }
     if (oldWidget.slowmodeUntil != widget.slowmodeUntil ||
         oldWidget.slowmode != widget.slowmode) {
@@ -218,6 +220,7 @@ class _MessageComposerState extends State<MessageComposer>
 
   @override
   void dispose() {
+    _saveDraft(widget.channelId);
     _disposeComposerAutocomplete();
     _slowmodeTicker?.cancel();
     _voiceGeneration++;
@@ -233,6 +236,50 @@ class _MessageComposerState extends State<MessageComposer>
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// What the box holds now. The reply target is the pane's to set, so it is
+  /// not part of this.
+  ComposerDraft get _boxContent => ComposerDraft(
+    text: _controller.text,
+    attachments: _attachments.items,
+    silent: _suppressNotifications,
+  );
+
+  void _saveDraft(String channelId) {
+    final replyTo = widget.drafts.read(channelId).replyTo;
+    widget.drafts.write(channelId, _boxContent.withReply(replyTo));
+  }
+
+  /// Fills the box from the open channel's draft, without telling anyone that
+  /// the user is typing.
+  void _openDraft() {
+    final draft = widget.drafts.read(widget.channelId);
+    _showInBox(draft);
+    if (draft.text.isEmpty) return;
+    // The pane points the command list at this channel in a microtask, which
+    // closes the list, and it queued that one first. A `/ban` that comes back
+    // with no list would go out as plain text.
+    scheduleMicrotask(() {
+      if (mounted) widget.slashCommands?.syncComposer(_controller.text);
+    });
+  }
+
+  void _showInBox(ComposerDraft draft) {
+    final text = draft.text;
+    // Leaves the caret alone when the text stays.
+    if (_controller.text != text) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    _hasContent = text.trim().isNotEmpty;
+    _charactersUsed = text.characters.length;
+    _suppressNotifications = draft.silent;
+    _attachments
+      ..clear()
+      ..merge(draft.attachments);
   }
 
   /// How long until slowmode lets this account send again, or null when
@@ -390,10 +437,14 @@ class _MessageComposerState extends State<MessageComposer>
   Future<void> _send() async {
     if (!_canSend || widget.isSending || _runTypedCommand()) return;
     final channelId = widget.channelId;
-    final text = _controller.text;
-    final attachments = _attachments.items;
-    final silent = _suppressNotifications;
-    final send = widget.onSend(text, attachments, widget.replyTo?.id, silent);
+    final drafts = widget.drafts;
+    final content = _boxContent;
+    final send = widget.onSend(
+      content.text,
+      content.attachments,
+      widget.replyTo?.id,
+      content.silent,
+    );
     // The box empties on the press, not on the answer, so whatever is typed
     // while the request runs belongs to the next message.
     _controller.clear();
@@ -407,32 +458,13 @@ class _MessageComposerState extends State<MessageComposer>
     });
     _focusNode.requestFocus();
     final sent = await send;
-    if (sent || !mounted || widget.channelId != channelId) return;
-    _restoreFailedSend(text, attachments, silent);
-  }
-
-  /// Puts a failed send back without overwriting anything: text typed since
-  /// then is the user's newer work and stays, while the files can join it.
-  void _restoreFailedSend(
-    String text,
-    List<PendingAttachment> attachments,
-    bool silent,
-  ) {
-    final restoresText = !_hasContent;
-    if (restoresText) {
-      _controller.value = TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      );
+    if (sent) return;
+    if (mounted && widget.channelId == channelId) {
+      setState(() => _showInBox(_boxContent.withFailedSend(content)));
+    } else {
+      // The user has left that channel, so its draft takes the message.
+      drafts.write(channelId, drafts.read(channelId).withFailedSend(content));
     }
-    setState(() {
-      if (restoresText) {
-        _hasContent = text.trim().isNotEmpty;
-        _charactersUsed = text.characters.length;
-        _suppressNotifications = silent;
-      }
-      _attachments.merge(attachments);
-    });
   }
 
   /// Sends the GIF straight away, as Discord's own client does: the picker is
