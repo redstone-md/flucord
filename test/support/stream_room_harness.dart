@@ -11,13 +11,13 @@ import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/room_focus.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
-import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'pane_harness.dart';
@@ -40,7 +40,7 @@ final class StreamRoomHarness {
     this.selfPreviewOpens = true,
   }) {
     voice = VoiceController(
-      const NoopVoiceMediaService(),
+      media,
       signalingServiceProvider: () => signaling,
       callServiceProvider: () => callService,
     );
@@ -91,6 +91,7 @@ final class StreamRoomHarness {
 
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
+  final StreamRoomMedia media = StreamRoomMedia();
   final StreamRoomSignaling signaling = StreamRoomSignaling();
   final StreamRoomCallService callService = StreamRoomCallService();
   final StreamRoomStreamRepository repository = StreamRoomStreamRepository();
@@ -224,11 +225,60 @@ final streamRoomWorkspace = ChatWorkspace(
   currentMemberId: 'me',
 );
 
+/// The machine's audio devices: whether the microphone is live, and a way to
+/// keep them opening for as long as a test needs.
+final class StreamRoomMedia implements VoiceMediaService {
+  bool microphoneOn = false;
+
+  /// While set, opening the devices waits on it.
+  Completer<void>? hold;
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
+
+  @override
+  Future<void> initialize() async => hold?.future;
+
+  @override
+  Future<List<VoiceDevice>> enumerateDevices() async => const [];
+
+  @override
+  Future<void> selectAudioOutput(String deviceId) async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async =>
+      microphoneOn = enabled;
+
+  @override
+  Future<void> startMicrophone(String? deviceId) async => microphoneOn = true;
+
+  @override
+  Future<void> stopMicrophone() async => microphoneOn = false;
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// One voice state the room sent. A null [channelId] is a leave.
+typedef StreamRoomVoiceFrame = ({
+  String? channelId,
+  bool selfMute,
+  bool selfDeaf,
+  bool selfVideo,
+});
+
 final class StreamRoomSignaling implements VoiceSignalingService {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
 
   Map<String, List<VoiceParticipantStateEvent>> seated = const {};
+
+  /// Every voice state sent, in order.
+  final List<StreamRoomVoiceFrame> frames = [];
+
+  /// While set, a join or a leave stays in flight after its frame goes out,
+  /// which is how a test holds a voice action open.
+  Completer<void>? hold;
 
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
@@ -252,10 +302,26 @@ final class StreamRoomSignaling implements VoiceSignalingService {
     bool selfMute = false,
     bool selfDeaf = false,
     bool selfVideo = false,
-  }) async {}
+  }) async {
+    frames.add((
+      channelId: channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
+    ));
+    await hold?.future;
+  }
 
   @override
-  Future<void> leaveVoiceChannel(String guildId) async {}
+  Future<void> leaveVoiceChannel(String guildId) async {
+    frames.add((
+      channelId: null,
+      selfMute: false,
+      selfDeaf: false,
+      selfVideo: false,
+    ));
+    await hold?.future;
+  }
 }
 
 final class StreamRoomCallService implements DirectCallService {
