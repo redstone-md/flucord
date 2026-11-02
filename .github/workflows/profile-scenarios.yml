@@ -1,0 +1,39 @@
+name: Profile scenarios
+
+# Frame times of the whole app on Windows, in profile mode. A person starts this
+# from the Actions tab. It takes too long and its times move too much to run on
+# each pull request. See tool/bench/README.md for how to read the result.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  scenarios:
+    name: Run the scenarios on Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-flutter
+        with:
+          precache-windows: "true"
+      - name: Run the scenarios
+        run: >
+          flutter drive --profile -d windows
+          --driver=test_driver/profile_scenarios.dart
+          --target=integration_test/profile_scenarios_test.dart
+      # A failed run still writes the scenarios it finished.
+      - name: Keep the result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: profile-scenarios-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: build/profile_scenarios.json
