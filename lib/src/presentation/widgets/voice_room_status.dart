@@ -23,7 +23,7 @@ String voiceRoomStatusLabel(VoiceController controller) {
 /// The one thing most worth saying about a room that is not working, or null.
 ///
 /// Ordered by what blocks the most: a session that cannot reach voice at all,
-/// then a connection that failed, then a microphone that would not open — which
+/// then a connection that failed, then a microphone that would not open, which
 /// still leaves a usable room, so it is reported last.
 ///
 /// Each answer says which of the three it is. The old wording called every
