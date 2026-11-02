@@ -301,7 +301,8 @@ final class VoiceController extends ChangeNotifier {
   ///
   /// Held here rather than on the camera controller because opcode 4 is a
   /// whole-state frame: the flag has to be replayed with every mute toggle and
-  /// every reconnect, and the thing that replays those is this.
+  /// every reconnect, and the thing that replays those is this. It clears when
+  /// the session moves, disconnects or fails, and the camera follows it.
   bool get isCameraOn => _isCameraOn;
   bool get isBusy => _pendingActions > 0;
 
@@ -395,6 +396,9 @@ final class VoiceController extends ChangeNotifier {
     required String channelId,
     required bool isCall,
   }) async {
+    // A camera belongs to the Room it was turned on in. Carried into this one,
+    // the flag would show a tile with no pictures behind it.
+    _isCameraOn = false;
     final signalingService = _signalingServiceProvider();
     await _bindSignaling(signalingService);
     // Walking between two channels of one guild is a move on the same
@@ -553,6 +557,8 @@ final class VoiceController extends ChangeNotifier {
     }
     await _signalingSubscription?.cancel();
     _signalingService = service;
+    // The new service's connection carries no camera of ours.
+    _isCameraOn = false;
     // Subscribed before anything that can throw. Sound is what a room can
     // survive losing; hearing the transport is not.
     unawaited(_seatedSubscription?.cancel());
@@ -614,6 +620,7 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
+          _isCameraOn = false;
           _clearParticipants();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
@@ -673,6 +680,7 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
+    _isCameraOn = false;
     _clearParticipants();
     unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();

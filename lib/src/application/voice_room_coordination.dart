@@ -125,8 +125,13 @@ final class VoiceRoomCoordination {
   /// that would carry the withdrawal is the one that dropped. A camera kept
   /// on across a full disconnect would be re-announced into the next room
   /// while sending on the old session's SSRC.
+  ///
+  /// Moving to another Room changes the session without the status ever saying
+  /// the Room went down. The voice flag says it instead: it clears on a move,
+  /// and a camera still on with no flag is sending into a Room that was not
+  /// told.
   void _endCameraWithRoom() {
-    if (_roomIsUp) return;
+    if (_roomIsUp && (_voice.isCameraOn || !_selfVideo.isOn)) return;
     unawaited(_selfVideo.forget());
   }
 

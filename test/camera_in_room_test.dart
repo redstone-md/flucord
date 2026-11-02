@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
 
 import 'support/stream_room_harness.dart';
@@ -121,6 +122,115 @@ void main() {
       expect(room.cameraTransport.sent, isEmpty);
     });
   });
+
+  group('the camera flag', () {
+    testWidgets('stays off the next channel of the same guild', (tester) async {
+      final room = await cameraRoom(tester);
+      expect(room.signaling.frames.last.selfVideo, isTrue);
+
+      await room.voice.connect(guildId: 'guild-1', channelId: 'voice-2');
+      await tester.pumpAndSettle();
+
+      expect(room.signaling.frames.last.channelId, 'voice-2');
+      expect(room.signaling.frames.last.selfVideo, isFalse);
+      expectCameraEnded(room);
+    });
+
+    testWidgets('stays off a Room in another guild', (tester) async {
+      final room = await cameraRoom(tester);
+
+      await room.voice.connect(guildId: 'guild-2', channelId: 'voice-3');
+      await tester.pumpAndSettle();
+
+      expect(room.signaling.frames.last.channelId, 'voice-3');
+      expect(room.signaling.frames.last.selfVideo, isFalse);
+      expectCameraEnded(room);
+    });
+
+    testWidgets('stays off a call', (tester) async {
+      final room = await cameraRoom(tester);
+
+      await room.voice.connectToCall(channelId: streamRoomCall.id);
+      await tester.pumpAndSettle();
+
+      expect(room.callService.frames.last.selfVideo, isFalse);
+      expectCameraEnded(room);
+    });
+
+    for (final status in [
+      VoiceConnectionStatus.disconnected,
+      VoiceConnectionStatus.failure,
+    ]) {
+      testWidgets('clears when the connection reports ${status.name}', (
+        tester,
+      ) async {
+        final room = await cameraRoom(tester);
+
+        await say(tester, room, status);
+        await room.voice.toggleMute();
+        await tester.pumpAndSettle();
+
+        expect(room.signaling.frames.last.selfMute, isTrue);
+        expect(room.signaling.frames.last.selfVideo, isFalse);
+        expectCameraEnded(room);
+      });
+    }
+
+    testWidgets('clears when the connection service closes', (tester) async {
+      final room = await pumpStreamRoom(tester, streamRoomCall);
+      await say(tester, room, VoiceConnectionStatus.ready);
+      expect(await room.camera.turnOn(), isTrue);
+      await tester.pumpAndSettle();
+
+      await room.signaling.closeEvents();
+      await tester.pumpAndSettle();
+      await room.voice.toggleMute();
+      await tester.pumpAndSettle();
+
+      expect(room.callService.frames.last.selfMute, isTrue);
+      expect(room.callService.frames.last.selfVideo, isFalse);
+      expectCameraEnded(room);
+    });
+
+    testWidgets('clears when a new gateway session takes over', (tester) async {
+      final room = await cameraRoom(tester);
+
+      final replacement = room.signaling = StreamRoomSignaling();
+      // On the real event loop, as giving up the old service's events only
+      // finishes there, and the capture started under the fake clock lets go
+      // across both.
+      await tester.runAsync(room.voice.refreshSignalingService);
+      await tester.pumpAndSettle();
+      await tester.runAsync(pumpEventQueue);
+
+      expect(replacement.frames.single.channelId, streamRoomVoiceChannel.id);
+      expect(replacement.frames.single.selfVideo, isFalse);
+      expectCameraEnded(room);
+    });
+
+    testWidgets('survives a reconnect, with the camera behind it', (
+      tester,
+    ) async {
+      final room = await cameraRoom(tester);
+
+      await say(tester, room, VoiceConnectionStatus.reconnecting);
+      await room.voice.toggleMute();
+      await say(tester, room, VoiceConnectionStatus.ready);
+
+      expect(room.signaling.frames.last.selfMute, isTrue);
+      expect(room.signaling.frames.last.selfVideo, isTrue);
+      expect(room.camera.isOn, isTrue);
+      expect(room.encoder.stopped, 0);
+    });
+  });
+}
+
+/// The camera went with its Room: the capture is released, and nothing was
+/// said on the socket that carried it.
+void expectCameraEnded(StreamRoomHarness room) {
+  expect(room.camera.isOn, isFalse);
+  expect(room.encoder.stopped, 1);
+  expect(room.cameraTransport.announcements, [true]);
 }
 
 /// The voice connection reports [status], and the Room hears it.
