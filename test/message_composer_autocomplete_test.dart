@@ -150,6 +150,76 @@ void main() {
     expect(_composerText(tester), '🚀 ');
     expect(find.byKey(const ValueKey('composer-autocomplete')), findsNothing);
   });
+
+  testWidgets('Numpad Enter sends, as Enter does', (tester) async {
+    final sentBodies = <String>[];
+    await tester.pumpWidget(_composerApp(sentBodies: sentBodies));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-composer')),
+      'from the number pad',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+    await tester.pumpAndSettle();
+
+    expect(sentBodies, ['from the number pad']);
+    expect(_composerText(tester), isEmpty);
+  });
+
+  testWidgets('Numpad Enter takes the selected suggestion', (tester) async {
+    final sentBodies = <String>[];
+    await tester.pumpWidget(_composerApp(sentBodies: sentBodies));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-composer')),
+      '@mi',
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+    await tester.pump();
+
+    expect(sentBodies, isEmpty);
+    expect(_composerText(tester), '<@member-1> ');
+  });
+
+  testWidgets('the selected suggestion stays in view as the arrows move it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_composerApp(workspace: _crowdedWorkspace));
+    final menu = find.byKey(const ValueKey('composer-autocomplete'));
+    Finder row(int index) =>
+        find.byKey(ValueKey('composer-suggestion-member-crowd-$index'));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-composer')),
+      '@crowd',
+    );
+    await tester.pump();
+    expect(row(7), findsNothing);
+
+    for (var press = 0; press < 7; press++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+    }
+    await tester.pump();
+
+    expect(row(7), findsOneWidget);
+    expect(
+      tester.getBottomLeft(row(7)).dy,
+      lessThanOrEqualTo(tester.getBottomLeft(menu).dy),
+    );
+
+    // Down from the last row wraps to the first.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.pump();
+
+    expect(row(0), findsOneWidget);
+    expect(
+      tester.getTopLeft(row(0)).dy,
+      greaterThanOrEqualTo(tester.getTopLeft(menu).dy),
+    );
+  });
 }
 
 String _composerText(WidgetTester tester) => tester
@@ -157,35 +227,36 @@ String _composerText(WidgetTester tester) => tester
     .controller!
     .text;
 
-Widget _composerApp({List<String>? sentBodies}) => MaterialApp(
-  theme: FlucordTheme.dark,
-  home: Scaffold(
-    body: Align(
-      alignment: Alignment.bottomCenter,
-      child: MessageComposer(
-        drafts: MemoryComposerDraftStore(),
-        channelId: 'general',
-        channelName: 'general',
-        spaceName: 'Forge',
-        autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
-          _workspace,
-          _workspace.channelById('general'),
+Widget _composerApp({List<String>? sentBodies, ChatWorkspace? workspace}) =>
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: MessageComposer(
+            drafts: MemoryComposerDraftStore(),
+            channelId: 'general',
+            channelName: 'general',
+            spaceName: 'Forge',
+            autocompleteCatalog: ComposerAutocompleteCatalog.fromWorkspace(
+              workspace ?? _workspace,
+              (workspace ?? _workspace).channelById('general'),
+            ),
+            emojiSections: const [],
+            stickerSections: const [],
+            isSending: false,
+            onSend: (body, _, _, _) async {
+              sentBodies?.add(body);
+              return true;
+            },
+            onCreatePoll: (_) async => false,
+            onSendStickers: (_) async => false,
+            onCancelReply: () {},
+            onTyping: () {},
+          ),
         ),
-        emojiSections: const [],
-        stickerSections: const [],
-        isSending: false,
-        onSend: (body, _, _, _) async {
-          sentBodies?.add(body);
-          return true;
-        },
-        onCreatePoll: (_) async => false,
-        onSendStickers: (_) async => false,
-        onCancelReply: () {},
-        onTyping: () {},
       ),
-    ),
-  ),
-);
+    );
 
 final _workspace = ChatWorkspace(
   spaces: const [
@@ -247,4 +318,21 @@ final _workspace = ChatWorkspace(
   ],
   messages: const [],
   currentMemberId: 'member-1',
+);
+
+/// More people match `@crowd` than the suggestion list shows at once.
+final _crowdedWorkspace = _workspace.copyWith(
+  members: [
+    ..._workspace.members,
+    for (var index = 0; index < 8; index++)
+      Member(
+        id: 'crowd-$index',
+        displayName: 'Crowd $index',
+        initials: 'C$index',
+        role: 'Member',
+        presence: Presence.online,
+        colorValue: 0xff5865f2,
+        spaceIds: const {'guild-1'},
+      ),
+  ],
 );

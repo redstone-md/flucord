@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/channel_sidebar_order.dart';
 import '../../application/connection_controller.dart';
 import '../../application/friends_controller.dart';
 import '../../domain/chat_models.dart';
@@ -149,15 +150,15 @@ class ChannelSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDirect = space.isDirectMessages;
-    final regularChannels = channels
-        .where((channel) => !channel.isThread)
-        .toList(growable: false);
-    final threads = channels
-        .where(
-          (channel) =>
-              channel.isThread && !channel.isArchived && !_isForumPost(channel),
-        )
-        .toList(growable: false);
+    final order = ChannelSidebarOrder(
+      space: space,
+      channels: channels,
+      categories: categories,
+      collapsedCategoryIds: collapsedCategoryIds,
+      selectedChannelId: selectedChannelId,
+      readState: _readState,
+      channelOf: channelOf,
+    );
     // The account's dark-sidebar answer, read here so the flag from any
     // device repaints the rail. It only applies to the built-in light
     // palette: an installed theme is never overridden, its author picked
@@ -211,11 +212,7 @@ class ChannelSidebar extends StatelessWidget {
                   )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-                    children: _navigationEntries(
-                      isDirect: isDirect,
-                      regularChannels: regularChannels,
-                      threads: threads,
-                    ),
+                    children: _navigationEntries(order),
                   ),
           ),
           // On a short window a tall bar scrolls, so the channels and the
@@ -342,60 +339,15 @@ class ChannelSidebar extends StatelessWidget {
       _readState.isChannelMuted(channel);
 
   /// Whether the row should read as unread.
-  ///
-  /// A mention always shows. Otherwise R04's resolved unread badge decides: a
-  /// channel set to "only mentions" stays quiet in the sidebar even though the
-  /// server does consider it unread.
-  bool _showsUnread(ConversationChannel channel) {
-    if (channel.mentionCount > 0) return true;
-    if (!channel.unread) return false;
-    return _readState.unreadBadgeFor(channel) == UnreadBadge.allMessages;
-  }
+  bool _showsUnread(ConversationChannel channel) =>
+      _readState.showsUnread(channel);
 
-  /// R04's `hide_muted_channels`: a muted channel is dropped from the list
-  /// unless it is the one on screen or it is shouting at the account anyway.
-  List<ConversationChannel> _withoutHiddenMuted(
-    List<ConversationChannel> source,
-  ) {
-    if (!_spaceSettings.hideMutedChannels) return source;
-    return [
-      for (final channel in source)
-        if (channel.id == selectedChannelId ||
-            channel.mentionCount > 0 ||
-            !_isMuted(channel))
-          channel,
-    ];
-  }
-
-  bool _isForumPost(ConversationChannel channel) {
-    final parentId = channel.parentId;
-    if (parentId == null) return false;
-    final parent = channelOf(parentId);
-    return parent?.kind == ChannelKind.forum ||
-        parent?.kind == ChannelKind.media;
-  }
-
-  List<Widget> _navigationEntries({
-    required bool isDirect,
-    required List<ConversationChannel> regularChannels,
-    required List<ConversationChannel> threads,
-  }) {
-    if (isDirect) return _directMessageEntries(regularChannels);
-    final sortedCategories = [...categories]
-      ..sort((left, right) => left.position.compareTo(right.position));
-    if (sortedCategories.isEmpty) {
-      return [
-        ..._eventEntries(),
-        ..._uncategorizedEntries(regularChannels, threads),
-      ];
+  List<Widget> _navigationEntries(ChannelSidebarOrder order) {
+    if (space.isDirectMessages) return _directMessageEntries(order);
+    if (order.categories.isEmpty) {
+      return [..._eventEntries(), ..._uncategorizedEntries(order)];
     }
-    final categoryIds = sortedCategories.map((category) => category.id).toSet();
-    final uncategorized = _ordered(
-      regularChannels.where(
-        (channel) =>
-            channel.parentId == null || !categoryIds.contains(channel.parentId),
-      ),
-    );
+    final uncategorized = order.uncategorized;
     return [
       ..._eventEntries(),
       if (uncategorized.isNotEmpty) ...[
@@ -403,12 +355,12 @@ class ChannelSidebar extends StatelessWidget {
         for (final channel in uncategorized) _rowFor(channel),
         const SizedBox(height: 10),
       ],
-      for (final category in sortedCategories)
+      for (final category in order.categories)
         // A category whose every channel was filtered out is dropped whole.
         // Collapsing hides rows without emptying this list, so a collapsed
         // category still keeps its header — only a category the account
         // cannot see into loses one.
-        if (regularChannels.any((channel) => channel.parentId == category.id))
+        if (order.hasChannelsIn(category))
           _CategorySection(
             category: category,
             collapsed: collapsedCategoryIds.contains(category.id),
@@ -417,21 +369,17 @@ class ChannelSidebar extends StatelessWidget {
               // Voice channels carry their occupants here too. They only did
               // outside categories, which is where almost no server puts
               // them, so every seat was invisible in practice.
-              for (final channel in _visibleCategoryChannels(
-                category,
-                regularChannels,
-              ))
+              for (final channel in order.rowsIn(category))
                 if (channel.kind == ChannelKind.voice)
                   ..._voiceEntry(channel)
                 else
                   _rowFor(channel),
             ],
           ),
-      if (threads.isNotEmpty) ...[
+      if (order.threads.isNotEmpty) ...[
         const SizedBox(height: 10),
         const _SectionLabel(label: 'Active threads'),
-        for (final channel in _ordered(threads))
-          _rowFor(channel, indented: true),
+        for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
     ];
   }
@@ -442,18 +390,13 @@ class ChannelSidebar extends StatelessWidget {
   /// A request never sits in the main list. Discord hides it there until the
   /// account answers it, which is the whole point of the folder, so the split
   /// happens here rather than in whatever built the channel list.
-  List<Widget> _directMessageEntries(List<ConversationChannel> channels) {
-    final requests = channels
-        .where((channel) => channel.isMessageRequest)
-        .toList(growable: false);
-    final conversations = channels
-        .where((channel) => !channel.isMessageRequest)
-        .toList(growable: false);
+  List<Widget> _directMessageEntries(ChannelSidebarOrder order) {
+    final requests = order.messageRequests;
     return [
       _DirectMessagesFolder(
         requests: requests,
         conversationRows: [
-          for (final channel in conversations) _rowFor(channel),
+          for (final channel in order.conversations) _rowFor(channel),
         ],
         requestRows: [for (final channel in requests) _requestRowFor(channel)],
       ),
@@ -492,33 +435,19 @@ class ChannelSidebar extends StatelessWidget {
     ];
   }
 
-  List<Widget> _uncategorizedEntries(
-    List<ConversationChannel> channels,
-    List<ConversationChannel> threads,
-  ) {
-    final text = _ordered(
-      channels.where((channel) => channel.kind == ChannelKind.text),
-    );
-    final voice = _ordered(
-      channels.where((channel) => channel.kind == ChannelKind.voice),
-    );
-    final forums = _ordered(
-      channels.where(
-        (channel) =>
-            channel.kind == ChannelKind.forum ||
-            channel.kind == ChannelKind.media,
-      ),
-    );
+  List<Widget> _uncategorizedEntries(ChannelSidebarOrder order) {
+    final text = order.ofKinds(const {ChannelKind.text});
+    final voice = order.ofKinds(const {ChannelKind.voice});
+    final forums = order.ofKinds(const {ChannelKind.forum, ChannelKind.media});
     return [
       if (text.isNotEmpty) ...[
         const _SectionLabel(label: 'Text channels'),
         for (final channel in text) _rowFor(channel),
       ],
-      if (threads.isNotEmpty) ...[
+      if (order.threads.isNotEmpty) ...[
         const SizedBox(height: 18),
         const _SectionLabel(label: 'Active threads'),
-        for (final channel in _ordered(threads))
-          _rowFor(channel, indented: true),
+        for (final channel in order.threads) _rowFor(channel, indented: true),
       ],
       if (forums.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -532,30 +461,6 @@ class ChannelSidebar extends StatelessWidget {
       ],
     ];
   }
-
-  List<ConversationChannel> _visibleCategoryChannels(
-    ChannelCategory category,
-    List<ConversationChannel> channels,
-  ) {
-    final collapsed = collapsedCategoryIds.contains(category.id);
-    return _ordered(
-      channels.where(
-        (channel) =>
-            channel.parentId == category.id &&
-            (!collapsed ||
-                channel.id == selectedChannelId ||
-                _showsUnread(channel)),
-      ),
-    );
-  }
-
-  List<ConversationChannel> _ordered(Iterable<ConversationChannel> source) =>
-      _withoutHiddenMuted(
-        source.toList(growable: false)..sort((left, right) {
-          final position = left.position.compareTo(right.position);
-          return position == 0 ? left.name.compareTo(right.name) : position;
-        }),
-      );
 
   /// A voice channel row followed by whoever is seated in it.
   List<Widget> _voiceEntry(

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,91 +10,24 @@ import 'mention_badge.dart';
 
 part 'quick_switcher_destination_row.dart';
 
-extension QuickSwitcherWidget on Widget {
-  Widget withQuickSwitcher({
-    required ChatWorkspace workspace,
-    required ValueChanged<QuickSwitcherDestination> onSelected,
-  }) => _QuickSwitcherLauncher(
-    workspace: workspace,
-    onSelected: onSelected,
-    child: this,
-  );
-}
-
-class _QuickSwitcherLauncher extends StatefulWidget {
-  const _QuickSwitcherLauncher({
-    required this.workspace,
-    required this.onSelected,
-    required this.child,
-  });
-
-  final ChatWorkspace workspace;
-  final ValueChanged<QuickSwitcherDestination> onSelected;
-  final Widget child;
-
-  @override
-  State<_QuickSwitcherLauncher> createState() => _QuickSwitcherLauncherState();
-}
-
-class _QuickSwitcherLauncherState extends State<_QuickSwitcherLauncher> {
-  final FocusNode _shortcutFocusNode = FocusNode(
-    debugLabel: 'Quick switcher shortcut scope',
-  );
-  bool _dialogOpen = false;
-
-  @override
-  void dispose() {
-    _shortcutFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Shortcuts(
-    shortcuts: const {
-      SingleActivator(LogicalKeyboardKey.keyK, control: true):
-          _OpenQuickSwitcherIntent(),
-    },
-    child: Actions(
-      actions: {
-        _OpenQuickSwitcherIntent: CallbackAction<_OpenQuickSwitcherIntent>(
-          onInvoke: (_) {
-            unawaited(_open());
-            return null;
-          },
-        ),
-      },
-      child: Focus(
-        focusNode: _shortcutFocusNode,
-        autofocus: true,
-        child: widget.child,
-      ),
+/// Asks where to go, and answers with the destination, or null when the user
+/// backs out. Backing out gives the focus back to where it was.
+Future<QuickSwitcherDestination?> showQuickSwitcher(
+  BuildContext context,
+  ChatWorkspace workspace,
+) async {
+  final previousFocus = FocusManager.instance.primaryFocus;
+  final selected = await showDialog<QuickSwitcherDestination>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.68),
+    builder: (context) => _QuickSwitcherDialog(
+      catalog: QuickSwitcherCatalog.fromWorkspace(workspace),
     ),
   );
-
-  Future<void> _open() async {
-    if (_dialogOpen) return;
-    _dialogOpen = true;
-    final previousFocus = FocusManager.instance.primaryFocus;
-    final selected = await showDialog<QuickSwitcherDestination>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.68),
-      builder: (context) => _QuickSwitcherDialog(
-        catalog: QuickSwitcherCatalog.fromWorkspace(widget.workspace),
-      ),
-    );
-    _dialogOpen = false;
-    if (!mounted) return;
-    if (selected != null) {
-      widget.onSelected(selected);
-      _shortcutFocusNode.requestFocus();
-    } else if (previousFocus?.canRequestFocus ?? false) {
-      previousFocus!.requestFocus();
-    }
+  if (selected == null && (previousFocus?.canRequestFocus ?? false)) {
+    previousFocus!.requestFocus();
   }
-}
-
-class _OpenQuickSwitcherIntent extends Intent {
-  const _OpenQuickSwitcherIntent();
+  return selected;
 }
 
 class _QuickSwitcherDialog extends StatefulWidget {

@@ -19,6 +19,7 @@ import '../domain/chat_models.dart';
 import '../domain/expression_favorites.dart';
 import '../domain/chat_repository.dart';
 import '../domain/discord_permissions.dart';
+import '../domain/navigation_memory.dart';
 import '../domain/discord_snowflake.dart';
 import '../domain/forum_repository.dart';
 import '../domain/guild_management.dart';
@@ -75,10 +76,22 @@ part 'chat_controller_history_window.dart';
 enum ChatLoadState { idle, loading, ready, failure }
 
 final class ChatController extends ChangeNotifier {
-  ChatController(ChatRepository repository) : _repository = repository {
+  /// [landingChannelIn] names the channel the app opens on when a workspace
+  /// first loads. Without it the app opens on the first text channel.
+  /// [readingPositions] says where the reader stopped in each channel, so that
+  /// opening a channel can load that stretch of it.
+  ChatController(
+    ChatRepository repository, {
+    String? Function(ChatWorkspace workspace)? landingChannelIn,
+    ReadingPositions? readingPositions,
+  }) : _repository = repository,
+       _landingChannelIn = landingChannelIn,
+       _readingPositions = readingPositions {
     _listenToRepository();
   }
 
+  final String? Function(ChatWorkspace workspace)? _landingChannelIn;
+  final ReadingPositions? _readingPositions;
   ChatRepository _repository;
 
   /// Set once [_repository] has begun to close, so that it closes only once.
@@ -371,21 +384,27 @@ final class ChatController extends ChangeNotifier {
     if (_state == ChatLoadState.ready &&
         workspace != null &&
         _activeChannelId == null) {
-      // A voice channel does carry messages, but it is never the channel the
-      // app lands on unasked, so warming its history here would be wasted work.
-      // The same visibility filter the shell lands by is applied here, or the
-      // two would disagree and the channel actually shown would never load.
-      final permissions = WorkspacePermissions(workspace);
-      final textChannels = workspace.channels.where(
-        (channel) =>
-            channel.kind != ChannelKind.voice &&
-            !channel.isThread &&
-            permissions.can(DiscordPermissions.viewChannel, channel),
-      );
-      if (textChannels.isNotEmpty) {
-        unawaited(openChannel(textChannels.first.id));
-      }
+      final landing = _landingChannelIn;
+      final channelId = landing == null
+          ? _firstTextChannelIn(workspace)
+          : landing(workspace);
+      if (channelId != null) unawaited(openChannel(channelId));
     }
+  }
+
+  /// A voice channel does carry messages, but it is never the channel the app
+  /// lands on unasked, so warming its history here would be wasted work.
+  String? _firstTextChannelIn(ChatWorkspace workspace) {
+    final permissions = WorkspacePermissions(workspace);
+    return workspace.channels
+        .where(
+          (channel) =>
+              channel.kind != ChannelKind.voice &&
+              !channel.isThread &&
+              permissions.can(DiscordPermissions.viewChannel, channel),
+        )
+        .firstOrNull
+        ?.id;
   }
 
   Future<void> openChannel(
@@ -419,14 +438,18 @@ final class ChatController extends ChangeNotifier {
     }
     if (_loadedChannels.contains(channelId) && !refresh) {
       if (anchorMessageId == null) {
-        // Coming back to a channel left in an old window opens on the present.
-        // Tapping the channel already open leaves the reader in place.
-        if (hasNewerMessages(channelId) && previousChannelId != channelId) {
+        // Coming back to a channel left in an old window opens on the present,
+        // unless the reader scrolled there and so has a place in it to return
+        // to. Tapping the channel already open leaves the reader in place.
+        if (hasNewerMessages(channelId) &&
+            previousChannelId != channelId &&
+            !_holdsReadingPosition(channelId)) {
           await jumpToPresent(channelId);
         } else {
           unawaited(_catchUpChannel(channelId));
           notifyListeners();
         }
+        await _returnToReadingPosition(channelId);
       } else if (workspace
           .messagesFor(channelId)
           .any((message) => message.id == anchorMessageId)) {
@@ -466,7 +489,10 @@ final class ChatController extends ChangeNotifier {
       );
       if (!isCurrent()) return;
       _applyWindow(channelId, page, aroundMessageId: anchorMessageId);
-      await _reachFirstUnread(channelId, page, isCurrent);
+      final reached =
+          anchorMessageId == null &&
+          await _reachReadingPosition(channelId, isCurrent);
+      if (!reached) await _reachFirstUnread(channelId, page, isCurrent);
       if (!isCurrent()) return;
       _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);

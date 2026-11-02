@@ -4,6 +4,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
   final OverlayPortalController _autocompleteOverlayController =
       OverlayPortalController();
   final LayerLink _autocompleteLayerLink = LayerLink();
+  final ScrollController _autocompleteScroll = ScrollController();
   List<ComposerAutocompleteSuggestion> _autocompleteSuggestions = const [];
   int _autocompleteSelection = 0;
 
@@ -24,6 +25,10 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
   TextEditingController get _autocompleteTextController;
   FocusNode get _autocompleteFocusNode;
 
+  /// Answers the keys pressed in the box. It offers each key to
+  /// [_handleComposerAutocompleteKey] first.
+  FocusOnKeyEventCallback get _composerKeyHandler;
+
   void _initializeComposerAutocomplete() {
     _autocompleteTextController.addListener(_refreshComposerAutocomplete);
     _autocompleteFocusNode.addListener(_handleAutocompleteFocus);
@@ -35,6 +40,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     if (_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.hide();
     }
+    _autocompleteScroll.dispose();
   }
 
   void _handleAutocompleteFocus() {
@@ -107,6 +113,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       _autocompleteSuggestions = suggestions;
       _autocompleteSelection = retainedIndex < 0 ? 0 : retainedIndex;
     });
+    _revealAutocompleteSelection();
     if (!_autocompleteOverlayController.isShowing) {
       _autocompleteOverlayController.show();
     }
@@ -155,6 +162,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter ||
         event.logicalKey == LogicalKeyboardKey.tab) {
       _selectComposerAutocomplete(_autocompleteSelection);
       return KeyEventResult.handled;
@@ -171,6 +179,24 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     setState(() {
       _autocompleteSelection =
           (_autocompleteSelection + delta) % _autocompleteSuggestions.length;
+    });
+    _revealAutocompleteSelection();
+  }
+
+  /// Scrolls the list just far enough to show the selected row. Called only
+  /// when the selection moves by key or by a new query: a row under the mouse
+  /// is on screen already, and the list must not move under the pointer.
+  void _revealAutocompleteSelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_autocompleteScroll.hasClients) return;
+      final position = _autocompleteScroll.position;
+      final top = _autocompleteSelection * _ComposerAutocompleteMenu.rowHeight;
+      final bottom = top + _ComposerAutocompleteMenu.rowHeight;
+      if (top < position.pixels) {
+        position.jumpTo(top);
+      } else if (bottom > position.pixels + position.viewportDimension) {
+        position.jumpTo(bottom - position.viewportDimension);
+      }
     });
   }
 
@@ -216,6 +242,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
                     suggestions: _autocompleteSuggestions,
                     selectedIndex: _autocompleteSelection,
                     trigger: _autocompleteQuery?.trigger,
+                    scrollController: _autocompleteScroll,
                     onHover: _hoverComposerAutocomplete,
                     onSelected: _selectComposerAutocomplete,
                   ),
@@ -225,10 +252,7 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
           ),
           child: CompositedTransformTarget(
             link: _autocompleteLayerLink,
-            child: Focus(
-              onKeyEvent: _handleComposerAutocompleteKey,
-              child: child,
-            ),
+            child: Focus(onKeyEvent: _composerKeyHandler, child: child),
           ),
         ),
       );
@@ -239,13 +263,17 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
     required this.suggestions,
     required this.selectedIndex,
     required this.trigger,
+    required this.scrollController,
     required this.onHover,
     required this.onSelected,
   });
 
+  static const rowHeight = 44.0;
+
   final List<ComposerAutocompleteSuggestion> suggestions;
   final int selectedIndex;
   final ComposerAutocompleteTrigger? trigger;
+  final ScrollController scrollController;
   final ValueChanged<int> onHover;
   final ValueChanged<int> onSelected;
 
@@ -261,7 +289,7 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
-        height: 32.0 + visibleCount * 44.0,
+        height: 32.0 + visibleCount * rowHeight,
         child: Column(
           children: [
             SizedBox(
@@ -288,9 +316,10 @@ class _ComposerAutocompleteMenu extends StatelessWidget {
             ),
             Expanded(
               child: ListView.builder(
+                controller: scrollController,
                 padding: EdgeInsets.zero,
                 itemCount: suggestions.length,
-                itemExtent: 44,
+                itemExtent: rowHeight,
                 itemBuilder: (context, index) => _ComposerAutocompleteRow(
                   suggestion: suggestions[index],
                   selected: index == selectedIndex,

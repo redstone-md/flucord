@@ -4,9 +4,18 @@ import '../domain/chat_models.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/workspace_permissions.dart';
 import '../domain/channel_link.dart';
+import '../domain/navigation_memory.dart';
+import 'navigation_memory_store.dart';
 import 'voice_channel_surface.dart';
 
 final class WorkspaceController extends ChangeNotifier {
+  WorkspaceController({NavigationMemoryStore? memory})
+    : _memory = memory ?? NavigationMemoryStore();
+
+  final NavigationMemoryStore _memory;
+
+  /// The memory generation the selection below was made under.
+  late int _selectionGeneration = _memory.generation;
   String? _selectedSpaceId;
   String? _selectedChannelId;
   String? _targetMessageId;
@@ -18,7 +27,6 @@ final class WorkspaceController extends ChangeNotifier {
   bool _showThreads = false;
   bool _showSearch = false;
   ChatWorkspace? _reconciledWorkspace;
-  final Set<String> _collapsedCategoryIds = {};
   final VoiceChannelSurfaces _voiceSurfaces = VoiceChannelSurfaces();
 
   String? get selectedSpaceId => _selectedSpaceId;
@@ -35,7 +43,10 @@ final class WorkspaceController extends ChangeNotifier {
   bool get showThreads => _showThreads;
   bool get showSearch => _showSearch;
   Set<String> get collapsedCategoryIds =>
-      Set.unmodifiable(_collapsedCategoryIds);
+      Set.unmodifiable(_memory.collapsedCategoryIds);
+
+  /// Where the reader stopped in each channel.
+  ReadingPositions get readingPositions => _memory;
 
   VoiceChannelSurface voiceSurfaceOf(String channelId) =>
       _voiceSurfaces.of(channelId);
@@ -50,16 +61,24 @@ final class WorkspaceController extends ChangeNotifier {
   void reconcile(ChatWorkspace workspace) {
     if (identical(_reconciledWorkspace, workspace)) return;
     _reconciledWorkspace = workspace;
-    // Both sets hold a handful of ids, so each held id is looked up in the
-    // workspace rather than every category and channel id being collected into
-    // a set to compare against.
-    _collapsedCategoryIds.retainWhere(
-      (id) => workspace.categoryOrNull(id) != null,
-    );
+    if (_selectionGeneration != _memory.generation) {
+      _selectionGeneration = _memory.generation;
+      _selectedSpaceId = null;
+      _selectedChannelId = null;
+    }
+    // This set holds a handful of ids, so each held id is looked up in the
+    // workspace rather than every channel id being collected into a set to
+    // compare against. Collapsed categories are not swept like this: a guild
+    // that is unavailable at launch comes back later with its categories, and
+    // an id left behind by a deleted category does no harm.
     _voiceSurfaces.retainWhere((id) => workspace.channelOrNull(id) != null);
     if (_selectedSpaceId == null ||
         workspace.spaceOrNull(_selectedSpaceId!) == null) {
-      _selectedSpaceId = workspace.spaces.first.id;
+      final remembered = _memory.lastSpaceId;
+      _selectedSpaceId =
+          remembered != null && workspace.spaceOrNull(remembered) != null
+          ? remembered
+          : workspace.spaces.first.id;
     }
     // A selection that is still open needs the same question answered as the
     // filter below asks — but about one channel, not about every channel of the
@@ -75,19 +94,55 @@ final class WorkspaceController extends ChangeNotifier {
         ).can(DiscordPermissions.viewChannel, selected)) {
       return;
     }
-    final availableChannels = _visibleChannels(workspace, _selectedSpaceId!);
-    if (availableChannels.isEmpty) {
-      _selectedChannelId = null;
-      _targetMessageId = null;
-      return;
-    }
     _targetMessageId = null;
-    _selectedChannelId = availableChannels
-        .firstWhere(
-          _isDefaultLandingChannel,
-          orElse: () => availableChannels.first,
-        )
+    _selectedChannelId = _landingChannelIn(workspace, _selectedSpaceId!);
+  }
+
+  /// The channel to open on when the app starts, or null when there is none.
+  /// Only the app's first landing needs this: a later one happens in [reconcile].
+  String? landingChannelIn(ChatWorkspace workspace) {
+    if (workspace.spaces.isEmpty) return null;
+    reconcile(workspace);
+    return _selectedChannelId;
+  }
+
+  /// Where [spaceId] opens: the channel last open there, if it still exists and
+  /// the account may still see it, and otherwise the default one.
+  String? _landingChannelIn(ChatWorkspace workspace, String spaceId) {
+    final remembered = _memory.lastChannelOf(spaceId);
+    final channel = remembered == null
+        ? null
+        : workspace.channelOrNull(remembered);
+    final permissions = WorkspacePermissions(workspace);
+    if (channel != null &&
+        channel.spaceId == spaceId &&
+        permissions.can(DiscordPermissions.viewChannel, channel)) {
+      return channel.id;
+    }
+    final channels = permissions.visibleChannelsFor(spaceId);
+    if (channels.isEmpty) return null;
+    return channels
+        .firstWhere(_isDefaultLandingChannel, orElse: () => channels.first)
         .id;
+  }
+
+  /// Notes where the reader chose to go. A landing that [reconcile] picks is not
+  /// a choice, so a guild missing for one launch keeps its place in the memory.
+  ///
+  /// A voice channel is not noted as a space's channel, for the reason on
+  /// [_isDefaultLandingChannel]. Neither is a channel of some other space, which
+  /// [reconcile] will not leave open.
+  void _rememberSelection() {
+    final spaceId = _selectedSpaceId;
+    if (spaceId == null) return;
+    final channelId = _selectedChannelId;
+    final channel = channelId == null
+        ? null
+        : _reconciledWorkspace?.channelOrNull(channelId);
+    final worthLanding =
+        channel == null ||
+        (channel.spaceId == spaceId && channel.kind != ChannelKind.voice);
+    _memory.rememberLocation(spaceId, worthLanding ? channelId : null);
   }
 
   /// Voice channels are skipped when a landing channel has to be guessed: the
@@ -97,33 +152,16 @@ final class WorkspaceController extends ChangeNotifier {
   static bool _isDefaultLandingChannel(ConversationChannel channel) =>
       channel.kind != ChannelKind.voice && !channel.isThread;
 
-  /// Landing is only ever guessed among channels the account may actually
-  /// open: Discord's own default-channel pick is the first one with
-  /// `VIEW_CHANNEL`, and dropping into a hidden channel would show an empty
-  /// timeline no request can fill.
-  static List<ConversationChannel> _visibleChannels(
-    ChatWorkspace workspace,
-    String spaceId,
-  ) => WorkspacePermissions(workspace).visibleChannelsFor(spaceId);
-
   void selectSpace(ChatWorkspace workspace, String spaceId) {
     if (_selectedSpaceId == spaceId) return;
     _selectedSpaceId = spaceId;
     // Results belong to the guild they were searched in, so leaving it closes
     // them rather than showing another server's messages under this one's name.
     _showSearch = false;
-    final channels = _visibleChannels(workspace, spaceId);
-    if (channels.isEmpty) {
-      _selectedChannelId = null;
-      _query = '';
-      notifyListeners();
-      return;
-    }
-    _selectedChannelId = channels
-        .firstWhere(_isDefaultLandingChannel, orElse: () => channels.first)
-        .id;
-    _targetMessageId = null;
+    _selectedChannelId = _landingChannelIn(workspace, spaceId);
+    if (_selectedChannelId != null) _targetMessageId = null;
     _query = '';
+    _rememberSelection();
     notifyListeners();
   }
 
@@ -142,6 +180,7 @@ final class WorkspaceController extends ChangeNotifier {
     _selectedChannelId = channelId;
     _targetMessageId = null;
     _query = '';
+    _rememberSelection();
     notifyListeners();
   }
 
@@ -179,6 +218,7 @@ final class WorkspaceController extends ChangeNotifier {
     _targetMessageId = messageId;
     _targetRequest++;
     _query = '';
+    _rememberSelection();
     notifyListeners();
   }
 
@@ -206,6 +246,7 @@ final class WorkspaceController extends ChangeNotifier {
     _selectedChannelId = link.channelId;
     _targetMessageId = null;
     _query = '';
+    _rememberSelection();
     if (changed || surfaceChanged) notifyListeners();
     return true;
   }
@@ -266,9 +307,7 @@ final class WorkspaceController extends ChangeNotifier {
   }
 
   void toggleCategory(String categoryId) {
-    if (!_collapsedCategoryIds.add(categoryId)) {
-      _collapsedCategoryIds.remove(categoryId);
-    }
+    _memory.toggleCategory(categoryId);
     notifyListeners();
   }
 
