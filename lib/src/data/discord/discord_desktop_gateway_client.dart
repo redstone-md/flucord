@@ -385,10 +385,12 @@ final class DiscordDesktopGatewayClient
   /// Discord pushes live events for a guild only once it is subscribed, and
   /// the subscriptions map is a replace: without this, typing, thread and
   /// member events for a joined server never arrive, because READY named the
-  /// guilds it listed and nothing else.
-  void subscribeGuildEvents(String guildId) {
-    if (!_subscriptions.setFlags(guildId)) return;
+  /// guilds it listed and nothing else. Answers whether this is news, which is
+  /// false for a guild that was already subscribed.
+  bool subscribeGuildEvents(String guildId) {
+    if (!_subscriptions.setFlags(guildId)) return false;
     _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+    return true;
   }
 
   /// Forgets a guild the account left, so a reconnect does not resubscribe

@@ -47,7 +47,6 @@ import '../../domain/voice_dave.dart';
 import '../../domain/voice_message_recorder.dart';
 import '../../domain/voice_message_repository.dart';
 import 'discord_api_client.dart';
-import 'discord_channel_handler.dart';
 import 'discord_direct_messages.dart';
 import 'discord_gateway_client.dart';
 import 'discord_guild_member_loader.dart';
@@ -130,13 +129,10 @@ final class DiscordChatRepository
     _events.add,
   );
   late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
-    _api,
+    _api.createDirectMessageChannel,
     _cache,
     _mapper,
-  );
-  late final DiscordChannelHandler _channelHandler = DiscordChannelHandler(
-    _cache,
-    _mapper,
+    _events.publish,
   );
   late final DiscordGuildMemberLoader _guildMemberLoader =
       DiscordGuildMemberLoader(_api);
@@ -149,7 +145,14 @@ final class DiscordChatRepository
   String? _currentMemberId;
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   late final DiscordSharedDispatches _sharedDispatches =
-      DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
+      DiscordSharedDispatches(
+        cache: _cache,
+        mapper: _mapper,
+        directMessages: _directMessages,
+        currentMemberId: () => _currentMemberId,
+        rolesOf: (guildId) => _rolesByGuild[guildId] ?? const [],
+        events: _events,
+      );
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;
@@ -228,9 +231,7 @@ final class DiscordChatRepository
     if (currentUserId == null) {
       throw StateError('Discord workspace is not loaded');
     }
-    final conversation = await _directMessages.open(recipientId, currentUserId);
-    _emitDirectConversation(conversation);
-    return conversation;
+    return _directMessages.open(recipientId, currentUserId);
   }
 
   @override
