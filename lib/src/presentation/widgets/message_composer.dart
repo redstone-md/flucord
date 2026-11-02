@@ -497,6 +497,14 @@ class MessageComposerState extends State<MessageComposer>
     return '$megabytes MB';
   }
 
+  /// Takes one file off the strip. A pasted picture's temp file goes with it,
+  /// because nothing will send it now.
+  void _removeAttachment(int index) {
+    final removed = _attachments.items[index];
+    setState(() => _attachments.removeAt(index));
+    unawaited(ClipboardAttachments.release([removed]));
+  }
+
   /// Applies or removes the spoiler tag on one attached file. The tag is the
   /// name, so this rewrites it: the upload carries the prefix and the
   /// receiver reads it back off the stored file.
@@ -648,7 +656,7 @@ class MessageComposerState extends State<MessageComposer>
             PendingAttachmentStrip(
               attachments: _attachments.items,
               enabled: !widget.isSending,
-              onRemove: (index) => setState(() => _attachments.removeAt(index)),
+              onRemove: _removeAttachment,
               onToggleSpoiler: _toggleAttachmentSpoiler,
             ),
             const SizedBox(height: 6),

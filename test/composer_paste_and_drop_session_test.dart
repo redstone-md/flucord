@@ -174,6 +174,28 @@ void main() {
       expect(File(keptAt).existsSync(), isFalse);
     });
 
+    testSession('a picture taken off the strip is gone from disk', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      _clipboardHolds(tester, image: _onePixelBmp);
+      await _pressPaste(tester, session);
+      await _waitFor(tester, session, find.text('image.png'));
+      final keptAt = tester
+          .widget<PendingAttachmentStrip>(find.byType(PendingAttachmentStrip))
+          .attachments
+          .single
+          .path;
+
+      await tester.tap(find.byTooltip('Remove attachment'));
+      await session.settle();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+
+      expect(find.byType(PendingAttachmentStrip), findsNothing);
+      expect(File(keptAt).existsSync(), isFalse);
+    });
+
     testSession('text puts it in the box, as before', (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       _clipboardHolds(tester, text: 'copied words');
