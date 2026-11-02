@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../application/discord_social_dm_controller.dart';
 import '../../domain/discord_social_dm.dart';
 import '../../theme/flucord_theme.dart';
+import 'destructive_confirmation.dart';
 
 class DiscordSocialDmMessageRow extends StatefulWidget {
   const DiscordSocialDmMessageRow({
@@ -190,32 +191,14 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete message?'),
-        content: Text(
-          widget.message.content,
-          maxLines: 5,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: ValueKey('social-dm-confirm-delete-${widget.message.id}'),
-            style: FilledButton.styleFrom(
-              backgroundColor: FlucordColors.danger,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Delete message?',
+      message: widget.message.content,
+      confirmLabel: 'Delete',
+      confirmKey: ValueKey('social-dm-confirm-delete-${widget.message.id}'),
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     await widget.controller.deleteMessage(
       widget.message.conversationUserId,
       widget.message.id,

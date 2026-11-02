@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'destructive_confirmation.dart';
+
 /// Asks before leaving a server.
 ///
 /// Leaving is not undoable from any surface Flucord has, so the ask names
@@ -8,28 +10,13 @@ import 'package:flutter/material.dart';
 Future<bool> showLeaveServerConfirmation(
   BuildContext context, {
   required String serverName,
-}) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      key: const ValueKey('leave-server-dialog'),
-      title: Text('Leave $serverName?'),
-      content: const Text(
-        'You will not see this server or its messages until you are invited '
-        'back.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('leave-server-confirm'),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Leave'),
-        ),
-      ],
-    ),
-  );
-  return confirmed ?? false;
-}
+}) => confirmDestructiveAction(
+  context,
+  title: 'Leave $serverName?',
+  message:
+      'You will not see this server or its messages until you are invited '
+      'back.',
+  confirmLabel: 'Leave',
+  dialogKey: const ValueKey('leave-server-dialog'),
+  confirmKey: const ValueKey('leave-server-confirm'),
+);

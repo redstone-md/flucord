@@ -1,5 +1,111 @@
 part of 'channel_sidebar.dart';
 
+enum _ServerMenuAction { settings, notifications, report, leave }
+
+/// A server's sidebar header: its name, and every action on the server in the
+/// one menu the name opens, the way Discord's own header works.
+///
+/// An action that is null is left out of the menu. With none at all the name
+/// is plain text, because a menu with nothing in it is a dead control.
+class _ServerHeader extends StatelessWidget {
+  const _ServerHeader({
+    required this.title,
+    required this.onOpenSettings,
+    required this.onLeave,
+    required this.onReport,
+    required this.onOpenNotifications,
+  });
+
+  final Widget title;
+  final VoidCallback? onOpenSettings;
+  final VoidCallback? onLeave;
+  final VoidCallback? onReport;
+
+  /// Raises the notification menu from the given context, at the position.
+  final void Function(BuildContext context, RelativeRect position)?
+  onOpenNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = [
+      if (onOpenSettings != null)
+        _item(
+          _ServerMenuAction.settings,
+          'open-server-settings',
+          'Server settings',
+        ),
+      if (onOpenNotifications != null)
+        _item(
+          _ServerMenuAction.notifications,
+          'space-notification-menu',
+          'Notification settings',
+        ),
+      if (onReport != null)
+        _item(_ServerMenuAction.report, 'report-server', 'Report server'),
+      if (onLeave != null)
+        _item(_ServerMenuAction.leave, 'leave-server', 'Leave server'),
+    ];
+    if (entries.isEmpty) return title;
+    return PopupMenuButton<_ServerMenuAction>(
+      key: const ValueKey('space-menu'),
+      tooltip: 'Server menu',
+      position: PopupMenuPosition.under,
+      onSelected: (action) => _perform(context, action),
+      itemBuilder: (_) => entries,
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            Expanded(child: title),
+            const Icon(Icons.expand_more, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static PopupMenuItem<_ServerMenuAction> _item(
+    _ServerMenuAction action,
+    String key,
+    String label,
+  ) => PopupMenuItem(
+    key: ValueKey(key),
+    value: action,
+    height: 36,
+    child: Text(label),
+  );
+
+  void _perform(BuildContext context, _ServerMenuAction action) {
+    switch (action) {
+      case _ServerMenuAction.settings:
+        onOpenSettings?.call();
+      case _ServerMenuAction.notifications:
+        if (_belowHeader(context) case final position?) {
+          onOpenNotifications?.call(context, position);
+        }
+      case _ServerMenuAction.report:
+        onReport?.call();
+      case _ServerMenuAction.leave:
+        onLeave?.call();
+    }
+  }
+
+  /// Where a follow-up menu opens: under the header, where this one was.
+  RelativeRect? _belowHeader(BuildContext context) {
+    final header = context.findRenderObject();
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (header is! RenderBox || overlay is! RenderBox) return null;
+    final corner = header.localToGlobal(
+      header.size.bottomLeft(Offset.zero),
+      ancestor: overlay,
+    );
+    return RelativeRect.fromRect(
+      corner & Size.zero,
+      Offset.zero & overlay.size,
+    );
+  }
+}
+
 /// The direct-messages block, with its message-request folder.
 ///
 /// The folder is the one piece of state the sidebar keeps: a request row is a

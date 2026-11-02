@@ -55,7 +55,7 @@ import 'discord_history_loader.dart';
 import 'discord_mapper.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_mapper.dart';
-import 'discord_reaction_handler.dart';
+import 'discord_shared_dispatches.dart';
 import 'discord_poll_vote_handler.dart';
 import 'discord_repository_events.dart';
 import 'discord_voice_signaling_service.dart';
@@ -148,10 +148,8 @@ final class DiscordChatRepository
   @override
   String? _currentMemberId;
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
-  late final DiscordReactionHandler _reactionHandler = DiscordReactionHandler(
-    _cache,
-    () => _currentMemberId,
-  );
+  late final DiscordSharedDispatches _sharedDispatches =
+      DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
 
   @override
   Stream<ChatRepositoryEvent> get events => _events.stream;

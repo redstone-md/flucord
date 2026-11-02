@@ -100,8 +100,8 @@ class VoiceDevicesSection extends StatelessWidget {
               style: TextStyle(fontSize: 13),
             ),
             subtitle: Text(
-              'Removes keyboards, fans and other voices from the microphone '
-              'with DeepFilterNet. Costs some CPU while in a call.',
+              'Removes keyboards, fans and other voices from the microphone. '
+              'Costs some CPU while in a call.',
               style: TextStyle(fontSize: 11, color: context.surfaces.muted),
             ),
           ),
@@ -274,10 +274,10 @@ class _SensitivityRow extends StatelessWidget {
           ),
           subtitle: Text(
             automatic
-                ? 'The gate learns the room and opens a margin above its '
-                      'noise floor.'
-                : 'The gate opens above the level chosen here, whatever the '
-                      'room sounds like.',
+                ? 'Flucord learns how loud the room is and opens the microphone '
+                      'when you speak above it.'
+                : 'The microphone opens above the level chosen here, whatever '
+                      'the room sounds like.',
             style: TextStyle(fontSize: 11, color: context.surfaces.muted),
           ),
         ),
