@@ -128,8 +128,8 @@ class ChannelSidebar extends StatelessWidget {
   final VoidCallback? onOpenEvents;
 
   /// Opens the server-settings window. Null when the account may administer
-  /// nothing here, or when the transport has no admin plane at all — the header
-  /// then simply has no gear, which is what Discord does too.
+  /// nothing here, or when the transport has no admin plane at all. The header
+  /// menu then has no settings entry, which is what Discord does too.
   final VoidCallback? onOpenServerSettings;
 
   /// Leaves the server. Null on a transport that cannot leave anything and
@@ -183,89 +183,17 @@ class ChannelSidebar extends StatelessWidget {
                 bottom: BorderSide(color: context.surfaces.border),
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    space.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _spaceMuted
-                          ? context.surfaces.muted
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
+            child: isDirect
+                ? _directMessagesHeader(context)
+                : _ServerHeader(
+                    title: _spaceTitle(context),
+                    onOpenSettings: onOpenServerSettings,
+                    onLeave: onLeaveServer,
+                    onReport: onReportServer,
+                    onOpenNotifications: onNotificationRequest == null
+                        ? null
+                        : _openSpaceNotifications,
                   ),
-                ),
-                if (_spaceMuted)
-                  Padding(
-                    key: const ValueKey('space-muted'),
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.notifications_off_outlined,
-                      size: 15,
-                      color: context.surfaces.muted,
-                    ),
-                  ),
-                if (isDirect && friends != null)
-                  IconButton(
-                    key: const ValueKey('toggle-friends'),
-                    onPressed: friends!.togglePanel,
-                    icon: Icon(
-                      friends!.isPanelOpen
-                          ? Icons.forum_outlined
-                          : Icons.people_alt_outlined,
-                      size: 18,
-                    ),
-                    tooltip: friends!.isPanelOpen ? 'Conversations' : 'Friends',
-                  ),
-                if (isDirect)
-                  IconButton(
-                    key: const ValueKey('new-direct-message'),
-                    onPressed: onNewDirectMessage,
-                    icon: const Icon(Icons.edit_square),
-                    tooltip: 'New message',
-                  ),
-                if (!isDirect && onOpenServerSettings != null)
-                  IconButton(
-                    key: const ValueKey('open-server-settings'),
-                    onPressed: onOpenServerSettings,
-                    icon: const Icon(Icons.settings_outlined, size: 18),
-                    tooltip: 'Server settings',
-                  ),
-                if (!isDirect && onLeaveServer != null)
-                  IconButton(
-                    key: const ValueKey('leave-server'),
-                    onPressed: onLeaveServer,
-                    icon: const Icon(Icons.logout_outlined, size: 18),
-                    tooltip: 'Leave server',
-                  ),
-                if (!isDirect && onReportServer != null)
-                  IconButton(
-                    key: const ValueKey('report-server'),
-                    onPressed: onReportServer,
-                    icon: const Icon(Icons.flag_outlined, size: 18),
-                    tooltip: 'Report server',
-                  ),
-                if (onNotificationRequest != null)
-                  PopupMenuButton<NotificationMenuRequest>(
-                    key: const ValueKey('space-notification-menu'),
-                    tooltip: 'Notification settings',
-                    icon: const Icon(Icons.more_vert, size: 18),
-                    padding: EdgeInsets.zero,
-                    onSelected: (request) =>
-                        onNotificationRequest!(request, null),
-                    itemBuilder: (context) => notificationMenuItems(
-                      muted: _spaceMuted,
-                      level: _spaceSettings.messageNotifications,
-                      isSpaceScope: true,
-                      suppressEveryone: _spaceSettings.suppressEveryone,
-                      mobilePush: _spaceSettings.mobilePush,
-                    ),
-                  ),
-              ],
-            ),
           ),
           Expanded(
             child: isDirect && (friends?.isPanelOpen ?? false)
@@ -304,6 +232,93 @@ class ChannelSidebar extends StatelessWidget {
       data: FlucordTheme.fromPalette(FlucordPalette.dark),
       child: content,
     );
+  }
+
+  /// The space's name, with a mark when the whole space is muted. Takes all
+  /// the width its row has left.
+  Widget _spaceTitle(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          space.name,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: _spaceMuted
+                ? context.surfaces.muted
+                : Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ),
+      if (_spaceMuted)
+        Padding(
+          key: const ValueKey('space-muted'),
+          padding: const EdgeInsets.only(right: 4),
+          child: Icon(
+            Icons.notifications_off_outlined,
+            size: 15,
+            color: context.surfaces.muted,
+          ),
+        ),
+    ],
+  );
+
+  /// Direct messages have no server menu: their actions start a conversation
+  /// or swap the list, so they stay one click away.
+  Widget _directMessagesHeader(BuildContext context) => Row(
+    children: [
+      Expanded(child: _spaceTitle(context)),
+      if (friends case final friends?)
+        IconButton(
+          key: const ValueKey('toggle-friends'),
+          onPressed: friends.togglePanel,
+          icon: Icon(
+            friends.isPanelOpen
+                ? Icons.forum_outlined
+                : Icons.people_alt_outlined,
+            size: 18,
+          ),
+          tooltip: friends.isPanelOpen ? 'Conversations' : 'Friends',
+        ),
+      IconButton(
+        key: const ValueKey('new-direct-message'),
+        onPressed: onNewDirectMessage,
+        icon: const Icon(Icons.edit_square),
+        tooltip: 'New message',
+      ),
+      if (onNotificationRequest case final onRequest?)
+        PopupMenuButton<NotificationMenuRequest>(
+          key: const ValueKey('space-notification-menu'),
+          tooltip: 'Notification settings',
+          icon: const Icon(Icons.more_vert, size: 18),
+          padding: EdgeInsets.zero,
+          onSelected: (request) => onRequest(request, null),
+          itemBuilder: (context) => _spaceNotificationItems,
+        ),
+    ],
+  );
+
+  List<PopupMenuEntry<NotificationMenuRequest>> get _spaceNotificationItems =>
+      notificationMenuItems(
+        muted: _spaceMuted,
+        level: _spaceSettings.messageNotifications,
+        isSpaceScope: true,
+        suppressEveryone: _spaceSettings.suppressEveryone,
+        mobilePush: _spaceSettings.mobilePush,
+      );
+
+  /// Raises the notification menu for the whole space at [position].
+  Future<void> _openSpaceNotifications(
+    BuildContext context,
+    RelativeRect position,
+  ) async {
+    final request = await showMenu<NotificationMenuRequest>(
+      context: context,
+      position: position,
+      items: _spaceNotificationItems,
+    );
+    if (request != null) onNotificationRequest?.call(request, null);
   }
 
   ReadStateSnapshot get _readState => readState ?? ReadStateSnapshot.empty;
