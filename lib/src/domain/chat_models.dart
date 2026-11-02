@@ -455,18 +455,23 @@ final class ChatWorkspace {
     Set<String> arrived = const {},
   }) {
     final held = messagesFor(page.channelId);
-    final oldest = page.messages.firstOrNull?.sentAt;
+    final oldest = page.messages.firstOrNull;
     final newest = page.messages.lastOrNull?.sentAt;
     bool cameLive(ChatMessage message) =>
         arrived.contains(message.id) ||
         (newest != null && message.sentAt.isAfter(newest));
+    // Two messages can share an instant, and then the id tells which is older.
+    bool isOlderThanPage(ChatMessage message, ChatMessage first) =>
+        message.sentAt.isBefore(first.sentAt) ||
+        (message.sentAt.isAtSameMomentAs(first.sentAt) &&
+            DiscordSnowflake.compare(message.id, first.id) < 0);
     return mergeHistory(
       ChannelHistory(
         channelId: page.channelId,
         members: page.members,
         messages: [
           if (oldest != null && _reachesHeldMessages(page))
-            ...held.where((message) => message.sentAt.isBefore(oldest)),
+            ...held.where((message) => isOlderThanPage(message, oldest)),
           ...held.where(cameLive),
           // After the live ones, so the page's copy of a message wins.
           ...page.messages,

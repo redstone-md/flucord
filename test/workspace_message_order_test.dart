@@ -149,6 +149,27 @@ void main() {
     expect(_idsIn(next, 'alpha'), [for (final m in page) m.id]);
   });
 
+  test('a catch-up keeps an older message sent in the same instant', () {
+    // 101 and 102 share a minute. The page starts at 102, so 101 is older
+    // than the page and stays.
+    final workspace = _workspaceWith([
+      _message('100', 'alpha', 1),
+      _message('101', 'alpha', 2),
+      _message('102', 'alpha', 2),
+      _message('103', 'alpha', 3),
+    ]);
+
+    final next = workspace.catchUpHistory(
+      ChannelHistory(
+        channelId: 'alpha',
+        messages: [_message('102', 'alpha', 2), _message('103', 'alpha', 3)],
+        members: const [],
+      ),
+    );
+
+    expect(_idsIn(next, 'alpha'), ['100', '101', '102', '103']);
+  });
+
   test('the flat view lists every channel, oldest first, after a change', () {
     final workspace = _workspaceWith([
       _message('b-1', 'beta', 2),
