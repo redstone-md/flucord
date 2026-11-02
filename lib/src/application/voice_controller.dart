@@ -345,13 +345,37 @@ final class VoiceController extends ChangeNotifier {
   /// Its own entry point so a surface can offer the retry: walking out of the
   /// channel and back in is not an obvious way to ask for one, and it is what
   /// somebody had to do before.
+  ///
+  /// In a Room it also opens the microphone again when that is what failed.
   Future<void> retryDevices() => _enqueue(() async {
     // A second press waits behind the first, and has nothing left to retry.
-    if (_state != VoiceState.failure) return;
-    _state = VoiceState.idle;
-    _deviceError = null;
-    await initialize();
+    if (_state == VoiceState.failure) {
+      _state = VoiceState.idle;
+      _deviceError = null;
+      await initialize();
+    }
+    if (_connectedChannelId != null &&
+        _microphoneError != null &&
+        _state == VoiceState.ready) {
+      await _openMicrophone();
+    }
   });
+
+  /// Opens the selected microphone, and keeps the reason when it will not
+  /// open.
+  ///
+  /// A failure here must not abort a join: the room is still worth being in
+  /// to listen. The reason is kept so the room can say the uplink is off
+  /// rather than leaving a silent mic looking fine.
+  Future<void> _openMicrophone() async {
+    try {
+      await _mediaService.startMicrophone(_selectedInputId);
+      await _mediaService.setMicrophoneEnabled(!_isMuted);
+      _microphoneError = null;
+    } on Object catch (error) {
+      _microphoneError = error;
+    }
+  }
 
   String? _firstDeviceId(VoiceDeviceKind kind) {
     for (final device in _devices) {
@@ -408,18 +432,7 @@ final class VoiceController extends ChangeNotifier {
             ? _connectedChannelId != channelId
             : _connectedGuildId != guildId);
     if (movedSession) await _leaveActiveSession();
-    if (_connectedChannelId == null) {
-      // Failing to open the microphone must not abort the join: the room is
-      // still worth being in to listen. The reason is kept so the room can
-      // say the uplink is off rather than leaving a silent mic looking fine.
-      try {
-        await _mediaService.startMicrophone(_selectedInputId);
-        await _mediaService.setMicrophoneEnabled(!_isMuted);
-        _microphoneError = null;
-      } on Object catch (error) {
-        _microphoneError = error;
-      }
-    }
+    if (_connectedChannelId == null) await _openMicrophone();
     _connectedGuildId = guildId;
     _connectedChannelId = channelId;
     _isCallSession = isCall;

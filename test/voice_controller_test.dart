@@ -720,6 +720,26 @@ void main() {
     expect(controller.joinBlockedReason, isNull);
   });
 
+  test('a retry opens a microphone that would not open on join', () async {
+    final media = _FakeVoiceMediaService()..failMicrophone = true;
+    final signaling = _FakeVoiceSignalingService();
+    final controller = VoiceController(
+      media,
+      signalingServiceProvider: () => signaling,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(signaling.close);
+    await controller.connect(guildId: 'forge', channelId: 'forge-voice');
+    expect(controller.microphoneError, isNotNull);
+
+    // The room offers the retry for this error, so the retry has to reach it.
+    media.failMicrophone = false;
+    await controller.retryDevices();
+
+    expect(controller.microphoneError, isNull);
+    expect(media.startedInputs, hasLength(2));
+  });
+
   test('stopping a watched stream removes its playback source', () async {
     final playback = _FakeVoicePlaybackService();
     final ended = StreamController<String>.broadcast();
