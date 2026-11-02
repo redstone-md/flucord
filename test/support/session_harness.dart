@@ -197,6 +197,16 @@ final class SessionHarness {
       (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
     );
     await _launch();
+    await settleServerErrorRepeats();
+  }
+
+  /// Lets a GET that keeps answering a server error use up its repeats, which
+  /// wait one and then two seconds on the REST client's clock.
+  Future<void> settleServerErrorRepeats() async {
+    await settle();
+    await _tester.pump(const Duration(seconds: 1));
+    await settle();
+    await _tester.pump(const Duration(seconds: 2));
     await settle();
   }
 
