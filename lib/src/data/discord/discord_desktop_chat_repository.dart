@@ -56,6 +56,7 @@ import 'discord_message_search_service.dart';
 import 'discord_message_nonce_factory.dart';
 import 'discord_presence_service.dart';
 import 'discord_rest_client.dart';
+import 'discord_shared_dispatches.dart';
 import 'discord_user_notes_repository.dart';
 import 'discord_user_profile_repository.dart';
 import 'discord_application_command_service.dart';
@@ -189,6 +190,8 @@ final class DiscordDesktopChatRepository
   late final DiscordDirectCallService _directCalls;
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
+  late final DiscordSharedDispatches _sharedDispatches =
+      DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
 
   /// Whether a workspace is being shown, live or from the cache.
   ///
@@ -398,6 +401,8 @@ final class DiscordDesktopChatRepository
               channelsByGuild: snapshot.channelsByGuild,
               rolesByGuild: snapshot.rolesByGuild,
               membersByGuild: snapshot.membersByGuild,
+              emojisByGuild: snapshot.emojisByGuild,
+              stickersByGuild: snapshot.stickersByGuild,
               directChannels: snapshot.directChannels,
               includeDirectMessagesSpace: true,
               currentUserRole: 'Discord user',

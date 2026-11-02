@@ -65,6 +65,7 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
         // current. There is no route to re-read it, so missing one means
         // showing a friend list that is quietly wrong.
         _relationships.accept(event.name, event.data);
+        _sharedDispatches.route(event);
         if (event.name == 'MESSAGE_CREATE' || event.name == 'MESSAGE_UPDATE') {
           unawaited(_acceptMessage(event));
         } else if (event.name == 'MESSAGE_DELETE') {
