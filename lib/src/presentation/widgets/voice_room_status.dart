@@ -5,27 +5,25 @@ String voiceRoomStatusLabel(VoiceController controller) {
   if (!controller.isConnected) return 'Disconnected';
   if (!controller.hasDiscordSignaling) return 'Local media ready';
   return switch (controller.connectionStatus) {
-    VoiceConnectionStatus.disconnected => 'Voice transport disconnected',
+    VoiceConnectionStatus.disconnected => 'Disconnected',
     VoiceConnectionStatus.joining => 'Joining voice channel...',
-    VoiceConnectionStatus.connecting => 'Connecting to voice server...',
-    VoiceConnectionStatus.discovering => 'Discovering UDP route...',
-    VoiceConnectionStatus.negotiating => 'Negotiating DAVE encryption...',
-    VoiceConnectionStatus.ready when controller.isAudioPlaybackActive =>
-      controller.isMuted
-          ? 'Encrypted voice connected - muted'
-          : 'Encrypted voice connected',
-    VoiceConnectionStatus.ready when controller.isAudioUplinkActive =>
-      'Encrypted voice uplink active',
-    VoiceConnectionStatus.ready => 'Encrypted transport ready',
-    VoiceConnectionStatus.reconnecting => 'Reconnecting voice transport...',
-    VoiceConnectionStatus.failure => 'Voice transport failed',
+    VoiceConnectionStatus.connecting ||
+    VoiceConnectionStatus.discovering ||
+    VoiceConnectionStatus.negotiating => 'Connecting...',
+    VoiceConnectionStatus.ready when controller.isDeafened =>
+      'Voice connected, deafened',
+    VoiceConnectionStatus.ready when controller.isMuted =>
+      'Voice connected, muted',
+    VoiceConnectionStatus.ready => 'Voice connected',
+    VoiceConnectionStatus.reconnecting => 'Reconnecting...',
+    VoiceConnectionStatus.failure => 'Could not connect',
   };
 }
 
 /// The one thing most worth saying about a room that is not working, or null.
 ///
 /// Ordered by what blocks the most: a session that cannot reach voice at all,
-/// then a transport that failed, then a microphone that would not open — which
+/// then a connection that failed, then a microphone that would not open — which
 /// still leaves a usable room, so it is reported last.
 ///
 /// Each answer says which of the three it is. The old wording called every
