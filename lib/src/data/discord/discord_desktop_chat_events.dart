@@ -72,11 +72,48 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
           _acceptTyping(event.data);
         } else if (event.name == 'PASSIVE_UPDATE_V2') {
           _acceptPassiveUpdate(event.data);
+        } else if (event.name == 'GUILD_CREATE') {
+          unawaited(_acceptGuild(event.data));
+        } else if (event.name == 'GUILD_UPDATE') {
+          unawaited(_acceptGuildUpdate(event.data));
+        } else if (event.name == 'GUILD_DELETE') {
+          unawaited(_acceptGuildRemoval(event.data));
         } else if (event.name == 'READY' ||
             event.name == 'READY_SUPPLEMENTAL') {
           unawaited(_rehydrateWorkspace());
         }
     }
+  }
+
+  /// A guild the account gained, or got back, once a workspace is on screen.
+  /// Before that, the opening dispatches build the workspace.
+  Future<void> _acceptGuild(Map<String, Object?> data) async {
+    if (!_workspaceShown) return;
+    final guild = DiscordGuildAdminMapper.joinedGuildFromDispatch(
+      data,
+      _mapper,
+    );
+    if (guild == null) return;
+    _events.publish(GuildGainedEvent(guild));
+    await _persistGainedGuild(guild);
+  }
+
+  Future<void> _acceptGuildUpdate(Map<String, Object?> data) async {
+    if (!_workspaceShown || data['id'] is! String) return;
+    final space = _mapper.spaceFromGuildPayload(data);
+    _events.publish(SpaceUpsertedEvent(space));
+    await _cache.writeSpace(space);
+  }
+
+  /// `unavailable` marks an outage on Discord's side. The account is still in
+  /// that guild, so it stays on the rail.
+  Future<void> _acceptGuildRemoval(Map<String, Object?> data) async {
+    final guildId = data['id'];
+    if (!_workspaceShown || guildId is! String || data['unavailable'] == true) {
+      return;
+    }
+    _events.publish(SpaceRemovedEvent(guildId));
+    await _persistLeftGuild(guildId);
   }
 
   /// Applies a post-load READY to the workspace in place.
@@ -259,9 +296,14 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
 
   Future<void> _acceptNewMessage(Map<String, Object?> payload) async {
     if (payload['id'] is! String) return;
+    final currentUserId = _currentMemberId;
+    if (currentUserId != null) {
+      await _directMessages.acceptMessage(payload, currentUserId);
+    }
     final message = await _storeMessage(payload);
     final member = _mapper.messageAuthor(payload);
     if (member != null) await _cache.writeMember(member);
+    _readState.acceptNewMessage(payload);
     _events.add(
       MessageUpsertedEvent(
         message: message,
@@ -281,8 +323,13 @@ extension _DiscordDesktopChatEvents on DiscordDesktopChatRepository {
       fallback: fallback,
       currentMemberId: _currentMemberId,
     );
-    await _cache.writeMessage(message);
-    return message;
+    // The mapper knows the account's id but not its roles. The flag decides the
+    // inbox and the desktop notification, so a role mention has to set it too.
+    final stored = _readState.mentionsAccountRole(payload)
+        ? message.copyWith(mentionsCurrentMember: true)
+        : message;
+    await _cache.writeMessage(stored);
+    return stored;
   }
 
   void _acceptTyping(Map<String, Object?> data) {

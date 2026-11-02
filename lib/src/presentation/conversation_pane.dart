@@ -40,6 +40,7 @@ import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/self_video_scope.dart';
 import 'widgets/slash_command_scope.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/soundboard_scope.dart';
@@ -308,6 +309,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     final cameras = RemoteCameraScope.of(context);
     final voice = VoiceScope.read(context);
     final goLive = GoLiveScope.read(context);
+    final camera = SelfVideoScope.read(context);
     final soundboard = SoundboardScope.read(context);
     final stage = StageScope.read(context);
     final threadMembership = ThreadMembershipScope.read(context);
@@ -401,6 +403,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             onTapParticipant: focus.toggle,
             onClearFocus: focus.clear,
             goLive: goLiveControl(),
+            camera: camera,
             channelId: channel.id,
             channelName: channel.name,
             controller: voice,
@@ -418,6 +421,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               onTapParticipant: focus.toggle,
               onClearFocus: focus.clear,
               goLive: goLiveControl(),
+              camera: camera,
               soundboard: ListenableBuilder(
                 listenable: soundboard,
                 builder: (_, _) => SoundboardButton(
@@ -718,6 +722,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               widget.capabilities,
               workspaceController.query,
               workspaceController.targetMessageId,
+              chat.lastSentMessageIdIn(channel.id),
               chat.canLoadOlderMessages(channel.id),
               chat.isLoadingOlderMessages(channel.id),
               chat.olderMessagesError(channel.id),
@@ -760,6 +765,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       channel: channel,
       query: workspaceController.query,
       targetMessageId: workspaceController.targetMessageId,
+      lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
       onReply: (message) => setState(() => _replyTo = message),
       onEdit: chat.editMessage,
       onDelete: chat.deleteMessage,

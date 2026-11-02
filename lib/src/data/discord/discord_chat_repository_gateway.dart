@@ -26,23 +26,10 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
             _sharedDispatches.inOrder(() => _handleNewMessage(event.data));
           case 'MESSAGE_POLL_VOTE_ADD' || 'MESSAGE_POLL_VOTE_REMOVE':
             _sharedDispatches.inOrder(() => _handlePollVote(event));
-          case 'CHANNEL_CREATE' ||
-              'CHANNEL_UPDATE' ||
-              'THREAD_CREATE' ||
-              'THREAD_UPDATE':
-            unawaited(_handleChannelUpsert(event.data));
-          case 'CHANNEL_DELETE' || 'THREAD_DELETE':
-            unawaited(_handleChannelDelete(event.data));
-          case 'GUILD_MEMBER_ADD' || 'GUILD_MEMBER_UPDATE':
-            unawaited(_handleMemberUpsert(event.data));
-          case 'GUILD_MEMBER_REMOVE':
-            _handleMemberRemove(event.data);
           case 'PRESENCE_UPDATE':
             _handlePresence(event.data);
           case 'TYPING_START':
             _handleTyping(event.data);
-          case 'CHANNEL_PINS_UPDATE':
-            _handlePinsChanged(event.data);
           case 'GUILD_CREATE':
             _handleGuildSnapshot(event.data);
           case 'GUILD_EMOJIS_UPDATE':
@@ -64,47 +51,6 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
     }
   }
 
-  Future<void> _handleChannelUpsert(Map<String, Object?> data) async {
-    final guildId = data['guild_id'] as String?;
-    if (guildId == null) {
-      final currentUserId = _currentMemberId;
-      if (currentUserId == null) return;
-      final conversation = await _directMessages.acceptChannel(
-        data,
-        currentUserId,
-      );
-      if (conversation != null) _emitDirectConversation(conversation);
-      return;
-    }
-    final update = await _channelHandler.upsert(data, guildId);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
-
-  Future<void> _handleChannelDelete(Map<String, Object?> data) async {
-    final update = await _channelHandler.delete(data);
-    if (update != null && !_events.isClosed) _events.add(update);
-  }
-
-  Future<void> _handleMemberUpsert(Map<String, Object?> data) async {
-    final guildId = data['guild_id'] as String?;
-    if (guildId == null || data['user'] is! Map) return;
-    final member = _mapper.guildMember(
-      data,
-      guildId,
-      _rolesByGuild[guildId] ?? const [],
-    );
-    await _cache.writeMember(member);
-    if (!_events.isClosed) _events.add(MemberUpsertedEvent(member));
-  }
-
-  void _handleMemberRemove(Map<String, Object?> data) {
-    final guildId = data['guild_id'] as String?;
-    final user = data['user'];
-    final memberId = user is Map ? user['id'] as String? : null;
-    if (guildId == null || memberId == null || _events.isClosed) return;
-    _events.add(MemberRemovedEvent(memberId: memberId, spaceId: guildId));
-  }
-
   void _handlePresence(Map<String, Object?> data) {
     if (_events.isClosed) return;
     final record = DiscordPresenceMapper.record(data);
@@ -119,13 +65,6 @@ extension _DiscordChatRepositoryGateway on DiscordChatRepository {
     final memberId = data['user_id'] as String?;
     if (channelId == null || memberId == null || _events.isClosed) return;
     _events.add(TypingStartedEvent(channelId: channelId, memberId: memberId));
-  }
-
-  void _handlePinsChanged(Map<String, Object?> data) {
-    final channelId = data['channel_id'] as String?;
-    if (channelId != null && !_events.isClosed) {
-      _events.add(PinsChangedEvent(channelId));
-    }
   }
 
   void _handleGuildSnapshot(Map<String, Object?> data) {

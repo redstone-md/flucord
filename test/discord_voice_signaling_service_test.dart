@@ -549,6 +549,214 @@ void main() {
     await _flushEvents();
     expect(received, [('member-1', frame)]);
   });
+
+  group('credentials that overlap', () {
+    /// A Participant who joined and is waiting for credentials. Each client
+    /// the service builds lands in [clients], in the order it was built.
+    Future<
+      ({
+        _FakeMainGateway gateway,
+        DiscordVoiceSignalingService service,
+        List<_FakeVoiceClient> clients,
+        List<VoiceSignalingEvent> events,
+      })
+    >
+    joinedCall({Completer<void>? firstConnect}) async {
+      final gateway = _FakeMainGateway();
+      final clients = <_FakeVoiceClient>[];
+      final service = DiscordVoiceSignalingService(
+        mainGateway: gateway,
+        socketFactory: _CallSocketFactory((credentials) {
+          final client = _FakeVoiceClient(
+            credentials,
+            connectGate: clients.isEmpty ? firstConnect : null,
+          );
+          clients.add(client);
+          return client;
+        }),
+      )..setCurrentUserId('bot-1');
+      addTearDown(service.close);
+      final events = <VoiceSignalingEvent>[];
+      final subscription = service.voiceEvents.listen(events.add);
+      addTearDown(subscription.cancel);
+      await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+      return (
+        gateway: gateway,
+        service: service,
+        clients: clients,
+        events: events,
+      );
+    }
+
+    /// One whole pair, the way the main gateway hands out a session.
+    void sendCredentials(_FakeMainGateway gateway, {required String token}) {
+      gateway.dispatch('VOICE_STATE_UPDATE', {
+        'guild_id': 'guild-1',
+        'channel_id': 'voice-1',
+        'user_id': 'bot-1',
+        'session_id': 'session-1',
+      });
+      gateway.dispatch('VOICE_SERVER_UPDATE', {
+        'guild_id': 'guild-1',
+        'token': token,
+        'endpoint': 'voice.example.test',
+      });
+    }
+
+    List<VoiceConnectionStatus> statuses(List<VoiceSignalingEvent> events) =>
+        events
+            .whereType<VoiceSignalingStatusEvent>()
+            .map((event) => event.status)
+            .toList();
+
+    test('two in one batch leave one client, and it plays once', () async {
+      final call = await joinedCall();
+      sendCredentials(call.gateway, token: 'token-0');
+      await _flushEvents();
+
+      sendCredentials(call.gateway, token: 'token-1');
+      sendCredentials(call.gateway, token: 'token-2');
+      await _flushEvents();
+
+      expect(
+        call.clients.where((client) => !client.closed).map((c) => c.token),
+        ['token-2'],
+      );
+
+      final heard = <VoiceRemoteOpusFrame>[];
+      final subscription = call.service.remoteAudio.listen(heard.add);
+      addTearDown(subscription.cancel);
+      for (final client in call.clients) {
+        client.emitAudio('member-1');
+      }
+      await _flushEvents();
+      expect(heard, hasLength(1));
+    });
+
+    group('while the older client is still closing', () {
+      /// Two more pairs arrive after a client is up, and its close is held.
+      Future<
+        ({
+          DiscordVoiceSignalingService service,
+          List<_FakeVoiceClient> clients,
+          Completer<void> closing,
+        })
+      >
+      overlapDuringClose() async {
+        final call = await joinedCall();
+        sendCredentials(call.gateway, token: 'token-0');
+        await _flushEvents();
+        final closing = Completer<void>();
+        call.clients.single.closeGate = closing;
+
+        sendCredentials(call.gateway, token: 'token-1');
+        sendCredentials(call.gateway, token: 'token-2');
+        await _flushEvents();
+        return (service: call.service, clients: call.clients, closing: closing);
+      }
+
+      test('no newer client starts', () async {
+        final call = await overlapDuringClose();
+
+        expect(call.clients.single.token, 'token-0');
+
+        call.closing.complete();
+        await _flushEvents();
+
+        expect(call.clients.map((client) => client.token), [
+          'token-0',
+          'token-2',
+        ]);
+      });
+
+      test('the microphone ends up on the client that remains', () async {
+        final call = await overlapDuringClose();
+        call.closing.complete();
+        await _flushEvents();
+
+        final opus = Uint8List.fromList(const [1, 2, 3]);
+        call.service.sendOpusFrame(opus);
+
+        final remaining = call.clients.where((client) => !client.closed);
+        expect(remaining.map((client) => client.token), ['token-2']);
+        expect(remaining.single.sentOpus, [opus]);
+      });
+    });
+
+    test('a close that throws does not stop the next client', () async {
+      final call = await joinedCall();
+      sendCredentials(call.gateway, token: 'token-0');
+      await _flushEvents();
+      final closing = Completer<void>();
+      call.clients.single.closeGate = closing;
+
+      sendCredentials(call.gateway, token: 'token-1');
+      await _flushEvents();
+      closing.completeError(StateError('the socket would not close'));
+      await _flushEvents();
+      sendCredentials(call.gateway, token: 'token-2');
+      await _flushEvents();
+
+      expect(call.clients.last.token, 'token-2');
+      expect(call.clients.last.connected, isTrue);
+    });
+
+    test('after Leave, no client reports a status', () async {
+      final call = await joinedCall();
+      sendCredentials(call.gateway, token: 'token-0');
+      await _flushEvents();
+      sendCredentials(call.gateway, token: 'token-1');
+      sendCredentials(call.gateway, token: 'token-2');
+      await _flushEvents();
+
+      await call.service.leaveVoiceChannel('guild-1');
+      await _flushEvents();
+      call.events.clear();
+      for (final client in call.clients) {
+        client.emitStatus(VoiceConnectionStatus.ready);
+      }
+      await _flushEvents();
+
+      expect(statuses(call.events), isEmpty);
+    });
+
+    test('a dial that fails after Leave reports nothing', () async {
+      final dial = Completer<void>();
+      final call = await joinedCall(firstConnect: dial);
+      sendCredentials(call.gateway, token: 'token-1');
+      await _flushEvents();
+
+      await call.service.leaveVoiceChannel('guild-1');
+      await _flushEvents();
+      call.events.clear();
+      dial.completeError(StateError('the dial was dropped'));
+      await _flushEvents();
+
+      expect(statuses(call.events), isEmpty);
+    });
+
+    test('a dial that never returns does not hold up the newer client, and '
+        'its late failure is not news', () async {
+      final dial = Completer<void>();
+      final call = await joinedCall(firstConnect: dial);
+      sendCredentials(call.gateway, token: 'token-1');
+      await _flushEvents();
+
+      sendCredentials(call.gateway, token: 'token-2');
+      await _flushEvents();
+      expect(call.clients.map((client) => client.token), [
+        'token-1',
+        'token-2',
+      ]);
+      expect(call.clients.first.closed, isTrue);
+
+      call.events.clear();
+      dial.completeError(StateError('the dial was dropped'));
+      await _flushEvents();
+
+      expect(statuses(call.events), isEmpty);
+    });
+  });
 }
 
 Future<void> _flushEvents() async {
@@ -613,17 +821,29 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
 
 /// Carries pictures the same way the production client does, so the video
 /// half of the call's connection is testable without a socket.
-final class _FakeVoiceClient implements DiscordVoiceClient {
-  _FakeVoiceClient(this.credentials);
+final class _FakeVoiceClient
+    implements DiscordVoiceClient, VoiceAudioTransport {
+  _FakeVoiceClient(this.credentials, {this.connectGate});
 
   final VoiceServerCredentials credentials;
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
   final StreamController<(String, DiscordRtpFrame)> _video =
       StreamController.broadcast();
+  final StreamController<VoiceRemoteOpusFrame> _audio =
+      StreamController.broadcast();
   final List<DiscordRtpFrame> sentFrames = [];
+  final List<Uint8List> sentOpus = [];
+
+  /// Holds [connect] open, the way a slow dial does.
+  final Completer<void>? connectGate;
+
+  /// Holds [close] open, the way a slow socket close does.
+  Completer<void>? closeGate;
   bool connected = false;
   bool closed = false;
+
+  String get token => credentials.token;
 
   @override
   int? get audioSsrc => null;
@@ -635,11 +855,26 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
   Stream<(String, DiscordRtpFrame)> get videoPackets => _video.stream;
 
   @override
-  Stream<VoiceRemoteOpusFrame> get remoteAudio =>
-      const Stream<VoiceRemoteOpusFrame>.empty();
+  Stream<VoiceRemoteOpusFrame> get remoteAudio => _audio.stream;
 
-  void emitStatus(VoiceConnectionStatus status) =>
-      _events.add(VoiceSignalingStatusEvent(status));
+  @override
+  void sendOpusFrame(Uint8List opusFrame) => sentOpus.add(opusFrame);
+
+  @override
+  Future<void> finishSpeaking() async {}
+
+  /// A closed client is silent, as the real one is.
+  void emitStatus(VoiceConnectionStatus status) {
+    if (!_events.isClosed) _events.add(VoiceSignalingStatusEvent(status));
+  }
+
+  /// Delivers one frame of somebody's voice, if this client is still open.
+  void emitAudio(String userId) {
+    if (_audio.isClosed) return;
+    _audio.add(
+      VoiceRemoteOpusFrame(userId: userId, opus: Uint8List.fromList(const [9])),
+    );
+  }
 
   /// Delivers a picture as if it arrived off the wire.
   void emitVideo(String userId, DiscordRtpFrame frame) =>
@@ -679,6 +914,7 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
   @override
   Future<void> connect() async {
     connected = true;
+    await connectGate?.future;
   }
 
   @override
@@ -689,6 +925,8 @@ final class _FakeVoiceClient implements DiscordVoiceClient {
     closed = true;
     await _events.close();
     await _video.close();
+    await _audio.close();
+    await closeGate?.future;
   }
 }
 

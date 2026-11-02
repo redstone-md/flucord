@@ -94,11 +94,7 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
     if (payload['id'] is! String) return;
     final currentUserId = _currentMemberId;
     if (currentUserId != null) {
-      final conversation = await _directMessages.acceptMessage(
-        payload,
-        currentUserId,
-      );
-      if (conversation != null) _emitDirectConversation(conversation);
+      await _directMessages.acceptMessage(payload, currentUserId);
     }
     final message = _mapper.message(payload, currentMemberId: currentUserId);
     final member = _mapper.messageAuthor(payload);
@@ -111,12 +107,5 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
-  }
-
-  void _emitDirectConversation(DirectConversation conversation) {
-    if (_events.isClosed) return;
-    _events.add(SpaceUpsertedEvent(_directMessages.space));
-    _events.add(MemberUpsertedEvent(conversation.recipient));
-    _events.add(ChannelUpsertedEvent(conversation.channel));
   }
 }

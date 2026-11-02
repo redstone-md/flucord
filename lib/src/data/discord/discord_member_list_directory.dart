@@ -4,9 +4,10 @@ import 'discord_member_list_id.dart';
 ///
 /// [DiscordMemberListId] can derive the identifier, but only from a channel
 /// record and the guild's `@everyone` permissions — neither of which the
-/// dispatch that needs them carries. Discord hands both out once, in READY and
-/// `GUILD_CREATE`, and never repeats them, so the client has to keep them or it
-/// can never match an inbound roster to the channel it asked about.
+/// dispatch that needs them carries. Discord hands both out in READY and
+/// `GUILD_CREATE`, and after that only tells of a channel when it changes, so the
+/// client has to keep them or it can never match an inbound roster to the channel
+/// it asked about.
 final class DiscordMemberListDirectory {
   /// Channel types that are threads and therefore inherit their parent's
   /// visibility instead of carrying overwrites of their own.
@@ -58,6 +59,20 @@ final class DiscordMemberListDirectory {
   }
 
   void removeGuild(String guildId) => _guilds.remove(guildId);
+
+  /// Records a channel or thread from its own dispatch, so that a new channel or
+  /// one with new overwrites resolves to the right list. A partial update keeps
+  /// what the record already held.
+  void acceptChannel(Map<String, Object?> channel) {
+    final channels = _guilds[channel['guild_id']]?.channels;
+    final id = channel['id'];
+    if (channels != null && id is String) {
+      channels[id] = {...?channels[id], ...channel};
+    }
+  }
+
+  void removeChannel(Map<String, Object?> channel) =>
+      _guilds[channel['guild_id']]?.channels.remove(channel['id']);
 
   void clear() => _guilds.clear();
 

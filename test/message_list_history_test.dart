@@ -187,7 +187,137 @@ void main() {
     expect(tester.getTopLeft(target).dy, inInclusiveRange(60, 250));
   });
 
+  group('a channel opened on an unread boundary', () {
+    final boundary = _channel.copyWith(firstUnreadMessageId: 'm100');
+    final held = List.generate(150, _message);
+    final arrived = [...held, _message(150), _message(151)];
+
+    Future<void> open(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(700, 500));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_host(held, channel: boundary));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('holds still for a reader scrolled up when messages arrive', (
+      tester,
+    ) async {
+      await open(tester);
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      final row = find.byKey(const ValueKey('message-m100'));
+      final top = tester.getTopLeft(row).dy;
+
+      await tester.pumpWidget(_host(arrived, channel: boundary));
+      await tester.pumpAndSettle();
+
+      expect(tester.getTopLeft(row).dy, top);
+    });
+
+    testWidgets('follows new messages for a reader at the end', (tester) async {
+      await open(tester);
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -9000));
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(_host(arrived, channel: boundary));
+      await tester.pumpAndSettle();
+
+      final newest = find.byKey(const ValueKey('message-m151'));
+      expect(newest, findsOneWidget);
+      expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+    });
+
+    testWidgets('follows when the boundary sits next to the end', (
+      tester,
+    ) async {
+      final nearEnd = _channel.copyWith(firstUnreadMessageId: 'm148');
+      await tester.binding.setSurfaceSize(const Size(700, 500));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_host(held, channel: nearEnd));
+      await tester.pumpAndSettle();
+
+      final messages = [...held];
+      for (var index = 150; index < 170; index++) {
+        messages.add(_message(index));
+        await tester.pumpWidget(_host(List.of(messages), channel: nearEnd));
+        await tester.pumpAndSettle();
+
+        final newest = find.byKey(ValueKey('message-${_message(index).id}'));
+        expect(newest, findsOneWidget);
+        expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+      }
+    });
+
+    testWidgets('keeps the rows above it when the boundary is cleared', (
+      tester,
+    ) async {
+      await open(tester);
+      final row = find.byKey(const ValueKey('message-m099'));
+      final top = tester.getTopLeft(row).dy;
+
+      await tester.pumpWidget(_host(held, channel: _channel));
+      await tester.pumpAndSettle();
+
+      expect(tester.getTopLeft(row).dy, top);
+    });
+  });
+
+  testWidgets('a boundary that appears later is no jump', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final held = List.generate(150, _message);
+    await tester.pumpWidget(_host(held));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('message-m135'));
+    final top = tester.getTopLeft(row).dy;
+
+    await tester.pumpWidget(
+      _host([
+        ...held,
+        _message(150),
+      ], channel: _channel.copyWith(firstUnreadMessageId: 'm150')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(row).dy, top);
+  });
+
+  testWidgets('a reader at the end stays there when the newest is deleted', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final messages = List.generate(60, _message);
+    await tester.pumpWidget(_host(messages));
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(_host(messages.sublist(0, 59)));
+    await tester.pumpAndSettle();
+
+    final newest = find.byKey(const ValueKey('message-m058'));
+    expect(newest, findsOneWidget);
+    expect(tester.getBottomLeft(newest).dy, lessThanOrEqualTo(500));
+    expect(find.byKey(const ValueKey('jump-to-present')), findsNothing);
+  });
+
   group('dates', () {
+    testWidgets('a day divider appears when an arriving message starts a day', (
+      tester,
+    ) async {
+      final first = _sentAt('m001', DateTime(2026, 3, 1, 23, 58));
+      await tester.pumpWidget(_host([first]));
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(
+        _host([first, _sentAt('m002', DateTime(2026, 3, 2, 0, 3))]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monday, March 2, 2026'), findsOneWidget);
+    });
+
     testWidgets('a divider sits between messages on different local days', (
       tester,
     ) async {

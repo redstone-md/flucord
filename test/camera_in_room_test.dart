@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/voice_controller.dart';
@@ -222,6 +223,47 @@ void main() {
       expect(room.camera.isOn, isTrue);
       expect(room.encoder.stopped, 0);
     });
+  });
+
+  group('the toolbar', () {
+    testWidgets('fits every control in a narrow window', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpStreamRoom(tester, streamRoomVoiceChannel);
+
+      for (final key in ['voice-mute', 'voice-deafen', 'voice-camera']) {
+        expect(find.byKey(ValueKey(key)).hitTestable(), findsOneWidget);
+      }
+      expect(
+        find.byKey(const ValueKey('voice-disconnect')).hitTestable(),
+        findsOneWidget,
+      );
+    });
+
+    for (final (name, channel) in const [
+      ('a server Room', streamRoomVoiceChannel),
+      ('a call', streamRoomCall),
+    ]) {
+      testWidgets('turns the camera on and off in $name', (tester) async {
+        final room = await pumpStreamRoom(tester, channel);
+        await say(tester, room, VoiceConnectionStatus.ready);
+        final button = find.byKey(const ValueKey('voice-camera'));
+
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+
+        expect(room.cameraTransport.announcements, [true]);
+        expect(find.byTooltip('Turn camera off'), findsOneWidget);
+        expect(find.byIcon(Icons.videocam), findsOneWidget);
+
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+
+        expect(room.cameraTransport.announcements, [true, false]);
+        expect(find.byTooltip('Turn camera on'), findsOneWidget);
+      });
+    }
   });
 }
 

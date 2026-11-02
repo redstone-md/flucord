@@ -46,10 +46,13 @@ import '../../domain/voice_dave.dart';
 import 'discord_desktop_api_client.dart';
 import 'discord_read_state_repository.dart';
 import 'discord_detectable_game_service.dart';
+import 'discord_direct_messages.dart';
+import 'discord_repository_events.dart';
 import 'discord_user_settings_repository.dart';
 import 'discord_desktop_gateway_client.dart';
 import 'discord_direct_call_service.dart';
 import 'discord_gateway_client.dart';
+import 'discord_guild_admin_mapper.dart';
 import 'discord_mapper.dart';
 import 'discord_member_list_handler.dart';
 import 'discord_message_search_service.dart';
@@ -193,8 +196,22 @@ final class DiscordDesktopChatRepository
   late final DiscordDirectCallService _directCalls;
   late final StreamSubscription<SelfPresence> _selfPresenceSubscription;
   String? _currentMemberId;
+  late final DiscordDirectMessages _directMessages = DiscordDirectMessages(
+    _api.createDirectMessageChannel,
+    _cache,
+    _mapper,
+    _events.publish,
+    onChannelAdded: _readState.addPrivateChannel,
+  );
   late final DiscordSharedDispatches _sharedDispatches =
-      DiscordSharedDispatches(_cache, _mapper, () => _currentMemberId, _events);
+      DiscordSharedDispatches(
+        cache: _cache,
+        mapper: _mapper,
+        directMessages: _directMessages,
+        currentMemberId: () => _currentMemberId,
+        rolesOf: _memberLists.rolesOf,
+        events: _events,
+      );
 
   /// Who the session's credential says it is, before Discord has confirmed it.
   /// The offline fallback compares this with the account of the cache.
@@ -514,26 +531,7 @@ final class DiscordDesktopChatRepository
   Future<DirectConversation> openDirectConversation(String recipientId) async {
     final currentUserId = _currentMemberId;
     if (currentUserId == null) throw StateError('Workspace is not loaded');
-    final mapped = _mapper.directMessage(
-      await _api.createDirectMessageChannel(recipientId),
-      currentUserId,
-    );
-    if (mapped == null) {
-      throw const DiscordApiException(
-        statusCode: 502,
-        message: 'Discord returned an invalid direct message channel',
-      );
-    }
-    await _cache.writeSpace(_mapper.directMessagesSpace);
-    await _cache.writeChannel(mapped.channel);
-    await _cache.writeMember(mapped.recipient);
-    _events.add(SpaceUpsertedEvent(_mapper.directMessagesSpace));
-    _events.add(ChannelUpsertedEvent(mapped.channel));
-    _events.add(MemberUpsertedEvent(mapped.recipient));
-    return DirectConversation(
-      channel: mapped.channel,
-      recipient: mapped.recipient,
-    );
+    return _directMessages.open(recipientId, currentUserId);
   }
 
   @override
@@ -578,7 +576,11 @@ final class DiscordDesktopChatRepository
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
     );
-    return _storeMessage(payload);
+    final message = await _storeMessage(payload);
+    // The gateway's copy may come later, and the channel must read as read
+    // from the moment the send returns.
+    _readState.acceptNewMessage(payload);
+    return message;
   }
 
   @override
@@ -808,13 +810,15 @@ final class DiscordDesktopChatRepository
   /// owns what a restart restores and the socket subscription Discord needs
   /// before it will push anything for the guild. The read state the account
   /// already carries for the guild's channels is folded here too: a join must
-  /// show the unreads it had, not a fresh sheet where every channel reads.
+  /// show the unreads it had, not a fresh sheet where every channel reads. A
+  /// guild this session already subscribed has it from READY or the first ask.
   Future<void> _persistGainedGuild(JoinedGuild guild) async {
     await _cache.writeGuild(guild);
-    unawaited(
-      _readState.hydrateReadState(guild.space.id).catchError((Object _) {}),
-    );
-    _gateway.subscribeGuildEvents(guild.space.id);
+    if (_gateway.subscribeGuildEvents(guild.space.id)) {
+      unawaited(
+        _readState.hydrateReadState(guild.space.id).catchError((Object _) {}),
+      );
+    }
   }
 
   /// Removes one left guild from the cache and drops its subscription.

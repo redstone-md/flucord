@@ -266,8 +266,8 @@ final class VoiceController extends ChangeNotifier {
   /// instead of showing "Disconnected" with no reason.
   String? get joinBlockedReason {
     if (_state == VoiceState.failure && _signalingService == null) {
-      return 'Audio devices could not be opened, and this session has no '
-          'Discord voice transport.';
+      return 'Audio devices could not be opened, and this session cannot '
+          'reach Discord voice.';
     }
     if (!hasDiscordSignaling && _signalingServiceProvider() == null) {
       return 'This session cannot reach Discord voice. Sign in with a Discord '

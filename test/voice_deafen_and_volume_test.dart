@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/application/voice_controller.dart';
@@ -95,6 +96,19 @@ void main() {
       expect(harness.audio.playing, isEmpty);
       expect(harness.voice.isDeafened, isTrue);
       expect(harness.signaling.frames.last.selfDeaf, isTrue);
+    });
+
+    testWidgets('the Room still says deafened after it', (tester) async {
+      final harness = await _connectedRoom(tester);
+      await tester.tap(find.byKey(const ValueKey('voice-deafen')));
+      await tester.pumpAndSettle();
+
+      await _reconnect(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Undeafen'), findsOneWidget);
+      expect(find.byIcon(Icons.headset_off), findsOneWidget);
+      expect(find.text('Voice connected, deafened'), findsOneWidget);
     });
 
     testWidgets('undeafening afterwards brings the sound back', (tester) async {
