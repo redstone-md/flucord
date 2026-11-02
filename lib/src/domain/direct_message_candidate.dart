@@ -17,7 +17,6 @@ final class DirectMessageCandidate {
   final String? username;
   final String? avatarUrl;
 
-  /// Whether [lowerCaseQuery] is part of the name or the username.
   bool matches(String lowerCaseQuery) =>
       name.toLowerCase().contains(lowerCaseQuery) ||
       (username?.toLowerCase().contains(lowerCaseQuery) ?? false);

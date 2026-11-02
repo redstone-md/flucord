@@ -383,10 +383,8 @@ final class VoiceController extends ChangeNotifier {
       return;
     }
     // A machine with no working capture device must still be able to walk into
-    // a channel and listen, which is what Discord does. Refusing the join
-    // outright, the old behaviour, left the room showing "Disconnected" with
-    // nothing said about why, and no way to hear anybody. The reason stays in
-    // [deviceError].
+    // a channel and listen, as it can in Discord, so a device error does not
+    // stop the join. The reason stays in [deviceError].
     _error = null;
     await _joinChannel(guildId: guildId, channelId: channelId, isCall: isCall);
   });
