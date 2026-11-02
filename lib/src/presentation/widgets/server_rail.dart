@@ -15,6 +15,7 @@ import 'account_standing_scope.dart';
 import 'remote_identity_image.dart';
 
 import 'accessibility_scope.dart';
+import 'activity_label.dart';
 import 'age_verification_scope.dart';
 import 'keybind_scope.dart';
 import 'mention_badge.dart';
@@ -349,7 +350,12 @@ class _RailButtonState extends State<_RailButton> {
   Widget build(BuildContext context) {
     final active = widget.selected || _hovered;
     final radius = BorderRadius.circular(active ? 14 : 22);
-    final semanticsLabel = _activityLabel(widget.tooltip, widget.activity);
+    final semanticsLabel = activityLabel(
+      widget.tooltip,
+      mentionCount: widget.activity.mentionCount,
+      muted: widget.activity.muted,
+      unread: widget.activity.hasUnread,
+    );
     return Semantics(
       key: ValueKey('space-semantics-${widget.spaceId}'),
       label: semanticsLabel,
@@ -436,14 +442,5 @@ class _RailButtonState extends State<_RailButton> {
         ),
       ),
     );
-  }
-
-  static String _activityLabel(String name, SpaceActivity activity) {
-    if (activity.mentionCount == 1) return '$name, 1 mention';
-    if (activity.mentionCount > 1) {
-      return '$name, ${activity.mentionCount} mentions';
-    }
-    if (activity.muted) return '$name, muted';
-    return activity.hasUnread ? '$name, unread' : name;
   }
 }
