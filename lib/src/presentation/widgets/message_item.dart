@@ -160,7 +160,6 @@ class _MessageItemState extends State<MessageItem> {
 
   @override
   Widget build(BuildContext context) {
-    final time = MessageTimestamp.of(context, widget.message.sentAt);
     // The account's density answer, read in the row rather than threaded
     // through constructors: a change from another device tightens the list
     // without anybody rebuilding it by hand.
@@ -198,8 +197,8 @@ class _MessageItemState extends State<MessageItem> {
                     child: widget.grouped
                         ? Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              time,
+                            child: MessageTimeLabel(
+                              widget.message.sentAt,
                               style: TextStyle(
                                 color: context.surfaces.muted,
                                 fontSize: 9,
@@ -215,7 +214,7 @@ class _MessageItemState extends State<MessageItem> {
                           ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: _content(context, time)),
+                  Expanded(child: _content(context)),
                 ],
               ),
             ),
@@ -227,13 +226,13 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
-  Widget _content(BuildContext context, String time) {
+  Widget _content(BuildContext context) {
     final message = widget.message;
     final display = UserSettingsScope.displayOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!widget.grouped) _authorLine(context, time),
+        if (!widget.grouped) _authorLine(context),
         if (message.reply case final reply?) _replyLine(context, reply),
         if (_editing)
           _editField(context)
@@ -331,7 +330,7 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
-  Widget _authorLine(BuildContext context, String time) => Padding(
+  Widget _authorLine(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 3),
     child: Row(
       children: [
@@ -340,8 +339,8 @@ class _MessageItemState extends State<MessageItem> {
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
         const SizedBox(width: 8),
-        Text(
-          time,
+        MessageTimeLabel(
+          widget.message.sentAt,
           style: TextStyle(color: context.surfaces.muted, fontSize: 10),
         ),
         // The flags a reader cannot guess from the text: why nothing
