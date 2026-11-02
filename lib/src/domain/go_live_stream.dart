@@ -156,7 +156,8 @@ abstract interface class GoLiveRepository {
   /// Streams this session knows about, keyed by their string form.
   Map<String, GoLiveStream> get streams;
 
-  /// Fires whenever any stream changes.
+  /// Fires whenever any stream changes. An update for a stream [streams] no
+  /// longer holds says it was deleted.
   Stream<GoLiveStream> get updates;
 
   /// Fires when Discord hands out an RTC endpoint for a stream.

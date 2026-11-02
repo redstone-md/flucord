@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flucord/src/app_bootstrap.dart';
@@ -9,15 +11,22 @@ import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/go_live_self_preview.dart';
 import 'package:flucord/src/application/room_focus.dart';
+import 'package:flucord/src/application/self_video_controller.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
-import 'package:flucord/src/data/noop_voice_media_service.dart';
+import 'package:flucord/src/application/voice_room_coordination.dart';
+import 'package:flucord/src/data/discord/discord_go_live_service.dart';
+import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
+import 'package:flucord/src/data/soloud_voice_playback_service.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/video_decoder.dart';
+import 'package:flucord/src/domain/video_encoder.dart';
+import 'package:flucord/src/domain/voice_audio.dart';
 import 'package:flucord/src/domain/voice_call.dart';
 import 'package:flucord/src/domain/voice_connection.dart';
+import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
 import 'pane_harness.dart';
@@ -40,9 +49,11 @@ final class StreamRoomHarness {
     this.selfPreviewOpens = true,
   }) {
     voice = VoiceController(
-      const NoopVoiceMediaService(),
+      media,
       signalingServiceProvider: () => signaling,
       callServiceProvider: () => callService,
+      playbackService: SoLoudVoicePlaybackService(player: audio),
+      streamAudio: receivedAudio.stream,
     );
     calls = DirectCallController(
       serviceProvider: () => callService,
@@ -52,9 +63,17 @@ final class StreamRoomHarness {
       repositoryProvider: () => repository,
       decoderFactory: StreamRoomDecoder.new,
     );
+    final capture = VideoCaptureHub(encoder: encoder);
+    camera = SelfVideoController(
+      capture: capture,
+      transportProvider: () => cameraTransport,
+      sinkProvider: () => cameraTransport.send,
+      isVoiceReady: () => voice.connectionStatus == VoiceConnectionStatus.ready,
+      announceSelfVideo: ({required bool enabled}) async => true,
+    );
     goLive = GoLiveController(
       repositoryProvider: () => repository,
-      capture: VideoCaptureHub(encoder: FakeVideoEncoder(cameras: const [])),
+      capture: capture,
       selfPreview: GoLiveSelfPreview(
         decoderFactory: () => selfPreviewDecoder = StreamRoomDecoder(
           failStart: !selfPreviewOpens,
@@ -62,6 +81,16 @@ final class StreamRoomHarness {
       ),
     )..reconcile();
     composition = AppComposition(AppBootstrap.demo());
+    coordination = VoiceRoomCoordination(
+      voice: voice,
+      remoteCameras: composition.remoteCameras,
+      overlay: composition.voiceOverlay,
+      streamerMode: composition.streamerMode,
+      goLive: goLive,
+      streamViewer: viewer,
+      selfVideo: camera,
+      focus: composition.roomFocus,
+    );
     composition.workspace
       ..reconcile(streamRoomWorkspace)
       ..selectChannel(channel.id);
@@ -91,14 +120,29 @@ final class StreamRoomHarness {
 
   /// The decoder the running share's preview was opened on.
   late StreamRoomDecoder selfPreviewDecoder;
+  final StreamRoomMedia media = StreamRoomMedia();
   final StreamRoomSignaling signaling = StreamRoomSignaling();
   final StreamRoomCallService callService = StreamRoomCallService();
   final StreamRoomStreamRepository repository = StreamRoomStreamRepository();
+
+  /// The machine's one capture, shared by the share and the camera.
+  final FakeVideoEncoder encoder = FakeVideoEncoder();
+  final StreamRoomCameraTransport cameraTransport = StreamRoomCameraTransport();
+
+  /// What this machine is playing: the real playback service runs over it.
+  final StreamRoomAudioEngine audio = StreamRoomAudioEngine();
+
+  /// Decoded sound reaching the room: voice under the person's id, a watched
+  /// stream under its key.
+  final StreamController<VoiceRemotePcmFrame> receivedAudio =
+      StreamController.broadcast();
   late final VoiceController voice;
   late final DirectCallController calls;
   late final StreamViewerController viewer;
   late final GoLiveController goLive;
+  late final SelfVideoController camera;
   late final AppComposition composition;
+  late final VoiceRoomCoordination coordination;
 
   /// Whose tile is on the stage, as the pane reads it.
   RoomFocus get focus => composition.roomFocus;
@@ -125,11 +169,15 @@ final class StreamRoomHarness {
   );
 
   void dispose() {
+    coordination.dispose();
     composition.dispose();
+    camera.dispose();
     goLive.dispose();
     viewer.dispose();
     calls.dispose();
     voice.dispose();
+    unawaited(repository.close());
+    unawaited(receivedAudio.close());
   }
 }
 
@@ -224,11 +272,63 @@ final streamRoomWorkspace = ChatWorkspace(
   currentMemberId: 'me',
 );
 
+/// The machine's audio devices: whether the microphone is live, and a way to
+/// keep them opening for as long as a test needs.
+final class StreamRoomMedia implements VoiceMediaService {
+  bool microphoneOn = false;
+
+  /// While set, opening the devices waits on it.
+  Completer<void>? hold;
+
+  @override
+  Stream<VoicePcmChunk> get microphonePcm => const Stream.empty();
+
+  @override
+  Future<void> initialize() async => hold?.future;
+
+  @override
+  Future<List<VoiceDevice>> enumerateDevices() async => const [];
+
+  @override
+  Future<void> selectAudioOutput(String deviceId) async {}
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async =>
+      microphoneOn = enabled;
+
+  @override
+  Future<void> startMicrophone(String? deviceId) async => microphoneOn = true;
+
+  @override
+  Future<void> stopMicrophone() async => microphoneOn = false;
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// One voice state the room sent. A null [channelId] is a leave.
+typedef StreamRoomVoiceFrame = ({
+  String? channelId,
+  bool selfMute,
+  bool selfDeaf,
+  bool selfVideo,
+});
+
 final class StreamRoomSignaling implements VoiceSignalingService {
   final StreamController<VoiceSignalingEvent> _events =
       StreamController.broadcast();
 
   Map<String, List<VoiceParticipantStateEvent>> seated = const {};
+
+  /// What the voice connection says next.
+  void emit(VoiceSignalingEvent event) => _events.add(event);
+
+  /// Every voice state sent, in order.
+  final List<StreamRoomVoiceFrame> frames = [];
+
+  /// While set, a join or a leave stays in flight after its frame goes out,
+  /// which is how a test holds a voice action open.
+  Completer<void>? hold;
 
   @override
   Stream<VoiceSignalingEvent> get voiceEvents => _events.stream;
@@ -252,10 +352,26 @@ final class StreamRoomSignaling implements VoiceSignalingService {
     bool selfMute = false,
     bool selfDeaf = false,
     bool selfVideo = false,
-  }) async {}
+  }) async {
+    frames.add((
+      channelId: channelId,
+      selfMute: selfMute,
+      selfDeaf: selfDeaf,
+      selfVideo: selfVideo,
+    ));
+    await hold?.future;
+  }
 
   @override
-  Future<void> leaveVoiceChannel(String guildId) async {}
+  Future<void> leaveVoiceChannel(String guildId) async {
+    frames.add((
+      channelId: null,
+      selfMute: false,
+      selfDeaf: false,
+      selfVideo: false,
+    ));
+    await hold?.future;
+  }
 }
 
 final class StreamRoomCallService implements DirectCallService {
@@ -297,20 +413,31 @@ final class StreamRoomCallService implements DirectCallService {
   Future<void> leaveCall(String channelId) async {}
 }
 
+/// Records what the room asked for, over the real fold of Discord's stream
+/// dispatches, so a test sends in what Discord sends.
 final class StreamRoomStreamRepository implements GoLiveRepository {
+  final DiscordGoLiveService _service = DiscordGoLiveService(
+    const _StreamRoomGateway(),
+  );
   final List<GoLiveStreamKey> watched = [];
   final List<GoLiveStreamKey> ended = [];
   final List<String> startedChannels = [];
   final List<String?> startedGuildIds = [];
 
-  @override
-  Map<String, GoLiveStream> get streams => const {};
+  /// A raw gateway dispatch, as Discord would send it.
+  void dispatch(String eventName, Map<String, Object?> data) =>
+      _service.accept(eventName, data);
+
+  Future<void> close() => _service.close();
 
   @override
-  Stream<GoLiveStream> get updates => const Stream.empty();
+  Map<String, GoLiveStream> get streams => _service.streams;
 
   @override
-  Stream<GoLiveServer> get servers => const Stream.empty();
+  Stream<GoLiveStream> get updates => _service.updates;
+
+  @override
+  Stream<GoLiveServer> get servers => _service.servers;
 
   /// Echoes the key the create frame asked for, so what a test reads back as
   /// ended is what the room asked to start. Hardcoding one here made the stop
@@ -320,16 +447,10 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
     required String channelId,
     String? guildId,
     String? preferredRegion,
-  }) async {
+  }) {
     startedChannels.add(channelId);
     startedGuildIds.add(guildId);
-    return guildId == null
-        ? GoLiveStreamKey.call(channelId: channelId, userId: 'me')
-        : GoLiveStreamKey.guild(
-            guildId: guildId,
-            channelId: channelId,
-            userId: 'me',
-          );
+    return _service.startStream(channelId: channelId, guildId: guildId);
   }
 
   @override
@@ -342,10 +463,145 @@ final class StreamRoomStreamRepository implements GoLiveRepository {
   Future<void> setPaused(GoLiveStreamKey key, {required bool paused}) async {}
 
   @override
-  Future<void> endStream(GoLiveStreamKey key) async => ended.add(key);
+  Future<void> endStream(GoLiveStreamKey key) {
+    ended.add(key);
+    return _service.endStream(key);
+  }
 
   @override
   Future<void> stopWatching(GoLiveStreamKey key) async {}
+}
+
+/// The frames the repository sends. [StreamRoomStreamRepository] records what
+/// was asked for one level up, so nothing here needs to.
+final class _StreamRoomGateway implements DiscordGoLiveGateway {
+  const _StreamRoomGateway();
+
+  @override
+  String? get currentUserId => 'me';
+
+  @override
+  void sendStreamCreate({
+    required String type,
+    required String channelId,
+    String? guildId,
+    String? preferredRegion,
+  }) {}
+
+  @override
+  void sendStreamDelete(String streamKey) {}
+
+  @override
+  void sendStreamWatch(String streamKey) {}
+
+  @override
+  void sendStreamPing(String streamKey) {}
+
+  @override
+  void sendStreamSetPaused(String streamKey, {required bool paused}) {}
+}
+
+/// One sound the machine is playing, at the level it is heard.
+final class StreamRoomPlayingSound {
+  StreamRoomPlayingSound(this.source, this.handle);
+
+  final AudioSource source;
+  final SoundHandle handle;
+  double volume = 1;
+}
+
+/// The audio engine with no sound card: it keeps what is playing and how loud.
+final class StreamRoomAudioEngine extends Fake implements SoLoud {
+  final List<StreamRoomPlayingSound> playing = [];
+  int _nextHandle = 1;
+
+  @override
+  Future<void> init({
+    PlaybackDevice? device,
+    bool automaticCleanup = false,
+    int sampleRate = 44100,
+    int bufferSize = 2048,
+    Channels channels = Channels.stereo,
+    bool lowLatency = true,
+    AndroidAAudioAttributes androidAAudioAttributes =
+        AndroidAAudioAttributes.mediaMusic,
+  }) async {}
+
+  @override
+  List<PlaybackDevice> listPlaybackDevices() => const [];
+
+  @override
+  AudioSource setBufferStream({
+    int? maxBufferSizeBytes,
+    Duration? maxBufferSizeDuration,
+    BufferingType bufferingType = BufferingType.preserved,
+    double bufferingTimeNeeds = 2,
+    int sampleRate = 24000,
+    Channels channels = Channels.mono,
+    BufferType format = BufferType.s16le,
+    void Function(bool isBuffering, int handle, double time)? onBuffering,
+    void Function(AudioMetadata)? onMetadata,
+  }) => _StreamRoomAudioSource();
+
+  @override
+  SoundHandle play(
+    AudioSource sound, {
+    int busId = 0,
+    double volume = 1,
+    double pan = 0,
+    bool paused = false,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+  }) {
+    final handle = SoundHandle(_nextHandle++);
+    playing.add(StreamRoomPlayingSound(sound, handle));
+    return handle;
+  }
+
+  @override
+  Duration getStreamTimeConsumed(AudioSource sound) => Duration.zero;
+
+  @override
+  void addAudioDataStream(AudioSource source, Uint8List audioChunk) {}
+
+  @override
+  void setPause(SoundHandle handle, bool pause) {}
+
+  @override
+  void setInaudibleBehavior(SoundHandle handle, bool mustTick, bool kill) {}
+
+  @override
+  void setVolume(SoundHandle handle, double volume) =>
+      playing.firstWhere((sound) => sound.handle == handle).volume = volume;
+
+  @override
+  Future<void> disposeSource(AudioSource source) async =>
+      playing.removeWhere((sound) => identical(sound.source, source));
+
+  @override
+  void deinit() => playing.clear();
+}
+
+/// A sound the engine knows by identity alone.
+final class _StreamRoomAudioSource extends Fake implements AudioSource {}
+
+/// The voice side of the camera: declares SSRCs, takes pictures.
+final class StreamRoomCameraTransport implements VoiceVideoTransport {
+  final List<bool> announcements = [];
+
+  @override
+  int? get audioSsrc => 40;
+
+  int send(DiscordRtpFrame frame) => frame.payload.length;
+
+  @override
+  bool announceVideo({
+    required bool enabled,
+    required VideoEncoderSettings settings,
+  }) {
+    announcements.add(enabled);
+    return true;
+  }
 }
 
 final class StreamRoomDecoder implements VideoDecoderService {

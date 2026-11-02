@@ -178,7 +178,12 @@ final class VoiceController extends ChangeNotifier {
   /// long enough to ride over those and a lost packet, short enough that the
   /// ring goes out with the voice.
   static const Duration speakingHangover = Duration(milliseconds: 250);
-  bool _isBusy = false;
+
+  /// How many voice actions are running or waiting their turn.
+  int _pendingActions = 0;
+
+  /// The end of the last voice action asked for. See [_enqueue].
+  Future<void> _actionTail = Future<void>.value();
   bool _disposed = false;
 
   /// How many 20 ms frames wait while playback is off. Ten is the jitter a
@@ -291,7 +296,7 @@ final class VoiceController extends ChangeNotifier {
   /// whole-state frame: the flag has to be replayed with every mute toggle and
   /// every reconnect, and the thing that replays those is this.
   bool get isCameraOn => _isCameraOn;
-  bool get isBusy => _isBusy;
+  bool get isBusy => _pendingActions > 0;
 
   Future<void> initialize() async {
     // A previous failure is tried again rather than remembered forever. Audio
@@ -332,12 +337,13 @@ final class VoiceController extends ChangeNotifier {
   /// Its own entry point so a surface can offer the retry: walking out of the
   /// channel and back in is not an obvious way to ask for one, and it is what
   /// somebody had to do before.
-  Future<void> retryDevices() async {
-    if (_state == VoiceState.loading) return;
+  Future<void> retryDevices() => _enqueue(() async {
+    // A second press waits behind the first, and has nothing left to retry.
+    if (_state != VoiceState.failure) return;
     _state = VoiceState.idle;
     _deviceError = null;
     await initialize();
-  }
+  });
 
   String? _firstDeviceId(VoiceDeviceKind kind) {
     for (final device in _devices) {
@@ -361,7 +367,7 @@ final class VoiceController extends ChangeNotifier {
     required String? guildId,
     required String channelId,
     required bool isCall,
-  }) async {
+  }) => _enqueue(() async {
     await initialize();
     if (_connectedGuildId == guildId &&
         _connectedChannelId == channelId &&
@@ -370,54 +376,61 @@ final class VoiceController extends ChangeNotifier {
     }
     // A machine with no working capture device must still be able to walk into
     // a channel and listen, which is what Discord does. Refusing the join
-    // outright — the old behaviour — left the room showing "Disconnected" with
-    // nothing said about why, and no way to hear anybody.
-    if (_state == VoiceState.loading) return;
-    await _run(() async {
-      final signalingService = _signalingServiceProvider();
-      await _bindSignaling(signalingService);
-      // Walking between two channels of one guild is a move on the same
-      // connection, so only a different session is torn down first. A call is
-      // its own session, keyed by channel, and always is.
-      final movedSession =
-          _isCallSession != isCall ||
-          (isCall
-              ? _connectedChannelId != channelId
-              : _connectedGuildId != guildId);
-      if (movedSession) await _leaveActiveSession();
-      if (_connectedChannelId == null) {
-        // Failing to open the microphone must not abort the join: the room is
-        // still worth being in to listen. The reason is kept so the room can
-        // say the uplink is off rather than leaving a silent mic looking fine.
-        try {
-          await _mediaService.startMicrophone(_selectedInputId);
-          await _mediaService.setMicrophoneEnabled(!_isMuted);
-          _microphoneError = null;
-        } on Object catch (error) {
-          _microphoneError = error;
-        }
+    // outright, the old behaviour, left the room showing "Disconnected" with
+    // nothing said about why, and no way to hear anybody. The reason stays in
+    // [deviceError].
+    _error = null;
+    await _joinChannel(guildId: guildId, channelId: channelId, isCall: isCall);
+  });
+
+  Future<void> _joinChannel({
+    required String? guildId,
+    required String channelId,
+    required bool isCall,
+  }) async {
+    final signalingService = _signalingServiceProvider();
+    await _bindSignaling(signalingService);
+    // Walking between two channels of one guild is a move on the same
+    // connection, so only a different session is torn down first. A call is
+    // its own session, keyed by channel, and always is.
+    final movedSession =
+        _isCallSession != isCall ||
+        (isCall
+            ? _connectedChannelId != channelId
+            : _connectedGuildId != guildId);
+    if (movedSession) await _leaveActiveSession();
+    if (_connectedChannelId == null) {
+      // Failing to open the microphone must not abort the join: the room is
+      // still worth being in to listen. The reason is kept so the room can
+      // say the uplink is off rather than leaving a silent mic looking fine.
+      try {
+        await _mediaService.startMicrophone(_selectedInputId);
+        await _mediaService.setMicrophoneEnabled(!_isMuted);
+        _microphoneError = null;
+      } on Object catch (error) {
+        _microphoneError = error;
       }
-      _connectedGuildId = guildId;
-      _connectedChannelId = channelId;
-      _isCallSession = isCall;
-      _participants.clear();
-      _transportSession = null;
-      await _audioPipeline?.setEnabled(false);
-      await _setPlaybackEnabled(false);
-      // Only a session that is actually being established says "joining". A
-      // transport already up for this channel — a rebind, or a second call
-      // into the same room — keeps what it has, or the room announces a
-      // connection it never lost.
-      if (movedSession ||
-          signalingService?.currentStatus != VoiceConnectionStatus.ready) {
-        _connectionStatus = VoiceConnectionStatus.joining;
-        _logStatus('joining', _connectionStatus);
-      }
-      if (!await _sendJoin()) {
-        _connectionStatus = VoiceConnectionStatus.disconnected;
-        _logStatus('join not sent', _connectionStatus);
-      }
-    });
+    }
+    _connectedGuildId = guildId;
+    _connectedChannelId = channelId;
+    _isCallSession = isCall;
+    _participants.clear();
+    _transportSession = null;
+    await _audioPipeline?.setEnabled(false);
+    await _setPlaybackEnabled(false);
+    // Only a session that is actually being established says "joining". A
+    // transport already up for this channel, a rebind or a second call into
+    // the same room, keeps what it has, or the room announces a connection it
+    // never lost.
+    if (movedSession ||
+        signalingService?.currentStatus != VoiceConnectionStatus.ready) {
+      _connectionStatus = VoiceConnectionStatus.joining;
+      _logStatus('joining', _connectionStatus);
+    }
+    if (!await _sendJoin()) {
+      _connectionStatus = VoiceConnectionStatus.disconnected;
+      _logStatus('join not sent', _connectionStatus);
+    }
   }
 
   /// Sets the camera flag and re-announces the session with it.
@@ -426,13 +439,21 @@ final class VoiceController extends ChangeNotifier {
   /// connected is refused rather than remembered: the flag would then be
   /// replayed into whatever channel is joined next.
   Future<bool> setCameraAnnounced({required bool enabled}) async {
-    if (_connectedChannelId == null) return false;
-    if (_isCameraOn == enabled) return true;
-    _isCameraOn = enabled;
-    final sent = await _sendJoin();
-    if (!sent) _isCameraOn = !enabled;
-    if (!_disposed) notifyListeners();
-    return sent;
+    var told = false;
+    await _enqueue(() async {
+      if (_connectedChannelId == null) return;
+      if (_isCameraOn == enabled) {
+        told = true;
+        return;
+      }
+      _isCameraOn = enabled;
+      try {
+        told = await _sendJoin();
+      } finally {
+        if (!told) _isCameraOn = !enabled;
+      }
+    });
+    return told;
   }
 
   /// Re-announces the current session, returning whether anything was sent.
@@ -479,9 +500,11 @@ final class VoiceController extends ChangeNotifier {
   }
 
   Future<void> refreshSignalingService() async {
-    final service = _signalingServiceProvider();
-    if (identical(service, _signalingService)) return;
+    if (identical(_signalingServiceProvider(), _signalingService)) return;
     await _run(() async {
+      // Read again on its turn: the session may have changed while it waited.
+      final service = _signalingServiceProvider();
+      if (identical(service, _signalingService)) return;
       await _bindSignaling(service);
       if (service == null || _connectedChannelId == null) return;
       if (service.currentStatus != VoiceConnectionStatus.ready) {
@@ -689,24 +712,74 @@ final class VoiceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _run(Future<void> Function() action) async {
-    if (_isBusy) return;
-    _isBusy = true;
+  /// Runs voice actions one at a time, in the order they were asked for.
+  ///
+  /// This is the one place that decides when an action runs. An action is
+  /// never thrown away because another is busy: that is how a released push to
+  /// talk key left the microphone open and a Leave was lost. For the queue to
+  /// hold:
+  ///
+  /// - An action must not wait on another action, or the queue stops for good.
+  /// - It reads the state when its turn comes, not when it was asked for, so
+  ///   any check on the room belongs inside it.
+  /// - A choice the user made is stored before queueing, as with [isMuted], so
+  ///   the screen shows it at once and every action sends the newest flags.
+  ///
+  /// A failure is kept in [error], and the actions behind it still run.
+  Future<void> _enqueue(Future<void> Function() action) {
+    _pendingActions++;
+    _notify();
+    return _actionTail = _actionTail.then((_) async {
+      if (_disposed) return;
+      try {
+        await action();
+      } on Object catch (error) {
+        _error = error;
+      } finally {
+        _pendingActions--;
+        _notify();
+      }
+    });
+  }
+
+  /// An action the user asked for just now, which replaces any old error.
+  Future<void> _run(Future<void> Function() action) {
     _error = null;
-    notifyListeners();
-    try {
-      await action();
-    } catch (error) {
-      _error = error;
-    } finally {
-      _isBusy = false;
-      if (!_disposed) notifyListeners();
+    return _enqueue(action);
+  }
+
+  /// Changes the voice flags, then puts them into effect on its turn.
+  ///
+  /// In a Room the choice is stored at once. With no Room yet, a join may be
+  /// ahead in the queue, so the choice waits and counts only if the join got
+  /// there. With no Room and nothing queued there is nothing to change: the
+  /// flag would be carried into whatever channel is joined next.
+  Future<void> _changeFlags(
+    void Function() change,
+    Future<void> Function() apply,
+  ) async {
+    if (isConnected) {
+      change();
+      await _run(() async {
+        if (isConnected) await apply();
+      });
+    } else if (isBusy) {
+      await _run(() async {
+        if (!isConnected) return;
+        change();
+        await apply();
+      });
     }
   }
 
-  Future<void> _setPlaybackEnabled(bool enabled) async {
+  /// Turns playback on or off. A deafened participant never has it on.
+  ///
+  /// The flag is read here and not by each caller: on transport ready the
+  /// microphone opens first, and a press of deafen can land while it does.
+  Future<void> _setPlaybackEnabled(bool wanted) async {
     final playbackService = _playbackService;
     if (playbackService == null) return;
+    final enabled = wanted && !_isDeafened;
     if (!enabled) {
       _isAudioPlaybackActive = false;
       _pendingPcmFrames.clear();
