@@ -6,6 +6,7 @@ import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/unicode_emoji.dart';
 import '../../theme/flucord_theme.dart';
+import 'accessibility_dials.dart';
 import 'remote_identity_image.dart';
 import 'user_settings_scope.dart';
 
@@ -272,7 +273,7 @@ class _EmojiPickerPanelState extends State<EmojiPickerPanel> {
     return SizedBox(
       key: const ValueKey('emoji-picker'),
       width: 360,
-      height: 420,
+      height: heightWithinWindow(context, 420),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

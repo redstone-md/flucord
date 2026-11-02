@@ -79,7 +79,7 @@ void main() {
   });
 
   testWidgets('the read-only notice fits a compact window', (tester) async {
-    await _pumpShell(tester, size: const Size(700, 620));
+    await _pumpShell(tester, size: const Size(620, 620));
     await tester.tap(find.byTooltip('Choose channel'));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('announcements').last);
