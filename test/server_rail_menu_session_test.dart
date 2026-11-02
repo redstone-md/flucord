@@ -82,10 +82,7 @@ void main() {
         (request) => request.method == 'PATCH',
       );
       expect(change.uri.path, '/api/v9/users/@me/guilds/settings');
-      expect(
-        (change.json! as Map)['guilds'],
-        contains(SessionHarness.guildId),
-      );
+      expect((change.json! as Map)['guilds'], contains(SessionHarness.guildId));
     },
     platform: TargetPlatform.windows,
   );

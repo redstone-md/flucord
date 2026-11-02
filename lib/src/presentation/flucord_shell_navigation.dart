@@ -272,7 +272,8 @@ extension _FlucordShellNavigation on FlucordShell {
     final administration = WorkspacePermissions(
       workspace,
     ).administrationOf(spaceId);
-    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
     final at = RelativeRect.fromRect(
       position & Size.zero,
       Offset.zero & overlay.size,
@@ -584,9 +585,18 @@ extension _FlucordShellNavigation on FlucordShell {
   }
 
   Future<void> _openDirectMessage(BuildContext context) async {
+    final workspace = chatController.workspace;
+    if (workspace == null) return;
     final recipientId = await showDialog<String>(
       context: context,
-      builder: (_) => const DirectMessageDialog(),
+      builder: (_) => DirectMessageDialog(
+        people: DirectMessageCandidate.from(
+          members: workspace.members,
+          currentMemberId: workspace.currentMemberId,
+          relationships:
+              chatController.relationships?.relationships ?? const [],
+        ),
+      ),
     );
     if (recipientId == null || !context.mounted) return;
     await _openDirectConversation(context, recipientId);

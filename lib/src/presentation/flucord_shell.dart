@@ -6,6 +6,7 @@ import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/friends_controller.dart';
+import '../domain/direct_message_candidate.dart';
 import '../application/guild_member_admin_controller.dart';
 import '../application/guild_member_list_controller.dart';
 import '../application/member_profile_controller.dart';

@@ -82,19 +82,18 @@ void main() {
       expect(_authorColor(tester, session), _adminColor);
     }, ready: _readyWithRoles());
 
-    testSession(
-      'takes the highest role that has a colour',
-      (tester, session) async {
-        await _messageFromAuthorWithRoles(session, [
-          _lowRole,
-          _plainRole,
-          _adminRole,
-        ]);
+    testSession('takes the highest role that has a colour', (
+      tester,
+      session,
+    ) async {
+      await _messageFromAuthorWithRoles(session, [
+        _lowRole,
+        _plainRole,
+        _adminRole,
+      ]);
 
-        expect(_authorColor(tester, session), _adminColor);
-      },
-      ready: _readyWithRoles(),
-    );
+      expect(_authorColor(tester, session), _adminColor);
+    }, ready: _readyWithRoles());
 
     testSession(
       'keeps the normal text colour with no coloured role',
@@ -111,9 +110,7 @@ void main() {
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
 
-        final asked = session.socket.frames.where(
-          (frame) => frame['op'] == 8,
-        );
+        final asked = session.socket.frames.where((frame) => frame['op'] == 8);
         expect(asked, hasLength(1));
         expect((asked.single['d']! as Map)['user_ids'], [
           SessionHarness.friendId,
@@ -175,7 +172,9 @@ void main() {
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
         await tester.tap(
-          find.byKey(const ValueKey('channel-${SessionHarness.otherChannelId}')),
+          find.byKey(
+            const ValueKey('channel-${SessionHarness.otherChannelId}'),
+          ),
         );
         await session.settle();
         await tester.tap(
@@ -237,10 +236,7 @@ void main() {
         await session.dispatch('MESSAGE_CREATE', replyQuoting('the question'));
 
         await tester.tap(
-          find.descendant(
-            of: session.messageRow(replyId),
-            matching: preview,
-          ),
+          find.descendant(of: session.messageRow(replyId), matching: preview),
         );
         await session.settle();
 
@@ -289,25 +285,24 @@ void main() {
       ready: _readyWithRoles(),
     );
 
-    testSession(
-      'draws the replied author in their role colour',
-      (tester, session) async {
-        await _messageFromAuthorWithRoles(session, [_adminRole]);
-        await session.dispatch('MESSAGE_CREATE', replyQuoting('the question'));
+    testSession('draws the replied author in their role colour', (
+      tester,
+      session,
+    ) async {
+      await _messageFromAuthorWithRoles(session, [_adminRole]);
+      await session.dispatch('MESSAGE_CREATE', replyQuoting('the question'));
 
-        final name = tester.widget<Text>(
-          find.descendant(
-            of: find.descendant(
-              of: session.messageRow(replyId),
-              matching: preview,
-            ),
-            matching: find.text('user-${SessionHarness.friendId}'),
+      final name = tester.widget<Text>(
+        find.descendant(
+          of: find.descendant(
+            of: session.messageRow(replyId),
+            matching: preview,
           ),
-        );
-        expect(name.style?.color, _adminColor);
-      },
-      ready: _readyWithRoles(),
-    );
+          matching: find.text('user-${SessionHarness.friendId}'),
+        ),
+      );
+      expect(name.style?.color, _adminColor);
+    }, ready: _readyWithRoles());
   });
 
   group('clicking an author', () {
