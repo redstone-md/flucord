@@ -114,6 +114,14 @@ final class _Wiring {
   late final StreamViewerController viewer;
   late final DiscordStreamRtcService service;
   late final StreamRouter router;
+  StreamSubscription<DecodedVideoFrame>? _tile;
+
+  /// What a tile does: listens for [key]'s pictures, which is what opens the
+  /// session's decoder.
+  void draw(GoLiveStreamKey key) {
+    unawaited(_tile?.cancel());
+    _tile = viewer.framesFor(key).listen(null);
+  }
 
   /// Emits one small picture, as the capture would.
   void emitFrame() => encoder.emit(
@@ -242,6 +250,8 @@ void main() {
     receiving.announce(const VoiceTransportReadyEvent(_session));
     await Future<void>.delayed(Duration.zero);
     expect(wiring.viewer.isWatching(_otherKey), isTrue);
+    wiring.draw(_otherKey);
+    await Future<void>.delayed(Duration.zero);
     expect(wiring.decoder.started, 1);
 
     // The window goes away.
@@ -305,6 +315,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(wiring.viewer.watching, _otherKey);
+      wiring.draw(_otherKey);
       // Nobody declared video and nothing was bound: this client is receiving.
       expect(client.announcements, isEmpty);
       expect(client.sentFrames, isEmpty);
@@ -465,6 +476,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(wiring.viewer.watching, _otherKey);
     expect(wiring.viewer.isWatching(_otherKey), isTrue);
+    wiring.draw(_otherKey);
 
     for (final frame in _packetizedUnit()) {
       second.emitVideo(_otherKey.userId, frame);
@@ -507,6 +519,7 @@ void main() {
       second.announce(const VoiceTransportReadyEvent(_session));
       await Future<void>.delayed(Duration.zero);
       expect(wiring.viewer.isWatching(_otherKey), isTrue);
+      wiring.draw(_otherKey);
 
       for (final frame in _packetizedUnit()) {
         second.emitVideo(_otherKey.userId, frame);
@@ -551,6 +564,7 @@ void main() {
       fresh.announce(const VoiceTransportReadyEvent(_session));
       await Future<void>.delayed(Duration.zero);
       expect(wiring.viewer.isWatching(_otherKey), isTrue);
+      wiring.draw(_otherKey);
 
       for (final frame in _packetizedUnit()) {
         fresh.emitVideo(_otherKey.userId, frame);

@@ -16,10 +16,13 @@ import '../monotonic_clock.dart';
 ///
 /// A picture whose slot has already passed is decoded immediately and the
 /// schedule is re-anchored there, so a stall (a window coming back, a network
-/// burst) is caught up rather than replayed slower than real time. A picture
-/// whose slot is unreasonably far ahead is treated the same way: that is what
-/// a sender's clock jumping or drifting ahead of ours looks like, and
-/// queueing for a slot that never comes is what fills the queue.
+/// burst) is caught up rather than replayed slower than real time. Whatever
+/// waits in the queue and is older decodes first: a picture that overtook an
+/// older one would be drawn from references the decoder does not have yet, and
+/// the stream would smear until the next keyframe. A picture whose slot is
+/// unreasonably far ahead is treated the same way: that is what a sender's
+/// clock jumping or drifting ahead of ours looks like, and queueing for a slot
+/// that never comes is what fills the queue.
 final class StreamPicturePacer {
   StreamPicturePacer({
     required void Function(Uint8List unit, int rtpTimestamp) submit,
@@ -94,7 +97,7 @@ final class StreamPicturePacer {
     // in front of pictures the decoder may already hold.
     final last = _lastRtp;
     if (last != null && _rtpDelta(rtpTimestamp, last) < 0) {
-      _decodeNow(unit, rtpTimestamp);
+      _decodeAfterOlder(unit, rtpTimestamp);
       return;
     }
     if (_anchorRtp == null || _anchorWall == null) {
@@ -113,21 +116,12 @@ final class StreamPicturePacer {
       if (!_isKeyframe(unit)) onOverflow?.call();
       return;
     }
-    final now = _now();
-    final lead = _slotFor(rtpTimestamp) - now;
-    if (lead <= Duration.zero) {
-      _decodeNow(unit, rtpTimestamp);
-      return;
-    }
-    if (lead > maxDelay + _maxLeadPastDelay) {
-      // A slot this far out is a clock jump, not a schedule. Whatever waits
-      // is older than this picture and decodes first, then the schedule
-      // starts over from here.
-      for (final picture in _pending) {
-        _submit(picture.unit, picture.rtpTimestamp);
-      }
-      _pending.clear();
-      _anchor(unit, rtpTimestamp, now);
+    final lead = _slotFor(rtpTimestamp) - _now();
+    // A slot that has passed is a stall to catch up on, and a slot this far
+    // out is a clock jump, not a schedule. Either way the schedule starts over
+    // from this picture.
+    if (lead <= Duration.zero || lead > maxDelay + _maxLeadPastDelay) {
+      _decodeAfterOlder(unit, rtpTimestamp);
       return;
     }
     _lastRtp = rtpTimestamp;
@@ -181,7 +175,6 @@ final class StreamPicturePacer {
     // the decode time and add the delay again, so every decoded picture pushed
     // the next one a full maxDelay further out and the drain crawled at a
     // fraction of the stream's pace.
-    _lastRtp = picture.rtpTimestamp;
     _submit(picture.unit, picture.rtpTimestamp);
     _armTimer();
   }
@@ -209,6 +202,18 @@ final class StreamPicturePacer {
 
   void _decodeNow(Uint8List unit, int rtpTimestamp) {
     _anchor(unit, rtpTimestamp, _now());
+  }
+
+  /// Decodes a picture that will not wait for a slot, behind every queued
+  /// picture older than it, so it overtakes nothing it may depend on. Queued
+  /// pictures newer than it stay queued.
+  void _decodeAfterOlder(Uint8List unit, int rtpTimestamp) {
+    while (_pending.isNotEmpty &&
+        _rtpDelta(_pending.first.rtpTimestamp, rtpTimestamp) <= 0) {
+      final picture = _pending.removeAt(0);
+      _submit(picture.unit, picture.rtpTimestamp);
+    }
+    _decodeNow(unit, rtpTimestamp);
   }
 
   /// Re-anchors the schedule at the picture just decoded, so the next one is
