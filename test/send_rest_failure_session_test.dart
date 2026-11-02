@@ -151,6 +151,61 @@ void main() {
     );
     expect(_boxText(tester), 'hello');
   });
+
+  testSession('sending a failed draft again keeps its nonce', (
+    tester,
+    session,
+  ) async {
+    session.transport.on(
+      'POST',
+      _sendPath,
+      (_) => Future.error(Exception('the answer never came')),
+    );
+    await session.openChannel(SessionHarness.channelId);
+
+    await _typeAndSend(tester, session, 'hello');
+    expect(_boxText(tester), 'hello');
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await session.settle();
+
+    _expectSameGuardedNonce(_posted(session, _sendPath), count: 2);
+  });
+
+  testSession('a draft changed after a failure is a new message', (
+    tester,
+    session,
+  ) async {
+    session.transport.on(
+      'POST',
+      _sendPath,
+      (_) => Future.error(Exception('the answer never came')),
+    );
+    await session.openChannel(SessionHarness.channelId);
+
+    await _typeAndSend(tester, session, 'hello');
+    await _typeAndSend(tester, session, 'hello again');
+
+    final nonces = _posted(session, _sendPath).map(_nonce);
+    expect(nonces.toSet(), hasLength(2));
+  });
+
+  testSession('the same words sent again after a success are a new message', (
+    tester,
+    session,
+  ) async {
+    session.transport.on(
+      'POST',
+      _sendPath,
+      (_) => _sentMessage('ok', SessionHarness.channelId),
+    );
+    await session.openChannel(SessionHarness.channelId);
+
+    await _typeAndSend(tester, session, 'ok');
+    await _typeAndSend(tester, session, 'ok');
+
+    final nonces = _posted(session, _sendPath).map(_nonce);
+    expect(nonces.toSet(), hasLength(2));
+  });
 }
 
 const _htmlPage = '<html><body><h1>Bad gateway</h1></body></html>';
