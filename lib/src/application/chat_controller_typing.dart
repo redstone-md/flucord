@@ -1,11 +1,22 @@
 part of 'chat_controller.dart';
 
+/// Announces that who is typing in the active channel changed.
+final class _TypingSignal extends ChangeNotifier {
+  void announce() => notifyListeners();
+}
+
 /// The typing indicator, both halves of it.
 ///
 /// Kept together because the two are one protocol: what the account announces
 /// is rate limited against the same clock the inbound rows expire on, and
 /// splitting them let the two drift out of step.
 extension ChatControllerTyping on ChatController {
+  /// Fires when [typingMembersFor] changes for the active channel, and for no
+  /// other channel. Typing does not notify the controller itself, so it never
+  /// rebuilds the shell. Opening a channel does notify, so a view that is
+  /// rebuilt then reads the new channel's answer.
+  Listenable get activeChannelTyping => _typingSignal;
+
   /// Who is typing in [channelId], never including the account itself.
   List<Member> typingMembersFor(String channelId) {
     final workspace = _workspace;
@@ -39,14 +50,18 @@ extension ChatControllerTyping on ChatController {
   void _handleTyping(TypingStartedEvent event) {
     if (event.memberId == _workspace?.currentMemberId) return;
     final members = _typingMembers.putIfAbsent(event.channelId, () => {});
-    members.add(event.memberId);
+    if (members.add(event.memberId)) _announceTyping(event.channelId);
     final key = '${event.channelId}:${event.memberId}';
     _typingTimers[key]?.cancel();
     _typingTimers[key] = Timer(const Duration(seconds: 9), () {
       _typingMembers[event.channelId]?.remove(event.memberId);
       _typingTimers.remove(key);
-      if (!_disposed) _notify();
+      _announceTyping(event.channelId);
     });
+  }
+
+  void _announceTyping(String channelId) {
+    if (channelId == _activeChannelId) _typingSignal.announce();
   }
 
   void _clearTyping() {
