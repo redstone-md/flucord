@@ -145,8 +145,8 @@ void _benchAt(int heldMessages) {
     );
   });
 
-  // A new message list drops the per-channel groups, so the next read of any
-  // channel groups the whole list again.
+  // A new message followed by a read of its channel. The name is from when this
+  // read had to group every held message again.
   _report('upsertMessage + messagesFor (regroup)', runs, (run) {
     workspace.upsertMessage(newMessage(run)).messagesFor(activeChannel);
   });

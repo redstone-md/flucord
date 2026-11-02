@@ -16,15 +16,23 @@ mixin _DiscordChatRepositoryMessageMutations implements MessageFlagRepository {
     bool suppressNotifications = false,
     bool textToSpeech = false,
   }) async {
-    final payload = await _api.createMessage(
+    final payload = await _messageNonceFactory.sendDraft(
       channelId: channelId,
-      content: body,
+      body: body,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
-      nonce: _messageNonceFactory.next(),
-      enforceNonce: true,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
+      send: (nonce) => _api.createMessage(
+        channelId: channelId,
+        content: body,
+        attachments: attachments,
+        replyToMessageId: replyToMessageId,
+        nonce: nonce,
+        enforceNonce: true,
+        suppressNotifications: suppressNotifications,
+        textToSpeech: textToSpeech,
+      ),
     );
     final message = _mapper.message(payload, currentMemberId: _currentMemberId);
     await _cache.writeMessage(message);

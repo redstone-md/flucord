@@ -360,7 +360,7 @@ void main() {
         throwsA(isA<DiscordApiException>()),
       );
       final unreadable = _Transport([
-        const DiscordHttpResponse(statusCode: 500, headers: {}, body: '{}'),
+        const DiscordHttpResponse(statusCode: 401, headers: {}, body: '{}'),
       ]);
       await expectLater(
         _repository(unreadable).loadSuspension(),

@@ -161,10 +161,6 @@ final class InboxCatalog {
       ).destinations.where((destination) => destination.channelId != null))
         destination.channelId!: destination.path,
     };
-    final messagesByChannel = <String, List<ChatMessage>>{};
-    for (final message in workspace.messages) {
-      messagesByChannel.putIfAbsent(message.channelId, () => []).add(message);
-    }
 
     final unread =
         workspace.channels
@@ -174,7 +170,7 @@ final class InboxCatalog {
                   (channel.unread || channel.mentionCount > 0),
             )
             .map((channel) {
-              final messages = messagesByChannel[channel.id] ?? const [];
+              final messages = workspace.messagesFor(channel.id);
               return InboxUnreadEntry(
                 target: InboxTarget(
                   spaceId: channel.spaceId,
@@ -196,7 +192,8 @@ final class InboxCatalog {
       for (final channel in workspace.channels) channel.id: channel,
     };
     final mentions =
-        workspace.messages
+        workspace.channels
+            .expand((channel) => workspace.messagesFor(channel.id))
             .map(
               (message) => (message, workspace.memberOrNull(message.authorId)),
             )
@@ -204,7 +201,6 @@ final class InboxCatalog {
               (entry) =>
                   entry.$1.mentionsCurrentMember &&
                   entry.$1.authorId != workspace.currentMemberId &&
-                  channelById.containsKey(entry.$1.channelId) &&
                   entry.$2 != null,
             )
             .map((entry) {

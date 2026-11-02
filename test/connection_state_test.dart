@@ -117,8 +117,9 @@ void main() {
       'a Retry that fails again keeps the reason and the Retry',
       (tester, session) async {
         await tester.tap(find.byKey(_retry));
-        // Frame by frame: the attempt must not flash another failure screen.
-        for (var frame = 0; frame < 24; frame++) {
+        // Frame by frame: the attempt must not flash another failure screen,
+        // for as long as the lookup repeats on the 503.
+        for (var frame = 0; frame < 130; frame++) {
           await tester.runAsync(() => Future<void>.delayed(Duration.zero));
           await tester.pump(const Duration(milliseconds: 25));
           expect(find.text('Workspace did not open'), findsNothing);
@@ -209,8 +210,7 @@ void main() {
         session.remoteAuth.add(
           DiscordRemoteAuthCompleted(DiscordDesktopUserSession(_savedToken)),
         );
-        await session.settle();
-        await session.settle();
+        await session.settleServerErrorRepeats();
 
         expect(find.text(_unreachable), findsOneWidget);
         expect(session.remoteAuth.starts, 1);

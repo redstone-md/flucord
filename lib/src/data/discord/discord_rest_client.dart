@@ -38,10 +38,25 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
 
   static const _defaultTimeout = Duration(seconds: 30);
 
-  /// One request's whole budget: connect, send, response headers and body.
+  /// The slowest upload that still finishes: about 256 kbit/s.
+  static const _slowestUploadBytesPerSecond = 32 * 1024;
+
+  /// One request's budget before its body: connect, response headers and body.
   /// Without it a server that accepts and never answers holds its caller
   /// forever, and a serialized caller holds every request behind it.
   final Duration requestTimeout;
+
+  /// The whole budget of a request that sends [bodyLength] bytes. A body takes
+  /// time to send in proportion to its size, so one fixed limit would fail every
+  /// large upload on a slow connection.
+  Duration _budgetFor(int bodyLength) =>
+      requestTimeout +
+      Duration(
+        microseconds:
+            bodyLength *
+            Duration.microsecondsPerSecond ~/
+            _slowestUploadBytesPerSecond,
+      );
 
   final HttpClient _client;
   final bool _ownsClient;
@@ -70,16 +85,17 @@ final class IoDiscordHttpTransport implements DiscordHttpTransport {
       );
     }
 
+    final budget = _budgetFor(body?.length ?? 0);
     return attempt().timeout(
-      requestTimeout,
+      budget,
       onTimeout: () {
         // The socket is in an unknown state: aborting releases it instead of
         // leaving a half-read connection in the client's pool.
         request?.abort();
         throw TimeoutException(
           'Discord request to ${uri.host} timed out after '
-          '${requestTimeout.inSeconds}s',
-          requestTimeout,
+          '${budget.inSeconds}s',
+          budget,
         );
       },
     );
@@ -128,7 +144,7 @@ final class DiscordApiResponse {
   static final _leadingInteger = RegExp(r'^\s*\d+');
 }
 
-final class DiscordApiException implements Exception {
+base class DiscordApiException implements Exception {
   const DiscordApiException({
     required this.statusCode,
     required this.message,
@@ -144,6 +160,21 @@ final class DiscordApiException implements Exception {
 
   @override
   String toString() => 'Discord API $statusCode: $message';
+}
+
+/// Discord refused the request for now, and the wait is too long to sit through.
+///
+/// Nothing was sent and nothing will be sent later by itself. The caller decides
+/// what to do, which for a message means telling the person.
+final class DiscordRateLimitedException extends DiscordApiException {
+  const DiscordRateLimitedException({
+    required super.message,
+    required this.retryAfter,
+    super.responsePayload,
+  }) : super(statusCode: HttpStatus.tooManyRequests);
+
+  /// How long Discord asked to wait.
+  final Duration retryAfter;
 }
 
 sealed class DiscordRestAuthorization {
@@ -200,6 +231,22 @@ final class DiscordHttpExecutor {
        _delay = delay ?? Future<void>.delayed,
        _baseUri = baseUri ?? Uri.parse('https://discord.com/api/v10');
 
+  static const _maxAttempts = 3;
+
+  /// The longest one request waits between its attempts, in total.
+  ///
+  /// A send holds the composer while it waits, so a wait must stay short enough
+  /// that a person would still call it one send. A longer one is an error.
+  ///
+  /// This assumes `retry_after` means seconds in the JSON body, as Discord
+  /// documents, with the `Retry-After` header as the fallback. What Discord
+  /// really sends in slowmode has not been checked on a live account yet.
+  static const _maxRetryWait = Duration(seconds: 10);
+
+  /// The wait before the first repeat after a server error. It grows with each
+  /// attempt.
+  static const _serverErrorWait = Duration(seconds: 1);
+
   final DiscordHttpTransport _transport;
   final DelayFunction _delay;
   final Uri _baseUri;
@@ -210,12 +257,14 @@ final class DiscordHttpExecutor {
     Map<String, Object?>? query,
     required Map<String, String> headers,
     List<int>? body,
+    bool guardedByNonce = false,
   }) async => (await send(
     method,
     path,
     query: query,
     headers: headers,
     body: body,
+    guardedByNonce: guardedByNonce,
   )).payload;
 
   /// Like [execute], but hands back the status and headers as well.
@@ -223,46 +272,85 @@ final class DiscordHttpExecutor {
   /// [query] takes `String` values, or `List<String>` for a parameter Discord
   /// repeats — `has=image&has=video` — which is how every list-valued search
   /// filter travels.
+  ///
+  /// A server error is repeated, unless it answers a POST. The server may have
+  /// done the work before it failed, and a second POST could create a second
+  /// thing. [guardedByNonce] marks a POST that cannot: its body carries a nonce
+  /// with `enforce_nonce`, so Discord answers a repeat with the first result.
   Future<DiscordApiResponse> send(
     String method,
     String path, {
     Map<String, Object?>? query,
     required Map<String, String> headers,
     List<int>? body,
+    bool guardedByNonce = false,
   }) async {
     final uri = Uri.parse(
       '${_baseUri.toString()}$path',
     ).replace(queryParameters: _queryParameters(query));
-    for (var attempt = 0; attempt < 3; attempt++) {
+    final repeatsServerErrors = method != 'POST' || guardedByNonce;
+    var waited = Duration.zero;
+    for (var attempt = 1; ; attempt++) {
       final response = await _transport.send(
         method: method,
         uri: uri,
         headers: headers,
         body: body,
       );
-      final payload = response.body.isEmpty ? null : jsonDecode(response.body);
-      if (response.statusCode == HttpStatus.tooManyRequests && attempt < 2) {
-        await _delay(_retryAfter(payload, response.headers));
-        continue;
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw DiscordApiException(
-          statusCode: response.statusCode,
-          message: _errorMessage(payload),
-          responsePayload: payload is Map
-              ? Map.unmodifiable(payload.cast<String, Object?>())
-              : null,
+      final status = response.statusCode;
+      if (status >= 200 && status < 300) {
+        return DiscordApiResponse(
+          statusCode: status,
+          headers: response.headers,
+          payload: response.body.isEmpty ? null : jsonDecode(response.body),
         );
       }
-      return DiscordApiResponse(
-        statusCode: response.statusCode,
-        headers: response.headers,
-        payload: payload,
+      final payload = _errorPayload(response.body);
+      final wait = switch (status) {
+        HttpStatus.tooManyRequests => _retryAfter(payload, response.headers),
+        >= 500 when repeatsServerErrors => _serverErrorWait * attempt,
+        _ => null,
+      };
+      if (wait == null ||
+          attempt == _maxAttempts ||
+          waited + wait > _maxRetryWait) {
+        throw _failure(status, payload, wait);
+      }
+      waited += wait;
+      await _delay(wait);
+    }
+  }
+
+  /// The body of a refusal. Proxies and load balancers answer in HTML, so a body
+  /// that is not JSON is expected here and says nothing: the status is the answer.
+  static Object? _errorPayload(String body) {
+    try {
+      return body.isEmpty ? null : jsonDecode(body);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static DiscordApiException _failure(
+    int status,
+    Object? payload,
+    Duration? wait,
+  ) {
+    final message = _errorMessage(payload);
+    final details = payload is Map
+        ? Map<String, Object?>.unmodifiable(payload.cast<String, Object?>())
+        : null;
+    if (status == HttpStatus.tooManyRequests && wait != null) {
+      return DiscordRateLimitedException(
+        message: message,
+        retryAfter: wait,
+        responsePayload: details,
       );
     }
-    throw const DiscordApiException(
-      statusCode: 429,
-      message: 'Rate limit retry budget exhausted',
+    return DiscordApiException(
+      statusCode: status,
+      message: message,
+      responsePayload: details,
     );
   }
 
@@ -302,9 +390,10 @@ final class DiscordHttpExecutor {
   }
 
   static Duration _retryAfter(Object? payload, Map<String, String> headers) {
-    num? seconds;
-    if (payload is Map) seconds = payload['retry_after'] as num?;
-    seconds ??= num.tryParse(headers['retry-after'] ?? '');
+    final inBody = payload is Map ? payload['retry_after'] : null;
+    final seconds = inBody is num
+        ? inBody
+        : num.tryParse(headers['retry-after'] ?? '');
     return Duration(milliseconds: ((seconds ?? 1) * 1000).ceil());
   }
 
@@ -398,6 +487,7 @@ final class DiscordRestClient {
     Map<String, Object?>? query,
     Map<String, Object?>? body,
     String? auditLogReason,
+    bool guardedByNonce = false,
   }) async {
     final payload = await request(
       method,
@@ -405,6 +495,7 @@ final class DiscordRestClient {
       query: query,
       body: body,
       auditLogReason: auditLogReason,
+      guardedByNonce: guardedByNonce,
     );
     if (payload is! Map) {
       throw const DiscordApiException(
@@ -458,6 +549,7 @@ final class DiscordRestClient {
     List<int>? rawBody,
     String contentType = 'application/json',
     String? auditLogReason,
+    bool guardedByNonce = false,
   }) => _execute(
     method,
     path,
@@ -466,6 +558,7 @@ final class DiscordRestClient {
         rawBody ?? (body == null ? null : utf8.encode(jsonEncode(body))),
     contentType: contentType,
     auditLogReason: auditLogReason,
+    guardedByNonce: guardedByNonce,
   );
 
   Future<Object?> _execute(
@@ -475,12 +568,14 @@ final class DiscordRestClient {
     List<int>? encodedBody,
     String contentType = 'application/json',
     String? auditLogReason,
+    bool guardedByNonce = false,
   }) => _executor.execute(
     method,
     path,
     query: query,
     headers: _headers(contentType, auditLogReason),
     body: encodedBody,
+    guardedByNonce: guardedByNonce,
   );
 
   /// A request whose status and headers the caller needs, for the routes where
