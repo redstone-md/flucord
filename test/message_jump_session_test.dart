@@ -208,18 +208,18 @@ void main() {
       tester,
       session,
     ) async {
-      await session.openChannel(SessionHarness.otherChannelId);
-      await _search(tester, session, _old);
       final plain = Completer<DiscordHttpResponse>();
       session.transport.on('GET', _messagesPath, (request) {
         return request.uri.queryParameters['around'] == null
             ? plain.future
             : jsonResponse(_page(_old - 50, 100));
       });
+      // Tapping the server opens its first channel, whose page does not come.
       await tester.tap(
-        find.byKey(const ValueKey('channel-${SessionHarness.channelId}')),
+        find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
       );
       await session.settle();
+      await _search(tester, session, _old);
 
       await _jumpToResult(tester, session, _old);
       plain.complete(jsonResponse(_page(_newestPageStart, 100)));

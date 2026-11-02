@@ -195,14 +195,8 @@ class _MessageListState extends State<MessageList>
 
   /// The row a jump last landed on, and how far its highlight has faded.
   String? _highlightedMessageId;
-  late final AnimationController _highlight = AnimationController(
-    vsync: this,
-    duration: _highlightDuration,
-  );
-  late final Animation<double> _highlightFade = CurvedAnimation(
-    parent: _highlight,
-    curve: const Interval(0.5, 1, curve: Curves.easeOut),
-  );
+  late final AnimationController _highlight;
+  late final Animation<double> _highlightFade;
 
   bool _didReachUnread = false;
 
@@ -213,6 +207,14 @@ class _MessageListState extends State<MessageList>
   @override
   void initState() {
     super.initState();
+    _highlight = AnimationController(
+      vsync: this,
+      duration: _highlightDuration,
+    );
+    _highlightFade = CurvedAnimation(
+      parent: _highlight,
+      curve: const Interval(0.5, 1, curve: Curves.easeOut),
+    );
     _scrollController.addListener(_handleScroll);
     _recentre(awaiting: _openingMessageId);
   }
