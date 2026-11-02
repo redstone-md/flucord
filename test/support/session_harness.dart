@@ -18,6 +18,7 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
 
@@ -209,6 +210,8 @@ final class SessionHarness {
     await _tester.tap(find.byKey(const ValueKey('open-connections')));
     await settle();
     await _tester.tap(find.text('Sign out'));
+    await settle();
+    await _tester.tap(find.byKey(destructiveConfirmKey));
     await settle();
   }
 
