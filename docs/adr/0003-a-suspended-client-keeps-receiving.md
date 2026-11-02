@@ -10,6 +10,10 @@ Suspension used to follow the focus, so a viewer who alt-tabbed away had their p
 
 The rule covered watched sessions; everybody else's cameras kept decoding with the window in the tray, one decoder and one last picture per camera. Camera decoding now suspends through the same seam and by the same rule: packets keep being counted, the decoder is let go, and the first picture back is a keyframe.
 
+## Amendment (2026-11-02): a session no tile draws is not decoded
+
+A watched session used to decode at full rate from the moment it arrived, whether or not anything drew it: a watcher reading a text channel, or looking at another stream on the stage, paid for pictures nobody saw. A session now decodes only while a tile listens to its pictures and the client is not suspended, the way the self-preview follows its tile (ADR-0001). The same rule holds as for suspension: the connection stays and is read, the decoder is let go, and the first picture back is a keyframe (ADR-0006 keeps the rate limit on the ask).
+
 ## Status
 
 Accepted.
