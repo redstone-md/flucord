@@ -52,7 +52,10 @@ void main() {
   ) async {
     final identify = session.socket.frames.singleWhere((f) => f['op'] == 2);
 
-    expect((identify['d']! as Map)['token'], 'harness-token');
+    expect(
+      (identify['d']! as Map)['token'],
+      SessionHarness.tokenOf(SessionHarness.currentUserId),
+    );
   });
 
   testSession('Enter in the composer posts the message over HTTP', (
