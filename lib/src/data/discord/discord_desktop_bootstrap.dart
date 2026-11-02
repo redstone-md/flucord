@@ -12,6 +12,8 @@ final class DiscordDesktopWorkspaceSnapshot {
     required Map<String, List<Map<String, Object?>>> channelsByGuild,
     Map<String, List<Map<String, Object?>>> rolesByGuild = const {},
     Map<String, List<Map<String, Object?>>> membersByGuild = const {},
+    Map<String, List<Map<String, Object?>>> emojisByGuild = const {},
+    Map<String, List<Map<String, Object?>>> stickersByGuild = const {},
   }) : currentUser = Map<String, Object?>.unmodifiable(currentUser),
        guilds = List<Map<String, Object?>>.unmodifiable(
          guilds.map(Map<String, Object?>.unmodifiable),
@@ -21,7 +23,9 @@ final class DiscordDesktopWorkspaceSnapshot {
        ),
        channelsByGuild = _byGuild(channelsByGuild),
        rolesByGuild = _byGuild(rolesByGuild),
-       membersByGuild = _byGuild(membersByGuild);
+       membersByGuild = _byGuild(membersByGuild),
+       emojisByGuild = _byGuild(emojisByGuild),
+       stickersByGuild = _byGuild(stickersByGuild);
 
   final Map<String, Object?> currentUser;
   final List<Map<String, Object?>> guilds;
@@ -40,6 +44,11 @@ final class DiscordDesktopWorkspaceSnapshot {
   /// transport that is normally just the account's own membership per guild,
   /// which is exactly what a permission check needs.
   final Map<String, List<Map<String, Object?>>> membersByGuild;
+
+  /// The servers' own emoji and stickers. On this transport they arrive only
+  /// inside READY's guild entries, and the composer's pickers draw from them.
+  final Map<String, List<Map<String, Object?>>> emojisByGuild;
+  final Map<String, List<Map<String, Object?>>> stickersByGuild;
 
   static Map<String, List<Map<String, Object?>>> _byGuild(
     Map<String, List<Map<String, Object?>>> source,
@@ -69,6 +78,8 @@ final class DiscordDesktopBootstrap {
   final Map<String, List<Map<String, Object?>>> _channelsByGuild = {};
   final Map<String, List<Map<String, Object?>>> _rolesByGuild = {};
   final Map<String, List<Map<String, Object?>>> _membersByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _emojisByGuild = {};
+  final Map<String, List<Map<String, Object?>>> _stickersByGuild = {};
   Map<String, Object?>? _currentUser;
 
   void acceptReady(Map<String, Object?> ready) {
@@ -85,6 +96,8 @@ final class DiscordDesktopBootstrap {
     _channelsByGuild.clear();
     _rolesByGuild.clear();
     _membersByGuild.clear();
+    _emojisByGuild.clear();
+    _stickersByGuild.clear();
     _privateChannels
       ..useReadStateCursors(_readStateCursors(ready['read_state']))
       ..applyReady(_expand(_objects(ready['private_channels'])));
@@ -133,6 +146,8 @@ final class DiscordDesktopBootstrap {
       ..._objects(guild['members']).map(users.expandMember),
     ].where((member) => member['user'] is Map).toList(growable: false);
     if (resolved.isNotEmpty) _membersByGuild[id] = resolved;
+    _emojisByGuild[id] = _named(guild['emojis']);
+    _stickersByGuild[id] = _named(guild['stickers']);
   }
 
   /// The snapshot so far, or null while the current user is still unknown.
@@ -146,6 +161,8 @@ final class DiscordDesktopBootstrap {
       channelsByGuild: _channelsByGuild,
       rolesByGuild: _rolesByGuild,
       membersByGuild: _membersByGuild,
+      emojisByGuild: _emojisByGuild,
+      stickersByGuild: _stickersByGuild,
     );
   }
 
@@ -155,9 +172,17 @@ final class DiscordDesktopBootstrap {
     _channelsByGuild.clear();
     _rolesByGuild.clear();
     _membersByGuild.clear();
+    _emojisByGuild.clear();
+    _stickersByGuild.clear();
     _privateChannels.clear();
     users.clear();
   }
+
+  /// The emoji or stickers that have what the mapper requires. One broken entry
+  /// must not stop the whole workspace from being built.
+  static List<Map<String, Object?>> _named(Object? entries) => _objects(
+    entries,
+  ).where((entry) => entry['id'] is String && entry['name'] is String).toList();
 
   /// The channel read states' ack cursors, keyed by channel id.
   static Map<String, String> _readStateCursors(Object? block) {

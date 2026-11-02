@@ -401,6 +401,8 @@ final class DiscordDesktopChatRepository
               channelsByGuild: snapshot.channelsByGuild,
               rolesByGuild: snapshot.rolesByGuild,
               membersByGuild: snapshot.membersByGuild,
+              emojisByGuild: snapshot.emojisByGuild,
+              stickersByGuild: snapshot.stickersByGuild,
               directChannels: snapshot.directChannels,
               includeDirectMessagesSpace: true,
               currentUserRole: 'Discord user',
