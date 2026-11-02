@@ -106,6 +106,10 @@ final class DiscordReadStateRepository implements ReadStateRepository {
   void setPrivateChannelIds(Iterable<String> ids) =>
       _privateChannelIds = Set.unmodifiable(ids.toSet());
 
+  /// Adds a DM the account gained during the session.
+  void addPrivateChannel(String id) =>
+      _privateChannelIds = Set.unmodifiable({..._privateChannelIds, id});
+
   /// Rebinds the account this store belongs to, resetting the ack token.
   void setCurrentUserId(String? userId) => _queue.bindSession(userId);
 
@@ -119,6 +123,20 @@ final class DiscordReadStateRepository implements ReadStateRepository {
     }
     if (_store.accept(name, data)) _emit();
   }
+
+  /// Feeds in a message the account has just received or sent, as a raw payload.
+  ///
+  /// The transport calls this once the message is stored, right before it
+  /// announces the message. The two updates then reach the controller with no
+  /// frame between them, so a mention in the channel on screen is read before
+  /// any badge can draw.
+  void acceptNewMessage(Map<String, Object?> payload) {
+    if (_store.acceptNewMessage(payload)) _emit();
+  }
+
+  /// Whether [payload] mentions a role the account holds in its guild.
+  bool mentionsAccountRole(Map<String, Object?> payload) =>
+      _store.mentionsAccountRole(payload);
 
   /// Folds the read-state entries one guild carries, as a join's hydration
   /// step.

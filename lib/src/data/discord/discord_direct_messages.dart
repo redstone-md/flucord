@@ -1,17 +1,33 @@
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_models.dart';
-import 'discord_api_client.dart';
+import '../../domain/chat_repository.dart';
 import 'discord_mapper.dart';
+import 'discord_rest_client.dart';
 
+/// Direct message channels the account gains, on either transport.
+///
+/// A conversation is announced before it is written, for the reason
+/// `DiscordChannelHandler` gives: the first message must find its channel in
+/// the workspace.
 final class DiscordDirectMessages {
-  DiscordDirectMessages(this._api, this._cache, this._mapper);
+  DiscordDirectMessages(
+    this._createChannel,
+    this._cache,
+    this._mapper,
+    this._publish, {
+    void Function(String channelId)? onChannelAdded,
+  }) : _onChannelAdded = onChannelAdded;
 
-  final DiscordApiClient _api;
+  /// The transport's own route for opening a channel with somebody.
+  final Future<Map<String, Object?>> Function(String recipientId)
+  _createChannel;
   final ChatCache _cache;
   final DiscordMapper _mapper;
+  final void Function(ChatRepositoryEvent event) _publish;
+  final void Function(String channelId)? _onChannelAdded;
   final Set<String> _knownChannelIds = {};
 
-  CommunitySpace get space => _mapper.directMessagesSpace;
+  CommunitySpace get _space => _mapper.directMessagesSpace;
 
   void seed(Iterable<ConversationChannel> channels) {
     _knownChannelIds.addAll(
@@ -25,7 +41,7 @@ final class DiscordDirectMessages {
     String recipientId,
     String currentUserId,
   ) async {
-    final payload = await _api.createDirectMessageChannel(recipientId);
+    final payload = await _createChannel(recipientId);
     final mapped = _mapper.directMessage(payload, currentUserId);
     if (mapped == null) {
       throw const DiscordApiException(
@@ -33,42 +49,51 @@ final class DiscordDirectMessages {
         message: 'Discord returned an invalid direct message channel',
       );
     }
-    return _persist(mapped);
+    return _adopt(mapped);
   }
 
-  Future<DirectConversation?> acceptChannel(
+  Future<void> acceptChannel(
     Map<String, Object?> payload,
     String currentUserId,
   ) async {
     final mapped = _mapper.directMessage(payload, currentUserId);
-    return mapped == null ? null : _persist(mapped);
+    if (mapped != null) await _adopt(mapped);
   }
 
-  Future<DirectConversation?> acceptMessage(
+  /// Adopts the channel of a message when the channel is new here.
+  ///
+  /// `MESSAGE_CREATE` is sometimes the first the client hears of a DM. The
+  /// message's author is then the only recipient it can name.
+  Future<void> acceptMessage(
     Map<String, Object?> payload,
     String currentUserId,
   ) async {
-    if (payload['guild_id'] != null) return null;
+    if (payload['guild_id'] != null) return;
     final channelId = payload['channel_id'] as String?;
-    if (channelId == null || _knownChannelIds.contains(channelId)) return null;
+    if (channelId == null || _knownChannelIds.contains(channelId)) return;
     final channelType = payload['channel_type'];
-    if (channelType != null && channelType != 1) return null;
+    if (channelType != null && channelType != 1) return;
     final author = payload['author'];
-    if (author is! Map || author['id'] == currentUserId) return null;
-    return acceptChannel({
+    if (author is! Map || author['id'] == currentUserId) return;
+    await acceptChannel({
       'id': channelId,
       'type': 1,
       'recipients': [author],
     }, currentUserId);
   }
 
-  Future<DirectConversation> _persist(DiscordMappedDirectMessage mapped) async {
+  Future<DirectConversation> _adopt(DiscordMappedDirectMessage mapped) async {
     final conversation = DirectConversation(
       channel: mapped.channel,
       recipient: mapped.recipient,
     );
-    _knownChannelIds.add(conversation.channel.id);
-    await _cache.writeSpace(space);
+    if (_knownChannelIds.add(conversation.channel.id)) {
+      _onChannelAdded?.call(conversation.channel.id);
+    }
+    _publish(SpaceUpsertedEvent(_space));
+    _publish(MemberUpsertedEvent(conversation.recipient));
+    _publish(ChannelUpsertedEvent(conversation.channel));
+    await _cache.writeSpace(_space);
     await _cache.writeChannel(conversation.channel);
     await _cache.writeMember(conversation.recipient);
     return conversation;

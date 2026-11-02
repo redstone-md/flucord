@@ -9,6 +9,7 @@ import '../application/direct_call_controller.dart';
 import '../application/go_live_controller.dart';
 import '../application/inbox_catalog.dart';
 import '../application/report_flow_controller.dart';
+import '../application/send_failure.dart';
 import '../application/voice_channel_surface.dart';
 import '../application/stream_viewer_controller.dart';
 import '../domain/account_entitlements.dart';
@@ -40,6 +41,7 @@ import 'widgets/message_composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/remote_camera_scope.dart';
 import 'widgets/report_dialog.dart';
+import 'widgets/self_video_scope.dart';
 import 'widgets/slash_command_scope.dart';
 import 'widgets/soundboard_picker.dart';
 import 'widgets/soundboard_scope.dart';
@@ -136,6 +138,11 @@ class ConversationPane extends StatefulWidget {
 class _ConversationPaneState extends State<ConversationPane> {
   ChatMessage? _replyTo;
 
+  /// Holds a send failure's note clear of the composer, even with four lines
+  /// of text in it. A note at the window's edge would cover the restored text
+  /// and the Send button the user needs to try again.
+  static const _aboveComposer = EdgeInsets.fromLTRB(16, 0, 16, 140);
+
   static String _composerHintPrefix(ConversationChannel channel) {
     if (channel.isDirectMessage) return '@';
     final hasNoHash =
@@ -143,10 +150,6 @@ class _ConversationPaneState extends State<ConversationPane> {
         channel.spaceId == CommunitySpace.directMessagesId;
     return hasNoHash ? '' : '#';
   }
-
-  /// When this account last sent in the channel, for the composer's slowmode
-  /// countdown. Null on a channel without slowmode, where nothing needs it.
-  DateTime? _lastSentAt;
 
   @override
   void initState() {
@@ -160,7 +163,6 @@ class _ConversationPaneState extends State<ConversationPane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.channel.id == widget.channel.id) return;
     _replyTo = null;
-    _lastSentAt = null;
     _watchCall();
     _pointControllersAtChannel();
   }
@@ -168,10 +170,14 @@ class _ConversationPaneState extends State<ConversationPane> {
   /// When slowmode releases this account's next send, or null while nothing
   /// is holding it back. Slowmode binds the sender, not the channel: the
   /// clock starts at this account's own last send.
-  DateTime? get _slowmodeUntil {
+  DateTime? _slowmodeUntil(ChatController chat) {
     final seconds = widget.channel.rateLimitPerUser;
-    final lastSentAt = _lastSentAt;
-    if (seconds == 0 || lastSentAt == null) return null;
+    final lastSentAt = chat.lastSentAt(widget.channel.id);
+    if (seconds == 0 ||
+        lastSentAt == null ||
+        widget.capabilities.bypassesSlowmode) {
+      return null;
+    }
     final until = lastSentAt.add(Duration(seconds: seconds));
     return until.isBefore(DateTime.now()) ? null : until;
   }
@@ -308,6 +314,7 @@ class _ConversationPaneState extends State<ConversationPane> {
     final cameras = RemoteCameraScope.of(context);
     final voice = VoiceScope.read(context);
     final goLive = GoLiveScope.read(context);
+    final camera = SelfVideoScope.read(context);
     final soundboard = SoundboardScope.read(context);
     final stage = StageScope.read(context);
     final threadMembership = ThreadMembershipScope.read(context);
@@ -401,6 +408,7 @@ class _ConversationPaneState extends State<ConversationPane> {
             onTapParticipant: focus.toggle,
             onClearFocus: focus.clear,
             goLive: goLiveControl(),
+            camera: camera,
             channelId: channel.id,
             channelName: channel.name,
             controller: voice,
@@ -418,6 +426,7 @@ class _ConversationPaneState extends State<ConversationPane> {
               onTapParticipant: focus.toggle,
               onClearFocus: focus.clear,
               goLive: goLiveControl(),
+              camera: camera,
               soundboard: ListenableBuilder(
                 listenable: soundboard,
                 builder: (_, _) => SoundboardButton(
@@ -553,7 +562,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                 : widget.workspace.memberOrNull(_replyTo!.authorId),
             onCancelReply: () => setState(() => _replyTo = null),
             slowmode: Duration(seconds: channel.rateLimitPerUser),
-            slowmodeUntil: _slowmodeUntil,
+            slowmodeUntil: _slowmodeUntil(chat),
             characterLimit: _characterLimit(),
             attachmentSizeLimitBytes: _attachmentSizeLimit(channel),
             channelHintPrefix: _composerHintPrefix(channel),
@@ -592,6 +601,7 @@ class _ConversationPaneState extends State<ConversationPane> {
                   replyToMessageId,
                   suppressNotifications,
                 ) async {
+                  final messenger = ScaffoldMessenger.maybeOf(context);
                   final sent = await chat.sendMessage(
                     channelId: channel.id,
                     body: body,
@@ -599,13 +609,24 @@ class _ConversationPaneState extends State<ConversationPane> {
                     replyToMessageId: replyToMessageId,
                     suppressNotifications: suppressNotifications,
                   );
-                  if (!mounted || !sent) return false;
-                  setState(() {
-                    _replyTo = null;
-                    if (channel.rateLimitPerUser > 0) {
-                      _lastSentAt = DateTime.now();
-                    }
-                  });
+                  if (!sent) {
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        margin: _aboveComposer,
+                        content: Text(
+                          'Your message to ${_composerHintPrefix(channel)}'
+                          '${channel.name} did not send. '
+                          '${sendFailureReason(chat.error)}',
+                        ),
+                      ),
+                    );
+                    return false;
+                  }
+                  // A reply picked while this send ran is not this send's.
+                  if (mounted && _replyTo?.id == replyToMessageId) {
+                    setState(() => _replyTo = null);
+                  }
                   return true;
                 },
           ),
