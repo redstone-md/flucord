@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../domain/attachment_download.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import '../attachment_download_controller.dart';
 import 'attachment_download_button.dart';
+import 'chat_image.dart';
 import 'image_attachment_viewer.dart';
 import 'native_inline_video_player.dart';
 import 'native_voice_message_player.dart';
@@ -243,76 +241,25 @@ class _SpoilerAttachmentState extends State<_SpoilerAttachment> {
         );
 }
 
-/// Where preview bytes live between runs.
-///
-/// Bounded by how many previews are kept rather than by the space they take,
-/// because the cache manager counts entries and not bytes. That works here
-/// because the address they are fetched from already asks the proxy for a
-/// preview-sized file, so one entry is tens of kilobytes rather than the
-/// original photo, and this many of them land somewhere under half a gigabyte.
-/// Discord bounds the same thing the same way: its cache is whatever Chromium
-/// keeps, and what it controls is asking for a resized image in the first
-/// place.
-///
-/// The stale period runs from last use, not from download, so a preview goes
-/// only once it has been left alone for a fortnight. Losing one costs a single
-/// small request the next time it is scrolled past.
-class _PreviewCache extends CacheManager with ImageCacheManager {
-  _PreviewCache._()
-    : super(
-        Config(
-          _storeKey,
-          stalePeriod: const Duration(days: 14),
-          maxNrOfCacheObjects: 4000,
-        ),
-      );
-
-  static const _storeKey = 'flucord_attachment_previews';
-
-  static final _PreviewCache instance = _PreviewCache._();
-}
-
-/// The box a preview of this shape is drawn in.
-///
-/// The aspect ratio decides it: a portrait picture fills the height and stops
-/// short of the width, so asking for the full width would fetch pixels that
-/// are never drawn.
-Size _previewBox(double ratio) {
-  final bounds = MessageAttachmentView.previewSize;
-  final width = math.min(bounds.width, bounds.height * ratio);
-  return Size(width, width / ratio);
-}
-
 /// The image a preview draws, fetched and decoded at the size it is shown at.
-///
-/// Discord's media proxy resizes on request, so a photo taken on a phone costs
-/// its thumbnail rather than its original. An attachment Discord did not proxy
-/// keeps its own address and is still decoded down, which is the part that
-/// keeps a large picture out of the image cache at full size.
 ImageProvider _previewImage(
   BuildContext context,
   MessageAttachment attachment,
   Size box,
 ) {
-  final scale = MediaQuery.devicePixelRatioOf(context);
-  final width = (box.width * scale).round();
-  final height = (box.height * scale).round();
-  return ResizeImage(
-    CachedNetworkImageProvider(
-      // The account's autoplay answer, read here so the flag from any
-      // device redraws the preview. A GIF the account keeps still is asked
-      // for as a png, which is the proxy's first frame.
-      _previewUrl(
-        attachment,
-        width: width,
-        height: height,
-        playsGifs: UserSettingsScope.displayOf(context).playsGifs,
-      ),
-      cacheManager: _PreviewCache.instance,
+  // The account's autoplay answer, read here so the flag from any device
+  // redraws the preview. A GIF the account keeps still is asked for as a png,
+  // which is the proxy's first frame.
+  final playsGifs = UserSettingsScope.displayOf(context).playsGifs;
+  return chatImage(
+    context,
+    size: box,
+    addressAt: (width, height) => _previewUrl(
+      attachment,
+      width: width,
+      height: height,
+      playsGifs: playsGifs,
     ),
-    width: width,
-    height: height,
-    policy: ResizeImagePolicy.fit,
   );
 }
 
@@ -326,32 +273,20 @@ String _previewUrl(
   if (proxy == null || !proxy.hasAuthority) {
     return playsGifs || !_looksLikeGif(attachment)
         ? attachment.url
-        : _stillFrameOf(attachment.url);
+        : cdnStillFrameOf(attachment.url);
   }
-  final query = {
-    ...proxy.queryParameters,
-    'width': '$width',
-    'height': '$height',
-    if (!playsGifs && _looksLikeGif(attachment)) 'format': 'png',
-  };
-  return proxy.replace(queryParameters: query).toString();
+  return proxyAddressAtSize(
+    proxy,
+    width: width,
+    height: height,
+    stillFrame: !playsGifs && _looksLikeGif(attachment),
+  );
 }
 
 /// Whether the attachment is a moving picture, judged from the filename the
 /// sender's client reported. The proxy honours the extension it is given.
 bool _looksLikeGif(MessageAttachment attachment) =>
     attachment.fileName.toLowerCase().endsWith('.gif');
-
-/// The first frame of a cdn GIF, which the cdn serves as the webp form.
-String _stillFrameOf(String url) {
-  final parsed = Uri.tryParse(url);
-  if (parsed == null || !parsed.path.endsWith('.gif')) return url;
-  return parsed
-      .replace(
-        path: parsed.path.replaceRange(parsed.path.length - 4, null, '.webp'),
-      )
-      .toString();
-}
 
 class _ImageAttachment extends StatelessWidget {
   const _ImageAttachment({required this.attachment, required this.onOpen});
@@ -366,7 +301,7 @@ class _ImageAttachment extends StatelessWidget {
                 ? attachment.width! / attachment.height!
                 : 16 / 9)
             .clamp(0.7, 2.2);
-    final box = _previewBox(ratio);
+    final box = boxFitting(MessageAttachmentView.previewSize, ratio);
     return Semantics(
       button: true,
       label: 'Open image ${attachment.fileName}',
