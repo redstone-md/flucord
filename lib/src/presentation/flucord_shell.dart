@@ -35,6 +35,7 @@ import 'conversation_pane.dart';
 import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
+import 'widgets/connection_banner.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/destructive_confirmation.dart';
 import 'widgets/discord_desktop_login_scope.dart';
@@ -183,7 +184,7 @@ class FlucordShell extends StatelessWidget {
                 ? null
                 : workspace.channelById(channelId);
             return Scaffold(
-              body: _withIncomingCall(
+              body: _withWorkspaceChrome(
                 workspace,
                 LayoutBuilder(
                   builder: (context, constraints) {

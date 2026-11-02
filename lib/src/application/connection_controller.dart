@@ -140,6 +140,13 @@ final class ConnectionController extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
+      // Every repository of one account file shares one database handle, so a
+      // live one must close first, or its close takes the new one's cache too.
+      if (_mode == SessionMode.discord) {
+        await _ensureDisconnectedWorkspace();
+        _mode = SessionMode.disconnected;
+        _activeSession = null;
+      }
       final repository = await _repositoryFactory.create(session);
       await _chatController.useRepository(repository);
     } catch (error, stackTrace) {

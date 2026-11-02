@@ -5,6 +5,7 @@ extension _FlucordShellNavigation on FlucordShell {
   /// OAuth account's guild directory when one is signed in, and otherwise the
   /// prompt to connect a transport.
   Widget _buildEmptyWorkspace(BuildContext context) {
+    if (connectionController.isBusy) return const LoadingWorkspaceView();
     if (connectionController.mode != SessionMode.disconnected) {
       return EmptyWorkspaceView(
         onOpenConnections: () => _openConnections(context),
@@ -33,6 +34,22 @@ extension _FlucordShellNavigation on FlucordShell {
       ),
     );
   }
+
+  /// Puts the connection banner above [body] and the incoming-call card over it.
+  ///
+  /// A demo has no connection to report, so it gets no banner.
+  Widget _withWorkspaceChrome(ChatWorkspace workspace, Widget body) => Column(
+    children: [
+      if (connectionController.mode == SessionMode.discord)
+        ConnectionBanner(
+          status: chatController.connectionStatus,
+          onRetry: connectionController.hasSavedCredential
+              ? () => unawaited(connectionController.connectSavedCredential())
+              : null,
+        ),
+      Expanded(child: _withIncomingCall(workspace, body)),
+    ],
+  );
 
   /// Floats the incoming-call card over [body].
   ///
