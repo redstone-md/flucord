@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -36,6 +37,22 @@ Future<void> _openTwoRows(SessionHarness session) async {
       ),
     );
   }
+}
+
+/// More emoji in the server than the picker's grid shows at once.
+Map<String, Object?> _readyWithManyEmoji() {
+  final ready = SessionHarness.defaultReady();
+  final guild = (ready['guilds']! as List).single as Map<String, Object?>;
+  return ready
+    ..['guilds'] = [
+      {
+        ...guild,
+        'emojis': [
+          for (var index = 0; index < 80; index++)
+            {'id': '${400000000000000100 + index}', 'name': 'emoji_$index'},
+        ],
+      },
+    ];
 }
 
 /// Everything the app puts on the clipboard from now on.
@@ -271,6 +288,34 @@ void main() {
 
       expect(find.byTooltip('Close reaction picker'), findsOneWidget);
     });
+
+    // The picker's grid scrolls, and its metrics rise through the row to the
+    // list. A list that took them for its own scrolled past its end, bounced
+    // back, and the bounce closed the picker.
+    testSession(
+      'opens the picker in a channel too short to scroll',
+      platform: TargetPlatform.windows,
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        final row = session.messageRow(ChannelHistoryFixture.idOf(1));
+        final mouse = await _hover(tester, tester.getCenter(row));
+        final top = tester.getTopLeft(row);
+        final button = find.byKey(
+          ValueKey('add-reaction-${ChannelHistoryFixture.idOf(1)}'),
+        );
+
+        await _click(tester, mouse, tester.getCenter(button));
+
+        expect(find.byTooltip('Close reaction picker'), findsOneWidget);
+        expect(tester.getTopLeft(row), top);
+      },
+      routes: (transport) => transport.on(
+        'GET',
+        ChannelHistoryFixture.messagesPath,
+        (_) => jsonResponse(ChannelHistoryFixture.page(0, 2)),
+      ),
+      ready: _readyWithManyEmoji(),
+    );
 
     testSession('stays on its row while the pointer crosses it', (
       tester,

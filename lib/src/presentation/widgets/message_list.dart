@@ -441,6 +441,9 @@ class MessageListState extends State<MessageList>
   /// the end without scrolling anything. A reader who was at the end stays
   /// there. Anybody else stays where they are, and may now be at the end.
   bool _handleMetricsChange(ScrollMetricsNotification notification) {
+    // A scrollable inside a row or its menu reports here too. Its numbers say
+    // nothing about this list.
+    if (notification.depth != 0) return false;
     final metrics = notification.metrics;
     if (!_isAtEnd) {
       _recordWhetherAtEnd();
