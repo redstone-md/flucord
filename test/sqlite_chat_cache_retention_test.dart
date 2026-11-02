@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +79,30 @@ void main() {
     final after = await cache.readChannelHistory('channel-1');
     expect(after.messages, hasLength(SqliteChatCache.historyPerChannel));
     expect(after.messages.first.id, 'm-5');
+  });
+
+  test('a message written while a flush commits is pruned too', () async {
+    final cache = await openCache();
+    const cap = SqliteChatCache.historyPerChannel;
+    await cache.writeChannelHistory(
+      historyOf(
+        'channel-1',
+        List.generate(cap, (index) => message('m-$index', 'channel-1', index)),
+      ),
+    );
+
+    // The change runs inside a flush, after that flush took its writes, so
+    // the message written here goes in with the next flush.
+    await cache.updateMessage('m-0', (held) {
+      unawaited(cache.writeMessage(message('m-$cap', 'channel-1', cap)));
+      return held;
+    });
+    await cache.flush();
+    await cache.flush();
+
+    final history = await cache.readChannelHistory('channel-1');
+    expect(history.messages, hasLength(cap));
+    expect(history.messages.first.id, 'm-1');
   });
 
   test('the cap is per channel, not shared', () async {

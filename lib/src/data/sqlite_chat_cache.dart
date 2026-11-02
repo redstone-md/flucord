@@ -31,7 +31,7 @@ final class SqliteChatCache
   @override
   late final SqliteWriteQueue _writes;
 
-  /// The channels that gained messages in the writes still waiting.
+  /// The channels that gained messages in the flush running now.
   final Set<String> _channelsWritten = {};
 
   /// The most messages held per channel, about five full pages of offline
@@ -305,8 +305,12 @@ final class SqliteChatCache
 
   @override
   Future<void> writeMessage(ChatMessage message, {Member? member}) async {
-    _channelsWritten.add(message.channelId);
-    _writes.add((transaction) => _putMessage(transaction, message, member));
+    // Noted when the write runs, not when it is added: a write added during a
+    // flush runs in the next one, and that flush must prune its channel.
+    _writes.add((transaction) {
+      _channelsWritten.add(message.channelId);
+      return _putMessage(transaction, message, member);
+    });
   }
 
   @override
