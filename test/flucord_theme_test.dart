@@ -205,6 +205,19 @@ void main() {
       expect(surfaces.accentIcon, const Color(brand));
       expect(surfaces.focusRing, const Color(brand));
     });
+
+    // A theme file may give a colour alpha. What people read is that colour
+    // mixed with the background, so that mix is what has to reach the ratio.
+    test('a see-through theme colour is measured as it shows', () {
+      final theme = FlucordTheme.fromPalette(
+        FlucordPalette.dark.copyWith(brand: 0x40ffc0cb, danger: 0x40ffb0b0),
+      );
+      final surfaces = theme.extension<FlucordSurfaceTheme>()!;
+
+      expectReadable(theme, surfaces.link, 4.5);
+      expectReadable(theme, surfaces.errorText, 4.5);
+      expectReadable(theme, surfaces.focusRing, 3);
+    });
   });
 
   group('the focus ring', () {

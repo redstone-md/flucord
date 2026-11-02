@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
-/// The WCAG 2 contrast ratio between two opaque colours.
-double contrast(Color a, Color b) {
-  final lighter = max(a.computeLuminance(), b.computeLuminance());
-  final darker = min(a.computeLuminance(), b.computeLuminance());
-  return (lighter + 0.05) / (darker + 0.05);
+/// The WCAG 2 contrast ratio of [foreground] drawn on [background].
+///
+/// A translucent [foreground] is measured as it shows, mixed with
+/// [background].
+double contrast(Color foreground, Color background) {
+  final shown = Color.alphaBlend(foreground, background).computeLuminance();
+  final under = background.computeLuminance();
+  return (max(shown, under) + 0.05) / (min(shown, under) + 0.05);
 }
 
 /// Expects [foreground] to reach [minimum] on each of the six backgrounds

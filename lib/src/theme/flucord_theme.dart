@@ -65,11 +65,14 @@ abstract final class FlucordTheme {
 
   static const _readableSteps = 100;
 
-  /// The WCAG 2 contrast ratio between two colours.
-  static double _contrast(Color a, Color b) {
-    final first = a.computeLuminance();
-    final second = b.computeLuminance();
-    return (max(first, second) + 0.05) / (min(first, second) + 0.05);
+  /// The WCAG 2 contrast ratio of [foreground] drawn on [background].
+  ///
+  /// A theme file may give a colour alpha, so [foreground] is measured as it
+  /// shows: mixed with [background].
+  static double _contrast(Color foreground, Color background) {
+    final shown = Color.alphaBlend(foreground, background).computeLuminance();
+    final under = background.computeLuminance();
+    return (max(shown, under) + 0.05) / (min(shown, under) + 0.05);
   }
 
   static ThemeData _build({
