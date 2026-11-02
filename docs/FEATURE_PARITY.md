@@ -19,7 +19,7 @@ do not count as desktop-user chat parity.
 | Server list | Ready | Hydrated from `READY`/`GUILD_CREATE` |
 | Joining, creating, leaving servers | Ready | Invites resolve to a preview in-app, joining hydrates the rail, channels, roles, members and read state without a restart, and leave asks first; live validation of the join round-trip on a real invite is still unverified |
 | Server channels | Ready | Hydrated from `GUILD_CREATE` |
-| Channel configuration | Ready | The channel editor exposes topic, slowmode, age gate, bitrate, user limit, parent and voice region; per-role and per-member permission overwrites are editable and private channels follow the computed permissions; webhooks are listed, created, edited and deleted from guild settings, gated on the manage-webhook permission; the composer counts down a channel's slowmode |
+| Channel configuration | Ready | The channel editor exposes topic, slowmode, age gate, bitrate, user limit, parent and voice region; per-role and per-member permission overwrites are editable and private channels follow the computed permissions; webhooks are listed, created, edited and deleted from guild settings, gated on the manage-webhook permission; the composer counts down a channel's slowmode and blocks sending until it ends |
 | Channel permissions | Ready | Visibility, composer and message actions follow computed permissions |
 | Direct Message list | Ready | `READY.users` expansion gives recipients names and avatars; ordered by last activity |
 | Message requests | Ready | Direct messages from strangers land in their own folder with accept and decline; accepting moves the conversation into the DM list, declining removes it, and both ack the request's read state |
