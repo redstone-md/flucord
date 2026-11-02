@@ -15,6 +15,7 @@ import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/accessibility.dart';
 import 'package:flucord/src/domain/channel_link.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/domain/chat_repository.dart';
@@ -28,6 +29,7 @@ import 'package:flucord/src/platform/desktop_integration.dart';
 import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
+import 'zoomed_app.dart';
 
 /// The whole app, in a real session, driven by raw gateway events (seam A).
 ///
@@ -64,6 +66,7 @@ final class SessionHarness {
     this._connector,
     Directory? diskDirectory,
     this._voiceMessageRecorder,
+    this._accessibility,
     this._linkAtLaunch,
   ) : _diskDirectory = diskDirectory,
       _factory = _FakeWireRepositoryFactory(
@@ -98,6 +101,7 @@ final class SessionHarness {
   final Directory? _diskDirectory;
   final _FakeWireRepositoryFactory _factory;
   final VoiceMessageRecorder? _voiceMessageRecorder;
+  final AccessibilitySettings _accessibility;
   final ChannelLink? _linkAtLaunch;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
@@ -157,6 +161,7 @@ final class SessionHarness {
       bootstrap: AppBootstrap(
         voiceMessageRecorder: _voiceMessageRecorder,
         credentialVault: _vault,
+        accessibilityRepository: FixedDials(_accessibility),
         desktopIntegration: _window,
         chatRepositoryFactory: _factory,
         discordRemoteAuthGatewayFactory: remoteAuth,
@@ -386,6 +391,7 @@ enum SessionLaunch {
 /// as a link does that started the app.
 /// Pass a [platform] when a test depends on platform gestures, such as the right
 /// button on selectable text. Without one, Flutter tests run as Android.
+/// [accessibility] is what the zoom and font dials are set to at launch.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
@@ -395,6 +401,7 @@ void testSession(
   SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
+  AccessibilitySettings accessibility = AccessibilitySettings.off,
   ChannelLink? linkAtLaunch,
   TargetPlatform? platform,
 }) {
@@ -414,6 +421,7 @@ void testSession(
       MemoryDesktopWebSocketConnector(),
       disk,
       voiceMessageRecorder,
+      accessibility,
       linkAtLaunch,
     );
     try {

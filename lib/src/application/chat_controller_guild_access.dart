@@ -87,7 +87,7 @@ extension ChatControllerGuildAccess on ChatController {
       _notify();
       return false;
     }
-    _workspace = workspace.removeGuild(spaceId);
+    _removeGuild(spaceId);
     _guildAccessError = null;
     _notify();
     return true;

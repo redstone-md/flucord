@@ -6,6 +6,7 @@ import 'application/voice_channel_surface.dart';
 import 'app_bootstrap.dart';
 import 'app_composition.dart';
 import 'presentation/flucord_shell.dart';
+import 'presentation/widgets/accessibility_dials.dart';
 import 'presentation/widgets/accessibility_scope.dart';
 import 'presentation/widgets/spell_check_scope.dart';
 import 'presentation/widgets/attachment_download_scope.dart';
@@ -114,130 +115,116 @@ class _FlucordAppState extends State<FlucordApp> {
         themeMode:
             _composition.userSettings.themeMode ??
             _composition.workspace.themeMode,
-        home: Builder(
-          builder: (context) {
-            final accessibility = _composition.accessibility;
-            return AccessibilityScope(
-              controller: accessibility,
-              child: SpellCheckScope(
-                service: _composition.spellCheck,
-                // The dials apply through the MediaQuery the whole tree
-                // already reads, so every widget honours them without being
-                // threaded through constructors. Zoom is a transform: the
-                // interface lays out at its scaled size rather than being
-                // painted small and stretched.
-                child: Transform.scale(
-                  scale: accessibility.zoom,
-                  alignment: Alignment.topLeft,
-                  child: MediaQuery(
-                    data: MediaQuery.of(context).copyWith(
-                      textScaler: TextScaler.linear(accessibility.fontScale),
-                      disableAnimations: accessibility.reducesMotion,
-                    ),
-                    child: AccountDataPackageScope(
-                      controller: _composition.accountDataPackage,
-                      child: SelfPresenceScope(
-                        controller: _composition.selfPresence,
-                        child: UserProfileScope(
-                          controller: _composition.userProfile,
-                          child: AccountStandingScope(
-                            controller: _composition.accountStanding,
-                            child: FamilyCentreScope(
-                              controller: _composition.familyCentre,
-                              child: AuthSessionScope(
-                                controller: _composition.authSession,
-                                child: MultiFactorAuthScope(
-                                  controller: _composition.multiFactorAuth,
-                                  child: AgeVerificationScope(
-                                    controller: _composition.ageVerification,
-                                    child: AccountConnectionsScope(
-                                      controller:
-                                          _composition.accountConnections,
-                                      child: AccountEntitlementsScope(
-                                        controller:
-                                            _composition.accountEntitlements,
-                                        child: AppAuthorisationScope(
-                                          controller:
-                                              _composition.appAuthorisation,
-                                          child: ThemeScope(
-                                            controller: _composition.theme,
-                                            child: VoiceScope(
-                                              controller: _composition.voice,
-                                              child: StreamerModeScope(
-                                                controller:
-                                                    _composition.streamerMode,
-                                                child: StreamQualityScope(
-                                                  controller: _composition
-                                                      .streamQuality,
-                                                  child: KeybindScope(
-                                                    controller:
-                                                        _composition.keybinds,
-                                                    child: UserSettingsScope(
+        builder: (context, child) => AccessibilityScope(
+          controller: _composition.accessibility,
+          child: AccessibilityDials(
+            controller: _composition.accessibility,
+            child: child!,
+          ),
+        ),
+        home: SpellCheckScope(
+          service: _composition.spellCheck,
+          child: AccountDataPackageScope(
+            controller: _composition.accountDataPackage,
+            child: SelfPresenceScope(
+              controller: _composition.selfPresence,
+              child: UserProfileScope(
+                controller: _composition.userProfile,
+                child: AccountStandingScope(
+                  controller: _composition.accountStanding,
+                  child: FamilyCentreScope(
+                    controller: _composition.familyCentre,
+                    child: AuthSessionScope(
+                      controller: _composition.authSession,
+                      child: MultiFactorAuthScope(
+                        controller: _composition.multiFactorAuth,
+                        child: AgeVerificationScope(
+                          controller: _composition.ageVerification,
+                          child: AccountConnectionsScope(
+                            controller: _composition.accountConnections,
+                            child: AccountEntitlementsScope(
+                              controller: _composition.accountEntitlements,
+                              child: AppAuthorisationScope(
+                                controller: _composition.appAuthorisation,
+                                child: ThemeScope(
+                                  controller: _composition.theme,
+                                  child: VoiceScope(
+                                    controller: _composition.voice,
+                                    child: StreamerModeScope(
+                                      controller: _composition.streamerMode,
+                                      child: StreamQualityScope(
+                                        controller: _composition.streamQuality,
+                                        child: KeybindScope(
+                                          controller: _composition.keybinds,
+                                          child: UserSettingsScope(
+                                            controller:
+                                                _composition.userSettings,
+                                            child: DiscordDesktopLoginScope(
+                                              controller:
+                                                  _composition.desktopLogin,
+                                              child: DiscordAccountConnectionScope(
+                                                controller: _composition
+                                                    .accountConnection,
+                                                child: DiscordSocialSdkScope(
+                                                  controller:
+                                                      _composition.socialSdk,
+                                                  child: DiscordSocialActivityScope(
+                                                    controller: _composition
+                                                        .socialActivity,
+                                                    child: DiscordSocialPresenceScope(
                                                       controller: _composition
-                                                          .userSettings,
-                                                      child: DiscordDesktopLoginScope(
+                                                          .socialPresence,
+                                                      child: DiscordSocialDmNavigationScope(
                                                         controller: _composition
-                                                            .desktopLogin,
-                                                        child: DiscordAccountConnectionScope(
-                                                          controller: _composition
-                                                              .accountConnection,
-                                                          child: DiscordSocialSdkScope(
-                                                            controller:
-                                                                _composition
-                                                                    .socialSdk,
-                                                            child: DiscordSocialActivityScope(
-                                                              controller:
-                                                                  _composition
-                                                                      .socialActivity,
-                                                              child: DiscordSocialPresenceScope(
-                                                                controller:
+                                                            .socialDmNavigation,
+                                                        child: DiscordSocialDmScope(
+                                                          controller:
+                                                              _composition
+                                                                  .socialDm,
+                                                          child: DiscordFriendsScope(
+                                                            controller: _composition
+                                                                .discordFriends,
+                                                            child: _conversationScopes(
+                                                              FlucordShell(
+                                                                chatController:
                                                                     _composition
-                                                                        .socialPresence,
-                                                                child: DiscordSocialDmNavigationScope(
-                                                                  controller:
-                                                                      _composition
-                                                                          .socialDmNavigation,
-                                                                  child: DiscordSocialDmScope(
-                                                                    controller:
-                                                                        _composition
-                                                                            .socialDm,
-                                                                    child: DiscordFriendsScope(
-                                                                      controller:
-                                                                          _composition
-                                                                              .discordFriends,
-                                                                      child: _conversationScopes(
-                                                                        FlucordShell(
-                                                                          chatController:
-                                                                              _composition.chat,
-                                                                          connectionController:
-                                                                              _composition.connection,
-                                                                          discordOAuthController:
-                                                                              _composition.oauth,
-                                                                          oauthGuildDirectoryController:
-                                                                              _composition.oauthGuildDirectory,
-                                                                          oauthGuildMembershipController:
-                                                                              _composition.oauthGuildMembership,
-                                                                          workspaceController:
-                                                                              _composition.workspace,
-                                                                          memberListController:
-                                                                              _composition.memberList,
-                                                                          memberProfileController:
-                                                                              _composition.memberProfile,
-                                                                          messageSearchController:
-                                                                              _composition.messageSearch,
-                                                                          voiceController:
-                                                                              _composition.voice,
-                                                                          selfVideoController:
-                                                                              _composition.selfVideo,
-                                                                          directCallController:
-                                                                              _composition.directCall,
-                                                                          externalLinkLauncher:
-                                                                              _composition.externalLinkLauncher,
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ),
+                                                                        .chat,
+                                                                connectionController:
+                                                                    _composition
+                                                                        .connection,
+                                                                discordOAuthController:
+                                                                    _composition
+                                                                        .oauth,
+                                                                oauthGuildDirectoryController:
+                                                                    _composition
+                                                                        .oauthGuildDirectory,
+                                                                oauthGuildMembershipController:
+                                                                    _composition
+                                                                        .oauthGuildMembership,
+                                                                workspaceController:
+                                                                    _composition
+                                                                        .workspace,
+                                                                memberListController:
+                                                                    _composition
+                                                                        .memberList,
+                                                                memberProfileController:
+                                                                    _composition
+                                                                        .memberProfile,
+                                                                messageSearchController:
+                                                                    _composition
+                                                                        .messageSearch,
+                                                                voiceController:
+                                                                    _composition
+                                                                        .voice,
+                                                                selfVideoController:
+                                                                    _composition
+                                                                        .selfVideo,
+                                                                directCallController:
+                                                                    _composition
+                                                                        .directCall,
+                                                                externalLinkLauncher:
+                                                                    _composition
+                                                                        .externalLinkLauncher,
                                                               ),
                                                             ),
                                                           ),
@@ -263,8 +250,8 @@ class _FlucordAppState extends State<FlucordApp> {
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
