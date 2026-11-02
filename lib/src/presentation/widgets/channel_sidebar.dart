@@ -8,6 +8,7 @@ import '../../domain/flucord_palette.dart';
 import '../../domain/read_state.dart';
 import '../../domain/voice_connection.dart';
 import '../../theme/flucord_theme.dart';
+import 'server_menu.dart';
 import 'account_panel.dart';
 import 'friends_panel.dart';
 import 'guild_events_sidebar_button.dart';
@@ -216,7 +217,15 @@ class ChannelSidebar extends StatelessWidget {
                     ),
                   ),
           ),
-          ?voiceConnectionBar,
+          // On a short window a tall bar scrolls, so the channels and the
+          // account panel keep their place.
+          if (voiceConnectionBar case final bar?)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height / 2,
+              ),
+              child: SingleChildScrollView(child: bar),
+            ),
           AccountPanel(
             member: currentMember,
             sessionMode: sessionMode,

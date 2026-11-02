@@ -142,22 +142,23 @@ void main() {
       expect(_rowColour(tester, session, _old).a, greaterThan(0));
     }, routes: _routeHistory);
 
-    testSession('that fails keeps the reader where they were and says so', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
-      session.transport.on(
-        'GET',
-        _messagesPath,
-        (_) => jsonResponse({'message': 'Unknown'}, statusCode: 404),
-      );
+    testSession(
+      'that fails keeps the reader where they were and says so',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        session.transport.on(
+          'GET',
+          _messagesPath,
+          (_) => jsonResponse({'message': 'Unknown'}, statusCode: 404),
+        );
 
-      await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
+        await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
 
-      expect(session.messageRow(_idOf(_newest + 1)), findsOneWidget);
-      expect(find.byType(SnackBar), findsOneWidget);
-    }, routes: _routeHistory);
+        expect(session.messageRow(_idOf(_newest + 1)), findsOneWidget);
+        expect(find.byType(SnackBar), findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
 
     testSession('whose message is gone does the same', (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
@@ -201,6 +202,55 @@ void main() {
       expect(session.messageRow(_idOf(89)), findsOneWidget);
       expect(session.messageRow(_idOf(99)), findsNothing);
     }, routes: _routeHistory);
+  });
+
+  group('a re-identify', () {
+    testSession('leaves the reader in an old window, and Jump to present shows '
+        'what was missed', (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await _search(tester, session, _old);
+      await _jumpToResult(tester, session, _old);
+      expect(session.messageRow(_idOf(_old)), findsOneWidget);
+
+      _routeHistory(session.transport, newest: _newest + 1);
+      session.socket.receive(const {'op': 9, 'd': false});
+      await session.settle();
+      await session.dispatch('READY', SessionHarness.defaultReady());
+
+      expect(session.messageRow(_idOf(_old)), findsOneWidget);
+      expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+      await session.settle();
+
+      expect(session.messageRow(_idOf(_newest + 1)), findsOneWidget);
+    }, routes: _routeHistory);
+
+    testSession(
+      'during a catch-up does not undo a jump made meanwhile',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _search(tester, session, _old);
+
+        final newestPage = Completer<DiscordHttpResponse>();
+        session.transport.on('GET', _messagesPath, (request) {
+          return request.uri.queryParameters['around'] == null
+              ? newestPage.future
+              : jsonResponse(_page(_old - 50, 100));
+        });
+        session.socket.receive(const {'op': 9, 'd': false});
+        await session.settle();
+        await session.dispatch('READY', SessionHarness.defaultReady());
+
+        await _jumpToResult(tester, session, _old);
+        newestPage.complete(jsonResponse(_page(_newestPageStart + 1, 100)));
+        await session.settle();
+
+        expect(session.messageRow(_idOf(_old)), findsOneWidget);
+        expect(find.byKey(const ValueKey('jump-to-present')), findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
   });
 
   group('a jump while another load is running', () {
@@ -255,55 +305,61 @@ void main() {
       newest: _newest,
     );
 
-    testSession('opens on the true first unread message', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
+    testSession(
+      'opens on the true first unread message',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
 
-      _expectOpenedOnNewLine(tester, session, _old);
-    }, ready: backlog, routes: _routeHistory);
+        _expectOpenedOnNewLine(tester, session, _old);
+      },
+      ready: backlog,
+      routes: _routeHistory,
+    );
 
-    testSession('a cached page does not keep it from the true one', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
-      // Left on the DM space, so the channel opens by the tap below and not at
-      // launch.
-      await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
-      await session.settle();
-      await session.relaunch(ready: backlog);
-      final newestPage = Completer<DiscordHttpResponse>();
-      session.transport.on('GET', _messagesPath, (request) {
-        return request.uri.queryParameters['around'] == null
-            ? newestPage.future
-            : jsonResponse(_page(_old - 50 < 0 ? 0 : _old - 50, 90));
-      });
+    testSession(
+      'a cached page does not keep it from the true one',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        // Left on the DM space, so the channel opens by the tap below and not at
+        // launch.
+        await tester.tap(find.byKey(const ValueKey('space-direct-messages')));
+        await session.settle();
+        await session.relaunch(ready: backlog);
+        final newestPage = Completer<DiscordHttpResponse>();
+        session.transport.on('GET', _messagesPath, (request) {
+          return request.uri.queryParameters['around'] == null
+              ? newestPage.future
+              : jsonResponse(_page(_old - 50 < 0 ? 0 : _old - 50, 90));
+        });
 
-      // The list opens on the cached page while Discord is asked.
-      await tester.tap(
-        find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
-      );
-      await session.settle();
-      expect(session.messageRow(_idOf(_newestPageStart)), findsOneWidget);
-      newestPage.complete(jsonResponse(_page(_newestPageStart, 100)));
-      await session.settle();
+        // The list opens on the cached page while Discord is asked.
+        await tester.tap(
+          find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
+        );
+        await session.settle();
+        expect(session.messageRow(_idOf(_newestPageStart)), findsOneWidget);
+        newestPage.complete(jsonResponse(_page(_newestPageStart, 100)));
+        await session.settle();
 
-      _expectOpenedOnNewLine(tester, session, _old);
-    }, onDisk: true, routes: _routeHistory);
+        _expectOpenedOnNewLine(tester, session, _old);
+      },
+      onDisk: true,
+      routes: _routeHistory,
+    );
 
-    testSession('jump to present still reaches the newest message', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
+    testSession(
+      'jump to present still reaches the newest message',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
 
-      await tester.tap(find.byKey(const ValueKey('jump-to-present')));
-      await session.settle();
+        await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+        await session.settle();
 
-      _expectAtPresent(tester, session, _newest);
-    }, ready: backlog, routes: _routeHistory);
+        _expectAtPresent(tester, session, _newest);
+      },
+      ready: backlog,
+      routes: _routeHistory,
+    );
 
     testSession('stays on the newest page if the older one fails', (
       tester,
@@ -337,38 +393,42 @@ void main() {
   });
 
   group('a channel with less than a page unread', () {
-    testSession('asks for no second page', (tester, session) async {
-      await session.openChannel(SessionHarness.channelId);
+    testSession(
+      'asks for no second page',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
 
-      expect(_queriesWith(session, 'around'), isEmpty);
-    },
-        ready: ChannelHistoryFixture.readyWithUnread(
-          firstUnread: _newest - 5,
-          newest: _newest,
-        ),
-        routes: _routeHistory);
+        expect(_queriesWith(session, 'around'), isEmpty);
+      },
+      ready: ChannelHistoryFixture.readyWithUnread(
+        firstUnread: _newest - 5,
+        newest: _newest,
+      ),
+      routes: _routeHistory,
+    );
   });
 
   group('an around page and the start of history', () {
-    testSession('a short page in a loaded channel can still load older', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
-      session.transport.on('GET', _messagesPath, (request) {
-        return request.uri.queryParameters['before'] != null
-            ? jsonResponse(_page(0, _old - 10))
-            : jsonResponse(_page(_old - 10, 60));
-      });
+    testSession(
+      'a short page in a loaded channel can still load older',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        session.transport.on('GET', _messagesPath, (request) {
+          return request.uri.queryParameters['before'] != null
+              ? jsonResponse(_page(0, _old - 10))
+              : jsonResponse(_page(_old - 10, 60));
+        });
 
-      await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
-      for (var drag = 0; drag < 20; drag++) {
-        if (_queriesWith(session, 'before').isNotEmpty) break;
-        await _scrollTimeline(tester, session, 800);
-      }
+        await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
+        for (var drag = 0; drag < 20; drag++) {
+          if (_queriesWith(session, 'before').isNotEmpty) break;
+          await _scrollTimeline(tester, session, 800);
+        }
 
-      expect(_queriesWith(session, 'before'), [_idOf(_old - 10)]);
-    }, routes: _routeHistory);
+        expect(_queriesWith(session, 'before'), [_idOf(_old - 10)]);
+      },
+      routes: _routeHistory,
+    );
 
     testSession('a short page in a channel not yet opened can too', (
       tester,
@@ -514,34 +574,35 @@ void main() {
       _expectAtPresent(tester, session, _newest + 2);
     }, routes: _routeHistory);
 
-    testSession('sending from it lands on the sent message with no gap', (
-      tester,
-      session,
-    ) async {
-      await session.openChannel(SessionHarness.channelId);
-      await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
-      session.transport.on(
-        'POST',
-        _messagesPath,
-        (_) => jsonResponse(
-          ChannelHistoryFixture.message(
-            _newest + 2,
-            authorId: SessionHarness.currentUserId,
+    testSession(
+      'sending from it lands on the sent message with no gap',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await _followLinkTo(tester, session, _old, postedAs: _newest + 1);
+        session.transport.on(
+          'POST',
+          _messagesPath,
+          (_) => jsonResponse(
+            ChannelHistoryFixture.message(
+              _newest + 2,
+              authorId: SessionHarness.currentUserId,
+            ),
           ),
-        ),
-      );
-      _routeHistory(session.transport, newest: _newest + 2);
+        );
+        _routeHistory(session.transport, newest: _newest + 2);
 
-      await tester.enterText(
-        find.byKey(const ValueKey('message-composer')),
-        'Message ${_newest + 2}',
-      );
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await session.settle();
+        await tester.enterText(
+          find.byKey(const ValueKey('message-composer')),
+          'Message ${_newest + 2}',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await session.settle();
 
-      _expectAtPresent(tester, session, _newest + 2);
-      expect(session.messageRow(_idOf(_newest + 1)), findsOneWidget);
-    }, routes: _routeHistory);
+        _expectAtPresent(tester, session, _newest + 2);
+        expect(session.messageRow(_idOf(_newest + 1)), findsOneWidget);
+      },
+      routes: _routeHistory,
+    );
   });
 }
 
@@ -585,9 +646,9 @@ void _expectOpenedOnNewLine(
   expect(row, findsOneWidget);
   expect(tester.getTopLeft(row).dy, inInclusiveRange(0, 400));
   expect(
-    tester.getBottomLeft(
-      find.byKey(const ValueKey('unread-message-boundary')),
-    ).dy,
+    tester
+        .getBottomLeft(find.byKey(const ValueKey('unread-message-boundary')))
+        .dy,
     tester.getTopLeft(row).dy,
   );
 }

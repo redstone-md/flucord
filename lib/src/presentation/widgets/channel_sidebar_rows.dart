@@ -1,7 +1,5 @@
 part of 'channel_sidebar.dart';
 
-enum _ServerMenuAction { settings, notifications, report, leave }
-
 /// A server's sidebar header: its name, and every action on the server in the
 /// one menu the name opens, the way Discord's own header works.
 ///
@@ -27,26 +25,14 @@ class _ServerHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = [
-      if (onOpenSettings != null)
-        _item(
-          _ServerMenuAction.settings,
-          'open-server-settings',
-          'Server settings',
-        ),
-      if (onOpenNotifications != null)
-        _item(
-          _ServerMenuAction.notifications,
-          'space-notification-menu',
-          'Notification settings',
-        ),
-      if (onReport != null)
-        _item(_ServerMenuAction.report, 'report-server', 'Report server'),
-      if (onLeave != null)
-        _item(_ServerMenuAction.leave, 'leave-server', 'Leave server'),
-    ];
+    final entries = serverMenuItems({
+      if (onOpenSettings != null) ServerMenuAction.settings,
+      if (onOpenNotifications != null) ServerMenuAction.notifications,
+      if (onReport != null) ServerMenuAction.report,
+      if (onLeave != null) ServerMenuAction.leave,
+    });
     if (entries.isEmpty) return title;
-    return PopupMenuButton<_ServerMenuAction>(
+    return PopupMenuButton<ServerMenuAction>(
       key: const ValueKey('space-menu'),
       tooltip: 'Server menu',
       position: PopupMenuPosition.under,
@@ -64,29 +50,21 @@ class _ServerHeader extends StatelessWidget {
     );
   }
 
-  static PopupMenuItem<_ServerMenuAction> _item(
-    _ServerMenuAction action,
-    String key,
-    String label,
-  ) => PopupMenuItem(
-    key: ValueKey(key),
-    value: action,
-    height: 36,
-    child: Text(label),
-  );
-
-  void _perform(BuildContext context, _ServerMenuAction action) {
+  void _perform(BuildContext context, ServerMenuAction action) {
     switch (action) {
-      case _ServerMenuAction.settings:
+      case ServerMenuAction.settings:
         onOpenSettings?.call();
-      case _ServerMenuAction.notifications:
+      case ServerMenuAction.notifications:
         if (_belowHeader(context) case final position?) {
           onOpenNotifications?.call(context, position);
         }
-      case _ServerMenuAction.report:
+      case ServerMenuAction.report:
         onReport?.call();
-      case _ServerMenuAction.leave:
+      case ServerMenuAction.leave:
         onLeave?.call();
+      // The header's notification menu has this row already.
+      case ServerMenuAction.markRead:
+        break;
     }
   }
 
@@ -481,7 +459,7 @@ class _ChannelRow extends StatelessWidget {
     final request = await showNotificationSettingsMenu(
       context: context,
       position: RelativeRect.fromRect(
-        position & Size.zero,
+        overlay.globalToLocal(position) & Size.zero,
         Offset.zero & overlay.size,
       ),
       muted: muted,

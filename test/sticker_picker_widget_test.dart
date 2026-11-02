@@ -6,7 +6,30 @@ import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/sticker_picker.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/zoomed_app.dart';
+
 void main() {
+  testWidgets('the picker stays on screen on a short window under zoom', (
+    tester,
+  ) async {
+    const window = Size(924, 461);
+    await tester.binding.setSurfaceSize(window);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _PickerApp(
+        onSend: (_) async => true,
+        builder: await zoomedAppBuilder(1.4),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-sticker-picker')));
+    await tester.pumpAndSettle();
+
+    final picker = tester.getRect(find.byKey(const ValueKey('sticker-picker')));
+    expect(picker.top, greaterThanOrEqualTo(0));
+    expect(picker.bottom, lessThanOrEqualTo(window.height));
+  });
+
   testWidgets('searches, caps selection, and retains a failed send', (
     tester,
   ) async {
@@ -117,14 +140,16 @@ void main() {
 }
 
 class _PickerApp extends StatelessWidget {
-  const _PickerApp({required this.onSend, this.sections});
+  const _PickerApp({required this.onSend, this.sections, this.builder});
 
   final SendStickersCallback onSend;
   final List<StickerServerSection>? sections;
+  final TransitionBuilder? builder;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     theme: FlucordTheme.dark,
+    builder: builder,
     home: Scaffold(
       body: Align(
         alignment: Alignment.bottomRight,

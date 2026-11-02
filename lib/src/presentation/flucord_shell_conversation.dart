@@ -38,6 +38,8 @@ extension _FlucordShellConversation on FlucordShell {
         ? (text) => _submitSearch(workspace, space, channel, text)
         : null,
     onOpenInbox: () => _openInbox(context),
+    onOpenMemberProfile: (userId) =>
+        unawaited(_openMemberCard(context, space.id, userId)),
   );
 
   /// Runs [text] against the server and opens the results panel.

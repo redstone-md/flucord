@@ -12,6 +12,7 @@ import 'sqlite_chat_schema.dart';
 import 'sqlite_guild_emoji_store.dart';
 import 'sqlite_guild_scheduled_event_store.dart';
 import 'sqlite_guild_sticker_store.dart';
+import 'sqlite_write_queue.dart';
 
 part 'sqlite_chat_cache_expressions.dart';
 part 'sqlite_chat_cache_entities.dart';
@@ -19,10 +20,18 @@ part 'sqlite_chat_cache_entities.dart';
 final class SqliteChatCache
     with _SqliteChatCacheExpressions, _SqliteChatCacheEntities
     implements ChatCache {
-  SqliteChatCache._(this._database);
+  SqliteChatCache._(this._database) {
+    _writes = SqliteWriteQueue(_database, beforeCommit: _pruneChannelsWritten);
+  }
 
   @override
   final Database _database;
+
+  @override
+  late final SqliteWriteQueue _writes;
+
+  /// The channels that gained messages in the writes still waiting.
+  final Set<String> _channelsWritten = {};
 
   /// The most messages held per channel, about five full pages of offline
   /// scrollback. History loading appends page after page without replacing,
@@ -57,6 +66,7 @@ final class SqliteChatCache
     final database = await (factory ?? databaseFactoryFfi).openDatabase(
       path,
       options: OpenDatabaseOptions(
+        onConfigure: _configure,
         version: SqliteChatSchema.version,
         onCreate: SqliteChatSchema.create,
         onUpgrade: SqliteChatSchema.upgrade,
@@ -65,12 +75,25 @@ final class SqliteChatCache
     return SqliteChatCache._(database);
   }
 
+  /// WAL lets a commit append to a side file, and NORMAL does not wait for the
+  /// disk on each commit. A crash of the app loses no commit. A crash of the
+  /// whole machine can lose the last few but cannot damage the file, and this
+  /// is only a cache of what Discord holds.
+  ///
+  /// WAL stays set in the file. NORMAL lasts as long as the connection, so each
+  /// open sets both.
+  static Future<void> _configure(Database database) async {
+    await database.rawQuery('PRAGMA journal_mode=WAL');
+    await database.rawQuery('PRAGMA synchronous=NORMAL');
+  }
+
   @override
-  Future<ChatWorkspace?> readWorkspace() => _readWorkspace(withHistory: true);
+  Future<ChatWorkspace?> readWorkspace() =>
+      _writes.inTurn(() => _readWorkspace(withHistory: true));
 
   @override
   Future<ChatWorkspace?> readWorkspaceShell() =>
-      _readWorkspace(withHistory: false);
+      _writes.inTurn(() => _readWorkspace(withHistory: false));
 
   /// Reads the workspace, with its members and messages when [withHistory].
   ///
@@ -129,8 +152,8 @@ final class SqliteChatCache
   }
 
   @override
-  Future<void> writeWorkspace(ChatWorkspace workspace) async {
-    await _database.transaction((transaction) async {
+  Future<void> writeWorkspace(ChatWorkspace workspace) => _writes.inTurn(() {
+    return _database.transaction((transaction) async {
       await transaction.insert('metadata', {
         'key': 'current_member_id',
         'value': workspace.currentMemberId,
@@ -165,14 +188,14 @@ final class SqliteChatCache
       }
       await batch.commit(noResult: true);
     });
-  }
+  });
 
   @override
   Future<ChannelHistory> readChannelHistory(
     String channelId, {
     int? limit,
     String? beforeMessageId,
-  }) async {
+  }) => _writes.inTurn(() async {
     // Times are stored as UTC in ISO form, so one sorts against another as
     // text and the cursor needs no parsing.
     final cursor = beforeMessageId == null
@@ -199,7 +222,7 @@ final class SqliteChatCache
       messages: messages.map(_messageFromRow).toList(),
       members: members,
     );
-  }
+  });
 
   /// When the named message was sent, as it is stored, or null where the
   /// message is not held. A cursor pointing at nothing reads the channel from
@@ -216,40 +239,42 @@ final class SqliteChatCache
   }
 
   @override
-  Future<ChatMessage?> readMessage(String messageId) async {
-    final rows = await _database.query(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [messageId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : _messageFromRow(rows.single);
-  }
+  Future<ChatMessage?> readMessage(String messageId) =>
+      _writes.inTurn(() async {
+        final rows = await _database.query(
+          'messages',
+          where: 'id = ?',
+          whereArgs: [messageId],
+          limit: 1,
+        );
+        return rows.isEmpty ? null : _messageFromRow(rows.single);
+      });
 
   @override
-  Future<ChannelHistory> readPinnedMessages(String channelId) async {
-    final messages = await _database.query(
-      'messages',
-      where: 'channel_id = ? AND is_pinned = 1',
-      whereArgs: [channelId],
-      orderBy: 'sent_at DESC',
-    );
-    final authorIds = messages
-        .map((row) => row['author_id']! as String)
-        .toSet();
-    return ChannelHistory(
-      channelId: channelId,
-      messages: messages.map(_messageFromRow).toList(),
-      members: await _readMembers(authorIds),
-    );
-  }
+  Future<ChannelHistory> readPinnedMessages(String channelId) =>
+      _writes.inTurn(() async {
+        final messages = await _database.query(
+          'messages',
+          where: 'channel_id = ? AND is_pinned = 1',
+          whereArgs: [channelId],
+          orderBy: 'sent_at DESC',
+        );
+        final authorIds = messages
+            .map((row) => row['author_id']! as String)
+            .toSet();
+        return ChannelHistory(
+          channelId: channelId,
+          messages: messages.map(_messageFromRow).toList(),
+          members: await _readMembers(authorIds),
+        );
+      });
 
   @override
   Future<void> writeChannelHistory(
     ChannelHistory history, {
     bool replaceExisting = true,
-  }) async {
-    await _database.transaction((transaction) async {
+  }) => _writes.inTurn(() {
+    return _database.transaction((transaction) async {
       if (replaceExisting) {
         await transaction.delete(
           'messages',
@@ -275,25 +300,60 @@ final class SqliteChatCache
       await batch.commit(noResult: true);
       await _pruneChannel(transaction, history.channelId);
     });
-  }
+  });
 
   @override
   Future<void> writeMessage(ChatMessage message, {Member? member}) async {
-    await _database.transaction((transaction) async {
-      if (member != null) {
-        await transaction.insert(
-          'members',
-          _memberToRow(member),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      await transaction.insert(
+    _channelsWritten.add(message.channelId);
+    _writes.add((transaction) => _putMessage(transaction, message, member));
+  }
+
+  @override
+  Future<void> updateMessage(
+    String messageId,
+    ChatMessage Function(ChatMessage held) change, {
+    Member? member,
+  }) async {
+    _writes.add((transaction) async {
+      final rows = await transaction.query(
         'messages',
-        _messageToRow(message),
+        where: 'id = ?',
+        whereArgs: [messageId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final updated = change(_messageFromRow(rows.single));
+      await _putMessage(transaction, updated, member);
+    });
+  }
+
+  Future<void> _putMessage(
+    Transaction transaction,
+    ChatMessage message,
+    Member? member,
+  ) async {
+    if (member != null) {
+      await transaction.insert(
+        'members',
+        _memberToRow(member),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      await _pruneChannel(transaction, message.channelId);
-    });
+    }
+    await transaction.insert(
+      'messages',
+      _messageToRow(message),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Once per flush, not once per message: a burst of messages in one channel
+  /// needs this delete only at the end.
+  Future<void> _pruneChannelsWritten(Transaction transaction) async {
+    final channelIds = [..._channelsWritten];
+    _channelsWritten.clear();
+    for (final channelId in channelIds) {
+      await _pruneChannel(transaction, channelId);
+    }
   }
 
   /// Keeps a channel's rows within [historyPerChannel], newest kept.
@@ -309,18 +369,23 @@ final class SqliteChatCache
 
   @override
   Future<void> writeSpace(CommunitySpace space) async {
-    final existing = await _database.query(
+    _writes.add((transaction) => _putSpace(transaction, space));
+  }
+
+  /// Writes [space], keeping its place in the list if it has one already.
+  Future<void> _putSpace(Transaction transaction, CommunitySpace space) async {
+    final existing = await transaction.query(
       'spaces',
       columns: ['sort_index'],
       where: 'id = ?',
       whereArgs: [space.id],
       limit: 1,
     );
-    final countRows = await _database.rawQuery(
+    final countRows = await transaction.rawQuery(
       'SELECT COUNT(*) AS space_count FROM spaces',
     );
     final count = countRows.single['space_count']! as int;
-    await _database.insert(
+    await transaction.insert(
       'spaces',
       _spaceToRow(
         space,
@@ -331,27 +396,9 @@ final class SqliteChatCache
   }
 
   @override
-  Future<void> writeGuild(JoinedGuild guild) async {
-    await _database.transaction((transaction) async {
-      final existing = await transaction.query(
-        'spaces',
-        columns: ['sort_index'],
-        where: 'id = ?',
-        whereArgs: [guild.space.id],
-        limit: 1,
-      );
-      final countRows = await transaction.rawQuery(
-        'SELECT COUNT(*) AS space_count FROM spaces',
-      );
-      final count = countRows.single['space_count']! as int;
-      await transaction.insert(
-        'spaces',
-        _spaceToRow(
-          guild.space,
-          existing.isEmpty ? count : existing.single['sort_index']! as int,
-        ),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+  Future<void> writeGuild(JoinedGuild guild) => _writes.inTurn(() {
+    return _database.transaction((transaction) async {
+      await _putSpace(transaction, guild.space);
       final batch = transaction.batch();
       for (var index = 0; index < guild.channels.length; index++) {
         batch.insert(
@@ -383,11 +430,11 @@ final class SqliteChatCache
       }
       await batch.commit(noResult: true);
     });
-  }
+  });
 
   @override
-  Future<void> deleteGuild(String spaceId) async {
-    await _database.transaction((transaction) async {
+  Future<void> deleteGuild(String spaceId) => _writes.inTurn(() {
+    return _database.transaction((transaction) async {
       // Messages reference the channels by id, so they go before the channels
       // the query reads from.
       await transaction.rawDelete(
@@ -428,7 +475,7 @@ final class SqliteChatCache
       );
       await _dropGuildFromMembers(transaction, spaceId);
     });
-  }
+  });
 
   /// Rewrites the members that named [spaceId] without it.
   ///
@@ -465,25 +512,35 @@ final class SqliteChatCache
   }
 
   @override
-  Future<void> deleteMessage(String messageId) =>
-      _database.delete('messages', where: 'id = ?', whereArgs: [messageId]);
-
-  @override
-  Future<void> writeChannel(ConversationChannel channel) async {
-    final countRows = await _database.rawQuery(
-      'SELECT COUNT(*) AS channel_count FROM channels',
-    );
-    final count = countRows.single['channel_count'] as int?;
-    await _database.insert(
-      'channels',
-      _channelToRow(channel, count ?? 0),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+  Future<void> deleteMessage(String messageId) async {
+    _writes.add(
+      (transaction) => transaction.delete(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [messageId],
+      ),
     );
   }
 
   @override
-  Future<void> writeChannelActivity(ConversationChannel channel) =>
-      _database.update(
+  Future<void> writeChannel(ConversationChannel channel) async {
+    _writes.add((transaction) async {
+      final countRows = await transaction.rawQuery(
+        'SELECT COUNT(*) AS channel_count FROM channels',
+      );
+      final count = countRows.single['channel_count'] as int?;
+      await transaction.insert(
+        'channels',
+        _channelToRow(channel, count ?? 0),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
+
+  @override
+  Future<void> writeChannelActivity(ConversationChannel channel) async {
+    _writes.add(
+      (transaction) => transaction.update(
         'channels',
         {
           'unread': channel.unread ? 1 : 0,
@@ -493,11 +550,13 @@ final class SqliteChatCache
         },
         where: 'id = ?',
         whereArgs: [channel.id],
-      );
+      ),
+    );
+  }
 
   @override
-  Future<void> deleteChannel(String channelId) async {
-    await _database.transaction((transaction) async {
+  Future<void> deleteChannel(String channelId) => _writes.inTurn(() {
+    return _database.transaction((transaction) async {
       await transaction.delete(
         'messages',
         where: 'channel_id = ?',
@@ -509,7 +568,7 @@ final class SqliteChatCache
         whereArgs: [channelId],
       );
     });
-  }
+  });
 
   @override
   Future<void> deleteCategory(String categoryId) =>
@@ -706,9 +765,10 @@ final class SqliteChatCache
   /// Every table is found by name, so a table added later cannot be missed.
   ///
   /// VACUUM rewrites the file. A delete alone leaves the row's bytes in free
-  /// pages, where anyone who opens the file can still read them.
+  /// pages, where anyone who opens the file can still read them. In WAL the old
+  /// pages also stay in the side file until the checkpoint empties it.
   @override
-  Future<void> clear() async {
+  Future<void> clear() => _writes.inTurn(() async {
     final tables = await _database.query(
       'sqlite_master',
       columns: ['name'],
@@ -720,8 +780,12 @@ final class SqliteChatCache
       }
     });
     await _database.execute('VACUUM');
-  }
+    await _database.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
+  });
 
   @override
-  Future<void> close() => _database.close();
+  Future<void> flush() => _writes.flush();
+
+  @override
+  Future<void> close() => _writes.close(_database.close);
 }

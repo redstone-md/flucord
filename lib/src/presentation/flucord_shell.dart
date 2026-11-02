@@ -6,6 +6,7 @@ import '../application/chat_controller.dart';
 import '../application/connection_controller.dart';
 import '../application/discord_oauth_controller.dart';
 import '../application/friends_controller.dart';
+import '../domain/direct_message_candidate.dart';
 import '../application/guild_member_admin_controller.dart';
 import '../application/guild_member_list_controller.dart';
 import '../application/member_profile_controller.dart';
@@ -54,6 +55,7 @@ import 'widgets/oauth_guild_workspace.dart';
 import 'widgets/pinned_messages_panel.dart';
 import 'widgets/quick_switcher.dart';
 import 'widgets/leave_server_dialog.dart';
+import 'widgets/server_menu.dart';
 import 'widgets/report_dialog.dart';
 import 'widgets/server_rail.dart';
 import 'widgets/status_views.dart';
@@ -70,6 +72,21 @@ part 'flucord_shell_conversation.dart';
 /// conversation plane is different: the pane resolves its controllers from the
 /// scope modules above this widget, so only navigation and panel intents cross
 /// the boundary between the two.
+/// Below this width the channel sidebar gives way to the rail alone.
+///
+/// It is under the smallest window at the largest zoom (940 / 1.4, less the
+/// window frame), so the sidebar and the account panel show at every window
+/// size the app allows.
+const double _channelSidebarMinWidth = 640;
+const double _railWidth = 72;
+const double _channelSidebarWidth = 236;
+
+/// The widest side panel, the search results.
+const double _sidePanelMaxWidth = 340;
+
+/// Below this width the composer's own buttons start to overlap.
+const double _conversationMinWidth = 352;
+
 class FlucordShell extends StatelessWidget {
   const FlucordShell({
     required this.chatController,
@@ -185,9 +202,7 @@ class FlucordShell extends StatelessWidget {
             // not answer differently about the same account.
             final administration = permissions.administrationOf(spaceId);
             final canOpenSettings =
-                !space.isDirectMessages &&
-                administration.hasAnySurface &&
-                chatController.guildManagement != null;
+                !space.isDirectMessages && _canOpenSettings(administration);
             final canReport = chatController.moderation != null;
 
             /// Joining, creating and leaving need the guild-management plane;
@@ -202,7 +217,8 @@ class FlucordShell extends StatelessWidget {
                 workspace,
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final showChannels = constraints.maxWidth >= 760;
+                    final showChannels =
+                        constraints.maxWidth >= _channelSidebarMinWidth;
                     final membersFit = constraints.maxWidth >= 1120;
                     final threadParentId = channel?.threadParentId;
                     final allowThreadPanel =
@@ -244,6 +260,116 @@ class FlucordShell extends StatelessWidget {
                           DiscordPermissions.readMessageHistory,
                           channel,
                         );
+                    final Widget? sidePanel = showSearchPanel
+                        ? MessageSearchPanel(
+                            controller: searchController,
+                            workspace: workspace,
+                            linkLauncher: externalLinkLauncher,
+                            channels: [
+                              if (channel != null)
+                                ..._searchChannels(workspace, space, channel),
+                            ],
+                            query: workspaceController.query,
+                            onSubmitQuery: channel != null && canSearch
+                                ? (text) {
+                                    // The bar echoes the line the controls
+                                    // composed, exactly as a typed line.
+                                    workspaceController.setQuery(text);
+                                    _submitSearch(
+                                      workspace,
+                                      space,
+                                      channel,
+                                      text,
+                                    );
+                                  }
+                                : null,
+                            onClose: () {
+                              workspaceController.closeSearch();
+                              searchController.clear();
+                            },
+                            onJump: (channelId, messageId) => _openDestination(
+                              spaceId:
+                                  workspace.channelOrNull(channelId)?.spaceId ??
+                                  spaceId,
+                              channelId: channelId,
+                              messageId: messageId,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                            onSelectChannel: (id) => _selectChannel(
+                              id,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                          )
+                        : showPins
+                        ? PinnedMessagesPanel(
+                            workspace: workspace,
+                            linkLauncher: externalLinkLauncher,
+                            onSelectChannel: (id) => _selectChannel(
+                              id,
+                              voiceSurface: VoiceChannelSurface.chat,
+                            ),
+                            channelId: channel.id,
+                            history: chatController.pinnedMessages(channel.id),
+                            isLoading: chatController.isLoadingPins(channel.id),
+                            error: chatController.pinError(channel.id),
+                            onClose: workspaceController.togglePins,
+                            onRefresh: () => unawaited(
+                              chatController.loadPinnedMessages(
+                                channel.id,
+                                refresh: true,
+                              ),
+                            ),
+                            onUnpin: chatController.togglePin,
+                          )
+                        : showThreads
+                        ? ThreadBrowserPanel(
+                            parentChannel: workspace.channelById(
+                              threadParentId,
+                            ),
+                            activeThreads: channels
+                                .where(
+                                  (item) =>
+                                      item.isThread &&
+                                      !item.isArchived &&
+                                      item.parentId == threadParentId,
+                                )
+                                .toList(growable: false),
+                            archivedThreads: chatController.archivedThreadsFor(
+                              threadParentId,
+                            ),
+                            isLoading: chatController.isLoadingArchivedThreads(
+                              threadParentId,
+                            ),
+                            error: chatController.archivedThreadsError(
+                              threadParentId,
+                            ),
+                            canLoadMore: chatController
+                                .canLoadMoreArchivedThreads(threadParentId),
+                            onClose: workspaceController.toggleThreads,
+                            onRefresh: () => unawaited(
+                              chatController.loadArchivedThreads(
+                                threadParentId,
+                                refresh: true,
+                              ),
+                            ),
+                            onLoadMore: () => unawaited(
+                              chatController.loadArchivedThreads(
+                                threadParentId,
+                              ),
+                            ),
+                            onSelectThread: _selectChannel,
+                          )
+                        : null;
+                    // A panel that would squeeze the conversation below what
+                    // the composer needs takes its place until it is closed.
+                    // The conversation stays mounted, so its text is kept.
+                    final panelCovers =
+                        sidePanel != null &&
+                        constraints.maxWidth -
+                                _railWidth -
+                                (showChannels ? _channelSidebarWidth : 0) -
+                                _sidePanelMaxWidth <
+                            _conversationMinWidth;
                     return Row(
                       children: [
                         // Kept across rebuilds that leave every pip where it
@@ -271,6 +397,9 @@ class FlucordShell extends StatelessWidget {
                             onAddServer: canManageServers
                                 ? () => unawaited(_addServer(context))
                                 : null,
+                            onOpenSpaceMenu: (spaceId, position) => unawaited(
+                              _openSpaceMenu(context, spaceId, position),
+                            ),
                             sessionMode: connectionController.mode,
                             isDark:
                                 workspaceController.themeMode == ThemeMode.dark,
@@ -403,128 +532,38 @@ class FlucordShell extends StatelessWidget {
                             },
                           ),
                         Expanded(
-                          child: channel == null
-                              ? DirectMessagesEmptyView(
-                                  onNewMessage: () =>
-                                      _openDirectMessage(context),
-                                )
-                              : _conversationPane(
-                                  context: context,
-                                  workspace: workspace,
-                                  capabilities: permissions.capabilitiesIn(
-                                    channel,
-                                  ),
-                                  channel: channel,
-                                  channels: channels,
-                                  space: space,
-                                  showChannels: showChannels,
-                                  membersFit: membersFit,
-                                  showMembers: showMembers,
-                                  showPins: showPins,
-                                  showThreads: showThreads,
-                                  allowThreadPanel: allowThreadPanel,
-                                  canSearch: canSearch,
-                                ),
-                        ),
-                        if (showSearchPanel)
-                          MessageSearchPanel(
-                            controller: searchController,
-                            workspace: workspace,
-                            linkLauncher: externalLinkLauncher,
-                            channels: [
-                              if (channel != null)
-                                ..._searchChannels(workspace, space, channel),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Offstage(
+                                offstage: panelCovers,
+                                child: channel == null
+                                    ? DirectMessagesEmptyView(
+                                        onNewMessage: () =>
+                                            _openDirectMessage(context),
+                                      )
+                                    : _conversationPane(
+                                        context: context,
+                                        workspace: workspace,
+                                        capabilities: permissions
+                                            .capabilitiesIn(channel),
+                                        channel: channel,
+                                        channels: channels,
+                                        space: space,
+                                        showChannels: showChannels,
+                                        membersFit: membersFit,
+                                        showMembers: showMembers,
+                                        showPins: showPins,
+                                        showThreads: showThreads,
+                                        allowThreadPanel: allowThreadPanel,
+                                        canSearch: canSearch,
+                                      ),
+                              ),
+                              if (panelCovers) sidePanel,
                             ],
-                            query: workspaceController.query,
-                            onSubmitQuery: channel != null && canSearch
-                                ? (text) {
-                                    // The bar echoes the line the controls
-                                    // composed, exactly as a typed line.
-                                    workspaceController.setQuery(text);
-                                    _submitSearch(
-                                      workspace,
-                                      space,
-                                      channel,
-                                      text,
-                                    );
-                                  }
-                                : null,
-                            onClose: () {
-                              workspaceController.closeSearch();
-                              searchController.clear();
-                            },
-                            onJump: (channelId, messageId) => _openDestination(
-                              spaceId:
-                                  workspace.channelOrNull(channelId)?.spaceId ??
-                                  spaceId,
-                              channelId: channelId,
-                              messageId: messageId,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
-                            onSelectChannel: (id) => _selectChannel(
-                              id,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
                           ),
-                        if (showPins)
-                          PinnedMessagesPanel(
-                            workspace: workspace,
-                            linkLauncher: externalLinkLauncher,
-                            onSelectChannel: (id) => _selectChannel(
-                              id,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
-                            channelId: channel.id,
-                            history: chatController.pinnedMessages(channel.id),
-                            isLoading: chatController.isLoadingPins(channel.id),
-                            error: chatController.pinError(channel.id),
-                            onClose: workspaceController.togglePins,
-                            onRefresh: () => unawaited(
-                              chatController.loadPinnedMessages(
-                                channel.id,
-                                refresh: true,
-                              ),
-                            ),
-                            onUnpin: chatController.togglePin,
-                          ),
-                        if (showThreads)
-                          ThreadBrowserPanel(
-                            parentChannel: workspace.channelById(
-                              threadParentId,
-                            ),
-                            activeThreads: channels
-                                .where(
-                                  (item) =>
-                                      item.isThread &&
-                                      !item.isArchived &&
-                                      item.parentId == threadParentId,
-                                )
-                                .toList(growable: false),
-                            archivedThreads: chatController.archivedThreadsFor(
-                              threadParentId,
-                            ),
-                            isLoading: chatController.isLoadingArchivedThreads(
-                              threadParentId,
-                            ),
-                            error: chatController.archivedThreadsError(
-                              threadParentId,
-                            ),
-                            canLoadMore: chatController
-                                .canLoadMoreArchivedThreads(threadParentId),
-                            onClose: workspaceController.toggleThreads,
-                            onRefresh: () => unawaited(
-                              chatController.loadArchivedThreads(
-                                threadParentId,
-                                refresh: true,
-                              ),
-                            ),
-                            onLoadMore: () => unawaited(
-                              chatController.loadArchivedThreads(
-                                threadParentId,
-                              ),
-                            ),
-                            onSelectThread: _selectChannel,
-                          ),
+                        ),
+                        if (sidePanel != null && !panelCovers) sidePanel,
                         if (showMembers)
                           MemberSidebar(
                             members: workspace.members,

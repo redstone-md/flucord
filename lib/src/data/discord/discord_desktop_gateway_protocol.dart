@@ -256,6 +256,20 @@ final class DiscordDesktopGatewayProtocol {
     },
   );
 
+  /// Opcode 8 by id. Discord takes either a query or ids, never both.
+  DiscordDesktopGatewayFrame requestGuildMembersByIds(
+    String guildId,
+    List<String> userIds,
+  ) => DiscordDesktopGatewayFrame(
+    DiscordDesktopGatewayOpcode.requestGuildMembers,
+    {
+      'guild_id': guildId,
+      'user_ids': userIds,
+      'limit': userIds.length,
+      'presences': false,
+    },
+  );
+
   List<DiscordDesktopGatewayFrame> guildSubscriptionFrames(
     Map<String, Map<String, Object?>> subscriptions,
   ) {

@@ -45,6 +45,7 @@ extension ChatControllerHistoryWindow on ChatController {
       }
       _applyWindow(channelId, page, aroundMessageId: aroundMessageId);
       _foldArrivals(channelId);
+      if (loadsPresent && !page.fromCache) _channelsWithGap.remove(channelId);
     } catch (error) {
       if (isCurrent()) _windowErrors[channelId] = error;
     } finally {
@@ -77,6 +78,7 @@ extension ChatControllerHistoryWindow on ChatController {
             page.history,
             retainExisting: aroundMessageId != null,
           );
+    _askAboutAuthors(page.history);
     // A short page around an anchor says nothing about where history starts:
     // Discord fills it from both sides. Only an older page can say so.
     _setHistoryExhausted(channelId, aroundMessageId == null && !page.hasMore);

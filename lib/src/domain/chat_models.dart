@@ -193,6 +193,9 @@ final class ChatWorkspace {
       Expando<Map<String, List<ConversationChannel>>>();
   static final _categoriesBySpaceTables =
       Expando<Map<String, List<ChannelCategory>>>();
+  static final _emojisBySpaceTables = Expando<Map<String, List<GuildEmoji>>>();
+  static final _stickersBySpaceTables =
+      Expando<Map<String, List<GuildSticker>>>();
 
   Map<String, CommunitySpace> get _spaceById =>
       _spaceTables[spaces] ??= _byId(spaces, (space) => space.id);
@@ -218,11 +221,23 @@ final class ChatWorkspace {
         (category) => category.spaceId,
       );
 
+  /// Only what can be used today: Discord withholds an unavailable one.
+  Map<String, List<GuildEmoji>> get _emojisBySpaceId =>
+      _emojisBySpaceTables[emojis] ??= _groupBy(
+        emojis.where((emoji) => emoji.available),
+        (emoji) => emoji.spaceId,
+      );
+  Map<String, List<GuildSticker>> get _stickersBySpaceId =>
+      _stickersBySpaceTables[stickers] ??= _groupBy(
+        stickers.where((sticker) => sticker.available),
+        (sticker) => sticker.spaceId,
+      );
+
   static Map<String, T> _byId<T>(List<T> items, String Function(T item) idOf) =>
       {for (final item in items) idOf(item): item};
 
   static Map<String, List<T>> _groupBy<T>(
-    List<T> items,
+    Iterable<T> items,
     String Function(T item) keyOf,
   ) {
     final grouped = <String, List<T>>{};
@@ -265,6 +280,18 @@ final class ChatWorkspace {
   CommunityRole? roleOrNull(String id) => _roleById[id];
 
   CommunitySpace? spaceOrNull(String id) => _spaceById[id];
+
+  /// The colour [member]'s name has in [spaceId]: that of their highest role
+  /// with a colour. Null when no role gives one, and in a space with no roles.
+  int? nameColorOf(Member member, String spaceId) {
+    CommunityRole? top;
+    for (final roleId in member.membershipIn(spaceId)?.roleIds ?? const []) {
+      final role = roleOrNull(roleId);
+      if (role?.colorValue == null) continue;
+      if (top == null || role!.position > top.position) top = role;
+    }
+    return top?.colorValue;
+  }
 
   ChannelCategory? categoryOrNull(String id) => _categoryById[id];
 
@@ -405,8 +432,43 @@ final class ChatWorkspace {
     history,
     replaceChannel:
         !retainExisting &&
-        channelById(history.channelId).firstUnreadMessageId == null,
+        (channelById(history.channelId).firstUnreadMessageId == null ||
+            !_reachesHeldMessages(history)),
   );
+
+  /// Folds in the newest page of a channel that may have missed messages.
+  ///
+  /// A page that shares a message with what the channel holds has no hole
+  /// behind it, so older messages stay and a reader scrolled up keeps their
+  /// place. A page that does not reach them replaces them, because keeping both
+  /// would leave a hole nothing marks. Inside the page's own span the page is
+  /// the truth, so a message deleted during the gap goes. Anything newer came
+  /// live while the page was on its way, and stays.
+  ChatWorkspace catchUpHistory(ChannelHistory page) {
+    if (page.messages.isEmpty) return mergeHistory(page);
+    final held = messagesFor(page.channelId);
+    final oldest = page.messages.first.sentAt;
+    final newest = page.messages.last.sentAt;
+    return mergeHistory(
+      ChannelHistory(
+        channelId: page.channelId,
+        members: page.members,
+        messages: [
+          if (_reachesHeldMessages(page))
+            ...held.where((message) => message.sentAt.isBefore(oldest)),
+          ...page.messages,
+          ...held.where((message) => message.sentAt.isAfter(newest)),
+        ],
+      ),
+    );
+  }
+
+  bool _reachesHeldMessages(ChannelHistory page) {
+    final pageIds = {for (final message in page.messages) message.id};
+    return messagesFor(
+      page.channelId,
+    ).any((message) => pageIds.contains(message.id));
+  }
 
   ChatWorkspace upsertMessage(ChatMessage message, {Member? member}) {
     final nextMembers = member == null
@@ -730,10 +792,18 @@ final class ChannelHistory {
 }
 
 final class ChannelHistoryPage {
-  const ChannelHistoryPage({required this.history, required this.hasMore});
+  const ChannelHistoryPage({
+    required this.history,
+    required this.hasMore,
+    this.fromCache = false,
+  });
 
   final ChannelHistory history;
   final bool hasMore;
+
+  /// True when Discord could not be asked and this is the local copy. It says
+  /// nothing about messages sent since that copy was written.
+  final bool fromCache;
 
   bool holds(String messageId) =>
       history.messages.any((message) => message.id == messageId);

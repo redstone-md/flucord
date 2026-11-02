@@ -349,6 +349,12 @@ final class _FakeMemberListRepository implements GuildMemberListRepository {
     required String query,
     int limit = 25,
   }) => searches.add((guildId, query));
+
+  @override
+  void requestGuildMembers({
+    required String guildId,
+    required List<String> userIds,
+  }) {}
 }
 
 const _jack = Member(

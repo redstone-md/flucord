@@ -93,6 +93,9 @@ final class ChatController extends ChangeNotifier {
   final String? Function(ChatWorkspace workspace)? _landingChannelIn;
   final ReadingPositions? _readingPositions;
   ChatRepository _repository;
+
+  /// Set once [_repository] has begun to close, so that it closes only once.
+  Future<void>? _repositoryClosed;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
   StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
   StreamSubscription<String>? _conversationSummarySubscription;
@@ -106,6 +109,11 @@ final class ChatController extends ChangeNotifier {
   RepositoryConnectionStatus _connectionStatus =
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
+
+  /// Held channels that may lack messages since a [HistoryGapEvent]. A page from
+  /// Discord clears a channel, and a page from the cache does not.
+  final Set<String> _channelsWithGap = {};
+  final Set<String> _catchingUpChannels = {};
 
   /// Channels showing a locally held page while their refresh is in flight.
   /// A refresh that then fails leaves what is on screen rather than an error.
@@ -140,6 +148,9 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
   final _archivedThreadState = _ArchivedThreadState();
+
+  /// Per space, the authors a member request has already asked about.
+  final Map<String, Set<String>> _askedAuthors = {};
   String? _activeChannelId;
   String? _guildAccessError;
   bool _isApplicationActive = true;
@@ -206,6 +217,29 @@ final class ChatController extends ChangeNotifier {
     );
   }
 
+  /// Asks about the authors of a history page whose roles in the guild are not
+  /// known yet. A page names none, and a name's colour comes from them. Each
+  /// author is asked about once per session, so moving between channels sends
+  /// nothing new.
+  void _askAboutAuthors(ChannelHistory history) {
+    final workspace = _workspace;
+    final channel = workspace?.channelOrNull(history.channelId);
+    if (workspace == null || channel == null || channel.isDirectMessage) return;
+    final spaceId = channel.spaceId;
+    final asked = _askedAuthors.putIfAbsent(spaceId, () => {});
+    final unknown = [
+      for (final author in history.members)
+        if (workspace.memberOrNull(author.id)?.membershipIn(spaceId) == null &&
+            asked.add(author.id))
+          author.id,
+    ];
+    if (unknown.isEmpty) return;
+    memberListRepository?.requestGuildMembers(
+      guildId: spaceId,
+      userIds: unknown,
+    );
+  }
+
   GuildMemberListRepository? get memberListRepository {
     final repository = _repository;
     return repository is GuildMemberListRepository
@@ -266,14 +300,26 @@ final class ChatController extends ChangeNotifier {
   bool isLoadingPins(String channelId) => _loadingPins.contains(channelId);
   Object? pinError(String channelId) => _pinErrors[channelId];
 
+  /// Closes the session before the process ends, so that what it still holds
+  /// reaches the disk and the server. A socket that does not answer must not
+  /// hold the exit, so the wait is short. The cache is the first thing a
+  /// repository saves when it closes, so this wait does not put it at risk.
+  Future<void> closeForExit() =>
+      _closeRepository().timeout(const Duration(seconds: 2), onTimeout: () {});
+
+  Future<void> _closeRepository() => _repositoryClosed ??= _repository.close();
+
   Future<void> useRepository(ChatRepository repository) async {
     await _eventSubscription?.cancel();
     await _readStateSubscription?.cancel();
     await _conversationSummarySubscription?.cancel();
-    await _repository.close();
+    await _closeRepository();
     _repository = repository;
+    _repositoryClosed = null;
     _workspace = null;
     _loadedChannels.clear();
+    _channelsWithGap.clear();
+    _catchingUpChannels.clear();
     _restoredChannels.clear();
     _loadingChannels.clear();
     _channelErrors.clear();
@@ -297,6 +343,7 @@ final class ChatController extends ChangeNotifier {
     // late, still writes to the store of the account it belongs to.
     _drafts = MemoryComposerDraftStore();
     _archivedThreadState.clear();
+    _askedAuthors.clear();
     _clearTyping();
     _unreadOpenings.clear();
     _activeChannelId = null;
@@ -398,6 +445,7 @@ final class ChatController extends ChangeNotifier {
             !_holdsReadingPosition(channelId)) {
           await jumpToPresent(channelId);
         } else {
+          unawaited(_catchUpChannel(channelId));
           notifyListeners();
         }
         await _returnToReadingPosition(channelId);
@@ -447,6 +495,9 @@ final class ChatController extends ChangeNotifier {
       if (!isCurrent()) return;
       _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);
+      if (anchorMessageId == null && !page.fromCache) {
+        _channelsWithGap.remove(channelId);
+      }
       // The page may name a newer message than the channel record did, and the
       // channel is on screen either way, so the cursor is moved again here.
       acknowledgeChannel(channelId);
@@ -532,6 +583,7 @@ final class ChatController extends ChangeNotifier {
         page.history,
         replaceChannel: false,
       );
+      _askAboutAuthors(page.history);
       _setHistoryExhausted(
         channelId,
         !page.hasMore || page.history.messages.isEmpty,
@@ -561,6 +613,85 @@ final class ChatController extends ChangeNotifier {
       _loadingChannels.remove(channelId);
     }
     _setHistoryExhausted(channelId, !event.hasMore);
+  }
+
+  /// Answers a stretch with no live events.
+  ///
+  /// The active channel fetches at once. Other held channels stop counting as
+  /// loaded, so opening one fetches, the same way a first open does. All of them
+  /// count as restored: what they hold stays readable if that fetch fails.
+  void _acceptHistoryGap() {
+    final activeId = _activeChannelId;
+    _channelsWithGap.addAll(_loadedChannels);
+    _restoredChannels.addAll(_loadedChannels);
+    _loadedChannels.removeWhere((id) => id != activeId);
+    if (activeId != null) unawaited(_catchUpChannel(activeId));
+  }
+
+  /// Fetches the newest page of a channel on screen that has a gap.
+  ///
+  /// It stays in view during the fetch, because a loading view would throw away
+  /// the reader's place in it. A failed fetch leaves the gap, and opening the
+  /// channel again retries. An old window keeps its gap too: leaving it loads the
+  /// newest page anyway, and a jump made during the fetch keeps its window.
+  Future<void> _catchUpChannel(String channelId) async {
+    if (!_channelsWithGap.contains(channelId) ||
+        hasNewerMessages(channelId) ||
+        !_catchingUpChannels.add(channelId)) {
+      return;
+    }
+    final window = _windowLoads[channelId];
+    try {
+      final page = await _repository.loadChannelHistory(channelId);
+      if (page.fromCache ||
+          _workspace?.channelOrNull(channelId) == null ||
+          !identical(_windowLoads[channelId], window)) {
+        return;
+      }
+      _workspace = _workspace?.catchUpHistory(page.history);
+      _channelsWithGap.remove(channelId);
+      _setHistoryExhausted(channelId, !page.hasMore);
+      // The window may be away: then the missed messages stay unread.
+      if (_isApplicationActive && channelId == _activeChannelId) {
+        acknowledgeChannel(channelId);
+      }
+    } catch (error) {
+      AppLog.warning(
+        'chat',
+        'Could not load messages missed in a reconnect: $error',
+        error: error,
+      );
+    } finally {
+      _catchingUpChannels.remove(channelId);
+      _capChannelIfNotOpen(channelId);
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  /// Takes a channel out of the workspace, with what the controller knew about
+  /// its history. It holds no messages now, so if it comes back it has to load.
+  void _removeChannel(String channelId) {
+    _workspace = _workspace?.removeChannel(channelId);
+    _forgetChannelHistory(channelId);
+  }
+
+  /// The same as [_removeChannel] for a guild and all its channels.
+  void _removeGuild(String spaceId) {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    for (final channel in workspace.channels) {
+      if (channel.spaceId == spaceId) _forgetChannelHistory(channel.id);
+    }
+    _workspace = workspace.removeGuild(spaceId);
+  }
+
+  void _forgetChannelHistory(String channelId) {
+    _loadedChannels.remove(channelId);
+    _channelsWithGap.remove(channelId);
+    _restoredChannels.remove(channelId);
+    _exhaustedChannels.remove(channelId);
+    _channelErrors.remove(channelId);
+    _olderChannelErrors.remove(channelId);
   }
 
   void _setHistoryExhausted(String channelId, bool exhausted) {
@@ -797,7 +928,7 @@ final class ChatController extends ChangeNotifier {
     unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
     unawaited(_conversationSummarySubscription?.cancel());
-    unawaited(_repository.close());
+    unawaited(_closeRepository());
     unawaited(_incomingMessages.close());
     super.dispose();
   }

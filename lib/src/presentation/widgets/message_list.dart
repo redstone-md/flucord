@@ -42,6 +42,7 @@ class MessageList extends StatefulWidget {
     required this.onToggleReaction,
     required this.onLoadReactionUsers,
     required this.onAddReaction,
+    this.onMarkUnread,
     required this.onCreateThread,
     required this.onTogglePin,
     this.onResolveAlert,
@@ -55,6 +56,7 @@ class MessageList extends StatefulWidget {
     required this.onLoadOlder,
     required this.externalLinkLauncher,
     required this.onSelectChannel,
+    this.onOpenMemberProfile,
     this.capabilities = ChannelCapabilities.unrestricted,
     this.attachmentDownloadService,
     super.key,
@@ -104,6 +106,7 @@ class MessageList extends StatefulWidget {
   final Future<void> Function(ChatMessage, MessageReaction) onToggleReaction;
   final ReactionUsersLoader onLoadReactionUsers;
   final Future<void> Function(ChatMessage, String) onAddReaction;
+  final Future<void> Function(ChatMessage)? onMarkUnread;
   final Future<bool> Function(ChatMessage, String, int) onCreateThread;
   final Future<void> Function(ChatMessage) onTogglePin;
   final Future<void> Function(ChatMessage, AutoModAlertAction)? onResolveAlert;
@@ -119,6 +122,9 @@ class MessageList extends StatefulWidget {
   final VoidCallback onLoadOlder;
   final ExternalLinkLauncher externalLinkLauncher;
   final ValueChanged<String> onSelectChannel;
+
+  /// Opens the profile of a message's author, by user id.
+  final ValueChanged<String>? onOpenMemberProfile;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -527,10 +533,8 @@ class _MessageListState extends State<MessageList>
     final viewport = _scrollController.position.context.notificationContext
         ?.findRenderObject();
     if (target is! RenderBox || viewport is! RenderBox) return false;
-    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
-    final viewportBottom = viewportTop + viewport.size.height;
-    final targetTop = target.localToGlobal(Offset.zero).dy;
-    return targetTop >= viewportTop && targetTop < viewportBottom;
+    final targetTop = target.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    return targetTop >= 0 && targetTop < viewport.size.height;
   }
 
   @override
@@ -725,6 +729,7 @@ class _MessageListState extends State<MessageList>
                 onToggleReaction: widget.onToggleReaction,
                 onLoadReactionUsers: widget.onLoadReactionUsers,
                 onAddReaction: widget.onAddReaction,
+                onMarkUnread: widget.onMarkUnread,
                 onCreateThread: widget.onCreateThread,
                 onTogglePin: widget.onTogglePin,
                 onResolveAlert: widget.onResolveAlert,
@@ -734,6 +739,8 @@ class _MessageListState extends State<MessageList>
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,
                 onSelectChannel: widget.onSelectChannel,
+                onOpenMemberProfile: widget.onOpenMemberProfile,
+                onOpenMessage: widget.onOpenMessage,
                 attachmentDownloadService: widget.attachmentDownloadService,
               ),
           ],
