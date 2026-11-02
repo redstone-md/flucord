@@ -106,7 +106,10 @@ final class ChatController extends ChangeNotifier {
   ChatLoadState _state = ChatLoadState.idle;
   ChatWorkspace? _workspace;
   Object? _error;
-  bool _isSending = false;
+
+  /// Channels with a send on its way. Each channel takes one send at a time,
+  /// and a slow one does not hold the others.
+  final Set<String> _sendingChannels = {};
   RepositoryConnectionStatus _connectionStatus =
       RepositoryConnectionStatus.offline;
   final Set<String> _loadedChannels = {};
@@ -173,7 +176,7 @@ final class ChatController extends ChangeNotifier {
   ChatLoadState get state => _state;
   ChatWorkspace? get workspace => _workspace;
   Object? get error => _error;
-  bool get isSending => _isSending;
+  bool isSendingIn(String channelId) => _sendingChannels.contains(channelId);
   RepositoryConnectionStatus get connectionStatus => _connectionStatus;
   String? get activeChannelId => _activeChannelId;
 
@@ -756,15 +759,10 @@ final class ChatController extends ChangeNotifier {
     final workspace = _workspace;
     final spoken = _spokenCommandFrom(body.trim());
     final content = spoken.$2;
-    if (workspace == null ||
-        (content.isEmpty && attachments.isEmpty) ||
-        _isSending) {
+    if (workspace == null || (content.isEmpty && attachments.isEmpty)) {
       return false;
     }
-
-    _isSending = true;
-    notifyListeners();
-    try {
+    return _sendingIn(channelId, () async {
       final message = await _repository.sendMessage(
         channelId: channelId,
         authorId: workspace.currentMemberId,
@@ -776,14 +774,7 @@ final class ChatController extends ChangeNotifier {
       );
       _applySentMessage(message);
       _lastSentAt[channelId] = DateTime.now();
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      notifyListeners();
-    }
+    });
   }
 
   /// The spoken-aloud command: `/tts <message>` sends the message flagged to
@@ -801,24 +792,15 @@ final class ChatController extends ChangeNotifier {
 
   Future<bool> editMessage(ChatMessage message, String body) async {
     final content = body.trim();
-    if (!message.canEdit || content.isEmpty || _isSending) return false;
-    _isSending = true;
-    notifyListeners();
-    try {
+    if (!message.canEdit || content.isEmpty) return false;
+    return _sendingIn(message.channelId, () async {
       final updated = await _repository.editMessage(
         channelId: message.channelId,
         messageId: message.id,
         body: content,
       );
       _workspace = _workspace?.upsertMessage(updated);
-      return true;
-    } catch (error) {
-      _error = error;
-      return false;
-    } finally {
-      _isSending = false;
-      notifyListeners();
-    }
+    });
   }
 
   Future<void> deleteMessage(ChatMessage message) async {
@@ -930,6 +912,28 @@ final class ChatController extends ChangeNotifier {
     _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
     _persistChannelActivity(channelId);
     _lastSentMessage = message;
+  }
+
+  /// Runs [send] as the one send of [channelId], with its composer busy until
+  /// it ends. Returns false when the channel already has a send on its way, or
+  /// when [send] throws, and then [error] holds why.
+  Future<bool> _sendingIn(
+    String channelId,
+    Future<void> Function() send,
+  ) async {
+    if (!_sendingChannels.add(channelId)) return false;
+    notifyListeners();
+    try {
+      await send();
+      _error = null;
+      return true;
+    } catch (error) {
+      _error = error;
+      return false;
+    } finally {
+      _sendingChannels.remove(channelId);
+      notifyListeners();
+    }
   }
 
   void _persistChannelActivity(String channelId) => unawaited(
