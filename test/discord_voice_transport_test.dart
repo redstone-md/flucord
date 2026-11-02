@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -18,10 +19,12 @@ import 'package:flucord/src/domain/voice_connection.dart';
 import 'package:flucord/src/domain/voice_dave.dart';
 
 part 'discord_voice_transport_handshake_cases.dart';
+part 'discord_voice_transport_recovery_cases.dart';
 
 void main() {
   _handshakeCases();
   _feedbackCases();
+  _recoveryCases();
 
   group('Discord Voice Gateway v8', () {
     test('a screen share declares the stream it carries', () {
@@ -1234,6 +1237,9 @@ final class _FakeVoiceUdpTransport implements DiscordVoiceUdpTransport {
 
   @override
   Stream<Uint8List> get packets => _packets.stream;
+
+  @override
+  Stream<Object> get socketFailures => const Stream.empty();
 
   @override
   Future<DiscordVoiceIpDiscovery> discover({
