@@ -373,7 +373,7 @@ class _ComposerAutocompleteRow extends StatelessWidget {
               border: Border(
                 left: BorderSide(
                   width: 2,
-                  color: selected ? FlucordColors.brand : Colors.transparent,
+                  color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
               ),
             ),

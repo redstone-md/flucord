@@ -354,7 +354,7 @@ class VoiceWaveformSurface extends StatelessWidget {
                 painter: _VoiceWaveformPainter(
                   samples: samples,
                   progress: progress,
-                  active: activeColor ?? FlucordColors.brand,
+                  active: activeColor ?? context.surfaces.brand,
                   inactive:
                       inactiveColor ??
                       context.surfaces.muted.withValues(alpha: 0.58),

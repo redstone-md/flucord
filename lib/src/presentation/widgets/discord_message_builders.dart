@@ -227,7 +227,7 @@ final class _CommandBuilder extends MarkdownElementBuilder {
     TextStyle? parentStyle,
   ) => DecoratedBox(
     decoration: BoxDecoration(
-      color: FlucordColors.brand.withValues(alpha: 0.14),
+      color: context.surfaces.brand.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(3),
     ),
     child: Padding(

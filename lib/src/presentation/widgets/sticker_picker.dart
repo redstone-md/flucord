@@ -378,10 +378,10 @@ class _StickerPickerPanel extends StatelessWidget {
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: selected
-                    ? FlucordColors.brand.withValues(alpha: 0.14)
+                    ? context.surfaces.brand.withValues(alpha: 0.14)
                     : Colors.transparent,
                 border: Border.all(
-                  color: selected ? FlucordColors.brand : Colors.transparent,
+                  color: selected ? context.surfaces.brand : Colors.transparent,
                 ),
                 borderRadius: BorderRadius.circular(4),
               ),

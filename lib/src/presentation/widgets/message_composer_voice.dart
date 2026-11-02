@@ -279,7 +279,7 @@ class _VoiceMessageComposerBar extends StatelessWidget {
               key: const ValueKey('voice-recording-waveform'),
               samples: progress.samples,
               progress: isRecording ? 1 : 0,
-              activeColor: isRecording ? errorColor : FlucordColors.brand,
+              activeColor: isRecording ? errorColor : context.surfaces.brand,
               semanticsLabel: isRecording
                   ? 'Live voice recording waveform'
                   : 'Recorded voice message waveform',
