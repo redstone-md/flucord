@@ -166,7 +166,7 @@ abstract final class FlucordTheme {
           }),
           overlayColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.focused)) {
-              return FlucordColors.brand.withValues(alpha: 0.2);
+              return brand.withValues(alpha: 0.2);
             }
             if (states.contains(WidgetState.hovered) ||
                 states.contains(WidgetState.pressed)) {
@@ -184,11 +184,9 @@ abstract final class FlucordTheme {
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
-              return FlucordColors.brand.withValues(alpha: 0.38);
+              return brand.withValues(alpha: 0.38);
             }
-            return states.contains(WidgetState.pressed)
-                ? FlucordColors.brandPressed
-                : FlucordColors.brand;
+            return states.contains(WidgetState.pressed) ? brandPressed : brand;
           }),
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
           side: focusSide,

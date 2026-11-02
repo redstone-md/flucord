@@ -114,6 +114,49 @@ void main() {
     expect(surfaces.offline, const Color(0xff000010));
   });
 
+  testWidgets('an installed theme paints buttons in its own brand', (
+    tester,
+  ) async {
+    const brand = Color(0xff2a9d8f);
+    const pressed = Color(0xff1f776c);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FlucordTheme.fromPalette(
+          FlucordPalette.dark.copyWith(
+            brand: brand.toARGB32(),
+            brandPressed: pressed.toARGB32(),
+          ),
+        ),
+        home: Scaffold(
+          body: Column(
+            children: [
+              FilledButton(onPressed: () {}, child: const Text('Save')),
+              const FilledButton(onPressed: null, child: Text('Off')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Color fill(String label) => tester
+        .widget<Material>(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Material))
+              .first,
+        )
+        .color!;
+
+    expect(fill('Save'), brand);
+    expect(fill('Off'), brand.withValues(alpha: 0.38));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Save')),
+    );
+    await tester.pumpAndSettle();
+    expect(fill('Save'), pressed);
+    await gesture.up();
+  });
+
   group('WCAG AA contrast', () {
     test('the measure agrees with published values', () {
       expect(contrast(Colors.black, Colors.white), closeTo(21, 0.01));
