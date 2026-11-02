@@ -272,8 +272,12 @@ final class GoLiveWireSender implements GoLiveSender {
           // connection announces ready again.
           _setStatus(GoLiveSenderStatus.held);
         }
-      case VoiceRetransmitRequestedEvent(:final sequences):
+      case VoiceRetransmitRequestedEvent(:final ssrc, :final sequences):
         _nacked += sequences.length;
+        if (ssrc != _transport?.ssrc) {
+          _nackedElsewhere += sequences.length;
+          _nackedSsrcs.add(ssrc);
+        }
         _transport?.retransmit(sequences);
       case VoiceReceiverReportEvent(:final lossRatio):
         _lossRatio = lossRatio;
@@ -301,6 +305,11 @@ final class GoLiveWireSender implements GoLiveSender {
   double _lossRatio = 0;
   int _reports = 0;
   int _nacked = 0;
+
+  /// Of [_nacked], the packets asked of an SSRC other than this stream's,
+  /// and which SSRCs: an ask the history can never answer.
+  int _nackedElsewhere = 0;
+  final Set<int> _nackedSsrcs = {};
   int _pictureLosses = 0;
   int _lastFrames = 0;
   int _lastPackets = 0;
@@ -351,8 +360,19 @@ final class GoLiveWireSender implements GoLiveSender {
     _lossRatio = 0;
     _reports = 0;
     _nacked = 0;
+    _nackedElsewhere = 0;
+    _nackedSsrcs.clear();
     _pictureLosses = 0;
     return line;
+  }
+
+  /// How many of the asked-for packets went out again, and how many were
+  /// asked of another SSRC, which the history can never answer.
+  String _describeResent(int retransmitted) {
+    final resent = '$retransmitted/$_nacked resent';
+    if (_nackedElsewhere == 0) return resent;
+    final ssrcs = _nackedSsrcs.join('/');
+    return '$resent ($_nackedElsewhere asked of ssrc $ssrcs)';
   }
 
   /// "healthy" when the far end said nothing is wrong.
@@ -360,7 +380,7 @@ final class GoLiveWireSender implements GoLiveSender {
     if (_reports == 0 && _nacked == 0 && _pictureLosses == 0) return 'healthy';
     return [
       if (_reports > 0) '${(_lossRatio * 100).toStringAsFixed(1)}% loss',
-      if (_nacked > 0) '$retransmitted/$_nacked resent',
+      if (_nacked > 0) _describeResent(retransmitted),
       if (_pictureLosses > 0) '$_pictureLosses keyframe req',
     ].join(', ');
   }

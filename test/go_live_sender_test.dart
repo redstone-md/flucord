@@ -200,6 +200,26 @@ void main() {
     );
   });
 
+  test('the pace line names the asks made of another SSRC', () async {
+    final opened = _Opened();
+    opened.ready();
+    opened.frames.add(_picture());
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // A viewer asking for packets of a stream this sender does not number
+    // can never be answered from its history; the line says so, and whose.
+    opened.client.emit(
+      const VoiceRetransmitRequestedEvent(ssrc: 4243, sequences: [0]),
+    );
+    opened.client.emit(
+      const VoiceRetransmitRequestedEvent(ssrc: 4244, sequences: [3, 4]),
+    );
+    expect(
+      opened.sender.takePaceLine(),
+      contains('1/3 resent (2 asked of ssrc 4244)'),
+    );
+  });
+
   test('sound goes through the connection\'s own audio path once ready', () {
     final opened = _Opened(frames: const Stream<EncodedVideoFrame>.empty());
 
