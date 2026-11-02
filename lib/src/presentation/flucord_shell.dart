@@ -220,396 +220,406 @@ class FlucordShell extends StatelessWidget {
             final channel = channelId == null
                 ? null
                 : workspace.channelById(channelId);
-            return Scaffold(
-              body: _withWorkspaceChrome(
-                workspace,
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final showChannels =
-                        constraints.maxWidth >= _channelSidebarMinWidth;
-                    final membersFit = constraints.maxWidth >= 1120;
-                    final threadParentId = channel?.threadParentId;
-                    final allowThreadPanel =
-                        channel?.kind == ChannelKind.text &&
-                        channel?.isDirectMessage == false &&
-                        threadParentId != null;
-                    final voiceSurface = channel == null
-                        ? VoiceChannelSurface.room
-                        : workspaceController.voiceSurfaceOf(channel.id);
-                    final showsMessages =
-                        channel != null &&
-                        showsMessageTimeline(channel, voiceSurface);
-                    final searchController = messageSearchController;
-                    final showThreads =
-                        workspaceController.showThreads && allowThreadPanel;
-                    final showSearchPanel =
-                        workspaceController.showSearch &&
-                        searchController != null &&
-                        !showThreads;
-                    final showPins =
-                        workspaceController.showPins &&
-                        showsMessages &&
-                        !showThreads &&
-                        !showSearchPanel;
-                    final showMembers =
-                        membersFit &&
-                        !space.isDirectMessages &&
-                        workspaceController.showMembers &&
-                        !showPins &&
-                        !showThreads &&
-                        !showSearchPanel;
-                    // Asking the server about a conversation the account may
-                    // not read the history of is a request Discord answers
-                    // with a rejection, so the affordance is withheld instead.
-                    final canSearch =
-                        channel != null &&
-                        (searchController?.isSupported ?? false) &&
-                        permissions.can(
-                          DiscordPermissions.readMessageHistory,
-                          channel,
-                        );
-                    final Widget? sidePanel = showSearchPanel
-                        ? MessageSearchPanel(
-                            controller: searchController,
-                            workspace: workspace,
-                            linkLauncher: externalLinkLauncher,
-                            channels: [
-                              if (channel != null)
-                                ..._searchChannels(workspace, space, channel),
-                            ],
-                            query: workspaceController.query,
-                            onSubmitQuery: channel != null && canSearch
-                                ? (text) {
-                                    // The bar echoes the line the controls
-                                    // composed, exactly as a typed line.
-                                    workspaceController.setQuery(text);
-                                    _submitSearch(
-                                      workspace,
-                                      space,
-                                      channel,
-                                      text,
-                                    );
-                                  }
-                                : null,
-                            onClose: () {
-                              workspaceController.closeSearch();
-                              searchController.clear();
-                            },
-                            onJump: (channelId, messageId) => _openDestination(
-                              spaceId:
-                                  workspace.channelOrNull(channelId)?.spaceId ??
-                                  spaceId,
-                              channelId: channelId,
-                              messageId: messageId,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
-                            onSelectChannel: (id) => _selectChannel(
-                              id,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
-                          )
-                        : showPins
-                        ? PinnedMessagesPanel(
-                            workspace: workspace,
-                            linkLauncher: externalLinkLauncher,
-                            onSelectChannel: (id) => _selectChannel(
-                              id,
-                              voiceSurface: VoiceChannelSurface.chat,
-                            ),
-                            channelId: channel.id,
-                            history: chatController.pinnedMessages(channel.id),
-                            isLoading: chatController.isLoadingPins(channel.id),
-                            error: chatController.pinError(channel.id),
-                            onClose: workspaceController.togglePins,
-                            onRefresh: () => unawaited(
-                              chatController.loadPinnedMessages(
-                                channel.id,
-                                refresh: true,
-                              ),
-                            ),
-                            onUnpin: chatController.togglePin,
-                          )
-                        : showThreads
-                        ? ThreadBrowserPanel(
-                            parentChannel: workspace.channelById(
-                              threadParentId,
-                            ),
-                            activeThreads: channels
-                                .where(
-                                  (item) =>
-                                      item.isThread &&
-                                      !item.isArchived &&
-                                      item.parentId == threadParentId,
-                                )
-                                .toList(growable: false),
-                            archivedThreads: chatController.archivedThreadsFor(
-                              threadParentId,
-                            ),
-                            isLoading: chatController.isLoadingArchivedThreads(
-                              threadParentId,
-                            ),
-                            error: chatController.archivedThreadsError(
-                              threadParentId,
-                            ),
-                            canLoadMore: chatController
-                                .canLoadMoreArchivedThreads(threadParentId),
-                            onClose: workspaceController.toggleThreads,
-                            onRefresh: () => unawaited(
-                              chatController.loadArchivedThreads(
-                                threadParentId,
-                                refresh: true,
-                              ),
-                            ),
-                            onLoadMore: () => unawaited(
-                              chatController.loadArchivedThreads(
-                                threadParentId,
-                              ),
-                            ),
-                            onSelectThread: _selectChannel,
-                          )
-                        : null;
-                    // A panel that would squeeze the conversation below what
-                    // the composer needs takes its place until it is closed.
-                    // The conversation stays mounted, so its text is kept.
-                    final panelCovers =
-                        sidePanel != null &&
-                        constraints.maxWidth -
-                                _railWidth -
-                                (showChannels ? _channelSidebarWidth : 0) -
-                                _sidePanelMaxWidth <
-                            _conversationMinWidth;
-                    return Row(
-                      children: [
-                        // Kept across rebuilds that leave every pip where it
-                        // was, which is most of them: an arriving message moves
-                        // a space's activity only when it changes what is
-                        // waiting there. Everything the rail draws is listed
-                        // below, and it opens a space from the workspace as it
-                        // stands when pressed rather than the one it was built
-                        // with.
-                        CachedSubtree(
-                          dependencies: [
-                            workspace.spaces,
-                            activityBySpaceId,
-                            spaceId,
-                            connectionController.mode,
-                            themeMode,
-                          ],
-                          builder: (_) => ServerRail(
-                            spaces: workspace.spaces,
-                            activity: activityBySpaceId,
-                            selectedSpaceId: spaceId,
-                            onSelectSpace: _selectSpace,
-                            onToggleTheme: onToggleTheme,
-                            onOpenConnections: () => _openConnections(context),
-                            onAddServer: canManageServers
-                                ? () => unawaited(_addServer(context))
-                                : null,
-                            onOpenSpaceMenu: (spaceId, position) => unawaited(
-                              _openSpaceMenu(context, spaceId, position),
-                            ),
-                            sessionMode: connectionController.mode,
-                            isDark: themeMode == ThemeMode.dark,
-                          ),
-                        ),
-                        if (showChannels)
-                          // Rebuilt from the voice controller: who is
-                          // sitting in a voice channel changes without
-                          // anything else in the shell changing, and
-                          // the seats used to appear only once some
-                          // unrelated event redrew the sidebar.
-                          ListenableBuilder(
-                            listenable: voiceController,
-                            builder: (_, _) {
-                              final seats = voiceController.seatedByChannel;
-                              final categories = workspace.categoriesFor(
-                                spaceId,
-                              );
-                              final currentMember = workspace.memberById(
-                                workspace.currentMemberId,
-                              );
-                              return CachedSubtree(
-                                dependencies: [
-                                  space,
-                                  channels,
-                                  categories,
-                                  currentMember,
-                                  _shownMembers(
-                                    workspace,
-                                    channels: channels,
-                                    seats: seats,
-                                  ),
-                                  seats,
-                                  channelId,
-                                  workspaceController.collapsedCategoryIds,
-                                  // Not the whole snapshot: each ack makes a new
-                                  // one, and the sidebar reads only these.
-                                  chatController.readState.settings,
-                                  chatController
-                                      .readState
-                                      .accountNotificationFlags,
-                                  connectionController.mode,
-                                  chatController.connectionStatus,
-                                  canOpenSettings,
-                                  chatController
-                                      .scheduledEventsFor(spaceId)
-                                      .length,
-                                  chatController.isLoadingScheduledEvents(
-                                    spaceId,
-                                  ),
-                                  chatController.scheduledEventsError(spaceId),
-                                ],
-                                builder: (_) => ChannelSidebar(
-                                  space: space,
-                                  friends: friendsController,
-                                  categories: categories,
-                                  currentMember: currentMember,
-                                  memberOf: _memberOf,
-                                  channelOf: _channelOf,
-                                  seatedByChannel: seats,
-                                  // Discord opens a profile from these rows with
-                                  // either mouse button. Ours were labels.
-                                  onOpenMemberProfile: (userId) => unawaited(
-                                    _openMemberCard(context, spaceId, userId),
-                                  ),
-                                  // A voice connection outlives the room view, so
-                                  // leaving it has to stay reachable from wherever
-                                  // the user has navigated to since.
-                                  voiceConnectionBar: VoiceConnectionBar(
-                                    controller: voiceController,
-                                    camera: selfVideoController,
-                                    channelNameFor: (id) =>
-                                        _channelOf(id)?.name,
-                                    serverNameFor: _serverNameOf,
-                                    onOpenChannel: _openVoiceRoom,
-                                  ),
-                                  channels: channels,
-                                  selectedChannelId: channelId,
-                                  collapsedCategoryIds:
-                                      workspaceController.collapsedCategoryIds,
-                                  onToggleCategory:
-                                      workspaceController.toggleCategory,
-                                  onNewDirectMessage: () =>
-                                      _openDirectMessage(context),
-                                  onAcceptMessageRequest: (channelId) =>
-                                      unawaited(
-                                        chatController.acceptMessageRequest(
-                                          channelId,
-                                        ),
-                                      ),
-                                  onDeclineMessageRequest: (channelId) =>
-                                      unawaited(
-                                        chatController.declineMessageRequest(
-                                          channelId,
-                                        ),
-                                      ),
-                                  scheduledEventCount: chatController
-                                      .scheduledEventsFor(space.id)
-                                      .length,
-                                  isLoadingScheduledEvents: chatController
-                                      .isLoadingScheduledEvents(space.id),
-                                  scheduledEventsError: chatController
-                                      .scheduledEventsError(space.id),
-                                  onOpenEvents: () =>
-                                      _openScheduledEvents(context, space),
-                                  onOpenServerSettings: canOpenSettings
-                                      ? () => unawaited(
-                                          _openGuildSettings(
-                                            context,
-                                            space,
-                                            administration,
-                                          ),
-                                        )
-                                      : null,
-                                  onLeaveServer: canManageServers
-                                      ? () => unawaited(
-                                          _leaveServer(context, space),
-                                        )
-                                      : null,
-                                  onReportServer: () =>
-                                      unawaited(_reportSpace(context, space)),
-                                  onSelectChannel: _selectChannel,
-                                  readState: chatController.readState,
-                                  onNotificationRequest: (request, target) =>
-                                      _applyNotificationRequest(
-                                        request,
-                                        space: space,
-                                        channel: target,
-                                      ),
-                                  sessionMode: connectionController.mode,
-                                  connectionStatus:
-                                      chatController.connectionStatus,
-                                ),
-                              );
-                            },
-                          ),
-                        Expanded(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Offstage(
-                                offstage: panelCovers,
-                                child: channel == null
-                                    ? DirectMessagesEmptyView(
-                                        onNewMessage: () =>
-                                            _openDirectMessage(context),
-                                      )
-                                    : _conversationPane(
-                                        context: context,
-                                        workspace: workspace,
-                                        capabilities: permissions
-                                            .capabilitiesIn(channel),
-                                        channel: channel,
-                                        channels: channels,
-                                        space: space,
-                                        showChannels: showChannels,
-                                        membersFit: membersFit,
-                                        showMembers: showMembers,
-                                        showPins: showPins,
-                                        showThreads: showThreads,
-                                        allowThreadPanel: allowThreadPanel,
-                                        canSearch: canSearch,
-                                      ),
-                              ),
-                              if (panelCovers) sidePanel,
-                            ],
-                          ),
-                        ),
-                        if (sidePanel != null && !panelCovers) sidePanel,
-                        if (showMembers)
-                          MemberSidebar(
-                            members: workspace.members,
-                            spaceId: spaceId,
-                            channelId: channel?.id,
-                            memberList: memberListController,
-                            roles: workspace.roles,
-                            profile: memberProfileController,
-                            currentMemberId: workspace.currentMemberId,
-                            onMessage: (member) => unawaited(
-                              _openDirectConversation(context, member.id),
-                            ),
-                            onReport: canReport
-                                ? (member) =>
-                                      unawaited(_reportMember(context, member))
-                                : null,
-                            onBlock: canReport
-                                ? (member) =>
-                                      unawaited(_blockMember(context, member))
-                                : null,
-                            moderationBuilder: (member) =>
-                                _memberAdminController(spaceId, member.id),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ).withShellKeyboard(
+            return ShellKeyboard(
               workspace: workspace,
               channelId: channelId,
               onOpenDestination: _openQuickSwitcherDestination,
               onStep: _takeStep,
               onOpenChannel: _openChannelFromHistory,
+              child: Scaffold(
+                body: _withWorkspaceChrome(
+                  workspace,
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final showChannels =
+                          constraints.maxWidth >= _channelSidebarMinWidth;
+                      final membersFit = constraints.maxWidth >= 1120;
+                      final threadParentId = channel?.threadParentId;
+                      final allowThreadPanel =
+                          channel?.kind == ChannelKind.text &&
+                          channel?.isDirectMessage == false &&
+                          threadParentId != null;
+                      final voiceSurface = channel == null
+                          ? VoiceChannelSurface.room
+                          : workspaceController.voiceSurfaceOf(channel.id);
+                      final showsMessages =
+                          channel != null &&
+                          showsMessageTimeline(channel, voiceSurface);
+                      final searchController = messageSearchController;
+                      final showThreads =
+                          workspaceController.showThreads && allowThreadPanel;
+                      final showSearchPanel =
+                          workspaceController.showSearch &&
+                          searchController != null &&
+                          !showThreads;
+                      final showPins =
+                          workspaceController.showPins &&
+                          showsMessages &&
+                          !showThreads &&
+                          !showSearchPanel;
+                      final showMembers =
+                          membersFit &&
+                          !space.isDirectMessages &&
+                          workspaceController.showMembers &&
+                          !showPins &&
+                          !showThreads &&
+                          !showSearchPanel;
+                      // Asking the server about a conversation the account may
+                      // not read the history of is a request Discord answers
+                      // with a rejection, so the affordance is withheld instead.
+                      final canSearch =
+                          channel != null &&
+                          (searchController?.isSupported ?? false) &&
+                          permissions.can(
+                            DiscordPermissions.readMessageHistory,
+                            channel,
+                          );
+                      final Widget? sidePanel = showSearchPanel
+                          ? MessageSearchPanel(
+                              controller: searchController,
+                              workspace: workspace,
+                              linkLauncher: externalLinkLauncher,
+                              channels: [
+                                if (channel != null)
+                                  ..._searchChannels(workspace, space, channel),
+                              ],
+                              query: workspaceController.query,
+                              onSubmitQuery: channel != null && canSearch
+                                  ? (text) {
+                                      // The bar echoes the line the controls
+                                      // composed, exactly as a typed line.
+                                      workspaceController.setQuery(text);
+                                      _submitSearch(
+                                        workspace,
+                                        space,
+                                        channel,
+                                        text,
+                                      );
+                                    }
+                                  : null,
+                              onClose: () {
+                                workspaceController.closeSearch();
+                                searchController.clear();
+                              },
+                              onJump: (channelId, messageId) =>
+                                  _openDestination(
+                                    spaceId:
+                                        workspace
+                                            .channelOrNull(channelId)
+                                            ?.spaceId ??
+                                        spaceId,
+                                    channelId: channelId,
+                                    messageId: messageId,
+                                    voiceSurface: VoiceChannelSurface.chat,
+                                  ),
+                              onSelectChannel: (id) => _selectChannel(
+                                id,
+                                voiceSurface: VoiceChannelSurface.chat,
+                              ),
+                            )
+                          : showPins
+                          ? PinnedMessagesPanel(
+                              workspace: workspace,
+                              linkLauncher: externalLinkLauncher,
+                              onSelectChannel: (id) => _selectChannel(
+                                id,
+                                voiceSurface: VoiceChannelSurface.chat,
+                              ),
+                              channelId: channel.id,
+                              history: chatController.pinnedMessages(
+                                channel.id,
+                              ),
+                              isLoading: chatController.isLoadingPins(
+                                channel.id,
+                              ),
+                              error: chatController.pinError(channel.id),
+                              onClose: workspaceController.togglePins,
+                              onRefresh: () => unawaited(
+                                chatController.loadPinnedMessages(
+                                  channel.id,
+                                  refresh: true,
+                                ),
+                              ),
+                              onUnpin: chatController.togglePin,
+                            )
+                          : showThreads
+                          ? ThreadBrowserPanel(
+                              parentChannel: workspace.channelById(
+                                threadParentId,
+                              ),
+                              activeThreads: channels
+                                  .where(
+                                    (item) =>
+                                        item.isThread &&
+                                        !item.isArchived &&
+                                        item.parentId == threadParentId,
+                                  )
+                                  .toList(growable: false),
+                              archivedThreads: chatController
+                                  .archivedThreadsFor(threadParentId),
+                              isLoading: chatController
+                                  .isLoadingArchivedThreads(threadParentId),
+                              error: chatController.archivedThreadsError(
+                                threadParentId,
+                              ),
+                              canLoadMore: chatController
+                                  .canLoadMoreArchivedThreads(threadParentId),
+                              onClose: workspaceController.toggleThreads,
+                              onRefresh: () => unawaited(
+                                chatController.loadArchivedThreads(
+                                  threadParentId,
+                                  refresh: true,
+                                ),
+                              ),
+                              onLoadMore: () => unawaited(
+                                chatController.loadArchivedThreads(
+                                  threadParentId,
+                                ),
+                              ),
+                              onSelectThread: _selectChannel,
+                            )
+                          : null;
+                      // A panel that would squeeze the conversation below what
+                      // the composer needs takes its place until it is closed.
+                      // The conversation stays mounted, so its text is kept.
+                      final panelCovers =
+                          sidePanel != null &&
+                          constraints.maxWidth -
+                                  _railWidth -
+                                  (showChannels ? _channelSidebarWidth : 0) -
+                                  _sidePanelMaxWidth <
+                              _conversationMinWidth;
+                      return Row(
+                        children: [
+                          // Kept across rebuilds that leave every pip where it
+                          // was, which is most of them: an arriving message moves
+                          // a space's activity only when it changes what is
+                          // waiting there. Everything the rail draws is listed
+                          // below, and it opens a space from the workspace as it
+                          // stands when pressed rather than the one it was built
+                          // with.
+                          CachedSubtree(
+                            dependencies: [
+                              workspace.spaces,
+                              activityBySpaceId,
+                              spaceId,
+                              connectionController.mode,
+                              themeMode,
+                            ],
+                            builder: (_) => ServerRail(
+                              spaces: workspace.spaces,
+                              activity: activityBySpaceId,
+                              selectedSpaceId: spaceId,
+                              onSelectSpace: _selectSpace,
+                              onToggleTheme: onToggleTheme,
+                              onOpenConnections: () =>
+                                  _openConnections(context),
+                              onAddServer: canManageServers
+                                  ? () => unawaited(_addServer(context))
+                                  : null,
+                              onOpenSpaceMenu: (spaceId, position) => unawaited(
+                                _openSpaceMenu(context, spaceId, position),
+                              ),
+                              sessionMode: connectionController.mode,
+                              isDark: themeMode == ThemeMode.dark,
+                            ),
+                          ),
+                          if (showChannels)
+                            // Rebuilt from the voice controller: who is
+                            // sitting in a voice channel changes without
+                            // anything else in the shell changing, and
+                            // the seats used to appear only once some
+                            // unrelated event redrew the sidebar.
+                            ListenableBuilder(
+                              listenable: voiceController,
+                              builder: (_, _) {
+                                final seats = voiceController.seatedByChannel;
+                                final categories = workspace.categoriesFor(
+                                  spaceId,
+                                );
+                                final currentMember = workspace.memberById(
+                                  workspace.currentMemberId,
+                                );
+                                return CachedSubtree(
+                                  dependencies: [
+                                    space,
+                                    channels,
+                                    categories,
+                                    currentMember,
+                                    _shownMembers(
+                                      workspace,
+                                      channels: channels,
+                                      seats: seats,
+                                    ),
+                                    seats,
+                                    channelId,
+                                    workspaceController.collapsedCategoryIds,
+                                    // Not the whole snapshot: each ack makes a new
+                                    // one, and the sidebar reads only these.
+                                    chatController.readState.settings,
+                                    chatController
+                                        .readState
+                                        .accountNotificationFlags,
+                                    connectionController.mode,
+                                    chatController.connectionStatus,
+                                    canOpenSettings,
+                                    chatController
+                                        .scheduledEventsFor(spaceId)
+                                        .length,
+                                    chatController.isLoadingScheduledEvents(
+                                      spaceId,
+                                    ),
+                                    chatController.scheduledEventsError(
+                                      spaceId,
+                                    ),
+                                  ],
+                                  builder: (_) => ChannelSidebar(
+                                    space: space,
+                                    friends: friendsController,
+                                    categories: categories,
+                                    currentMember: currentMember,
+                                    memberOf: _memberOf,
+                                    channelOf: _channelOf,
+                                    seatedByChannel: seats,
+                                    // Discord opens a profile from these rows with
+                                    // either mouse button. Ours were labels.
+                                    onOpenMemberProfile: (userId) => unawaited(
+                                      _openMemberCard(context, spaceId, userId),
+                                    ),
+                                    // A voice connection outlives the room view, so
+                                    // leaving it has to stay reachable from wherever
+                                    // the user has navigated to since.
+                                    voiceConnectionBar: VoiceConnectionBar(
+                                      controller: voiceController,
+                                      camera: selfVideoController,
+                                      channelNameFor: (id) =>
+                                          _channelOf(id)?.name,
+                                      serverNameFor: _serverNameOf,
+                                      onOpenChannel: _openVoiceRoom,
+                                    ),
+                                    channels: channels,
+                                    selectedChannelId: channelId,
+                                    collapsedCategoryIds: workspaceController
+                                        .collapsedCategoryIds,
+                                    onToggleCategory:
+                                        workspaceController.toggleCategory,
+                                    onNewDirectMessage: () =>
+                                        _openDirectMessage(context),
+                                    onAcceptMessageRequest: (channelId) =>
+                                        unawaited(
+                                          chatController.acceptMessageRequest(
+                                            channelId,
+                                          ),
+                                        ),
+                                    onDeclineMessageRequest: (channelId) =>
+                                        unawaited(
+                                          chatController.declineMessageRequest(
+                                            channelId,
+                                          ),
+                                        ),
+                                    scheduledEventCount: chatController
+                                        .scheduledEventsFor(space.id)
+                                        .length,
+                                    isLoadingScheduledEvents: chatController
+                                        .isLoadingScheduledEvents(space.id),
+                                    scheduledEventsError: chatController
+                                        .scheduledEventsError(space.id),
+                                    onOpenEvents: () =>
+                                        _openScheduledEvents(context, space),
+                                    onOpenServerSettings: canOpenSettings
+                                        ? () => unawaited(
+                                            _openGuildSettings(
+                                              context,
+                                              space,
+                                              administration,
+                                            ),
+                                          )
+                                        : null,
+                                    onLeaveServer: canManageServers
+                                        ? () => unawaited(
+                                            _leaveServer(context, space),
+                                          )
+                                        : null,
+                                    onReportServer: () =>
+                                        unawaited(_reportSpace(context, space)),
+                                    onSelectChannel: _selectChannel,
+                                    readState: chatController.readState,
+                                    onNotificationRequest: (request, target) =>
+                                        _applyNotificationRequest(
+                                          request,
+                                          space: space,
+                                          channel: target,
+                                        ),
+                                    sessionMode: connectionController.mode,
+                                    connectionStatus:
+                                        chatController.connectionStatus,
+                                  ),
+                                );
+                              },
+                            ),
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Offstage(
+                                  offstage: panelCovers,
+                                  child: channel == null
+                                      ? DirectMessagesEmptyView(
+                                          onNewMessage: () =>
+                                              _openDirectMessage(context),
+                                        )
+                                      : _conversationPane(
+                                          context: context,
+                                          workspace: workspace,
+                                          capabilities: permissions
+                                              .capabilitiesIn(channel),
+                                          channel: channel,
+                                          channels: channels,
+                                          space: space,
+                                          showChannels: showChannels,
+                                          membersFit: membersFit,
+                                          showMembers: showMembers,
+                                          showPins: showPins,
+                                          showThreads: showThreads,
+                                          allowThreadPanel: allowThreadPanel,
+                                          canSearch: canSearch,
+                                        ),
+                                ),
+                                if (panelCovers) sidePanel,
+                              ],
+                            ),
+                          ),
+                          if (sidePanel != null && !panelCovers) sidePanel,
+                          if (showMembers)
+                            MemberSidebar(
+                              members: workspace.members,
+                              spaceId: spaceId,
+                              channelId: channel?.id,
+                              memberList: memberListController,
+                              roles: workspace.roles,
+                              profile: memberProfileController,
+                              currentMemberId: workspace.currentMemberId,
+                              onMessage: (member) => unawaited(
+                                _openDirectConversation(context, member.id),
+                              ),
+                              onReport: canReport
+                                  ? (member) => unawaited(
+                                      _reportMember(context, member),
+                                    )
+                                  : null,
+                              onBlock: canReport
+                                  ? (member) =>
+                                        unawaited(_blockMember(context, member))
+                                  : null,
+                              moderationBuilder: (member) =>
+                                  _memberAdminController(spaceId, member.id),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
             );
           },
         );
