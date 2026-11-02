@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/voice_controller.dart';
 import '../../domain/voice_media.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Which microphone and which speakers voice uses.
 ///
@@ -27,7 +28,10 @@ class VoiceDevicesSection extends StatelessWidget {
         Text(
           'Devices are read from the machine, so they are the same whichever '
           'account is signed in.',
-          style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+          style: TextStyle(
+            color: context.surfaces.muted,
+            fontSize: FlucordType.caption,
+          ),
         ),
         const SizedBox(height: 16),
         _DeviceSelect(
@@ -60,12 +64,15 @@ class VoiceDevicesSection extends StatelessWidget {
             ),
             title: const Text(
               'Echo cancellation',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: FlucordType.label),
             ),
             subtitle: Text(
               'Takes what the speakers are playing out of the microphone, '
               'so the room does not hear itself.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -78,12 +85,15 @@ class VoiceDevicesSection extends StatelessWidget {
             ),
             title: const Text(
               'Automatic gain control',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: FlucordType.label),
             ),
             subtitle: Text(
               'Keeps the microphone at a steady level without touching its '
               'own volume knob.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
         ],
@@ -97,12 +107,15 @@ class VoiceDevicesSection extends StatelessWidget {
                 unawaited(controller.setNoiseSuppression(value)),
             title: const Text(
               'Noise suppression',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: FlucordType.label),
             ),
             subtitle: Text(
               'Removes keyboards, fans and other voices from the microphone. '
               'Costs some CPU while in a call.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
         ],
@@ -116,12 +129,15 @@ class VoiceDevicesSection extends StatelessWidget {
                 unawaited(controller.setAttenuateApplications(value)),
             title: const Text(
               'Attenuate other applications',
-              style: TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: FlucordType.label),
             ),
             subtitle: Text(
               'Turns the rest of the machine down while you speak, so the '
               'room stays audible over music and games.',
-              style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+              style: TextStyle(
+                fontSize: FlucordType.caption,
+                color: context.surfaces.muted,
+              ),
             ),
           ),
           if (controller.attenuateApplications) ...[
@@ -144,7 +160,7 @@ class VoiceDevicesSection extends StatelessWidget {
                     '${(controller.attenuationLevel * 100).round()}%',
                     textAlign: TextAlign.end,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: FlucordType.caption,
                       color: context.surfaces.muted,
                     ),
                   ),
@@ -160,7 +176,7 @@ class VoiceDevicesSection extends StatelessWidget {
             'Audio devices could not be opened: $error',
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
-              fontSize: 12,
+              fontSize: FlucordType.caption,
             ),
           ),
           const SizedBox(height: 8),
@@ -206,7 +222,7 @@ class _DeviceSelect extends StatelessWidget {
           label.toUpperCase(),
           style: TextStyle(
             color: context.surfaces.muted,
-            fontSize: 10,
+            fontSize: FlucordType.caption,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.6,
           ),
@@ -230,7 +246,10 @@ class _DeviceSelect extends StatelessWidget {
                 },
           hint: Text(
             devices.isEmpty ? 'No devices found' : 'Choose a device',
-            style: TextStyle(color: context.surfaces.muted, fontSize: 12),
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: FlucordType.caption,
+            ),
           ),
         ),
       ],
@@ -270,7 +289,7 @@ class _SensitivityRow extends StatelessWidget {
           ),
           title: const Text(
             'Manual input sensitivity',
-            style: TextStyle(fontSize: 13),
+            style: TextStyle(fontSize: FlucordType.label),
           ),
           subtitle: Text(
             automatic
@@ -278,7 +297,10 @@ class _SensitivityRow extends StatelessWidget {
                       'when you speak above it.'
                 : 'The microphone opens above the level chosen here, whatever '
                       'the room sounds like.',
-            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+            style: TextStyle(
+              fontSize: FlucordType.caption,
+              color: context.surfaces.muted,
+            ),
           ),
         ),
         if (!automatic) ...[
@@ -300,7 +322,10 @@ class _SensitivityRow extends StatelessWidget {
                 child: Text(
                   '${sensitivity.toStringAsFixed(0)} dB',
                   textAlign: TextAlign.end,
-                  style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+                  style: TextStyle(
+                    fontSize: FlucordType.caption,
+                    color: context.surfaces.muted,
+                  ),
                 ),
               ),
             ],
@@ -343,7 +368,7 @@ class _ReleaseDelayRow extends StatelessWidget {
             Expanded(
               child: Text(
                 'Push-to-talk release delay',
-                style: TextStyle(fontSize: 13),
+                style: TextStyle(fontSize: FlucordType.label),
               ),
             ),
             DropdownButton<int>(
@@ -371,7 +396,10 @@ class _ReleaseDelayRow extends StatelessWidget {
         Text(
           'Keeps the microphone live for this long after the key is '
           'released, so the ends of words survive.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          style: TextStyle(
+            fontSize: FlucordType.caption,
+            color: context.surfaces.muted,
+          ),
         ),
       ],
     );

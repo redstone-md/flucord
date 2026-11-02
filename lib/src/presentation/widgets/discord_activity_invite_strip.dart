@@ -5,6 +5,7 @@ import '../../domain/discord_relationship.dart';
 import '../../domain/discord_social_activity.dart';
 import '../../domain/discord_social_call.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 import 'discord_activity_voice_participants_dialog.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
@@ -81,7 +82,7 @@ class _IncomingInvite extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -98,7 +99,7 @@ class _IncomingInvite extends StatelessWidget {
                     color: failed
                         ? context.surfaces.errorText
                         : context.surfaces.muted,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],
@@ -162,7 +163,7 @@ class _JoinedSession extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: FlucordType.caption,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -175,7 +176,7 @@ class _JoinedSession extends StatelessWidget {
                     color: controller.callError == null
                         ? context.surfaces.muted
                         : context.surfaces.errorText,
-                    fontSize: 10,
+                    fontSize: FlucordType.caption,
                   ),
                 ),
               ],

@@ -7,6 +7,9 @@ import 'dart:ui' as ui;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/flucord_radius.dart';
+import '../theme/flucord_type.dart';
+
 /// The window that floats over a game.
 ///
 /// Deliberately not an injected overlay. Discord's own draws inside the other
@@ -165,10 +168,7 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
 
   final background = Paint()..color = const Color(0xCC1B1D22);
   canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, width, height),
-      const Radius.circular(8),
-    ),
+    FlucordRadius.medium.toRRect(Rect.fromLTWH(0, 0, width, height)),
     background,
   );
 
@@ -188,7 +188,7 @@ Future<OverlayPicture?> paintOverlay(List<OverlaySpeaker> speakers) async {
         text: speaker.name,
         style: const TextStyle(
           color: Color(0xFFFFFFFF),
-          fontSize: 13,
+          fontSize: FlucordType.label,
           fontWeight: FontWeight.w600,
         ),
       ),

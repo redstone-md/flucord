@@ -8,6 +8,7 @@ import '../../application/stream_quality_controller.dart';
 import '../../domain/go_live_stream.dart';
 import '../../domain/stream_quality.dart';
 import '../../theme/flucord_theme.dart';
+import '../../theme/flucord_type.dart';
 
 /// Starts and ends a Go Live stream from inside the voice room.
 class GoLiveButton extends StatelessWidget {
@@ -60,7 +61,7 @@ class GoLiveButton extends StatelessWidget {
               key: const ValueKey('go-live-viewers'),
               style: TextStyle(
                 color: context.surfaces.muted,
-                fontSize: 11,
+                fontSize: FlucordType.caption,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -147,7 +148,10 @@ class _QualityMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = TextStyle(color: context.surfaces.muted, fontSize: 11);
+    final muted = TextStyle(
+      color: context.surfaces.muted,
+      fontSize: FlucordType.caption,
+    );
     return PopupMenuButton<void>(
       key: const ValueKey('go-live-quality'),
       tooltip: 'Stream quality',
