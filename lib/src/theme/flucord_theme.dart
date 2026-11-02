@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../domain/flucord_palette.dart';
+import 'flucord_type.dart';
 
 abstract final class FlucordColors {
   static const brand = Color(0xff5865f2);
@@ -142,7 +143,7 @@ abstract final class FlucordTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
       dividerColor: border,
-      fontFamily: 'Bahnschrift',
+      fontFamily: FlucordType.family,
     );
     return base.copyWith(
       canvasColor: canvas,
