@@ -22,13 +22,14 @@ class FlucordDialog extends StatelessWidget {
        alignment = null,
        insetPadding = null;
 
-  /// The frame alone, with [child] inside it.
+  /// The frame alone, with [child] inside it at the size it asks for, within
+  /// [maxWidth] and [maxHeight].
   ///
   /// [alignment] and [insetPadding] place a dialog that belongs near what
   /// opened it, such as the inbox under its button.
   const FlucordDialog.frame({
     required Widget this.child,
-    this.maxWidth = _materialMaxWidth,
+    this.maxWidth = double.infinity,
     this.maxHeight,
     this.alignment,
     this.insetPadding,

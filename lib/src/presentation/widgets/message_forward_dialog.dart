@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../application/message_forward_destination_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 typedef ForwardMessageCallback =
     Future<bool> Function(ChatMessage message, String targetChannelId);
@@ -63,29 +64,22 @@ class _MessageForwardDialogState extends State<MessageForwardDialog> {
   @override
   Widget build(BuildContext context) {
     final availableHeight = MediaQuery.sizeOf(context).height - 48;
-    return Dialog(
+    return FlucordDialog.frame(
       key: const ValueKey('message-forward-dialog'),
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      backgroundColor: context.surfaces.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 520,
-          maxHeight: math.min(560, availableHeight),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(context),
-            Divider(height: 1, color: context.surfaces.border),
-            Flexible(child: _destinationList(context)),
-            if (_error case final error?) _errorLine(context, error),
-            Divider(height: 1, color: context.surfaces.border),
-            _actions(context),
-          ],
-        ),
+      maxWidth: 520,
+      maxHeight: math.min(560, availableHeight),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _header(context),
+          Divider(height: 1, color: context.surfaces.border),
+          Flexible(child: _destinationList(context)),
+          if (_error case final error?) _errorLine(context, error),
+          Divider(height: 1, color: context.surfaces.border),
+          _actions(context),
+        ],
       ),
     );
   }

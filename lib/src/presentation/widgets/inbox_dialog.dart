@@ -8,6 +8,7 @@ import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'mention_badge.dart';
+import 'flucord_dialog.dart';
 
 class InboxActivityButton extends StatelessWidget {
   const InboxActivityButton({
@@ -98,15 +99,10 @@ class InboxDialog extends StatelessWidget {
       scopesRoute: true,
       namesRoute: true,
       explicitChildNodes: true,
-      child: Dialog(
+      child: FlucordDialog.frame(
         key: const ValueKey('inbox-dialog'),
         alignment: Alignment.topRight,
         insetPadding: const EdgeInsets.fromLTRB(24, 64, 12, 24),
-        elevation: 16,
-        shadowColor: Colors.black.withValues(alpha: 0.38),
-        backgroundColor: context.surfaces.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: SizedBox(
           width: 480,
           height: math.min(680, availableHeight),

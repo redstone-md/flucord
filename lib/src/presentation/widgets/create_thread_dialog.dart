@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 typedef CreateThreadCallback =
     Future<bool> Function(String name, int autoArchiveDurationMinutes);
@@ -60,108 +61,99 @@ class _CreateThreadDialogState extends State<CreateThreadDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    insetPadding: const EdgeInsets.all(20),
-    backgroundColor: context.surfaces.surface,
-    clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
-      side: BorderSide(color: context.surfaces.border),
-    ),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 440),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DialogHeader(
-              onClose: _isCreating ? null : () => Navigator.pop(context),
+  Widget build(BuildContext context) => FlucordDialog.frame(
+    maxWidth: 440,
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DialogHeader(
+            onClose: _isCreating ? null : () => Navigator.pop(context),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const ValueKey('thread-name'),
+            controller: _nameController,
+            autofocus: true,
+            enabled: !_isCreating,
+            maxLength: 100,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_isCreating) _submit();
+            },
+            decoration: const InputDecoration(
+              labelText: 'Thread name',
+              hintText: 'New discussion',
             ),
-            const SizedBox(height: 16),
-            TextField(
-              key: const ValueKey('thread-name'),
-              controller: _nameController,
-              autofocus: true,
-              enabled: !_isCreating,
-              maxLength: 100,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) {
-                if (!_isCreating) _submit();
-              },
-              decoration: const InputDecoration(
-                labelText: 'Thread name',
-                hintText: 'New discussion',
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'AUTO-ARCHIVE',
+            style: TextStyle(
+              color: context.surfaces.muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'AUTO-ARCHIVE',
-              style: TextStyle(
-                color: context.surfaces.muted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<int>(
-                key: const ValueKey('thread-auto-archive'),
-                segments: const [
-                  ButtonSegment(value: 60, label: Text('1 hour')),
-                  ButtonSegment(value: 1440, label: Text('24 hours')),
-                  ButtonSegment(value: 4320, label: Text('3 days')),
-                  ButtonSegment(value: 10080, label: Text('1 week')),
-                ],
-                selected: {_autoArchiveDurationMinutes},
-                showSelectedIcon: false,
-                onSelectionChanged: _isCreating
-                    ? null
-                    : (selection) => setState(
-                        () => _autoArchiveDurationMinutes = selection.single,
-                      ),
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  padding: WidgetStatePropertyAll(
-                    EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 10)),
-                ),
-              ),
-            ),
-            if (_error case final error?) ...[
-              const SizedBox(height: 12),
-              _DialogError(message: error),
-            ],
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _isCreating ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  key: const ValueKey('create-thread-confirm'),
-                  onPressed: _isCreating ? null : _submit,
-                  icon: _isCreating
-                      ? const SizedBox.square(
-                          dimension: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.forum_outlined, size: 16),
-                  label: const Text('Create thread'),
-                ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<int>(
+              key: const ValueKey('thread-auto-archive'),
+              segments: const [
+                ButtonSegment(value: 60, label: Text('1 hour')),
+                ButtonSegment(value: 1440, label: Text('24 hours')),
+                ButtonSegment(value: 4320, label: Text('3 days')),
+                ButtonSegment(value: 10080, label: Text('1 week')),
               ],
+              selected: {_autoArchiveDurationMinutes},
+              showSelectedIcon: false,
+              onSelectionChanged: _isCreating
+                  ? null
+                  : (selection) => setState(
+                      () => _autoArchiveDurationMinutes = selection.single,
+                    ),
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                padding: WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 8),
+                ),
+                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 10)),
+              ),
             ),
+          ),
+          if (_error case final error?) ...[
+            const SizedBox(height: 12),
+            _DialogError(message: error),
           ],
-        ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _isCreating ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const ValueKey('create-thread-confirm'),
+                onPressed: _isCreating ? null : _submit,
+                icon: _isCreating
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.forum_outlined, size: 16),
+                label: const Text('Create thread'),
+              ),
+            ],
+          ),
+        ],
       ),
     ),
   );

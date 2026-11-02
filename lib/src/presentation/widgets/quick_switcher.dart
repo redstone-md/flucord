@@ -7,6 +7,7 @@ import '../../application/quick_switcher_catalog.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
 import 'mention_badge.dart';
+import 'flucord_dialog.dart';
 
 part 'quick_switcher_destination_row.dart';
 
@@ -19,7 +20,6 @@ Future<QuickSwitcherDestination?> showQuickSwitcher(
   final previousFocus = FocusManager.instance.primaryFocus;
   final selected = await showDialog<QuickSwitcherDestination>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.68),
     builder: (context) => _QuickSwitcherDialog(
       catalog: QuickSwitcherCatalog.fromWorkspace(workspace),
     ),
@@ -67,15 +67,10 @@ class _QuickSwitcherDialogState extends State<_QuickSwitcherDialog> {
       namesRoute: true,
       label: 'Quick Switcher',
       explicitChildNodes: true,
-      child: Dialog(
+      child: FlucordDialog.frame(
         key: const ValueKey('quick-switcher'),
         alignment: const Alignment(0, -0.48),
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        elevation: 18,
-        shadowColor: Colors.black.withValues(alpha: 0.42),
-        backgroundColor: context.surfaces.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: SizedBox(
           width: 640,
           height: math.min(520, availableHeight),

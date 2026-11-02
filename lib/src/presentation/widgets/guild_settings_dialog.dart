@@ -15,6 +15,7 @@ import 'guild_settings_moderation_section.dart';
 import 'guild_settings_overview_section.dart';
 import 'guild_settings_roles_section.dart';
 import 'guild_settings_webhooks_section.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's server-settings window.
 ///
@@ -61,20 +62,16 @@ class _GuildSettingsDialogState extends State<GuildSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    return FlucordDialog.frame(
       key: const ValueKey('guild-settings-dialog'),
-      backgroundColor: context.surfaces.surface,
-      insetPadding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 940, maxHeight: 660),
-        child: ListenableBuilder(
-          listenable: widget.controller,
-          builder: (context, _) => LayoutBuilder(
-            builder: (context, constraints) => _layout(
-              context,
-              isCompact:
-                  constraints.maxWidth < GuildSettingsDialog.compactWidth,
-            ),
+      maxWidth: 940,
+      maxHeight: 660,
+      child: ListenableBuilder(
+        listenable: widget.controller,
+        builder: (context, _) => LayoutBuilder(
+          builder: (context, constraints) => _layout(
+            context,
+            isCompact: constraints.maxWidth < GuildSettingsDialog.compactWidth,
           ),
         ),
       ),

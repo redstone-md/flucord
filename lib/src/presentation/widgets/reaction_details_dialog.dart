@@ -8,6 +8,7 @@ import '../../domain/reaction_repository.dart';
 import '../../theme/flucord_theme.dart';
 import 'member_avatar.dart';
 import 'message_reaction_strip.dart';
+import 'flucord_dialog.dart';
 
 typedef ReactionUsersLoader =
     Future<ReactionUsersPage> Function(
@@ -152,9 +153,8 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.sizeOf(context);
-    return Dialog(
+    return FlucordDialog.frame(
       insetPadding: const EdgeInsets.all(16),
-      clipBehavior: Clip.antiAlias,
       child: SizedBox(
         width: math.min(540, media.width - 32),
         height: math.min(520, media.height - 32),

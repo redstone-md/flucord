@@ -6,6 +6,7 @@ import '../../application/report_flow_controller.dart';
 import '../../domain/moderation_report.dart';
 import '../../theme/flucord_theme.dart';
 import 'report_element_views.dart';
+import 'flucord_dialog.dart';
 
 /// Discord's in-app report modal.
 ///
@@ -47,16 +48,13 @@ class _ReportDialogState extends State<ReportDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('report-dialog'),
-    backgroundColor: context.surfaces.surface,
-    insetPadding: const EdgeInsets.all(24),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => _body(context),
-      ),
+    maxWidth: 480,
+    maxHeight: 560,
+    child: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => _body(context),
     ),
   );
 

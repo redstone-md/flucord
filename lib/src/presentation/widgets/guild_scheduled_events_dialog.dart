@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'flucord_dialog.dart';
 
 class GuildScheduledEventsDialog extends StatelessWidget {
   const GuildScheduledEventsDialog({
@@ -46,27 +47,23 @@ class GuildScheduledEventsDialog extends StatelessWidget {
   final void Function(GuildScheduledEvent)? onShowAttendees;
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('guild-events-dialog'),
-    insetPadding: const EdgeInsets.all(24),
-    backgroundColor: context.surfaces.surface,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 680, maxHeight: 680),
-      child: SizedBox(
-        width: 680,
-        height: MediaQuery.sizeOf(context).height * 0.78,
-        child: Column(
-          children: [
-            _EventsHeader(
-              spaceName: space.name,
-              onRefresh: onRefresh,
-              onCreate: onCreate,
-            ),
-            Divider(height: 1, color: context.surfaces.border),
-            Expanded(child: _buildBody(context)),
-          ],
-        ),
+    maxWidth: 680,
+    maxHeight: 680,
+    child: SizedBox(
+      width: 680,
+      height: MediaQuery.sizeOf(context).height * 0.78,
+      child: Column(
+        children: [
+          _EventsHeader(
+            spaceName: space.name,
+            onRefresh: onRefresh,
+            onCreate: onCreate,
+          ),
+          Divider(height: 1, color: context.surfaces.border),
+          Expanded(child: _buildBody(context)),
+        ],
       ),
     ),
   );

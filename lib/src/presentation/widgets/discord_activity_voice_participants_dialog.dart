@@ -7,6 +7,7 @@ import '../../domain/discord_relationship.dart';
 import '../../theme/flucord_theme.dart';
 import 'discord_friends_scope.dart';
 import 'discord_relationship_avatar.dart';
+import 'flucord_dialog.dart';
 
 Future<void> showDiscordActivityVoiceParticipantsDialog(
   BuildContext context,
@@ -33,52 +34,50 @@ class _ParticipantsDialog extends StatelessWidget {
   final List<DiscordRelationship> relationships;
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 380, maxHeight: 460),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          final call = controller.call;
-          final participants = call?.participantUserIds ?? const <String>[];
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _Header(
-                count: participants.length,
-                connected: call?.isConnected == true,
-              ),
-              Divider(height: 1, color: context.surfaces.border),
-              if (participants.isEmpty)
-                const _EmptyParticipants()
-              else
-                Flexible(
-                  child: ListView.separated(
-                    key: const ValueKey('activity-voice-participant-list'),
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: participants.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 2),
-                    itemBuilder: (context, index) {
-                      final userId = participants[index];
-                      return _ParticipantRow(
-                        user: _userFor(userId),
-                        speaking: call?.isSpeaking(userId) == true,
-                        currentUser: userId == call?.currentUserId,
-                        locallyMuted: call?.isLocallyMuted(userId) == true,
-                        pending: controller.isParticipantMutePending(userId),
-                        error: controller.participantMuteErrorFor(userId),
-                        onToggleMuted: () => unawaited(
-                          controller.toggleParticipantMuted(userId),
-                        ),
-                      );
-                    },
-                  ),
+  Widget build(BuildContext context) => FlucordDialog.frame(
+    maxWidth: 380,
+    maxHeight: 460,
+    child: AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final call = controller.call;
+        final participants = call?.participantUserIds ?? const <String>[];
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Header(
+              count: participants.length,
+              connected: call?.isConnected == true,
+            ),
+            Divider(height: 1, color: context.surfaces.border),
+            if (participants.isEmpty)
+              const _EmptyParticipants()
+            else
+              Flexible(
+                child: ListView.separated(
+                  key: const ValueKey('activity-voice-participant-list'),
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: participants.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 2),
+                  itemBuilder: (context, index) {
+                    final userId = participants[index];
+                    return _ParticipantRow(
+                      user: _userFor(userId),
+                      speaking: call?.isSpeaking(userId) == true,
+                      currentUser: userId == call?.currentUserId,
+                      locallyMuted: call?.isLocallyMuted(userId) == true,
+                      pending: controller.isParticipantMutePending(userId),
+                      error: controller.participantMuteErrorFor(userId),
+                      onToggleMuted: () =>
+                          unawaited(controller.toggleParticipantMuted(userId)),
+                    );
+                  },
                 ),
-            ],
-          );
-        },
-      ),
+              ),
+          ],
+        );
+      },
     ),
   );
 

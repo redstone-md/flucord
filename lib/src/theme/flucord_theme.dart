@@ -185,6 +185,7 @@ abstract final class FlucordTheme {
       dialogTheme: DialogThemeData(
         barrierColor: Colors.black.withValues(alpha: 0.58),
         backgroundColor: surface,
+        insetPadding: const EdgeInsets.all(24),
         shape: const RoundedRectangleBorder(borderRadius: FlucordRadius.medium),
         titleTextStyle: textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.w700,

@@ -42,6 +42,7 @@ import 'accessibility_section.dart';
 import 'streamer_mode_section.dart';
 import 'theme_section.dart';
 import 'voice_devices_section.dart';
+import 'flucord_dialog.dart';
 
 /// The left-hand categories, in the order Discord lists the comparable ones.
 enum UserSettingsCategory {
@@ -181,7 +182,6 @@ class UserSettingsDialog extends StatefulWidget {
     VoiceController? voiceController,
   }) => showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.58),
     builder: (_) => UserSettingsDialog(
       controller: controller,
       profileController: profileController,
@@ -221,62 +221,59 @@ class _UserSettingsDialogState extends State<UserSettingsDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => FlucordDialog.frame(
     key: const ValueKey('user-settings-dialog'),
-    insetPadding: const EdgeInsets.all(24),
-    backgroundColor: context.surfaces.canvas,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 940, maxHeight: 720),
-      child: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) => LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
-            final navigation = _Navigation(
-              selected: _category,
-              horizontal: !wide,
-              onSelected: (category) => setState(() => _category = category),
-            );
-            final body = _Body(
-              controller: widget.controller,
-              profileController: widget.profileController,
-              standingController: widget.standingController,
-              familyController: widget.familyController,
-              sessionController: widget.sessionController,
-              connectionsController: widget.connectionsController,
-              entitlementsController: widget.entitlementsController,
-              dataPackageController: widget.dataPackageController,
-              appAuthorisationController: widget.appAuthorisationController,
-              mfaController: widget.mfaController,
-              ageController: widget.ageController,
-              keybindController: widget.keybindController,
-              streamerModeController: widget.streamerModeController,
-              accessibilityController: widget.accessibilityController,
-              streamQualityController: widget.streamQualityController,
-              themeController: widget.themeController,
-              voiceController: widget.voiceController,
-              category: _category,
-            );
-            return wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(width: 232, child: navigation),
-                      VerticalDivider(width: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      navigation,
-                      Divider(height: 1, color: context.surfaces.border),
-                      Expanded(child: body),
-                    ],
-                  );
-          },
-        ),
+    maxWidth: 940,
+    maxHeight: 720,
+    child: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final wide =
+              constraints.maxWidth >= UserSettingsDialog.railBreakpoint;
+          final navigation = _Navigation(
+            selected: _category,
+            horizontal: !wide,
+            onSelected: (category) => setState(() => _category = category),
+          );
+          final body = _Body(
+            controller: widget.controller,
+            profileController: widget.profileController,
+            standingController: widget.standingController,
+            familyController: widget.familyController,
+            sessionController: widget.sessionController,
+            connectionsController: widget.connectionsController,
+            entitlementsController: widget.entitlementsController,
+            dataPackageController: widget.dataPackageController,
+            appAuthorisationController: widget.appAuthorisationController,
+            mfaController: widget.mfaController,
+            ageController: widget.ageController,
+            keybindController: widget.keybindController,
+            streamerModeController: widget.streamerModeController,
+            accessibilityController: widget.accessibilityController,
+            streamQualityController: widget.streamQualityController,
+            themeController: widget.themeController,
+            voiceController: widget.voiceController,
+            category: _category,
+          );
+          return wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 232, child: navigation),
+                    VerticalDivider(width: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    navigation,
+                    Divider(height: 1, color: context.surfaces.border),
+                    Expanded(child: body),
+                  ],
+                );
+        },
       ),
     ),
   );
