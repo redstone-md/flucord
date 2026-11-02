@@ -32,7 +32,8 @@ do not count as desktop-user chat parity.
 | Composer checks | Ready | A character counter appears near the limit, attachment sizes are checked against the tier- and entitlement-derived limit before upload, and a file can be tagged as a spoiler at attach time, arriving spoiler-tagged |
 | Attachments and replies | Ready | Native multipart upload and existing composer |
 | Inline video playback | Ready | Native playback, seek, mute, explicit fullscreen exit, and deterministic teardown |
-| Reactions and pins | Ready | Desktop-user message routes |
+| Reactions | Partial | A click adds or takes back a normal reaction over the desktop-user routes. The chip changes when the `MESSAGE_REACTION_ADD` or `MESSAGE_REACTION_REMOVE` answer arrives, so it does not change before the server replies. Other people's reactions and a moderator clearing one emoji or all of them show live, also on a message the cache has pruned. The "who reacted" list stays empty because the desktop transport has no route for it. A click cannot take back a burst reaction. `MESSAGE_REACTION_ADD_MANY` is not handled. Not yet checked against a live session |
+| Pins | Ready | Desktop-user message routes |
 | Threads | Ready | Create from message, archived-thread paging, join and leave with a live member count, and the lazy roster from `THREAD_MEMBER_LIST_UPDATE` |
 | Voice channel text chat | Ready | Room and timeline switch inside a voice channel |
 | Member list, roles and presence | Ready | Server-authoritative lazy member list with scroll-driven subscriptions; presence, activities, hidden activities and the account's own custom status all read and published. The role editor offers every permission bit, colour and icon; the member popover grants roles and applies nickname, timeout, kick and ban, gated on computed permissions; the list is searched in large servers through the member-chunk mechanism |
