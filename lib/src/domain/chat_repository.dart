@@ -127,6 +127,25 @@ final class MessageDeletedEvent extends ChatRepositoryEvent {
   final String channelId;
 }
 
+/// A server the account gained or got back, whole, as `GUILD_CREATE` carries it.
+final class GuildGainedEvent extends ChatRepositoryEvent {
+  const GuildGainedEvent(this.guild);
+
+  final JoinedGuild guild;
+}
+
+/// One bulk delete, folded at once: a moderator's purge can name a hundred
+/// messages in a channel somebody is reading.
+final class MessagesDeletedEvent extends ChatRepositoryEvent {
+  const MessagesDeletedEvent({
+    required this.messageIds,
+    required this.channelId,
+  });
+
+  final Set<String> messageIds;
+  final String channelId;
+}
+
 final class ChannelUpsertedEvent extends ChatRepositoryEvent {
   const ChannelUpsertedEvent(this.channel);
 
@@ -200,11 +219,10 @@ final class ChannelDeletedEvent extends ChatRepositoryEvent {
   final String channelId;
 }
 
-/// A server the account can no longer see.
+/// A server the account can no longer see, gone from the workspace whole.
 ///
-/// A `READY` that stops naming a guild says the account left it while the
-/// socket was down. The server's channels each carry their own deletion event,
-/// so this one only takes the server row off the rail.
+/// `GUILD_DELETE` says so while the socket is up. A `READY` that stops naming a
+/// guild says the account left it while the socket was down.
 final class SpaceRemovedEvent extends ChatRepositoryEvent {
   const SpaceRemovedEvent(this.spaceId);
 

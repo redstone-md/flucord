@@ -4,6 +4,7 @@ import 'package:flucord/src/app_composition.dart';
 import 'package:flucord/src/application/direct_call_controller.dart';
 import 'package:flucord/src/application/go_live_controller.dart';
 import 'package:flucord/src/application/room_focus.dart';
+import 'package:flucord/src/application/self_video_controller.dart';
 import 'package:flucord/src/application/stream_viewer_controller.dart';
 import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/domain/channel_capabilities.dart';
@@ -20,6 +21,7 @@ import 'package:flucord/src/presentation/widgets/go_live_scope.dart';
 import 'package:flucord/src/presentation/widgets/message_component_scope.dart';
 import 'package:flucord/src/presentation/widgets/remote_camera_scope.dart';
 import 'package:flucord/src/presentation/widgets/room_focus_scope.dart';
+import 'package:flucord/src/presentation/widgets/self_video_scope.dart';
 import 'package:flucord/src/presentation/widgets/slash_command_scope.dart';
 import 'package:flucord/src/presentation/widgets/soundboard_scope.dart';
 import 'package:flucord/src/presentation/widgets/stage_scope.dart';
@@ -45,6 +47,7 @@ Widget paneHarness(
   DirectCallController? directCall,
   GoLiveController? goLive,
   StreamViewerController? streamViewer,
+  SelfVideoController? camera,
   RoomFocus? focus,
 }) => RoomFocusScope(
   focus: focus ?? composition.roomFocus,
@@ -82,22 +85,26 @@ Widget paneHarness(
                                   controller: composition.messageComponent,
                                   child: VoiceScope(
                                     controller: voice ?? composition.voice,
-                                    child: ConversationPane(
-                                      workspace: workspace,
-                                      capabilities: capabilities,
-                                      channel: channel,
-                                      channels: WorkspacePermissions(
-                                        workspace,
-                                      ).visibleChannelsFor(channel.spaceId),
-                                      compact: false,
-                                      allowMemberPanel: true,
-                                      allowThreadPanel: true,
-                                      showMembers: false,
-                                      showPins: false,
-                                      showThreads: false,
-                                      onPickChannel: (_) {},
-                                      onSelectChannel: (_) {},
-                                      onOpenInbox: () {},
+                                    child: SelfVideoScope(
+                                      controller:
+                                          camera ?? composition.selfVideo,
+                                      child: ConversationPane(
+                                        workspace: workspace,
+                                        capabilities: capabilities,
+                                        channel: channel,
+                                        channels: WorkspacePermissions(
+                                          workspace,
+                                        ).visibleChannelsFor(channel.spaceId),
+                                        compact: false,
+                                        allowMemberPanel: true,
+                                        allowThreadPanel: true,
+                                        showMembers: false,
+                                        showPins: false,
+                                        showThreads: false,
+                                        onPickChannel: (_) {},
+                                        onSelectChannel: (_) {},
+                                        onOpenInbox: () {},
+                                      ),
                                     ),
                                   ),
                                 ),

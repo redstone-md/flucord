@@ -32,6 +32,7 @@ import 'presentation/widgets/slash_command_scope.dart';
 import 'presentation/widgets/soundboard_scope.dart';
 import 'presentation/widgets/stage_scope.dart';
 import 'presentation/widgets/room_focus_scope.dart';
+import 'presentation/widgets/self_video_scope.dart';
 import 'presentation/widgets/stream_viewer_scope.dart';
 import 'presentation/widgets/thread_membership_scope.dart';
 import 'presentation/widgets/voice_message_recorder_scope.dart';
@@ -342,7 +343,10 @@ class _FlucordAppState extends State<FlucordApp> {
                                     controller: _composition.slashCommand,
                                     child: MessageComponentScope(
                                       controller: _composition.messageComponent,
-                                      child: child,
+                                      child: SelfVideoScope(
+                                        controller: _composition.selfVideo,
+                                        child: child,
+                                      ),
                                     ),
                                   ),
                                 ),

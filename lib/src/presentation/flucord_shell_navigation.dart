@@ -420,6 +420,25 @@ extension _FlucordShellNavigation on FlucordShell {
     unawaited(chatController.openChannel(channelId));
   }
 
+  /// Walks back to the Room the account is connected to, from any server and
+  /// from the channel's chat.
+  void _openVoiceRoom(String channelId) {
+    final channel = _channelOf(channelId);
+    if (channel == null) return;
+    _openDestination(
+      spaceId: channel.spaceId,
+      channelId: channelId,
+      voiceSurface: VoiceChannelSurface.room,
+    );
+  }
+
+  /// The name of the server [channelId] is in, or null for a call.
+  String? _serverNameOf(String channelId) {
+    final guildId = _channelOf(channelId)?.guildId;
+    if (guildId == null) return null;
+    return chatController.workspace?.spaceOrNull(guildId)?.name;
+  }
+
   /// Looks a member up in the workspace as it stands.
   ///
   /// Handed to kept subtrees so a row drawn from an older build still reads the

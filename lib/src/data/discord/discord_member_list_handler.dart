@@ -9,10 +9,10 @@ import 'discord_member_list_update.dart';
 
 /// Turns the Gateway's member-list traffic into domain state.
 ///
-/// Three dispatches have to be read together for a roster to make sense: READY
-/// and `GUILD_CREATE` describe the channels a list id can be derived from, and
-/// `GUILD_MEMBER_LIST_UPDATE` carries the rows. Keeping them in one handler is
-/// what lets a roster row be matched to the channel that asked for it, and
+/// These dispatches have to be read together for a roster to make sense: READY,
+/// `GUILD_CREATE` and the channel dispatches describe the channels a list id can
+/// be derived from, and `GUILD_MEMBER_LIST_UPDATE` carries the rows. Keeping them
+/// in one handler is what lets a roster row be matched to the channel that asked for it, and
 /// keeps the repository above from having to know the derivation at all.
 final class DiscordMemberListHandler {
   DiscordMemberListHandler(this._mapper);
@@ -32,6 +32,10 @@ final class DiscordMemberListHandler {
     required String guildId,
     required String channelId,
   }) => _directory.memberListIdFor(guildId: guildId, channelId: channelId);
+
+  /// The guild's raw role payloads, which a member payload is mapped against.
+  List<Map<String, Object?>> rolesOf(String guildId) =>
+      _directory.rolesOf(guildId);
 
   /// Applies one dispatch and returns the members it carried.
   ///
@@ -56,6 +60,13 @@ final class DiscordMemberListHandler {
           _directory.removeGuild(guildId);
           _store.clearGuild(guildId);
         }
+      case 'CHANNEL_CREATE' ||
+          'CHANNEL_UPDATE' ||
+          'THREAD_CREATE' ||
+          'THREAD_UPDATE':
+        _directory.acceptChannel(data);
+      case 'CHANNEL_DELETE' || 'THREAD_DELETE':
+        _directory.removeChannel(data);
       case 'GUILD_MEMBER_LIST_UPDATE':
         return _acceptListUpdate(data);
     }

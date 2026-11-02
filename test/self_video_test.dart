@@ -626,13 +626,10 @@ Future<void> _pumpBar(WidgetTester tester, SelfVideoController camera) async {
     MaterialApp(
       theme: FlucordTheme.dark,
       home: Scaffold(
-        body: ListenableBuilder(
-          listenable: Listenable.merge([controller, camera]),
-          builder: (_, _) => VoiceConnectionBar(
-            controller: controller,
-            channelNameFor: (_) => 'General',
-            camera: camera,
-          ),
+        body: VoiceConnectionBar(
+          controller: controller,
+          channelNameFor: (_) => 'General',
+          camera: camera,
         ),
       ),
     ),
