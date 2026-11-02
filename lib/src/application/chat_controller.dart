@@ -69,6 +69,7 @@ part 'chat_controller_scheduled_events.dart';
 part 'chat_controller_user_settings.dart';
 part 'chat_controller_guild_access.dart';
 part 'chat_controller_read_state.dart';
+part 'chat_controller_history_window.dart';
 
 enum ChatLoadState { idle, loading, ready, failure }
 
@@ -100,6 +101,17 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _loadingOlderChannels = {};
   final Set<String> _exhaustedChannels = {};
   final Map<String, Object> _olderChannelErrors = {};
+
+  /// Channels whose held messages stop short of the present, each with the
+  /// newest message known to exist when that became so.
+  final Map<String, String> _windowsBehind = {};
+
+  /// The newest load of a first page or a window, per channel.
+  final Map<String, Object> _windowLoads = {};
+  final Map<String, Object> _windowErrors = {};
+
+  /// Messages that arrive while the newest page of an old window is on its way.
+  final Map<String, List<ChatMessage>> _arrivalsDuringPresentLoad = {};
   final Map<String, ChannelHistory> _pinnedMessages = {};
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
@@ -240,6 +252,10 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.clear();
     _exhaustedChannels.clear();
     _olderChannelErrors.clear();
+    _windowsBehind.clear();
+    _windowLoads.clear();
+    _windowErrors.clear();
+    _arrivalsDuringPresentLoad.clear();
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
@@ -316,12 +332,37 @@ final class ChatController extends ChangeNotifier {
       await loadArchivedThreads(channelId, refresh: refresh);
       return;
     }
-    if (_workspace == null ||
-        _loadingChannels.contains(channelId) ||
-        (_loadedChannels.contains(channelId) && !refresh)) {
+    final workspace = _workspace;
+    if (workspace == null) {
       notifyListeners();
       return;
     }
+    if (_loadedChannels.contains(channelId) && !refresh) {
+      if (anchorMessageId == null) {
+        // Coming back to a channel left in an old window opens on the present.
+        if (hasNewerMessages(channelId)) {
+          await jumpToPresent(channelId);
+        } else {
+          notifyListeners();
+        }
+      } else if (workspace
+          .messagesFor(channelId)
+          .any((message) => message.id == anchorMessageId)) {
+        // A window still on its way would take the reader off this message.
+        _beginWindowLoad(channelId);
+        notifyListeners();
+      } else {
+        await _moveWindow(channelId, aroundMessageId: anchorMessageId);
+      }
+      return;
+    }
+    // A jump does not wait for a plain load in flight, whose page may not hold
+    // the message. It takes the load's place.
+    if (_loadingChannels.contains(channelId) && anchorMessageId == null) {
+      notifyListeners();
+      return;
+    }
+    final isCurrent = _beginWindowLoad(channelId);
     _loadingChannels.add(channelId);
     _channelErrors.remove(channelId);
     _olderChannelErrors.remove(channelId);
@@ -334,23 +375,20 @@ final class ChatController extends ChangeNotifier {
         channelId,
         aroundMessageId: anchorMessageId,
       );
-      _workspace = _workspace?.mergeInitialHistory(
-        page.history,
-        retainExisting: anchorMessageId != null,
-      );
+      if (!isCurrent()) return;
+      _applyWindow(channelId, page, aroundMessageId: anchorMessageId);
       _loadedChannels.add(channelId);
-      _setHistoryExhausted(channelId, !page.hasMore);
       // The page may name a newer message than the channel record did, and the
       // channel is on screen either way, so the cursor is moved again here.
       acknowledgeChannel(channelId);
     } catch (error) {
       // A channel already reading from its local copy keeps it. The error
       // state is for a channel with nothing to show.
-      if (!_restoredChannels.contains(channelId)) {
+      if (isCurrent() && !_restoredChannels.contains(channelId)) {
         _channelErrors[channelId] = error;
       }
     } finally {
-      _loadingChannels.remove(channelId);
+      if (isCurrent()) _loadingChannels.remove(channelId);
       if (!_disposed) notifyListeners();
     }
   }
@@ -389,11 +427,14 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.add(channelId);
     _olderChannelErrors.remove(channelId);
     notifyListeners();
+    final window = _windowLoads[channelId];
     try {
       final page = await _repository.loadChannelHistory(
         channelId,
         beforeMessageId: messages.first.id,
       );
+      // This page sits next to a window that has since been replaced.
+      if (!identical(_windowLoads[channelId], window)) return;
       _workspace = _workspace?.mergeHistory(
         page.history,
         replaceChannel: false,
@@ -632,10 +673,13 @@ final class ChatController extends ChangeNotifier {
   /// Folds in a message this client just sent. It reads its channel, and the
   /// timeline takes the reader to it.
   void _applySentMessage(ChatMessage message) {
-    _workspace = _workspace
-        ?.upsertMessage(message)
-        .clearChannelUnreadBoundary(message.channelId);
-    _persistChannelActivity(message.channelId);
+    final channelId = message.channelId;
+    if (hasNewerMessages(channelId)) unawaited(jumpToPresent(channelId));
+    if (!_keepOutOfOldWindow(message)) {
+      _workspace = _workspace?.upsertMessage(message);
+    }
+    _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
+    _persistChannelActivity(channelId);
     _lastSentMessage = message;
   }
 

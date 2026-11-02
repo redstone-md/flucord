@@ -722,6 +722,9 @@ class _ConversationPaneState extends State<ConversationPane> {
               widget.capabilities,
               workspaceController.query,
               workspaceController.targetMessageId,
+              workspaceController.targetRequest,
+              chat.hasNewerMessages(channel.id),
+              chat.historyWindowError(channel.id),
               chat.lastSentMessageIdIn(channel.id),
               chat.canLoadOlderMessages(channel.id),
               chat.isLoadingOlderMessages(channel.id),
@@ -734,19 +737,31 @@ class _ConversationPaneState extends State<ConversationPane> {
     );
   }
 
-  /// Takes the reader to the message a summary starts at, by the same route
-  /// the inbox and search results take: the selection points at the message
-  /// and the channel opens built around it.
+  /// Takes the reader to a message, by the same route the inbox and search
+  /// results take: the selection points at the message and the channel opens
+  /// built around it.
+  void _jumpToMessage(
+    ChatController chat,
+    WorkspaceController workspaceController,
+    String channelId,
+    String messageId,
+  ) {
+    workspaceController.selectMessage(channelId, messageId);
+    unawaited(chat.openChannel(channelId, anchorMessageId: messageId));
+  }
+
   void _jumpToSummary(
     ChatController chat,
     WorkspaceController workspaceController,
     ConversationSummary summary,
   ) {
-    final channelId = summary.channelId;
-    final messageId = summary.startMessageId;
-    if (messageId.isEmpty) return;
-    workspaceController.selectMessage(channelId, messageId);
-    unawaited(chat.openChannel(channelId, anchorMessageId: messageId));
+    if (summary.startMessageId.isEmpty) return;
+    _jumpToMessage(
+      chat,
+      workspaceController,
+      summary.channelId,
+      summary.startMessageId,
+    );
   }
 
   Widget _timeline(
@@ -765,7 +780,13 @@ class _ConversationPaneState extends State<ConversationPane> {
       channel: channel,
       query: workspaceController.query,
       targetMessageId: workspaceController.targetMessageId,
+      targetRequest: workspaceController.targetRequest,
       lastSentMessageId: chat.lastSentMessageIdIn(channel.id),
+      hasNewerMessages: chat.hasNewerMessages(channel.id),
+      windowError: chat.historyWindowError(channel.id),
+      onOpenMessage: (messageId) =>
+          _jumpToMessage(chat, workspaceController, channel.id, messageId),
+      onLoadPresent: () => unawaited(chat.jumpToPresent(channel.id)),
       onReply: (message) => setState(() => _replyTo = message),
       onEdit: chat.editMessage,
       onDelete: chat.deleteMessage,
