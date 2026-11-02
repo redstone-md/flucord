@@ -409,7 +409,7 @@ class _RemoteEmbedImage extends StatelessWidget {
       key: const ValueKey('embed-image'),
       image: _embedImage(
         context,
-        address: plays || !_isGif(media) ? url : _stillFrameOf(url),
+        address: plays || !_isGif(media) ? url : _stillFrameOf(media),
         isProxied: media.proxyUrl != null,
         size: _covering(box, media.aspectRatio),
       ),
@@ -491,17 +491,19 @@ Size _covering(Size box, double ratio) {
 bool _isGif(MessageEmbedMedia media) =>
     (media.proxyUrl ?? media.url).toLowerCase().endsWith('.gif');
 
-/// The first frame of a GIF the account keeps still: the proxy serves a png
-/// when asked, and the cdn the webp form of the same path.
-String _stillFrameOf(String url) {
-  final parsed = Uri.tryParse(url);
-  if (parsed == null) return url;
-  if (parsed.host == 'media.discordapp.net') {
-    return parsed
-        .replace(queryParameters: {...parsed.queryParameters, 'format': 'png'})
+/// The first frame of a GIF the account keeps still. Any media proxy serves a
+/// png when asked, and Discord's cdn serves the webp form of the same path.
+/// Another host has no still form, so its picture is drawn as it is.
+String _stillFrameOf(MessageEmbedMedia media) {
+  final proxy = Uri.tryParse(media.proxyUrl ?? '');
+  if (proxy != null && proxy.hasAuthority) {
+    return proxy
+        .replace(queryParameters: {...proxy.queryParameters, 'format': 'png'})
         .toString();
   }
-  return cdnStillFrameOf(url);
+  return Uri.tryParse(media.url)?.host == 'cdn.discordapp.com'
+      ? cdnStillFrameOf(media.url)
+      : media.url;
 }
 
 class _EmbedFooterRow extends StatelessWidget {

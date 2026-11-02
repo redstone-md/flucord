@@ -1,5 +1,7 @@
 import 'dart:ui' as ui;
 
+import 'package:flucord/src/data/discord/discord_user_settings_proto.dart';
+import 'package:flucord/src/data/proto/proto_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -212,6 +214,32 @@ void main() {
     await images.letTimersEnd(tester);
   });
 
+  // Every Discord media proxy serves a still frame for `format=png`, whatever
+  // its host. The path names the original picture, so it is left alone.
+  testSession(
+    'a GIF kept still asks its proxy for the png frame of the same path',
+    (tester, session) async {
+      const path = '/external/still/picture.gif';
+      final address = images.serve(path, ChatImageDisk.redThenBlueGif);
+
+      await session.dispatch(
+        'MESSAGE_CREATE',
+        _messageWithEmbed({'image': _media(address, width: 300, height: 200)}),
+      );
+      await images.waitUntil(
+        tester,
+        () => images.requestsFor(path).isNotEmpty,
+        'the still frame request',
+      );
+
+      expect(images.requestsFor(path).single.queryParameters['format'], 'png');
+
+      await images.letTimersEnd(tester);
+    },
+    ready: SessionHarness.defaultReady()
+      ..['user_settings_proto'] = _gifsKeptStill(),
+  );
+
   testSession('an embed image that cannot load shows the broken image icon', (
     tester,
     session,
@@ -231,6 +259,15 @@ void main() {
     await images.letTimersEnd(tester);
   });
 }
+
+/// Account settings that turn GIF autoplay off.
+String _gifsKeptStill() => DiscordUserSettingsProto.encodeBase64(
+  (ProtoMessage()..setMessage(
+        PreloadedUserSettingsField.textAndImages,
+        ProtoMessage()..setBoolWrapper(TextAndImagesField.gifAutoPlay, false),
+      ))
+      .encode(),
+);
 
 /// The colour of the top left pixel of [image], as RGBA.
 Future<int?> _firstPixel(WidgetTester tester, ui.Image image) =>
