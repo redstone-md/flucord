@@ -1,0 +1,6 @@
+# A package of its own with no dependencies, see README.md for why.
+name: flucord_domain_bench
+publish_to: none
+
+environment:
+  sdk: ^3.12.2

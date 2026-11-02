@@ -1,0 +1,211 @@
+/// The two fakes under the desktop repository: everything above them is real.
+///
+/// A test feeds the gateway what Discord would send, and reads back the frames
+/// and requests the client sent. `SessionHarness` runs the whole app on these;
+/// a repository test can also use them directly.
+library;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flucord/src/data/discord/discord_desktop_websocket.dart';
+import 'package:flucord/src/data/discord/discord_etf_codec.dart';
+import 'package:flucord/src/data/discord/discord_rest_client.dart';
+
+/// One gateway connection, in the encoding the client asked for when it dialled.
+final class MemoryDesktopWebSocket implements DiscordDesktopWebSocket {
+  MemoryDesktopWebSocket._({required bool etf}) : _etf = etf;
+
+  final bool _etf;
+  final StreamController<Object?> _messages = StreamController();
+  final List<Object> _sent = [];
+  bool _open = true;
+  int? _closeCode;
+
+  /// Every frame the client sent on this socket, decoded, oldest first.
+  List<Map<String, Object?>> get frames => [
+    for (final frame in _sent)
+      (frame is Uint8List
+              ? DiscordEtfCodec.decode(frame)
+              : jsonDecode('$frame'))
+          as Map<String, Object?>,
+  ];
+
+  /// Delivers one gateway payload to the client.
+  void receive(Map<String, Object?> payload) => _messages.add(
+    _etf ? DiscordEtfCodec.encode(payload) : jsonEncode(payload),
+  );
+
+  /// Closes from the server's side, as a dropped connection does.
+  Future<void> dropConnection({int? code}) {
+    _closeCode = code;
+    return close();
+  }
+
+  @override
+  int? get closeCode => _closeCode;
+
+  @override
+  bool get isOpen => _open;
+
+  @override
+  Stream<Object?> get messages => _messages.stream;
+
+  @override
+  void send(String data) => _sent.add(data);
+
+  @override
+  void sendBinary(List<int> data) => _sent.add(Uint8List.fromList(data));
+
+  @override
+  Future<void> close() async {
+    _open = false;
+    if (!_messages.isClosed) await _messages.close();
+  }
+}
+
+/// Answers each dial with a new socket, and keeps them all in order.
+final class MemoryDesktopWebSocketConnector
+    implements DiscordDesktopWebSocketConnector {
+  final List<MemoryDesktopWebSocket> sockets = [];
+
+  @override
+  Future<DiscordDesktopWebSocket> connect(Uri uri) async {
+    final socket = MemoryDesktopWebSocket._(
+      etf: uri.queryParameters['encoding'] == 'etf',
+    );
+    sockets.add(socket);
+    return socket;
+  }
+}
+
+/// One HTTP request as the client sent it.
+final class RecordedRequest {
+  const RecordedRequest({
+    required this.method,
+    required this.uri,
+    required this.headers,
+    required this.body,
+  });
+
+  final String method;
+  final Uri uri;
+  final Map<String, String> headers;
+  final List<int>? body;
+
+  /// The body decoded as JSON. Null when the request had no body.
+  Object? get json => body == null ? null : jsonDecode(utf8.decode(body!));
+}
+
+/// Answers a request. May return a future the test completes later, which is
+/// how a test holds a request open.
+typedef FakeRoute =
+    FutureOr<DiscordHttpResponse> Function(RecordedRequest request);
+
+/// The HTTP side: records every request and answers from routes.
+///
+/// A request with no route goes to [fallback], which answers 404 unless a test
+/// says otherwise. The gateway lookup is routed from the start.
+final class FakeDiscordTransport implements DiscordHttpTransport {
+  FakeDiscordTransport({this.fallback = notFound}) {
+    on(
+      'GET',
+      '/api/v9/gateway',
+      (_) => jsonResponse({'url': 'wss://gateway.discord.gg'}),
+    );
+  }
+
+  final FakeRoute fallback;
+
+  /// Every request the client made, oldest first.
+  final List<RecordedRequest> requests = [];
+
+  final Map<String, FakeRoute> _routes = {};
+
+  /// Answers [method] on [path] with [route]. A later call replaces an earlier
+  /// one. [path] is the full path, such as `/api/v9/channels/1/messages`, with
+  /// no query string.
+  void on(String method, String path, FakeRoute route) =>
+      _routes['$method $path'] = route;
+
+  @override
+  Future<DiscordHttpResponse> send({
+    required String method,
+    required Uri uri,
+    required Map<String, String> headers,
+    List<int>? body,
+  }) async {
+    final request = RecordedRequest(
+      method: method,
+      uri: uri,
+      headers: headers,
+      body: body,
+    );
+    requests.add(request);
+    return (_routes['$method ${uri.path}'] ?? fallback)(request);
+  }
+
+  @override
+  void close() {}
+}
+
+/// The default [FakeDiscordTransport.fallback].
+DiscordHttpResponse notFound(RecordedRequest request) =>
+    jsonResponse({'message': 'Not routed by the test'}, statusCode: 404);
+
+/// A response with [payload] as its JSON body.
+DiscordHttpResponse jsonResponse(Object? payload, {int statusCode = 200}) =>
+    DiscordHttpResponse(
+      statusCode: statusCode,
+      headers: const {},
+      body: jsonEncode(payload),
+    );
+
+/// A guild text channel as a gateway payload carries it.
+Map<String, Object?> rawChannel({
+  required String id,
+  required String name,
+  String? lastMessageId,
+}) => {
+  'id': id,
+  'type': 0,
+  'name': name,
+  'last_message_id': lastMessageId,
+  'permission_overwrites': <Object?>[],
+};
+
+/// A guild as READY carries it, with only the `@everyone` role.
+///
+/// [everyonePermissions] is Discord's decimal bit field. The default is view
+/// channel only; pass more to open the composer's controls.
+Map<String, Object?> rawGuild({
+  required String id,
+  required String name,
+  required List<Object?> channels,
+  String everyonePermissions = '1024',
+}) => {
+  'id': id,
+  'name': name,
+  'roles': [
+    {'id': id, 'name': '@everyone', 'permissions': everyonePermissions},
+  ],
+  'channels': channels,
+};
+
+/// A message as `MESSAGE_CREATE` and the history route carry it.
+Map<String, Object?> rawMessage({
+  required String id,
+  required String channelId,
+  required String authorId,
+  required String content,
+  String? guildId,
+  String timestamp = '2026-07-25T10:00:00+00:00',
+}) => {
+  'id': id,
+  'channel_id': channelId,
+  'guild_id': ?guildId,
+  'author': {'id': authorId, 'username': 'user-$authorId'},
+  'content': content,
+  'timestamp': timestamp,
+};
