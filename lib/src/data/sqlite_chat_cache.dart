@@ -703,6 +703,25 @@ final class SqliteChatCache
     ),
   );
 
+  /// Every table is found by name, so a table added later cannot be missed.
+  ///
+  /// VACUUM rewrites the file. A delete alone leaves the row's bytes in free
+  /// pages, where anyone who opens the file can still read them.
+  @override
+  Future<void> clear() async {
+    final tables = await _database.query(
+      'sqlite_master',
+      columns: ['name'],
+      where: "type = 'table' AND name NOT LIKE 'sqlite_%'",
+    );
+    await _database.transaction((transaction) async {
+      for (final table in tables) {
+        await transaction.delete(table['name']! as String);
+      }
+    });
+    await _database.execute('VACUUM');
+  }
+
   @override
   Future<void> close() => _database.close();
 }

@@ -164,7 +164,15 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
-    if (controller.results.isEmpty && controller.categories.isEmpty) {
+    final favorites = widget.favorites;
+    // Only on the idle picker: a search is a question about Tenor, and
+    // answering it with what was starred last week would bury the results.
+    final starred = controller.query.trim().isEmpty && favorites != null
+        ? favorites.favorites.gifs
+        : const <FavoriteGif>[];
+    if (starred.isEmpty &&
+        controller.results.isEmpty &&
+        controller.categories.isEmpty) {
       return Center(
         child: Column(
           key: const ValueKey('gif-empty'),
@@ -190,12 +198,6 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
         ),
       );
     }
-    final favorites = widget.favorites;
-    // Only on the idle picker: a search is a question about Tenor, and
-    // answering it with what was starred last week would bury the results.
-    final starred = controller.query.trim().isEmpty && favorites != null
-        ? favorites.favorites.gifs
-        : const <FavoriteGif>[];
     return GridView.count(
       crossAxisCount: 3,
       crossAxisSpacing: 6,

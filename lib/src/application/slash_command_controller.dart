@@ -45,6 +45,9 @@ final class SlashCommandController extends ChangeNotifier {
 
   List<ApplicationCommand> get commands => _commands;
   String get query => _query;
+
+  /// Whether [commands] may not yet answer [query]: from the keystroke, through
+  /// the debounce, until the search returns.
   bool get isLoading => _isLoading;
   bool get isSending => _isSending;
   Object? get error => _error;
@@ -56,6 +59,9 @@ final class SlashCommandController extends ChangeNotifier {
     _channelId = channelId;
     _guildId = guildId;
     close();
+    // Each channel has its own commands, so reopening must ask again.
+    _query = '';
+    _commands = const [];
   }
 
   /// Reads what the composer holds and opens or closes the list.
@@ -80,6 +86,10 @@ final class SlashCommandController extends ChangeNotifier {
       return;
     }
     _query = query;
+    // A search already running answers an older keystroke, so its list must not
+    // land and look like the answer to this one.
+    _generation++;
+    _isLoading = _repository != null && _channelId != null;
     _notify();
     _debounce?.cancel();
     _debounce = Timer(debounce, () => unawaited(_search(query)));
@@ -90,6 +100,9 @@ final class SlashCommandController extends ChangeNotifier {
     _debounce?.cancel();
     if (!_isOpen) return;
     _isOpen = false;
+    // A list that never got its answer must not pass for one on reopening.
+    if (_isLoading) _commands = const [];
+    _isLoading = false;
     _notify();
   }
 

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -15,6 +18,8 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_session.dart';
+import 'package:flucord/src/domain/voice_message_recorder.dart';
+import 'package:flucord/src/presentation/widgets/destructive_confirmation.dart';
 
 import 'fake_discord_wire.dart';
 
@@ -43,9 +48,17 @@ import 'fake_discord_wire.dart';
 /// clock, and an `await` on a cancelled stream subscription only finishes on
 /// the real event loop, which [settle] lets run.
 ///
+/// A layout overflow fails the test, like any other Flutter error.
+///
 /// To count widget builds, use `countBuilds` from `build_counter.dart`.
 final class SessionHarness {
-  SessionHarness._(this._tester, this.transport, this._connector);
+  SessionHarness._(
+    this._tester,
+    this.transport,
+    this._connector,
+    this._diskDirectory,
+    this._voiceMessageRecorder,
+  );
 
   /// The account the default READY signs in.
   static const currentUserId = '100000000000000001';
@@ -66,23 +79,22 @@ final class SessionHarness {
 
   final WidgetTester _tester;
   final MemoryDesktopWebSocketConnector _connector;
+  final _MemoryCredentialVault _vault = _MemoryCredentialVault();
+
+  /// Where the cache lives when the test asked for `onDisk`.
+  final Directory? _diskDirectory;
+  final VoiceMessageRecorder? _voiceMessageRecorder;
 
   /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
 
-  /// Layout overflows drawn so far, with their messages.
-  ///
-  /// They are collected here and do not fail the test, because the composer
-  /// overflows in a real session today (the bug in FLUCORD-4) and that would
-  /// fail every test. Any other Flutter error still fails the test.
-  final List<String> layoutOverflows = [];
-
   int _sequence = 0;
 
-  bool _isLayoutOverflow(FlutterErrorDetails details) =>
-      details.library == 'rendering library' &&
-      details.exceptionAsString().contains('overflowed');
+  /// The saved token of [accountId]. It is made up, in Discord's shape: its first
+  /// part is the account's id.
+  static String tokenOf(String accountId) =>
+      '${base64Url.encode(utf8.encode(accountId))}.harness.token';
 
   /// The READY a session starts from. A new map each call, so a test can change
   /// its copy and pass it to [testSession].
@@ -121,20 +133,26 @@ final class SessionHarness {
     },
   };
 
-  /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
-  Future<void> _start(Map<String, Object?> ready) async {
-    await _tester.pumpWidget(
-      FlucordApp(
-        bootstrap: AppBootstrap(
-          credentialVault: _MemoryCredentialVault(),
-          chatRepositoryFactory: _FakeWireRepositoryFactory(
-            transport,
-            _connector,
-          ),
+  /// Pumps a new app that restores the saved session.
+  Future<void> _launch() => _tester.pumpWidget(
+    FlucordApp(
+      bootstrap: AppBootstrap(
+        voiceMessageRecorder: _voiceMessageRecorder,
+        credentialVault: _vault,
+        chatRepositoryFactory: _FakeWireRepositoryFactory(
+          transport,
+          _connector,
+          _diskDirectory,
         ),
       ),
-    );
-    await _settleUntil(() => sockets.isNotEmpty, 'a socket');
+    ),
+  );
+
+  /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
+  Future<void> _start(Map<String, Object?> ready) async {
+    final dialled = sockets.length;
+    await _launch();
+    await _settleUntil(() => sockets.length > dialled, 'a socket');
     await hello();
     await _settleUntil(
       () => socket.frames.any((frame) => frame['op'] == 2),
@@ -153,6 +171,53 @@ final class SessionHarness {
     await _tester.pumpWidget(const SizedBox());
     await settle();
   }
+
+  /// Quits the app and opens it again, signed in as [accountId], up to READY.
+  ///
+  /// The test must use `onDisk`, or nothing survives the quit. The account can
+  /// change here with no sign-out. A real install reaches that state through a
+  /// cache left by a version that did not clear it on sign-out.
+  Future<void> relaunch({
+    String accountId = currentUserId,
+    required Map<String, Object?> ready,
+  }) async {
+    await _end();
+    _vault.saveAccount(accountId);
+    await _start(ready);
+  }
+
+  /// Quits the app and opens it again as [accountId], with Discord answering
+  /// 503 to the first call a launch makes. Nothing is on the wire after this.
+  Future<void> relaunchUnreachable({String accountId = currentUserId}) async {
+    await _end();
+    _vault.saveAccount(accountId);
+    transport.on(
+      'GET',
+      '/api/v9/gateway',
+      (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
+    );
+    await _launch();
+    await settle();
+  }
+
+  /// Signs out as the user does, through the Connections dialog.
+  Future<void> signOut() async {
+    await _tester.tap(find.byKey(const ValueKey('open-connections')));
+    await settle();
+    await _tester.tap(find.text('Sign out'));
+    await settle();
+    await _tester.tap(find.byKey(destructiveConfirmKey));
+    await settle();
+  }
+
+  /// Every byte the cache has on disk, as text, with its side files.
+  ///
+  /// Read the files, not the tables: SQLite keeps a deleted row's bytes in the
+  /// file until something writes over them, and a query cannot see those.
+  String get cacheBytesOnDisk => [
+    for (final file in _diskDirectory!.listSync().whereType<File>())
+      latin1.decode(file.readAsBytesSync()),
+  ].join();
 
   /// The socket the client dialled last.
   MemoryDesktopWebSocket get socket => _connector.sockets.last;
@@ -218,35 +283,40 @@ final class SessionHarness {
 /// Defines a widget test that runs inside a started [SessionHarness].
 ///
 /// [ready] replaces [SessionHarness.defaultReady]. [routes] adds HTTP routes
-/// before the first request; after that, use `session.transport.on`.
+/// before the first request; after that, use `session.transport.on`. Pass a
+/// [voiceMessageRecorder] for the composer's voice message button, which only
+/// shows with one. [onDisk] keeps the cache in a temporary folder instead of in
+/// memory, which a test of a relaunch or of the cache file needs.
 void testSession(
   String description,
   Future<void> Function(WidgetTester tester, SessionHarness session) body, {
   Map<String, Object?>? ready,
   void Function(FakeDiscordTransport transport)? routes,
   Size size = const Size(1440, 900),
+  VoiceMessageRecorder? voiceMessageRecorder,
+  bool onDisk = false,
 }) {
   testWidgets(description, (tester) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final transport = FakeDiscordTransport(fallback: _emptyHistoryOrNotFound);
     routes?.call(transport);
+    final disk = onDisk
+        ? Directory.systemTemp.createTempSync('flucord-session-')
+        : null;
+    if (disk != null) addTearDown(() => disk.deleteSync(recursive: true));
     final session = SessionHarness._(
       tester,
       transport,
       MemoryDesktopWebSocketConnector(),
+      disk,
+      voiceMessageRecorder,
     );
-    // Restored in the finally: the framework fails a test that leaves this set.
-    final report = FlutterError.onError;
-    FlutterError.onError = (details) => session._isLayoutOverflow(details)
-        ? session.layoutOverflows.add(details.exceptionAsString())
-        : report?.call(details);
     try {
       await session._start(ready ?? SessionHarness.defaultReady());
       await body(tester, session);
     } finally {
       await session._end();
-      FlutterError.onError = report;
     }
   });
 }
@@ -262,10 +332,24 @@ DiscordHttpResponse _emptyHistoryOrNotFound(RecordedRequest request) =>
 
 /// Builds the same repository as `DiscordRepositoryFactory`, on the fake wire.
 final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
-  const _FakeWireRepositoryFactory(this._transport, this._connector);
+  const _FakeWireRepositoryFactory(
+    this._transport,
+    this._connector,
+    this._diskDirectory,
+  );
 
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
+  final Directory? _diskDirectory;
+
+  // No isolate: the widget tester's fake clock would never see an isolate's
+  // answer, so the cache has to run on the test's own event loop.
+  Future<SqliteChatCache> _openCache() => SqliteChatCache.openAt(
+    _diskDirectory == null
+        ? inMemoryDatabasePath
+        : '${_diskDirectory.path}/flucord.sqlite3',
+    factory: databaseFactoryFfiNoIsolate,
+  );
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -285,19 +369,27 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
         profile: profile,
         socketConnector: _connector,
       ),
-      // No isolate: the widget tester's fake clock would never see an isolate's
-      // answer, so the cache has to run on the test's own event loop.
-      await SqliteChatCache.openAt(
-        inMemoryDatabasePath,
-        factory: databaseFactoryFfiNoIsolate,
-      ),
+      await _openCache(),
+      accountId: session.accountId,
     );
+  }
+
+  @override
+  Future<void> clearCache() async {
+    final cache = await _openCache();
+    await cache.clear();
+    await cache.close();
   }
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
 final class _MemoryCredentialVault implements CredentialVault {
-  DiscordAccountSession? _session = DiscordDesktopUserSession('harness-token');
+  DiscordAccountSession? _session = _sessionOf(SessionHarness.currentUserId);
+
+  static DiscordAccountSession _sessionOf(String accountId) =>
+      DiscordDesktopUserSession(SessionHarness.tokenOf(accountId));
+
+  void saveAccount(String accountId) => _session = _sessionOf(accountId);
 
   @override
   Future<DiscordAccountSession?> readDiscordSession() async => _session;

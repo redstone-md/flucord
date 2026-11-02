@@ -195,7 +195,23 @@ final class ConnectionController extends ChangeNotifier {
     await forgetSavedCredential();
   }
 
+  /// Forgets the account on this machine: its credential and its cached data.
+  ///
+  /// A live session ends first, because it holds the cache open and would keep
+  /// writing to it. A cache that cannot be cleared must not keep the credential
+  /// alive, so the credential goes either way and the failure is reported.
   Future<void> forgetSavedCredential() async {
+    if (_mode == SessionMode.discord) await disconnect();
+    try {
+      await _repositoryFactory.clearCache();
+    } catch (error, stackTrace) {
+      AppLog.error(
+        'connection',
+        'The chat cache could not be cleared: $error',
+        stackTrace: stackTrace,
+      );
+      _errorMessage = 'Your cached messages could not be removed from disk.';
+    }
     await _credentialVault.clearDiscordSession();
     _hasSavedCredential = false;
     notifyListeners();

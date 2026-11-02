@@ -173,6 +173,13 @@ final class VoiceController extends ChangeNotifier {
   /// listen while the room is being built, before anybody can leave it.
   Stream<String> get camerasGone => _camerasGone.stream;
 
+  final StreamController<VoicePictureAsk> _pictureAsks =
+      StreamController.broadcast();
+
+  /// What the media server wants of the pictures this connection sends, which
+  /// on a voice connection are the camera's. Go Live hears its own connection.
+  Stream<VoicePictureAsk> get pictureAsks => _pictureAsks.stream;
+
   /// How long a participant still counts as speaking after their last voice
   /// frame. A sender closes a burst with five silence frames, 100 ms; this is
   /// long enough to ride over those and a lost packet, short enough that the
@@ -294,7 +301,8 @@ final class VoiceController extends ChangeNotifier {
   ///
   /// Held here rather than on the camera controller because opcode 4 is a
   /// whole-state frame: the flag has to be replayed with every mute toggle and
-  /// every reconnect, and the thing that replays those is this.
+  /// every reconnect, and the thing that replays those is this. It clears when
+  /// the session moves, disconnects or fails, and the camera follows it.
   bool get isCameraOn => _isCameraOn;
   bool get isBusy => _pendingActions > 0;
 
@@ -388,6 +396,9 @@ final class VoiceController extends ChangeNotifier {
     required String channelId,
     required bool isCall,
   }) async {
+    // A camera belongs to the Room it was turned on in. Carried into this one,
+    // the flag would show a tile with no pictures behind it.
+    _isCameraOn = false;
     final signalingService = _signalingServiceProvider();
     await _bindSignaling(signalingService);
     // Walking between two channels of one guild is a move on the same
@@ -546,6 +557,8 @@ final class VoiceController extends ChangeNotifier {
     }
     await _signalingSubscription?.cancel();
     _signalingService = service;
+    // The new service's connection carries no camera of ours.
+    _isCameraOn = false;
     // Subscribed before anything that can throw. Sound is what a room can
     // survive losing; hearing the transport is not.
     unawaited(_seatedSubscription?.cancel());
@@ -607,6 +620,7 @@ final class VoiceController extends ChangeNotifier {
         if (event.status == VoiceConnectionStatus.disconnected ||
             event.status == VoiceConnectionStatus.failure) {
           _transportSession = null;
+          _isCameraOn = false;
           _clearParticipants();
           unawaited(_applyBackgroundAudioState(uplink: false, playback: false));
         }
@@ -638,16 +652,12 @@ final class VoiceController extends ChangeNotifier {
         _forgetParticipant(event.userId);
       case VoiceDaveBinaryEvent():
         break;
-      case VoiceKeyframeRequestedEvent():
-        // Answered where the pictures come from: the stream router points the
-        // share's capture at one of these. A camera's turn, when its pictures
-        // are being sent at all.
-        break;
-      case VoiceRetransmitRequestedEvent():
+      case VoicePictureAsk():
+        if (!_disposed) _pictureAsks.add(event);
       case VoiceReceiverReportEvent():
         // Feedback about the pictures this client sends. The Go Live path
-        // acts on it through the stream router; a call carrying only audio
-        // has nothing to resend.
+        // acts on it through the stream router; the camera has no bitrate to
+        // change.
         break;
       case VoiceCredentialsNeededEvent():
         // The signaling service asks the gateway for fresh credentials; the
@@ -670,6 +680,7 @@ final class VoiceController extends ChangeNotifier {
     _signalingService = null;
     _connectionStatus = VoiceConnectionStatus.disconnected;
     _transportSession = null;
+    _isCameraOn = false;
     _clearParticipants();
     unawaited(_unbindBackgroundAudio());
     if (!_disposed) notifyListeners();
@@ -972,6 +983,7 @@ final class VoiceController extends ChangeNotifier {
     unawaited(_signalingSubscription?.cancel());
     unawaited(_seatedSubscription?.cancel());
     unawaited(_camerasGone.close());
+    unawaited(_pictureAsks.close());
     unawaited(_audioPipeline?.dispose());
     unawaited(_playbackService?.dispose());
     unawaited(_mediaService.dispose());

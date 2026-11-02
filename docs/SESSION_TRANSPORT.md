@@ -221,3 +221,7 @@ A future session adapter must:
 4. Translate authentication failures at the repository boundary.
 5. Pass the same repository contract and full regression gate before it can
    replace the active workspace transport.
+6. Keep one account's data from another. One cache file serves whoever signs in
+   on the machine. An offline launch shows the cache only if it names the
+   session's account, a live session of another account empties it first, and
+   sign-out empties it for good.

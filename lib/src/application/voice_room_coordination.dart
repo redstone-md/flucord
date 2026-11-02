@@ -41,11 +41,13 @@ final class VoiceRoomCoordination {
     _voice.addListener(_endWatchesWithRoom);
     _voice.addListener(_endShareWithRoom);
     _voice.addListener(_endCameraWithRoom);
+    _voice.addListener(_keepCameraOnConnection);
     _voice.addListener(_keepFocusInRoom);
     _voice.addListener(_refreshOverlay);
     _streamerMode.addListener(_refreshOverlay);
     _goLive.addListener(_syncStreamerMode);
     _camerasGoneSubscription = voice.camerasGone.listen(_remoteCameras.forget);
+    _pictureAsksSubscription = voice.pictureAsks.listen(selfVideo.answer);
   }
 
   final VoiceController _voice;
@@ -57,17 +59,20 @@ final class VoiceRoomCoordination {
   final SelfVideoController _selfVideo;
   final RoomFocus _focus;
   StreamSubscription<String>? _camerasGoneSubscription;
+  StreamSubscription<VoicePictureAsk>? _pictureAsksSubscription;
 
   void dispose() {
     _voice.removeListener(_syncRemoteCameras);
     _voice.removeListener(_endWatchesWithRoom);
     _voice.removeListener(_endShareWithRoom);
     _voice.removeListener(_endCameraWithRoom);
+    _voice.removeListener(_keepCameraOnConnection);
     _voice.removeListener(_keepFocusInRoom);
     _voice.removeListener(_refreshOverlay);
     _streamerMode.removeListener(_refreshOverlay);
     _goLive.removeListener(_syncStreamerMode);
     unawaited(_camerasGoneSubscription?.cancel());
+    unawaited(_pictureAsksSubscription?.cancel());
   }
 
   /// Reads everybody else's cameras only while a room is actually connected.
@@ -120,9 +125,21 @@ final class VoiceRoomCoordination {
   /// that would carry the withdrawal is the one that dropped. A camera kept
   /// on across a full disconnect would be re-announced into the next room
   /// while sending on the old session's SSRC.
+  ///
+  /// Moving to another Room changes the session without the status ever saying
+  /// the Room went down. The voice flag says it instead: it clears on a move,
+  /// and a camera still on with no flag is sending into a Room that was not
+  /// told.
   void _endCameraWithRoom() {
-    if (_roomIsUp) return;
+    if (_roomIsUp && (_voice.isCameraOn || !_selfVideo.isOn)) return;
     unawaited(_selfVideo.forget());
+  }
+
+  /// A camera that outlived a reconnect follows the connection to its new
+  /// SSRC, once the connection is up again.
+  void _keepCameraOnConnection() {
+    if (_voice.connectionStatus != VoiceConnectionStatus.ready) return;
+    _selfVideo.followVoiceSession();
   }
 
   /// A connection that failed ends the room the same as one that was left:

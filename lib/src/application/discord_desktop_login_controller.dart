@@ -123,7 +123,7 @@ final class DiscordDesktopLoginController extends ChangeNotifier {
     _state = DiscordDesktopLoginState.idle;
     _qrUri = null;
     _pendingDisplayName = null;
-    _errorMessage = null;
+    _errorMessage = _connectionController.errorMessage;
     _captchaChallenge = null;
     notifyListeners();
   }
