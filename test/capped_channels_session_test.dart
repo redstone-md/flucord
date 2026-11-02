@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flucord/src/application/chat_controller.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flucord/src/presentation/widgets/chat_scope.dart';
 import 'package:flucord/src/presentation/widgets/status_views.dart';
 import 'package:flutter/widgets.dart';
@@ -19,7 +20,15 @@ const _pageSize = 100;
 const _openChannelPath =
     '/api/v9/channels/${SessionHarness.channelId}/messages';
 
-String _idOf(int index) => '9${index.toString().padLeft(17, '0')}';
+/// The first id is a day old. The read-state collector drops a cursor older
+/// than 30 days when the session starts, so an older id would lose it.
+final _firstId = BigInt.parse(
+  DiscordSnowflake.fromTimestampMillis(
+    DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch,
+  ),
+);
+
+String _idOf(int index) => (_firstId + BigInt.from(index)).toString();
 
 /// Message [index] in [channelId]. A larger index is a newer id and a later time.
 Map<String, Object?> _message(
@@ -190,6 +199,11 @@ void main() {
   testSession(
     'a channel with a read cursor, capped while unread, opens on its NEW line',
     (tester, session) async {
+      expect(
+        _chat(tester).readState.forChannel(SessionHarness.channelId),
+        isNotNull,
+        reason: 'the read-state collector must keep the cursor',
+      );
       await session.openChannel(SessionHarness.otherChannelId);
       await _arrive(session, 1, _cap + 50);
       expect(_heldIds(tester, SessionHarness.channelId), hasLength(_cap));
