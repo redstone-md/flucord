@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flucord/src/application/voice_controller.dart';
 import 'package:flucord/src/data/discord/discord_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_rtp_packet.dart';
 import 'package:flucord/src/data/discord/discord_voice_gateway_client.dart';
 import 'package:flucord/src/data/discord/discord_voice_signaling_service.dart';
 import 'package:flucord/src/data/discord/discord_voice_socket_factory.dart';
+import 'package:flucord/src/data/noop_voice_media_service.dart';
 import 'package:flucord/src/domain/go_live_stream.dart';
 import 'package:flucord/src/domain/video_encoder.dart';
 import 'package:flucord/src/domain/voice_audio.dart';
@@ -376,17 +378,121 @@ void main() {
     });
     await _flushEvents();
 
-    clients.single.emitStatus(VoiceConnectionStatus.reconnecting);
-    await _flushEvents();
-    gateway.updates.clear();
+    for (final status in [
+      VoiceConnectionStatus.failure,
+      VoiceConnectionStatus.disconnected,
+    ]) {
+      clients.single.emitStatus(status);
+      await _flushEvents();
+      gateway.updates.clear();
 
-    await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
+      await service.joinVoiceChannel(guildId: 'guild-1', channelId: 'voice-1');
 
-    // An identical voice state is a no-op server-side; joining the same
-    // channel on a dead session has to leave and rejoin instead.
-    expect(gateway.updates, hasLength(2));
-    expect(gateway.updates.first.channelId, isNull);
-    expect(gateway.updates.last.channelId, 'voice-1');
+      // An identical voice state is a no-op server-side; joining the same
+      // channel on a dead session has to leave and rejoin instead.
+      expect(gateway.updates, hasLength(2));
+      expect(gateway.updates.first.channelId, isNull);
+      expect(gateway.updates.last.channelId, 'voice-1');
+    }
+  });
+
+  group('a press during a reconnect', () {
+    /// A Participant in a room over the real service, with its socket up.
+    Future<
+      ({
+        _FakeMainGateway gateway,
+        _FakeVoiceClient client,
+        VoiceController voice,
+      })
+    >
+    joinedRoom({
+      Duration reissueFallbackDelay = const Duration(seconds: 2),
+    }) async {
+      final gateway = _FakeMainGateway();
+      final clients = <_FakeVoiceClient>[];
+      final service = DiscordVoiceSignalingService(
+        mainGateway: gateway,
+        socketFactory: _CallSocketFactory((credentials) {
+          final client = _FakeVoiceClient(credentials);
+          clients.add(client);
+          return client;
+        }),
+        reissueFallbackDelay: reissueFallbackDelay,
+      )..setCurrentUserId('bot-1');
+      addTearDown(service.close);
+      final voice = VoiceController(
+        const NoopVoiceMediaService(),
+        signalingServiceProvider: () => service,
+      );
+      addTearDown(voice.dispose);
+
+      await voice.connect(guildId: 'guild-1', channelId: 'voice-1');
+      gateway.dispatch('VOICE_STATE_UPDATE', {
+        'guild_id': 'guild-1',
+        'channel_id': 'voice-1',
+        'user_id': 'bot-1',
+        'session_id': 'session-1',
+      });
+      gateway.dispatch('VOICE_SERVER_UPDATE', {
+        'guild_id': 'guild-1',
+        'token': 'voice-token',
+        'endpoint': 'voice.example.test',
+      });
+      await _flushEvents();
+      return (gateway: gateway, client: clients.single, voice: voice);
+    }
+
+    test('sends the voice state and no leave and join cycle', () async {
+      final room = await joinedRoom();
+      room.client.emitStatus(VoiceConnectionStatus.reconnecting);
+      await _flushEvents();
+      room.gateway.updates.clear();
+
+      await room.voice.toggleMute();
+      expect(room.gateway.updates.single.channelId, 'voice-1');
+      expect(room.gateway.updates.single.selfMute, isTrue);
+      room.gateway.updates.clear();
+
+      await room.voice.toggleDeafen();
+      expect(room.gateway.updates.single.channelId, 'voice-1');
+      expect(room.gateway.updates.single.selfDeaf, isTrue);
+      room.gateway.updates.clear();
+
+      await room.voice.setCameraAnnounced(enabled: true);
+      expect(room.gateway.updates.single.channelId, 'voice-1');
+      expect(room.gateway.updates.single.selfVideo, isTrue);
+    });
+
+    test('is what a stalled reconnect rejoins with', () async {
+      final room = await joinedRoom(
+        reissueFallbackDelay: const Duration(milliseconds: 20),
+      );
+      room.client.emitStatus(VoiceConnectionStatus.reconnecting);
+      await _flushEvents();
+
+      await room.voice.toggleMute();
+      room.gateway.updates.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      // The recovery's own cycle, once its wait ran out.
+      expect(room.gateway.updates.first.channelId, isNull);
+      expect(room.gateway.updates[1].channelId, 'voice-1');
+      expect(room.gateway.updates[1].selfMute, isTrue);
+    });
+
+    test('on a failed connection rejoins with the new choice', () async {
+      final room = await joinedRoom();
+      room.client.emitStatus(VoiceConnectionStatus.failure);
+      await _flushEvents();
+      room.gateway.updates.clear();
+
+      await room.voice.toggleMute();
+
+      expect(room.gateway.updates, hasLength(2));
+      expect(room.gateway.updates.first.channelId, isNull);
+      expect(room.gateway.updates.last.channelId, 'voice-1');
+      expect(room.gateway.updates.last.selfMute, isTrue);
+    });
   });
 
   test('carries video on the connection the call opened', () async {
@@ -456,12 +562,14 @@ final class _VoiceUpdate {
     required this.channelId,
     required this.selfMute,
     required this.selfDeaf,
+    required this.selfVideo,
   });
 
   final String guildId;
   final String? channelId;
   final bool selfMute;
   final bool selfDeaf;
+  final bool selfVideo;
 }
 
 final class _FakeMainGateway implements DiscordVoiceStateGateway {
@@ -494,6 +602,7 @@ final class _FakeMainGateway implements DiscordVoiceStateGateway {
         channelId: channelId,
         selfMute: selfMute,
         selfDeaf: selfDeaf,
+        selfVideo: selfVideo,
       ),
     );
   }

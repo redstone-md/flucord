@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/system_message_text.dart';
 import '../../domain/chat_models.dart';
 import '../../theme/flucord_theme.dart';
+import 'message_timestamp.dart';
 
 class SystemMessageItem extends StatelessWidget {
   const SystemMessageItem({
@@ -24,12 +25,9 @@ class SystemMessageItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final descriptor = _SystemMessageDescriptor.from(message, member);
     final action = _action();
-    final time = MaterialLocalizations.of(context).formatTimeOfDay(
-      TimeOfDay.fromDateTime(message.sentAt),
-      alwaysUse24HourFormat: MediaQuery.of(context).alwaysUse24HourFormat,
-    );
     return Semantics(
-      label: '${descriptor.text}, $time',
+      label:
+          '${descriptor.text}, ${MessageTimestamp.of(context, message.sentAt)}',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
@@ -76,12 +74,9 @@ class SystemMessageItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Tooltip(
-              message: time,
-              child: Text(
-                time,
-                style: TextStyle(fontSize: 10, color: context.surfaces.muted),
-              ),
+            MessageTimeLabel(
+              message.sentAt,
+              style: TextStyle(fontSize: 10, color: context.surfaces.muted),
             ),
           ],
         ),
