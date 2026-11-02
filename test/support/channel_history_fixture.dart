@@ -1,3 +1,4 @@
+import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flucord/src/domain/discord_snowflake.dart';
 
 import 'fake_discord_wire.dart';
@@ -40,6 +41,37 @@ abstract final class ChannelHistoryFixture {
       20,
     ).add(Duration(minutes: index * 10)).toIso8601String(),
   );
+
+  /// READY for an account that has read the channel up to [firstUnread], with
+  /// the channel's newest message at [newest].
+  static Map<String, Object?> readyWithUnread({
+    required int firstUnread,
+    required int newest,
+  }) => SessionHarness.defaultReady()
+    ..['guilds'] = [
+      rawGuild(
+        id: SessionHarness.guildId,
+        name: 'The Forge',
+        channels: [
+          rawChannel(
+            id: SessionHarness.channelId,
+            name: 'general',
+            lastMessageId: idOf(newest),
+          ),
+        ],
+        everyonePermissions: '${DiscordPermissions.viewChannel}',
+      ),
+    ]
+    ..['read_state'] = {
+      'version': 1,
+      'partial': false,
+      'entries': [
+        {
+          'id': SessionHarness.channelId,
+          'last_message_id': idOf(firstUnread - 1),
+        },
+      ],
+    };
 
   /// A page of history as Discord answers it, newest first.
   static List<Map<String, Object?>> page(int first, int count) => [

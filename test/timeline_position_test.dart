@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
-import 'package:flucord/src/domain/discord_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -33,36 +32,13 @@ const _ackDebounce = Duration(seconds: 3);
 /// The first unread message of a channel opened with [_readyWithUnread].
 const _firstUnread = _firstHeld + 50;
 
-/// READY for an account that has read the channel up to [firstUnread], with the
-/// channel's newest message at [newest].
 Map<String, Object?> _readyWithUnread({
   int firstUnread = _firstUnread,
   int newest = _newestHeld,
-}) => SessionHarness.defaultReady()
-  ..['guilds'] = [
-    rawGuild(
-      id: SessionHarness.guildId,
-      name: 'The Forge',
-      channels: [
-        rawChannel(
-          id: SessionHarness.channelId,
-          name: 'general',
-          lastMessageId: _idOf(newest),
-        ),
-      ],
-      everyonePermissions: '${DiscordPermissions.viewChannel}',
-    ),
-  ]
-  ..['read_state'] = {
-    'version': 1,
-    'partial': false,
-    'entries': [
-      {
-        'id': SessionHarness.channelId,
-        'last_message_id': _idOf(firstUnread - 1),
-      },
-    ],
-  };
+}) => ChannelHistoryFixture.readyWithUnread(
+  firstUnread: firstUnread,
+  newest: newest,
+);
 
 Finder get _newLine => find.byKey(const ValueKey('unread-message-boundary'));
 

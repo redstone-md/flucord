@@ -363,7 +363,8 @@ final class ChatController extends ChangeNotifier {
     if (_loadedChannels.contains(channelId) && !refresh) {
       if (anchorMessageId == null) {
         // Coming back to a channel left in an old window opens on the present.
-        if (hasNewerMessages(channelId)) {
+        // Tapping the channel already open leaves the reader in place.
+        if (hasNewerMessages(channelId) && previousChannelId != channelId) {
           await jumpToPresent(channelId);
         } else {
           notifyListeners();
@@ -407,6 +408,8 @@ final class ChatController extends ChangeNotifier {
       );
       if (!isCurrent()) return;
       _applyWindow(channelId, page, aroundMessageId: anchorMessageId);
+      await _reachFirstUnread(channelId, page, isCurrent);
+      if (!isCurrent()) return;
       _setBoundaryOfUnreadOpening(channelId);
       _loadedChannels.add(channelId);
       // The page may name a newer message than the channel record did, and the

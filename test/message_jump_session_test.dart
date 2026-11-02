@@ -249,6 +249,102 @@ void main() {
     }, routes: _routeHistory);
   });
 
+  group('a channel with more than a page unread', () {
+    final backlog = ChannelHistoryFixture.readyWithUnread(
+      firstUnread: _old,
+      newest: _newest,
+    );
+
+    testSession('opens on the true first unread message', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      _expectOpenedOnNewLine(tester, session, _old);
+    }, ready: backlog, routes: _routeHistory);
+
+    testSession('a cached page does not keep it from the true one', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+      await session.relaunch(ready: backlog);
+      final newestPage = Completer<DiscordHttpResponse>();
+      session.transport.on('GET', _messagesPath, (request) {
+        return request.uri.queryParameters['around'] == null
+            ? newestPage.future
+            : jsonResponse(_page(_old - 50 < 0 ? 0 : _old - 50, 90));
+      });
+
+      // The list opens on the cached page while Discord is asked.
+      await tester.tap(
+        find.byKey(const ValueKey('space-${SessionHarness.guildId}')),
+      );
+      await session.settle();
+      expect(session.messageRow(_idOf(_newestPageStart)), findsOneWidget);
+      newestPage.complete(jsonResponse(_page(_newestPageStart, 100)));
+      await session.settle();
+
+      _expectOpenedOnNewLine(tester, session, _old);
+    }, onDisk: true, routes: _routeHistory);
+
+    testSession('jump to present still reaches the newest message', (
+      tester,
+      session,
+    ) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await tester.tap(find.byKey(const ValueKey('jump-to-present')));
+      await session.settle();
+
+      _expectAtPresent(tester, session, _newest);
+    }, ready: backlog, routes: _routeHistory);
+
+    testSession('stays on the newest page if the older one fails', (
+      tester,
+      session,
+    ) async {
+      session.transport.on('GET', _messagesPath, (request) {
+        return request.uri.queryParameters['around'] != null
+            ? jsonResponse({'message': 'Unknown'}, statusCode: 404)
+            : jsonResponse(_page(_newestPageStart, 100));
+      });
+
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(session.messageRow(_idOf(_newestPageStart)), findsOneWidget);
+    }, ready: backlog);
+
+    testSession('stays on the newest page if the read message is gone', (
+      tester,
+      session,
+    ) async {
+      session.transport.on('GET', _messagesPath, (request) {
+        return request.uri.queryParameters['around'] != null
+            ? jsonResponse(_page(_old, 60))
+            : jsonResponse(_page(_newestPageStart, 100));
+      });
+
+      await session.openChannel(SessionHarness.channelId);
+
+      _expectOpenedOnNewLine(tester, session, _newestPageStart);
+    }, ready: backlog);
+  });
+
+  group('a channel with less than a page unread', () {
+    testSession('asks for no second page', (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      expect(_queriesWith(session, 'around'), isEmpty);
+    },
+        ready: ChannelHistoryFixture.readyWithUnread(
+          firstUnread: _newest - 5,
+          newest: _newest,
+        ),
+        routes: _routeHistory);
+  });
+
   group('an around page and the start of history', () {
     testSession('a short page in a loaded channel can still load older', (
       tester,
@@ -473,6 +569,23 @@ Future<void> _jumpToResult(
 ) async {
   await tester.tap(find.byKey(ValueKey('jump-to-${_idOf(target)}')));
   await session.settle();
+}
+
+/// The NEW line sits on screen, directly above the message at [index].
+void _expectOpenedOnNewLine(
+  WidgetTester tester,
+  SessionHarness session,
+  int index,
+) {
+  final row = session.messageRow(_idOf(index));
+  expect(row, findsOneWidget);
+  expect(tester.getTopLeft(row).dy, inInclusiveRange(0, 400));
+  expect(
+    tester.getBottomLeft(
+      find.byKey(const ValueKey('unread-message-boundary')),
+    ).dy,
+    tester.getTopLeft(row).dy,
+  );
 }
 
 /// The colour painted behind a message row.

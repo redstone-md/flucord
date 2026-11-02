@@ -91,6 +91,33 @@ extension ChatControllerHistoryWindow on ChatController {
     }
   }
 
+  /// With more than a page unread, the first unread message is further back
+  /// than the newest page. A window around the read cursor holds it, and the
+  /// reader leaves that window with Jump to present.
+  Future<void> _reachFirstUnread(
+    String channelId,
+    ChannelHistoryPage newestPage,
+    bool Function() isCurrent,
+  ) async {
+    final opening = _unreadOpenings[channelId];
+    final cursor = opening?.lastAckedId;
+    if (opening == null || cursor == null || !newestPage.hasMore) return;
+    if (!newestPage.history.messages.every((m) => opening.isBehind(m.id))) {
+      return;
+    }
+    try {
+      final window = await _repository.loadChannelHistory(
+        channelId,
+        aroundMessageId: cursor,
+      );
+      if (isCurrent() && window.holds(cursor)) {
+        _applyWindow(channelId, window, aroundMessageId: cursor);
+      }
+    } on Object {
+      // The newest page is on screen already, and it is still worth reading.
+    }
+  }
+
   /// Keeps a new message out of a list that stops short of the present, and
   /// notes that the channel has moved on. False when the channel is not in an
   /// old window, and the message belongs in the list.

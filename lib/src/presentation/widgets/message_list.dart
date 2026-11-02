@@ -240,6 +240,13 @@ class _MessageListState extends State<MessageList>
         _awaitedMessageId = _unreadMessageId;
       }
     }
+    // A window on the first unread message replaced the page this list opened
+    // on, which had no message that far back.
+    if (!oldWidget.hasNewerMessages &&
+        widget.hasNewerMessages &&
+        _targetMessageId == null) {
+      _awaitedMessageId = _unreadMessageId;
+    }
     if ((oldWidget.targetMessageId != widget.targetMessageId ||
             oldWidget.targetRequest != widget.targetRequest) &&
         widget.targetMessageId != null) {
