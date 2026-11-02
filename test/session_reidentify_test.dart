@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
-import 'package:flucord/src/presentation/widgets/chat_scope.dart';
-import 'package:flucord/src/presentation/widgets/message_list.dart';
 import 'package:flucord/src/presentation/widgets/status_views.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -372,9 +370,7 @@ void main() {
         await identifyAgainNaming('900000000000000002', 2);
         expect(acked('900000000000000002'), isTrue);
 
-        ChatScope.of(
-          tester.element(find.byType(MessageList)),
-        ).setApplicationActive(false);
+        session.blurWindow();
         await identifyAgainNaming('900000000000000003', 3);
 
         expect(session.messageRow('900000000000000003'), findsOneWidget);
