@@ -18,6 +18,7 @@ final class ChannelCapabilities {
     required this.attachFiles,
     required this.embedLinks,
     required this.moderateStage,
+    required this.bypassesSlowmode,
   });
 
   /// Everything allowed. Used where no permission data exists at all — a demo
@@ -34,6 +35,7 @@ final class ChannelCapabilities {
     attachFiles: true,
     embedLinks: true,
     moderateStage: true,
+    bypassesSlowmode: true,
   );
 
   /// Nothing allowed, for a channel that resolved to no permissions at all.
@@ -47,6 +49,7 @@ final class ChannelCapabilities {
     attachFiles: false,
     embedLinks: false,
     moderateStage: false,
+    bypassesSlowmode: false,
   );
 
   /// Reads the answers out of a computed permission bitfield.
@@ -95,6 +98,13 @@ final class ChannelCapabilities {
               DiscordPermissions.muteMembers |
               DiscordPermissions.moveMembers,
         ),
+        // Discord lets any one of these three skip the wait.
+        bypassesSlowmode: DiscordPermissions.hasAny(
+          permissions,
+          DiscordPermissions.manageMessages |
+              DiscordPermissions.manageChannels |
+              DiscordPermissions.bypassSlowmode,
+        ),
       );
 
   final bool viewChannel;
@@ -110,6 +120,9 @@ final class ChannelCapabilities {
 
   /// Whether this account may run a stage in this channel.
   final bool moderateStage;
+
+  /// Whether slowmode leaves this account alone in this channel.
+  final bool bypassesSlowmode;
 
   /// Whether [message] may be acted on as its owner would: your own always,
   /// anyone else's only with `MANAGE_MESSAGES`. This is the rule behind both
@@ -127,7 +140,8 @@ final class ChannelCapabilities {
       other.createPublicThreads == createPublicThreads &&
       other.addReactions == addReactions &&
       other.attachFiles == attachFiles &&
-      other.embedLinks == embedLinks;
+      other.embedLinks == embedLinks &&
+      other.bypassesSlowmode == bypassesSlowmode;
 
   @override
   int get hashCode => Object.hash(
@@ -139,5 +153,6 @@ final class ChannelCapabilities {
     addReactions,
     attachFiles,
     embedLinks,
+    bypassesSlowmode,
   );
 }
