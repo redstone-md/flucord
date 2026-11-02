@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/video_decoder.dart';
 import '../domain/video_encoder.dart';
+import '../monotonic_clock.dart';
 import 'window_visible.dart';
 
 /// The picture a sender sees of their own share.
@@ -25,9 +26,9 @@ import 'window_visible.dart';
 ///
 /// A decode that falls behind drops access units, and every picture after a
 /// drop is built on one that is gone. The tile then keeps its last whole
-/// picture until the encoder's next keyframe has been decoded. That keyframe
-/// is not asked for: it would cost every viewer a full picture for the
-/// sender's own tile.
+/// picture, and the encoder is asked for the keyframe that mends it, at most
+/// once a second like a watched stream asks. Waiting for the encoder's own
+/// next keyframe instead froze the tile for up to ten seconds per drop.
 final class GoLiveSelfPreview extends ChangeNotifier {
   GoLiveSelfPreview({
     required VideoDecoderService Function() decoderFactory,
@@ -35,8 +36,10 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     /// The window the tile is drawn in. Without one, the listener alone
     /// decides.
     WindowVisible? window,
+    Duration Function()? now,
   }) : _decoderFactory = decoderFactory,
-       _window = window {
+       _window = window,
+       _now = now ?? monotonicNow {
     _frames = StreamController.broadcast(
       onListen: _wanted,
       onCancel: _unwanted,
@@ -47,6 +50,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
 
   final VideoDecoderService Function() _decoderFactory;
   final WindowVisible? _window;
+  final Duration Function() _now;
   late final StreamController<DecodedVideoFrame> _frames;
 
   /// Decoded pictures of the running share. Empty between shares, and while
@@ -85,6 +89,9 @@ final class GoLiveSelfPreview extends ChangeNotifier {
   /// after the window came back waits for the next natural keyframe instead
   /// of costing every viewer a full picture at the sender's bitrate.
   bool _askedForKeyframe = false;
+
+  /// When a drop last asked for a keyframe.
+  Duration? _lastDropAsk;
   Object? _error;
 
   /// Why there is no picture, or null while there is or could be one.
@@ -177,6 +184,11 @@ final class GoLiveSelfPreview extends ChangeNotifier {
       _broken = true;
       _mendedAt = null;
       _awaitingKeyframe = true;
+      final now = _now();
+      final last = _lastDropAsk;
+      if (last != null && now - last < const Duration(seconds: 1)) return;
+      _lastDropAsk = now;
+      unawaited(source.requestKeyframe?.call());
     });
     _encoded = source.encoded.listen((frame) {
       if (_awaitingKeyframe) {
