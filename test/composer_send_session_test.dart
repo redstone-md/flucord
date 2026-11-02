@@ -357,6 +357,19 @@ void main() {
       voiceMessageRecorder: FakeVoiceMessageRecorder(),
     );
 
+    testSession('blocks a poll too', (tester, session) async {
+      session.transport.on('POST', _sendPath, (_) => _sentMessage('first'));
+      await session.openChannel(SessionHarness.channelId);
+      await _typeAndSend(tester, session, 'first');
+
+      await tester.tap(find.byKey(const ValueKey('composer-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('create-poll')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create a poll'), findsNothing);
+    }, ready: _slowmodeReady());
+
     const gifUrl = 'https://tenor.example/starred';
     testSession(
       'blocks a GIF too',

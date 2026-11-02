@@ -615,7 +615,7 @@ class MessageComposerState extends State<MessageComposer>
   }
 
   void _showPollDialog() {
-    if (widget.isSending) return;
+    if (widget.isSending || _isHeldBySlowmode) return;
     CreatePollDialog.show(context, onCreate: widget.onCreatePoll);
   }
 
@@ -873,10 +873,12 @@ class MessageComposerState extends State<MessageComposer>
             label: 'Add attachment',
           ),
         ),
-      const PopupMenuItem(
-        key: ValueKey('create-poll'),
+      PopupMenuItem(
+        key: const ValueKey('create-poll'),
         value: _ComposerMenuAction.poll,
-        child: _ComposerMenuRow(
+        // A poll is a message, so slowmode holds it like the rest.
+        enabled: !_isHeldBySlowmode,
+        child: const _ComposerMenuRow(
           icon: Icons.poll_outlined,
           label: 'Create poll',
         ),

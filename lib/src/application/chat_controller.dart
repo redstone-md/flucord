@@ -773,7 +773,6 @@ final class ChatController extends ChangeNotifier {
         textToSpeech: spoken.$1,
       );
       _applySentMessage(message);
-      _lastSentAt[channelId] = DateTime.now();
     });
   }
 
@@ -912,6 +911,8 @@ final class ChatController extends ChangeNotifier {
     _workspace = _workspace?.clearChannelUnreadBoundary(channelId);
     _persistChannelActivity(channelId);
     _lastSentMessage = message;
+    // Slowmode counts every kind of message, so every send starts its clock.
+    _lastSentAt[channelId] = DateTime.now();
   }
 
   /// Runs [send] as the one send of [channelId], with its composer busy until
