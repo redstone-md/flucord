@@ -107,7 +107,7 @@ void main() {
       expect(_firstAccountName, findsOneWidget);
       expect(_guildIcon, findsOneWidget);
       await tester.tap(_dmRow);
-      await session.settle();
+      await session.settleServerErrorRepeats();
       expect(session.messageRow(_dmMessageId), findsOneWidget);
     },
     onDisk: true,
@@ -146,6 +146,7 @@ void main() {
         (_) => _unavailable,
       );
       await session.openChannel(SessionHarness.channelId);
+      await session.settleServerErrorRepeats();
 
       expect(
         tester

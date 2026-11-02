@@ -42,6 +42,171 @@ void main() {
       expect(headers, isNot(contains('x-fingerprint')));
     });
 
+    group('a refusal', () {
+      const htmlPage = '<html><body>Bad gateway</body></html>';
+
+      test('with a long retry_after fails at once with the wait', () async {
+        final transport = _RecordingTransport([
+          const DiscordHttpResponse(
+            statusCode: 429,
+            headers: {},
+            body: '{"message":"limited","retry_after":10.5}',
+          ),
+        ]);
+        final delays = <Duration>[];
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: transport,
+          delay: (duration) async => delays.add(duration),
+        );
+
+        await expectLater(
+          client.getCurrentUser(),
+          throwsA(
+            isA<DiscordRateLimitedException>()
+                .having((error) => error.statusCode, 'status', 429)
+                .having(
+                  (error) => error.retryAfter,
+                  'wait',
+                  const Duration(milliseconds: 10500),
+                ),
+          ),
+        );
+        expect(delays, isEmpty);
+        expect(transport.requests, hasLength(1));
+      });
+
+      test('waits up to ten seconds in total across its attempts', () async {
+        final transport = _RecordingTransport([
+          const DiscordHttpResponse(
+            statusCode: 429,
+            headers: {},
+            body: '{"retry_after":6}',
+          ),
+          const DiscordHttpResponse(
+            statusCode: 429,
+            headers: {},
+            body: '{"retry_after":6}',
+          ),
+        ]);
+        final delays = <Duration>[];
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: transport,
+          delay: (duration) async => delays.add(duration),
+        );
+
+        await expectLater(
+          client.getCurrentUser(),
+          throwsA(isA<DiscordRateLimitedException>()),
+        );
+        expect(delays, [const Duration(seconds: 6)]);
+      });
+
+      test('that keeps coming ends in the typed error', () async {
+        DiscordHttpResponse limited() => const DiscordHttpResponse(
+          statusCode: 429,
+          headers: {},
+          body: '{"retry_after":1}',
+        );
+        final transport = _RecordingTransport([
+          limited(),
+          limited(),
+          limited(),
+        ]);
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: transport,
+          delay: (_) async {},
+        );
+
+        await expectLater(
+          client.getCurrentUser(),
+          throwsA(
+            isA<DiscordRateLimitedException>().having(
+              (error) => error.retryAfter,
+              'wait',
+              const Duration(seconds: 1),
+            ),
+          ),
+        );
+        expect(transport.requests, hasLength(3));
+      });
+
+      test('as an HTML server error page is repeated for a GET', () async {
+        final transport = _RecordingTransport([
+          const DiscordHttpResponse(
+            statusCode: 503,
+            headers: {},
+            body: htmlPage,
+          ),
+          const DiscordHttpResponse(
+            statusCode: 200,
+            headers: {},
+            body: '{"id":"bot-1"}',
+          ),
+        ]);
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: transport,
+          delay: (_) async {},
+        );
+
+        expect((await client.getCurrentUser())['id'], 'bot-1');
+      });
+
+      test('as a server error is not repeated for an unguarded POST', () async {
+        final transport = _RecordingTransport([
+          const DiscordHttpResponse(
+            statusCode: 502,
+            headers: {},
+            body: htmlPage,
+          ),
+        ]);
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: transport,
+          delay: (_) async {},
+        );
+
+        await expectLater(
+          client.createMessage(channelId: 'c1', content: 'hello'),
+          throwsA(
+            isA<DiscordApiException>().having(
+              (error) => error.statusCode,
+              'status',
+              502,
+            ),
+          ),
+        );
+        expect(transport.requests, hasLength(1));
+      });
+
+      test('as an HTML page with any other status keeps that status', () async {
+        final client = DiscordApiClient(
+          botToken: 'token',
+          transport: _RecordingTransport([
+            const DiscordHttpResponse(
+              statusCode: 403,
+              headers: {},
+              body: htmlPage,
+            ),
+          ]),
+        );
+
+        await expectLater(
+          client.getCurrentUser(),
+          throwsA(
+            isA<DiscordApiException>().having(
+              (error) => error.isForbidden,
+              'forbidden',
+              isTrue,
+            ),
+          ),
+        );
+      });
+    });
+
     test(
       'sends message content as JSON and never exposes token in errors',
       () async {

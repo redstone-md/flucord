@@ -571,14 +571,22 @@ final class DiscordDesktopChatRepository
     bool suppressNotifications = false,
     bool textToSpeech = false,
   }) async {
-    final payload = await _api.createMessage(
+    final payload = await _nonceFactory.sendDraft(
       channelId: channelId,
-      content: body,
-      nonce: _nonceFactory.next(),
+      body: body,
       attachments: attachments,
       replyToMessageId: replyToMessageId,
       suppressNotifications: suppressNotifications,
       textToSpeech: textToSpeech,
+      send: (nonce) => _api.createMessage(
+        channelId: channelId,
+        content: body,
+        nonce: nonce,
+        attachments: attachments,
+        replyToMessageId: replyToMessageId,
+        suppressNotifications: suppressNotifications,
+        textToSpeech: textToSpeech,
+      ),
     );
     final message = await _storeMessage(payload);
     // The gateway's copy may come later, and the channel must read as read

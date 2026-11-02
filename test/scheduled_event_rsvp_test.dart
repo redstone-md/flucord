@@ -166,9 +166,9 @@ void main() {
     test('anything else is still an error', () async {
       final transport = _Transport([
         DiscordHttpResponse(
-          statusCode: 500,
+          statusCode: 401,
           headers: const {},
-          body: jsonEncode({'message': 'Server error'}),
+          body: jsonEncode({'message': 'Unauthorized'}),
         ),
       ]);
 
@@ -380,9 +380,9 @@ void main() {
     test('anything else on a delete is still an error', () async {
       final transport = _Transport([
         DiscordHttpResponse(
-          statusCode: 500,
+          statusCode: 401,
           headers: const {},
-          body: jsonEncode({'message': 'Server error'}),
+          body: jsonEncode({'message': 'Unauthorized'}),
         ),
       ]);
 

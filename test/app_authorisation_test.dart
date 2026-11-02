@@ -285,7 +285,7 @@ void main() {
     });
 
     test('anything else on the grants routes is still an error', () async {
-      final transport = _Transport([_error(500)]);
+      final transport = _Transport([_error(401)]);
       const grant = AuthorisedApplication(
         applicationId: '978270835341422',
         name: 'Helper Bot',

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +89,51 @@ void main() {
     );
 
     await connectionClosed.future.timeout(const Duration(seconds: 2));
+  });
+
+  group('an upload gets time for its size', () {
+    /// Reads the whole request, then answers after [delay].
+    Future<Uri> answerAfter(Duration delay) async {
+      final answering = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(answering.close);
+      answering.listen((request) async {
+        await request.drain<void>();
+        await Future<void>.delayed(delay);
+        await request.response.close();
+      });
+      return Uri.parse(
+        'http://${answering.address.host}:${answering.port}/upload',
+      );
+    }
+
+    test('a large body outlasts the limit a small request has', () async {
+      final instance = await transport();
+      final slow = await answerAfter(const Duration(milliseconds: 500));
+
+      final response = await instance.send(
+        method: 'POST',
+        uri: slow,
+        headers: const {},
+        body: Uint8List(1024 * 1024),
+      );
+
+      expect(response.statusCode, 200);
+    });
+
+    test('a small body still has the short limit', () async {
+      final instance = await transport();
+      final slow = await answerAfter(const Duration(milliseconds: 500));
+
+      await expectLater(
+        instance.send(
+          method: 'POST',
+          uri: slow,
+          headers: const {},
+          body: Uint8List(16),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
   });
 
   test('the transport still works after a timeout', () async {
