@@ -59,6 +59,7 @@ import '../app_log.dart';
 
 part 'chat_controller_events.dart';
 part 'chat_controller_typing.dart';
+part 'chat_controller_presence.dart';
 part 'chat_controller_threads.dart';
 part 'chat_controller_forums.dart';
 part 'chat_controller_polls.dart';
@@ -147,6 +148,8 @@ final class ChatController extends ChangeNotifier {
   final Map<String, Set<String>> _typingMembers = {};
   final Map<String, Timer> _typingTimers = {};
   final Map<String, DateTime> _typingRequests = {};
+  final Map<String, UserPresence> _heldPresences = {};
+  Timer? _presenceFold;
   final _typingSignal = _TypingSignal();
   final _archivedThreadState = _ArchivedThreadState();
 
@@ -938,6 +941,7 @@ final class ChatController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _presenceFold?.cancel();
     _clearTyping();
     _typingSignal.dispose();
     unawaited(_readStateSubscription?.cancel());
