@@ -40,7 +40,26 @@ class MessageContentView extends StatefulWidget {
 }
 
 class _MessageContentViewState extends State<MessageContentView> {
-  late MarkdownStyleSheet _markdownStyleSheet;
+  /// Anything markdown or Discord could read as markup. A body without any draws
+  /// as plain text, with no parsing and no widgets per word. A false match only
+  /// costs a parse, while a miss would show raw markers, so this errs wide.
+  static final _markup = RegExp(
+    // Inline markers, mentions, tags, escapes, entities and spoilers.
+    r'[*_~`|<>\[\]\\&@]'
+    // Bare links.
+    r'|://|www\.'
+    // Control characters, which leaves only the new line.
+    r'|[\x00-\x09\x0b-\x1f\x7f]'
+    // A line with space at either end, which includes a blank line.
+    r'|^\s|\s$'
+    // A line that starts a heading, a list, a quote or a rule.
+    r'|^(?:[#>+=-]|\d+[.)])',
+    multiLine: true,
+    caseSensitive: false,
+  );
+
+  /// Built only for a body that needs it, as it is costly per row.
+  MarkdownStyleSheet? _markdownStyleSheet;
   Timer? _relativeTimestampTimer;
   int _relativeTimestampTick = 0;
 
@@ -53,15 +72,13 @@ class _MessageContentViewState extends State<MessageContentView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _markdownStyleSheet = _buildStyleSheet(context);
+    _markdownStyleSheet = null;
   }
 
   @override
   void didUpdateWidget(covariant MessageContentView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.textStyle != widget.textStyle) {
-      _markdownStyleSheet = _buildStyleSheet(context);
-    }
+    if (oldWidget.textStyle != widget.textStyle) _markdownStyleSheet = null;
     if (oldWidget.body != widget.body || oldWidget.now != widget.now) {
       _configureRelativeTimestampTimer();
     }
@@ -82,34 +99,44 @@ class _MessageContentViewState extends State<MessageContentView> {
     final rowMenu = MessageMenuScope.maybeOf(context);
     final text = SelectionArea(
       onSelectionChanged: rowMenu?.onSelectionChanged,
-      child: MarkdownBody(
-        key: ValueKey(Object.hash(_resolutionSignature, body)),
-        data: body,
-        selectable: false,
-        softLineBreak: true,
-        extensionSet: md.ExtensionSet.gitHubFlavored,
-        inlineSyntaxes: discordMessageInlineSyntaxes(),
-        builders: discordMessageBuilders(
-          workspace: widget.workspace,
-          onSelectChannel: widget.onSelectChannel,
-          now: widget.now,
-        ),
-        styleSheet: _markdownStyleSheet,
-        onTapLink: (_, href, _) {
-          if (href != null) unawaited(_openLink(context, href));
-        },
-        imageBuilder: (uri, _, alt) => Text(
-          alt?.isNotEmpty == true ? alt! : uri.toString(),
-          style: const TextStyle(
-            color: FlucordColors.brand,
-            decoration: TextDecoration.underline,
-          ),
-        ),
-      ),
+      child: _markup.hasMatch(body)
+          ? _markdown(context, body)
+          // Takes the row's width with the text at its start, as a parsed body
+          // does, so a drag from beside the text still starts a selection.
+          : Align(
+              alignment: AlignmentDirectional.centerStart,
+              heightFactor: 1,
+              child: Text(body, style: _bodyStyle),
+            ),
     );
     if (rowMenu == null) return text;
     return RightClickClaim(onPressed: rowMenu.onOpen, child: text);
   }
+
+  Widget _markdown(BuildContext context, String body) => MarkdownBody(
+    key: ValueKey(Object.hash(_resolutionSignature, body)),
+    data: body,
+    selectable: false,
+    softLineBreak: true,
+    extensionSet: md.ExtensionSet.gitHubFlavored,
+    inlineSyntaxes: discordMessageInlineSyntaxes(),
+    builders: discordMessageBuilders(
+      workspace: widget.workspace,
+      onSelectChannel: widget.onSelectChannel,
+      now: widget.now,
+    ),
+    styleSheet: _markdownStyleSheet ??= _buildStyleSheet(context),
+    onTapLink: (_, href, _) {
+      if (href != null) unawaited(_openLink(context, href));
+    },
+    imageBuilder: (uri, _, alt) => Text(
+      alt?.isNotEmpty == true ? alt! : uri.toString(),
+      style: const TextStyle(
+        color: FlucordColors.brand,
+        decoration: TextDecoration.underline,
+      ),
+    ),
+  );
 
   int get _resolutionSignature {
     final values = <Object?>[
@@ -177,9 +204,11 @@ class _MessageContentViewState extends State<MessageContentView> {
     );
   }
 
+  TextStyle get _bodyStyle =>
+      widget.textStyle ?? const TextStyle(fontSize: 13, height: 1.38);
+
   MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
-    final bodyStyle =
-        widget.textStyle ?? const TextStyle(fontSize: 13, height: 1.38);
+    final bodyStyle = _bodyStyle;
     final surfaces = context.surfaces;
     return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: bodyStyle,
