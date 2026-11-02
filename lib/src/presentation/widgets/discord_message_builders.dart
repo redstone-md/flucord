@@ -4,6 +4,7 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../data/discord/discord_cdn.dart';
 import '../../domain/chat_models.dart';
+import '../../domain/duration_in_words.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import 'message_preview_text.dart';
@@ -189,15 +190,8 @@ final class _TimestampBuilder extends MarkdownElementBuilder {
   String _relative(DateTime value) {
     final difference = value.difference(now);
     final future = !difference.isNegative;
-    final duration = difference.abs();
-    final (amount, unit) = duration.inDays >= 1
-        ? (duration.inDays, duration.inDays == 1 ? 'day' : 'days')
-        : duration.inHours >= 1
-        ? (duration.inHours, duration.inHours == 1 ? 'hour' : 'hours')
-        : duration.inMinutes >= 1
-        ? (duration.inMinutes, duration.inMinutes == 1 ? 'minute' : 'minutes')
-        : (duration.inSeconds, duration.inSeconds == 1 ? 'second' : 'seconds');
-    return future ? 'in $amount $unit' : '$amount $unit ago';
+    final words = durationInWords(difference.abs());
+    return future ? 'in $words' : '$words ago';
   }
 
   static String _time(

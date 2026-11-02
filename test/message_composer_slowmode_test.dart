@@ -26,7 +26,7 @@ void main() {
 
     final note = find.byKey(const ValueKey('composer-slowmode-countdown'));
     expect(note, findsOneWidget);
-    expect(find.textContaining('Wait '), findsOneWidget);
+    expect(find.textContaining('Try again in '), findsOneWidget);
     // The countdown ticks: a second later the note still names a wait.
     await tester.pump(const Duration(seconds: 2));
     expect(note, findsOneWidget);
@@ -44,7 +44,7 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('Wait 1:05 '), findsOneWidget);
+    expect(find.textContaining('Try again in 1:05.'), findsOneWidget);
   });
 
   testWidgets('a slowmode that already elapsed shows nothing', (tester) async {

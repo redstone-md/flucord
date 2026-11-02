@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../application/composer_autocomplete_catalog.dart';
+import '../../application/send_failure.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/composer_draft.dart';
 import '../../domain/voice_message_recorder.dart';
@@ -406,9 +407,7 @@ class MessageComposerState extends State<MessageComposer>
   Widget _slowmodeNotice(Duration remaining) => _composerNotice(
     key: const ValueKey('composer-slowmode-countdown'),
     icon: Icons.timer_outlined,
-    text:
-        'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
-        'before sending again.',
+    text: sendingTooFast(_slowmodeLabel(remaining)),
   );
 
   Future<void> _pickAttachments() => _attachFrom(
