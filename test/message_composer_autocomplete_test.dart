@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/application/composer_autocomplete_catalog.dart';
 import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/composer_draft.dart';
 import 'package:flucord/src/presentation/widgets/message_composer.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
@@ -162,6 +163,7 @@ Widget _composerApp({List<String>? sentBodies}) => MaterialApp(
     body: Align(
       alignment: Alignment.bottomCenter,
       child: MessageComposer(
+        drafts: MemoryComposerDraftStore(),
         channelId: 'general',
         channelName: 'general',
         spaceName: 'Forge',
