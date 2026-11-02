@@ -85,6 +85,21 @@ void main() {
     expect(shown(tester), Brightness.light);
     expect(saves(session), isEmpty);
   });
+
+  // A new ThemeData on each rebuild would start a theme animation after
+  // every workspace change, with nothing to animate.
+  testSession('a workspace change keeps the same theme', (
+    tester,
+    session,
+  ) async {
+    ThemeData? installed() =>
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).darkTheme;
+    final before = installed();
+
+    await session.openChannel(SessionHarness.otherChannelId);
+
+    expect(installed(), same(before));
+  });
 }
 
 String _storedTheme(int theme) => DiscordUserSettingsProto.encodeBase64(

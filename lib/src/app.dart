@@ -77,6 +77,11 @@ class FlucordApp extends StatefulWidget {
 class _FlucordAppState extends State<FlucordApp> {
   late final AppComposition _composition;
 
+  /// One theme per palette. A new ThemeData on each rebuild never compares
+  /// equal to the last, so MaterialApp would animate between two identical
+  /// themes after every workspace change.
+  final _themes = Expando<ThemeData>('theme');
+
   @override
   void initState() {
     super.initState();
@@ -259,9 +264,10 @@ class _FlucordAppState extends State<FlucordApp> {
   }
 
   /// The theme to draw with, built from whichever palette is in force.
-  ThemeData _installedTheme({required bool dark}) => FlucordTheme.fromPalette(
-    _composition.theme.paletteFor(systemIsDark: dark),
-  );
+  ThemeData _installedTheme({required bool dark}) {
+    final palette = _composition.theme.paletteFor(systemIsDark: dark);
+    return _themes[palette] ??= FlucordTheme.fromPalette(palette);
+  }
 
   /// Wraps the shell in the scopes the conversation pane resolves its
   /// controllers from.
