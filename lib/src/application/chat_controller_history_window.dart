@@ -10,27 +10,26 @@ part of 'chat_controller.dart';
 /// newest page again.
 extension ChatControllerHistoryWindow on ChatController {
   /// Whether messages newer than the held window exist.
-  bool hasNewerMessages(String channelId) =>
-      _windowsBehind.containsKey(channelId);
+  bool hasNewerMessages(String channelId) => _windows.isBehind(channelId);
 
   /// Why the last jump in this channel did not land. The channel keeps showing
   /// the messages it had.
-  Object? historyWindowError(String channelId) => _windowErrors[channelId];
+  Object? historyWindowError(String channelId) => _windows.errors[channelId];
 
   /// Leaves an old window for the newest page of the channel.
   Future<void> jumpToPresent(String channelId) async {
-    if (_arrivalsDuringPresentLoad.containsKey(channelId)) return;
+    if (_windows.arrivals.containsKey(channelId)) return;
     await _moveWindow(channelId);
   }
 
   /// Replaces what a loaded channel holds, leaving it on screen until the new
   /// page is in.
   Future<void> _moveWindow(String channelId, {String? aroundMessageId}) async {
-    final isCurrent = _beginWindowLoad(channelId);
+    final isCurrent = _windows.begin(channelId);
     final loadsPresent = aroundMessageId == null;
     // The page may have been built before these messages reached Discord.
-    if (loadsPresent) _arrivalsDuringPresentLoad[channelId] = [];
-    _windowErrors.remove(channelId);
+    if (loadsPresent) _windows.arrivals[channelId] = [];
+    _windows.errors.remove(channelId);
     try {
       final page = await _repository.loadChannelHistory(
         channelId,
@@ -38,7 +37,7 @@ extension ChatControllerHistoryWindow on ChatController {
       );
       if (!isCurrent()) return;
       if (aroundMessageId != null && !page.holds(aroundMessageId)) {
-        _windowErrors[channelId] = StateError(
+        _windows.errors[channelId] = StateError(
           'Message $aroundMessageId is not in the page around it.',
         );
         return;
@@ -47,18 +46,11 @@ extension ChatControllerHistoryWindow on ChatController {
       _foldArrivals(channelId);
       if (loadsPresent && !page.fromCache) _channelsWithGap.remove(channelId);
     } catch (error) {
-      if (isCurrent()) _windowErrors[channelId] = error;
+      if (isCurrent()) _windows.errors[channelId] = error;
     } finally {
-      if (loadsPresent) _arrivalsDuringPresentLoad.remove(channelId);
+      if (loadsPresent) _windows.arrivals.remove(channelId);
       if (!_disposed) _notify();
     }
-  }
-
-  /// Marks a load as the newest for its channel. The check it returns turns
-  /// false once a later load takes over, and that load's page is then dropped.
-  bool Function() _beginWindowLoad(String channelId) {
-    final load = _windowLoads[channelId] = Object();
-    return () => identical(_windowLoads[channelId], load);
   }
 
   /// Folds in a first page or a window, and works out whether it reaches the
@@ -87,9 +79,9 @@ extension ChatControllerHistoryWindow on ChatController {
         latestKnown != null &&
         newestHeld != null &&
         _isOlderThan(newestHeld, latestKnown)) {
-      _windowsBehind[channelId] = latestKnown;
+      _windows.behind[channelId] = latestKnown;
     } else {
-      _windowsBehind.remove(channelId);
+      _windows.behind.remove(channelId);
     }
   }
 
@@ -169,7 +161,7 @@ extension ChatControllerHistoryWindow on ChatController {
         _holdsReadingPosition(channelId)) {
       return;
     }
-    await _reachReadingPosition(channelId, _beginWindowLoad(channelId));
+    await _reachReadingPosition(channelId, _windows.begin(channelId));
     _capChannelIfNotOpen(channelId);
     if (!_disposed) _notify();
   }
@@ -183,12 +175,12 @@ extension ChatControllerHistoryWindow on ChatController {
         ? _workspace
         : _workspace?.upsertMember(member);
     _workspace = workspace?.recordLatestMessage(message.channelId, message.id);
-    _arrivalsDuringPresentLoad[message.channelId]?.add(message);
+    _windows.arrivals[message.channelId]?.add(message);
     return true;
   }
 
   void _foldArrivals(String channelId) {
-    final arrivals = _arrivalsDuringPresentLoad[channelId];
+    final arrivals = _windows.arrivals[channelId];
     if (arrivals == null || arrivals.isEmpty) return;
     _workspace = _workspace?.mergeHistory(
       ChannelHistory(channelId: channelId, messages: arrivals, members: []),
@@ -201,7 +193,7 @@ extension ChatControllerHistoryWindow on ChatController {
   String? _latestKnownMessageId(String channelId) {
     final known = [
       _workspace?.channelOrNull(channelId)?.lastMessageId,
-      _windowsBehind[channelId],
+      _windows.behind[channelId],
       _workspace?.messagesFor(channelId).lastOrNull?.id,
     ].nonNulls;
     return known.isEmpty
@@ -215,4 +207,45 @@ extension ChatControllerHistoryWindow on ChatController {
   /// a window there still offers the way back.
   bool _isOlderThan(String id, String other) =>
       id != other && DiscordSnowflake.compare(id, other) <= 0;
+}
+
+/// What the controller knows about each channel's window: whether it stops
+/// short of the present, its newest load, why its last jump failed, and what
+/// arrives while the newest page is on its way.
+final class _HistoryWindows {
+  /// Channels whose held messages stop short of the present, each with the
+  /// newest message known to exist when that became so.
+  final Map<String, String> behind = {};
+
+  /// Why the last jump in each channel did not land.
+  final Map<String, Object> errors = {};
+
+  /// Messages that arrive while the newest page of an old window is on its way.
+  final Map<String, List<ChatMessage>> arrivals = {};
+
+  /// The newest load of a first page or a window, per channel.
+  final Map<String, Object> _loads = {};
+
+  bool isBehind(String channelId) => behind.containsKey(channelId);
+
+  /// Marks a load as the newest for its channel. The check it returns turns
+  /// false once a later load takes over, and that load's page is then dropped.
+  bool Function() begin(String channelId) {
+    final load = _loads[channelId] = Object();
+    return () => identical(_loads[channelId], load);
+  }
+
+  /// A check that turns false once a load begins after this call, for a page
+  /// that only makes sense next to the window held now.
+  bool Function() current(String channelId) {
+    final load = _loads[channelId];
+    return () => identical(_loads[channelId], load);
+  }
+
+  void clear() {
+    behind.clear();
+    errors.clear();
+    arrivals.clear();
+    _loads.clear();
+  }
 }

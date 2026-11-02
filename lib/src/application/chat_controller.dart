@@ -131,16 +131,7 @@ final class ChatController extends ChangeNotifier {
   final Set<String> _exhaustedChannels = {};
   final Map<String, Object> _olderChannelErrors = {};
 
-  /// Channels whose held messages stop short of the present, each with the
-  /// newest message known to exist when that became so.
-  final Map<String, String> _windowsBehind = {};
-
-  /// The newest load of a first page or a window, per channel.
-  final Map<String, Object> _windowLoads = {};
-  final Map<String, Object> _windowErrors = {};
-
-  /// Messages that arrive while the newest page of an old window is on its way.
-  final Map<String, List<ChatMessage>> _arrivalsDuringPresentLoad = {};
+  final _windows = _HistoryWindows();
   final Map<String, ChannelHistory> _pinnedMessages = {};
   final Set<String> _loadingPins = {};
   final Map<String, Object> _pinErrors = {};
@@ -336,10 +327,7 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.clear();
     _exhaustedChannels.clear();
     _olderChannelErrors.clear();
-    _windowsBehind.clear();
-    _windowLoads.clear();
-    _windowErrors.clear();
-    _arrivalsDuringPresentLoad.clear();
+    _windows.clear();
     _pinnedMessages.clear();
     _loadingPins.clear();
     _pinErrors.clear();
@@ -463,7 +451,7 @@ final class ChatController extends ChangeNotifier {
           .messagesFor(channelId)
           .any((message) => message.id == anchorMessageId)) {
         // A window still on its way would take the reader off this message.
-        _beginWindowLoad(channelId);
+        _windows.begin(channelId);
         notifyListeners();
       } else {
         await _moveWindow(channelId, aroundMessageId: anchorMessageId);
@@ -476,7 +464,7 @@ final class ChatController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final isCurrent = _beginWindowLoad(channelId);
+    final isCurrent = _windows.begin(channelId);
     _loadingChannels.add(channelId);
     _channelErrors.remove(channelId);
     _olderChannelErrors.remove(channelId);
@@ -581,14 +569,14 @@ final class ChatController extends ChangeNotifier {
     _loadingOlderChannels.add(channelId);
     _olderChannelErrors.remove(channelId);
     notifyListeners();
-    final window = _windowLoads[channelId];
+    final isCurrent = _windows.current(channelId);
     try {
       final page = await _repository.loadChannelHistory(
         channelId,
         beforeMessageId: messages.first.id,
       );
       // This page sits next to a window that has since been replaced.
-      if (!identical(_windowLoads[channelId], window)) return;
+      if (!isCurrent()) return;
       _workspace = _workspace?.mergeHistory(
         page.history,
         replaceChannel: false,
@@ -653,12 +641,12 @@ final class ChatController extends ChangeNotifier {
       return;
     }
     final arrived = _catchingUpChannels[channelId] = {};
-    final window = _windowLoads[channelId];
+    final isCurrent = _windows.current(channelId);
     try {
       final page = await _repository.loadChannelHistory(channelId);
       if (page.fromCache ||
           _workspace?.channelOrNull(channelId) == null ||
-          !identical(_windowLoads[channelId], window)) {
+          !isCurrent()) {
         return;
       }
       _workspace = _workspace?.catchUpHistory(page.history, arrived: arrived);
