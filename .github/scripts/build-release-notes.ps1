@@ -16,6 +16,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 class ReleaseNotesBuilder {
+  # Below GitHub's limit of 125,000, with room for the final newline and for
+  # characters GitHub may count differently.
+  static [int] $MaxBodyLength = 120000
+
   hidden [string] $Tag
   hidden [string] $OutputPath
   hidden [string] $Repository
@@ -88,25 +92,34 @@ class ReleaseNotesBuilder {
 
     $this.AppendHighlights($content)
 
-    $this.AppendConventionalIndex($content, $commits)
-    $this.AppendCommitSection($content, 'Merge history', $mergeCommits)
-    $this.AppendCommitSection($content, 'First-parent history', $firstParentCommits)
+    $lists = [System.Collections.Generic.List[string]]::new()
+    $this.AppendConventionalIndex($lists, $commits)
+    $this.AppendCommitSection($lists, 'Merge history', $mergeCommits)
+    $this.AppendCommitSection($lists, 'First-parent history', $firstParentCommits)
 
-    $content.Add('<details>')
-    $content.Add("<summary>Complete commit history ($($commits.Count) commits)</summary>")
-    $content.Add('')
-    $this.AppendCommitList($content, $commits)
-    $content.Add('')
-    $content.Add('</details>')
-    $content.Add('')
-    $content.Add('## Build provenance')
-    $content.Add('')
-    $content.Add('- Built by GitHub Actions on the pinned tag commit.')
-    $content.Add('- Flutter 3.44.7 and Dart 3.12.2 from the checksum-verified official Flutter archive.')
-    $content.Add('- Gates: complete repository privacy audit, `flutter analyze`, full `flutter test`, and Windows release compilation.')
-    $content.Add('- Distribution: complete Windows x64 runtime directory plus `SHA256SUMS.txt`.')
-    $content.Add('')
-    $content.Add('Flucord is experimental and is not affiliated with Discord. The desktop-user transport relies on a private protocol that can change without notice.')
+    $provenance = [System.Collections.Generic.List[string]]::new()
+    $provenance.Add('## Build provenance')
+    $provenance.Add('')
+    $provenance.Add('- Built by GitHub Actions on the pinned tag commit.')
+    $provenance.Add('- Flutter 3.44.7 and Dart 3.12.2 from the checksum-verified official Flutter archive.')
+    $provenance.Add('- Gates: complete repository privacy audit, `flutter analyze`, full `flutter test`, and Windows release compilation.')
+    $provenance.Add('- Distribution: complete Windows x64 runtime directory plus `SHA256SUMS.txt`.')
+    $provenance.Add('')
+    $provenance.Add('Flucord is experimental and is not affiliated with Discord. The desktop-user transport relies on a private protocol that can change without notice.')
+
+    # GitHub refuses a release body over 125,000 characters. A release with
+    # hundreds of commits passes that in its lists alone, so then the lists
+    # give way to the history link the scope above already carries.
+    $length = (@($content) + @($lists) + @($provenance) -join "`n").Length
+    if ($length -le [ReleaseNotesBuilder]::MaxBodyLength) {
+      $content.AddRange($lists)
+    } else {
+      $content.Add('## Changes')
+      $content.Add('')
+      $content.Add("The $($commits.Count) commits of this release are too many to list on this page. The link under Release scope shows every one.")
+      $content.Add('')
+    }
+    $content.AddRange($provenance)
 
     $parent = Split-Path -Parent $this.OutputPath
     if ($parent) {
