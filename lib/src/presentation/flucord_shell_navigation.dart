@@ -270,6 +270,17 @@ extension _FlucordShellNavigation on FlucordShell {
     final administration = WorkspacePermissions(
       workspace,
     ).administrationOf(spaceId);
+    final items = serverMenuItems({
+      if (chatController.readStateRepository != null) ...{
+        ServerMenuAction.markRead,
+        ServerMenuAction.notifications,
+      },
+      if (_canOpenSettings(administration)) ServerMenuAction.settings,
+      if (chatController.moderation != null) ServerMenuAction.report,
+      if (chatController.guildManagement != null) ServerMenuAction.leave,
+    });
+    // A transport with none of these, like the demo, has no menu to show.
+    if (items.isEmpty) return;
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
     final at = RelativeRect.fromRect(
@@ -279,15 +290,7 @@ extension _FlucordShellNavigation on FlucordShell {
     final action = await showMenu<ServerMenuAction>(
       context: context,
       position: at,
-      items: serverMenuItems({
-        if (chatController.readStateRepository != null) ...{
-          ServerMenuAction.markRead,
-          ServerMenuAction.notifications,
-        },
-        if (_canOpenSettings(administration)) ServerMenuAction.settings,
-        if (chatController.moderation != null) ServerMenuAction.report,
-        if (chatController.guildManagement != null) ServerMenuAction.leave,
-      }),
+      items: items,
     );
     if (action == null || !context.mounted) return;
     switch (action) {
