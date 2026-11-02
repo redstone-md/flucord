@@ -193,17 +193,16 @@ final class ConnectionController extends ChangeNotifier {
     return true;
   }
 
+  /// Signs out of the live session and removes its cached messages and
+  /// pictures from disk. A saved credential stays, so it can sign back in.
   Future<void> disconnect() async {
-    await _ensureDisconnectedWorkspace();
-    _mode = SessionMode.disconnected;
-    _activeSession = null;
-    _state = ConnectionActionState.idle;
-    _clearError();
+    await _endSession();
+    await _clearCachedChats();
     notifyListeners();
   }
 
   Future<void> disconnectAndForget() async {
-    await disconnect();
+    await _endSession();
     await forgetSavedCredential();
   }
 
@@ -215,13 +214,25 @@ final class ConnectionController extends ChangeNotifier {
   /// alive, or the other cache, so everything else goes either way and the
   /// failure is reported.
   Future<void> forgetSavedCredential() async {
-    if (_mode == SessionMode.discord) await disconnect();
-    await _clearFromDisk(_repositoryFactory.clearCache, 'messages');
-    await _clearFromDisk(_clearChatImages, 'images');
+    if (_mode == SessionMode.discord) await _endSession();
+    await _clearCachedChats();
     await _navigationMemory?.forget();
     await _credentialVault.clearDiscordSession();
     _hasSavedCredential = false;
     notifyListeners();
+  }
+
+  Future<void> _endSession() async {
+    await _ensureDisconnectedWorkspace();
+    _mode = SessionMode.disconnected;
+    _activeSession = null;
+    _state = ConnectionActionState.idle;
+    _clearError();
+  }
+
+  Future<void> _clearCachedChats() async {
+    await _clearFromDisk(_repositoryFactory.clearCache, 'messages');
+    await _clearFromDisk(_clearChatImages, 'images');
   }
 
   /// Runs [clear], and reports a failure as the cached [what] left on disk.

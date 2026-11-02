@@ -136,6 +136,36 @@ void main() {
     },
   );
 
+  test(
+    'disconnecting the bot clears its cached messages and pictures',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryCredentialVault();
+      final factory = _StaticRepositoryFactory(
+        MockChatRepository(latency: Duration.zero),
+      );
+      var imageClears = 0;
+      final controller = ConnectionController(
+        chat,
+        vault,
+        factory,
+        botTransportEnabled: true,
+        clearChatImages: () async => imageClears++,
+      );
+      addTearDown(chat.dispose);
+      await chat.load();
+      await controller.connectWithBotToken(token: 'bot-token', remember: true);
+
+      await controller.disconnect();
+
+      expect(controller.mode, SessionMode.disconnected);
+      expect(factory.cacheClears, 1);
+      expect(imageClears, 1);
+      // The saved token stays, so "Use saved token" can sign back in.
+      expect(vault.token, 'bot-token');
+    },
+  );
+
   group('forgetting the account', () {
     ConnectionController controllerWith(
       Future<void> Function() clearChatImages, {
@@ -427,6 +457,7 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
 
   final ChatRepository repository;
   DiscordAccountSession? receivedSession;
+  int cacheClears = 0;
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -435,7 +466,7 @@ final class _StaticRepositoryFactory implements ChatRepositoryFactory {
   }
 
   @override
-  Future<void> clearCache() async {}
+  Future<void> clearCache() async => cacheClears++;
 }
 
 final class _CacheLockedRepositoryFactory implements ChatRepositoryFactory {
