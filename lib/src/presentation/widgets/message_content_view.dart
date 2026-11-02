@@ -10,10 +10,12 @@ import '../../domain/channel_link.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/external_link_launcher.dart';
 import '../../theme/flucord_theme.dart';
+import 'chat_scope.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
 import 'guild_access_scope.dart';
 import 'message_context_menu.dart';
+import 'timeline_dependencies.dart';
 
 class MessageContentView extends StatefulWidget {
   const MessageContentView({
@@ -115,17 +117,15 @@ class _MessageContentViewState extends State<MessageContentView> {
       widget.now?.millisecondsSinceEpoch,
       _relativeTimestampTick,
     ];
-    for (final match in RegExp(r'<@!?(\d+)>').allMatches(widget.body)) {
-      final id = match[1]!;
+    final mentions = BodyMentions.of(widget.body);
+    for (final id in mentions.members) {
       values.addAll([id, widget.workspace.memberOrNull(id)?.displayName]);
     }
-    for (final match in RegExp(r'<@&(\d+)>').allMatches(widget.body)) {
-      final id = match[1]!;
+    for (final id in mentions.roles) {
       final role = widget.workspace.roleOrNull(id);
       values.addAll([id, role?.name, role?.colorValue]);
     }
-    for (final match in RegExp(r'<#(\d+)>').allMatches(widget.body)) {
-      final id = match[1]!;
+    for (final id in mentions.channels) {
       final channel = widget.workspace.channelOrNull(id);
       values.addAll([id, channel?.name, channel?.kind]);
     }
@@ -159,7 +159,10 @@ class _MessageContentViewState extends State<MessageContentView> {
       final messageLink = DiscordMessageLink.tryParse(rawHref);
       final openMessageLink = access.onOpenMessageLink;
       if (messageLink != null && openMessageLink != null) {
-        final channel = widget.workspace.channelOrNull(messageLink.channelId);
+        final channel = ChatScope.workspaceNow(
+          context,
+          widget.workspace,
+        ).channelOrNull(messageLink.channelId);
         if (channel != null && channel.spaceId == messageLink.spaceId) {
           openMessageLink(context, messageLink);
           return;

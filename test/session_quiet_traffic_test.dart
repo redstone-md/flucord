@@ -1,11 +1,15 @@
 import 'package:flucord/src/domain/discord_snowflake.dart';
 import 'package:flucord/src/presentation/conversation_pane.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
+import 'package:flucord/src/presentation/widgets/chat_scope.dart';
+import 'package:flucord/src/presentation/widgets/message_item.dart';
 import 'package:flucord/src/presentation/widgets/typing_indicator.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/build_counter.dart';
+import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -27,14 +31,19 @@ Future<void> _typing(
 }, settle: settle);
 
 /// A presence as the gateway carries it.
-Future<void> _presence(SessionHarness session, String userId) =>
-    session.dispatch('PRESENCE_UPDATE', {
-      'user': {'id': userId},
-      'guild_id': _guildId,
-      'status': 'dnd',
-      'activities': <Object?>[],
-      'client_status': {'desktop': 'dnd'},
-    });
+Future<void> _presence(
+  SessionHarness session,
+  String userId, {
+  String guildId = _guildId,
+  String status = 'dnd',
+  bool settle = true,
+}) => session.dispatch('PRESENCE_UPDATE', {
+  'user': {'id': userId},
+  'guild_id': guildId,
+  'status': status,
+  'activities': <Object?>[],
+  'client_status': {'desktop': status},
+}, settle: settle);
 
 /// Builds of the shell. Everything the shell shows hangs from a
 /// [ListenableBuilder] on a controller, so a notification always counts here.
@@ -104,7 +113,191 @@ Map<String, Object?> _twoServers() {
   return ready;
 }
 
+/// People the app knows only from the far server.
+final _farMembers = [
+  for (var index = 0; index < 50; index++) '40000000000000${1000 + index}',
+];
+
+Future<void> _meetFarMembers(SessionHarness session) async {
+  for (final id in _farMembers) {
+    await session.dispatch('GUILD_MEMBER_ADD', {
+      'guild_id': _farGuildId,
+      'user': {'id': id, 'username': 'far-$id'},
+      'roles': <Object?>[],
+    }, settle: false);
+  }
+  await session.settle();
+}
+
+const _spokenId = '900000000000000001';
+const _madeLaterId = '300000000000000077';
+
+/// Somebody says [body] in the open channel.
+Future<void> _say(SessionHarness session, String body) => session.dispatch(
+  'MESSAGE_CREATE',
+  rawMessage(
+    id: _spokenId,
+    channelId: _channelId,
+    guildId: _guildId,
+    authorId: _friendId,
+    content: body,
+  ),
+);
+
+Future<void> _createChannel(SessionHarness session) => session.dispatch(
+  'CHANNEL_CREATE',
+  {...rawChannel(id: _madeLaterId, name: 'made-later'), 'guild_id': _guildId},
+);
+
+/// Fills the open channel with more rows than fit on the screen.
+void _routeHistory(FakeDiscordTransport transport) => transport.on(
+  'GET',
+  ChannelHistoryFixture.messagesPath,
+  (_) => jsonResponse(ChannelHistoryFixture.page(0, 100)),
+);
+
 void main() {
+  group('the timeline', () {
+    testSession(
+      'builds no row for 50 presences from another server',
+      (tester, session) async {
+        await _openAndRest(tester, session, _channelId);
+        await _meetFarMembers(session);
+        expect(find.byType(MessageItem), findsWidgets);
+
+        final builds = await countBuilds(() async {
+          for (final id in _farMembers) {
+            await _presence(session, id, guildId: _farGuildId, settle: false);
+          }
+          await session.settle();
+        });
+        expect(_shellBuilds(builds), greaterThan(0));
+        expect(builds.of<MessageItem>(), 0);
+
+        // The control: an edit to a row that is not mounted changes no row on
+        // screen, and the counter still sees the list build them again.
+        final control = await countBuilds(
+          () => session.dispatch(
+            'MESSAGE_UPDATE',
+            ChannelHistoryFixture.message(0, content: 'edited'),
+          ),
+        );
+        expect(session.messageRow(ChannelHistoryFixture.idOf(0)), findsNothing);
+        expect(control.of<MessageItem>(), greaterThan(0));
+      },
+      ready: _twoServers(),
+      routes: _routeHistory,
+    );
+
+    testSession(
+      'builds no row for a message in another server',
+      (tester, session) async {
+        await _openAndRest(tester, session, _channelId);
+        expect(find.byType(MessageItem), findsWidgets);
+
+        final builds = await countBuilds(
+          () => session.dispatch(
+            'MESSAGE_CREATE',
+            rawMessage(
+              id: _newest,
+              channelId: _farChannelId,
+              guildId: _farGuildId,
+              authorId: _farMembers.first,
+              content: 'far away',
+            ),
+          ),
+        );
+
+        expect(_shellBuilds(builds), greaterThan(0));
+        expect(builds.of<MessageItem>(), 0);
+      },
+      ready: _twoServers(),
+      routes: _routeHistory,
+    );
+
+    testSession('a rename of somebody mentioned redraws the mention', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _meetFarMembers(session);
+      final mentioned = _farMembers.first;
+      await _say(session, 'hello <@$mentioned>');
+
+      await session.dispatch('GUILD_MEMBER_UPDATE', {
+        'guild_id': _farGuildId,
+        'user': {'id': mentioned, 'username': 'far'},
+        'nick': 'Renamed',
+        'roles': <Object?>[],
+      });
+
+      expect(find.text('@Renamed'), findsOneWidget);
+    }, ready: _twoServers());
+
+    testSession('a rename of a mentioned channel redraws the mention', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      await _say(session, 'see <#$_farChannelId>');
+
+      await session.dispatch('CHANNEL_UPDATE', {
+        ...rawChannel(id: _farChannelId, name: 'renamed'),
+        'guild_id': _farGuildId,
+      });
+
+      expect(find.text('#renamed'), findsOneWidget);
+    }, ready: _twoServers());
+
+    testSession(
+      'Forward offers a channel made after the row was drawn',
+      (tester, session) async {
+        await _openAndRest(tester, session, _channelId);
+        await _say(session, 'pass this on');
+
+        await _createChannel(session);
+        await tester.tap(
+          session.messageRow(_spokenId),
+          buttons: kSecondaryMouseButton,
+          kind: PointerDeviceKind.mouse,
+        );
+        await session.settle();
+        await tester.tap(find.byKey(const ValueKey('message-menu-forward')));
+        await session.settle();
+
+        expect(
+          find.byKey(const ValueKey('message-forward-$_madeLaterId')),
+          findsOneWidget,
+        );
+      },
+      ready: _twoServers(),
+      platform: TargetPlatform.windows,
+    );
+
+    testSession('a link opens a channel made after the row was drawn', (
+      tester,
+      session,
+    ) async {
+      await _openAndRest(tester, session, _channelId);
+      final link =
+          'https://discord.com/channels/$_guildId/$_madeLaterId/$_cursor';
+      await _say(session, link);
+      final chat = ChatScope.read(
+        tester.element(session.messageRow(_spokenId)),
+      );
+
+      await _createChannel(session);
+      // The text widget is as wide as the row, so its centre misses the link.
+      await tester.tapAt(
+        tester.getTopLeft(find.text(link, findRichText: true)) +
+            const Offset(20, 8),
+      );
+      await session.settle();
+
+      expect(chat.activeChannelId, _madeLaterId);
+    }, ready: _twoServers());
+  });
+
   group('presence', () {
     testSession('for somebody the app does not know does not build the shell', (
       tester,

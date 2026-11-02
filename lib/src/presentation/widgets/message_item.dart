@@ -8,6 +8,7 @@ import '../../domain/application_command.dart';
 import '../../application/slash_command_controller.dart';
 import '../../application/message_component_controller.dart';
 import 'application_command_menu.dart';
+import 'chat_scope.dart';
 import 'component_directory_picker.dart';
 import 'message_component_row.dart';
 
@@ -150,6 +151,10 @@ class _MessageItemState extends State<MessageItem> {
     _editFocus.dispose();
     super.dispose();
   }
+
+  /// The workspace for an action, which can reach past what this row draws.
+  ChatWorkspace get _workspaceNow =>
+      ChatScope.workspaceNow(context, widget.workspace);
 
   Future<void> _saveEdit() async {
     final content = _editController.text.trim();
@@ -323,7 +328,7 @@ class _MessageItemState extends State<MessageItem> {
                   unawaited(widget.linkLauncher.open(Uri.parse(url))),
               directoryEntries: (component) => ComponentDirectory.entriesFor(
                 component,
-                workspace: widget.workspace,
+                workspace: _workspaceNow,
                 spaceId:
                     widget.workspace
                         .channelOrNull(message.channelId)
@@ -574,14 +579,13 @@ class _MessageItemState extends State<MessageItem> {
   }
 
   Future<void> _pickReactionAt(Offset position) async {
-    final spaceId = widget.workspace
-        .channelById(widget.message.channelId)
-        .spaceId;
+    final workspace = _workspaceNow;
+    final spaceId = workspace.channelById(widget.message.channelId).spaceId;
     final emoji = await showEmojiPickerAt(
       context: context,
       position: position,
-      spaceName: widget.workspace.spaceById(spaceId).name,
-      emojiSections: emojiSectionsFromWorkspace(widget.workspace, spaceId),
+      spaceName: workspace.spaceById(spaceId).name,
+      emojiSections: emojiSectionsFromWorkspace(workspace, spaceId),
       purpose: EmojiPickerPurpose.reaction,
       favorites: widget.expressionFavorites,
     );
@@ -600,7 +604,7 @@ class _MessageItemState extends State<MessageItem> {
             targetId: widget.message.id,
           ),
     message: widget.message,
-    workspace: widget.workspace,
+    workspace: _workspaceNow,
     capabilities: widget.capabilities,
     isCurrentUser: widget.isCurrentUser,
     onReply: () => widget.onReply(widget.message),
@@ -633,7 +637,7 @@ class _MessageItemState extends State<MessageItem> {
       ReactionDetailsDialog.show(
         context,
         message: widget.message,
-        workspace: widget.workspace,
+        workspace: _workspaceNow,
         initialReaction: reaction,
         onLoad: widget.onLoadReactionUsers,
       ),
@@ -655,7 +659,7 @@ class _MessageItemState extends State<MessageItem> {
       MessageForwardDialog.show(
         context,
         message: widget.message,
-        workspace: widget.workspace,
+        workspace: _workspaceNow,
         onForward: widget.onForward,
       ),
     );

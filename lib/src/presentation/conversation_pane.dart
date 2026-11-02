@@ -54,6 +54,7 @@ import 'widgets/stream_viewer_scope.dart';
 import 'widgets/thread_browser_panel.dart';
 import 'widgets/thread_membership_button.dart';
 import 'widgets/thread_membership_scope.dart';
+import 'widgets/timeline_dependencies.dart';
 import 'widgets/typing_indicator.dart';
 import 'widgets/voice_message_recorder_scope.dart';
 import 'widgets/voice_participant_grid.dart' show VoiceListeningControls;
@@ -746,20 +747,15 @@ class _ConversationPaneState extends State<ConversationPane> {
         // voice seat filling and a call ringing all redraw the pane without
         // changing a message.
         //
-        // Listed below is every workspace value it draws from. The
-        // controllers it also reads out of the scopes above are not listed,
-        // because a scope hands out the same instance for the life of the
-        // session; were one to be swapped, the timeline would keep the old
-        // one.
+        // Listed below is everything it draws from, and of the workspace only
+        // what its rows show. The controllers it also reads out of the scopes
+        // above are not listed, because a scope hands out the same instance
+        // for the life of the session; were one to be swapped, the timeline
+        // would keep the old one.
         Expanded(
           child: CachedSubtree(
             dependencies: [
-              widget.workspace.messagesFor(channel.id),
-              widget.workspace.members,
-              widget.workspace.roles,
-              widget.workspace.channels,
-              widget.workspace.emojis,
-              widget.workspace.currentMemberId,
+              ...timelineDependencies(widget.workspace, channel),
               channel,
               widget.capabilities,
               workspaceController.query,
