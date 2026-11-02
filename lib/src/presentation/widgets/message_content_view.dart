@@ -13,6 +13,7 @@ import '../../theme/flucord_theme.dart';
 import 'discord_message_builders.dart';
 import 'discord_message_syntax.dart';
 import 'guild_access_scope.dart';
+import 'message_context_menu.dart';
 
 class MessageContentView extends StatefulWidget {
   const MessageContentView({
@@ -76,7 +77,9 @@ class _MessageContentViewState extends State<MessageContentView> {
     // on and off while the same message is on screen, and the copy held by the
     // cache is the one that has to survive it being turned off again.
     final body = StreamerModeScope.redact(context, widget.body);
-    return SelectionArea(
+    final rowMenu = MessageMenuScope.maybeOf(context);
+    final text = SelectionArea(
+      onSelectionChanged: rowMenu?.onSelectionChanged,
       child: MarkdownBody(
         key: ValueKey(Object.hash(_resolutionSignature, body)),
         data: body,
@@ -102,6 +105,8 @@ class _MessageContentViewState extends State<MessageContentView> {
         ),
       ),
     );
+    if (rowMenu == null) return text;
+    return RightClickClaim(onPressed: rowMenu.onOpen, child: text);
   }
 
   int get _resolutionSignature {

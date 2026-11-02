@@ -111,6 +111,10 @@ class _MessageItemState extends State<MessageItem> {
   bool _hovered = false;
   bool _editing = false;
   bool _reactionPickerOpen = false;
+
+  /// The text selected in this row now. Opening the menu takes focus, and that
+  /// clears the selection, so the menu keeps its own copy.
+  String _selectedText = '';
   late final TextEditingController _editController = TextEditingController(
     text: widget.message.body,
   );
@@ -204,7 +208,15 @@ class _MessageItemState extends State<MessageItem> {
                           ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: _content(context)),
+                  Expanded(
+                    child: MessageMenuScope(
+                      onOpen: (position) =>
+                          unawaited(_openContextMenu(context, position)),
+                      onSelectionChanged: (content) =>
+                          _selectedText = content?.plainText ?? '',
+                      child: _content(context),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -420,12 +432,14 @@ class _MessageItemState extends State<MessageItem> {
   );
 
   Future<void> _openContextMenu(BuildContext context, Offset position) async {
+    final selectedText = _selectedText;
     final action = await showMessageContextMenu(
       context: context,
       position: position,
       message: widget.message,
       capabilities: widget.capabilities,
       isCurrentUser: widget.isCurrentUser,
+      selectedText: selectedText,
     );
     if (action == null || !mounted) return;
     switch (action) {
@@ -440,6 +454,8 @@ class _MessageItemState extends State<MessageItem> {
         _showForwardDialog();
       case MessageMenuAction.createThread:
         _showCreateThreadDialog();
+      case MessageMenuAction.copySelection:
+        await copyToClipboard(selectedText);
       case MessageMenuAction.copyText:
         await copyToClipboard(widget.message.body);
       case MessageMenuAction.copyLink:
