@@ -93,15 +93,16 @@ void main() {
         currentMemberId: 'bot-1',
       ),
     );
-    final handler = DiscordChannelHandler(cache, DiscordMapper());
+    final events = <ChatRepositoryEvent>[];
+    final handler = DiscordChannelHandler(cache, DiscordMapper(), events.add);
 
-    final categoryEvent = await handler.upsert(const {
+    await handler.upsert(const {
       'id': 'category-1',
       'type': 4,
       'name': 'Operations',
       'position': 1,
     }, 'guild-1');
-    final channelEvent = await handler.upsert(const {
+    await handler.upsert(const {
       'id': 'channel-1',
       'type': 0,
       'name': 'alerts',
@@ -109,18 +110,15 @@ void main() {
       'parent_id': 'category-1',
     }, 'guild-1');
 
-    expect(categoryEvent, isA<CategoryUpsertedEvent>());
-    expect(channelEvent, isA<ChannelUpsertedEvent>());
+    expect(events[0], isA<CategoryUpsertedEvent>());
+    expect(events[1], isA<ChannelUpsertedEvent>());
     var restored = await cache.readWorkspace();
     expect(restored?.categories.single.id, 'category-1');
     expect(restored?.channels.single.parentId, 'category-1');
     expect(restored?.channels.single.position, 2);
 
-    final deleteEvent = await handler.delete(const {
-      'id': 'category-1',
-      'type': 4,
-    });
-    expect(deleteEvent, isA<CategoryDeletedEvent>());
+    await handler.delete(const {'id': 'category-1', 'type': 4});
+    expect(events.last, isA<CategoryDeletedEvent>());
     restored = await cache.readWorkspace();
     expect(restored?.categories, isEmpty);
   });

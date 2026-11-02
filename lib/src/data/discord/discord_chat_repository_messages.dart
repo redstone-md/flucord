@@ -95,11 +95,7 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
     if (messageId == null) return;
     final currentUserId = _currentMemberId;
     if (event.name == 'MESSAGE_CREATE' && currentUserId != null) {
-      final conversation = await _directMessages.acceptMessage(
-        event.data,
-        currentUserId,
-      );
-      if (conversation != null) _emitDirectConversation(conversation);
+      await _directMessages.acceptMessage(event.data, currentUserId);
     }
     final fallback = event.name == 'MESSAGE_UPDATE'
         ? await _cache.readMessage(messageId)
@@ -131,12 +127,5 @@ extension _DiscordChatRepositoryMessages on DiscordChatRepository {
         mentionsCurrentMember: message.mentionsCurrentMember,
       ),
     );
-  }
-
-  void _emitDirectConversation(DirectConversation conversation) {
-    if (_events.isClosed) return;
-    _events.add(SpaceUpsertedEvent(_directMessages.space));
-    _events.add(MemberUpsertedEvent(conversation.recipient));
-    _events.add(ChannelUpsertedEvent(conversation.channel));
   }
 }

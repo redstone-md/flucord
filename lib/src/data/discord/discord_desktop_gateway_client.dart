@@ -47,7 +47,11 @@ final class DiscordDesktopGatewayClient
   final DiscordDesktopVoiceFrames _voiceFrames = DiscordDesktopVoiceFrames();
   final DiscordDesktopBootstrap _bootstrap = DiscordDesktopBootstrap();
 
+  /// The one socket this client reads from and writes to. A socket stops being
+  /// this the moment a reconnect or a close gives up on it, so what it still
+  /// reports from then on means nothing.
   DiscordDesktopWebSocket? _socket;
+  bool _dialing = false;
   Timer? _heartbeatTimer;
   Timer? _initialHeartbeatTimer;
   Timer? _reconnectTimer;
@@ -116,7 +120,7 @@ final class DiscordDesktopGatewayClient
   }
 
   Future<void> _open() async {
-    if (_closing) return;
+    if (_closing || _dialing) return;
     _emitStatus(
       _protocol.canResume
           ? DiscordGatewayStatus.reconnecting
@@ -128,19 +132,44 @@ final class DiscordDesktopGatewayClient
     // Transport compression is per connection. Carrying a decompressor across a
     // reconnect would resolve matches against the previous session's bytes.
     _codec.reset();
+    _dialing = true;
     try {
-      _socket = await _socketConnector.connect(uri);
-      _socket!.messages.listen(
-        _accept,
-        onDone: _onDone,
-        onError: _onSocketError,
-        cancelOnError: true,
-      );
+      final socket = await _socketConnector.connect(uri);
+      if (_closing) {
+        await socket.close();
+        return;
+      }
+      _listenTo(socket);
     } on Object catch (error, stackTrace) {
       _lastBootstrapError = error;
       _logBootstrapFailure('websocket-upgrade', error, stackTrace);
       _scheduleReconnect(reason: 'websocket upgrade failed: $error');
+    } finally {
+      _dialing = false;
     }
+  }
+
+  /// Makes [socket] the current one. Its callbacks work only while it stays
+  /// current: a close handshake can end long after a new socket took over, and
+  /// the old socket's done event must not take the new one down with it.
+  ///
+  /// The stream stays subscribed after that, because the platform needs it read
+  /// to finish the close handshake.
+  void _listenTo(DiscordDesktopWebSocket socket) {
+    _socket = socket;
+    bool isCurrent() => identical(socket, _socket);
+    socket.messages.listen(
+      (raw) {
+        if (isCurrent()) _accept(raw);
+      },
+      onDone: () {
+        if (isCurrent()) _onDone(socket);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (isCurrent()) _onSocketError(error, stackTrace);
+      },
+      cancelOnError: true,
+    );
   }
 
   void _accept(Object? raw) {
@@ -286,9 +315,9 @@ final class DiscordDesktopGatewayClient
         _captureBootstrap(action);
         if (action.name == 'READY' || action.name == 'RESUMED') {
           _diagnose(action.name.toLowerCase());
+          _emitStatus(DiscordGatewayStatus.connected);
         }
         if (action.name == 'READY') {
-          _emitStatus(DiscordGatewayStatus.connected);
           _subscribeReadyGuilds(action.data);
           for (final frame in _voiceFrames.replay) {
             _send(frame);
@@ -385,10 +414,12 @@ final class DiscordDesktopGatewayClient
   /// Discord pushes live events for a guild only once it is subscribed, and
   /// the subscriptions map is a replace: without this, typing, thread and
   /// member events for a joined server never arrive, because READY named the
-  /// guilds it listed and nothing else.
-  void subscribeGuildEvents(String guildId) {
-    if (!_subscriptions.setFlags(guildId)) return;
+  /// guilds it listed and nothing else. Answers whether this is news, which is
+  /// false for a guild that was already subscribed.
+  bool subscribeGuildEvents(String guildId) {
+    if (!_subscriptions.setFlags(guildId)) return false;
     _sendSubscriptions({guildId: _subscriptions.snapshot(guildId)});
+    return true;
   }
 
   /// Forgets a guild the account left, so a reconnect does not resubscribe
@@ -457,14 +488,12 @@ final class DiscordDesktopGatewayClient
         'discord.gateway',
         'Gateway send failed, reconnecting: ${_diagnosticFor(error)}',
       );
-      unawaited(socket.close());
-      _socket = null;
       _scheduleReconnect(immediate: true, reason: 'send failed');
     }
   }
 
-  void _onDone() {
-    final code = _socket?.closeCode;
+  void _onDone(DiscordDesktopWebSocket socket) {
+    final code = socket.closeCode;
     _lastBootstrapCloseCode = code;
     if (_bootstrapCompleter?.isCompleted == false) {
       AppLog.warning(
@@ -485,9 +514,8 @@ final class DiscordDesktopGatewayClient
       }
       return;
     }
-    // The code the *closing* socket carried, read before anything replaces
-    // it, and how long since a heartbeat went out — a socket that dies a
-    // moment after one usually died because of it.
+    // How long since a heartbeat went out: a socket that dies a moment after
+    // one usually died because of it.
     _scheduleReconnect(
       reason:
           'socket closed (code ${code ?? 'none'}, '
@@ -539,7 +567,9 @@ final class DiscordDesktopGatewayClient
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
     _emitStatus(DiscordGatewayStatus.reconnecting);
-    unawaited(_socket?.close());
+    final socket = _socket;
+    _socket = null;
+    unawaited(socket?.close());
     _reconnectTimer = Timer(
       immediate ? Duration.zero : const Duration(seconds: 2),
       _open,
@@ -607,7 +637,9 @@ final class DiscordDesktopGatewayClient
     _bootstrapTimer?.cancel();
     _heartbeatTimer?.cancel();
     _initialHeartbeatTimer?.cancel();
-    await _socket?.close();
+    final socket = _socket;
+    _socket = null;
+    await socket?.close();
     _voiceFrames.clear();
     _subscriptions.clear();
     _emitStatus(DiscordGatewayStatus.offline);

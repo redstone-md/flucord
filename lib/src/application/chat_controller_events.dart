@@ -13,14 +13,19 @@ extension _ChatControllerEvents on ChatController {
           );
         case MessageDeletedEvent():
           _workspace = _workspace?.removeMessage(event.messageId);
+        case MessagesDeletedEvent():
+          _workspace = _workspace?.removeMessages(event.messageIds);
         case ChannelUpsertedEvent():
           _workspace = _workspace?.upsertChannel(event.channel);
         case CategoryUpsertedEvent():
           _workspace = _workspace?.upsertCategory(event.category);
         case SpaceUpsertedEvent():
           _workspace = _workspace?.upsertSpace(event.space);
+        case GuildGainedEvent():
+          _workspace = _workspace?.mergeGuild(event.guild);
+          _applyReadState();
         case SpaceRemovedEvent():
-          _workspace = _workspace?.removeSpace(event.spaceId);
+          _workspace = _workspace?.removeGuild(event.spaceId);
         case GuildEmojisReplacedEvent():
           _workspace = _workspace?.replaceGuildEmojis(
             event.spaceId,

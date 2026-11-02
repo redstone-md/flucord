@@ -1,18 +1,22 @@
 import '../../domain/read_state.dart';
+import 'discord_account_roles.dart';
+import 'discord_mention_matcher.dart';
 import 'discord_read_state_codec.dart';
 
 /// The account's read state as the gateway describes it, held in one place.
 ///
 /// Everything here is a fold over dispatches: `READY` sets the baseline, the
 /// ack events, `USER_GUILD_SETTINGS_UPDATE` and the cross-session
-/// `STATE_UPDATE` revise it, and `DELETED_ENTITY_IDS` forgets what Discord's
-/// garbage collector dropped. The two version counters this keeps are what a
+/// `STATE_UPDATE` revise it, a new message raises a mention count or moves the
+/// cursor, and `DELETED_ENTITY_IDS` forgets what Discord's garbage collector
+/// dropped. The two version counters this keeps are what a
 /// later connect echoes back so the server can answer with a delta. The store
 /// is deliberately free of transport and of timers: it decides *what is true*,
 /// and the repository around it decides what to send.
 final class DiscordReadStateStore {
   final Map<String, ReadState> _readStates = {};
   final Map<String, GuildNotificationSettings> _settings = {};
+  final DiscordAccountRoles _accountRoles = DiscordAccountRoles();
   int _accountNotificationFlags = 0;
   int _readStateVersion = 0;
   int _userGuildSettingsVersion = 0;
@@ -28,18 +32,62 @@ final class DiscordReadStateStore {
   /// Folds one gateway dispatch in. Returns true when anything changed, so the
   /// repository can stay quiet rather than rebuild every unread surface for a
   /// dispatch that told it nothing new.
-  bool accept(String name, Map<String, Object?> data) => switch (name) {
-    'READY' => _acceptReady(data),
-    'STATE_UPDATE' => _acceptStateUpdate(data),
-    'DELETED_ENTITY_IDS' => _acceptDeletedEntityIds(data),
-    'MESSAGE_ACK' => _acceptMessageAck(data),
-    'CHANNEL_PINS_ACK' => _acceptPinsAck(data),
-    'CHANNEL_PINS_UPDATE' => _acceptPinsUpdate(data),
-    'GUILD_FEATURE_ACK' => _acceptFeatureAck(data),
-    'USER_NON_CHANNEL_ACK' => _acceptUserAck(data),
-    'USER_GUILD_SETTINGS_UPDATE' => _acceptSettingsUpdate(data),
-    _ => false,
-  };
+  bool accept(String name, Map<String, Object?> data) {
+    _accountRoles.accept(name, data);
+    return switch (name) {
+      'READY' => _acceptReady(data),
+      'STATE_UPDATE' => _acceptStateUpdate(data),
+      'DELETED_ENTITY_IDS' => _acceptDeletedEntityIds(data),
+      'MESSAGE_ACK' => _acceptMessageAck(data),
+      'CHANNEL_PINS_ACK' => _acceptPinsAck(data),
+      'CHANNEL_PINS_UPDATE' => _acceptPinsUpdate(data),
+      'GUILD_FEATURE_ACK' => _acceptFeatureAck(data),
+      'USER_NON_CHANNEL_ACK' => _acceptUserAck(data),
+      'USER_GUILD_SETTINGS_UPDATE' => _acceptSettingsUpdate(data),
+      _ => false,
+    };
+  }
+
+  /// Folds in a message the account has just received or sent.
+  ///
+  /// The account's own message moves the cursor, so it never reads as unread. A
+  /// message that mentions the account adds one to the count, unless the cursor
+  /// is already at or past it, which means somebody has read it. Returns true
+  /// when anything changed, as [accept] does.
+  ///
+  /// This needs no answer from the server. If the server does send an ack or a
+  /// read state for the same message, its values replace these ones.
+  bool acceptNewMessage(Map<String, Object?> payload) {
+    final channelId = payload['channel_id'];
+    final messageId = payload['id'];
+    if (channelId is! String || messageId is! String) return false;
+    final author = payload['author'];
+    final previous = channelState(channelId);
+    final next = author is Map && author['id'] == _accountRoles.accountId
+        ? previous.acknowledged(messageId)
+        : previous.isBehind(messageId) && _mentionsAccount(payload)
+        ? previous.copyWith(mentionCount: previous.mentionCount + 1)
+        : previous;
+    if (identical(next, previous)) return false;
+    _readStates[next.key] = next;
+    return true;
+  }
+
+  /// Whether [payload] mentions a role the account holds in its guild.
+  ///
+  /// False when the guild's `suppress_roles` setting is on.
+  bool mentionsAccountRole(Map<String, Object?> payload) {
+    final guildId = payload['guild_id'];
+    if (guildId is! String || settingsFor(guildId).suppressRoles) return false;
+    return DiscordMentionMatcher.containsRole(
+      payload,
+      _accountRoles.inGuild(guildId),
+    );
+  }
+
+  bool _mentionsAccount(Map<String, Object?> payload) =>
+      DiscordMentionMatcher.containsUser(payload, _accountRoles.accountId) ||
+      mentionsAccountRole(payload);
 
   /// Replaces one read state outright, for the optimistic half of an ACK.
   void put(ReadState state) => _readStates[state.key] = state;
@@ -70,6 +118,7 @@ final class DiscordReadStateStore {
   void clear() {
     _readStates.clear();
     _settings.clear();
+    _accountRoles.clear();
     _accountNotificationFlags = 0;
     _readStateVersion = 0;
     _userGuildSettingsVersion = 0;
