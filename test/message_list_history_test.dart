@@ -487,6 +487,8 @@ Widget _host(
     channel: channel,
     query: query,
     targetMessageId: targetMessageId,
+    onOpenMessage: (_) {},
+    onLoadPresent: () {},
     onReply: (_) {},
     onEdit: (_, _) async => true,
     onDelete: (_) async {},

@@ -136,7 +136,7 @@ void main() {
     });
 
     test('anything else is still an error', () async {
-      final transport = _Transport([_error(500)]);
+      final transport = _Transport([_error(401)]);
 
       await expectLater(
         _repository(transport).unlink(_spotify),

@@ -72,12 +72,15 @@ List<String> _heldIds(WidgetTester tester, String channelId) => [
     message.id,
 ];
 
+// Newest-page requests only. A window around the read cursor (FLUCORD-22) is
+// not a first page.
 int _firstPageRequests(SessionHarness session) => session.transport.requests
     .where(
       (request) =>
           request.method == 'GET' &&
           request.uri.path == _openChannelPath &&
-          !request.uri.queryParameters.containsKey('before'),
+          !request.uri.queryParameters.containsKey('before') &&
+          !request.uri.queryParameters.containsKey('around'),
     )
     .length;
 
