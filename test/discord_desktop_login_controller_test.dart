@@ -70,6 +70,36 @@ void main() {
     expect(vault.session?.transportCredential, 'desktop-authorization');
   });
 
+  test(
+    'a sign-out with a locked cache forgets the account and says so',
+    () async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final vault = _MemoryVault();
+      final connection = ConnectionController(
+        chat,
+        vault,
+        _RepositoryFactory(clearFails: true),
+      );
+      final controller = DiscordDesktopLoginController(
+        _RemoteAuthFactory(_RemoteAuthGateway()),
+        connection,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(connection.dispose);
+      addTearDown(chat.dispose);
+      await connection.connectSession(
+        session: DiscordDesktopUserSession('desktop-authorization'),
+        remember: true,
+      );
+
+      await controller.disconnect();
+
+      expect(vault.session, isNull);
+      expect(connection.mode, SessionMode.disconnected);
+      expect(controller.errorMessage, contains('could not be removed'));
+    },
+  );
+
   testWidgets('renders a standard square QR code with a quiet zone', (
     tester,
   ) async {
@@ -169,7 +199,16 @@ final class _MemoryVault implements CredentialVault {
 }
 
 final class _RepositoryFactory implements ChatRepositoryFactory {
+  _RepositoryFactory({this.clearFails = false});
+
+  final bool clearFails;
+
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async =>
       MockChatRepository(latency: Duration.zero);
+
+  @override
+  Future<void> clearCache() async {
+    if (clearFails) throw StateError('The file is locked');
+  }
 }

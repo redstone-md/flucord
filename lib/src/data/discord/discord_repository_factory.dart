@@ -14,10 +14,23 @@ import 'discord_desktop_gateway_client.dart';
 import 'discord_desktop_profile.dart';
 import 'discord_gateway_client.dart';
 
+/// Both transports share one cache file.
+Future<void> _clearDefaultCache() async {
+  final cache = await SqliteChatCache.openDefault();
+  try {
+    await cache.clear();
+  } finally {
+    await cache.close();
+  }
+}
+
 final class DiscordRepositoryFactory implements ChatRepositoryFactory {
   const DiscordRepositoryFactory({this.daveService});
 
   final VoiceDaveService? daveService;
+
+  @override
+  Future<void> clearCache() => _clearDefaultCache();
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {
@@ -65,6 +78,9 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
   const DiscordBotRepositoryFactory({this.daveService});
 
   final VoiceDaveService? daveService;
+
+  @override
+  Future<void> clearCache() => _clearDefaultCache();
 
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async {

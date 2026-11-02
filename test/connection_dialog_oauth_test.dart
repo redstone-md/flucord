@@ -115,6 +115,9 @@ final class _RepositoryFactory implements ChatRepositoryFactory {
   @override
   Future<ChatRepository> create(DiscordAccountSession session) async =>
       MockChatRepository(latency: Duration.zero);
+
+  @override
+  Future<void> clearCache() async {}
 }
 
 final class _RemoteAuthFactory implements DiscordRemoteAuthGatewayFactory {
