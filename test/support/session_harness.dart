@@ -10,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:flucord/src/app.dart';
 import 'package:flucord/src/app_bootstrap.dart';
+import 'package:flucord/src/data/chat_image_cache.dart';
 import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
 import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
 import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
@@ -87,6 +88,7 @@ final class SessionHarness {
          _connector,
          diskDirectory,
          cacheOnIsolate: measured,
+         clearChatImages: _chatImagesOnDisk ? ChatImageCache.clear : null,
        );
 
   /// The account the default READY signs in.
@@ -574,12 +576,15 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     this._connector,
     this._diskDirectory, {
     required bool cacheOnIsolate,
-  }) : _cacheOnIsolate = cacheOnIsolate;
+    required Future<void> Function()? clearChatImages,
+  }) : _cacheOnIsolate = cacheOnIsolate,
+       _clearChatImages = clearChatImages;
 
   final FakeDiscordTransport _transport;
   final MemoryDesktopWebSocketConnector _connector;
   final Directory? _diskDirectory;
   final bool _cacheOnIsolate;
+  final Future<void> Function()? _clearChatImages;
 
   /// The cache of the repository built last.
   SqliteChatCache? openedCache;
@@ -623,6 +628,7 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
       ),
       cache,
       accountId: session.accountId,
+      clearChatImages: _clearChatImages,
     );
   }
 

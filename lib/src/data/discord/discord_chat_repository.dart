@@ -102,7 +102,9 @@ final class DiscordChatRepository
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? messageNonceFactory,
     VoiceDaveService? daveService,
+    Future<void> Function()? clearChatImages,
   }) : _accountId = accountId,
+       _clearChatImages = clearChatImages,
        _mapper = mapper ?? DiscordMapper(),
        _messageNonceFactory =
            messageNonceFactory ?? DiscordMessageNonceFactory(),
@@ -124,6 +126,10 @@ final class DiscordChatRepository
   /// Who the session's credential says it is, before Discord has confirmed it.
   /// The offline fallback compares this with the account of the cache.
   final String? _accountId;
+
+  /// Removes the pictures of the chats from disk, when another account's
+  /// cache is found. Null where the app keeps no pictures on disk.
+  final Future<void> Function()? _clearChatImages;
   @override
   final DiscordMapper _mapper;
   @override
@@ -189,7 +195,11 @@ final class DiscordChatRepository
         emojisByGuild[guildId] = await _api.getGuildEmojis(guildId);
         stickersByGuild[guildId] = await _api.getGuildStickers(guildId);
       }
-      await clearCacheOfOtherAccount(_cache, user['id']! as String);
+      await clearCacheOfOtherAccount(
+        _cache,
+        user['id']! as String,
+        clearChatImages: _clearChatImages,
+      );
       final cached = await _cache.readWorkspace();
       final workspace = _mapper
           .workspace(

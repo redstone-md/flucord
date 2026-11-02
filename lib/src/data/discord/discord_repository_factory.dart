@@ -4,6 +4,7 @@ import '../../domain/chat_repository_factory.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/discord_session.dart';
 import '../../domain/voice_dave.dart';
+import '../chat_image_cache.dart';
 import '../dave/native_dave_service.dart';
 import '../sqlite_chat_cache.dart';
 import 'discord_api_client.dart';
@@ -64,6 +65,7 @@ final class DiscordRepositoryFactory implements ChatRepositoryFactory {
       cache,
       accountId: session.accountId,
       daveService: _resolveDaveService(),
+      clearChatImages: ChatImageCache.clear,
     );
   }
 
@@ -97,6 +99,7 @@ final class DiscordBotRepositoryFactory implements ChatRepositoryFactory {
       accountId: session.accountId,
       daveService:
           daveService ?? (Platform.isWindows ? NativeDaveService.open() : null),
+      clearChatImages: ChatImageCache.clear,
     );
   }
 }

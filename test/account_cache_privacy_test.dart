@@ -166,40 +166,71 @@ void main() {
   group('the pictures of a chat', () {
     final images = ChatImageDisk.declare();
 
+    /// A DM of the first account shows a picture, and the test waits until the
+    /// picture and its address are on disk.
+    Future<void> receivePicture(
+      WidgetTester tester,
+      SessionHarness session,
+      String path,
+    ) async {
+      final address = images.serve(path, images.largePhoto);
+      await session.dispatch('MESSAGE_CREATE', {
+        ...rawMessage(
+          id: _dmMessageId,
+          channelId: SessionHarness.dmChannelId,
+          authorId: SessionHarness.friendId,
+          content: _privateText,
+        ),
+        'embeds': [
+          {
+            'type': 'rich',
+            'image': {
+              'url': 'https://pictures.example/original',
+              'proxy_url': address,
+              'width': 3000,
+              'height': 2000,
+            },
+          },
+        ],
+      });
+      // The cache's index reaches the disk some seconds after the download.
+      await tester.pump(const Duration(seconds: 4));
+      // Without this check, a cache that was never written would also pass.
+      await images.waitUntil(
+        tester,
+        () =>
+            images.bytesOnDisk.contains(ChatImageDisk.pictureMark) &&
+            images.bytesOnDisk.contains(path),
+        'the picture and its address on disk',
+      );
+    }
+
+    testSession(
+      'a second account that connects finds no picture of the first',
+      (tester, session) async {
+        const path = '/external/private/second-account.png';
+        await receivePicture(tester, session, path);
+
+        await session.relaunch(
+          accountId: _secondAccountId,
+          ready: _readyOf(_secondAccountId, username: 'second-account'),
+        );
+
+        expect(images.bytesOnDisk, isNot(contains(ChatImageDisk.pictureMark)));
+        expect(images.bytesOnDisk, isNot(contains(path)));
+
+        await images.letTimersEnd(tester);
+      },
+      onDisk: true,
+      chatImagesOnDisk: true,
+      ready: _readyOf(SessionHarness.currentUserId),
+    );
+
     testSession(
       'signing out leaves no picture of the account and no address on disk',
       (tester, session) async {
         const path = '/external/private/photo.png';
-        final address = images.serve(path, images.largePhoto);
-        await session.dispatch('MESSAGE_CREATE', {
-          ...rawMessage(
-            id: _dmMessageId,
-            channelId: SessionHarness.dmChannelId,
-            authorId: SessionHarness.friendId,
-            content: _privateText,
-          ),
-          'embeds': [
-            {
-              'type': 'rich',
-              'image': {
-                'url': 'https://pictures.example/original',
-                'proxy_url': address,
-                'width': 3000,
-                'height': 2000,
-              },
-            },
-          ],
-        });
-        // The cache's index reaches the disk some seconds after the download.
-        await tester.pump(const Duration(seconds: 4));
-        // Without this check, a cache that was never written would also pass.
-        await images.waitUntil(
-          tester,
-          () =>
-              images.bytesOnDisk.contains(ChatImageDisk.pictureMark) &&
-              images.bytesOnDisk.contains(path),
-          'the picture and its address on disk',
-        );
+        await receivePicture(tester, session, path);
 
         await session.signOut();
 
