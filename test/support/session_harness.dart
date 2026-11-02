@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,6 +18,7 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/credential_vault.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_remote_auth.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 import 'package:flucord/src/domain/voice_message_recorder.dart';
 import 'package:flucord/src/platform/desktop_integration.dart';
@@ -92,6 +94,9 @@ final class SessionHarness {
   /// out in [FakeDiscordTransport.requests].
   final FakeDiscordTransport transport;
 
+  /// The QR sign-in. Feed it what the phone and Discord would cause.
+  final FakeRemoteAuth remoteAuth = FakeRemoteAuth();
+
   int _sequence = 0;
 
   /// The saved token of [accountId]. It is made up, in Discord's shape: its first
@@ -148,14 +153,48 @@ final class SessionHarness {
           _connector,
           _diskDirectory,
         ),
+        discordRemoteAuthGatewayFactory: remoteAuth,
       ),
     ),
   );
 
-  /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
-  Future<void> _start(Map<String, Object?> ready) async {
+  /// Launches the app. A signed-in launch that can reach Discord goes on to
+  /// READY. Any other launch stops at whatever the app shows on its own.
+  Future<void> _start(
+    Map<String, Object?> ready, [
+    SessionLaunch launch = SessionLaunch.signedIn,
+  ]) async {
+    if (launch == SessionLaunch.unreachable) discordUnreachable();
+    if (launch == SessionLaunch.signedOut) await _vault.clearDiscordSession();
     final dialled = sockets.length;
     await _launch();
+    if (launch == SessionLaunch.signedIn) {
+      await _walkToReady(ready, dialled);
+    } else {
+      await settle();
+    }
+  }
+
+  /// Makes the first call of a connection answer 503, so no socket is dialled.
+  void discordUnreachable() => transport.on(
+    'GET',
+    '/api/v9/gateway',
+    (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
+  );
+
+  /// Undoes [discordUnreachable].
+  void discordReachable() => transport.on(
+    'GET',
+    '/api/v9/gateway',
+    (_) => jsonResponse({'url': 'wss://gateway.discord.gg'}),
+  );
+
+  /// Walks a connection the app is about to start through HELLO, IDENTIFY and
+  /// READY, up to the first workspace.
+  Future<void> connectToReady(Map<String, Object?> ready) =>
+      _walkToReady(ready, sockets.length);
+
+  Future<void> _walkToReady(Map<String, Object?> ready, int dialled) async {
     await _settleUntil(() => sockets.length > dialled, 'a socket');
     await hello();
     await _settleUntil(
@@ -195,11 +234,7 @@ final class SessionHarness {
   Future<void> relaunchUnreachable({String accountId = currentUserId}) async {
     await _end();
     _vault.saveAccount(accountId);
-    transport.on(
-      'GET',
-      '/api/v9/gateway',
-      (_) => jsonResponse({'message': 'Unavailable'}, statusCode: 503),
-    );
+    discordUnreachable();
     await _launch();
     await settle();
   }
@@ -284,6 +319,18 @@ final class SessionHarness {
   }
 }
 
+/// How a [testSession] opens the app.
+enum SessionLaunch {
+  /// A saved session that reaches READY.
+  signedIn,
+
+  /// A saved session, with Discord out of reach.
+  unreachable,
+
+  /// Nothing saved: a new user.
+  signedOut,
+}
+
 /// Defines a widget test that runs inside a started [SessionHarness].
 ///
 /// [ready] replaces [SessionHarness.defaultReady]. [routes] adds HTTP routes
@@ -298,6 +345,7 @@ void testSession(
   Map<String, Object?>? ready,
   void Function(FakeDiscordTransport transport)? routes,
   Size size = const Size(1440, 900),
+  SessionLaunch launch = SessionLaunch.signedIn,
   VoiceMessageRecorder? voiceMessageRecorder,
   bool onDisk = false,
   DesktopIntegration? desktop,
@@ -320,7 +368,7 @@ void testSession(
       desktop,
     );
     try {
-      await session._start(ready ?? SessionHarness.defaultReady());
+      await session._start(ready ?? SessionHarness.defaultReady(), launch);
       await body(tester, session);
     } finally {
       await session._end();
@@ -387,6 +435,37 @@ final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
     await cache.clear();
     await cache.close();
   }
+}
+
+/// The QR sign-in, below the app's controller. It stands in for the phone and
+/// for Discord's remote-auth socket, which encrypts its frames per session.
+final class FakeRemoteAuth
+    implements DiscordRemoteAuthGatewayFactory, DiscordRemoteAuthGateway {
+  final StreamController<DiscordRemoteAuthEvent> _events =
+      StreamController.broadcast();
+
+  /// How many sign-ins the app started.
+  int starts = 0;
+
+  /// Delivers one event to the sign-in the app has open.
+  void add(DiscordRemoteAuthEvent event) => _events.add(event);
+
+  @override
+  DiscordRemoteAuthGateway create() => this;
+
+  @override
+  Stream<DiscordRemoteAuthEvent> get events => _events.stream;
+
+  @override
+  Future<void> start() async => starts++;
+
+  @override
+  Future<void> submitCaptcha(String response) async {}
+
+  // Stays open: the app closes a gateway before it starts the next one, and
+  // this one object plays every gateway of the session.
+  @override
+  Future<void> close() async {}
 }
 
 /// A saved session, so the app connects at launch as it does for a real user.
