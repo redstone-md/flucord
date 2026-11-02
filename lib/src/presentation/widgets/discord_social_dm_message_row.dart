@@ -93,8 +93,8 @@ class _DiscordSocialDmMessageRowState extends State<DiscordSocialDmMessageRow> {
                             key: ValueKey(
                               'social-dm-action-error-${message.id}',
                             ),
-                            style: const TextStyle(
-                              color: FlucordColors.danger,
+                            style: TextStyle(
+                              color: context.surfaces.errorText,
                               fontSize: 10,
                             ),
                           ),

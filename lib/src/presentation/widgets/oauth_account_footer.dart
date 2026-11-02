@@ -85,7 +85,7 @@ class OAuthAccountFooter extends StatelessWidget {
                     color:
                         activePresence?.state ==
                             DiscordSocialPresenceState.failure
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
                     fontSize: 10,
                   ),

@@ -96,7 +96,7 @@ class _IncomingInvite extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: failed
-                        ? FlucordColors.danger
+                        ? context.surfaces.errorText
                         : context.surfaces.muted,
                     fontSize: 10,
                   ),
@@ -170,7 +170,7 @@ class _JoinedSession extends StatelessWidget {
                   style: TextStyle(
                     color: controller.callError == null
                         ? context.surfaces.muted
-                        : FlucordColors.danger,
+                        : context.surfaces.errorText,
                     fontSize: 10,
                   ),
                 ),

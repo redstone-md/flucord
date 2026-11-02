@@ -208,10 +208,13 @@ class _ParticipantRow extends StatelessWidget {
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'Could not update local volume',
-                    key: ValueKey('activity-participant-mute-error'),
-                    style: TextStyle(color: FlucordColors.danger, fontSize: 10),
+                    key: const ValueKey('activity-participant-mute-error'),
+                    style: TextStyle(
+                      color: context.surfaces.errorText,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ],

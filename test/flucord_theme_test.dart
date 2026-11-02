@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/contrast.dart';
 
 void main() {
   test('dark theme exposes Discord workspace surface roles', () {
@@ -134,27 +134,11 @@ void main() {
 
     themes.forEach((name, palette) {
       group('in $name', () {
-        final surfaces = FlucordTheme.fromPalette(
-          palette,
-        ).extension<FlucordSurfaceTheme>()!;
-        final backgrounds = <String, Color>{
-          'rail': surfaces.rail,
-          'canvas': surfaces.canvas,
-          'surface': surfaces.surface,
-          'raised': surfaces.raised,
-          'inset': surfaces.inset,
-          'control': surfaces.control,
-        };
+        final theme = FlucordTheme.fromPalette(palette);
+        final surfaces = theme.extension<FlucordSurfaceTheme>()!;
 
-        void expectContrast(Color foreground, double minimum) {
-          backgrounds.forEach((backgroundName, background) {
-            expect(
-              contrast(foreground, background),
-              greaterThanOrEqualTo(minimum),
-              reason: 'on $backgroundName',
-            );
-          });
-        }
+        void expectContrast(Color foreground, double minimum) =>
+            expectReadable(theme, foreground, minimum);
 
         test(
           'link text reaches 4.5:1',
@@ -230,11 +214,4 @@ void main() {
       });
     }
   });
-}
-
-/// The WCAG 2 contrast ratio between two opaque colours.
-double contrast(Color a, Color b) {
-  final lighter = max(a.computeLuminance(), b.computeLuminance());
-  final darker = min(a.computeLuminance(), b.computeLuminance());
-  return (lighter + 0.05) / (darker + 0.05);
 }

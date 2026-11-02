@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/app.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
 
 void main() {
   testWidgets('opens globally and routes a keyboard selection', (tester) async {
@@ -84,6 +85,22 @@ void main() {
 
     expect(find.textContaining('continuous signal'), findsOneWidget);
     semantics.dispose();
+  });
+
+  testWidgets('the search box shows the theme focus ring', (tester) async {
+    await _pumpWorkspace(tester);
+    await _openQuickSwitcher(tester);
+
+    final search = find.byKey(const ValueKey('quick-switcher-search'));
+    final field = tester.widget<TextField>(search);
+    final theme = Theme.of(tester.element(search));
+    expect(
+      field.decoration!.focusedBorder!.borderSide,
+      BorderSide(
+        color: theme.extension<FlucordSurfaceTheme>()!.focusRing,
+        width: 2,
+      ),
+    );
   });
 }
 

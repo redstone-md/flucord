@@ -108,8 +108,8 @@ class _MessageContentViewState extends State<MessageContentView> {
         },
         imageBuilder: (uri, _, alt) => Text(
           alt?.isNotEmpty == true ? alt! : uri.toString(),
-          style: const TextStyle(
-            color: FlucordColors.brand,
+          style: TextStyle(
+            color: context.surfaces.link,
             decoration: TextDecoration.underline,
           ),
         ),
@@ -192,9 +192,9 @@ class _MessageContentViewState extends State<MessageContentView> {
       p: bodyStyle,
       pPadding: EdgeInsets.zero,
       a: bodyStyle.copyWith(
-        color: FlucordColors.brand,
+        color: surfaces.link,
         decoration: TextDecoration.underline,
-        decorationColor: FlucordColors.brand,
+        decorationColor: surfaces.link,
       ),
       code: bodyStyle.copyWith(
         fontFamily: 'Consolas',

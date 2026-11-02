@@ -16,6 +16,8 @@ import 'package:flucord/src/presentation/widgets/discord_desktop_login_section.d
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'support/contrast.dart';
+
 void main() {
   test('connects and persists the session emitted by QR remote auth', () async {
     final chat = ChatController(MockChatRepository(latency: Duration.zero));
@@ -101,6 +103,48 @@ void main() {
       expect(controller.errorMessage, contains('could not be removed'));
     },
   );
+
+  for (final (name, theme) in [
+    ('dark', FlucordTheme.dark),
+    ('light', FlucordTheme.light),
+  ]) {
+    testWidgets('a failed sign-in reads at 4.5:1 in $name', (tester) async {
+      final chat = ChatController(MockChatRepository(latency: Duration.zero));
+      final connection = ConnectionController(
+        chat,
+        _MemoryVault(),
+        _RepositoryFactory(),
+      );
+      final gateway = _RemoteAuthGateway();
+      final controller = DiscordDesktopLoginController(
+        _RemoteAuthFactory(gateway),
+        connection,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(connection.dispose);
+      addTearDown(chat.dispose);
+
+      await controller.start();
+      gateway.add(const DiscordRemoteAuthFailed('The code expired.'));
+      await tester.pump();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: DiscordDesktopLoginSection(
+              controller: controller,
+              connectionController: connection,
+            ),
+          ),
+        ),
+      );
+
+      final error = tester.widget<Text>(
+        find.textContaining('The code expired.'),
+      );
+      expectReadable(theme, error.style?.color, 4.5);
+    });
+  }
 
   testWidgets('renders a standard square QR code with a quiet zone', (
     tester,

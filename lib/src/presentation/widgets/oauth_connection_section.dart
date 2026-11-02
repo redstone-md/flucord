@@ -78,7 +78,7 @@ class _OAuthIdentityTile extends StatelessWidget {
               status,
               key: const ValueKey('discord-oauth-status'),
               style: TextStyle(
-                color: failed ? FlucordColors.danger : null,
+                color: failed ? context.surfaces.errorText : null,
                 fontSize: 12,
               ),
             ),

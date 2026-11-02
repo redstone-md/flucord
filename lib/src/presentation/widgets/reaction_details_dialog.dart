@@ -348,7 +348,7 @@ class _ReactionDetailsDialogState extends State<ReactionDetailsDialog> {
     ),
     child: Row(
       children: [
-        const Icon(Icons.error_outline, size: 15, color: FlucordColors.danger),
+        Icon(Icons.error_outline, size: 15, color: context.surfaces.errorText),
         const SizedBox(width: 8),
         const Expanded(
           child: Text(

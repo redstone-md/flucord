@@ -182,7 +182,7 @@ class _MoreActions extends StatelessWidget {
             child: Text(
               _menuLabel(action),
               style: action == DiscordRelationshipAction.blockUser
-                  ? const TextStyle(color: FlucordColors.danger)
+                  ? TextStyle(color: context.surfaces.errorText)
                   : null,
             ),
           ),
