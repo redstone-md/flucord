@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flucord/src/data/discord/discord_frecency_proto.dart';
 import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/data/proto/proto_message.dart';
 import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/expression_favorites.dart';
 
 import 'support/fake_discord_wire.dart';
 import 'support/fake_voice_message_recorder.dart';
@@ -231,6 +236,98 @@ void main() {
       expect(posted(session, _sendPath), hasLength(1));
       expect(find.byKey(const ValueKey('slash-command-list')), findsNothing);
     });
+  });
+
+  group('favourites', () {
+    const gifUrl = 'https://tenor.example/starred';
+    const stickerId = '600000000000000001';
+    const emojiId = '600000000000000002';
+
+    void routeFavourites(FakeDiscordTransport transport) => transport.on(
+      'GET',
+      '/api/v9/users/@me/settings-proto/2',
+      (_) => jsonResponse({
+        'settings': base64.encode(
+          DiscordFrecencyProtoCodec.apply(
+            ProtoMessage(),
+            const ExpressionFavorites(
+              gifs: [FavoriteGif(url: gifUrl, src: gifUrl)],
+              stickerIds: [stickerId],
+              emojis: [emojiId],
+            ),
+          ).encode(),
+        ),
+      }),
+    );
+
+    // A server's emoji and stickers arrive inside its entry in READY.
+    Map<String, Object?> readyWithExpressions() => SessionHarness.defaultReady()
+      ..['guilds'] = [
+        {
+          ...rawGuild(
+            id: SessionHarness.guildId,
+            name: 'The Forge',
+            channels: [
+              rawChannel(id: SessionHarness.channelId, name: 'general'),
+            ],
+            everyonePermissions:
+                '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages}',
+          ),
+          'emojis': [
+            {'id': emojiId, 'name': 'forge'},
+          ],
+          'stickers': [
+            {'id': stickerId, 'name': 'wave', 'format_type': 1, 'tags': 'hi'},
+          ],
+        },
+      ];
+
+    testSession(
+      'show in the emoji picker',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await tester.tap(find.byKey(const ValueKey('open-emoji-picker')));
+        await session.settle();
+
+        expect(find.text('FAVOURITES'), findsOneWidget);
+      },
+      routes: routeFavourites,
+      ready: readyWithExpressions(),
+    );
+
+    // Trending is not routed here: a picker with nothing else keeps the stars.
+    testSession('show in the GIF picker', (tester, session) async {
+      await session.openChannel(SessionHarness.channelId);
+
+      await tester.tap(find.byKey(const ValueKey('gif-picker-open')));
+      await session.settle();
+
+      expect(
+        find.byKey(const ValueKey('gif-favorite-$gifUrl')),
+        findsOneWidget,
+      );
+    }, routes: routeFavourites);
+
+    testSession(
+      'show in the sticker picker',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+
+        await tester.tap(find.byKey(const ValueKey('open-sticker-picker')));
+        await session.settle();
+
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('sticker-star-$stickerId')),
+            matching: find.byIcon(Icons.star),
+          ),
+          findsOneWidget,
+        );
+      },
+      routes: routeFavourites,
+      ready: readyWithExpressions(),
+    );
   });
 
   testSession('a poll is created from the menu', (tester, session) async {
