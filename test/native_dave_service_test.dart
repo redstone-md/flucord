@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -107,7 +109,7 @@ void main() {
     );
     final decrypted = decryptor.decrypt(
       mediaType: DaveMediaType.audio,
-      encryptedFrame: encrypted,
+      encryptedFrame: Uint8List.fromList(encrypted),
     );
 
     expect(encrypted, frame);

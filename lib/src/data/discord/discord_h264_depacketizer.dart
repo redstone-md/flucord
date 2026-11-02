@@ -7,14 +7,22 @@ import 'dart:typed_data';
 /// be byte-identical to what the encoder produced, and a decoder has to accept
 /// it. A packetiser that quietly corrupts a fragment header produces packets
 /// that look reasonable and a picture nobody can draw.
+///
+/// The parts of a picture are held as views of the payloads they came from, and
+/// are copied once, into the access unit, when the picture closes.
 final class DiscordH264Depacketizer {
-  final List<int> _fragment = [];
-  final List<int> _accessUnit = [];
+  static final Uint8List _startCode = Uint8List.fromList(const [0, 0, 0, 1]);
+
+  /// The fragments of a NAL that has not finished, behind [_fragmentHeader].
+  /// Kept apart from [_accessUnit], because a NAL that never finishes is lost.
+  final List<Uint8List> _fragment = [];
+  final BytesBuilder _accessUnit = BytesBuilder(copy: false);
 
   int _fragmentHeader = 0;
   bool _dropping = false;
 
-  /// Feeds one RTP payload in.
+  /// Feeds one RTP payload in. Its bytes are read until the picture closes, so
+  /// nobody may change them before then.
   ///
   /// Returns the completed access unit when [marker] closes one, or `null`
   /// while the picture is still arriving.
@@ -32,8 +40,7 @@ final class DiscordH264Depacketizer {
       _appendNal(payload);
     }
     if (!marker) return null;
-    final unit = Uint8List.fromList(_accessUnit);
-    _accessUnit.clear();
+    final unit = _accessUnit.takeBytes();
     _fragment.clear();
     _dropping = false;
     return unit.isEmpty ? null : unit;
@@ -46,12 +53,10 @@ final class DiscordH264Depacketizer {
     final isFirst = header & 0x80 != 0;
     final isFinal = header & 0x40 != 0;
     if (isFirst) {
-      _fragment
-        ..clear()
-        // The original NAL header is the indicator's importance bits and the
-        // fragment header's type, put back together.
-        ..add((indicator & 0xe0) | (header & 0x1f));
-      _fragmentHeader = _fragment.first;
+      _fragment.clear();
+      // The original NAL header is the indicator's importance bits and the
+      // fragment header's type, put back together.
+      _fragmentHeader = (indicator & 0xe0) | (header & 0x1f);
       _dropping = false;
     } else if (_fragment.isEmpty) {
       // A continuation with no start means the first packet was lost. The
@@ -61,9 +66,12 @@ final class DiscordH264Depacketizer {
       return;
     }
     if (_dropping) return;
-    _fragment.addAll(payload.sublist(2));
+    _fragment.add(Uint8List.sublistView(payload, 2));
     if (isFinal) {
-      _appendNal(Uint8List.fromList(_fragment));
+      _accessUnit
+        ..add(_startCode)
+        ..addByte(_fragmentHeader);
+      _fragment.forEach(_accessUnit.add);
       _fragment.clear();
       _fragmentHeader = 0;
     }
@@ -86,8 +94,9 @@ final class DiscordH264Depacketizer {
   /// codes anywhere differs from the ciphertext and will not decrypt.
   void _appendNal(Uint8List nal) {
     if (nal.isEmpty) return;
-    _accessUnit.addAll(const [0, 0, 0, 1]);
-    _accessUnit.addAll(nal);
+    _accessUnit
+      ..add(_startCode)
+      ..add(nal);
   }
 
   /// The NAL header byte of the fragment being reassembled, or 0.

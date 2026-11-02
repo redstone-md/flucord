@@ -19,7 +19,7 @@ void main() {
           timestamp: 0x10,
           ssrc: 0xdeadbeef,
         ),
-        payload: [0x10, 0x20, 0x30, 0x40, 0x50],
+        payload: Uint8List.fromList([0x10, 0x20, 0x30, 0x40, 0x50]),
       );
 
       expect(
@@ -78,7 +78,7 @@ void main() {
             extensionProfile: 0xbede,
             extensionLengthWords: 1,
           ),
-          payload: [90, 91, 92, 93, 1, 2, 3],
+          payload: Uint8List.fromList([90, 91, 92, 93, 1, 2, 3]),
         );
 
         final decrypted = receiver.decryptPacket(sender.encryptFrame(frame));
@@ -86,6 +86,47 @@ void main() {
         expect(decrypted.header.csrcs, [13]);
         expect(decrypted.header.extensionProfile, 0xbede);
         expect(decrypted.payload, [1, 2, 3]);
+      });
+
+      group('$mode padding', () {
+        for (final (name, sent, expected, extensionWords) in [
+          ('comes off', [1, 2, 3, 0, 0, 3], [1, 2, 3], 0),
+          ('comes off behind an extension', [9, 9, 9, 9, 1, 2, 2], [1], 1),
+          ('of zero is left on', [1, 2, 0], [1, 2, 0], 0),
+          ('longer than the payload is left on', [1, 2, 9], [1, 2, 9], 0),
+          ('as long as the payload leaves nothing', [1, 2, 3], <int>[], 0),
+        ]) {
+          test(name, () {
+            final sender = DiscordVoiceTransportCipher(
+              mode: mode,
+              secretKey: List<int>.filled(32, 5),
+            );
+            final receiver = DiscordVoiceTransportCipher(
+              mode: mode,
+              secretKey: List<int>.filled(32, 5),
+            );
+            addTearDown(sender.dispose);
+            addTearDown(receiver.dispose);
+
+            final decrypted = receiver.decryptPacket(
+              sender.encryptFrame(
+                DiscordRtpFrame(
+                  header: DiscordRtpHeader(
+                    sequence: 1,
+                    timestamp: 2,
+                    ssrc: 3,
+                    padding: true,
+                    extensionProfile: extensionWords > 0 ? 0xbede : null,
+                    extensionLengthWords: extensionWords,
+                  ),
+                  payload: Uint8List.fromList(sent),
+                ),
+              ),
+            );
+
+            expect(decrypted.payload, expected);
+          });
+        }
       });
     }
 
@@ -104,7 +145,7 @@ void main() {
       final packet = sender.encryptFrame(
         DiscordRtpFrame(
           header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 3),
-          payload: [4, 5, 6],
+          payload: Uint8List.fromList([4, 5, 6]),
         ),
       );
 
@@ -126,7 +167,7 @@ void main() {
       addTearDown(cipher.dispose);
       final frame = DiscordRtpFrame(
         header: DiscordRtpHeader(sequence: 1, timestamp: 2, ssrc: 3),
-        payload: [4],
+        payload: Uint8List.fromList([4]),
       );
 
       cipher.encryptFrame(frame);
