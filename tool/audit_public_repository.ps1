@@ -22,6 +22,7 @@ class RepositoryPrivacyAudit {
   hidden [System.Text.RegularExpressions.Regex] $EmailPattern
   hidden [System.Text.RegularExpressions.Regex] $IpPattern
   hidden [System.Text.RegularExpressions.Regex] $SnowflakePattern
+  hidden [System.Text.RegularExpressions.Regex] $FixtureSnowflakePattern
   hidden [object[]] $ContentRules
 
   RepositoryPrivacyAudit([string] $root) {
@@ -75,7 +76,13 @@ class RepositoryPrivacyAudit {
       # History keeps them forever, and rewriting it costs more than naming them.
       '1541148819067248680',
       '1541148819067248681',
-      '1541148819067248682'
+      '1541148819067248682',
+      # The digits in counting order, as a fixture writes them.
+      '1234567890123456789',
+      # Legacy: the first and last of 5000 generated channel ids that reached
+      # the history of test/session_reconnect_diff_test.dart.
+      '310000000000000000',
+      '310000000000004999'
     )) {
       [void] $this.AllowedSnowflakes.Add($value)
     }
@@ -91,6 +98,15 @@ class RepositoryPrivacyAudit {
     $this.SnowflakePattern = [regex]::new(
       '(?<![0-9A-Fa-f])[0-9]{17,20}(?![0-9A-Fa-f])'
     )
+    # The shape test fixtures number their ids in: one digit that is not zero,
+    # at least nine zeroes, then a short count, as in 100000000000000221. A
+    # snowflake keeps its creation time in milliseconds above its low 22 bits,
+    # so the ids of this shape that share a first digit and a length all come
+    # from one stretch of about 24 ms. Over every first digit and length that
+    # is fewer than twenty such stretches since 2015, so a real id of this
+    # shape is very unlikely, and a match is taken for a fixture. Naming each
+    # fixture id instead would grow this list with every test.
+    $this.FixtureSnowflakePattern = [regex]::new('^[1-9]0{9,}[0-9]{0,8}$')
 
     $privateKey = 'BEGIN\s+(?:(?:RSA|EC|OPENSSH|DSA)\s+)?' +
       'PRIVATE\s+KEY'
@@ -270,10 +286,15 @@ class RepositoryPrivacyAudit {
       }
     }
     foreach ($snowflake in $this.SnowflakePattern.Matches($text)) {
-      if (-not $this.AllowedSnowflakes.Contains($snowflake.Value)) {
+      if (-not $this.IsAllowedSnowflake($snowflake.Value)) {
         $this.AddFinding('discord-snowflake', $location)
       }
     }
+  }
+
+  hidden [bool] IsAllowedSnowflake([string] $value) {
+    return $this.AllowedSnowflakes.Contains($value) -or
+      $this.FixtureSnowflakePattern.IsMatch($value)
   }
 
   hidden [bool] IsAllowedEmail([string] $email) {
