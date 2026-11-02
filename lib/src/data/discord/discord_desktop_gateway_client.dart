@@ -315,9 +315,9 @@ final class DiscordDesktopGatewayClient
         _captureBootstrap(action);
         if (action.name == 'READY' || action.name == 'RESUMED') {
           _diagnose(action.name.toLowerCase());
+          _emitStatus(DiscordGatewayStatus.connected);
         }
         if (action.name == 'READY') {
-          _emitStatus(DiscordGatewayStatus.connected);
           _subscribeReadyGuilds(action.data);
           for (final frame in _voiceFrames.replay) {
             _send(frame);
