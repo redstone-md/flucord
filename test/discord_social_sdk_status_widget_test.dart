@@ -16,6 +16,8 @@ import 'package:flucord/src/presentation/widgets/discord_social_dm_scope.dart';
 import 'package:flucord/src/presentation/widgets/oauth_account_home.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 
+import 'support/zoomed_app.dart';
+
 void main() {
   testWidgets('shows the absent native SDK in the Friends account home', (
     tester,
@@ -67,6 +69,35 @@ void main() {
     );
     expect(find.text('Social SDK'), findsOneWidget);
     expect(find.text('Native social access is linked'), findsNothing);
+  });
+
+  testWidgets('under zoom a row above the middle opens its profile downward', (
+    tester,
+  ) async {
+    final harness = await _harnessFor(
+      DiscordSocialSdkAvailability.ready,
+      relationships: [_relationship(id: 'online-1', name: 'Online')],
+    );
+    addTearDown(harness.dispose);
+
+    // 450 high at zoom 1.4 lays out 321 high, so the middle is at 160. The row
+    // is at 137 laid out and at 192 drawn, so it is above the middle unless the
+    // two are mixed up.
+    await _pumpAccountHome(
+      tester,
+      harness,
+      size: const Size(700, 450),
+      builder: await zoomedAppBuilder(1.4),
+    );
+    final row = find.byKey(const ValueKey('discord-friend-online-1'));
+    final rowTop = tester.getTopLeft(row).dy;
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    final profile = find.byKey(
+      const ValueKey('discord-friend-profile-popover'),
+    );
+    expect(tester.getTopLeft(profile).dy, greaterThanOrEqualTo(rowTop - 1));
   });
 
   testWidgets('keeps linked-package authorization distinct from loading', (
@@ -335,12 +366,14 @@ Future<void> _pumpAccountHome(
   WidgetTester tester,
   _ControllerHarness harness, {
   Size size = const Size(900, 720),
+  TransitionBuilder? builder,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
       theme: FlucordTheme.dark,
+      builder: builder,
       home: DiscordSocialSdkScope(
         controller: harness.social,
         child: DiscordSocialDmNavigationScope(

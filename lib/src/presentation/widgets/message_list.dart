@@ -421,10 +421,8 @@ class _MessageListState extends State<MessageList>
     final viewport = _scrollController.position.context.notificationContext
         ?.findRenderObject();
     if (target is! RenderBox || viewport is! RenderBox) return false;
-    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
-    final viewportBottom = viewportTop + viewport.size.height;
-    final targetTop = target.localToGlobal(Offset.zero).dy;
-    return targetTop >= viewportTop && targetTop < viewportBottom;
+    final targetTop = target.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    return targetTop >= 0 && targetTop < viewport.size.height;
   }
 
   @override

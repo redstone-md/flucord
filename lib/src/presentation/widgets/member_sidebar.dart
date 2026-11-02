@@ -396,7 +396,12 @@ class _MemberSidebarState extends State<MemberSidebar> {
     final box = context.findRenderObject() as RenderBox?;
     final centerY = box == null
         ? 0.0
-        : box.localToGlobal(Offset(0, box.size.height / 2)).dy;
+        : box
+              .localToGlobal(
+                Offset(0, box.size.height / 2),
+                ancestor: Overlay.of(context).context.findRenderObject(),
+              )
+              .dy;
     setState(() {
       _selectedMember = member;
       _selectedLink = link;

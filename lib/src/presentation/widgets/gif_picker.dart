@@ -149,7 +149,9 @@ class _GifPickerSheetState extends State<GifPickerSheet> {
                 ),
               ),
             const SizedBox(height: 10),
-            SizedBox(height: 320, child: _body(context)),
+            // Less than this on a short window, so the search field stays on
+            // screen.
+            Flexible(child: SizedBox(height: 320, child: _body(context))),
           ],
         ),
       ),
