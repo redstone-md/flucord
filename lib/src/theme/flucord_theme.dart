@@ -150,7 +150,9 @@ abstract final class FlucordTheme {
       cardColor: raised,
       hoverColor: text.withValues(alpha: 0.05),
       focusColor: brand.withValues(alpha: 0.24),
-      textTheme: base.textTheme.apply(bodyColor: text, displayColor: text),
+      textTheme: FlucordType.textTheme(
+        base.textTheme,
+      ).apply(bodyColor: text, displayColor: text),
       iconTheme: IconThemeData(color: muted, size: 19),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
@@ -212,7 +214,7 @@ abstract final class FlucordTheme {
           color: rail,
           borderRadius: BorderRadius.circular(4),
         ),
-        textStyle: TextStyle(color: text, fontSize: 12),
+        textStyle: TextStyle(color: text, fontSize: FlucordType.caption),
         waitDuration: const Duration(milliseconds: 450),
       ),
       inputDecorationTheme: InputDecorationTheme(
