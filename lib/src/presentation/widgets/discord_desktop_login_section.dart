@@ -31,10 +31,13 @@ final class DiscordDesktopLoginSection extends StatelessWidget {
             children: [
               const Icon(Icons.person_outline, size: 20),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Discord chat',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  connected ? 'Discord chat' : 'Sign in to Discord',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               if (connected)
@@ -85,7 +88,8 @@ final class _DisconnectedContent extends StatelessWidget {
             onSolved: controller.submitCaptcha,
           ),
           const SizedBox(height: 14),
-        ] else if (qrUri != null) ...[
+        ] else if (qrUri != null &&
+            controller.state == DiscordDesktopLoginState.qrReady) ...[
           Center(
             child: Container(
               width: 228,
@@ -110,10 +114,13 @@ final class _DisconnectedContent extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
+          const _Caption('Scan this code with the Discord app on your phone.'),
         ],
         if (controller.pendingDisplayName case final displayName?)
           _PendingIdentity(displayName: displayName),
+        if (controller.state == DiscordDesktopLoginState.scanned)
+          const _Caption('Now confirm the sign-in on your phone.'),
         if (controller.state == DiscordDesktopLoginState.starting ||
             controller.state == DiscordDesktopLoginState.connecting)
           const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -139,6 +146,22 @@ final class _DisconnectedContent extends StatelessWidget {
       ],
     );
   }
+}
+
+final class _Caption extends StatelessWidget {
+  const _Caption(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(color: context.surfaces.muted, fontSize: 13),
+    ),
+  );
 }
 
 final class _PendingIdentity extends StatelessWidget {

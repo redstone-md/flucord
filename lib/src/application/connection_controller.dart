@@ -31,6 +31,7 @@ final class ConnectionController extends ChangeNotifier {
   bool _hasSavedCredential = false;
   DiscordAccountSession? _activeSession;
   String? _errorMessage;
+  String? _errorDetail;
 
   SessionMode get mode => _mode;
   ConnectionActionState get state => _state;
@@ -38,7 +39,12 @@ final class ConnectionController extends ChangeNotifier {
   DiscordAccountSession? get activeSession => _activeSession;
   Set<DiscordSessionCapability> get capabilities =>
       _activeSession?.capabilities ?? const {};
+
+  /// Why the last action failed, in plain words.
   String? get errorMessage => _errorMessage;
+
+  /// What the failure said underneath [errorMessage], for a bug report.
+  String? get errorDetail => _errorDetail;
   bool get isBusy => _state == ConnectionActionState.connecting;
 
   Future<void> initialize({bool restoreSavedSession = true}) async {
@@ -58,9 +64,7 @@ final class ConnectionController extends ChangeNotifier {
       _hasSavedCredential = false;
       await _ensureDisconnectedWorkspace();
       _mode = SessionMode.disconnected;
-      _state = ConnectionActionState.failure;
-      _errorMessage = 'The system credential vault could not be read.';
-      notifyListeners();
+      _fail(_unreadableVaultMessage);
       return;
     }
     if (session != null) {
@@ -70,7 +74,7 @@ final class ConnectionController extends ChangeNotifier {
     await _ensureDisconnectedWorkspace();
     _mode = SessionMode.disconnected;
     _state = ConnectionActionState.idle;
-    _errorMessage = null;
+    _clearError();
     notifyListeners();
   }
 
@@ -81,9 +85,7 @@ final class ConnectionController extends ChangeNotifier {
     if (!botTransportEnabled) return _rejectDisabledBotTransport();
     final normalized = token.trim();
     if (normalized.isEmpty) {
-      _state = ConnectionActionState.failure;
-      _errorMessage = 'Enter a Discord application bot token.';
-      notifyListeners();
+      _fail('Enter a Discord application bot token.');
       return false;
     }
     return connectSession(
@@ -103,9 +105,7 @@ final class ConnectionController extends ChangeNotifier {
   }
 
   Future<bool> _rejectDisabledBotTransport() async {
-    _state = ConnectionActionState.failure;
-    _errorMessage = 'Developer bot transport is disabled in this build.';
-    notifyListeners();
+    _fail('Developer bot transport is disabled in this build.');
     return false;
   }
 
@@ -114,9 +114,7 @@ final class ConnectionController extends ChangeNotifier {
       final session = await _credentialVault.readDiscordSession();
       if (session == null) {
         _hasSavedCredential = false;
-        _state = ConnectionActionState.failure;
-        _errorMessage = 'Saved credential is no longer available.';
-        notifyListeners();
+        _fail('Saved credential is no longer available.');
         return false;
       }
       if (session is DiscordBotSession && !botTransportEnabled) {
@@ -124,9 +122,7 @@ final class ConnectionController extends ChangeNotifier {
       }
       return _connect(session, remember: true, persistCredential: false);
     } catch (_) {
-      _state = ConnectionActionState.failure;
-      _errorMessage = 'The system credential vault could not be read.';
-      notifyListeners();
+      _fail(_unreadableVaultMessage);
       return false;
     }
   }
@@ -137,9 +133,16 @@ final class ConnectionController extends ChangeNotifier {
     bool persistCredential = true,
   }) async {
     _state = ConnectionActionState.connecting;
-    _errorMessage = null;
+    _clearError();
     notifyListeners();
     try {
+      // Every repository of one account file shares one database handle, so a
+      // live one must close first, or its close takes the new one's cache too.
+      if (_mode == SessionMode.discord) {
+        await _ensureDisconnectedWorkspace();
+        _mode = SessionMode.disconnected;
+        _activeSession = null;
+      }
       final repository = await _repositoryFactory.create(session);
       await _chatController.useRepository(repository);
     } catch (error, stackTrace) {
@@ -151,9 +154,7 @@ final class ConnectionController extends ChangeNotifier {
       await _ensureDisconnectedWorkspace();
       _mode = SessionMode.disconnected;
       _activeSession = null;
-      _state = ConnectionActionState.failure;
-      _errorMessage = _messageFor(error, session);
-      notifyListeners();
+      _fail(_messageFor(error, session), detail: _detailFor(error));
       return false;
     }
     _mode = SessionMode.discord;
@@ -186,7 +187,7 @@ final class ConnectionController extends ChangeNotifier {
     _mode = SessionMode.disconnected;
     _activeSession = null;
     _state = ConnectionActionState.idle;
-    _errorMessage = null;
+    _clearError();
     notifyListeners();
   }
 
@@ -231,23 +232,40 @@ final class ConnectionController extends ChangeNotifier {
     await _chatController.useRepository(const DisconnectedChatRepository());
   }
 
+  void _fail(String message, {String? detail}) {
+    _state = ConnectionActionState.failure;
+    _errorMessage = message;
+    _errorDetail = detail;
+    notifyListeners();
+  }
+
+  void _clearError() {
+    _errorMessage = null;
+    _errorDetail = null;
+  }
+
+  static const _unreadableVaultMessage =
+      'Your saved sign-in could not be read.';
+
   static String _messageFor(Object error, DiscordAccountSession session) {
     if (error is UnsupportedDiscordSessionException) {
-      return 'This authorized Discord session does not expose full chat and Gateway access.';
+      return 'This Discord session cannot open chat. Please sign in again.';
     }
     if (error is DiscordApiException && error.isUnauthorized) {
       return 'Discord rejected this ${session.credentialLabel}.';
     }
-    // The transport already explains itself — the bootstrap failure carries the
-    // stage it died at and the last error underneath. Replacing that with one
-    // fixed sentence is what made two broken releases undiagnosable from the
-    // outside: the user could only report "unreachable".
-    if (error is DiscordApiException) {
-      return 'Discord is unreachable: ${error.message}';
-    }
-    return 'Discord is unreachable. No chat transport is connected. '
-        '(${error.runtimeType})';
+    return 'Could not reach Discord. Check your connection.';
   }
+
+  /// The failure's own words, kept apart from the plain [_messageFor]. Showing
+  /// only one fixed sentence is what made two broken releases undiagnosable
+  /// from the outside: the user could only report "unreachable".
+  static String? _detailFor(Object error) => switch (error) {
+    UnsupportedDiscordSessionException() => null,
+    DiscordApiException(isUnauthorized: true) => null,
+    DiscordApiException() => error.message,
+    _ => '${error.runtimeType}',
+  };
 
   static String _diagnosticFor(Object error) => switch (error) {
     DiscordApiException() =>

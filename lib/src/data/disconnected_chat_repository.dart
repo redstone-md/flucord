@@ -236,5 +236,5 @@ final class DisconnectedChatRepository implements ChatRepository {
   Future<void> close() async {}
 
   Future<T> _reject<T>() =>
-      Future<T>.error(StateError('No Discord chat transport is connected.'));
+      Future<T>.error(StateError('Not connected to Discord.'));
 }

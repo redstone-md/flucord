@@ -254,10 +254,10 @@ final class DiscordGatewayClient implements DiscordChatGateway {
       case 0:
         final name = payload['t'] as String?;
         final data = payload['d'];
-        if (name == 'READY') {
+        if (name == 'READY' || name == 'RESUMED') {
           _emitStatus(DiscordGatewayStatus.connected);
-          _flushVoiceStates();
         }
+        if (name == 'READY') _flushVoiceStates();
         if (name != null && data is Map) {
           _events.add(
             DiscordGatewayDispatch(
