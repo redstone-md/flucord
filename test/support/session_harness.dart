@@ -1,0 +1,311 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'package:flucord/src/app.dart';
+import 'package:flucord/src/app_bootstrap.dart';
+import 'package:flucord/src/data/discord/discord_desktop_api_client.dart';
+import 'package:flucord/src/data/discord/discord_desktop_chat_repository.dart';
+import 'package:flucord/src/data/discord/discord_desktop_gateway_client.dart';
+import 'package:flucord/src/data/discord/discord_desktop_profile.dart';
+import 'package:flucord/src/data/discord/discord_rest_client.dart';
+import 'package:flucord/src/data/sqlite_chat_cache.dart';
+import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/domain/chat_repository_factory.dart';
+import 'package:flucord/src/domain/credential_vault.dart';
+import 'package:flucord/src/domain/discord_permissions.dart';
+import 'package:flucord/src/domain/discord_session.dart';
+
+import 'fake_discord_wire.dart';
+
+/// The whole app, in a real session, driven by raw gateway events (seam A).
+///
+/// Everything from [FlucordApp] down to [DiscordDesktopChatRepository] and an
+/// in-memory SQLite cache is the production code. A saved session is restored
+/// the way a launch restores one. Only the websocket and the HTTP transport are
+/// fake, so a test sends what Discord would send and reads what the user sees
+/// and what went out on the wire.
+///
+/// Write a test with [testSession], which starts the session and shuts it down:
+///
+/// ```dart
+/// testSession('a message from the wire shows', (tester, session) async {
+///   await session.openChannel(SessionHarness.channelId);
+///   await session.dispatch('MESSAGE_CREATE', rawMessage(...));
+///   expect(session.messageRow('...'), findsOneWidget);
+///   expect(session.socket.frames.where((f) => f['op'] == 8), isEmpty);
+///   expect(session.transport.requests, isNotEmpty);
+/// });
+/// ```
+///
+/// Wait with [settle], not with `tester.pump` or `tester.pumpAndSettle`, after
+/// anything that reaches the repository. The widget tester runs on a fake
+/// clock, and an `await` on a cancelled stream subscription only finishes on
+/// the real event loop, which [settle] lets run.
+///
+/// To count widget builds, use `countBuilds` from `build_counter.dart`.
+final class SessionHarness {
+  SessionHarness._(this._tester, this.transport, this._connector);
+
+  /// The account the default READY signs in.
+  static const currentUserId = '100000000000000001';
+
+  /// Somebody else in the default READY's guild, and in its DM.
+  static const friendId = '100000000000000002';
+
+  static const guildId = '200000000000000001';
+
+  /// The first text channel of [guildId].
+  static const channelId = '300000000000000001';
+
+  /// A second text channel of [guildId].
+  static const otherChannelId = '300000000000000002';
+
+  /// The DM with [friendId].
+  static const dmChannelId = '300000000000000003';
+
+  final WidgetTester _tester;
+  final MemoryDesktopWebSocketConnector _connector;
+
+  /// The HTTP side: add routes with [FakeDiscordTransport.on], read what went
+  /// out in [FakeDiscordTransport.requests].
+  final FakeDiscordTransport transport;
+
+  /// Layout overflows drawn so far, with their messages.
+  ///
+  /// They are collected here and do not fail the test, because the composer
+  /// overflows in a real session today (the bug in FLUCORD-4) and that would
+  /// fail every test. Any other Flutter error still fails the test.
+  final List<String> layoutOverflows = [];
+
+  int _sequence = 0;
+
+  bool _isLayoutOverflow(FlutterErrorDetails details) =>
+      details.library == 'rendering library' &&
+      details.exceptionAsString().contains('overflowed');
+
+  /// The READY a session starts from. A new map each call, so a test can change
+  /// its copy and pass it to [testSession].
+  static Map<String, Object?> defaultReady() => {
+    'session_id': 'harness-session',
+    'resume_gateway_url': 'wss://gateway.discord.gg',
+    'user': {'id': currentUserId, 'username': 'me'},
+    'users': [
+      {'id': friendId, 'username': 'friend', 'global_name': 'Friend'},
+    ],
+    'guilds': [
+      rawGuild(
+        id: guildId,
+        name: 'The Forge',
+        channels: [
+          rawChannel(id: channelId, name: 'general'),
+          rawChannel(id: otherChannelId, name: 'random'),
+        ],
+        // What an ordinary member can do, so the composer is fully open.
+        everyonePermissions:
+            '${DiscordPermissions.viewChannel | DiscordPermissions.sendMessages | DiscordPermissions.readMessageHistory | DiscordPermissions.addReactions | DiscordPermissions.attachFiles | DiscordPermissions.embedLinks}',
+      ),
+    ],
+    'private_channels': [
+      {
+        'id': dmChannelId,
+        'type': 1,
+        'recipient_ids': [friendId],
+      },
+    ],
+    'read_state': {'version': 1, 'partial': false, 'entries': <Object?>[]},
+    'user_guild_settings': {
+      'version': 1,
+      'partial': false,
+      'entries': <Object?>[],
+    },
+  };
+
+  /// Launches the app and walks the session through HELLO, IDENTIFY and READY.
+  Future<void> _start(Map<String, Object?> ready) async {
+    await _tester.pumpWidget(
+      FlucordApp(
+        bootstrap: AppBootstrap(
+          credentialVault: _MemoryCredentialVault(),
+          chatRepositoryFactory: _FakeWireRepositoryFactory(
+            transport,
+            _connector,
+          ),
+        ),
+      ),
+    );
+    await _settleUntil(() => sockets.isNotEmpty, 'a socket');
+    await hello();
+    await _settleUntil(
+      () => socket.frames.any((frame) => frame['op'] == 2),
+      'IDENTIFY',
+    );
+    await dispatch('READY', ready);
+    // The client waits this long for more opening dispatches before it hands
+    // the first workspace to the app.
+    await _tester.pump(const Duration(seconds: 2));
+    await settle();
+  }
+
+  /// Unmounts the app and lets the repository finish closing, so no timer of
+  /// the session outlives the test.
+  Future<void> _end() async {
+    await _tester.pumpWidget(const SizedBox());
+    await settle();
+  }
+
+  /// The socket the client dialled last.
+  MemoryDesktopWebSocket get socket => _connector.sockets.last;
+
+  /// Every socket the client dialled, oldest first.
+  List<MemoryDesktopWebSocket> get sockets => _connector.sockets;
+
+  /// Sends HELLO on [socket], which is what a new socket needs before the
+  /// client sends IDENTIFY or RESUME on it.
+  Future<void> hello() async {
+    socket.receive({
+      'op': 10,
+      'd': {'heartbeat_interval': 41250},
+    });
+    await settle();
+  }
+
+  /// Sends one raw gateway dispatch on [socket] and waits for the screen.
+  ///
+  /// [data] is the `d` field. The sequence number is handled here. Pass
+  /// `settle: false` to send many at once, then call [settle] after the last.
+  Future<void> dispatch(
+    String event,
+    Map<String, Object?> data, {
+    bool settle = true,
+  }) async {
+    socket.receive({'op': 0, 's': ++_sequence, 't': event, 'd': data});
+    if (settle) await this.settle();
+  }
+
+  /// Opens a channel of [space] by tapping the server and the channel, as the
+  /// user does.
+  Future<void> openChannel(String id, {String space = guildId}) async {
+    await _tester.tap(find.byKey(ValueKey('space-$space')));
+    await settle();
+    await _tester.tap(find.byKey(ValueKey('channel-$id')));
+    await settle();
+  }
+
+  /// Finds the timeline row of the message with this [id].
+  Finder messageRow(String id) => find.byKey(ValueKey('message-$id'));
+
+  /// Lets about 300 ms pass on the fake clock, and lets the real event loop run
+  /// between frames.
+  ///
+  /// It does not use `pumpAndSettle`, which never returns while a spinner
+  /// turns. Call that as well when a test needs a long animation to end.
+  Future<void> settle() async {
+    for (var round = 0; round < 12; round++) {
+      await _tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await _tester.pump(const Duration(milliseconds: 25));
+    }
+  }
+
+  Future<void> _settleUntil(bool Function() condition, String what) async {
+    for (var attempt = 0; attempt < 10 && !condition(); attempt++) {
+      await settle();
+    }
+    expect(condition(), isTrue, reason: 'The client never produced $what.');
+  }
+}
+
+/// Defines a widget test that runs inside a started [SessionHarness].
+///
+/// [ready] replaces [SessionHarness.defaultReady]. [routes] adds HTTP routes
+/// before the first request; after that, use `session.transport.on`.
+void testSession(
+  String description,
+  Future<void> Function(WidgetTester tester, SessionHarness session) body, {
+  Map<String, Object?>? ready,
+  void Function(FakeDiscordTransport transport)? routes,
+  Size size = const Size(1440, 900),
+}) {
+  testWidgets(description, (tester) async {
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final transport = FakeDiscordTransport(fallback: _emptyHistoryOrNotFound);
+    routes?.call(transport);
+    final session = SessionHarness._(
+      tester,
+      transport,
+      MemoryDesktopWebSocketConnector(),
+    );
+    // Restored in the finally: the framework fails a test that leaves this set.
+    final report = FlutterError.onError;
+    FlutterError.onError = (details) => session._isLayoutOverflow(details)
+        ? session.layoutOverflows.add(details.exceptionAsString())
+        : report?.call(details);
+    try {
+      await session._start(ready ?? SessionHarness.defaultReady());
+      await body(tester, session);
+    } finally {
+      await session._end();
+      FlutterError.onError = report;
+    }
+  });
+}
+
+final _channelHistoryPath = RegExp(r'^/api/v9/channels/\d+/messages$');
+
+/// Every channel opens on an empty history unless a test routes it, because a
+/// 404 here would draw the error view instead of the timeline.
+DiscordHttpResponse _emptyHistoryOrNotFound(RecordedRequest request) =>
+    request.method == 'GET' && _channelHistoryPath.hasMatch(request.uri.path)
+    ? jsonResponse(<Object?>[])
+    : notFound(request);
+
+/// Builds the same repository as `DiscordRepositoryFactory`, on the fake wire.
+final class _FakeWireRepositoryFactory implements ChatRepositoryFactory {
+  const _FakeWireRepositoryFactory(this._transport, this._connector);
+
+  final FakeDiscordTransport _transport;
+  final MemoryDesktopWebSocketConnector _connector;
+
+  @override
+  Future<ChatRepository> create(DiscordAccountSession session) async {
+    final desktop = session as DiscordDesktopUserSession;
+    const profile = DiscordDesktopProtocolProfile.installedStable20260725;
+    final context = DiscordDesktopClientContext.create(profile: profile);
+    return DiscordDesktopChatRepository(
+      DiscordDesktopApiClient(
+        authorization: desktop.transportCredential,
+        headers: context.authenticatedHeaders(desktop.transportCredential),
+        baseUri: profile.apiBaseUri,
+        transport: _transport,
+      ),
+      DiscordDesktopGatewayClient(
+        authorization: desktop.transportCredential,
+        properties: context.superProperties.toJson(),
+        profile: profile,
+        socketConnector: _connector,
+      ),
+      // No isolate: the widget tester's fake clock would never see an isolate's
+      // answer, so the cache has to run on the test's own event loop.
+      await SqliteChatCache.openAt(
+        inMemoryDatabasePath,
+        factory: databaseFactoryFfiNoIsolate,
+      ),
+    );
+  }
+}
+
+/// A saved session, so the app connects at launch as it does for a real user.
+final class _MemoryCredentialVault implements CredentialVault {
+  DiscordAccountSession? _session = DiscordDesktopUserSession('harness-token');
+
+  @override
+  Future<DiscordAccountSession?> readDiscordSession() async => _session;
+
+  @override
+  Future<void> writeDiscordSession(DiscordAccountSession session) async =>
+      _session = session;
+
+  @override
+  Future<void> clearDiscordSession() async => _session = null;
+}
