@@ -13,6 +13,7 @@ import 'multi_factor_auth.dart';
 import 'family_centre.dart';
 import 'guild_expression_repository.dart';
 import 'guild_management_repository.dart';
+import 'message_reaction_change.dart';
 import 'message_search_repository.dart';
 import 'moderation_repository.dart';
 import 'presence_repository.dart';
@@ -50,6 +51,16 @@ final class MessageUpsertedEvent extends ChatRepositoryEvent {
   final Member? member;
   final bool isNew;
   final bool mentionsCurrentMember;
+}
+
+/// The reactions on a message changed.
+///
+/// Kept distinct from [MessageUpsertedEvent] because a reaction is not a new
+/// message: it must not mark the channel read or move its latest message.
+final class MessageReactionChangedEvent extends ChatRepositoryEvent {
+  const MessageReactionChangedEvent(this.change);
+
+  final MessageReactionChange change;
 }
 
 final class MemberUpsertedEvent extends ChatRepositoryEvent {

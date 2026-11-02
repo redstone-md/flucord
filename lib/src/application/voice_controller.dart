@@ -783,9 +783,14 @@ final class VoiceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _setPlaybackEnabled(bool enabled) async {
+  /// Turns playback on or off. A deafened participant never has it on.
+  ///
+  /// The flag is read here and not by each caller: on transport ready the
+  /// microphone opens first, and a press of deafen can land while it does.
+  Future<void> _setPlaybackEnabled(bool wanted) async {
     final playbackService = _playbackService;
     if (playbackService == null) return;
+    final enabled = wanted && !_isDeafened;
     if (!enabled) {
       _isAudioPlaybackActive = false;
       _pendingPcmFrames.clear();

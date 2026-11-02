@@ -308,7 +308,7 @@ class _InvitationCard extends StatelessWidget {
             ),
           const SizedBox(height: 8),
           Text(
-            'Requested scopes',
+            'What it asks for',
             key: const ValueKey('app-invite-scopes-title'),
             style: TextStyle(fontSize: 11, color: context.surfaces.muted),
           ),
