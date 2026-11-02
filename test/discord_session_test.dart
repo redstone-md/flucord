@@ -4,6 +4,32 @@ import 'package:flucord/src/domain/chat_repository_factory.dart';
 import 'package:flucord/src/domain/discord_session.dart';
 
 void main() {
+  group('a credential names its account', () {
+    // Made-up tokens: the first part is the base64 of a made-up id, with the
+    // padding Discord leaves off, and the rest means nothing.
+    test('a user token names the id in its first part', () {
+      final session = DiscordDesktopUserSession(
+        'MTAwMDAwMDAwMDAwMDAwMDAx.not.real',
+      );
+      expect(session.accountId, '100000000000000001');
+    });
+
+    test('an id of any length reads the same without padding', () {
+      final session = DiscordBotSession('MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.not.real');
+      expect(session.accountId, '1234567890123456789');
+    });
+
+    test('a token in any other shape names nobody', () {
+      for (final token in ['opaque-token', 'mfa.abc.def', 'aGVsbG8.not.real']) {
+        expect(
+          DiscordDesktopUserSession(token).accountId,
+          isNull,
+          reason: token,
+        );
+      }
+    });
+  });
+
   test(
     'bot sessions expose full chat capabilities without logging secrets',
     () {

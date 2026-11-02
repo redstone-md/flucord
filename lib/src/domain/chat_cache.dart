@@ -79,5 +79,9 @@ abstract interface class ChatCache {
 
   Future<void> deleteCategory(String categoryId);
 
+  /// Removes everything held, for good, so that nothing of the account can be
+  /// read back from the disk. Sign-out and a change of account call this.
+  Future<void> clear();
+
   Future<void> close();
 }

@@ -270,20 +270,34 @@ class _MessageComposerState extends State<MessageComposer>
     return '$seconds';
   }
 
-  Widget _slowmodeNotice(Duration remaining) => Padding(
-    key: const ValueKey('composer-slowmode-countdown'),
+  /// One line of small text above the field.
+  Widget _composerNotice({
+    required Key key,
+    required IconData icon,
+    required String text,
+  }) => Padding(
+    key: key,
     padding: const EdgeInsets.only(left: 14, bottom: 4),
     child: Row(
       children: [
-        Icon(Icons.timer_outlined, size: 13, color: context.surfaces.muted),
+        Icon(icon, size: 13, color: context.surfaces.muted),
         const SizedBox(width: 5),
-        Text(
-          'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
-          'before sending again.',
-          style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 11, color: context.surfaces.muted),
+          ),
         ),
       ],
     ),
+  );
+
+  Widget _slowmodeNotice(Duration remaining) => _composerNotice(
+    key: const ValueKey('composer-slowmode-countdown'),
+    icon: Icons.timer_outlined,
+    text:
+        'You are sending too fast. Wait ${_slowmodeLabel(remaining)} '
+        'before sending again.',
   );
 
   Future<void> _pickAttachments() async {
@@ -344,8 +358,32 @@ class _MessageComposerState extends State<MessageComposer>
     );
   });
 
+  /// Whether a slash in the box took the send, rather than the text going out.
+  ///
+  /// The text waits while the list is still looking, because `/ban` must not
+  /// post just because Enter beat the answer. A slash no command matches is
+  /// ordinary text, as it is in Discord.
+  bool _runTypedCommand() {
+    final commands = widget.slashCommands;
+    if (commands == null || !commands.isSupported || !commands.isOpen) {
+      return false;
+    }
+    if (commands.isLoading || commands.isSending) return true;
+    final command = commands.commands.firstOrNull;
+    if (command == null) return false;
+    unawaited(
+      SlashCommandList.run(
+        context,
+        controller: commands,
+        command: command,
+        onPicked: _clearComposer,
+      ),
+    );
+    return true;
+  }
+
   Future<void> _send() async {
-    if (!_canSend || widget.isSending) return;
+    if (!_canSend || widget.isSending || _runTypedCommand()) return;
     final sent = await widget.onSend(
       _controller.text,
       _attachments.items,
@@ -354,6 +392,8 @@ class _MessageComposerState extends State<MessageComposer>
     );
     if (!mounted || !sent) return;
     _controller.clear();
+    // Clearing from code does not reach the field's onChanged.
+    widget.slashCommands?.close();
     setState(() {
       _hasContent = false;
       _charactersUsed = 0;
@@ -429,6 +469,13 @@ class _MessageComposerState extends State<MessageComposer>
             ),
           if (_slowmodeRemaining case final remaining?)
             _slowmodeNotice(remaining),
+          // The switch lives in a closed menu, so its state shows here.
+          if (_suppressNotifications)
+            _composerNotice(
+              key: const ValueKey('composer-silent-notice'),
+              icon: Icons.notifications_off_outlined,
+              text: 'This message will send without notifications.',
+            ),
           if (widget.replyTo != null) _replyBar(context),
           if (_attachments.isNotEmpty) ...[
             PendingAttachmentStrip(
@@ -510,23 +557,7 @@ class _MessageComposerState extends State<MessageComposer>
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
-                    prefixIcon: widget.canAttachFiles
-                        ? IconButton(
-                            key: const ValueKey('add-attachment'),
-                            onPressed: widget.isSending
-                                ? null
-                                : _pickAttachments,
-                            icon: const Icon(
-                              Icons.add_circle_outline,
-                              size: 20,
-                            ),
-                            tooltip: 'Add attachment',
-                          )
-                        : null,
-                    suffixIconConstraints: const BoxConstraints.tightFor(
-                      width: 240,
-                      height: 48,
-                    ),
+                    prefixIcon: _composerMenu(),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -553,44 +584,6 @@ class _MessageComposerState extends State<MessageComposer>
                           isSending: widget.isSending,
                           onSend: widget.onSendStickers,
                           favorites: widget.expressionFavorites,
-                        ),
-                        IconButton(
-                          key: const ValueKey('create-poll'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: widget.isSending ? null : _showPollDialog,
-                          icon: const Icon(Icons.poll_outlined, size: 19),
-                          tooltip: 'Create poll',
-                        ),
-                        IconButton(
-                          key: const ValueKey('send-silently'),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          padding: EdgeInsets.zero,
-                          isSelected: _suppressNotifications,
-                          onPressed: widget.isSending
-                              ? null
-                              : () => setState(
-                                  () => _suppressNotifications =
-                                      !_suppressNotifications,
-                                ),
-                          icon: const Icon(
-                            Icons.notifications_outlined,
-                            size: 19,
-                          ),
-                          selectedIcon: const Icon(
-                            Icons.notifications_off_outlined,
-                            size: 19,
-                            color: FlucordColors.brand,
-                          ),
-                          tooltip: _suppressNotifications
-                              ? 'Send with notifications'
-                              : 'Send silently',
                         ),
                         // The two send buttons share one key, so a disabled
                         // send updates in place; only the spinner and the
@@ -670,6 +663,59 @@ class _MessageComposerState extends State<MessageComposer>
         ],
       ],
     ),
+  );
+
+  /// The button at the start of the field: uploads, polls and silent send.
+  ///
+  /// Without `ATTACH_FILES` it holds no upload and stops looking like an
+  /// attach button, while polls and silent send stay in reach.
+  Widget _composerMenu() => PopupMenuButton<_ComposerMenuAction>(
+    key: const ValueKey('composer-menu'),
+    enabled: !widget.isSending,
+    tooltip: 'More options',
+    icon: Icon(
+      widget.canAttachFiles ? Icons.add_circle_outline : Icons.more_horiz,
+      size: 20,
+    ),
+    onSelected: (action) => switch (action) {
+      _ComposerMenuAction.attach => unawaited(_pickAttachments()),
+      _ComposerMenuAction.poll => _showPollDialog(),
+      _ComposerMenuAction.silent => setState(
+        () => _suppressNotifications = !_suppressNotifications,
+      ),
+    },
+    itemBuilder: (_) => [
+      if (widget.canAttachFiles)
+        const PopupMenuItem(
+          key: ValueKey('add-attachment'),
+          value: _ComposerMenuAction.attach,
+          child: _ComposerMenuRow(
+            icon: Icons.upload_file_outlined,
+            label: 'Add attachment',
+          ),
+        ),
+      const PopupMenuItem(
+        key: ValueKey('create-poll'),
+        value: _ComposerMenuAction.poll,
+        child: _ComposerMenuRow(
+          icon: Icons.poll_outlined,
+          label: 'Create poll',
+        ),
+      ),
+      PopupMenuItem(
+        key: const ValueKey('send-silently'),
+        value: _ComposerMenuAction.silent,
+        child: _suppressNotifications
+            ? const _ComposerMenuRow(
+                icon: Icons.notifications_outlined,
+                label: 'Send with notifications',
+              )
+            : const _ComposerMenuRow(
+                icon: Icons.notifications_off_outlined,
+                label: 'Send silently',
+              ),
+      ),
+    ],
   );
 
   /// The last control in the composer's trailing cluster.
@@ -760,6 +806,25 @@ class _MessageComposerState extends State<MessageComposer>
         ),
       ],
     ),
+  );
+}
+
+enum _ComposerMenuAction { attach, poll, silent }
+
+class _ComposerMenuRow extends StatelessWidget {
+  const _ComposerMenuRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 10),
+      Text(label, style: const TextStyle(fontSize: 13)),
+    ],
   );
 }
 

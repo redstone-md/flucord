@@ -74,6 +74,7 @@ import 'discord_voice_signaling_service.dart';
 import 'discord_voice_socket_factory.dart';
 import '../../app_log.dart';
 
+import 'discord_account_cache.dart';
 import 'discord_restored_history.dart';
 
 part 'discord_desktop_chat_events.dart';
@@ -88,10 +89,12 @@ final class DiscordDesktopChatRepository
     this._api,
     this._gateway,
     this._cache, {
+    String? accountId,
     DiscordMapper? mapper,
     DiscordMessageNonceFactory? nonceFactory,
     VoiceDaveService? daveService,
-  }) : _mapper = mapper ?? DiscordMapper(),
+  }) : _accountId = accountId,
+       _mapper = mapper ?? DiscordMapper(),
        _nonceFactory = nonceFactory ?? DiscordMessageNonceFactory(),
        _userSettings = DiscordUserSettingsRepository(_api),
        _readState = DiscordReadStateRepository(_api),
@@ -192,6 +195,10 @@ final class DiscordDesktopChatRepository
   String? _currentMemberId;
   late final DiscordSharedDispatches _sharedDispatches =
       DiscordSharedDispatches(_cache, () => _currentMemberId, _events);
+
+  /// Who the session's credential says it is, before Discord has confirmed it.
+  /// The offline fallback compares this with the account of the cache.
+  final String? _accountId;
 
   /// Whether a workspace is being shown, live or from the cache.
   ///
@@ -388,10 +395,13 @@ final class DiscordDesktopChatRepository
         'gateway-session',
         () => _gateway.connectAndReadWorkspace(gatewayUrl),
       );
-      final cached = await _bootstrapStage(
-        'cache-read',
-        _cache.readWorkspaceShell,
-      );
+      final cached = await _bootstrapStage('cache-read', () async {
+        await clearCacheOfOtherAccount(
+          _cache,
+          snapshot.currentUser['id']! as String,
+        );
+        return _cache.readWorkspaceShell();
+      });
       final workspace = await _bootstrapStage(
         'workspace-mapping',
         () async => _mapper
@@ -401,6 +411,8 @@ final class DiscordDesktopChatRepository
               channelsByGuild: snapshot.channelsByGuild,
               rolesByGuild: snapshot.rolesByGuild,
               membersByGuild: snapshot.membersByGuild,
+              emojisByGuild: snapshot.emojisByGuild,
+              stickersByGuild: snapshot.stickersByGuild,
               directChannels: snapshot.directChannels,
               includeDirectMessagesSpace: true,
               currentUserRole: 'Discord user',
@@ -417,7 +429,7 @@ final class DiscordDesktopChatRepository
       return workspace;
     } catch (error) {
       if (error is DiscordApiException && error.isUnauthorized) rethrow;
-      final cached = await _cache.readWorkspace();
+      final cached = await readOfflineWorkspace(_cache, _accountId);
       if (cached != null) {
         _adoptCurrentMember(cached.currentMemberId);
         _adoptPrivateChannels(cached);
