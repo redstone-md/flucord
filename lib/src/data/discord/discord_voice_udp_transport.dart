@@ -12,6 +12,11 @@ final class DiscordVoiceIpDiscovery {
 abstract interface class DiscordVoiceUdpTransport {
   Stream<Uint8List> get packets;
 
+  /// Reports a socket that died after its discovery finished. No more packets
+  /// move until the next [discover]. A socket that dies during a discovery
+  /// fails that [discover] instead.
+  Stream<Object> get socketFailures;
+
   Future<DiscordVoiceIpDiscovery> discover({
     required String host,
     required int port,
@@ -54,15 +59,36 @@ abstract final class DiscordVoiceDiscoveryPacket {
 }
 
 final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
+  IoDiscordVoiceUdpTransport({
+    Duration discoveryWindow = const Duration(seconds: 5),
+    Duration discoveryResend = const Duration(seconds: 1),
+  }) : _discoveryWindow = discoveryWindow,
+       _discoveryResend = discoveryResend;
+
+  static const _socketClosed = SocketException('Voice UDP socket closed');
+
+  /// How long one discovery may take, and how often it asks again in that
+  /// time. A request is a single datagram, and the network may lose it.
+  final Duration _discoveryWindow;
+  final Duration _discoveryResend;
+
   final StreamController<Uint8List> _packets = StreamController.broadcast();
+  final StreamController<Object> _socketFailures = StreamController.broadcast();
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
   InternetAddress? _remoteAddress;
   int? _remotePort;
   Completer<DiscordVoiceIpDiscovery>? _discovery;
 
+  /// Rises with each [discover] and [close]. A discovery reads it after its
+  /// waits, to see if a newer call took over the transport in the meantime.
+  int _socketClaims = 0;
+
   @override
   Stream<Uint8List> get packets => _packets.stream;
+
+  @override
+  Stream<Object> get socketFailures => _socketFailures.stream;
 
   @override
   Future<DiscordVoiceIpDiscovery> discover({
@@ -70,25 +96,55 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
     required int port,
     required int ssrc,
   }) async {
+    final claim = ++_socketClaims;
     await _closeSocket();
     final addresses = await InternetAddress.lookup(host);
     if (addresses.isEmpty) throw const SocketException('Voice host not found');
-    _remoteAddress = addresses.first;
-    _remotePort = port;
-    _socket = await RawDatagramSocket.bind(
-      _remoteAddress!.type == InternetAddressType.IPv6
+    final address = addresses.first;
+    final socket = await RawDatagramSocket.bind(
+      address.type == InternetAddressType.IPv6
           ? InternetAddress.anyIPv6
           : InternetAddress.anyIPv4,
       0,
     );
-    _subscription = _socket!.listen(_handleSocketEvent);
-    _discovery = Completer<DiscordVoiceIpDiscovery>();
-    _socket!.send(
-      DiscordVoiceDiscoveryPacket.request(ssrc),
-      _remoteAddress!,
-      port,
+    if (claim != _socketClaims) {
+      socket.close();
+      throw _socketClosed;
+    }
+    _socket = socket;
+    _remoteAddress = address;
+    _remotePort = port;
+    _subscription = socket.listen(
+      _handleSocketEvent,
+      onError: (Object error) => _handleSocketLost(socket, error),
+      onDone: () => _handleSocketLost(socket, _socketClosed),
     );
-    return _discovery!.future.timeout(const Duration(seconds: 5));
+    final pending = Completer<DiscordVoiceIpDiscovery>();
+    _discovery = pending;
+    final request = DiscordVoiceDiscoveryPacket.request(ssrc);
+    socket.send(request, address, port);
+    final resend = Timer.periodic(
+      _discoveryResend,
+      (_) => socket.send(request, address, port),
+    );
+    try {
+      return await pending.future.timeout(_discoveryWindow);
+    } finally {
+      resend.cancel();
+      if (identical(_discovery, pending)) _discovery = null;
+    }
+  }
+
+  /// `dart:io` closes a datagram socket after any failed send. It reports that
+  /// once as an error and then as the end of the stream, and every later send
+  /// on it returns 0 with no error. Measured on Linux with "message too long"
+  /// and "permission denied". Other systems and errors are not measured.
+  void _handleSocketLost(RawDatagramSocket socket, Object error) {
+    if (!identical(socket, _socket)) return;
+    // A running discovery reports the loss to its own caller.
+    final discovering = _discovery != null;
+    unawaited(_closeSocket(error));
+    if (!discovering && !_socketFailures.isClosed) _socketFailures.add(error);
   }
 
   void _handleSocketEvent(RawSocketEvent event) {
@@ -118,23 +174,25 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
     return socket.send(packet, address, port);
   }
 
-  Future<void> _closeSocket() async {
-    await _subscription?.cancel();
-    _subscription = null;
-    _socket?.close();
+  Future<void> _closeSocket([Object reason = _socketClosed]) async {
+    final socket = _socket;
+    final subscription = _subscription;
+    final pending = _discovery;
     _socket = null;
+    _subscription = null;
     _remoteAddress = null;
     _remotePort = null;
-    final pending = _discovery;
-    if (pending != null && !pending.isCompleted) {
-      pending.completeError(const SocketException('Voice UDP socket closed'));
-    }
     _discovery = null;
+    if (pending != null && !pending.isCompleted) pending.completeError(reason);
+    await subscription?.cancel();
+    socket?.close();
   }
 
   @override
   Future<void> close() async {
+    _socketClaims++;
     await _closeSocket();
     await _packets.close();
+    await _socketFailures.close();
   }
 }
