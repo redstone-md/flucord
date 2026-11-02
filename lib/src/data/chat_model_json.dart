@@ -3,9 +3,11 @@ import 'dart:convert';
 import '../domain/chat_models.dart';
 import '../domain/discord_permissions.dart';
 import '../domain/guild_membership.dart';
+import '../domain/message_component.dart';
 import '../domain/message_embed.dart';
 import '../domain/permission_overwrite.dart';
 import 'message_attachment_codec.dart';
+import 'message_component_codec.dart';
 import 'message_embed_codec.dart';
 import 'message_poll_codec.dart';
 import 'message_sticker_codec.dart';
@@ -24,6 +26,12 @@ final class ChatModelJson {
 
   static List<MessageEmbed> embedsFrom(String source) =>
       MessageEmbedCodec.decode(source);
+
+  static String componentRows(List<MessageActionRow> values) =>
+      MessageComponentCodec.encode(values);
+
+  static List<MessageActionRow> componentRowsFrom(String source) =>
+      MessageComponentCodec.decode(source);
 
   static String? poll(MessagePoll? value) => MessagePollCodec.encode(value);
 
