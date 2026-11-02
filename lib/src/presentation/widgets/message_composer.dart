@@ -568,6 +568,7 @@ class _MessageComposerState extends State<MessageComposer>
             CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): _send,
+                const SingleActivator(LogicalKeyboardKey.numpadEnter): _send,
               },
               child: _buildComposerAutocompletePortal(
                 child: TextField(
