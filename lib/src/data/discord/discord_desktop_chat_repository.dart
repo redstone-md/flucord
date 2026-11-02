@@ -631,6 +631,12 @@ final class DiscordDesktopChatRepository
   );
 
   @override
+  void requestGuildMembers({
+    required String guildId,
+    required List<String> userIds,
+  }) => _gateway.requestGuildMembersByIds(guildId: guildId, userIds: userIds);
+
+  @override
   Future<List<GuildScheduledEvent>> loadScheduledEvents(String spaceId) async {
     final payloads = await _api.getGuildScheduledEvents(spaceId);
     return [

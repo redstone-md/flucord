@@ -352,7 +352,11 @@ class _MessageItemState extends State<MessageItem> {
           key: const ValueKey('message-author-name'),
           child: Text(
             widget.member.displayName,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _nameColor(widget.member),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -389,6 +393,17 @@ class _MessageItemState extends State<MessageItem> {
       ],
     ),
   );
+
+  /// The colour of [member]'s role here, or null for the normal text colour.
+  Color? _nameColor(Member member) {
+    final spaceId = widget.workspace
+        .channelOrNull(widget.message.channelId)
+        ?.spaceId;
+    final value = spaceId == null
+        ? null
+        : widget.workspace.nameColorOf(member, spaceId);
+    return value == null ? null : Color(value);
+  }
 
   /// Makes [child] open the author's profile when it is clicked.
   Widget _opensAuthorProfile({required Key key, required Widget child}) {
