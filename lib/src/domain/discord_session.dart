@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum DiscordSessionKind { botApplication, oauthUser, desktopUser }
 
 enum DiscordSessionCapability {
@@ -20,6 +22,26 @@ sealed class DiscordAccountSession {
   String get displayName;
   String get credentialLabel;
   String get transportCredential;
+
+  /// The Discord id of the account this credential signs in, or null when the
+  /// credential does not say.
+  ///
+  /// It works with no network. The first part of a bot or user token is the
+  /// account's id in base64. An OAuth token, or a token in any other shape,
+  /// says nothing, so callers must treat null as "unknown".
+  String? get accountId {
+    final encoded = transportCredential.split('.').first;
+    try {
+      final decoded = utf8.decode(
+        base64Url.decode(base64Url.normalize(encoded)),
+      );
+      return _snowflake.hasMatch(decoded) ? decoded : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static final _snowflake = RegExp(r'^\d{17,20}$');
 
   bool supports(DiscordSessionCapability capability) =>
       capabilities.contains(capability);
