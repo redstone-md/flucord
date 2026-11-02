@@ -28,6 +28,7 @@ import 'message_content_view.dart';
 import 'message_embed_view.dart';
 import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
+import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
@@ -58,6 +59,7 @@ class MessageItem extends StatefulWidget {
     required this.linkLauncher,
     required this.onSelectChannel,
     this.onOpenMemberProfile,
+    this.onOpenMessage,
     this.componentController,
     this.applicationCommands,
     this.expressionFavorites,
@@ -106,6 +108,9 @@ class MessageItem extends StatefulWidget {
   /// Opens the profile of the user with this id. Null where no profile can
   /// show, which leaves the author's name and avatar as plain content.
   final ValueChanged<String>? onOpenMemberProfile;
+
+  /// Jumps to another message of this channel, by id.
+  final ValueChanged<String>? onOpenMessage;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -405,50 +410,78 @@ class _MessageItemState extends State<MessageItem> {
     return value == null ? null : Color(value);
   }
 
-  /// Makes [child] open the author's profile when it is clicked.
-  Widget _opensAuthorProfile({required Key key, required Widget child}) {
-    final open = widget.onOpenMemberProfile;
-    if (open == null) return child;
+  /// Makes [child] a target for the pointer, or leaves it as it is when there
+  /// is nothing to do. The label replaces what [child] would announce.
+  Widget _clickable({
+    required Key key,
+    required String label,
+    required VoidCallback? onTap,
+    required Widget child,
+  }) {
+    if (onTap == null) return child;
     return Semantics(
       button: true,
-      label: '${widget.member.displayName} profile',
+      label: label,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           key: key,
-          onTap: () => open(widget.message.authorId),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
           child: child,
         ),
       ),
     );
   }
 
+  Widget _opensAuthorProfile({required Key key, required Widget child}) {
+    final open = widget.onOpenMemberProfile;
+    return _clickable(
+      key: key,
+      label: '${widget.member.displayName} profile',
+      onTap: open == null ? null : () => open(widget.message.authorId),
+      child: child,
+    );
+  }
+
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final author = widget.workspace.memberOrNull(reply.authorId);
+    final open = widget.onOpenMessage;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(
-            Icons.subdirectory_arrow_right,
-            size: 13,
-            color: context.surfaces.muted,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            author?.displayName ?? 'Unknown user',
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 5),
-          Expanded(
-            child: Text(
-              reply.body.isEmpty ? 'Message unavailable' : reply.body,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+      child: _clickable(
+        key: const ValueKey('message-reply-preview'),
+        label: 'Go to the replied message',
+        onTap: open == null ? null : () => open(reply.messageId),
+        child: Row(
+          children: [
+            Icon(
+              Icons.subdirectory_arrow_right,
+              size: 13,
+              color: context.surfaces.muted,
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            Text(
+              author?.displayName ?? 'Unknown user',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: author == null ? null : _nameColor(author),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                reply.body.isEmpty
+                    ? 'Message unavailable'
+                    : messagePreviewText(context, reply.body, widget.workspace),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.surfaces.muted, fontSize: 10),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

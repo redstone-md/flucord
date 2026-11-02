@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/channel_history_fixture.dart';
 import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
@@ -204,6 +205,108 @@ void main() {
           );
         }
       },
+    );
+  });
+
+  group('a reply preview', () {
+    const replyId = '900000000000000500';
+    final repliedAt = ChannelHistoryFixture.idOf(40);
+
+    Map<String, Object?> replyQuoting(String quoted) => {
+      ...rawMessage(
+        id: replyId,
+        channelId: SessionHarness.channelId,
+        guildId: SessionHarness.guildId,
+        authorId: SessionHarness.currentUserId,
+        content: 'my answer',
+      ),
+      'referenced_message': rawMessage(
+        id: repliedAt,
+        channelId: SessionHarness.channelId,
+        authorId: SessionHarness.friendId,
+        content: quoted,
+      ),
+    };
+
+    final preview = find.byKey(const ValueKey('message-reply-preview'));
+
+    testSession(
+      'jumps to the replied message when clicked',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await session.dispatch('MESSAGE_CREATE', replyQuoting('the question'));
+
+        await tester.tap(
+          find.descendant(
+            of: session.messageRow(replyId),
+            matching: preview,
+          ),
+        );
+        await session.settle();
+
+        expect(session.messageRow(repliedAt), findsOneWidget);
+        expect(
+          session.transport.requests.map(
+            (request) => request.uri.queryParameters['around'],
+          ),
+          contains(repliedAt),
+        );
+      },
+      routes: (transport) => transport.on(
+        'GET',
+        ChannelHistoryFixture.messagesPath,
+        (request) => jsonResponse(
+          request.uri.queryParameters.containsKey('around')
+              ? ChannelHistoryFixture.page(20, 40)
+              : <Object?>[],
+        ),
+      ),
+    );
+
+    testSession(
+      'reads mentions, roles, channels and emoji as words',
+      (tester, session) async {
+        await session.openChannel(SessionHarness.channelId);
+        await session.dispatch(
+          'MESSAGE_CREATE',
+          replyQuoting(
+            'hey <@${SessionHarness.friendId}> and <@!${SessionHarness.friendId}> '
+            'of <@&$_adminRole> in <#${SessionHarness.channelId}> '
+            '<:party:500000000000000001>',
+          ),
+        );
+
+        expect(
+          find.descendant(
+            of: session.messageRow(replyId),
+            matching: find.text(
+              'hey @Friend and @Friend of @Admin in #general :party:',
+            ),
+          ),
+          findsOneWidget,
+        );
+      },
+      ready: _readyWithRoles(),
+    );
+
+    testSession(
+      'draws the replied author in their role colour',
+      (tester, session) async {
+        await _messageFromAuthorWithRoles(session, [_adminRole]);
+        await session.dispatch('MESSAGE_CREATE', replyQuoting('the question'));
+
+        final name = tester.widget<Text>(
+          find.descendant(
+            of: find.descendant(
+              of: session.messageRow(replyId),
+              matching: preview,
+            ),
+            matching: find.text('user-${SessionHarness.friendId}'),
+          ),
+        );
+        expect(name.style?.color, _adminColor);
+      },
+      ready: _readyWithRoles(),
     );
   });
 

@@ -616,6 +616,7 @@ class _MessageListState extends State<MessageList>
                 linkLauncher: widget.externalLinkLauncher,
                 onSelectChannel: widget.onSelectChannel,
                 onOpenMemberProfile: widget.onOpenMemberProfile,
+                onOpenMessage: widget.onOpenMessage,
                 attachmentDownloadService: widget.attachmentDownloadService,
               ),
           ],
