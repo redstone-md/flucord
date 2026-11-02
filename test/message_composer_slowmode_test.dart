@@ -32,6 +32,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a wait over a minute reads as minutes and two-digit seconds', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      slowmode: const Duration(minutes: 2),
+      slowmodeUntil: DateTime.now().add(
+        const Duration(minutes: 1, seconds: 4, milliseconds: 500),
+      ),
+    );
+
+    expect(find.textContaining('Wait 1:05 '), findsOneWidget);
+  });
+
   testWidgets('a slowmode that already elapsed shows nothing', (tester) async {
     await _pump(
       tester,
