@@ -57,6 +57,7 @@ class MessageItem extends StatefulWidget {
     required this.onToggleSuppressEmbeds,
     required this.linkLauncher,
     required this.onSelectChannel,
+    this.onOpenMemberProfile,
     this.componentController,
     this.applicationCommands,
     this.expressionFavorites,
@@ -101,6 +102,10 @@ class MessageItem extends StatefulWidget {
   final Future<bool> Function(ChatMessage) onToggleSuppressEmbeds;
   final ExternalLinkLauncher linkLauncher;
   final ValueChanged<String> onSelectChannel;
+
+  /// Opens the profile of the user with this id. Null where no profile can
+  /// show, which leaves the author's name and avatar as plain content.
+  final ValueChanged<String>? onOpenMemberProfile;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -203,12 +208,15 @@ class _MessageItemState extends State<MessageItem> {
                               ),
                             ),
                           )
-                        : MemberAvatar(
-                            member: widget.member,
-                            size: 34,
-                            spaceId: widget.workspace
-                                .channelById(widget.message.channelId)
-                                .spaceId,
+                        : _opensAuthorProfile(
+                            key: const ValueKey('message-author-avatar'),
+                            child: MemberAvatar(
+                              member: widget.member,
+                              size: 34,
+                              spaceId: widget.workspace
+                                  .channelById(widget.message.channelId)
+                                  .spaceId,
+                            ),
                           ),
                   ),
                   const SizedBox(width: 10),
@@ -340,9 +348,12 @@ class _MessageItemState extends State<MessageItem> {
     padding: const EdgeInsets.only(bottom: 3),
     child: Row(
       children: [
-        Text(
-          widget.member.displayName,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        _opensAuthorProfile(
+          key: const ValueKey('message-author-name'),
+          child: Text(
+            widget.member.displayName,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ),
         const SizedBox(width: 8),
         MessageTimeLabel(
@@ -378,6 +389,24 @@ class _MessageItemState extends State<MessageItem> {
       ],
     ),
   );
+
+  /// Makes [child] open the author's profile when it is clicked.
+  Widget _opensAuthorProfile({required Key key, required Widget child}) {
+    final open = widget.onOpenMemberProfile;
+    if (open == null) return child;
+    return Semantics(
+      button: true,
+      label: '${widget.member.displayName} profile',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          key: key,
+          onTap: () => open(widget.message.authorId),
+          child: child,
+        ),
+      ),
+    );
+  }
 
   Widget _replyLine(BuildContext context, MessageReply reply) {
     final author = widget.workspace.memberOrNull(reply.authorId);

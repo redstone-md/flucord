@@ -53,6 +53,7 @@ class MessageList extends StatefulWidget {
     required this.onLoadOlder,
     required this.externalLinkLauncher,
     required this.onSelectChannel,
+    this.onOpenMemberProfile,
     this.capabilities = ChannelCapabilities.unrestricted,
     this.attachmentDownloadService,
     super.key,
@@ -113,6 +114,9 @@ class MessageList extends StatefulWidget {
   final VoidCallback onLoadOlder;
   final ExternalLinkLauncher externalLinkLauncher;
   final ValueChanged<String> onSelectChannel;
+
+  /// Opens the profile of a message's author, by user id.
+  final ValueChanged<String>? onOpenMemberProfile;
   final AttachmentDownloadService? attachmentDownloadService;
 
   @override
@@ -611,6 +615,7 @@ class _MessageListState extends State<MessageList>
                 onToggleSuppressEmbeds: widget.onToggleSuppressEmbeds,
                 linkLauncher: widget.externalLinkLauncher,
                 onSelectChannel: widget.onSelectChannel,
+                onOpenMemberProfile: widget.onOpenMemberProfile,
                 attachmentDownloadService: widget.attachmentDownloadService,
               ),
           ],

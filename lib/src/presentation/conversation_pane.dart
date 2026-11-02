@@ -90,6 +90,7 @@ class ConversationPane extends StatefulWidget {
     required this.onSelectChannel,
     this.onSubmitQuery,
     required this.onOpenInbox,
+    this.onOpenMemberProfile,
     super.key,
   });
 
@@ -130,6 +131,9 @@ class ConversationPane extends StatefulWidget {
   /// Opens the inbox, which belongs to the whole workspace rather than the
   /// open channel.
   final VoidCallback onOpenInbox;
+
+  /// Opens the profile of a message's author, by user id.
+  final ValueChanged<String>? onOpenMemberProfile;
 
   @override
   State<ConversationPane> createState() => _ConversationPaneState();
@@ -849,6 +853,7 @@ class _ConversationPaneState extends State<ConversationPane> {
       olderLoadError: chat.olderMessagesError(channel.id),
       onLoadOlder: () => unawaited(chat.loadOlderMessages(channel.id)),
       onSelectChannel: widget.onSelectChannel,
+      onOpenMemberProfile: widget.onOpenMemberProfile,
     );
   }
 
