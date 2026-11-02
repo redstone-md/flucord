@@ -95,7 +95,13 @@ mixin _ComposerAutocompleteStateMixin on State<MessageComposer> {
     _autocompleteTextController.removeListener(_refreshComposerAutocomplete);
     change();
     _autocompleteTextController.addListener(_refreshComposerAutocomplete);
-    _resetComposerAutocomplete();
+    _autocompleteSuggestions = const [];
+    // This runs during a build, where the portal cannot be hidden.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _autocompleteSuggestions.isEmpty) {
+        _resetComposerAutocomplete();
+      }
+    });
   }
 
   void _dismissComposerAutocomplete() {

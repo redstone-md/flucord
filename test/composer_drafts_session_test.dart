@@ -131,14 +131,21 @@ void main() {
       expect(find.text('/ping'), findsOneWidget);
     });
 
-    testSession('survives a half typed mention', (tester, session) async {
+    testSession('brings back a half typed channel link', (
+      tester,
+      session,
+    ) async {
+      const suggestions = ValueKey('composer-autocomplete');
       await session.openChannel(SessionHarness.channelId);
-      await _type(tester, session, 'hi @fr');
+      await _type(tester, session, 'see #gen');
+      expect(find.byKey(suggestions), findsOneWidget);
 
       await session.openChannel(SessionHarness.otherChannelId);
-      await session.openChannel(SessionHarness.channelId);
+      expect(find.byKey(suggestions), findsNothing);
 
-      expect(_boxText(tester), 'hi @fr');
+      await session.openChannel(SessionHarness.channelId);
+      expect(_boxText(tester), 'see #gen');
+      expect(find.byKey(suggestions), findsNothing);
     });
   });
 
@@ -147,13 +154,13 @@ void main() {
     (tester, session) async {
       await session.openChannel(SessionHarness.channelId);
       await _startReply(tester, session);
-      await _type(tester, session, 'half a thought');
+      await _type(tester, session, 'see #gen');
 
       await session.openChannel(SessionHarness.otherChannelId);
       expect(find.byKey(_composer), findsNothing);
 
       await session.openChannel(SessionHarness.channelId);
-      expect(_boxText(tester), 'half a thought');
+      expect(_boxText(tester), 'see #gen');
       expect(_replyBar, findsOneWidget);
     },
     ready: _readyWithReadOnlyOtherChannel(),
