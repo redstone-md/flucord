@@ -58,6 +58,26 @@ void main() {
     },
   );
 
+  test('quit lets the app finish its work before the window closes', () async {
+    final gateway = _TrayGateway();
+    final steps = <String>[];
+    final coordinator = DesktopTrayCoordinator(
+      showWindow: () async {},
+      quit: () async => steps.add('window closed'),
+      gateway: gateway,
+    );
+    final surface = _SurfaceStub()
+      ..onPrepareToExit = () => steps.add('app ready');
+    addTearDown(coordinator.dispose);
+    addTearDown(surface.dispose);
+
+    await coordinator.initialize();
+    coordinator.attach(surface);
+    await gateway.emit(DesktopTrayAction.quit);
+
+    expect(steps, ['app ready', 'window closed']);
+  });
+
   test('does not invoke a disabled update action', () async {
     final gateway = _TrayGateway();
     var updateCount = 0;
@@ -78,6 +98,10 @@ void main() {
 
 final class _SurfaceStub extends ChangeNotifier implements DesktopAppSurface {
   int? unread;
+  void Function()? onPrepareToExit;
+
+  @override
+  Future<void> prepareToExit() async => onPrepareToExit?.call();
 
   @override
   int? get unreadChannelCount => unread;

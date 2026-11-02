@@ -1,4 +1,3 @@
-import '../../app_log.dart';
 import '../../domain/chat_cache.dart';
 import '../../domain/chat_repository.dart';
 import '../../domain/message_reaction_change.dart';
@@ -6,40 +5,21 @@ import '../../domain/reaction_repository.dart';
 import 'discord_color.dart';
 import 'discord_gateway_client.dart';
 
-/// Turns reaction dispatches into a change for the cache and the workspace.
+/// Turns reaction dispatches into a change for the workspace and the cache.
 final class DiscordReactionHandler {
-  DiscordReactionHandler(this._cache, this._currentMemberId);
+  DiscordReactionHandler(this._cache, this._currentMemberId, this._publish);
 
   final ChatCache _cache;
   final String? Function() _currentMemberId;
+  final void Function(ChatRepositoryEvent event) _publish;
 
-  /// Applies [event] to the cached message, if there is one, and returns the
-  /// event to announce. Null when the payload describes no change.
-  ///
-  /// This reads a message and writes it back, so calls must not overlap, or one
-  /// reaction would overwrite another. `DiscordSharedDispatches` runs them one
-  /// at a time.
-  Future<MessageReactionChangedEvent?> apply(
-    DiscordGatewayDispatch event,
-  ) async {
+  /// Announces [event], then applies it to the cached message, if there is one.
+  /// A payload that describes no change does nothing.
+  Future<void> apply(DiscordGatewayDispatch event) async {
     final change = _changeFrom(event);
-    if (change == null) return null;
-    await _updateCache(change);
-    return MessageReactionChangedEvent(change);
-  }
-
-  /// A failed write costs only the cached copy, so the screen still updates.
-  Future<void> _updateCache(MessageReactionChange change) async {
-    try {
-      final cached = await _cache.readMessage(change.messageId);
-      if (cached != null) await _cache.writeMessage(change.applyTo(cached));
-    } catch (error) {
-      AppLog.warning(
-        'discord.reactions',
-        'Could not update the cached reactions: $error',
-        error: error,
-      );
-    }
+    if (change == null) return;
+    _publish(MessageReactionChangedEvent(change));
+    await _cache.updateMessage(change.messageId, change.applyTo);
   }
 
   MessageReactionChange? _changeFrom(DiscordGatewayDispatch event) {

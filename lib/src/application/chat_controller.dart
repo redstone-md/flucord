@@ -80,6 +80,9 @@ final class ChatController extends ChangeNotifier {
   }
 
   ChatRepository _repository;
+
+  /// Set once [_repository] has begun to close, so that it closes only once.
+  Future<void>? _repositoryClosed;
   StreamSubscription<ChatRepositoryEvent>? _eventSubscription;
   StreamSubscription<ReadStateSnapshot>? _readStateSubscription;
   StreamSubscription<String>? _conversationSummarySubscription;
@@ -258,12 +261,22 @@ final class ChatController extends ChangeNotifier {
   bool isLoadingPins(String channelId) => _loadingPins.contains(channelId);
   Object? pinError(String channelId) => _pinErrors[channelId];
 
+  /// Closes the session before the process ends, so that what it still holds
+  /// reaches the disk and the server. A socket that does not answer must not
+  /// hold the exit, so the wait is short. The cache is the first thing a
+  /// repository saves when it closes, so this wait does not put it at risk.
+  Future<void> closeForExit() =>
+      _closeRepository().timeout(const Duration(seconds: 2), onTimeout: () {});
+
+  Future<void> _closeRepository() => _repositoryClosed ??= _repository.close();
+
   Future<void> useRepository(ChatRepository repository) async {
     await _eventSubscription?.cancel();
     await _readStateSubscription?.cancel();
     await _conversationSummarySubscription?.cancel();
-    await _repository.close();
+    await _closeRepository();
     _repository = repository;
+    _repositoryClosed = null;
     _workspace = null;
     _loadedChannels.clear();
     _channelsWithGap.clear();
@@ -861,7 +874,7 @@ final class ChatController extends ChangeNotifier {
     unawaited(_readStateSubscription?.cancel());
     unawaited(_eventSubscription?.cancel());
     unawaited(_conversationSummarySubscription?.cancel());
-    unawaited(_repository.close());
+    unawaited(_closeRepository());
     unawaited(_incomingMessages.close());
     super.dispose();
   }
