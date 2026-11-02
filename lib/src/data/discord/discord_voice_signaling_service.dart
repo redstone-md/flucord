@@ -209,6 +209,9 @@ final class DiscordVoiceSignalingService
       // server-side, Discord answers it with silence, and the only way out is
       // the leave-and-rejoin cycle below.
       if (_isStuck(key)) {
+        // Stored first: the cycle repeats what was last asked for, and this
+        // press is the newest choice.
+        _lastFlags[key] = (mute: selfMute, deaf: selfDeaf, video: selfVideo);
         _forcedReissues.remove(key);
         _pingedSessions.add(key);
         _forceReissue(key);
@@ -446,10 +449,13 @@ final class DiscordVoiceSignalingService
   /// Whether the session's connection is one a join into the same channel
   /// has to revive rather than re-announce. A status of null means no client
   /// has reported anything yet: the first pairing is still in flight.
+  ///
+  /// `reconnecting` is not stuck. The client is still working, and the wait in
+  /// [_scheduleReissueFallback] already covers it failing to come back: a mute
+  /// pressed meanwhile must not make the room see this account leave and
+  /// return.
   bool _isStuck(VoiceSessionKey key) => switch (_lastStatuses[key]) {
-    VoiceConnectionStatus.reconnecting ||
-    VoiceConnectionStatus.failure ||
-    VoiceConnectionStatus.disconnected => true,
+    VoiceConnectionStatus.failure || VoiceConnectionStatus.disconnected => true,
     _ => false,
   };
 
