@@ -40,7 +40,9 @@ final class NavigationMemory {
     this.positions = const {},
   });
 
-  final String accountId;
+  /// Whose memory this is. Null in a session with no account to name, as a
+  /// demo, whose memory lasts until the app closes and is never saved.
+  final String? accountId;
   final String? lastSpaceId;
 
   /// The last channel open in each space, by space id.
@@ -49,6 +51,20 @@ final class NavigationMemory {
 
   /// By channel id, with the channel read least recently first.
   final Map<String, ReadingPosition> positions;
+
+  /// This memory with the parts given changed, and the account kept.
+  NavigationMemory copyWith({
+    String? lastSpaceId,
+    Map<String, String>? lastChannels,
+    Set<String>? collapsedCategoryIds,
+    Map<String, ReadingPosition>? positions,
+  }) => NavigationMemory(
+    accountId: accountId,
+    lastSpaceId: lastSpaceId ?? this.lastSpaceId,
+    lastChannels: lastChannels ?? this.lastChannels,
+    collapsedCategoryIds: collapsedCategoryIds ?? this.collapsedCategoryIds,
+    positions: positions ?? this.positions,
+  );
 
   Map<String, Object?> toJson() => {
     'account': accountId,
