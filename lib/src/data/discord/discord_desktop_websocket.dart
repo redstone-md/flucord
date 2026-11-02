@@ -344,17 +344,6 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
         ),
         'enable WebSocket upgrade',
       );
-      final closeTimeout = arena<Uint32>()..value = _winHttpCloseTimeoutMillis;
-      _requireSuccess(
-        bindings,
-        bindings.setOption(
-          upgradeRequest,
-          _winHttpWebSocketCloseTimeout,
-          closeTimeout.cast(),
-          sizeOf<Uint32>(),
-        ),
-        'set WebSocket close timeout',
-      );
       final origin = 'Origin: https://discord.com\r\n'.toNativeUtf16(
         allocator: arena,
       );
@@ -397,6 +386,20 @@ void _runWinHttpWorker(Map<Object?, Object?> request) {
       }
       webSocket = bindings.completeUpgrade(upgradeRequest, 0);
       _requireHandle(bindings, webSocket, 'complete WebSocket upgrade');
+      // The option belongs to the WebSocket handle. On the HTTP request
+      // before the upgrade Windows refuses it with
+      // ERROR_WINHTTP_INCORRECT_HANDLE_TYPE (12018).
+      final closeTimeout = arena<Uint32>()..value = _winHttpCloseTimeoutMillis;
+      _requireSuccess(
+        bindings,
+        bindings.setOption(
+          webSocket,
+          _winHttpWebSocketCloseTimeout,
+          closeTimeout.cast(),
+          sizeOf<Uint32>(),
+        ),
+        'set WebSocket close timeout',
+      );
     });
     bindings.closeHandle(upgradeRequest);
     upgradeRequest = nullptr;
@@ -514,8 +517,8 @@ const _winHttpSecure = 0x00800000;
 const _winHttpUpgradeToWebSocket = 114;
 const _winHttpWebSocketCloseTimeout = 115;
 
-/// How long the close handshake may take, in milliseconds, on every handle
-/// this socket opens. The Windows default is ten seconds. The close path
+/// How long the close handshake may take, in milliseconds, on the WebSocket
+/// handle. The Windows default is ten seconds. The close path
 /// waits [_closeGrace] before forcing the connection closed, so this must
 /// stay below that grace: a forced close that outlives its wait would leave
 /// the worker cancelled after the main isolate had stopped listening.
