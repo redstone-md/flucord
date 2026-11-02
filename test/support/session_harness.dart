@@ -164,10 +164,13 @@ final class SessionHarness {
     if (launch == SessionLaunch.signedOut) await _vault.clearDiscordSession();
     final dialled = sockets.length;
     await _launch();
-    if (launch == SessionLaunch.signedIn) {
-      await _walkToReady(ready, dialled);
-    } else {
-      await settle();
+    switch (launch) {
+      case SessionLaunch.signedIn:
+        await _walkToReady(ready, dialled);
+      case SessionLaunch.unreachable:
+        await settleServerErrorRepeats();
+      case SessionLaunch.signedOut:
+        await settle();
     }
   }
 
