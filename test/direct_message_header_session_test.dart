@@ -5,22 +5,24 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/app_font.dart';
+import 'support/fake_discord_wire.dart';
 import 'support/session_harness.dart';
 
-// The DM header in direction B (FLUCORD-82): the person's avatar with a
-// status dot, then their whole name, at the window size the app opens with.
+// A DM in direction B (FLUCORD-82): the header shows the person's avatar
+// with a status dot, then their whole name, at the window size the app opens
+// with; the history starts on the person.
 
 const _name = 'Konstantin Konstantinopolsky';
 
+const _friend = {
+  'id': SessionHarness.friendId,
+  'username': 'konstantin',
+  'global_name': _name,
+};
+
 Map<String, Object?> _ready() {
   final ready = SessionHarness.defaultReady();
-  ready['users'] = [
-    {
-      'id': SessionHarness.friendId,
-      'username': 'konstantin',
-      'global_name': _name,
-    },
-  ];
+  ready['users'] = [_friend];
   return ready;
 }
 
@@ -51,7 +53,10 @@ void main() {
       );
 
       final title = find.descendant(of: header, matching: find.text(_name));
-      expect(tester.getRect(avatar).right, lessThan(tester.getRect(title).left));
+      expect(
+        tester.getRect(avatar).right,
+        lessThan(tester.getRect(title).left),
+      );
       final paragraph = tester.renderObject<RenderParagraph>(title);
       expect(
         paragraph.size.width,
@@ -63,4 +68,52 @@ void main() {
     // The window the app opens with on Linux.
     size: const Size(1280, 720),
   );
+
+  testSession(
+    'a DM opens on the person, not on a channel heading',
+    (tester, session) async {
+      await session.openChannel(
+        SessionHarness.dmChannelId,
+        space: 'direct-messages',
+      );
+
+      const intro =
+          'This is the beginning of your direct message history with $_name.';
+      expect(find.text(intro), findsOneWidget);
+      final avatar = find.ancestor(
+        of: find.text(intro),
+        matching: find.byType(Column),
+      );
+      expect(
+        tester.getSize(
+          find.descendant(
+            of: avatar.first,
+            matching: find.byType(MemberAvatar),
+          ),
+        ),
+        const Size.square(80),
+      );
+      expect(find.text('# $_name'), findsNothing);
+    },
+    ready: _ready(),
+    routes: _oneMessageInTheDm,
+  );
 }
+
+/// The DM's whole history is one message, so it opens at its start.
+void _oneMessageInTheDm(FakeDiscordTransport transport) => transport.on(
+  'GET',
+  '/api/v9/channels/${SessionHarness.dmChannelId}/messages',
+  (_) => jsonResponse([
+    {
+      ...rawMessage(
+        id: '400000000000000001',
+        channelId: SessionHarness.dmChannelId,
+        authorId: SessionHarness.friendId,
+        content: 'hi',
+      ),
+      // The author as READY named them, so the message does not rename them.
+      'author': _friend,
+    },
+  ]),
+);

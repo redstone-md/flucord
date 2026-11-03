@@ -167,3 +167,43 @@ class DirectMessageHeaderAvatar extends StatelessWidget {
     presenceBorderColor: context.surfaces.canvas,
   );
 }
+
+/// What a DM opens on, above its first message: the person, large, and a
+/// line that says this is where the history starts.
+class DirectMessageStart extends StatelessWidget {
+  const DirectMessageStart({
+    required this.avatar,
+    required this.name,
+    super.key,
+  });
+
+  /// The size [avatar] is drawn at.
+  static const avatarSize = 80.0;
+
+  final Widget avatar;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox.square(dimension: avatarSize, child: avatar),
+          const SizedBox(height: 12),
+          Text(
+            name,
+            style: FlucordTextRole.display.style.copyWith(color: surfaces.text),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'This is the beginning of your direct message history with $name.',
+            style: FlucordTextRole.body.style.copyWith(color: surfaces.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
