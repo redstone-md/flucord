@@ -27,20 +27,25 @@ class MessageEmbedView extends StatelessWidget {
   final ValueChanged<String> onSelectChannel;
   final InlineVideoBuilder inlineVideoBuilder;
 
+  /// The card's fill: the text colour, so white on a dark theme, at 3%.
+  static const _fillAlpha = 0.03;
+
   @override
   Widget build(BuildContext context) {
+    final surfaces = context.surfaces;
     final accent = embed.colorValue == null
-        ? context.surfaces.border
+        ? surfaces.border
         : Color(0xff000000 | (embed.colorValue! & 0x00ffffff));
     final showsMedia = UserSettingsScope.displayOf(context).rendersEmbedMedia;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 520),
       child: Container(
+        key: const ValueKey('embed-card'),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: context.surfaces.inset,
-          border: Border.all(color: context.surfaces.border),
-          borderRadius: FlucordRadius.small,
+          color: surfaces.text.withValues(alpha: _fillAlpha),
+          border: Border.all(color: surfaces.border),
+          borderRadius: FlucordRadius.medium,
         ),
         child: Stack(
           children: [
@@ -186,13 +191,7 @@ class _EmbedTextContent extends StatelessWidget {
           const SizedBox(height: 7),
         ],
         if (embed.title case final title?) ...[
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: FlucordType.label,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(title, style: _EmbedText.emphasis(context)),
           const SizedBox(height: 5),
         ],
         if (embed.description case final description?)
@@ -201,10 +200,7 @@ class _EmbedTextContent extends StatelessWidget {
             workspace: workspace,
             linkLauncher: linkLauncher,
             onSelectChannel: onSelectChannel,
-            textStyle: const TextStyle(
-              fontSize: FlucordType.label,
-              height: 1.35,
-            ),
+            textStyle: _EmbedText.body(context),
           ),
         if (embed.fields.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -244,9 +240,9 @@ class _EmbedSource extends StatelessWidget {
           child: Text(
             name,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: FlucordType.caption,
-              fontWeight: FontWeight.w600,
+            style: FlucordTextRole.caption.style.copyWith(
+              fontWeight: FontWeight.w500,
+              color: context.surfaces.text,
             ),
           ),
         ),
@@ -323,24 +319,14 @@ class _EmbedFieldView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          field.name,
-          style: const TextStyle(
-            fontSize: FlucordType.label,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text(field.name, style: _EmbedText.emphasis(context)),
         const SizedBox(height: 3),
         MessageContentView(
           body: field.value,
           workspace: workspace,
           linkLauncher: linkLauncher,
           onSelectChannel: onSelectChannel,
-          textStyle: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: FlucordType.label,
-            height: 1.3,
-          ),
+          textStyle: _EmbedText.body(context),
         ),
       ],
     );
@@ -527,9 +513,8 @@ class _EmbedFooterRow extends StatelessWidget {
           child: Text(
             [?footer?.text, ?timestampLabel].join(' • '),
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
             ),
           ),
         ),
@@ -542,4 +527,14 @@ class _EmbedFooterRow extends StatelessWidget {
     return '${value.year}-${two(value.month)}-${two(value.day)} '
         '${two(value.hour)}:${two(value.minute)}';
   }
+}
+
+/// The two text styles inside an embed, on the label role: names and titles
+/// one weight step up in the title tier, other text in the body tier.
+abstract final class _EmbedText {
+  static TextStyle emphasis(BuildContext context) => FlucordTextRole.label.style
+      .copyWith(fontWeight: FontWeight.w500, color: context.surfaces.text);
+
+  static TextStyle body(BuildContext context) =>
+      FlucordTextRole.label.style.copyWith(color: context.surfaces.bodyText);
 }

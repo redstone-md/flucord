@@ -536,7 +536,7 @@ class _MessageItemState extends State<MessageItem> {
         if (!message.suppressesEmbeds && display.rendersEmbeds)
           for (var index = 0; index < message.embeds.length; index++)
             Padding(
-              padding: const EdgeInsets.only(top: 7),
+              padding: const EdgeInsets.only(top: 8),
               child: MessageEmbedView(
                 key: ValueKey('message-${message.id}-embed-$index'),
                 embed: message.embeds[index],
