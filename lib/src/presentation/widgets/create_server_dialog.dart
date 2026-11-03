@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../application/chat_controller.dart';
-import '../../theme/flucord_theme.dart';
-import '../../theme/flucord_type.dart';
+import 'flucord_button.dart';
+import 'flucord_controls.dart';
 import 'flucord_dialog.dart';
 
 /// Discord's create-a-server dialog: a name in, a server out, owned by this
@@ -61,50 +61,37 @@ class _CreateServerDialogState extends State<CreateServerDialog> {
   @override
   Widget build(BuildContext context) => FlucordDialog(
     key: const ValueKey('create-server-dialog'),
+    maxWidth: 480,
     title: const Text('Create a server'),
-    content: SizedBox(
-      width: 360,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Your server is where you and your friends hang out. Name it now; '
-            'everything else can be changed later.',
-            style: TextStyle(
-              color: context.surfaces.muted,
-              fontSize: FlucordType.label,
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            key: const ValueKey('create-server-name-field'),
-            controller: _controller,
-            autofocus: true,
-            enabled: !_creating,
-            maxLength: 100,
-            decoration: InputDecoration(
-              labelText: 'Server name',
-              errorText: _error,
-              counterText: '',
-            ),
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
-            onSubmitted: (_) => unawaited(_create()),
-          ),
-        ],
-      ),
+    description:
+        'Your server is where you and your friends hang out. Name it now; '
+        'everything else can be changed later.',
+    content: FlucordTextField(
+      fieldKey: const ValueKey('create-server-name-field'),
+      label: 'Server name',
+      controller: _controller,
+      autofocus: true,
+      enabled: !_creating,
+      maxLength: 100,
+      errorText: _error,
+      onChanged: (_) {
+        if (_error != null) setState(() => _error = null);
+      },
+      onSubmitted: (_) => unawaited(_create()),
     ),
+    onConfirm: () => unawaited(_create()),
     actions: [
-      TextButton(
+      FlucordButton(
+        label: 'Cancel',
+        keyHint: FlucordKeyHint.escape,
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
       ),
-      FilledButton(
+      FlucordButton(
         key: const ValueKey('create-server-submit'),
+        kind: FlucordButtonKind.primary,
+        label: _creating ? 'Creating' : 'Create',
+        keyHint: FlucordKeyHint.enter,
         onPressed: _creating ? null : () => unawaited(_create()),
-        child: Text(_creating ? 'Creating' : 'Create'),
       ),
     ],
   );
