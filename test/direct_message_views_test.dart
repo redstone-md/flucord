@@ -8,7 +8,10 @@ import 'package:flucord/src/domain/chat_repository.dart';
 import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
 import 'package:flucord/src/presentation/widgets/direct_message_views.dart';
 import 'package:flucord/src/presentation/widgets/server_rail.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+
+import 'support/flucord_icon_finder.dart';
 
 void main() {
   testWidgets(
@@ -68,7 +71,7 @@ void main() {
       expect(find.byKey(const ValueKey('server-rail')), findsOneWidget);
       expect(find.byKey(const ValueKey('channel-sidebar')), findsOneWidget);
       expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
-      expect(find.byIcon(Icons.tag), findsNothing);
+      expect(findFlucordIcon(FlucordIcons.textChannel), findsNothing);
 
       final guildButton = find.byKey(const ValueKey('space-guild-1'));
       final guildSurface = find.descendant(
