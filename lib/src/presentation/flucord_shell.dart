@@ -603,36 +603,46 @@ class FlucordShell extends StatelessWidget {
                                   if (sidePanel != null && !panelCovers)
                                     sidePanel,
                                   if (showMembers)
-                                    MemberSidebar(
-                                      members: workspace.members,
-                                      spaceId: spaceId,
-                                      channelId: channel?.id,
-                                      memberList: memberListController,
-                                      roles: workspace.roles,
-                                      profile: memberProfileController,
-                                      currentMemberId:
-                                          workspace.currentMemberId,
-                                      onMessage: (member) => unawaited(
-                                        _openDirectConversation(
-                                          context,
-                                          member.id,
-                                        ),
-                                      ),
-                                      onReport: canReport
-                                          ? (member) => unawaited(
-                                              _reportMember(context, member),
-                                            )
-                                          : null,
-                                      onBlock: canReport
-                                          ? (member) => unawaited(
-                                              _blockMember(context, member),
-                                            )
-                                          : null,
-                                      moderationBuilder: (member) =>
-                                          _memberAdminController(
-                                            spaceId,
+                                    // Rebuilt from the voice controller, as
+                                    // the channel sidebar is: a member's
+                                    // "In voice" line follows the seats.
+                                    ListenableBuilder(
+                                      listenable: voiceController,
+                                      builder: (_, _) => MemberSidebar(
+                                        seatedByChannel:
+                                            voiceController.seatedByChannel,
+                                        nameColorOf: (member) => workspace
+                                            .nameColorOf(member, spaceId),
+                                        members: workspace.members,
+                                        spaceId: spaceId,
+                                        channelId: channel?.id,
+                                        memberList: memberListController,
+                                        roles: workspace.roles,
+                                        profile: memberProfileController,
+                                        currentMemberId:
+                                            workspace.currentMemberId,
+                                        onMessage: (member) => unawaited(
+                                          _openDirectConversation(
+                                            context,
                                             member.id,
                                           ),
+                                        ),
+                                        onReport: canReport
+                                            ? (member) => unawaited(
+                                                _reportMember(context, member),
+                                              )
+                                            : null,
+                                        onBlock: canReport
+                                            ? (member) => unawaited(
+                                                _blockMember(context, member),
+                                              )
+                                            : null,
+                                        moderationBuilder: (member) =>
+                                            _memberAdminController(
+                                              spaceId,
+                                              member.id,
+                                            ),
+                                      ),
                                     ),
                                 ],
                               ),
