@@ -226,10 +226,13 @@ void main() {
         'MESSAGE_CREATE',
         _messageWithEmbed({'image': _media(address, width: 300, height: 200)}),
       );
+      // Wait for the drawn frame, not just the request. The cache starts its
+      // save timer before it hands the file over, so only then can
+      // letTimersEnd run that timer out.
       await images.waitUntil(
         tester,
-        () => images.requestsFor(path).isNotEmpty,
-        'the still frame request',
+        () => _drawn(tester).image != null,
+        'the still frame',
       );
 
       expect(images.requestsFor(path).single.queryParameters['format'], 'png');
