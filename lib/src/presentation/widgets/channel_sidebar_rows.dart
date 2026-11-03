@@ -5,6 +5,11 @@ abstract final class _SidebarMetrics {
   static const headerHeight = 48.0;
   static const rowHeight = 30.0;
 
+  /// A row that shows a person, such as a direct message: room for the
+  /// avatar and an activity line under the name.
+  static const personRowHeight = 40.0;
+  static const personAvatarSize = 28.0;
+
   /// The space between rows, so two filled rows never touch.
   static const rowGap = 2.0;
 
@@ -436,6 +441,10 @@ class _ChannelRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaces = context.surfaces;
     final strong = selected || showsUnread;
+    final person = recipient;
+    final height = person == null
+        ? _SidebarMetrics.rowHeight
+        : _SidebarMetrics.personRowHeight;
     // A muted channel reads as quieter than a plain read one, which is how the
     // official client tells the two apart at a glance.
     final foreground = muted && !selected
@@ -469,7 +478,7 @@ class _ChannelRow extends StatelessWidget {
           // read as a bare number.
           child: ExcludeSemantics(
             child: SizedBox(
-              height: _SidebarMetrics.rowHeight,
+              height: height,
               child: Row(
                 children: [
                   SizedBox(
@@ -478,8 +487,13 @@ class _ChannelRow extends StatelessWidget {
                               _SidebarMetrics.nestedIndent
                         : _SidebarMetrics.rowPadding,
                   ),
-                  if (recipient != null)
-                    MemberAvatar(member: recipient!, size: 24)
+                  if (person != null)
+                    MemberAvatar(
+                      member: person,
+                      size: _SidebarMetrics.personAvatarSize,
+                      // The dot is cut out of the rail it sits on.
+                      presenceBorderColor: surfaces.rail,
+                    )
                   else
                     FlucordIcon(
                       _iconFor(channel),
@@ -531,10 +545,7 @@ class _ChannelRow extends StatelessWidget {
           if (showsUnread && !selected)
             PositionedDirectional(
               start: -_SidebarMetrics.listInset,
-              top:
-                  (_SidebarMetrics.rowHeight -
-                      _SidebarMetrics.unreadMarker.height) /
-                  2,
+              top: (height - _SidebarMetrics.unreadMarker.height) / 2,
               child: _UnreadMarker(
                 key: ValueKey('channel-unread-${channel.id}'),
               ),

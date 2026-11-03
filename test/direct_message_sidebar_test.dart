@@ -1,0 +1,169 @@
+import 'package:flucord/src/application/connection_controller.dart';
+import 'package:flucord/src/application/friends_controller.dart';
+import 'package:flucord/src/domain/chat_models.dart';
+import 'package:flucord/src/domain/chat_repository.dart';
+import 'package:flucord/src/presentation/widgets/channel_sidebar.dart';
+import 'package:flucord/src/presentation/widgets/member_avatar.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
+import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// What the direct-messages sidebar looks like in direction B (FLUCORD-82):
+// people on 40 px rows with a 28 px avatar, quiet at rest and full strength
+// when open or unread.
+
+final _surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+
+void main() {
+  testWidgets('a DM row is 40 high with a 28 px avatar and a status dot', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    expect(tester.getSize(_row('dm-bo')).height, 40);
+    final avatar = find.descendant(
+      of: _row('dm-bo'),
+      matching: find.byType(MemberAvatar),
+    );
+    expect(tester.getSize(avatar), const Size.square(28));
+    expect(
+      find.descendant(
+        of: avatar,
+        matching: find.byKey(const ValueKey('member-presence-bo')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a DM at rest names the person in secondary text', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final name = _textStyle(tester, 'Bo');
+    expect(name.color, _surfaces.muted);
+    expect(name.fontWeight, FontWeight.w400);
+    expect(_fillOf(tester, 'dm-bo'), Colors.transparent);
+  });
+
+  testWidgets('an unread DM names the person at full strength', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final name = _textStyle(tester, 'Ann');
+    expect(name.color, _surfaces.text);
+    expect(name.fontWeight, FontWeight.w500);
+  });
+
+  testWidgets('the open DM has a soft fill with the control radius', (
+    tester,
+  ) async {
+    await _pumpSidebar(tester);
+
+    final name = _textStyle(tester, 'Jack');
+    expect(name.color, _surfaces.text);
+    expect(name.fontWeight, FontWeight.w500);
+    final surface = _surfaceOf(tester, 'dm-jack');
+    expect(surface.color, _surfaces.text.withValues(alpha: 0.06));
+    expect(surface.borderRadius, FlucordRadius.control);
+  });
+}
+
+Finder _row(String channelId) => find.byKey(ValueKey('channel-$channelId'));
+
+TextStyle _textStyle(WidgetTester tester, String text) =>
+    tester.widget<Text>(find.text(text)).style!;
+
+Material _surfaceOf(WidgetTester tester, String channelId) => tester
+    .widget<Material>(
+      find.ancestor(of: _row(channelId), matching: find.byType(Material)).first,
+    );
+
+Color? _fillOf(WidgetTester tester, String channelId) =>
+    _surfaceOf(tester, channelId).color;
+
+Future<void> _pumpSidebar(
+  WidgetTester tester, {
+  FriendsController? friends,
+  VoidCallback? onNewDirectMessage,
+}) async {
+  Widget sidebar() => ChannelSidebar(
+    space: _workspace.spaceById(CommunitySpace.directMessagesId),
+    channels: _workspace.channelsFor(CommunitySpace.directMessagesId),
+    selectedChannelId: 'dm-jack',
+    onSelectChannel: (_) {},
+    sessionMode: SessionMode.discord,
+    connectionStatus: RepositoryConnectionStatus.connected,
+    categories: const [],
+    currentMember: _workspace.memberById(_workspace.currentMemberId),
+    memberOf: _workspace.memberOrNull,
+    channelOf: _workspace.channelOrNull,
+    collapsedCategoryIds: const {},
+    onToggleCategory: (_) {},
+    onNewDirectMessage: onNewDirectMessage ?? () {},
+    friends: friends,
+  );
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: FlucordTheme.dark,
+      home: Scaffold(
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (friends == null)
+              sidebar()
+            else
+              ListenableBuilder(
+                listenable: friends,
+                builder: (_, _) => sidebar(),
+              ),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+ConversationChannel _dm(String person, {bool unread = false}) =>
+    ConversationChannel(
+      id: 'dm-$person',
+      spaceId: CommunitySpace.directMessagesId,
+      name: '${person[0].toUpperCase()}${person.substring(1)}',
+      topic: '',
+      kind: ChannelKind.text,
+      recipientId: person,
+      unread: unread,
+    );
+
+Member _person(String id, Presence presence) => Member(
+  id: id,
+  displayName: '${id[0].toUpperCase()}${id.substring(1)}',
+  initials: id[0].toUpperCase(),
+  role: 'Direct message',
+  presence: presence,
+  colorValue: 0xff59636a,
+  spaceIds: const {CommunitySpace.directMessagesId},
+);
+
+final _workspace = ChatWorkspace(
+  spaces: const [CommunitySpace.directMessages()],
+  channels: [_dm('jack'), _dm('ann', unread: true), _dm('bo')],
+  members: [
+    const Member(
+      id: 'me',
+      displayName: 'Ada',
+      initials: 'A',
+      role: 'Member',
+      presence: Presence.online,
+      colorValue: 0xff456b5a,
+    ),
+    _person('jack', Presence.online),
+    _person('ann', Presence.idle),
+    _person('bo', Presence.offline),
+  ],
+  messages: const [],
+  currentMemberId: 'me',
+);
