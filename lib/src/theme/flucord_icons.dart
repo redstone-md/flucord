@@ -95,6 +95,16 @@ abstract final class FlucordIcons {
     HugeIcons.strokeRoundedNotificationOff01,
   );
   static const spoken = FlucordIconData(HugeIcons.strokeRoundedVoice);
+
+  // Settings and dialogs.
+  static const info = FlucordIconData(HugeIcons.strokeRoundedInformationCircle);
+  static const error = FlucordIconData(HugeIcons.strokeRoundedAlertCircle);
+  static const offline = FlucordIconData(HugeIcons.strokeRoundedCloudOff);
+  static const lock = FlucordIconData(HugeIcons.strokeRoundedSquareLock02);
+  static const logOut = FlucordIconData(
+    HugeIcons.strokeRoundedLogout03,
+    matchTextDirection: true,
+  );
 }
 
 /// Draws a [FlucordIcons] entry at the design's 1.75 stroke on the 24 grid.

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/user_settings.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_controls.dart';
 
-/// Heading for one group of settings rows.
+/// Heading for one group of settings rows, in the heading role.
 class SettingsSectionHeader extends StatelessWidget {
   const SettingsSectionHeader({required this.title, this.subtitle, super.key});
 
@@ -14,24 +16,22 @@ class SettingsSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.only(bottom: 4),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: FlucordType.title,
-            fontWeight: FontWeight.w700,
+          style: FlucordTextRole.heading.style.copyWith(
+            color: context.surfaces.text,
           ),
         ),
         if (subtitle case final text?) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             text,
-            style: TextStyle(
+            style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
             ),
           ),
         ],
@@ -72,18 +72,17 @@ class SettingRow extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: FlucordType.label,
-            fontWeight: FontWeight.w600,
+          style: FlucordTextRole.label.style.copyWith(
+            fontWeight: FontWeight.w500,
+            color: context.surfaces.text,
           ),
         ),
         if (description case final text?) ...[
           const SizedBox(height: 2),
           Text(
             text,
-            style: TextStyle(
+            style: FlucordTextRole.caption.style.copyWith(
               color: context.surfaces.muted,
-              fontSize: FlucordType.caption,
             ),
           ),
         ],
@@ -94,7 +93,7 @@ class SettingRow extends StatelessWidget {
       ],
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: LayoutBuilder(
         builder: (context, constraints) => constraints.maxWidth < stackedWidth
             ? Column(
@@ -102,7 +101,6 @@ class SettingRow extends StatelessWidget {
                 children: [label, const SizedBox(height: 8), child],
               )
             : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: label),
                   const SizedBox(width: 16),
@@ -141,10 +139,10 @@ class _SupportBadge extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(
+          child: FlucordIcon(
             support == UserSettingSupport.unavailable
-                ? Icons.block_outlined
-                : Icons.info_outline,
+                ? FlucordIcons.block
+                : FlucordIcons.info,
             size: 12,
             color: color,
           ),
@@ -153,7 +151,7 @@ class _SupportBadge extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            style: TextStyle(color: color, fontSize: FlucordType.caption),
+            style: FlucordTextRole.caption.style.copyWith(color: color),
           ),
         ),
       ],
@@ -182,8 +180,8 @@ class SettingSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: Switch(value: value, onChanged: onChanged),
+    alignment: AlignmentDirectional.centerEnd,
+    child: FlucordToggle(value: value, onChanged: onChanged),
   );
 }
 
@@ -199,10 +197,10 @@ final class SettingChoice<T extends Enum> {
   final bool enabled;
 }
 
-/// A wrapped row of chips, one per option.
+/// A segmented group, one option per choice.
 ///
-/// Wrapping rather than a fixed segmented control is what keeps the settings
-/// pane usable in a narrow window: options reflow instead of overflowing.
+/// The group wraps rather than overflowing, which keeps the settings pane
+/// usable in a narrow window.
 class SettingChoices<T extends Enum> extends StatelessWidget {
   const SettingChoices({
     required this.options,
@@ -219,29 +217,15 @@ class SettingChoices<T extends Enum> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      alignment: WrapAlignment.end,
-      children: [
+    alignment: AlignmentDirectional.centerEnd,
+    child: FlucordSegmented<T>(
+      keyPrefix: keyPrefix,
+      options: [
         for (final option in options)
-          ChoiceChip(
-            key: keyPrefix == null
-                ? null
-                : ValueKey('$keyPrefix-${option.value.name}'),
-            label: Text(
-              option.label,
-              style: const TextStyle(fontSize: FlucordType.caption),
-            ),
-            selected: option.value == selected,
-            onSelected: option.enabled
-                ? (isSelected) {
-                    if (isSelected) onSelected(option.value);
-                  }
-                : null,
-          ),
+          FlucordSegment(option.value, option.label, enabled: option.enabled),
       ],
+      selected: selected,
+      onSelected: onSelected,
     ),
   );
 }
@@ -256,16 +240,16 @@ class SettingValue extends StatelessWidget {
   Widget build(BuildContext context) => Align(
     alignment: Alignment.centerRight,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: context.surfaces.inset,
-        borderRadius: FlucordRadius.small,
+        borderRadius: FlucordRadius.control,
+        border: Border.all(color: context.surfaces.border),
       ),
       child: Text(
         value,
-        style: TextStyle(
+        style: FlucordTextRole.label.style.copyWith(
           color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
         ),
       ),
     ),

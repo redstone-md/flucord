@@ -11,6 +11,7 @@ import 'package:flucord/src/domain/user_settings.dart';
 import 'package:flucord/src/domain/video_capture_hub.dart';
 import 'package:flucord/src/domain/voice_media.dart';
 import 'package:flucord/src/domain/user_settings_repository.dart';
+import 'package:flucord/src/presentation/widgets/flucord_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_controls.dart';
 import 'package:flucord/src/presentation/widgets/user_settings_dialog.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
@@ -43,17 +44,17 @@ void main() {
     final repository = _Repository();
     await _pumpDialog(tester, repository);
 
-    final darker = tester.widget<ChoiceChip>(
+    final darker = tester.widget<FlucordTab>(
       find.byKey(const ValueKey('setting-theme-darker')),
     );
-    final developerMode = tester.widget<Switch>(
+    final developerMode = tester.widget<FlucordToggle>(
       find.descendant(
         of: find.byKey(const ValueKey('setting-developer-mode')),
-        matching: find.byType(Switch),
+        matching: find.byType(FlucordToggle),
       ),
     );
 
-    expect(darker.onSelected, isNull);
+    expect(darker.onPressed, isNull);
     expect(developerMode.onChanged, isNull);
     expect(
       find.text('Flucord has no screen for this setting yet.'),
@@ -233,7 +234,7 @@ void main() {
       find.byKey(const ValueKey('user-settings-unavailable')),
       findsOneWidget,
     );
-    expect(find.byType(Switch), findsNothing);
+    expect(find.byType(FlucordToggle), findsNothing);
   });
 
   testWidgets('offers a retry when the settings never arrive', (tester) async {
@@ -413,7 +414,9 @@ Future<void> _tapSetting(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
   // The control is aligned to the trailing edge of its slot, so the tap has
   // to land on the switch rather than on the middle of the slot.
-  await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
+  await tester.tap(
+    find.descendant(of: row, matching: find.byType(FlucordToggle)),
+  );
   await tester.pumpAndSettle();
 }
 
