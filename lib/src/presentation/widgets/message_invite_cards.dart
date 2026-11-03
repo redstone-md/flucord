@@ -73,13 +73,9 @@ class _InviteCard extends StatefulWidget {
 }
 
 class _InviteCardState extends State<_InviteCard> {
-  late Future<InvitePreview> _preview = widget.lookup(widget.code);
-
-  @override
-  void didUpdateWidget(covariant _InviteCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.code != widget.code) _preview = widget.lookup(widget.code);
-  }
+  /// Asked once per card. The cards are keyed by code, so a new code is a
+  /// new card rather than a change to this one.
+  late final Future<InvitePreview> _preview = widget.lookup(widget.code);
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
@@ -214,7 +210,7 @@ class _ValidInvite extends StatelessWidget {
         style: FlucordTextRole.heading.style.copyWith(color: surfaces.text),
       ),
       detail: Wrap(
-        spacing: 12,
+        spacing: _Count.spacing,
         children: [
           if (preview.approximatePresenceCount case final online?)
             _Count(dot: surfaces.success, label: '$online Online'),
@@ -270,6 +266,8 @@ class _InvalidInvite extends StatelessWidget {
 class _Count extends StatelessWidget {
   const _Count({required this.dot, required this.label});
 
+  /// The space between two counts on one line.
+  static const spacing = 12.0;
   static const _dotSize = 8.0;
   static const _gap = 4.0;
 
