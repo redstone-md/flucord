@@ -71,6 +71,9 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
+  static const lightTheme = FlucordIconData(HugeIcons.strokeRoundedSun03);
+  static const darkTheme = FlucordIconData(HugeIcons.strokeRoundedMoon02);
+  static const person = FlucordIconData(HugeIcons.strokeRoundedUser);
   // Menu and popover actions.
   static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
   static const forward = FlucordIconData(
