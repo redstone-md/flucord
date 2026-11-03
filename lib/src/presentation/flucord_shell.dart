@@ -35,6 +35,8 @@ import '../domain/workspace_permissions.dart';
 import '../application/report_flow_controller.dart';
 import 'conversation_pane.dart';
 import 'shell_keyboard.dart';
+import '../theme/flucord_radius.dart';
+import '../theme/flucord_theme.dart';
 import 'widgets/add_server_dialog.dart';
 import 'widgets/cached_subtree.dart';
 import 'widgets/channel_sidebar.dart';
@@ -65,6 +67,7 @@ import 'widgets/voice_connection_bar.dart';
 
 part 'flucord_shell_navigation.dart';
 part 'flucord_shell_conversation.dart';
+part 'flucord_shell_canvas.dart';
 
 /// The workspace chrome: the rail, the channel sidebar, the member and search
 /// panels, and the conversation pane in the middle.
@@ -387,6 +390,7 @@ class FlucordShell extends StatelessWidget {
                           constraints.maxWidth -
                                   _railWidth -
                                   (showChannels ? _channelSidebarWidth : 0) -
+                                  _canvasInset -
                                   _sidePanelMaxWidth <
                               _conversationMinWidth;
                       return Row(
@@ -558,62 +562,82 @@ class FlucordShell extends StatelessWidget {
                               },
                             ),
                           Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Offstage(
-                                  offstage: panelCovers,
-                                  child: channel == null
-                                      ? DirectMessagesEmptyView(
-                                          onNewMessage: () =>
-                                              _openDirectMessage(context),
-                                        )
-                                      : _conversationPane(
-                                          context: context,
-                                          workspace: workspace,
-                                          capabilities: permissions
-                                              .capabilitiesIn(channel),
-                                          channel: channel,
-                                          channels: channels,
-                                          space: space,
-                                          showChannels: showChannels,
-                                          membersFit: membersFit,
-                                          showMembers: showMembers,
-                                          showPins: showPins,
-                                          showThreads: showThreads,
-                                          allowThreadPanel: allowThreadPanel,
-                                          canSearch: canSearch,
+                            child: _CanvasCard(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Offstage(
+                                          offstage: panelCovers,
+                                          child: channel == null
+                                              ? DirectMessagesEmptyView(
+                                                  onNewMessage: () =>
+                                                      _openDirectMessage(
+                                                        context,
+                                                      ),
+                                                )
+                                              : _conversationPane(
+                                                  context: context,
+                                                  workspace: workspace,
+                                                  capabilities: permissions
+                                                      .capabilitiesIn(channel),
+                                                  channel: channel,
+                                                  channels: channels,
+                                                  space: space,
+                                                  showChannels: showChannels,
+                                                  membersFit: membersFit,
+                                                  showMembers: showMembers,
+                                                  showPins: showPins,
+                                                  showThreads: showThreads,
+                                                  allowThreadPanel:
+                                                      allowThreadPanel,
+                                                  canSearch: canSearch,
+                                                ),
                                         ),
-                                ),
-                                if (panelCovers) sidePanel,
-                              ],
+                                        if (panelCovers) sidePanel,
+                                      ],
+                                    ),
+                                  ),
+                                  if (sidePanel != null && !panelCovers)
+                                    sidePanel,
+                                  if (showMembers)
+                                    MemberSidebar(
+                                      members: workspace.members,
+                                      spaceId: spaceId,
+                                      channelId: channel?.id,
+                                      memberList: memberListController,
+                                      roles: workspace.roles,
+                                      profile: memberProfileController,
+                                      currentMemberId:
+                                          workspace.currentMemberId,
+                                      onMessage: (member) => unawaited(
+                                        _openDirectConversation(
+                                          context,
+                                          member.id,
+                                        ),
+                                      ),
+                                      onReport: canReport
+                                          ? (member) => unawaited(
+                                              _reportMember(context, member),
+                                            )
+                                          : null,
+                                      onBlock: canReport
+                                          ? (member) => unawaited(
+                                              _blockMember(context, member),
+                                            )
+                                          : null,
+                                      moderationBuilder: (member) =>
+                                          _memberAdminController(
+                                            spaceId,
+                                            member.id,
+                                          ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                          if (sidePanel != null && !panelCovers) sidePanel,
-                          if (showMembers)
-                            MemberSidebar(
-                              members: workspace.members,
-                              spaceId: spaceId,
-                              channelId: channel?.id,
-                              memberList: memberListController,
-                              roles: workspace.roles,
-                              profile: memberProfileController,
-                              currentMemberId: workspace.currentMemberId,
-                              onMessage: (member) => unawaited(
-                                _openDirectConversation(context, member.id),
-                              ),
-                              onReport: canReport
-                                  ? (member) => unawaited(
-                                      _reportMember(context, member),
-                                    )
-                                  : null,
-                              onBlock: canReport
-                                  ? (member) =>
-                                        unawaited(_blockMember(context, member))
-                                  : null,
-                              moderationBuilder: (member) =>
-                                  _memberAdminController(spaceId, member.id),
-                            ),
                         ],
                       );
                     },
