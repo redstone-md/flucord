@@ -33,7 +33,7 @@ final class VoiceController extends ChangeNotifier {
     /// Opens the microphone noise filter; null on a build without one.
     Future<VoiceNoiseSuppressor> Function()? noiseSuppressorFactory,
 
-    /// Opens the machine's echo and gain stages; null on a build without
+    /// Opens the echo and gain stages; null on a build without
     /// them.
     Future<VoiceMicrophoneEnhancer> Function({
       required bool echoCancellation,

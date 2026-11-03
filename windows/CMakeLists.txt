@@ -200,6 +200,15 @@ foreach(DEEPFILTERNET_FILE "df.dll" "DeepFilterNet3_onnx.tar.gz")
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 endforeach()
 
+# WebRTC Audio Processing behind a small C API, for microphone echo
+# cancellation and gain control.
+set(WEBRTC_APM_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc_apm/flucord_apm.dll")
+if(NOT EXISTS "${WEBRTC_APM_DLL}")
+  message(FATAL_ERROR "Missing ${WEBRTC_APM_DLL}; run tool/build_webrtc_apm.ps1")
+endif()
+install(FILES "${WEBRTC_APM_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 if(FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME)
   install(FILES "${FLUCORD_DISCORD_SOCIAL_SDK_RUNTIME}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)

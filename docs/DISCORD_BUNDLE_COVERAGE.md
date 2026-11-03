@@ -794,7 +794,7 @@ are excluded from the denominator and are never reported as implemented.
   push-to-talk keeps transmitting for its configured release delay after the
   key comes up, and echo cancellation and automatic gain control are applied
   in the native capture layer (`windows/flucord_audio`'s microphone enhancer,
-  the Windows voice-capture DMO); all four settings persist.
+  WebRTC Audio Processing in `flucord_apm.dll`); all four settings persist.
 - **Tests**: `discord_voice_*_test.dart`, `discord_rtp_*_test.dart`,
   `voice_controller_test.dart`, `voice_connection_bar_test.dart`,
   `discord_voice_state_roster_test.dart`, `dm_call_workflow_test.dart`,

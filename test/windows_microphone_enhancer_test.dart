@@ -1,9 +1,39 @@
 import 'dart:ffi' show DynamicLibrary;
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flucord/src/data/windows_microphone_enhancer.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// One 20 ms stereo frame at 48 kHz of a [hertz] tone at [amplitude].
+Int16List _tone(int frame, {required double hertz, required int amplitude}) {
+  final samples = Int16List(960 * 2);
+  for (var i = 0; i < 960; i++) {
+    final t = (frame * 960 + i) / 48000;
+    final value = (amplitude * math.sin(2 * math.pi * hertz * t)).round();
+    samples[i * 2] = value;
+    samples[i * 2 + 1] = value;
+  }
+  return samples;
+}
+
+/// The strength of [hertz] in the left channel of [frame] (Goertzel).
+double _strengthAt(Int16List frame, double hertz) {
+  final coefficient = 2 * math.cos(2 * math.pi * hertz / 48000);
+  var previous = 0.0;
+  var beforePrevious = 0.0;
+  for (var i = 0; i < frame.length; i += 2) {
+    final current = frame[i] + coefficient * previous - beforePrevious;
+    beforePrevious = previous;
+    previous = current;
+  }
+  return math.sqrt(
+    previous * previous +
+        beforePrevious * beforePrevious -
+        coefficient * previous * beforePrevious,
+  );
+}
 
 void main() {
   group('the factory', () {
@@ -19,21 +49,16 @@ void main() {
     /// below are live evidence, and a suite without the DLL keeps them
     /// visible as skips instead of silently passing.
     ///
-    /// The echo path (mode 0, echo cancellation on) is only exercised on a
-    /// Windows machine with a render endpoint: the DMO takes what the
-    /// speakers are playing on its second stream, and a CI box with no
-    /// audio hardware cannot offer that. Gain alone (mode 5) needs no
-    /// render endpoint, so it is the case a bare CI can hold.
+    /// Gain alone needs no speakers. The echo path loops the default
+    /// speakers back, so a CI box with no audio hardware refuses its open.
     bool stageSupported() => Platform.isWindows && File(path).existsSync();
 
-    test('the real module opens, processes frames, and closes', () async {
+    test('gain keeps the whole band of the voice', () async {
       if (!stageSupported()) {
         // Counted as a skip, not a silent pass: the suite reports the case
         // it did not run.
         return;
       }
-      // Gain without echo: mode 5 needs no render endpoint, so a CI machine
-      // with no speakers still runs the stage.
       final enhancer = WindowsMicrophoneEnhancer(
         DynamicLibrary.open(path),
         echoCancellation: false,
@@ -41,16 +66,19 @@ void main() {
       );
       addTearDown(enhancer.dispose);
 
-      // A few frames of a loud sawtooth: the first ones pass through as
-      // captured until the stage has a whole frame answered, which is by
-      // design. What is checked is that the path runs at all.
-      for (var frame = 0; frame < 4; frame++) {
-        final samples = Int16List(1920);
-        for (var i = 0; i < samples.length; i++) {
-          samples[i] = (i * 37) % 2000 - 1000;
-        }
-        await enhancer.process(samples, channels: 2);
+      // A 12 kHz tone is above what a 16 kHz path can carry at all (8 kHz),
+      // and what made voices sound like a telephone. It must come through.
+      late Int16List last;
+      for (var frame = 0; frame < 50; frame++) {
+        last = _tone(frame, hertz: 12000, amplitude: 3000);
+        await enhancer.process(last, channels: 2);
       }
+      final kept = _strengthAt(last, 12000);
+      final reference = _strengthAt(
+        _tone(49, hertz: 12000, amplitude: 3000),
+        12000,
+      );
+      expect(kept, greaterThan(reference * 0.5));
     });
 
     test('gain with echo runs both stages on one capture', () async {
@@ -58,9 +86,8 @@ void main() {
         // Counted as a skip the same way: the echo path is machine-bound.
         return;
       }
-      // Echo cancellation on: the module asks the DMO for mode 0, which
-      // wants a render endpoint. A machine without one refuses the open,
-      // and the refusal is the honest answer, not a failure of the path.
+      // A machine without speakers refuses the open, and the refusal is the
+      // honest answer, not a failure of the path.
       final enhancer = WindowsMicrophoneEnhancer(
         DynamicLibrary.open(path),
         echoCancellation: true,
@@ -68,14 +95,12 @@ void main() {
       );
       addTearDown(enhancer.dispose);
 
-      final samples = Int16List(1920);
-      for (var i = 0; i < samples.length; i++) {
-        samples[i] = (i * 37) % 2000 - 1000;
+      for (var frame = 0; frame < 4; frame++) {
+        await enhancer.process(
+          _tone(frame, hertz: 440, amplitude: 3000),
+          channels: 2,
+        );
       }
-      // The first frames pass through while the stages fill, so this only
-      // proves the path runs; the echo's own effect is the machine's to
-      // answer for.
-      await enhancer.process(samples, channels: 2);
     });
   });
 }

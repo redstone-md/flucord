@@ -7,11 +7,10 @@ import 'package:ffi/ffi.dart';
 import '../domain/voice_processing.dart';
 
 /// Echo cancellation and gain control through `flucord_audio.dll`, which
-/// runs the Windows voice capture stages on the frames handed to it.
+/// runs WebRTC Audio Processing (`flucord_apm.dll`) on the frames handed to
+/// it, at the pipeline's full 48 kHz.
 ///
-/// The stages work one frame behind the microphone, so the enhanced answer
-/// for a frame arrives with the next ones and the first few frames of a
-/// session pass through as captured while their buffers fill. The work
+/// Each frame is processed in place and handed back at once. The work
 /// happens on the caller's turn, like the encoder's does.
 final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   /// The factory the composition root offers: null where the bundle has no
@@ -34,7 +33,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
 
   static const String libraryFileName = 'flucord_audio.dll';
 
-  /// Opens the machine's echo and gain stages. Throws when they cannot be
+  /// Opens the echo and gain stages. Throws when they cannot be
   /// reached: the pipeline reports the failure and turns both switches
   /// off with it, which is what the settings surface then shows.
   static Future<VoiceMicrophoneEnhancer> open({
@@ -77,14 +76,11 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   static const List<String> _stages = [
     'none',
     'COM',
-    'voice capture stages',
-    'stage settings',
-    'stage formats',
+    'WebRTC audio processing',
     'default speakers',
     'speaker loopback',
-    'microphone input',
     'speaker input',
-    'enhanced output',
+    'microphone',
   ];
 
   /// The module handed in rather than opened, so a test can drive the
@@ -147,7 +143,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
       );
       if (status != 0) {
         throw StateError(
-          'The machine could not open its echo and gain stages'
+          'The echo and gain stages could not open'
           '${_describeFailure()}',
         );
       }
@@ -157,8 +153,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     }
   }
 
-  /// Which step of the open or frame failed and what Windows answered, as a
-  /// suffix for the error, or empty when the module cannot say.
+  /// Which step of the open or frame failed and what Windows or the library
+  /// answered, as a suffix for the error, or empty when the module cannot
+  /// say.
   String _describeFailure() {
     final failure = _failure;
     if (failure == null) return '';

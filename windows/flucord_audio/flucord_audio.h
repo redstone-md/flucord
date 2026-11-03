@@ -72,11 +72,9 @@ flucord_audio_attenuate_others(double level);
 FLUCORD_AUDIO_EXPORT int32_t flucord_audio_restore_others(void);
 
 // The microphone enhancer: takes what the speakers are playing out of the
-// microphone and keeps its level steady, through the Windows voice capture
-// stages. echo_cancellation and automatic_gain_control say which stages run.
-// The stages work a frame behind the microphone: the enhanced frame that
-// comes back is the previous one's, and what is left inside comes out with
-// the next frames given to flucord_audio_enhance_frame.
+// microphone and keeps its level steady, through WebRTC Audio Processing in
+// flucord_apm.dll. echo_cancellation and automatic_gain_control say which
+// stages run. A frame is processed in place and comes back at once.
 typedef struct FlucordAudioEnhancer FlucordAudioEnhancer;
 
 FLUCORD_AUDIO_EXPORT FlucordAudioStatus
@@ -88,36 +86,32 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
 // flucord_audio_mic_enhancer_failure.
 typedef enum FlucordAudioEnhancerStage {
   FLUCORD_AUDIO_ENHANCER_STAGE_NONE = 0,
-  // COM on the calling thread.
+  // COM on the calling thread, for the speaker loopback.
   FLUCORD_AUDIO_ENHANCER_STAGE_APARTMENT = 1,
-  // Creating the Windows voice capture DMO.
-  FLUCORD_AUDIO_ENHANCER_STAGE_CREATE = 2,
-  // Choosing its mode and stages.
-  FLUCORD_AUDIO_ENHANCER_STAGE_CONFIGURE = 3,
-  // Its input and output formats, and its streaming resources.
-  FLUCORD_AUDIO_ENHANCER_STAGE_FORMAT = 4,
-  // Finding the default speakers and their format.
-  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS = 5,
+  // flucord_apm.dll missing beside this module, or out of memory.
+  FLUCORD_AUDIO_ENHANCER_STAGE_LIBRARY = 2,
+  // No default speakers, or a mix format that is neither float nor 16-bit.
+  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKERS = 3,
   // Starting the loopback capture of the speakers.
-  FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK = 6,
-  // Handing a frame of the microphone to the DMO.
-  FLUCORD_AUDIO_ENHANCER_STAGE_MICROPHONE_INPUT = 7,
-  // Handing a frame of the speakers to the DMO.
-  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT = 8,
-  // Reading the enhanced frame back.
-  FLUCORD_AUDIO_ENHANCER_STAGE_OUTPUT = 9,
+  FLUCORD_AUDIO_ENHANCER_STAGE_LOOPBACK = 4,
+  // Reading the speakers and handing them to the echo stage.
+  FLUCORD_AUDIO_ENHANCER_STAGE_SPEAKER_INPUT = 5,
+  // The library refusing a microphone chunk; the result is its error code.
+  FLUCORD_AUDIO_ENHANCER_STAGE_MICROPHONE = 6,
 } FlucordAudioEnhancerStage;
 
 // Why the most recent flucord_audio_open_mic_enhancer or
 // flucord_audio_enhance_frame failed: the step, as a
-// FlucordAudioEnhancerStage, and the HRESULT Windows answered. NONE after an
-// open that succeeded, and after one refused before any step (bad arguments,
-// or no memory for the enhancer).
+// FlucordAudioEnhancerStage, and the HRESULT Windows answered or the small
+// negative error code WebRTC Audio Processing did. NONE after an open that
+// succeeded, and after one refused before any step (bad arguments, or no
+// memory for the enhancer).
 FLUCORD_AUDIO_EXPORT void
 flucord_audio_mic_enhancer_failure(int32_t* out_stage, int32_t* out_result);
 
-// Enhances one frame of interleaved 16-bit PCM in place. samples holds
-// sample_count_per_channel samples on each of channels interleaved channels.
+// Enhances one frame of interleaved 16-bit PCM at 48 kHz in place. samples
+// holds sample_count_per_channel samples on each of channels interleaved
+// channels, a whole number of 10 ms chunks (480 samples each).
 FLUCORD_AUDIO_EXPORT FlucordAudioStatus
 flucord_audio_enhance_frame(FlucordAudioEnhancer* enhancer,
                             int16_t* samples,

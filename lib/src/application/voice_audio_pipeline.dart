@@ -76,7 +76,7 @@ final class VoiceAudioPipeline {
   final VoicePcmFramer _framer = VoicePcmFramer();
   final Future<VoiceNoiseSuppressor> Function()? _noiseSuppressorFactory;
 
-  /// Opens the machine's echo and gain processing, with the settings as they
+  /// Opens the echo and gain processing, with the settings as they
   /// were asked for; null on a build without one.
   final Future<VoiceMicrophoneEnhancer> Function({
     required bool echoCancellation,
@@ -110,7 +110,7 @@ final class VoiceAudioPipeline {
   /// Whether the level is learned from the room (null) or chosen by hand.
   double? get inputSensitivity => _gate.isAutomatic ? null : _gate.threshold;
 
-  /// Whether this build has the machine's echo and gain processing at all.
+  /// Whether this build has the echo and gain processing at all.
   bool get isMicrophoneEnhancementAvailable =>
       _microphoneEnhancerFactory != null;
 
@@ -127,10 +127,10 @@ final class VoiceAudioPipeline {
   /// the automatic gate with null.
   void setInputThreshold(double? dbfs) => _gate.setManualThreshold(dbfs);
 
-  /// Switches the machine's echo and gain processing. Completes when the
+  /// Switches the echo and gain processing. Completes when the
   /// enhancer is open, or at once when neither is wanted or it already is.
   ///
-  /// Both settings ride one enhancer: the machine's echo and gain stages
+  /// Both settings ride one enhancer: the echo and gain stages
   /// share a device and a clock, so one open path serves both switches and
   /// reopening for each would cost the full setup twice. Turning both off
   /// closes it.

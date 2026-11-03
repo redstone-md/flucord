@@ -557,7 +557,7 @@ final class AppComposition {
         // Null where the bundle has no filter to switch on, and the switch
         // is hidden with it.
         noiseSuppressorFactory: IsolateNoiseSuppressor.bundledFactory(),
-        // The machine's own echo and gain stages, where the bundle has
+        // The echo and gain stages, where the bundle has
         // them; the switches are hidden otherwise.
         microphoneEnhancerFactory: WindowsMicrophoneEnhancer.bundledFactory(),
         processingRepository:
