@@ -156,6 +156,13 @@ void main() {
       decoder.drop(3);
       await Future<void>.delayed(Duration.zero);
       expect(asked, 2);
+
+      // A new share starts its own count: its first drop asks at once, even
+      // within a second of the last share's ask.
+      await preview.start(encoded.stream, requestKeyframe: () async => asked++);
+      decoder.drop(4);
+      await Future<void>.delayed(Duration.zero);
+      expect(asked, 3);
     },
   );
 

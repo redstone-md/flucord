@@ -111,6 +111,7 @@ final class GoLiveSelfPreview extends ChangeNotifier {
     _source = (encoded: encoded, requestKeyframe: requestKeyframe);
     _error = null;
     _askedForKeyframe = false;
+    _lastDropAsk = null;
     if (_shown) await _open();
   }
 

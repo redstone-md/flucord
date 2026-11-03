@@ -532,12 +532,14 @@ FLUCORD_AUDIO_EXPORT FlucordAudioStatus
 flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
                                 int32_t automatic_gain_control,
                                 FlucordAudioEnhancer** out_enhancer) {
+  // Cleared first, so a refusal before any step is never read as the reason
+  // an earlier open gave.
+  RecordEnhancerFailure(FLUCORD_AUDIO_ENHANCER_STAGE_NONE, S_OK);
   if (out_enhancer == nullptr ||
       (echo_cancellation == 0 && automatic_gain_control == 0)) {
     return FLUCORD_AUDIO_ERROR_STATE;
   }
   *out_enhancer = nullptr;
-  RecordEnhancerFailure(FLUCORD_AUDIO_ENHANCER_STAGE_NONE, S_OK);
 
   auto* enhancer = new (std::nothrow) FlucordAudioEnhancer(
       echo_cancellation != 0, automatic_gain_control != 0);

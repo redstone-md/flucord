@@ -74,7 +74,7 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
 
   /// The steps of an open, by the number the module reports them with.
   static const List<String> _stages = [
-    'unknown step',
+    'none',
     'COM',
     'voice capture stages',
     'stage settings',
@@ -160,9 +160,11 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     final result = calloc<Int32>();
     try {
       failure(stage, result);
-      final name = stage.value > 0 && stage.value < _stages.length
+      // No step recorded: the open refused before reaching one.
+      if (stage.value == 0) return '';
+      final name = stage.value < _stages.length
           ? _stages[stage.value]
-          : _stages.first;
+          : 'step ${stage.value}';
       final code = result.value.toUnsigned(32).toRadixString(16);
       return ' ($name, 0x$code)';
     } finally {

@@ -104,7 +104,8 @@ typedef enum FlucordAudioEnhancerStage {
 
 // Why the most recent flucord_audio_open_mic_enhancer failed: the step, as a
 // FlucordAudioEnhancerStage, and the HRESULT Windows answered. NONE after an
-// open that succeeded.
+// open that succeeded, and after one refused before any step (bad arguments,
+// or no memory for the enhancer).
 FLUCORD_AUDIO_EXPORT void
 flucord_audio_mic_enhancer_failure(int32_t* out_stage, int32_t* out_result);
 
