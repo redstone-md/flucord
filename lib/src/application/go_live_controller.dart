@@ -154,10 +154,11 @@ final class GoLiveController extends ChangeNotifier {
   /// Whether this build can send pictures at all.
   bool get canEncode => _capture.isSupported;
 
-  /// The sender's own picture, decoded from what the encoder produces
-  /// (ADR-0001). Empty between shares, and on a build that cannot decode.
-  Stream<DecodedVideoFrame> get previewFrames =>
-      _preview?.frames ?? const Stream<DecodedVideoFrame>.empty();
+  /// The texture the sender's own picture is drawn on, decoded from what the
+  /// encoder produces (ADR-0001, ADR-0009). Empty between shares, and on a
+  /// build that cannot decode.
+  Stream<VideoTexture> get previewTextures =>
+      _preview?.textures ?? const Stream<VideoTexture>.empty();
 
   /// Why the sender has no picture of their own share, or null while they
   /// have or could have one.

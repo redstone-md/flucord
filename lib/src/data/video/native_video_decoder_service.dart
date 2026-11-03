@@ -9,15 +9,17 @@ import 'package:ffi/ffi.dart';
 import '../../app_log.dart';
 import '../../domain/video_decoder.dart';
 import 'native_video_bindings.dart';
+import 'native_video_textures.dart';
 
-/// Decodes a Go Live stream through `flucord_video.dll`.
+/// What both kinds of native decoder share: the module, the worker that owns
+/// the native handle, and the drops.
 ///
-/// The service is a proxy: a worker isolate owns every native handle, so the
-/// per-picture copy, the close and the join of the decode thread all run off
+/// Each decoder is a proxy: a worker isolate owns every native handle, so the
+/// per-picture work, the close and the join of the decode thread all run off
 /// the main isolate, and an open that fails is an error the caller hears
 /// rather than a silence. See docs/NATIVE_MEDIA.md for the whole story.
-final class NativeVideoDecoderService implements VideoDecoderService {
-  NativeVideoDecoderService({String? libraryPath})
+abstract base class _NativeDecoderProxy implements VideoDecoder {
+  _NativeDecoderProxy({String? libraryPath})
     : _libraryPath = libraryPath ?? _defaultLibrary;
 
   static const _defaultLibrary = 'flucord_video.dll';
@@ -28,8 +30,6 @@ final class NativeVideoDecoderService implements VideoDecoderService {
 
   final int _id = _DecoderWorker.instance.nextId();
 
-  final StreamController<DecodedVideoFrame> _frames =
-      StreamController.broadcast();
   final StreamController<int> _dropped = StreamController.broadcast();
 
   bool? _supported;
@@ -38,38 +38,10 @@ final class NativeVideoDecoderService implements VideoDecoderService {
   @override
   bool get isSupported => _supported ??= _openModule(_libraryPath) != null;
 
-  @override
-  Stream<DecodedVideoFrame> get frames => _frames.stream;
-
   /// The worker polls the dropped count with every picture and reports the
   /// growth the moment it sees it, not on a timer.
   @override
   Stream<int> get droppedAccessUnits => _dropped.stream;
-
-  @override
-  Future<void> start() async {
-    if (_open) return;
-    _open = true;
-    _DecoderWorker.instance.register(
-      _id,
-      onPicture: (frame) {
-        if (!_frames.isClosed) _frames.add(frame);
-      },
-      onDrop: (dropped) {
-        if (dropped <= 3 || dropped % 20 == 0) {
-          AppLog.warning('video', 'decode dropped $dropped access units');
-        }
-        if (!_dropped.isClosed) _dropped.add(dropped);
-      },
-    );
-    try {
-      await _DecoderWorker.instance.open(_id, _libraryPath);
-    } on Object {
-      _open = false;
-      _DecoderWorker.instance.unregister(_id);
-      rethrow;
-    }
-  }
 
   @override
   Future<void> submit(Uint8List accessUnit, {Duration? timestamp}) async {
@@ -80,18 +52,144 @@ final class NativeVideoDecoderService implements VideoDecoderService {
     );
   }
 
+  /// Opens the native decoder, drawing on the surface at [surface] when it
+  /// is not 0.
+  Future<void> _openNative({int surface = 0}) async {
+    _DecoderWorker.instance.register(_id, this);
+    try {
+      await _DecoderWorker.instance.open(_id, _libraryPath, surface);
+    } on Object {
+      _DecoderWorker.instance.unregister(_id);
+      rethrow;
+    }
+  }
+
+  Future<void> _closeNative() async {
+    await _DecoderWorker.instance.closeDecoder(_id);
+    _DecoderWorker.instance.unregister(_id);
+  }
+
+  void _onPicture(DecodedVideoFrame frame) {}
+
+  void _onShown(int width, int height) {}
+
+  void _onDrop(int dropped) {
+    if (dropped <= 3 || dropped % 20 == 0) {
+      AppLog.warning('video', 'decode dropped $dropped access units');
+    }
+    if (!_dropped.isClosed) _dropped.add(dropped);
+  }
+}
+
+/// Decodes a Go Live stream through `flucord_video.dll` and hands every
+/// picture over as pixels.
+final class NativeVideoDecoderService extends _NativeDecoderProxy
+    implements VideoDecoderService {
+  NativeVideoDecoderService({super.libraryPath});
+
+  final StreamController<DecodedVideoFrame> _frames =
+      StreamController.broadcast();
+
+  @override
+  Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Future<void> start() async {
+    if (_open) return;
+    _open = true;
+    try {
+      await _openNative();
+    } on Object {
+      _open = false;
+      rethrow;
+    }
+  }
+
   @override
   Future<void> stop() async {
     if (!_open) return;
     _open = false;
-    await _DecoderWorker.instance.closeDecoder(_id);
-    _DecoderWorker.instance.unregister(_id);
+    await _closeNative();
   }
 
   Future<void> close() async {
     await stop();
     if (!_frames.isClosed) await _frames.close();
     if (!_dropped.isClosed) await _dropped.close();
+  }
+
+  @override
+  void _onPicture(DecodedVideoFrame frame) {
+    if (!_frames.isClosed) _frames.add(frame);
+  }
+}
+
+/// Decodes a Go Live stream through `flucord_video.dll` onto a texture the
+/// runner made, so no pixel passes through Dart (ADR-0009).
+///
+/// Each [start] makes a texture and each [stop] gives it back, after the
+/// decoder drawing on it has closed.
+final class NativeVideoTextureDecoder extends _NativeDecoderProxy
+    implements VideoTextureDecoder {
+  NativeVideoTextureDecoder({super.libraryPath, NativeVideoTextures? textures})
+    : _textures = textures ?? const ChannelVideoTextures();
+
+  final NativeVideoTextures _textures;
+  final StreamController<VideoTexture> _shown = StreamController.broadcast();
+
+  /// The texture made by the running start, once it is made.
+  NativeVideoTexture? _texture;
+
+  @override
+  Stream<VideoTexture> get textures => _shown.stream;
+
+  @override
+  Future<void> start() async {
+    if (_open) return;
+    _open = true;
+    final NativeVideoTexture texture;
+    try {
+      texture = await _textures.create();
+    } on Object {
+      _open = false;
+      rethrow;
+    }
+    // Stopped while the texture was being made: the stop could not see it,
+    // so it is given back here.
+    if (!_open) {
+      await _textures.dispose(texture.id);
+      return;
+    }
+    _texture = texture;
+    try {
+      await _openNative(surface: texture.surface);
+    } on Object {
+      _open = false;
+      // Unless a stop that landed meanwhile already gave it back.
+      if (identical(_texture, texture)) {
+        _texture = null;
+        await _textures.dispose(texture.id);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> stop() async {
+    if (!_open) return;
+    _open = false;
+    final texture = _texture;
+    _texture = null;
+    // The decoder first: the texture goes only once nothing draws on it.
+    await _closeNative();
+    if (texture != null) await _textures.dispose(texture.id);
+  }
+
+  @override
+  void _onShown(int width, int height) {
+    final texture = _texture;
+    if (texture == null || _shown.isClosed) return;
+    _shown.add(VideoTexture(id: texture.id, width: width, height: height));
   }
 }
 
@@ -130,7 +228,9 @@ final class _DecoderWorker {
   int _nextId = 0;
   final Map<int, Completer<void>> _opens = {};
   final Map<int, Completer<void>> _closes = {};
-  final Map<int, _Route> _routes = {};
+
+  /// Where each decoder's pictures and drops go once they arrive.
+  final Map<int, _NativeDecoderProxy> _routes = {};
 
   int nextId() => _nextId++;
 
@@ -162,13 +262,13 @@ final class _DecoderWorker {
 
   /// Opens decoder [id], failing when the module cannot load, the decoder
   /// refuses, or the worker never answers.
-  Future<void> open(int id, String libraryPath) async {
+  Future<void> open(int id, String libraryPath, int surface) async {
     final completer = Completer<void>();
     _opens[id] = completer;
     final SendPort port;
     try {
       port = await this.port();
-      port.send(_Open(id, libraryPath));
+      port.send(_Open(id, libraryPath, surface));
     } on Object {
       _opens.remove(id);
       rethrow;
@@ -209,12 +309,8 @@ final class _DecoderWorker {
     }
   }
 
-  void register(
-    int id, {
-    required void Function(DecodedVideoFrame frame) onPicture,
-    required void Function(int dropped) onDrop,
-  }) {
-    _routes[id] = (onPicture: onPicture, onDrop: onDrop);
+  void register(int id, _NativeDecoderProxy decoder) {
+    _routes[id] = decoder;
   }
 
   void unregister(int id) {
@@ -240,7 +336,7 @@ final class _DecoderWorker {
         :final height,
         :final timestamp,
       ):
-        _routes[id]?.onPicture(
+        _routes[id]?._onPicture(
           DecodedVideoFrame(
             pixels: bytes.materialize().asUint8List(),
             width: width,
@@ -248,8 +344,10 @@ final class _DecoderWorker {
             timestamp: timestamp,
           ),
         );
+      case _Shown(:final id, :final width, :final height):
+        _routes[id]?._onShown(width, height);
       case _Dropped(:final id, :final total):
-        _routes[id]?.onDrop(total);
+        _routes[id]?._onDrop(total);
     }
   }
 }
@@ -269,7 +367,7 @@ Future<void> _decoderWorkerMain(SendPort toMain) async {
   await for (final message in inbox) {
     try {
       switch (message) {
-        case _Open(:final id, :final libraryPath):
+        case _Open(:final id, :final libraryPath, :final surface):
           final bindings = modules.putIfAbsent(
             libraryPath,
             () => _openModule(libraryPath),
@@ -280,7 +378,12 @@ Future<void> _decoderWorkerMain(SendPort toMain) async {
             );
             break;
           }
-          final (decoder, status) = _NativeDecoder.open(bindings, id, toMain);
+          final (decoder, status) = _NativeDecoder.open(
+            bindings,
+            id,
+            toMain,
+            surface,
+          );
           if (decoder == null) {
             toMain.send(
               _OpenFailed(id, 'the decoder refused to open ($status)'),
@@ -311,7 +414,7 @@ Future<void> _decoderWorkerMain(SendPort toMain) async {
 /// One native decoder on the worker: its handle, its picture callback, and
 /// the accounting it is polled for.
 final class _NativeDecoder {
-  _NativeDecoder._(this._bindings, this._id, this._toMain);
+  _NativeDecoder._(this._bindings, this._id, this._toMain, this._onSurface);
 
   /// Opens the decoder, or answers null with the status the module returned
   /// when it refused.
@@ -319,8 +422,9 @@ final class _NativeDecoder {
     NativeVideoBindings bindings,
     int id,
     SendPort toMain,
+    int surface,
   ) {
-    final decoder = _NativeDecoder._(bindings, id, toMain);
+    final decoder = _NativeDecoder._(bindings, id, toMain, surface != 0);
     decoder._callback = NativeCallable<NativePictureCallback>.listener(
       decoder._onPicture,
     );
@@ -329,6 +433,7 @@ final class _NativeDecoder {
       final status = bindings.decoderOpen(
         decoder._callback!.nativeFunction,
         nullptr,
+        Pointer<Void>.fromAddress(surface),
         out,
       );
       if (status != NativeVideoStatus.ok) {
@@ -351,6 +456,9 @@ final class _NativeDecoder {
   final int _id;
   final SendPort _toMain;
 
+  /// Whether the decoder draws on a surface instead of handing pixels over.
+  final bool _onSurface;
+
   Pointer<Void> _handle = nullptr;
   NativeCallable<NativePictureCallback>? _callback;
   Timer? _stats;
@@ -358,6 +466,8 @@ final class _NativeDecoder {
   bool _loggedInfo = false;
   int _reportedSubmitted = -1;
   int _reportedDropped = 0;
+  int _shownWidth = 0;
+  int _shownHeight = 0;
 
   void submit(Uint8List accessUnit, Duration? timestamp) {
     if (_handle == nullptr || accessUnit.isEmpty) return;
@@ -405,24 +515,41 @@ final class _NativeDecoder {
     int stride,
     int timestampUs,
   ) {
-    if (width <= 0 || height <= 0 || pixels == nullptr) return;
+    if (width <= 0 || height <= 0) return;
+    if (!_onSurface && pixels == nullptr) return;
     if (!_loggedInfo) {
       _loggedInfo = true;
       // By the first picture the decoder has settled its output type, which
       // is the moment an unexpected format or row pitch can be seen.
       _logDecoderInfo();
     }
-    // One copy, made here rather than on the main isolate: the transferable
-    // buffer is built straight out of native memory, and the main isolate
-    // adopts it without a second one. The buffer is ours until released, so
-    // the copy has no race with the next picture.
-    final bytes = TransferableTypedData.fromList([
-      pixels.asTypedList(width * height * 4),
-    ]);
-    _bindings.decoderReleasePicture?.call(pixels.cast<Void>());
-    _toMain.send(
-      _Picture(_id, bytes, width, height, Duration(microseconds: timestampUs)),
-    );
+    if (_onSurface) {
+      // The picture is already on the texture. The main isolate hears only
+      // about its size, the first time and when it changes.
+      if (width != _shownWidth || height != _shownHeight) {
+        _shownWidth = width;
+        _shownHeight = height;
+        _toMain.send(_Shown(_id, width, height));
+      }
+    } else {
+      // One copy, made here rather than on the main isolate: the
+      // transferable buffer is built straight out of native memory, and the
+      // main isolate adopts it without a second one. The buffer is ours
+      // until released, so the copy has no race with the next picture.
+      final bytes = TransferableTypedData.fromList([
+        pixels.asTypedList(width * height * 4),
+      ]);
+      _bindings.decoderReleasePicture?.call(pixels.cast<Void>());
+      _toMain.send(
+        _Picture(
+          _id,
+          bytes,
+          width,
+          height,
+          Duration(microseconds: timestampUs),
+        ),
+      );
+    }
     // A drop the decode queue made is seen by the next picture, so the
     // keyframe it needs is asked for at once instead of when the stats
     // timer next runs.
@@ -517,10 +644,11 @@ final class _NativeDecoder {
         0 => ', decoded on the GPU',
         _ => ', decoded on the CPU (0x${gpu.toUnsigned(32).toRadixString(16)})',
       };
+      final drawn = _onSurface ? ', drawn on a texture' : '';
       AppLog.warning(
         'video',
         'decoder output: $name ${width.value}x${height.value} '
-            'stride ${stride.value}$where',
+            'stride ${stride.value}$where$drawn',
       );
     } finally {
       calloc.free(fourcc);
@@ -539,12 +667,6 @@ final class _Hello {
   final SendPort port;
 }
 
-/// Where a decoder service's pictures and drops go once they arrive.
-typedef _Route = ({
-  void Function(DecodedVideoFrame frame) onPicture,
-  void Function(int dropped) onDrop,
-});
-
 final class _Log {
   const _Log(this.level, this.scope, this.message, this.error);
 
@@ -555,10 +677,13 @@ final class _Log {
 }
 
 final class _Open {
-  const _Open(this.id, this.libraryPath);
+  const _Open(this.id, this.libraryPath, this.surface);
 
   final int id;
   final String libraryPath;
+
+  /// The address of the surface to draw on, or 0 to hand pixels over.
+  final int surface;
 }
 
 final class _Opened {
@@ -590,6 +715,15 @@ final class _Picture {
   final int width;
   final int height;
   final Duration timestamp;
+}
+
+/// A decoder drawing on a surface has drawn a picture of a new size.
+final class _Shown {
+  const _Shown(this.id, this.width, this.height);
+
+  final int id;
+  final int width;
+  final int height;
 }
 
 final class _Dropped {

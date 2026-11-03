@@ -79,6 +79,20 @@ close joins the decode thread, which used to run on the UI isolate and hitch
 the interface on every suspend, switch and leave. The main isolate hands
 access units over and receives pictures, and touches no native memory.
 
+The self-preview does not receive pictures at all (ADR-0009).
+`NativeVideoTextureDecoder` asks the runner for a texture over
+`flucord/video_texture`. The runner makes a surface in `flucord_video.dll` (one
+shared Direct3D texture, on the adapter Flutter renders with) and registers it
+with the engine as a DXGI shared handle texture. The decoder opens on that
+surface: it decodes on the surface's device, the video processor converts each
+picture to BGRA, and the picture is copied into the shared texture and marked
+available. The engine draws it in a `Texture` widget. Dart only hears the
+texture's size, the first time and when it changes. After a dropped access
+unit the decoder keeps the last whole picture on the texture until it has
+decoded a keyframe, so a broken picture never reaches the screen.
+`flucord_video_surface_test` opens a surface's pictures from a second device
+by their handle, the way the engine does.
+
 The packets of a watched stream still arrive, decrypt and reassemble on the UI
 isolate, so what each packet allocates there is pressure on the interface. A
 payload stays a `Uint8List` from the socket to the decoder, and pieces of it are

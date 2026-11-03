@@ -7,6 +7,7 @@ project(flucord_video LANGUAGES CXX)
 add_library(flucord_video SHARED
   "flucord_video.cpp"
   "qpc_clock.cpp"
+  "video_surface.cpp"
 )
 
 target_include_directories(flucord_video PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -35,4 +36,15 @@ if(FLUCORD_VIDEO_BUILD_TESTS)
   )
   target_compile_features(flucord_video_clock_test PRIVATE cxx_std_17)
   add_test(NAME flucord_video_clock_test COMMAND flucord_video_clock_test)
+
+  add_executable(flucord_video_surface_test
+    "video_surface_test.cpp"
+    "video_surface.cpp"
+  )
+  target_compile_features(flucord_video_surface_test PRIVATE cxx_std_17)
+  target_compile_definitions(flucord_video_surface_test PRIVATE
+    UNICODE _UNICODE)
+  target_link_libraries(flucord_video_surface_test PRIVATE d3d11 dxgi)
+  add_test(NAME flucord_video_surface_test
+    COMMAND flucord_video_surface_test)
 endif()

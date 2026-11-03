@@ -42,16 +42,38 @@ final class DecodedVideoFrame {
   }
 }
 
-/// Turns somebody else's H.264 into pictures.
+/// A texture a decoder draws on, as it is now: the id a `Texture` widget
+/// shows, and the size of the picture on it.
+final class VideoTexture {
+  const VideoTexture({
+    required this.id,
+    required this.width,
+    required this.height,
+  });
+
+  final int id;
+  final int width;
+  final int height;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VideoTexture &&
+      other.id == id &&
+      other.width == width &&
+      other.height == height;
+
+  @override
+  int get hashCode => Object.hash(id, width, height);
+}
+
+/// Turns H.264 into pictures. What a decoder does whatever it hands its
+/// pictures to.
 ///
 /// The receiving half of Go Live. Sending without this is half a feature: a
 /// client that can share its screen but not watch anybody else's is not
 /// something a user would call working.
-abstract interface class VideoDecoderService {
+abstract interface class VideoDecoder {
   bool get isSupported;
-
-  /// Pictures, in the order they decode.
-  Stream<DecodedVideoFrame> get frames;
 
   /// The running total of access units the decoder had to drop, reported
   /// whenever it grows. A dropped unit breaks the reference chain like a lost
@@ -65,4 +87,22 @@ abstract interface class VideoDecoderService {
   Future<void> submit(Uint8List accessUnit, {Duration? timestamp});
 
   Future<void> stop();
+}
+
+/// A decoder that hands every picture over as pixels.
+abstract interface class VideoDecoderService implements VideoDecoder {
+  /// Pictures, in the order they decode.
+  Stream<DecodedVideoFrame> get frames;
+}
+
+/// A decoder that draws its pictures on a texture, so no pixel passes
+/// through Dart (ADR-0009).
+///
+/// After a dropped access unit the texture keeps its last whole picture
+/// until a keyframe has been decoded. Whoever feeds the decoder still asks
+/// for that keyframe.
+abstract interface class VideoTextureDecoder implements VideoDecoder {
+  /// The texture, once it has a picture, and again each time the picture
+  /// changes size. One texture per [start].
+  Stream<VideoTexture> get textures;
 }

@@ -738,7 +738,8 @@ final class StreamRoomCameraTransport implements VoiceVideoTransport {
   }
 }
 
-final class StreamRoomDecoder implements VideoDecoderService {
+final class StreamRoomDecoder
+    implements VideoDecoderService, VideoTextureDecoder {
   StreamRoomDecoder({this.failStart = false});
 
   final bool failStart;
@@ -756,6 +757,9 @@ final class StreamRoomDecoder implements VideoDecoderService {
 
   @override
   Stream<DecodedVideoFrame> get frames => _frames.stream;
+
+  @override
+  Stream<VideoTexture> get textures => const Stream.empty();
 
   @override
   Stream<int> get droppedAccessUnits => const Stream.empty();

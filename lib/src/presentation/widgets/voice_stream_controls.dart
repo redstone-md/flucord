@@ -6,13 +6,13 @@ import '../../domain/video_decoder.dart';
 
 /// The picture this account sees of its own stream.
 ///
-/// The sender's tile uses the same stream viewer as every other tile, drawing
-/// the encoder's own pictures decoded locally (ADR-0001). A decoder that would
-/// not open is shown as such rather than as an empty tile.
+/// The encoder's own pictures, decoded locally (ADR-0001) onto a texture
+/// (ADR-0009). A decoder that would not open is shown as such rather than as
+/// an empty tile.
 final class VoiceSelfPreview {
-  const VoiceSelfPreview({required this.frames, this.error});
+  const VoiceSelfPreview({required this.textures, this.error});
 
-  final Stream<DecodedVideoFrame> frames;
+  final Stream<VideoTexture> textures;
   final Object? error;
 }
 
