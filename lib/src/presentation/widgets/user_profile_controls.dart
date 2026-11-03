@@ -6,6 +6,8 @@ import '../../domain/user_profile.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
+import 'flucord_controls.dart';
+import 'user_settings_controls.dart';
 import 'remote_identity_image.dart';
 
 /// Discord's accent swatches, plus "no accent" which falls back to the avatar.
@@ -30,26 +32,11 @@ class ProfilePreviewHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: FlucordType.title,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
+    child: SettingsSectionHeader(
+      title: title,
+      subtitle:
           'How your account looks to everyone else. Changes are saved '
           'together.',
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-          ),
-        ),
-      ],
     ),
   );
 }
@@ -83,16 +70,7 @@ class ProfileField extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: context.surfaces.muted,
-            fontSize: FlucordType.caption,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
+        FlucordFieldLabel(label),
         TextField(
           key: fieldKey,
           controller: controller,
@@ -155,7 +133,7 @@ class ProfileAvatarButton extends StatelessWidget {
               initial.isEmpty ? '?' : initial.characters.first.toUpperCase(),
               style: const TextStyle(
                 fontSize: FlucordType.display,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -275,16 +253,7 @@ class ProfileAccentPicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        'ACCENT COLOUR',
-        style: TextStyle(
-          color: context.surfaces.muted,
-          fontSize: FlucordType.caption,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-        ),
-      ),
-      const SizedBox(height: 8),
+      const FlucordFieldLabel('Accent colour'),
       Wrap(
         spacing: 8,
         runSpacing: 8,

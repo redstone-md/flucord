@@ -127,7 +127,7 @@ class _MethodRow extends StatelessWidget {
             children: [
               Text(
                 method.label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               if (method.description.isNotEmpty)
                 Padding(

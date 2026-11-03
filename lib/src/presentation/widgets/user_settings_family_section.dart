@@ -192,7 +192,7 @@ class _LinkCode extends StatelessWidget {
             key: const ValueKey('family-link-code'),
             style: const TextStyle(
               fontFamily: 'monospace',
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               fontSize: FlucordType.title,
             ),
           ),

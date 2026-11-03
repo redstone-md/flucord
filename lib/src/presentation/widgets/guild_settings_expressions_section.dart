@@ -230,15 +230,12 @@ class _ExpressionGroup extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
-        heading.toUpperCase(),
-        style: TextStyle(
-          fontSize: FlucordType.caption,
-          letterSpacing: 0.5,
-          fontWeight: FontWeight.w700,
-          color: context.surfaces.muted,
+        heading,
+        style: FlucordTextRole.heading.style.copyWith(
+          color: context.surfaces.text,
         ),
       ),
-      const SizedBox(height: 6),
+      const SizedBox(height: 8),
       if (rows.isEmpty)
         Padding(
           key: ValueKey(emptyKey),

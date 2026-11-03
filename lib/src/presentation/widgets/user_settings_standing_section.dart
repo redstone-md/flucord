@@ -82,7 +82,7 @@ class _AccountStandingSectionState extends State<AccountStandingSection> {
         child: Text(
           standing.username,
           key: const ValueKey('standing-username'),
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(fontWeight: FontWeight.w500),
         ),
       ),
     if (standing.isClear)
@@ -170,7 +170,7 @@ class _RecordGroup extends StatelessWidget {
                       // is left as a record with no words rather than given
                       // wording this client invented.
                       record.title.isEmpty ? 'Recorded action' : record.title,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     if (record.subtitle.isNotEmpty)
                       Padding(
@@ -289,7 +289,7 @@ class _SuspensionNotice extends StatelessWidget {
           'This account is suspended',
           style: TextStyle(
             fontSize: FlucordType.label,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w500,
           ),
         ),
         if (suspension.reason.isNotEmpty) ...[

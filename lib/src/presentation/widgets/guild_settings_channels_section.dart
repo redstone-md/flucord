@@ -634,12 +634,9 @@ class _OverwriteEditor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'PERMISSION OVERRIDES',
-          style: TextStyle(
-            fontSize: FlucordType.caption,
-            letterSpacing: 0.5,
-            fontWeight: FontWeight.w700,
-            color: context.surfaces.muted,
+          'Permission overrides',
+          style: FlucordTextRole.heading.style.copyWith(
+            color: context.surfaces.text,
           ),
         ),
         const SizedBox(height: 6),

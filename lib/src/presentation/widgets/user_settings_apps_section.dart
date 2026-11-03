@@ -288,7 +288,7 @@ class _InvitationCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   application?.name ?? 'This app',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -424,7 +424,7 @@ class _GuildChoice extends StatelessWidget {
                 child: Text(
                   guild.name,
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.w600 : null,
+                    fontWeight: selected ? FontWeight.w500 : null,
                   ),
                 ),
               ),
@@ -469,7 +469,7 @@ class _GrantRow extends StatelessWidget {
               children: [
                 Text(
                   grant.name,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 if (grant.description.isNotEmpty)
                   Padding(

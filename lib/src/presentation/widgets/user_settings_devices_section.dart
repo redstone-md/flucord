@@ -133,7 +133,7 @@ class _SessionRow extends StatelessWidget {
                 children: [
                   Text(
                     session.deviceLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   if (session.isCurrent) ...[
                     const SizedBox(width: 8),

@@ -372,7 +372,7 @@ class _MfaSettingsSectionState extends State<MfaSettingsSection> {
       key: const ValueKey('mfa-secret'),
       style: const TextStyle(
         fontFamily: 'monospace',
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         fontSize: FlucordType.body,
       ),
     ),
@@ -532,7 +532,7 @@ class _SecurityKeyRow extends StatelessWidget {
             child: Text(
               securityKey.name,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
           if (created != null)
