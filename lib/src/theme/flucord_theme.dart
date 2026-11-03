@@ -206,6 +206,20 @@ abstract final class FlucordTheme {
         titleTextStyle: textTheme.titleLarge,
         contentTextStyle: textTheme.bodyMedium,
       ),
+      // Every menu opens one layer up from where it was opened, the same
+      // frame a popover has. The rows are FlucordMenuItem.
+      popupMenuTheme: PopupMenuThemeData(
+        color: raised,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: FlucordRadius.medium,
+          side: BorderSide(color: border),
+        ),
+        menuPadding: const EdgeInsets.symmetric(vertical: 4),
+        labelTextStyle: WidgetStatePropertyAll(
+          FlucordTextRole.label.style.copyWith(color: text),
+        ),
+      ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: rail,

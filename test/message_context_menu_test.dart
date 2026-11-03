@@ -1,8 +1,12 @@
 import 'package:flucord/src/domain/channel_capabilities.dart';
 import 'package:flucord/src/domain/chat_models.dart';
 import 'package:flucord/src/presentation/widgets/message_context_menu.dart';
+import 'package:flucord/src/theme/flucord_icons.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
+import 'package:flucord/src/theme/flucord_type.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +43,46 @@ void main() {
           'https://discord.com/channels/@me/dm-1/message-1',
         );
       }
+    });
+  });
+
+  group('how the menu looks', () {
+    testWidgets('sits one layer up: raised, a thin border, medium corners', (
+      tester,
+    ) async {
+      await _pumpMenu(tester, isCurrentUser: false);
+      final surfaces = FlucordTheme.dark.extension<FlucordSurfaceTheme>()!;
+
+      final menu = _menuSurface(
+        tester,
+        find.byKey(const ValueKey('message-menu-reply')),
+      );
+      final shape = menu.shape! as RoundedRectangleBorder;
+      expect(menu.color, surfaces.raised);
+      expect(shape.side.color, surfaces.border);
+      expect(shape.side.width, 1);
+      expect(shape.borderRadius, FlucordRadius.medium);
+    });
+
+    testWidgets('rows are in the label role with an icon each', (
+      tester,
+    ) async {
+      await _pumpMenu(tester, isCurrentUser: true);
+
+      final reply = find.byKey(const ValueKey('message-menu-reply'));
+      final label = tester.renderObject<RenderParagraph>(
+        find.descendant(of: reply, matching: find.byType(RichText)),
+      );
+      expect(label.text.style?.fontSize, FlucordTextRole.label.size);
+      expect(
+        find.descendant(of: reply, matching: find.byType(FlucordIcon)),
+        findsOne,
+      );
+      final delete = find.byKey(const ValueKey('message-menu-delete'));
+      expect(
+        find.descendant(of: delete, matching: find.byType(FlucordIcon)),
+        findsOne,
+      );
     });
   });
 
@@ -153,6 +197,14 @@ void main() {
     });
   });
 }
+
+/// The surface the open menu is drawn on: the nearest [Material] above
+/// [item] that has a shape of its own.
+Material _menuSurface(WidgetTester tester, Finder item) => tester
+    .widgetList<Material>(
+      find.ancestor(of: item, matching: find.byType(Material)),
+    )
+    .firstWhere((material) => material.shape is RoundedRectangleBorder);
 
 Future<void> _pumpMenu(
   WidgetTester tester, {

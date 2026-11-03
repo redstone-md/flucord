@@ -17,11 +17,14 @@ final class MemberProfileController extends ChangeNotifier {
   MemberProfileController({
     required UserProfileRepository? Function() profileProvider,
     required UserNotesRepository? Function() notesProvider,
+    String? Function(String guildId)? serverNameOf,
   }) : _profileProvider = profileProvider,
-       _notesProvider = notesProvider;
+       _notesProvider = notesProvider,
+       _serverNameOf = serverNameOf;
 
   final UserProfileRepository? Function() _profileProvider;
   final UserNotesRepository? Function() _notesProvider;
+  final String? Function(String guildId)? _serverNameOf;
 
   StreamSubscription<UserNotes>? _notesSubscription;
   bool _disposed = false;
@@ -55,6 +58,10 @@ final class MemberProfileController extends ChangeNotifier {
 
   /// The note kept on the open user, or null when there is none.
   String? get note => _notesProvider()?.current.noteFor(_openUserId ?? '');
+
+  /// The name the workspace already holds for [guildId], or null when the
+  /// server is not loaded. The profile route sends mutual servers as ids only.
+  String? serverName(String guildId) => _serverNameOf?.call(guildId);
 
   /// Whether this transport can show a full profile or a note at all.
   bool get isSupported =>

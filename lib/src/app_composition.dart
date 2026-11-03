@@ -362,6 +362,7 @@ final class AppComposition {
       MemberProfileController(
         profileProvider: () => chat.userProfile,
         notesProvider: () => chat.userNotes,
+        serverNameOf: (id) => chat.workspace?.spaceOrNull(id)?.name,
       ),
     );
     accountStanding = _register(

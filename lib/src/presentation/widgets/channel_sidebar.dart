@@ -172,10 +172,7 @@ class ChannelSidebar extends StatelessWidget {
     final content = Container(
       key: const ValueKey('channel-sidebar'),
       width: 236,
-      decoration: BoxDecoration(
-        color: context.surfaces.rail,
-        border: Border(right: BorderSide(color: context.surfaces.border)),
-      ),
+      decoration: BoxDecoration(color: context.surfaces.rail),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

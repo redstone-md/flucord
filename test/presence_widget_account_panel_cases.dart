@@ -47,6 +47,26 @@ void _accountPanelCases() {
       expect(find.text('Do Not Disturb'), findsOneWidget);
     });
 
+    testWidgets('each status shows its own dot and the chosen one a check', (
+      tester,
+    ) async {
+      await tester.pumpWidget(panel());
+      await tester.tap(find.byKey(const ValueKey('self-status-menu')));
+      await tester.pumpAndSettle();
+
+      for (final status in Presence.selectable) {
+        final row = find.byKey(ValueKey('self-status-${status.name}'));
+        final dot = tester.widget<PresenceIndicator>(
+          find.descendant(of: row, matching: find.byType(PresenceIndicator)),
+        );
+        expect(dot.presence.status, status);
+        expect(
+          find.descendant(of: row, matching: find.byType(FlucordIcon)),
+          status == Presence.online ? findsOne : findsNothing,
+        );
+      }
+    });
+
     testWidgets('renders the custom status instead of the plain status', (
       tester,
     ) async {
