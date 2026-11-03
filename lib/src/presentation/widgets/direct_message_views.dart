@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/chat_models.dart';
 import '../../domain/direct_message_candidate.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
-import 'remote_identity_image.dart';
 import 'flucord_dialog.dart';
+import 'member_avatar.dart';
+import 'remote_identity_image.dart';
 
 /// Finds somebody to message. Pops with their user id.
 class DirectMessageDialog extends StatefulWidget {
@@ -145,5 +147,23 @@ class DirectMessagesEmptyView extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+/// The person a DM is with, as the chat header draws them before the name:
+/// a small avatar with their status dot.
+class DirectMessageHeaderAvatar extends StatelessWidget {
+  const DirectMessageHeaderAvatar({required this.person, super.key});
+
+  static const size = 24.0;
+
+  final Member person;
+
+  @override
+  Widget build(BuildContext context) => MemberAvatar(
+    member: person,
+    size: size,
+    // The dot is cut out of the header it sits on.
+    presenceBorderColor: context.surfaces.canvas,
   );
 }
