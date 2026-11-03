@@ -312,7 +312,8 @@ void main() {
     expect(replacement.speakers, 'Headset');
     media.addPcm(_speech);
     await _flushEvents();
-    expect(replacement.frames, hasLength(1));
+    expect(replacement.frames, isEmpty);
+    expect(replacement.gainFrames, hasLength(1));
 
     // Both off: the path closes.
     await controller.setMicrophoneEnhancement(automaticGainControl: false);
@@ -321,7 +322,7 @@ void main() {
     expect(replacement.disposed, isTrue);
     media.addPcm(_speech);
     await _flushEvents();
-    expect(replacement.frames, hasLength(1));
+    expect(replacement.gainFrames, hasLength(1));
     expect(opened, hasLength(2));
 
     expect(repository.saved!.echoCancellation, isFalse);
@@ -1058,6 +1059,9 @@ final class _FakeVoiceSignalingService
     sentFrames.add(Uint8List.fromList(opusFrame));
     _operations?.add('send');
   }
+
+  @override
+  void skipOpusFrame() {}
 
   @override
   Future<void> finishSpeaking() async => _operations?.add('finish');

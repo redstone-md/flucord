@@ -194,11 +194,13 @@ passes to `record` (`noiseSuppress`, `echoCancel`, `autoGain`), `noiseSuppress`
 stays parsed and not applied, because DeepFilter owns suppression between the
 framer and the encoder; `echoCancel` and `autoGain` are applied by the native
 module's microphone enhancer (ADR-0010), one open path serving both switches.
-It runs WebRTC Audio Processing, the echo canceller (AEC3) and gain control
+The echo stage runs before DeepFilter and the gain stage after it, in WebRTC's
+own order. It runs WebRTC Audio Processing, the echo canceller (AEC3) and gain control
 (AGC2) Discord's own client uses, bundled as `flucord_apm.dll`
 (`tool/build_webrtc_apm.ps1` rebuilds it). The library works at 48 kHz in
 10 ms chunks, so a 20 ms frame is two chunks processed in place, with the
-whole band of the voice kept. The module loops back the output the room is
+whole band of the voice kept. Each stage is a processor of its own. The
+module loops back the output the room is
 played on (the one picked in voice settings, or the system default, followed
 when it moves) as the reference the echo stage takes out.
 

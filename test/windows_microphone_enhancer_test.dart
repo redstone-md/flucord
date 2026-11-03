@@ -64,7 +64,7 @@ void main() {
       late Int16List last;
       for (var frame = 0; frame < 50; frame++) {
         last = _tone(frame, hertz: 12000, amplitude: 3000);
-        await enhancer.process(last, channels: 2);
+        await enhancer.controlGain(last, channels: 2);
       }
       final kept = _strengthAt(last, 12000);
       final reference = _strengthAt(
@@ -75,7 +75,7 @@ void main() {
     });
 
     test(
-      'gain with echo runs both stages on one capture',
+      'gain with echo runs both stages on one capture, one processor each',
       skip: skip,
       () async {
         final enhancer = WindowsMicrophoneEnhancer(
@@ -87,10 +87,9 @@ void main() {
 
         try {
           for (var frame = 0; frame < 4; frame++) {
-            await enhancer.process(
-              _tone(frame, hertz: 440, amplitude: 3000),
-              channels: 2,
-            );
+            final capture = _tone(frame, hertz: 440, amplitude: 3000);
+            await enhancer.cancelEcho(capture, channels: 2);
+            await enhancer.controlGain(capture, channels: 2);
           }
         } on StateError catch (error) {
           // A machine without speakers refuses the open at the speakers step,

@@ -442,6 +442,9 @@ final class _InertVoiceClient
   void sendOpusFrame(Uint8List opusFrame) => frames.add(opusFrame);
 
   @override
+  void skipOpusFrame() {}
+
+  @override
   Future<void> finishSpeaking() async => finished = true;
 
   @override

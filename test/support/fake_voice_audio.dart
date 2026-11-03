@@ -59,10 +59,12 @@ class FakeNoiseSuppressor implements VoiceNoiseSuppressor {
   void dispose() => disposed = true;
 }
 
-/// An enhancer that records the frames it was handed and halves them, so a
-/// test can tell an enhanced frame from a raw one by its samples.
+/// An enhancer that records the frames its echo step was handed and halves
+/// them, so a test can tell an enhanced frame from a raw one by its samples.
+/// Its gain step records the frames and leaves them as they are.
 class FakeMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final List<Int16List> frames = [];
+  final List<Int16List> gainFrames = [];
   int? channels;
   bool disposed = false;
   String? speakers;
@@ -71,12 +73,17 @@ class FakeMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   void loopBack(String? speakers) => this.speakers = speakers;
 
   @override
-  Future<void> process(Int16List frame, {required int channels}) async {
+  Future<void> cancelEcho(Int16List frame, {required int channels}) async {
     this.channels = channels;
     frames.add(Int16List.fromList(frame));
     for (var i = 0; i < frame.length; i++) {
       frame[i] = frame[i] ~/ 2;
     }
+  }
+
+  @override
+  Future<void> controlGain(Int16List frame, {required int channels}) async {
+    gainFrames.add(Int16List.fromList(frame));
   }
 
   @override

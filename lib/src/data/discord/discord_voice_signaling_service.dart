@@ -683,6 +683,15 @@ final class DiscordVoiceSignalingService
     throw StateError('Discord voice media transport is not ready');
   }
 
+  /// Nothing to keep time with between sessions: the next one starts its
+  /// own clock.
+  @override
+  void skipOpusFrame() {
+    if (_activeClient case final VoiceAudioTransport audioTransport) {
+      audioTransport.skipOpusFrame();
+    }
+  }
+
   @override
   Future<void> finishSpeaking() async {
     final client = _activeClient;

@@ -282,20 +282,26 @@ abstract interface class VoiceNoiseSuppressor {
 /// Enhances the microphone, one frame at a time: removes what the machine's
 /// speakers are playing from it and keeps its level steady.
 ///
-/// Sits where the noise filter sits, between the framer and the encoder,
-/// and sees the frame before the filter does: echo removal wants the raw
-/// microphone, with the room's own voices still in it, or there is nothing
-/// for the speaker line to match against. The machine's own audio layer
-/// supplies the speaker line: what is actually playing, and when, is a fact
-/// only it can know.
+/// The two stages sit on either side of the noise filter, between the
+/// framer and the encoder, in the order WebRTC's own pipeline runs them.
+/// Echo removal comes first: it wants the raw microphone, with the room's
+/// own voices still in it, or there is nothing for the speaker line to
+/// match against. Gain comes last: a level judged on a noisy microphone
+/// lifts the noise along with the voice, and hands the filter more to
+/// remove. The machine's own audio layer supplies the speaker line: what
+/// is actually playing, and when, is a fact only it can know.
+///
+/// Each step works on one frame of interleaved 48 kHz PCM16, [channels]
+/// wide, in place, and does nothing when its stage is off. It answers a
+/// future because the work may run where the enhancement lives rather than
+/// on the caller's isolate; the caller chains its frames, so order is kept
+/// whichever side does the work.
 abstract interface class VoiceMicrophoneEnhancer {
-  /// Enhances one frame of interleaved 48 kHz PCM16, [channels] wide, in
-  /// place.
-  ///
-  /// Answers a future because the work may run where the enhancement lives
-  /// rather than on the caller's isolate; the caller chains its frames, so
-  /// order is kept whichever side does the work.
-  Future<void> process(Int16List frame, {required int channels});
+  /// Takes what the speakers play out of [frame].
+  Future<void> cancelEcho(Int16List frame, {required int channels});
+
+  /// Keeps [frame]'s level steady.
+  Future<void> controlGain(Int16List frame, {required int channels});
 
   /// Takes the speaker line from the output named [speakers], as the
   /// playback's device list names it, or from the system default when null:

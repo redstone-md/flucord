@@ -10,8 +10,11 @@ import '../domain/voice_processing.dart';
 /// runs WebRTC Audio Processing (`flucord_apm.dll`) on the frames handed to
 /// it, at the pipeline's full 48 kHz.
 ///
-/// Each frame is processed in place and handed back at once. The work
-/// happens on the caller's turn, like the encoder's does.
+/// Each stage is a processor of its own, opened on its first frame: the echo
+/// stage runs before the noise filter and the gain stage after it, so one
+/// processor cannot hold both. Each frame is processed in place and handed
+/// back at once. The work happens on the caller's turn, like the encoder's
+/// does.
 final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   /// The factory the composition root offers: null where the bundle has no
   /// native module, so the switches are hidden rather than offered empty.
@@ -110,7 +113,9 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   final _LoopBack _loopBack;
   final _EnhancerFailure? _failure;
 
-  Pointer<Void>? _enhancer;
+  /// The processors of the echo and the gain stage, once opened.
+  Pointer<Void>? _echo;
+  Pointer<Void>? _gain;
 
   /// The output to take the speaker line from, applied when the enhancer
   /// opens; null is the system default.
@@ -120,10 +125,25 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   bool _disposed = false;
 
   @override
-  Future<void> process(Int16List frame, {required int channels}) async {
+  Future<void> cancelEcho(Int16List frame, {required int channels}) async {
+    if (!echoCancellation) return;
+    _run(_echo ??= _openStage(echo: true), frame, channels, 'echo');
+  }
+
+  @override
+  Future<void> controlGain(Int16List frame, {required int channels}) async {
+    if (!automaticGainControl) return;
+    _run(_gain ??= _openStage(echo: false), frame, channels, 'gain');
+  }
+
+  void _run(
+    Pointer<Void> enhancer,
+    Int16List frame,
+    int channels,
+    String stage,
+  ) {
     if (_disposed) throw StateError('The enhancer is disposed');
     if (frame.isEmpty || channels <= 0) return;
-    final enhancer = _ensureOpen();
     final samples = frame.length ~/ channels;
     // The frame is copied in and the answer copied back out: the stages work
     // on native memory of their own, and the frame handed around the
@@ -133,30 +153,32 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
     final status = _enhance(enhancer, scratch, samples, channels);
     if (status != 0) {
       throw StateError(
-        'The echo and gain stages failed on a frame${_describeFailure()}',
+        'The $stage stage failed on a frame${_describeFailure()}',
       );
     }
     frame.setAll(0, scratch.asTypedList(frame.length));
   }
 
-  Pointer<Void> _ensureOpen() {
-    final held = _enhancer;
-    if (held != null) return held;
+  /// Opens the processor of one stage: the echo stage with its speaker
+  /// line, or the gain stage alone.
+  Pointer<Void> _openStage({required bool echo}) {
+    if (_disposed) throw StateError('The enhancer is disposed');
     final out = calloc<Pointer<Void>>();
     try {
-      final status = _open(
-        echoCancellation ? 1 : 0,
-        automaticGainControl ? 1 : 0,
-        out,
-      );
+      final status = _open(echo ? 1 : 0, echo ? 0 : 1, out);
+      final stage = echo ? 'echo' : 'gain';
       if (status != 0) {
         throw StateError(
-          'The echo and gain stages could not open'
-          '${_describeFailure()}',
+          'The $stage stage could not open${_describeFailure()}',
         );
       }
-      final enhancer = _enhancer = out.value;
-      if (_speakers != null) _applySpeakers(enhancer);
+      final enhancer = out.value;
+      try {
+        if (echo && _speakers != null) _applySpeakers(enhancer);
+      } on Object {
+        _close(enhancer);
+        rethrow;
+      }
       return enhancer;
     } finally {
       calloc.free(out);
@@ -167,8 +189,8 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   void loopBack(String? speakers) {
     if (_disposed || speakers == _speakers) return;
     _speakers = speakers;
-    final enhancer = _enhancer;
-    if (enhancer != null) _applySpeakers(enhancer);
+    final echo = _echo;
+    if (echo != null) _applySpeakers(echo);
   }
 
   /// The loopback itself opens on the next frame, which reports a missing
@@ -219,9 +241,11 @@ final class WindowsMicrophoneEnhancer implements VoiceMicrophoneEnhancer {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    final enhancer = _enhancer;
-    if (enhancer != null) _close(enhancer);
-    _enhancer = null;
+    for (final enhancer in [_echo, _gain]) {
+      if (enhancer != null) _close(enhancer);
+    }
+    _echo = null;
+    _gain = null;
     final scratch = _scratch;
     if (scratch != null) calloc.free(scratch);
     _scratch = null;
