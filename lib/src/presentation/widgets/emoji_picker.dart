@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../application/expression_favorites_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/unicode_emoji.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_radius.dart';
 import '../../theme/flucord_theme.dart';
 import '../../theme/flucord_type.dart';
@@ -184,15 +185,19 @@ class _EmojiPickerButtonState extends State<EmojiPickerButton> {
       tooltip: controller.isOpen
           ? widget.purpose.closeTooltip
           : widget.purpose.openTooltip,
-      icon: Icon(
-        widget.purpose == EmojiPickerPurpose.reaction
-            ? Icons.add_reaction_outlined
-            : controller.isOpen
-            ? Icons.emoji_emotions
-            : Icons.emoji_emotions_outlined,
-        size: widget.iconSize,
-        color: controller.isOpen ? context.surfaces.accentIcon : null,
-      ),
+      icon: widget.purpose == EmojiPickerPurpose.reaction
+          ? FlucordIcon(
+              FlucordIcons.addReaction,
+              size: widget.iconSize,
+              color: controller.isOpen ? context.surfaces.accentIcon : null,
+            )
+          : Icon(
+              controller.isOpen
+                  ? Icons.emoji_emotions
+                  : Icons.emoji_emotions_outlined,
+              size: widget.iconSize,
+              color: controller.isOpen ? context.surfaces.accentIcon : null,
+            ),
     ),
   );
 }
