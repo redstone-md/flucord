@@ -34,6 +34,7 @@ import 'message_forward_dialog.dart';
 import 'message_poll_view.dart';
 import 'message_preview_text.dart';
 import 'message_reaction_strip.dart';
+import 'message_reply_line.dart';
 import 'message_sticker_view.dart';
 import 'message_timestamp.dart';
 import 'reaction_details_dialog.dart';
@@ -158,6 +159,9 @@ class _MessageItemState extends State<MessageItem> {
   static const _avatarSize = 40.0;
   static const _avatarGap = 12.0;
   static const _nameRowHeight = 18.0;
+
+  /// Space between a reply line and the name row under it.
+  static const _replyGap = 4.0;
 
   /// How far the toolbar rises above the highlight's top edge.
   static const _barRise = 16.0;
@@ -387,38 +391,49 @@ class _MessageItemState extends State<MessageItem> {
             : null,
       ),
       padding: EdgeInsets.symmetric(horizontal: _inline, vertical: block),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: _avatarSize,
-            child: widget.grouped
-                ? _followUpTime(context)
-                : _opensAuthorProfile(
-                    key: const ValueKey('message-author-avatar'),
-                    child: MemberAvatar(
-                      member: widget.member,
-                      size: _avatarSize,
-                      spaceId: widget.workspace
-                          .channelById(widget.message.channelId)
-                          .spaceId,
-                    ),
-                  ),
-          ),
-          const SizedBox(width: _avatarGap),
-          Expanded(
-            child: MessageMenuScope(
-              onOpen: (position) =>
-                  unawaited(_openContextMenu(context, position)),
-              onSelectionChanged: (content) =>
-                  _selectedText = content?.plainText ?? '',
-              child: _content(context),
-            ),
-          ),
+          if (widget.message.reply case final reply?) ...[
+            _replyLine(context, reply),
+            const SizedBox(height: _replyGap),
+          ],
+          _authorAndContent(context),
         ],
       ),
     );
   }
+
+  /// The avatar lane and, beside it, the name row and everything below.
+  Widget _authorAndContent(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(
+        width: _avatarSize,
+        child: widget.grouped
+            ? _followUpTime(context)
+            : _opensAuthorProfile(
+                key: const ValueKey('message-author-avatar'),
+                child: MemberAvatar(
+                  member: widget.member,
+                  size: _avatarSize,
+                  spaceId: widget.workspace
+                      .channelById(widget.message.channelId)
+                      .spaceId,
+                ),
+              ),
+      ),
+      const SizedBox(width: _avatarGap),
+      Expanded(
+        child: MessageMenuScope(
+          onOpen: (position) => unawaited(_openContextMenu(context, position)),
+          onSelectionChanged: (content) =>
+              _selectedText = content?.plainText ?? '',
+          child: _content(context),
+        ),
+      ),
+    ],
+  );
 
   /// A follow-up's clock, in the avatar's lane. It sits on the first line of
   /// text, and may spill into the gaps beside the lane, since `12:59 PM` is
@@ -484,7 +499,6 @@ class _MessageItemState extends State<MessageItem> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!widget.grouped) _authorLine(context),
-        if (message.reply case final reply?) _replyLine(context, reply),
         if (widget.isEditing)
           _editField(context)
         else if (message.body.isNotEmpty)
@@ -683,46 +697,34 @@ class _MessageItemState extends State<MessageItem> {
     );
   }
 
+  /// The reply line: a spine in the avatar lane, curving into what the
+  /// message answers, which sits in the text column.
   Widget _replyLine(BuildContext context, MessageReply reply) {
-    final author = widget.workspace.memberOrNull(reply.authorId);
     final open = widget.onOpenMessage;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: _clickable(
-        key: const ValueKey('message-reply-preview'),
-        label: 'Go to the replied message',
-        onTap: open == null ? null : () => open(reply.messageId),
-        child: Row(
-          children: [
-            Icon(
-              Icons.subdirectory_arrow_right,
-              size: 13,
-              color: context.surfaces.muted,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              author?.displayName ?? 'Unknown user',
-              style: FlucordTextRole.label.style.copyWith(
-                fontWeight: FontWeight.w500,
-                color: author == null ? null : _nameColor(author),
-              ),
-            ),
-            const SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                reply.body.isEmpty
-                    ? 'Message unavailable'
-                    : messagePreviewText(context, reply.body, widget.workspace),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: FlucordTextRole.label.style.copyWith(
-                  color: context.surfaces.muted,
-                ),
-              ),
-            ),
-          ],
+    final author = widget.workspace.memberOrNull(reply.authorId);
+    return Row(
+      children: [
+        const MessageReplySpine(
+          laneWidth: _avatarSize + _avatarGap,
+          avatarSize: _avatarSize,
         ),
-      ),
+        Expanded(
+          child: _clickable(
+            key: const ValueKey('message-reply-preview'),
+            label: 'Go to the replied message',
+            onTap: open == null ? null : () => open(reply.messageId),
+            child: MessageReplyPreview(
+              reply: reply,
+              author: author,
+              workspace: widget.workspace,
+              nameColor: author == null ? null : _nameColor(author),
+              spaceId: widget.workspace
+                  .channelOrNull(widget.message.channelId)
+                  ?.spaceId,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

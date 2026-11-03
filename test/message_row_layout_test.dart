@@ -155,4 +155,70 @@ void main() {
 
     expect(body.height, 21);
   });
+
+  group('a reply', () {
+    const replyId = '900000000000000021';
+    const quotedId = '900000000000000020';
+    final quoted = List.filled(40, 'a long question that goes on').join(' ');
+    final preview = find.byKey(const ValueKey('message-reply-preview'));
+
+    Future<void> openReply(SessionHarness session) async {
+      await session.openChannel(SessionHarness.channelId);
+      await session.dispatch('MESSAGE_CREATE', {
+        ...rawMessage(
+          id: replyId,
+          channelId: SessionHarness.channelId,
+          guildId: SessionHarness.guildId,
+          authorId: SessionHarness.friendId,
+          content: 'my answer',
+        ),
+        'referenced_message': rawMessage(
+          id: quotedId,
+          channelId: SessionHarness.channelId,
+          authorId: SessionHarness.friendId,
+          content: quoted,
+        ),
+      });
+    }
+
+    testSession('draws its preview on one line, above the name row', (
+      tester,
+      session,
+    ) async {
+      await openReply(session);
+
+      final reply = tester.getRect(_in(session, replyId, preview));
+      final text = tester.getRect(
+        _in(session, replyId, find.textContaining('a long question')),
+      );
+      final name = tester.getRect(
+        _in(
+          session,
+          replyId,
+          find.text('user-${SessionHarness.friendId}'),
+        ).last,
+      );
+
+      expect(reply.height, 18);
+      expect(text.height, 18);
+      expect(reply.bottom, lessThanOrEqualTo(name.top));
+    });
+
+    testSession('starts at the text column with a 16 px avatar', (
+      tester,
+      session,
+    ) async {
+      await openReply(session);
+
+      final reply = tester.getRect(_in(session, replyId, preview));
+      final avatar = tester.getRect(
+        find.descendant(of: preview, matching: find.byType(MemberAvatar)),
+      );
+      final body = _bodyOf(tester, session, replyId, 'my answer');
+
+      expect(avatar.size, const Size.square(16));
+      expect(avatar.left, body.left);
+      expect(reply.left, body.left);
+    });
+  });
 }
