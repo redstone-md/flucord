@@ -94,7 +94,9 @@ constexpr PROPERTYKEY kFeatureMode = {kWmaaecmaFmtid, 5};
 
 // MFPKEY_WMAAECMA_FEATR_NS, pid 8. Stays off: DeepFilterNet already owns
 // noise at the same place in the pipeline, and two noise stages would
-// charge the CPU twice for the same clean.
+// charge the CPU twice for the same clean. Unlike its neighbours it is a
+// VT_I4, not a VT_BOOL; a VT_BOOL is refused with
+// MF_E_TRANSFORM_PROPERTY_VARIANT_TYPE_WRONG.
 constexpr PROPERTYKEY kFeatureNoiseSuppression = {kWmaaecmaFmtid, 8};
 
 // MFPKEY_WMAAECMA_FEATR_AGC, pid 9.
@@ -582,7 +584,7 @@ flucord_audio_open_mic_enhancer(int32_t echo_cancellation,
   }
   if (SUCCEEDED(hr)) hr = SetProperty(properties, kFeatureMode, true);
   if (SUCCEEDED(hr)) {
-    hr = SetProperty(properties, kFeatureNoiseSuppression, false);
+    hr = SetProperty(properties, kFeatureNoiseSuppression, 0);
   }
   if (SUCCEEDED(hr)) {
     hr = SetProperty(properties, kFeatureAutomaticGain,
