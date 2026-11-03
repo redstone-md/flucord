@@ -44,6 +44,17 @@ abstract final class FlucordIcons {
     matchTextDirection: true,
   );
   static const hangUp = FlucordIconData(HugeIcons.strokeRoundedCallEnd01);
+  // The voice and user panels.
+  static const micOff = FlucordIconData(HugeIcons.strokeRoundedMicOff01);
+  static const headphonesOff = FlucordIconData(
+    HugeIcons.strokeRoundedHeadphoneOff,
+  );
+  static const cameraOff = FlucordIconData(HugeIcons.strokeRoundedVideoOff);
+  static const screenShareOff = FlucordIconData(
+    HugeIcons.strokeRoundedScreenShareOff,
+    matchTextDirection: true,
+  );
+  static const activities = FlucordIconData(HugeIcons.strokeRoundedRocket01);
   static const add = FlucordIconData(HugeIcons.strokeRoundedAdd01);
   static const emoji = FlucordIconData(HugeIcons.strokeRoundedSmile);
   static const reply = FlucordIconData(
