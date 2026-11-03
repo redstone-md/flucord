@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
+
+import '../../app_log.dart';
 
 final class DiscordVoiceIpDiscovery {
   const DiscordVoiceIpDiscovery({required this.address, required this.port});
@@ -58,6 +61,62 @@ abstract final class DiscordVoiceDiscoveryPacket {
   }
 }
 
+/// Datagrams a socket would not take yet, let out in order as it frees up.
+///
+/// `dart:io` keeps a single send in flight per socket on Windows: a send made
+/// while one is pending returns 0 and the datagram is gone. A video picture
+/// is a burst of packets, so most of each burst was lost before it left the
+/// machine, and a viewer's request to send those packets again found nothing
+/// to send. Here a datagram the socket refuses waits for the socket's next
+/// write event instead.
+final class DatagramSendQueue {
+  DatagramSendQueue({
+    required int Function(Uint8List datagram) send,
+    required void Function() awaitWritable,
+    this.capacity = defaultCapacity,
+  }) : _send = send,
+       _awaitWritable = awaitWritable;
+
+  /// About a second of a 1080p share. A socket that has not drained that
+  /// much has stopped draining, and a datagram older than that is no use to
+  /// anyone.
+  static const defaultCapacity = 1024;
+
+  final int capacity;
+  final int Function(Uint8List datagram) _send;
+  final void Function() _awaitWritable;
+  final Queue<Uint8List> _waiting = Queue();
+
+  int get waiting => _waiting.length;
+
+  /// Sends [datagram] now or after the ones already waiting. Answers its
+  /// length once the socket has it or it is queued, and 0 when the queue is
+  /// full and it was refused.
+  int add(Uint8List datagram) {
+    if (_waiting.isEmpty) {
+      final sent = _send(datagram);
+      if (sent > 0) return sent;
+    }
+    if (_waiting.length >= capacity) return 0;
+    _waiting.add(datagram);
+    _awaitWritable();
+    return datagram.length;
+  }
+
+  /// Lets out what waits, oldest first, until the socket refuses again.
+  void flush() {
+    while (_waiting.isNotEmpty) {
+      if (_send(_waiting.first) == 0) {
+        _awaitWritable();
+        return;
+      }
+      _waiting.removeFirst();
+    }
+  }
+
+  void clear() => _waiting.clear();
+}
+
 final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
   IoDiscordVoiceUdpTransport({
     Duration discoveryWindow = const Duration(seconds: 5),
@@ -76,9 +135,12 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
   final StreamController<Object> _socketFailures = StreamController.broadcast();
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
-  InternetAddress? _remoteAddress;
-  int? _remotePort;
   Completer<DiscordVoiceIpDiscovery>? _discovery;
+  DatagramSendQueue? _sendQueue;
+
+  /// Whether the send queue is refusing datagrams, so a full queue is
+  /// logged once when it fills rather than once per datagram.
+  bool _refusing = false;
 
   /// Rises with each [discover] and [close]. A discovery reads it after its
   /// waits, to see if a newer call took over the transport in the meantime.
@@ -112,8 +174,10 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
       throw _socketClosed;
     }
     _socket = socket;
-    _remoteAddress = address;
-    _remotePort = port;
+    _sendQueue = DatagramSendQueue(
+      send: (datagram) => socket.send(datagram, address, port),
+      awaitWritable: () => socket.writeEventsEnabled = true,
+    );
     _subscription = socket.listen(
       _handleSocketEvent,
       onError: (Object error) => _handleSocketLost(socket, error),
@@ -148,6 +212,7 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
   }
 
   void _handleSocketEvent(RawSocketEvent event) {
+    if (event == RawSocketEvent.write) _sendQueue?.flush();
     if (event != RawSocketEvent.read) return;
     Datagram? datagram;
     while ((datagram = _socket?.receive()) != null) {
@@ -166,13 +231,22 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
     }
   }
 
+  /// Answers the bytes taken: sent now, or queued behind a send still in
+  /// flight. 0 when there is no socket, or the queue is full.
   @override
   int send(Uint8List packet) {
-    final socket = _socket;
-    final address = _remoteAddress;
-    final port = _remotePort;
-    if (socket == null || address == null || port == null) return 0;
-    return socket.send(packet, address, port);
+    final queue = _sendQueue;
+    if (queue == null) return 0;
+    final taken = queue.add(packet);
+    if (taken == 0 && !_refusing) {
+      AppLog.warning(
+        'voice.transport',
+        'udp send queue full at ${queue.waiting}: datagrams are dropped '
+            'until the socket drains',
+      );
+    }
+    _refusing = taken == 0;
+    return taken;
   }
 
   Future<void> _closeSocket([Object reason = _socketClosed]) async {
@@ -181,8 +255,9 @@ final class IoDiscordVoiceUdpTransport implements DiscordVoiceUdpTransport {
     final pending = _discovery;
     _socket = null;
     _subscription = null;
-    _remoteAddress = null;
-    _remotePort = null;
+    _sendQueue?.clear();
+    _sendQueue = null;
+    _refusing = false;
     _discovery = null;
     if (pending != null && !pending.isCompleted) pending.completeError(reason);
     await subscription?.cancel();

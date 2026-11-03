@@ -57,9 +57,10 @@ final class DiscordVideoStreamTransport {
        _now = now;
 
   /// How many sent packets are kept for retransmission: four seconds at
-  /// the packet rate of a 720p share, which is longer than any viewer waits
-  /// for a missing packet. A power of two, so a sequence indexes it by mask.
-  static const historySize = 1024;
+  /// the packet rate of a 1080p share at 60 frames (about a thousand a
+  /// second), which is longer than any viewer waits for a missing packet. A
+  /// power of two, so a sequence indexes it by mask.
+  static const historySize = 4096;
 
   /// The wire rate packets are let out at, as a multiple of the encoder's
   /// bitrate: fast enough that a keyframe several times the size of an
@@ -354,7 +355,8 @@ final class DiscordVideoStreamTransport {
   }
 
   /// One packet to the sink. Answers the bytes it handed to the wire: 0 when
-  /// it held the packet back (a reconnect does), and -1 when it threw, which
+  /// it held the packet back (a reconnect does, and so does a socket whose
+  /// send queue is full), and -1 when it threw, which
   /// stops the stream. Only handed packets are counted, or the pace line
   /// reports traffic that never left the machine.
   int _put(DiscordRtpFrame rtp) {
