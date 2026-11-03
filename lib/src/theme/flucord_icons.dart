@@ -60,18 +60,30 @@ abstract final class FlucordIcons {
   static const signal = FlucordIconData(HugeIcons.strokeRoundedSignalFull02);
   static const mention = FlucordIconData(HugeIcons.strokeRoundedAt);
   static const mail = FlucordIconData(HugeIcons.strokeRoundedMail01);
-
-  // The message toolbar.
-  static const addReaction = FlucordIconData(HugeIcons.strokeRoundedSmilePlus);
+  // Menu and popover actions.
+  static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
   static const forward = FlucordIconData(
     HugeIcons.strokeRoundedArrowTurnForward,
     matchTextDirection: true,
   );
-  static const edit = FlucordIconData(HugeIcons.strokeRoundedPencilEdit01);
-  static const delete = FlucordIconData(HugeIcons.strokeRoundedDelete02);
-  static const report = FlucordIconData(HugeIcons.strokeRoundedFlag01);
-  static const unpin = FlucordIconData(HugeIcons.strokeRoundedPinOff);
+  static const markUnread = FlucordIconData(
+    HugeIcons.strokeRoundedMessageNotification01,
+  );
+  static const copy = FlucordIconData(HugeIcons.strokeRoundedCopy01);
   static const link = FlucordIconData(HugeIcons.strokeRoundedLink01);
+  static const id = FlucordIconData(HugeIcons.strokeRoundedId);
+  static const delete = FlucordIconData(HugeIcons.strokeRoundedDelete02);
+  static const check = FlucordIconData(HugeIcons.strokeRoundedTick02);
+  static const clear = FlucordIconData(HugeIcons.strokeRoundedCancel01);
+  static const report = FlucordIconData(HugeIcons.strokeRoundedFlag01);
+  static const block = FlucordIconData(HugeIcons.strokeRoundedUserBlock01);
+  static const verified = FlucordIconData(
+    HugeIcons.strokeRoundedCheckmarkBadge01,
+  );
+
+  // The message toolbar.
+  static const addReaction = FlucordIconData(HugeIcons.strokeRoundedSmilePlus);
+  static const unpin = FlucordIconData(HugeIcons.strokeRoundedPinOff);
   static const unlink = FlucordIconData(HugeIcons.strokeRoundedUnlink01);
   static const done = FlucordIconData(HugeIcons.strokeRoundedTaskDone01);
   static const reopen = FlucordIconData(

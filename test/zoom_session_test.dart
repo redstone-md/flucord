@@ -36,14 +36,18 @@ void main() {
     );
 
     testSession(
-      'at 0.8 the interface reaches the window edge',
+      'at 0.8 the interface reaches the canvas edge',
       (tester, session) async {
         await session.openChannel(SessionHarness.channelId);
 
+        // The canvas card sits 8 px in from the window, drawn at 0.8 too.
+        final card = tester.getRect(find.byKey(const ValueKey('canvas-card')));
+        expect(card.bottom, closeTo(window.height - 8 * 0.8, 0.5));
+        expect(card.right, closeTo(window.width - 8 * 0.8, 0.5));
         final composer = tester.getRect(find.byType(MessageComposer));
-        expect(composer.bottom, closeTo(window.height, 0.5));
+        expect(composer.bottom, closeTo(card.bottom, 0.5));
         // The member list, 224 px wide, is drawn at 0.8 to its right.
-        expect(composer.right, closeTo(window.width - 224 * 0.8, 0.5));
+        expect(composer.right, closeTo(card.right - 224 * 0.8, 0.5));
       },
       size: window,
       accessibility: const AccessibilitySettings(zoom: 0.8),
@@ -414,8 +418,11 @@ void main() {
           final sidebar = tester.getRect(
             find.byKey(const ValueKey('channel-sidebar')),
           );
+          final card = tester.getRect(
+            find.byKey(const ValueKey('canvas-card')),
+          );
           expect(panel.left, closeTo(sidebar.right, 0.5));
-          expect(panel.right, closeTo(_smallestWindow.width, 0.5));
+          expect(panel.right, closeTo(card.right, 0.5));
           expect(find.byKey(const ValueKey('composer-menu')), findsNothing);
 
           await tester.tap(find.byKey(const ValueKey('close-pins-panel')));

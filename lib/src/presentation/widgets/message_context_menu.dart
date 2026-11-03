@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../domain/channel_capabilities.dart';
 import '../../domain/chat_models.dart';
+import '../../theme/flucord_icons.dart';
+import 'flucord_menu.dart';
 
 /// What the right button offers on a message.
 ///
@@ -50,75 +52,88 @@ Future<MessageMenuAction?> showMessageContextMenu({
     ),
     items: [
       if (capabilities.addReactions)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-add-reaction'),
           value: MessageMenuAction.addReaction,
-          child: Text('Add reaction'),
+          icon: FlucordIcons.emoji,
+          label: 'Add reaction',
         ),
       if (capabilities.sendMessages)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-reply'),
           value: MessageMenuAction.reply,
-          child: Text('Reply'),
+          icon: FlucordIcons.reply,
+          label: 'Reply',
         ),
       if (isCurrentUser && message.canEdit)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-edit'),
           value: MessageMenuAction.edit,
-          child: Text('Edit message'),
+          icon: FlucordIcons.edit,
+          label: 'Edit message',
         ),
       if (capabilities.pinMessages)
-        PopupMenuItem(
+        FlucordMenuItem(
           key: const ValueKey('message-menu-pin'),
           value: MessageMenuAction.pin,
-          child: Text(message.isPinned ? 'Unpin message' : 'Pin message'),
+          icon: FlucordIcons.pin,
+          label: message.isPinned ? 'Unpin message' : 'Pin message',
         ),
       if (capabilities.sendMessages)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-forward'),
           value: MessageMenuAction.forward,
-          child: Text('Forward'),
+          icon: FlucordIcons.forward,
+          label: 'Forward',
         ),
       if (capabilities.createPublicThreads)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-thread'),
           value: MessageMenuAction.createThread,
-          child: Text('Create thread'),
+          icon: FlucordIcons.threads,
+          label: 'Create thread',
         ),
       if (canMarkUnread)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-mark-unread'),
           value: MessageMenuAction.markUnread,
-          child: Text('Mark unread'),
+          icon: FlucordIcons.markUnread,
+          label: 'Mark unread',
         ),
-      const PopupMenuDivider(),
+      const FlucordMenuDivider(),
       if (selectedText.isNotEmpty)
-        const PopupMenuItem(
+        const FlucordMenuItem(
           key: ValueKey('message-menu-copy-selection'),
           value: MessageMenuAction.copySelection,
-          child: Text('Copy'),
+          icon: FlucordIcons.copy,
+          label: 'Copy',
         ),
-      const PopupMenuItem(
+      const FlucordMenuItem(
         key: ValueKey('message-menu-copy-text'),
         value: MessageMenuAction.copyText,
-        child: Text('Copy text'),
+        icon: FlucordIcons.copy,
+        label: 'Copy text',
       ),
-      const PopupMenuItem(
+      const FlucordMenuItem(
         key: ValueKey('message-menu-copy-link'),
         value: MessageMenuAction.copyLink,
-        child: Text('Copy message link'),
+        icon: FlucordIcons.link,
+        label: 'Copy message link',
       ),
-      const PopupMenuItem(
+      const FlucordMenuItem(
         key: ValueKey('message-menu-copy-id'),
         value: MessageMenuAction.copyId,
-        child: Text('Copy message ID'),
+        icon: FlucordIcons.id,
+        label: 'Copy message ID',
       ),
       if (canDelete) ...[
-        const PopupMenuDivider(),
-        const PopupMenuItem(
+        const FlucordMenuDivider(),
+        const FlucordMenuItem(
           key: ValueKey('message-menu-delete'),
           value: MessageMenuAction.delete,
-          child: Text('Delete message'),
+          icon: FlucordIcons.delete,
+          label: 'Delete message',
+          danger: true,
         ),
       ],
     ],

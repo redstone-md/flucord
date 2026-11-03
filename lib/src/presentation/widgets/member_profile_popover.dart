@@ -4,6 +4,7 @@ import '../../application/guild_member_admin_controller.dart';
 import '../../application/member_profile_controller.dart';
 import '../../domain/chat_models.dart';
 import '../../domain/user_profile.dart';
+import '../../theme/flucord_icons.dart';
 import '../../theme/flucord_theme.dart';
 import 'activity_views.dart';
 import 'discord_identity_profile_popover.dart';
@@ -117,14 +118,14 @@ class MemberProfilePopover extends StatelessWidget {
           OutlinedButton.icon(
             key: const ValueKey('report-member'),
             onPressed: onReport,
-            icon: const Icon(Icons.flag_outlined, size: 15),
+            icon: const FlucordIcon(FlucordIcons.report, size: 16),
             label: const Text('Report'),
           ),
         if (onBlock != null)
           OutlinedButton.icon(
             key: const ValueKey('block-member'),
             onPressed: onBlock,
-            icon: const Icon(Icons.block, size: 15),
+            icon: const FlucordIcon(FlucordIcons.block, size: 16),
             label: const Text('Block'),
           ),
       ],
