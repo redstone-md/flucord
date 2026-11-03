@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flucord/src/data/theme/file_theme_store.dart';
 import 'package:flucord/src/domain/flucord_palette.dart';
+import 'package:flucord/src/theme/flucord_radius.dart';
 import 'package:flucord/src/theme/flucord_theme.dart';
 import 'package:flucord/src/theme/flucord_type.dart';
 
@@ -270,6 +271,26 @@ void main() {
 
     test('the sizes on the scale, smallest first', () {
       expect(FlucordType.sizes, [12, 13, 14, 20, 24]);
+    });
+  });
+
+  group('the radius scale', () {
+    test('runs small 4, control 6, medium 8, large 12 and full', () {
+      expect(FlucordRadius.small, BorderRadius.circular(4));
+      expect(FlucordRadius.control, BorderRadius.circular(6));
+      expect(FlucordRadius.medium, BorderRadius.circular(8));
+      expect(FlucordRadius.large, BorderRadius.circular(12));
+      expect(FlucordRadius.full, BorderRadius.circular(999));
+    });
+
+    test('buttons take the control corner', () {
+      final theme = FlucordTheme.dark;
+      const control = RoundedRectangleBorder(
+        borderRadius: FlucordRadius.control,
+      );
+
+      expect(theme.iconButtonTheme.style!.shape!.resolve({}), control);
+      expect(theme.filledButtonTheme.style!.shape!.resolve({}), control);
     });
   });
 

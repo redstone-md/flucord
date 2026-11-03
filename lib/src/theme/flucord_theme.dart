@@ -168,7 +168,7 @@ abstract final class FlucordTheme {
           }),
           side: focusSide,
           shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
+            RoundedRectangleBorder(borderRadius: FlucordRadius.control),
           ),
         ),
       ),
@@ -183,7 +183,7 @@ abstract final class FlucordTheme {
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
           side: focusSide,
           shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: FlucordRadius.small),
+            RoundedRectangleBorder(borderRadius: FlucordRadius.control),
           ),
         ),
       ),
